@@ -1,7 +1,5 @@
+import { AppShell } from '@renderer/features/layout/AppShell';
+
 export function App() {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background text-foreground">
-      SyncFlow Desktop
-    </div>
-  );
+  return <AppShell />;
 }
