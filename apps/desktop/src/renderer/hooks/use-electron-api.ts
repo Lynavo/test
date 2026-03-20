@@ -1,21 +1,7 @@
-import type {
-  DashboardDeviceDTO,
-  DashboardSummaryDTO,
-  DeviceFileLedgerDTO,
-  SettingsDTO,
-} from '@syncflow/contracts';
+import type { ElectronAPI } from '../../preload/api';
 
-export interface ElectronAPI {
-  getDashboardSummary(): Promise<DashboardSummaryDTO>;
-  getDashboardDevices(): Promise<DashboardDeviceDTO[]>;
-  getDeviceFiles(deviceId: string, dateKey: string): Promise<DeviceFileLedgerDTO[]>;
-  getAvailableDates(deviceId: string): Promise<string[]>;
-  getSettings(): Promise<SettingsDTO>;
-  regenerateConnectionCode(): Promise<string>;
-  openFolder(path: string): Promise<void>;
-}
-
-const mockAPI: ElectronAPI = {
+const mockSidecar: ElectronAPI['sidecar'] = {
+  getHealth: async () => ({ ok: true, service: 'syncflow-sidecar' }),
   getDashboardSummary: async () => ({
     todayUploadCount: 0,
     todayOccupiedBytes: 0,
@@ -23,24 +9,67 @@ const mockAPI: ElectronAPI = {
     isDiskLow: false,
   }),
   getDashboardDevices: async () => [],
+  getDeviceDetail: async () => ({
+    deviceId: '',
+    clientName: '',
+    ip: '',
+    status: 'offline' as const,
+    todayFileCount: 0,
+    todayBytes: 0,
+    storageLeft: '—',
+    storagePath: '',
+  }),
   getDeviceFiles: async () => [],
-  getAvailableDates: async () => [],
+  getDeviceDates: async () => ({ dates: [] }),
   getSettings: async () => ({
-    connectionCode: '',
+    connectionCode: '000000',
     receivePath: '',
     shareAddress: '',
     shareStatus: 'unknown' as const,
-    shareName: '',
+    shareName: 'SyncFlow',
   }),
-  regenerateConnectionCode: async () => '',
-  openFolder: async () => {},
+  updateSettings: async (s) => ({
+    connectionCode: '000000',
+    receivePath: '',
+    shareAddress: '',
+    shareStatus: 'unknown' as const,
+    shareName: 'SyncFlow',
+    ...s,
+  }) as any,
+  regenerateConnectionCode: async () => ({ code: '000000' }),
+  getShareStatus: async () => ({
+    enabled: false,
+    smbUrl: null,
+    status: 'unknown' as const,
+  }),
+  validateShare: async () => ({
+    enabled: false,
+    smbUrl: null,
+    status: 'unknown' as const,
+  }),
 };
 
-declare global {
-  interface Window {
-    electronAPI?: ElectronAPI;
-  }
-}
+const mockFiles: ElectronAPI['files'] = {
+  openFolder: async () => {},
+  openFile: async () => {},
+  selectFolder: async () => null,
+  copyToClipboard: async () => {},
+};
+
+const mockEvents: ElectronAPI['events'] = {
+  onSidecarEvent: () => () => {},
+};
+
+const mockPlatform: ElectronAPI['platform'] = {
+  isMac: () => true,
+};
+
+const mockAPI: ElectronAPI = {
+  sidecar: mockSidecar,
+  files: mockFiles,
+  events: mockEvents,
+  platform: mockPlatform,
+};
 
 export function useElectronAPI(): ElectronAPI {
   return window.electronAPI ?? mockAPI;
