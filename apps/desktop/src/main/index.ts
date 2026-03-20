@@ -1,8 +1,11 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
 import { is } from '@electron-toolkit/utils';
+import { registerIpcHandlers } from './ipc-handlers';
+import { SidecarManager } from './sidecar-manager';
 
 let mainWindow: BrowserWindow | null = null;
+const sidecar = new SidecarManager();
 
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -26,6 +29,8 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerIpcHandlers();
+  await sidecar.start();
   await createMainWindow();
 
   app.on('activate', async () => {
@@ -39,4 +44,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', async () => {
+  await sidecar.stop();
 });

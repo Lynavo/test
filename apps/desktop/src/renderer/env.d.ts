@@ -1,2 +1,9 @@
-// Expanded by Task 1.1 with full ElectronAPI type declaration
+import type { ElectronAPI } from '../preload/api';
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
+}
+
 export {};
