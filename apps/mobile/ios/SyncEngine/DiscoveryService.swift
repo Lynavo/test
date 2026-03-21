@@ -92,14 +92,6 @@ class DiscoveryService {
 
     /// Extract a UTF-8 string value from an NWTXTRecord entry.
     private func txtString(from record: NWTXTRecord, key: String) -> String? {
-        guard let entry = record[key] else { return nil }
-        switch entry {
-        case .string(let value):
-            return value
-        case .rawBytes(let data):
-            return String(data: data, encoding: .utf8)
-        @unknown default:
-            return nil
-        }
+        return record[key]
     }
 }

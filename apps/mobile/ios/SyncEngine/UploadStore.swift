@@ -356,8 +356,6 @@ class UploadStore {
         case int(Int64)
         case double(Double)
         case null
-        case textOrNull(String?)
-        case intOrNull(Int64?)
 
         static func textOrNull(_ value: String?) -> BindingValue {
             if let v = value { return .text(v) }
@@ -398,18 +396,6 @@ class UploadStore {
                 sqlite3_bind_double(stmt, position, value)
             case .null:
                 sqlite3_bind_null(stmt, position)
-            case .textOrNull(let value):
-                if let v = value {
-                    sqlite3_bind_text(stmt, position, (v as NSString).utf8String, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-                } else {
-                    sqlite3_bind_null(stmt, position)
-                }
-            case .intOrNull(let value):
-                if let v = value {
-                    sqlite3_bind_int64(stmt, position, v)
-                } else {
-                    sqlite3_bind_null(stmt, position)
-                }
             }
         }
 
@@ -438,18 +424,6 @@ class UploadStore {
                 sqlite3_bind_double(stmt, position, value)
             case .null:
                 sqlite3_bind_null(stmt, position)
-            case .textOrNull(let value):
-                if let v = value {
-                    sqlite3_bind_text(stmt, position, (v as NSString).utf8String, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-                } else {
-                    sqlite3_bind_null(stmt, position)
-                }
-            case .intOrNull(let value):
-                if let v = value {
-                    sqlite3_bind_int64(stmt, position, v)
-                } else {
-                    sqlite3_bind_null(stmt, position)
-                }
             }
         }
 
