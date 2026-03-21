@@ -1,10 +1,12 @@
-import { useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   Pressable,
+  NativeModules,
+  NativeEventEmitter,
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,14 +27,25 @@ interface QueueItem {
   type: 'video' | 'image';
 }
 
+interface SyncOverview {
+  progressPercent: number;
+  speed: string;
+  completed: string;
+  total: string;
+  uploadState: string;
+}
+
 // ---------------------------------------------------------------------------
-// Mock data (will be replaced by TurboModule events)
+// Mock data (fallback when native module not available)
 // ---------------------------------------------------------------------------
 
-const MOCK_PROGRESS = 68;
-const MOCK_SPEED = '45 MB/s';
-const MOCK_COMPLETED = '8 GB';
-const MOCK_TOTAL = '12.4 GB';
+const MOCK_OVERVIEW: SyncOverview = {
+  progressPercent: 68,
+  speed: '45 MB/s',
+  completed: '8 GB',
+  total: '12.4 GB',
+  uploadState: 'syncing_foreground',
+};
 
 const mockQueue: QueueItem[] = [
   { id: '1', name: 'DJI_0022_PRO.mp4', size: '1.2 GB', type: 'video' },
@@ -71,10 +84,15 @@ function fileIcon(type: 'video' | 'image'): string {
   return type === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDDBC';
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
 /**
  * Build an array of small arc segments for the circular progress ring.
- * We approximate the circle with 72 evenly-spaced tiny Views placed
- * around the centre via absolute positioning + transform.
  */
 function buildRingSegments(progress: number): Array<{ angle: number; active: boolean }> {
   const TOTAL_SEGMENTS = 72;
@@ -90,7 +108,7 @@ function buildRingSegments(progress: number): Array<{ angle: number; active: boo
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function CircularProgress({ progress }: { progress: number }) {
+function CircularProgress({ progress, speed }: { progress: number; speed: string }) {
   const segments = buildRingSegments(progress);
   const centre = RING_SIZE / 2;
   const radius = (RING_SIZE - RING_THICKNESS) / 2;
@@ -135,7 +153,7 @@ function CircularProgress({ progress }: { progress: number }) {
       <View style={styles.ringCentre}>
         <Text style={styles.transmittingLabel}>TRANSMITTING</Text>
         <Text style={styles.percentageText}>{progress}%</Text>
-        <Text style={styles.speedText}>{MOCK_SPEED}</Text>
+        <Text style={styles.speedText}>{speed}</Text>
       </View>
     </View>
   );
@@ -163,6 +181,80 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
 
 export function SyncStatusScreen() {
   const navigation = useNavigation<SyncStatusNav>();
+  const [overview, setOverview] = useState<SyncOverview>(MOCK_OVERVIEW);
+  const [queue, setQueue] = useState<QueueItem[]>(mockQueue);
+
+  // ---------------------------------------------------------------------------
+  // Load real data from native module with mock fallback
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    let syncSub: { remove: () => void } | undefined;
+    let queueSub: { remove: () => void } | undefined;
+
+    const loadReal = async () => {
+      try {
+        const { NativeSyncEngine } = NativeModules;
+        if (!NativeSyncEngine) return;
+
+        // Load initial overview
+        const syncData = await NativeSyncEngine.getSyncOverview();
+        if (syncData) {
+          setOverview({
+            progressPercent: syncData.progressPercent ?? 0,
+            speed: syncData.currentSpeedMbps ? `${syncData.currentSpeedMbps} MB/s` : '0 MB/s',
+            completed: formatBytes(syncData.transferredBytes ?? 0),
+            total: formatBytes(syncData.totalBytes ?? 0),
+            uploadState: syncData.uploadState ?? 'idle',
+          });
+        }
+
+        // Load initial queue
+        const queueData = await NativeSyncEngine.getReadOnlyQueue();
+        if (queueData && queueData.length > 0) {
+          setQueue(queueData.map((item: Record<string, unknown>, index: number) => ({
+            id: String(item.id ?? index),
+            name: (item.originalFilename as string) || 'Unknown',
+            size: formatBytes((item.fileSize as number) ?? 0),
+            type: (item.mediaType as string) === 'video' ? 'video' : 'image',
+          })));
+        }
+
+        // Subscribe to live updates
+        const emitter = new NativeEventEmitter(NativeSyncEngine);
+        syncSub = emitter.addListener('onSyncStateChanged', (state: Record<string, unknown>) => {
+          setOverview((prev) => ({
+            ...prev,
+            progressPercent: (state.progressPercent as number) ?? prev.progressPercent,
+            speed: state.currentSpeedMbps ? `${state.currentSpeedMbps} MB/s` : prev.speed,
+            completed: state.transferredBytes ? formatBytes(state.transferredBytes as number) : prev.completed,
+            total: state.totalBytes ? formatBytes(state.totalBytes as number) : prev.total,
+            uploadState: (state.uploadState as string) ?? prev.uploadState,
+          }));
+        });
+
+        queueSub = emitter.addListener('onQueueUpdated', (updatedQueue: Array<Record<string, unknown>>) => {
+          if (updatedQueue && updatedQueue.length > 0) {
+            setQueue(updatedQueue.map((item, index) => ({
+              id: String(item.id ?? index),
+              name: (item.originalFilename as string) || 'Unknown',
+              size: formatBytes((item.fileSize as number) ?? 0),
+              type: (item.mediaType as string) === 'video' ? 'video' : 'image',
+            })));
+          }
+        });
+      } catch (e) {
+        console.warn('Native module not available for SyncStatus, using mock data');
+      }
+    };
+
+    loadReal();
+
+    return () => {
+      syncSub?.remove();
+      queueSub?.remove();
+    };
+  }, []);
 
   const handleHistory = useCallback(() => {
     navigation.navigate('History');
@@ -174,9 +266,9 @@ export function SyncStatusScreen() {
 
   const renderQueueItem = useCallback(
     ({ item, index }: ListRenderItemInfo<QueueItem>) => (
-      <QueueItemRow item={item} isLast={index === mockQueue.length - 1} />
+      <QueueItemRow item={item} isLast={index === queue.length - 1} />
     ),
-    [],
+    [queue.length],
   );
 
   const keyExtractor = useCallback((item: QueueItem) => item.id, []);
@@ -206,9 +298,9 @@ export function SyncStatusScreen() {
 
       {/* ---- Progress card ---- */}
       <View style={styles.progressCard}>
-        <CircularProgress progress={MOCK_PROGRESS} />
+        <CircularProgress progress={overview.progressPercent} speed={overview.speed} />
         <Text style={styles.completedText}>
-          {'\u5DF2\u5B8C\u6210 '}{MOCK_COMPLETED}{' / '}{MOCK_TOTAL}
+          {'\u5DF2\u5B8C\u6210 '}{overview.completed}{' / '}{overview.total}
         </Text>
       </View>
 
@@ -217,11 +309,11 @@ export function SyncStatusScreen() {
         <View style={styles.queueHeader}>
           <Text style={styles.queueTitle}>{'\u6392\u961F\u4E2D'}</Text>
           <View style={styles.queueBadge}>
-            <Text style={styles.queueBadgeText}>{mockQueue.length}</Text>
+            <Text style={styles.queueBadgeText}>{queue.length}</Text>
           </View>
         </View>
         <FlatList<QueueItem>
-          data={mockQueue}
+          data={queue}
           renderItem={renderQueueItem}
           keyExtractor={keyExtractor}
           scrollEnabled={true}

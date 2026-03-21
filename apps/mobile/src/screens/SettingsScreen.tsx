@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,11 +15,11 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Mock data (fallback when native module not available)
 // ---------------------------------------------------------------------------
 
 const mockDevice = {
-  name: '剪辑工作站-A',
+  name: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
   ip: '192.168.1.101',
   connected: true,
 };
@@ -33,12 +34,62 @@ export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [editing, setEditing] = useState(false);
   const [deviceName, setDeviceName] = useState(mockDevice.name);
+  const [deviceIp, setDeviceIp] = useState(mockDevice.ip);
+  const [connected, setConnected] = useState(mockDevice.connected);
 
-  const handleConfirmEdit = useCallback(() => {
-    setEditing(false);
+  // ---------------------------------------------------------------------------
+  // Load real binding state from native module
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const loadBindingState = async () => {
+      try {
+        const { NativeSyncEngine } = NativeModules;
+        if (!NativeSyncEngine) return;
+
+        const state = await NativeSyncEngine.getBindingState();
+        if (state) {
+          setDeviceName(state.deviceAlias || state.deviceName || mockDevice.name);
+          setDeviceIp(state.host || mockDevice.ip);
+          setConnected(true);
+        }
+      } catch (e) {
+        console.warn('Native module not available for Settings, using mock data');
+      }
+    };
+
+    loadBindingState();
   }, []);
 
-  const handleDisconnect = useCallback(() => {
+  // ---------------------------------------------------------------------------
+  // Rename device alias
+  // ---------------------------------------------------------------------------
+
+  const handleConfirmEdit = useCallback(async () => {
+    setEditing(false);
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine) {
+        await NativeSyncEngine.renameBoundDeviceAlias(deviceName);
+      }
+    } catch (e) {
+      console.warn('Failed to rename device alias');
+    }
+  }, [deviceName]);
+
+  // ---------------------------------------------------------------------------
+  // Disconnect and unbind
+  // ---------------------------------------------------------------------------
+
+  const handleDisconnect = useCallback(async () => {
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine) {
+        await NativeSyncEngine.disconnectAndUnbind();
+      }
+    } catch (e) {
+      console.warn('Failed to disconnect');
+    }
     navigation.reset({
       index: 0,
       routes: [{ name: 'DeviceDiscovery' }],
@@ -55,9 +106,9 @@ export function SettingsScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>←</Text>
+            <Text style={styles.backArrow}>{'\u2190'}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>设置</Text>
+          <Text style={styles.title}>{'\u8BBE\u7F6E'}</Text>
         </View>
 
         <ScrollView
@@ -70,7 +121,7 @@ export function SettingsScreen() {
             <View style={styles.deviceRow}>
               {/* Monitor icon */}
               <View style={styles.monitorIconWrapper}>
-                <Text style={styles.monitorIcon}>🖥</Text>
+                <Text style={styles.monitorIcon}>{'\uD83D\uDDA5'}</Text>
               </View>
 
               {/* Name + IP + status */}
@@ -91,12 +142,12 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={handleConfirmEdit}
                     >
-                      <Text style={styles.confirmIcon}>✓</Text>
+                      <Text style={styles.confirmIcon}>{'\u2713'}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={styles.nameRow}>
-                    <Text style={styles.deviceName} numberOfLines={1}>
+                    <Text style={styles.deviceNameText} numberOfLines={1}>
                       {deviceName}
                     </Text>
                     <TouchableOpacity
@@ -104,17 +155,19 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={() => setEditing(true)}
                     >
-                      <Text style={styles.editIcon}>✏️</Text>
+                      <Text style={styles.editIcon}>{'\u270F\uFE0F'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                <Text style={styles.deviceIp}>{mockDevice.ip}</Text>
+                <Text style={styles.deviceIp}>{deviceIp}</Text>
 
                 {/* Connection status */}
                 <View style={styles.statusRow}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusText}>已连接</Text>
+                  <View style={[styles.statusDot, !connected && styles.statusDotDisconnected]} />
+                  <Text style={[styles.statusText, !connected && styles.statusTextDisconnected]}>
+                    {connected ? '\u5DF2\u8FDE\u63A5' : '\u672A\u8FDE\u63A5'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -125,13 +178,13 @@ export function SettingsScreen() {
               activeOpacity={0.7}
               onPress={handleDisconnect}
             >
-              <Text style={styles.disconnectText}>断开连接 / 切换设备</Text>
+              <Text style={styles.disconnectText}>{'\u65AD\u5F00\u8FDE\u63A5 / \u5207\u6362\u8BBE\u5907'}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Hint text */}
           <Text style={styles.hintText}>
-            设备名称默认格式：设备名 + IP 地址，可点击编辑图标自定义名称
+            {'\u8BBE\u5907\u540D\u79F0\u9ED8\u8BA4\u683C\u5F0F\uFF1A\u8BBE\u5907\u540D + IP \u5730\u5740\uFF0C\u53EF\u70B9\u51FB\u7F16\u8F91\u56FE\u6807\u81EA\u5B9A\u4E49\u540D\u79F0'}
           </Text>
         </ScrollView>
       </View>
@@ -232,7 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  deviceName: {
+  deviceNameText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.screenTitle,
@@ -297,9 +350,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#22c55e',
   },
+  statusDotDisconnected: {
+    backgroundColor: '#9ca3af',
+  },
   statusText: {
     fontSize: 12,
     color: '#22c55e',
+  },
+  statusTextDisconnected: {
+    color: '#9ca3af',
   },
 
   // Disconnect button

@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  NativeModules,
+  NativeEventEmitter,
   ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,13 +30,13 @@ interface DiscoveredDevice {
 }
 
 // ---------------------------------------------------------------------------
-// Static mock data (native module not wired yet)
+// Static mock data (fallback when native module not available)
 // ---------------------------------------------------------------------------
 
 const mockDevices: DiscoveredDevice[] = [
-  { deviceId: 'mac-1', name: '剪辑工作站-A', ip: '192.168.1.101', type: 'mac' as const, port: 39393 },
+  { deviceId: 'mac-1', name: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A', ip: '192.168.1.101', type: 'mac' as const, port: 39393 },
   { deviceId: 'mac-2', name: 'MacBook Pro', ip: '192.168.1.108', type: 'mac' as const, port: 39393 },
-  { deviceId: 'mac-3', name: '备用机-B', ip: '192.168.1.115', type: 'mac' as const, port: 39393 },
+  { deviceId: 'mac-3', name: '\u5907\u7528\u673A-B', ip: '192.168.1.115', type: 'mac' as const, port: 39393 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ function PulseRings() {
       })}
       {/* Center circle */}
       <View style={styles.pulseCenter}>
-        <Text style={styles.wifiIconSmall}>📡</Text>
+        <Text style={styles.wifiIconSmall}>{'\uD83D\uDCE1'}</Text>
       </View>
     </View>
   );
@@ -106,20 +108,74 @@ export function DeviceDiscoveryScreen() {
   const [scanning, setScanning] = useState(true);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
 
-  const startScan = useCallback(() => {
+  // ---------------------------------------------------------------------------
+  // Native module discovery with mock fallback
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    let subscription: { remove: () => void } | undefined;
+    let mockTimer: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine) {
+        NativeSyncEngine.startDiscovery();
+        const emitter = new NativeEventEmitter(NativeSyncEngine);
+        subscription = emitter.addListener('onDiscoveredDevicesChanged', (discoveredDevices: DiscoveredDevice[]) => {
+          setDevices(discoveredDevices);
+          setScanning(false);
+        });
+      } else {
+        // Fallback to mock data
+        mockTimer = setTimeout(() => {
+          setDevices(mockDevices);
+          setScanning(false);
+        }, 1800);
+      }
+    } catch {
+      // Fallback to mock data
+      console.warn('Native module not available, using mock discovery data');
+      mockTimer = setTimeout(() => {
+        setDevices(mockDevices);
+        setScanning(false);
+      }, 1800);
+    }
+
+    return () => {
+      subscription?.remove();
+      if (mockTimer) clearTimeout(mockTimer);
+      try {
+        NativeModules.NativeSyncEngine?.stopDiscovery();
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Rescan
+  // ---------------------------------------------------------------------------
+
+  const handleRescan = useCallback(() => {
     setScanning(true);
     setDevices([]);
-    const timer = setTimeout(() => {
+
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine) {
+        NativeSyncEngine.stopDiscovery();
+        NativeSyncEngine.startDiscovery();
+        return;
+      }
+    } catch {
+      // fallback
+    }
+    // Mock fallback
+    setTimeout(() => {
       setDevices(mockDevices);
       setScanning(false);
     }, 1800);
-    return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    const cleanup = startScan();
-    return cleanup;
-  }, [startScan]);
 
   const handleDevicePress = useCallback(
     (device: DiscoveredDevice) => {
@@ -133,10 +189,6 @@ export function DeviceDiscoveryScreen() {
     [navigation],
   );
 
-  const handleRescan = useCallback(() => {
-    startScan();
-  }, [startScan]);
-
   const renderDevice = useCallback(
     ({ item }: ListRenderItemInfo<DiscoveredDevice>) => (
       <TouchableOpacity
@@ -146,17 +198,17 @@ export function DeviceDiscoveryScreen() {
       >
         {/* Monitor icon with gradient bg */}
         <View style={styles.deviceIconWrapper}>
-          <Text style={styles.monitorIcon}>🖥</Text>
+          <Text style={styles.monitorIcon}>{'\uD83D\uDDA5'}</Text>
         </View>
 
         {/* Device info */}
         <View style={styles.deviceInfo}>
           <Text style={styles.deviceName}>{item.name}</Text>
-          <Text style={styles.deviceMeta}>macOS · {item.ip}</Text>
+          <Text style={styles.deviceMeta}>macOS {'\u00B7'} {item.ip}</Text>
         </View>
 
         {/* Chevron */}
-        <Text style={styles.chevron}>›</Text>
+        <Text style={styles.chevron}>{'\u203A'}</Text>
       </TouchableOpacity>
     ),
     [handleDevicePress],
@@ -170,17 +222,17 @@ export function DeviceDiscoveryScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.wifiIconBox}>
-            <Text style={styles.wifiIcon}>📶</Text>
+            <Text style={styles.wifiIcon}>{'\uD83D\uDCF6'}</Text>
           </View>
-          <Text style={styles.title}>搜索设备</Text>
-          <Text style={styles.subtitle}>正在扫描局域网中的电脑端应用...</Text>
+          <Text style={styles.title}>{'\u641C\u7D22\u8BBE\u5907'}</Text>
+          <Text style={styles.subtitle}>{'\u6B63\u5728\u626B\u63CF\u5C40\u57DF\u7F51\u4E2D\u7684\u7535\u8111\u7AEF\u5E94\u7528...'}</Text>
         </View>
 
         {/* Scanning animation */}
         {scanning && devices.length === 0 && (
           <View style={styles.scanningSection}>
             <PulseRings />
-            <Text style={styles.scanningText}>扫描中，请稍候...</Text>
+            <Text style={styles.scanningText}>{'\u626B\u63CF\u4E2D\uFF0C\u8BF7\u7A0D\u5019...'}</Text>
           </View>
         )}
 
@@ -188,11 +240,11 @@ export function DeviceDiscoveryScreen() {
         {!scanning && (
           <View style={styles.listSection}>
             {devices.length > 0 && (
-              <Text style={styles.deviceCount}>发现 {devices.length} 台设备</Text>
+              <Text style={styles.deviceCount}>{'\u53D1\u73B0'} {devices.length} {'\u53F0\u8BBE\u5907'}</Text>
             )}
             {devices.length === 0 ? (
               <View style={styles.emptySection}>
-                <Text style={styles.emptyText}>未发现设备</Text>
+                <Text style={styles.emptyText}>{'\u672A\u53D1\u73B0\u8BBE\u5907'}</Text>
               </View>
             ) : (
               <FlatList
@@ -210,7 +262,7 @@ export function DeviceDiscoveryScreen() {
               activeOpacity={0.7}
               onPress={handleRescan}
             >
-              <Text style={styles.rescanText}>🔄  重新扫描</Text>
+              <Text style={styles.rescanText}>{'\uD83D\uDD04'}  {'\u91CD\u65B0\u626B\u63CF'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -232,7 +284,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: undefined,
     // Approximate linear gradient with layered background:
-    // top #c4e4f5 → bottom #f2f8fd via the safeArea + container split
+    // top #c4e4f5 -> bottom #f2f8fd via the safeArea + container split
   },
   header: {
     paddingTop: 24,
@@ -334,7 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    // Approximate gradient: #4db8ea → #2e8fcc
+    // Approximate gradient: #4db8ea -> #2e8fcc
     backgroundColor: '#3ba4dc',
     shadowColor: 'rgba(59,159,216,0.5)',
     shadowOffset: { width: 0, height: 3 },

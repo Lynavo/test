@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
+  NativeModules,
+  NativeEventEmitter,
   type SectionListData,
   type SectionListRenderItemInfo,
 } from 'react-native';
@@ -36,17 +38,50 @@ interface HistorySection {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function isToday(dateStr: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  return dateStr === today;
+}
+
+function formatDateLabel(dateStr: string): string {
+  if (isToday(dateStr)) return '\u4ECA\u5929';
+  // Format as month/day in Chinese
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parseInt(parts[1], 10)}\u6708${parseInt(parts[2], 10)}\u65E5`;
+  }
+  return dateStr;
+}
+
+// ---------------------------------------------------------------------------
 // Mock data
 // ---------------------------------------------------------------------------
 
 const mockSections: HistorySection[] = [
   {
-    title: '今天',
+    title: '\u4ECA\u5929',
     isToday: true,
     data: [
       {
         id: 's1',
-        deviceName: '剪辑工作站-A',
+        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
         deviceIp: '192.168.1.101',
         fileCount: 15,
         totalSize: '16.3 GB',
@@ -63,12 +98,12 @@ const mockSections: HistorySection[] = [
     ],
   },
   {
-    title: '3月18日',
+    title: '3\u670818\u65E5',
     isToday: false,
     data: [
       {
         id: 's3',
-        deviceName: '剪辑工作站-A',
+        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
         deviceIp: '192.168.1.101',
         fileCount: 45,
         totalSize: '86.5 GB',
@@ -77,12 +112,12 @@ const mockSections: HistorySection[] = [
     ],
   },
   {
-    title: '3月17日',
+    title: '3\u670817\u65E5',
     isToday: false,
     data: [
       {
         id: 's4',
-        deviceName: '剪辑工作站-A',
+        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
         deviceIp: '192.168.1.101',
         fileCount: 29,
         totalSize: '51.0 GB',
@@ -164,7 +199,7 @@ function DeviceCard({ deviceName, deviceIp, fileCount, totalSize, duration }: De
       {/* Row 1: device icon + name + IP */}
       <View style={styles.cardHeader}>
         <View style={styles.monitorIconWrapper}>
-          <Text style={styles.monitorIcon}>🖥</Text>
+          <Text style={styles.monitorIcon}>{'\uD83D\uDDA5'}</Text>
         </View>
         <View style={styles.cardDeviceInfo}>
           <Text style={styles.cardDeviceName} numberOfLines={1}>
@@ -180,15 +215,15 @@ function DeviceCard({ deviceName, deviceIp, fileCount, totalSize, duration }: De
       {/* Row 2: stats */}
       <View style={styles.cardStats}>
         <View style={styles.cardStatsLeft}>
-          <Text style={styles.statsLabel}>共同步媒体文件</Text>
+          <Text style={styles.statsLabel}>{'\u5171\u540C\u6B65\u5A92\u4F53\u6587\u4EF6'}</Text>
           <Text style={styles.statsValue}>
             <Text style={styles.statsCount}>{fileCount}</Text>
-            <Text style={styles.statsSep}> 个 · </Text>
+            <Text style={styles.statsSep}> {'\u4E2A'} {'\u00B7'} </Text>
             <Text style={styles.statsSize}>{totalSize}</Text>
           </Text>
         </View>
         <View style={styles.cardStatsRight}>
-          <Text style={styles.durationLabel}>耗时</Text>
+          <Text style={styles.durationLabel}>{'\u8017\u65F6'}</Text>
           <Text style={styles.durationValue}>{duration}</Text>
         </View>
       </View>
@@ -204,6 +239,49 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'History'>;
 
 export function HistoryScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const [sections, setSections] = useState<HistorySection[]>(mockSections);
+
+  // ---------------------------------------------------------------------------
+  // Load real history from native module with mock fallback
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    let historySub: { remove: () => void } | undefined;
+
+    const loadHistory = async () => {
+      try {
+        const { NativeSyncEngine } = NativeModules;
+        if (!NativeSyncEngine) return;
+
+        const result = await NativeSyncEngine.getHistoryDays(null);
+        if (result && result.items && result.items.length > 0) {
+          const grouped = groupByDate(result.items);
+          setSections(grouped);
+        }
+
+        // Subscribe to live updates
+        const emitter = new NativeEventEmitter(NativeSyncEngine);
+        historySub = emitter.addListener('onHistoryUpdated', async () => {
+          try {
+            const updated = await NativeSyncEngine.getHistoryDays(null);
+            if (updated && updated.items && updated.items.length > 0) {
+              setSections(groupByDate(updated.items));
+            }
+          } catch {
+            // keep current data
+          }
+        });
+      } catch (e) {
+        console.warn('Native module not available for History, using mock data');
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      historySub?.remove();
+    };
+  }, []);
 
   const renderSectionHeader = ({
     section,
@@ -215,7 +293,7 @@ export function HistoryScreen() {
       {section.isToday && (
         <>
           <PulsingDot />
-          <Text style={styles.liveLabel}>实时同步中</Text>
+          <Text style={styles.liveLabel}>{'\u5B9E\u65F6\u540C\u6B65\u4E2D'}</Text>
         </>
       )}
     </View>
@@ -243,14 +321,14 @@ export function HistoryScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>←</Text>
+            <Text style={styles.backArrow}>{'\u2190'}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>历史记录</Text>
+          <Text style={styles.title}>{'\u5386\u53F2\u8BB0\u5F55'}</Text>
         </View>
 
         {/* Content */}
         <SectionList
-          sections={mockSections}
+          sections={sections}
           renderSectionHeader={renderSectionHeader}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
@@ -259,13 +337,57 @@ export function HistoryScreen() {
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>暂无同步记录</Text>
+              <Text style={styles.emptyText}>{'\u6682\u65E0\u540C\u6B65\u8BB0\u5F55'}</Text>
             </View>
           }
         />
       </View>
     </SafeAreaView>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Group ledger items by date into sections
+// ---------------------------------------------------------------------------
+
+interface LedgerItem {
+  ledgerDate: string;
+  deviceId: string;
+  deviceName: string;
+  deviceIp: string;
+  fileCount: number;
+  totalBytes: number;
+  transmissionMs: number;
+}
+
+function groupByDate(items: LedgerItem[]): HistorySection[] {
+  const map = new Map<string, SessionCard[]>();
+
+  for (const item of items) {
+    const key = item.ledgerDate;
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key)!.push({
+      id: `${item.ledgerDate}-${item.deviceId}`,
+      deviceName: item.deviceName,
+      deviceIp: item.deviceIp,
+      fileCount: item.fileCount,
+      totalSize: formatBytes(item.totalBytes),
+      duration: formatDuration(item.transmissionMs),
+    });
+  }
+
+  const sections: HistorySection[] = [];
+  for (const [date, data] of map.entries()) {
+    sections.push({
+      title: formatDateLabel(date),
+      isToday: isToday(date),
+      data,
+    });
+  }
+
+  return sections;
 }
 
 // ---------------------------------------------------------------------------

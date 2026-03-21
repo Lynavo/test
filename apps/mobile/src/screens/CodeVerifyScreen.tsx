@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Vibration,
+  NativeModules,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -33,7 +34,7 @@ const VERIFY_DELAY_MS = 1200;
 export function CodeVerifyScreen() {
   const navigation = useNavigation<CodeVerifyNavProp>();
   const route = useRoute<CodeVerifyRouteProp>();
-  const { deviceName } = route.params;
+  const { deviceId, host, port, deviceName } = route.params;
 
   const [code, setCode] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const [verifying, setVerifying] = useState(false);
@@ -42,19 +43,45 @@ export function CodeVerifyScreen() {
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
   // -----------------------------------------------------------------------
-  // Simulate verification (mock — always succeeds after delay)
+  // Submit code — try native module, fallback to mock
   // -----------------------------------------------------------------------
 
   const submitCode = useCallback(
-    (fullCode: string) => {
+    async (fullCode: string) => {
       setVerifying(true);
+      setError(false);
+
+      try {
+        const { NativeSyncEngine } = NativeModules;
+        if (NativeSyncEngine) {
+          await NativeSyncEngine.pairDevice({
+            deviceId,
+            host,
+            port,
+            connectionCode: fullCode,
+          });
+          setVerifying(false);
+          navigation.replace('SyncStatus');
+          return;
+        }
+      } catch (e) {
+        console.warn('Native pairing failed or unavailable, falling back to mock');
+        // If native module threw an actual pairing error, show error state
+        setVerifying(false);
+        setError(true);
+        setCode(Array(CODE_LENGTH).fill(''));
+        Vibration.vibrate(300);
+        inputRefs.current[0]?.focus();
+        return;
+      }
+
+      // Mock fallback: always succeed after delay
       setTimeout(() => {
         setVerifying(false);
-        // Mock: always succeed for now
         navigation.replace('SyncStatus');
       }, VERIFY_DELAY_MS);
     },
-    [navigation],
+    [navigation, deviceId, host, port],
   );
 
   // -----------------------------------------------------------------------
@@ -88,7 +115,7 @@ export function CodeVerifyScreen() {
   );
 
   // -----------------------------------------------------------------------
-  // Handle backspace on empty box → move to previous
+  // Handle backspace on empty box -> move to previous
   // -----------------------------------------------------------------------
 
   const handleKeyPress = useCallback(
@@ -100,25 +127,14 @@ export function CodeVerifyScreen() {
     [code],
   );
 
-  // -----------------------------------------------------------------------
-  // Clear all boxes on error
-  // -----------------------------------------------------------------------
-
-  const triggerError = useCallback(() => {
-    setError(true);
-    setCode(Array(CODE_LENGTH).fill(''));
-    Vibration.vibrate(300);
-    inputRefs.current[0]?.focus();
-  }, []);
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Device name context */}
-        <Text style={styles.deviceLabel}>正在连接: {deviceName}</Text>
+        <Text style={styles.deviceLabel}>{'\u6B63\u5728\u8FDE\u63A5'}: {deviceName}</Text>
 
         {/* Prompt */}
-        <Text style={styles.prompt}>请输入电脑端显示的 6 位连接码</Text>
+        <Text style={styles.prompt}>{'\u8BF7\u8F93\u5165\u7535\u8111\u7AEF\u663E\u793A\u7684 6 \u4F4D\u8FDE\u63A5\u7801'}</Text>
 
         {/* Code input boxes */}
         <View style={styles.codeRow}>
@@ -151,19 +167,19 @@ export function CodeVerifyScreen() {
         {verifying && (
           <View style={styles.statusRow}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.statusText}>正在验证连接码...</Text>
+            <Text style={styles.statusText}>{'\u6B63\u5728\u9A8C\u8BC1\u8FDE\u63A5\u7801...'}</Text>
           </View>
         )}
 
         {/* Status: error */}
         {error && (
-          <Text style={styles.errorText}>连接码错误，请重新输入</Text>
+          <Text style={styles.errorText}>{'\u8FDE\u63A5\u7801\u9519\u8BEF\uFF0C\u8BF7\u91CD\u65B0\u8F93\u5165'}</Text>
         )}
 
         {/* Help text */}
         <View style={styles.helpCard}>
           <Text style={styles.helpText}>
-            请确保手机与电脑处于同一局域网下，在电脑端打开应用即可看到连接码
+            {'\u8BF7\u786E\u4FDD\u624B\u673A\u4E0E\u7535\u8111\u5904\u4E8E\u540C\u4E00\u5C40\u57DF\u7F51\u4E0B\uFF0C\u5728\u7535\u8111\u7AEF\u6253\u5F00\u5E94\u7528\u5373\u53EF\u770B\u5230\u8FDE\u63A5\u7801'}
           </Text>
         </View>
       </View>
