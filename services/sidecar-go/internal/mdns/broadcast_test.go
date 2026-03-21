@@ -81,8 +81,8 @@ func TestNewBroadcaster_ValidConfig(t *testing.T) {
 	defer b.Shutdown()
 }
 
-func TestShutdown_NilServer(t *testing.T) {
-	b := &Broadcaster{server: nil}
+func TestShutdown_NilCmd(t *testing.T) {
+	b := &Broadcaster{cmd: nil}
 	// Must not panic.
 	b.Shutdown()
 }

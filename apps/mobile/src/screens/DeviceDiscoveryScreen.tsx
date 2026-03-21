@@ -119,10 +119,10 @@ export function DeviceDiscoveryScreen() {
     try {
       const { NativeSyncEngine } = NativeModules;
       if (NativeSyncEngine) {
-        console.log('[Discovery] NativeModules keys:', Object.keys(NativeModules));
-        console.log('[Discovery] NativeSyncEngine:', NativeSyncEngine);
-        console.log('[Discovery] NativeSyncEngine methods:', NativeSyncEngine ? Object.getOwnPropertyNames(NativeSyncEngine) : 'null');
-        console.log('[Discovery] typeof startDiscovery:', typeof NativeSyncEngine?.startDiscovery);
+        
+        
+        
+        
         NativeSyncEngine.startDiscovery()
           .then((diag: any) => console.log('[Discovery] startDiscovery resolved, diag:', JSON.stringify(diag)))
           .catch((e: Error) => console.warn('[Discovery] startDiscovery failed:', e));
