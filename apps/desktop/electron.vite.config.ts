@@ -1,8 +1,9 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { fileURLToPath } from 'url';
 
-const root = __dirname;
+const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   main: {
@@ -14,7 +15,7 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@renderer': resolve(root, 'src/renderer'),
+        '@renderer': resolve(projectRoot, 'src/renderer'),
       },
     },
     plugins: [react()],
