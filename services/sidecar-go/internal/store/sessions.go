@@ -59,6 +59,18 @@ func (s *Store) UpdateSessionState(sessionID, state string) error {
 	return nil
 }
 
+// UpdateSessionActiveFile updates the currently active file and its byte offset for a session.
+func (s *Store) UpdateSessionActiveFile(sessionID, fileKey string, offset int64) error {
+	_, err := s.db.Exec(
+		`UPDATE sessions SET active_file_key = ?, active_offset = ?, updated_at = ? WHERE session_id = ?`,
+		fileKey, offset, time.Now().UTC().Format(time.RFC3339), sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("update session active file %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // GetActiveSession returns the most recent non-ended, non-error session for a client.
 func (s *Store) GetActiveSession(clientID string) (*Session, error) {
 	sess := &Session{}
