@@ -3,6 +3,10 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"time"
+
+	"github.com/nicksyncflow/sidecar/internal/share"
+	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
 type shareStatusDTO struct {
@@ -30,7 +34,7 @@ func (s *Server) handleShareStatus(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// handleShareValidate is a placeholder. Real detection will be implemented in T2.7.
+// handleShareValidate runs SMB share detection and persists the result.
 func (s *Server) handleShareValidate(w http.ResponseWriter, _ *http.Request) {
 	cfg, err := s.store.GetShareConfig()
 	if err != nil {
@@ -39,11 +43,30 @@ func (s *Server) handleShareValidate(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, shareStatusDTO{
-		Enabled:         cfg.ShareURL != "",
-		SmbURL:          cfg.ShareURL,
-		Status:          cfg.ShareStatus,
-		LastValidatedAt: cfg.LastValidatedAt,
-		LastError:       cfg.LastError,
-	})
+	result := share.Detect(cfg.ReceiveRoot, cfg.ShareName)
+
+	// Persist the detection result.
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := s.store.UpdateShareConfig(store.ShareConfig{
+		ReceiveRoot:     cfg.ReceiveRoot,
+		ShareName:       cfg.ShareName,
+		ShareURL:        derefStr(result.SmbURL),
+		ShareStatus:     string(result.Status),
+		LastValidatedAt: &now,
+		LastError:       result.Error,
+	}); err != nil {
+		slog.Error("share validate: update config", "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to persist share status")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// derefStr safely dereferences a *string, returning "" if nil.
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
