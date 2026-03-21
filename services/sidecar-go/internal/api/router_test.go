@@ -345,6 +345,108 @@ func TestRegenerateCode(t *testing.T) {
 	}
 }
 
+func TestConnectionCodeAutoRegeneration(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+
+	// Verify the migration seeds connection_code as "000000"
+	code, err := st.GetConnectionCode()
+	if err != nil {
+		t.Fatalf("GetConnectionCode: %v", err)
+	}
+	if code != "000000" {
+		t.Fatalf("expected seed code 000000, got %s", code)
+	}
+
+	// Simulate bootstrapReconciliation (as main.go does on startup):
+	// detect the placeholder and replace it with a real 6-digit code.
+	if code == "000000" {
+		if err := st.SetConnectionCode("482917"); err != nil {
+			t.Fatalf("SetConnectionCode: %v", err)
+		}
+	}
+
+	handler := api.NewServer(st, cfg, hub)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	// Step 1: GET /settings should return the bootstrapped (non-"000000") code
+	resp, err := http.Get(srv.URL + "/settings")
+	if err != nil {
+		t.Fatalf("GET /settings: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var settings settingsResp
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		t.Fatalf("decode settings: %v", err)
+	}
+	if settings.ConnectionCode == "000000" {
+		t.Fatal("expected connection code to have been auto-regenerated, still 000000")
+	}
+	if len(settings.ConnectionCode) != 6 {
+		t.Fatalf("expected 6-digit code, got %q", settings.ConnectionCode)
+	}
+	oldCode := settings.ConnectionCode
+
+	// Step 2: POST /connection-code/regenerate should return a new code
+	resp2, err := http.Post(srv.URL+"/connection-code/regenerate", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /connection-code/regenerate: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+
+	var regenResp map[string]string
+	if err := json.NewDecoder(resp2.Body).Decode(&regenResp); err != nil {
+		t.Fatalf("decode regenerate: %v", err)
+	}
+	newCode := regenResp["code"]
+	if len(newCode) != 6 {
+		t.Fatalf("expected 6-digit code from regenerate, got %q", newCode)
+	}
+	if newCode < "100000" {
+		t.Errorf("expected code >= 100000, got %s", newCode)
+	}
+	if newCode == oldCode {
+		t.Errorf("expected regenerated code to differ from old code %s", oldCode)
+	}
+
+	// Step 3: GET /settings should now reflect the regenerated code
+	resp3, err := http.Get(srv.URL + "/settings")
+	if err != nil {
+		t.Fatalf("GET /settings (after regen): %v", err)
+	}
+	defer resp3.Body.Close()
+
+	if resp3.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp3.StatusCode)
+	}
+
+	var updatedSettings settingsResp
+	if err := json.NewDecoder(resp3.Body).Decode(&updatedSettings); err != nil {
+		t.Fatalf("decode updated settings: %v", err)
+	}
+	if updatedSettings.ConnectionCode != newCode {
+		t.Errorf("GET /settings code = %s, want %s", updatedSettings.ConnectionCode, newCode)
+	}
+}
+
+// settingsResp mirrors the settings JSON response for test decoding.
+type settingsResp struct {
+	ConnectionCode string `json:"connectionCode"`
+	ReceivePath    string `json:"receivePath"`
+	ShareAddress   string `json:"shareAddress"`
+	ShareStatus    string `json:"shareStatus"`
+	ShareName      string `json:"shareName"`
+}
+
 func TestShareStatus(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	handler := api.NewServer(st, cfg, hub)
