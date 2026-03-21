@@ -1,5 +1,6 @@
 import Foundation
 import Photos
+import UIKit
 
 @objc
 class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
@@ -26,6 +27,48 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         }
         uploadQueue.exportService = exportService
         discoveryService.delegate = self
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    // MARK: - App State Transitions
+
+    @objc private func appDidEnterBackground() {
+        NSLog("[SyncEngine] app entered background")
+        if sessionService.state == .syncingForeground {
+            sessionService.transitionTo(.syncingBackground)
+            let taskId = backgroundService.beginTransitionTask()
+            backgroundService.submitContinuedTask()
+            // End transition task after a delay to allow BGTask scheduling
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                self.backgroundService.endTransitionTask(taskId)
+            }
+        }
+    }
+
+    @objc private func appWillEnterForeground() {
+        NSLog("[SyncEngine] app entering foreground")
+        if sessionService.state == .syncingBackground {
+            sessionService.transitionTo(.syncingForeground)
+        }
+    }
+
+    // MARK: - Sync
+
+    /// Start or resume a sync session. Currently a stub — full pipeline wired in a follow-up task.
+    func startSync() {
+        NSLog("[SyncEngine] startSync (stub)")
     }
 
     // MARK: - DiscoveryServiceDelegate

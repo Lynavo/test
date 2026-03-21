@@ -23,6 +23,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     window = UIWindow(frame: UIScreen.main.bounds)
 
+    // Register background task handlers before app finishes launching
+    SyncEngineManager.shared.backgroundService.registerBackgroundTasks()
+
     factory.startReactNative(
       withModuleName: "SyncFlowMobile",
       in: window,
