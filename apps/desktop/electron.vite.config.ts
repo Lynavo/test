@@ -18,6 +18,9 @@ export default defineConfig({
         '@renderer': resolve(projectRoot, 'src/renderer'),
       },
     },
+    optimizeDeps: {
+      include: ['@syncflow/contracts', '@syncflow/design-tokens'],
+    },
     plugins: [react()],
   },
 });
