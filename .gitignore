@@ -4,3 +4,7 @@ out/
 .turbo/
 *.tsbuildinfo
 .DS_Store
+
+# Playwright
+.playwright-mcp/
+*.png
