@@ -2,11 +2,57 @@ import Foundation
 import React
 
 @objc(NativeSyncEngine)
-class NativeSyncEngineModule: NSObject {
+class NativeSyncEngineModule: RCTEventEmitter {
 
-    @objc static func requiresMainQueueSetup() -> Bool {
+    static var shared: NativeSyncEngineModule?
+
+    override init() {
+        super.init()
+        NativeSyncEngineModule.shared = self
+    }
+
+    override func supportedEvents() -> [String]! {
+        return [
+            "onDiscoveredDevicesChanged",
+            "onSyncStateChanged",
+            "onQueueUpdated",
+            "onHistoryUpdated",
+            "onBindingStateChanged",
+            "onError",
+        ]
+    }
+
+    override static func requiresMainQueueSetup() -> Bool {
         return false
     }
+
+    // MARK: - Event Emitters
+
+    func emitDiscoveredDevices(_ devices: [[String: Any]]) {
+        sendEvent(withName: "onDiscoveredDevicesChanged", body: devices)
+    }
+
+    func emitSyncStateChanged(_ state: [String: Any]) {
+        sendEvent(withName: "onSyncStateChanged", body: state)
+    }
+
+    func emitQueueUpdated(_ queue: [[String: Any]]) {
+        sendEvent(withName: "onQueueUpdated", body: queue)
+    }
+
+    func emitHistoryUpdated() {
+        sendEvent(withName: "onHistoryUpdated", body: nil)
+    }
+
+    func emitBindingStateChanged(_ binding: [String: Any]?) {
+        sendEvent(withName: "onBindingStateChanged", body: binding)
+    }
+
+    func emitError(_ error: [String: Any]) {
+        sendEvent(withName: "onError", body: error)
+    }
+
+    // MARK: - Bridge Methods
 
     @objc
     func requestPhotoPermission(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -18,26 +64,14 @@ class NativeSyncEngineModule: NSObject {
 
     @objc
     func startDiscovery(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        Task {
-            do {
-                try await SyncEngineManager.shared.startDiscovery()
-                resolve(nil)
-            } catch {
-                reject("DISCOVERY_ERROR", error.localizedDescription, error)
-            }
-        }
+        SyncEngineManager.shared.startDiscovery()
+        resolve(nil)
     }
 
     @objc
     func stopDiscovery(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        Task {
-            do {
-                try await SyncEngineManager.shared.stopDiscovery()
-                resolve(nil)
-            } catch {
-                reject("DISCOVERY_ERROR", error.localizedDescription, error)
-            }
-        }
+        SyncEngineManager.shared.stopDiscovery()
+        resolve(nil)
     }
 
     @objc

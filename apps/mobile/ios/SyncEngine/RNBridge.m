@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface RCT_EXTERN_MODULE(NativeSyncEngine, NSObject)
+@interface RCT_EXTERN_MODULE(NativeSyncEngine, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(requestPhotoPermission:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(startDiscovery:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
