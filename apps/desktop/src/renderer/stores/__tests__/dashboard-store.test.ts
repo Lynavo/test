@@ -93,4 +93,44 @@ describe('dashboard-store', () => {
     useDashboardStore.getState().updateSummary(newSummary);
     expect(useDashboardStore.getState().summary).toEqual(newSummary);
   });
+
+  it('updateDeviceProgress updates progress for matching device', () => {
+    useDashboardStore.getState().updateDeviceProgress('d1', 'file-key-1', 85);
+    const d1 = useDashboardStore.getState().devices.find((d) => d.deviceId === 'd1');
+    expect(d1?.currentFile?.progress).toBe(85);
+    expect(d1?.currentFile?.filename).toBe('DJI_0421_4K_RAW.mp4');
+  });
+
+  it('updateDeviceProgress is no-op for device without currentFile', () => {
+    useDashboardStore.getState().updateDeviceProgress('d2', 'file-key-2', 50);
+    const d2 = useDashboardStore.getState().devices.find((d) => d.deviceId === 'd2');
+    expect(d2?.currentFile).toBeUndefined();
+  });
+
+  it('updateDeviceProgress is no-op for unknown device', () => {
+    const before = useDashboardStore.getState().devices;
+    useDashboardStore.getState().updateDeviceProgress('unknown', 'fk', 99);
+    const after = useDashboardStore.getState().devices;
+    expect(after).toEqual(before);
+  });
+
+  it('updateDeviceStatus changes status and re-sorts', () => {
+    // d4 starts as offline (last), promote it to transferring
+    useDashboardStore.getState().updateDeviceStatus('d4', 'transferring');
+    const devices = useDashboardStore.getState().devices;
+    // Both d1 and d4 are now transferring, so they should be first
+    expect(devices[0].status).toBe('transferring');
+    expect(devices[1].status).toBe('transferring');
+    expect(devices[2].status).toBe('connected_idle');
+    const d4 = devices.find((d) => d.deviceId === 'd4');
+    expect(d4?.status).toBe('transferring');
+  });
+
+  it('updateDeviceStatus to offline moves device to end', () => {
+    useDashboardStore.getState().updateDeviceStatus('d1', 'offline');
+    const devices = useDashboardStore.getState().devices;
+    expect(devices[0].status).toBe('connected_idle');
+    expect(devices[1].status).toBe('offline');
+    expect(devices[2].status).toBe('offline');
+  });
 });

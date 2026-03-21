@@ -22,6 +22,8 @@ export interface DashboardState {
   dismissDiskWarning(): void;
   updateSummary(summary: DashboardSummaryDTO): void;
   updateDevices(devices: DashboardDeviceDTO[]): void;
+  updateDeviceProgress(deviceId: string, fileKey: string, progress: number): void;
+  updateDeviceStatus(deviceId: string, status: DeviceDashboardStatus): void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -53,4 +55,24 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   updateSummary: (summary) => set({ summary }),
 
   updateDevices: (devices) => set({ devices: sortDevices(devices) }),
+
+  updateDeviceProgress: (deviceId, _fileKey, progress) => {
+    set((state) => ({
+      devices: state.devices.map((d) =>
+        d.deviceId === deviceId && d.currentFile
+          ? { ...d, currentFile: { ...d.currentFile, progress } }
+          : d,
+      ),
+    }));
+  },
+
+  updateDeviceStatus: (deviceId, status) => {
+    set((state) => ({
+      devices: sortDevices(
+        state.devices.map((d) =>
+          d.deviceId === deviceId ? { ...d, status } : d,
+        ),
+      ),
+    }));
+  },
 }));

@@ -44,8 +44,19 @@ export function AppShell() {
         case 'dashboard.updated':
           useDashboardStore.getState().updateSummary(event.payload);
           break;
-        case 'device.state.changed':
         case 'upload.progress':
+          useDashboardStore.getState().updateDeviceProgress(
+            event.payload.deviceId,
+            event.payload.fileKey,
+            event.payload.progress,
+          );
+          break;
+        case 'device.state.changed':
+          useDashboardStore.getState().updateDeviceStatus(
+            event.payload.deviceId,
+            event.payload.status,
+          );
+          break;
         case 'upload.completed':
         case 'upload.failed':
           useDashboardStore.getState().fetchDashboard();
@@ -63,6 +74,14 @@ export function AppShell() {
       }
     });
     return unsub;
+  }, []);
+
+  // Periodic polling fallback in case WebSocket events are missed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      useDashboardStore.getState().fetchDashboard();
+    }, 10_000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
