@@ -119,22 +119,38 @@ export function DeviceDiscoveryScreen() {
     try {
       const { NativeSyncEngine } = NativeModules;
       if (NativeSyncEngine) {
-        NativeSyncEngine.startDiscovery();
+        console.log('[Discovery] NativeModules keys:', Object.keys(NativeModules));
+        console.log('[Discovery] NativeSyncEngine:', NativeSyncEngine);
+        console.log('[Discovery] NativeSyncEngine methods:', NativeSyncEngine ? Object.getOwnPropertyNames(NativeSyncEngine) : 'null');
+        console.log('[Discovery] typeof startDiscovery:', typeof NativeSyncEngine?.startDiscovery);
+        NativeSyncEngine.startDiscovery()
+          .then((diag: any) => console.log('[Discovery] startDiscovery resolved, diag:', JSON.stringify(diag)))
+          .catch((e: Error) => console.warn('[Discovery] startDiscovery failed:', e));
+        // Poll browser state after a delay
+        setTimeout(() => {
+          NativeSyncEngine.startDiscovery()
+            .then((diag: any) => console.log('[Discovery] browser state after 3s:', JSON.stringify(diag)));
+        }, 3000);
         const emitter = new NativeEventEmitter(NativeSyncEngine);
         subscription = emitter.addListener('onDiscoveredDevicesChanged', (discoveredDevices: DiscoveredDevice[]) => {
+          console.log('[Discovery] received devices event:', JSON.stringify(discoveredDevices));
           setDevices(discoveredDevices);
           setScanning(false);
         });
+        // Timeout fallback: if no devices found after 8s, stop scanning animation
+        mockTimer = setTimeout(() => {
+          console.log('[Discovery] timeout — no devices found, stopping scan animation');
+          setScanning(false);
+        }, 8000);
       } else {
-        // Fallback to mock data
+        console.log('[Discovery] native module not found, using mock data');
         mockTimer = setTimeout(() => {
           setDevices(mockDevices);
           setScanning(false);
         }, 1800);
       }
-    } catch {
-      // Fallback to mock data
-      console.warn('Native module not available, using mock discovery data');
+    } catch (e) {
+      console.warn('[Discovery] error:', e);
       mockTimer = setTimeout(() => {
         setDevices(mockDevices);
         setScanning(false);

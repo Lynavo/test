@@ -3,30 +3,27 @@ package mdns
 import (
 	"fmt"
 	"log/slog"
-	"net"
-	"os"
-
-	"github.com/hashicorp/mdns"
+	"os/exec"
+	"strings"
 )
 
 // BroadcastConfig holds the parameters for Bonjour/mDNS service registration.
 type BroadcastConfig struct {
-	DeviceID     string // e.g. "mac-7fae12c9"
-	DeviceName   string // display name, used as mDNS instance name
+	DeviceID     string
+	DeviceName   string
 	DeviceType   string // "mac"
-	TCPPort      int    // 39393 — the LMUP TCP port, NOT the HTTP port
+	TCPPort      int    // 39393
 	Proto        int    // 2
 	ShareEnabled bool
-	ShareName    string // SMB share name, e.g. "SyncFlow"
+	ShareName    string
 }
 
-// Broadcaster wraps an mDNS server that advertises _syncflow._tcp on the LAN.
+// Broadcaster wraps a dns-sd process that advertises _syncflow._tcp via macOS native Bonjour.
 type Broadcaster struct {
-	server *mdns.Server
+	cmd *exec.Cmd
 }
 
 // BuildTXTRecords constructs the TXT record key-value pairs from config.
-// Exported so tests can verify the output without starting a real mDNS server.
 func BuildTXTRecords(cfg BroadcastConfig) []string {
 	return []string{
 		fmt.Sprintf("id=%s", cfg.DeviceID),
@@ -39,43 +36,38 @@ func BuildTXTRecords(cfg BroadcastConfig) []string {
 	}
 }
 
-// NewBroadcaster registers a _syncflow._tcp Bonjour service on the local network.
+// NewBroadcaster registers a _syncflow._tcp Bonjour service using macOS native dns-sd command.
+// This is guaranteed compatible with Apple's NWBrowser on iOS.
 func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 	txt := BuildTXTRecords(cfg)
 
-	host, _ := os.Hostname()
-	ips := getLocalIPs()
+	// Build dns-sd command: dns-sd -R <name> <type> <domain> <port> [TXT key=value ...]
+	args := []string{"-R", cfg.DeviceName, "_syncflow._tcp", "local.", fmt.Sprintf("%d", cfg.TCPPort)}
+	args = append(args, txt...)
 
-	service, err := mdns.NewMDNSService(
-		cfg.DeviceName,     // instance name
-		"_syncflow._tcp",   // service type
-		"",                 // domain (empty = default)
-		host+".",           // host name
-		cfg.TCPPort,        // port
-		ips,                // IPs to advertise
-		txt,                // TXT records
-	)
-	if err != nil {
-		return nil, fmt.Errorf("mdns service: %w", err)
+	cmd := exec.Command("dns-sd", args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("dns-sd start: %w", err)
 	}
 
-	server, err := mdns.NewServer(&mdns.Config{Zone: service})
-	if err != nil {
-		return nil, fmt.Errorf("mdns server: %w", err)
-	}
-
-	slog.Info("bonjour broadcasting",
+	slog.Info("bonjour broadcasting (dns-sd)",
 		"service", "_syncflow._tcp",
 		"port", cfg.TCPPort,
 		"name", cfg.DeviceName,
+		"txt", strings.Join(txt, ", "),
+		"pid", cmd.Process.Pid,
 	)
-	return &Broadcaster{server: server}, nil
+	return &Broadcaster{cmd: cmd}, nil
 }
 
-// Shutdown stops the mDNS broadcast. Safe to call on a nil Broadcaster or server.
+// Shutdown stops the dns-sd process.
 func (b *Broadcaster) Shutdown() {
-	if b != nil && b.server != nil {
-		b.server.Shutdown()
+	if b != nil && b.cmd != nil && b.cmd.Process != nil {
+		b.cmd.Process.Kill()
+		b.cmd.Wait()
 	}
 }
 
@@ -84,18 +76,4 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
-}
-
-func getLocalIPs() []net.IP {
-	var ips []net.IP
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil
-	}
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			ips = append(ips, ipnet.IP)
-		}
-	}
-	return ips
 }

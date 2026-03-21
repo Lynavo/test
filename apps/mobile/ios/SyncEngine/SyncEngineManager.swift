@@ -22,7 +22,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             uploadStore = try UploadStore()
             historyStore = HistoryLedgerStore(store: uploadStore!)
         } catch {
-            print("[SyncEngine] Failed to init stores: \(error)")
+            NSLog("[SyncEngine] Failed to init stores: \(error)")
         }
         uploadQueue.exportService = exportService
         discoveryService.delegate = self
@@ -31,6 +31,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
     // MARK: - DiscoveryServiceDelegate
 
     func discoveryDidUpdate(devices: [DiscoveredDevice]) {
+        NSLog("[SyncEngine] discoveryDidUpdate called with \(devices.count) devices")
         let mapped: [[String: Any]] = devices.map { device in
             [
                 "deviceId": device.deviceId,
@@ -44,18 +45,23 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
                 "shareName": device.shareName ?? NSNull(),
             ]
         }
-        NativeSyncEngineModule.shared?.emitDiscoveredDevices(mapped)
+        if let bridge = NativeSyncEngineModule.shared {
+            NSLog("[SyncEngine] emitting \(mapped.count) devices to RN")
+            bridge.emitDiscoveredDevices(mapped)
+        } else {
+            NSLog("[SyncEngine] WARNING: NativeSyncEngineModule.shared is nil, cannot emit")
+        }
     }
 
     // MARK: - Discovery
 
     func startDiscovery() {
-        print("[SyncEngine] startDiscovery")
+        NSLog("[SyncEngine] startDiscovery - delegate is \(discoveryService.delegate == nil ? "nil" : "set")")
         discoveryService.startBrowsing()
     }
 
     func stopDiscovery() {
-        print("[SyncEngine] stopDiscovery")
+        NSLog("[SyncEngine] stopDiscovery")
         discoveryService.stopBrowsing()
     }
 
@@ -84,11 +90,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
     func pairDevice(deviceId: String, host: String, port: Int, connectionCode: String) async throws {
         // Stub: full LMUP handshake will be wired in a follow-up task.
         // For now, log and return success so the UI flow works end-to-end.
-        print("[SyncEngine] pairDevice \(deviceId) at \(host):\(port) code=\(connectionCode) (stub)")
+        NSLog("[SyncEngine] pairDevice \(deviceId) at \(host):\(port) code=\(connectionCode) (stub)")
     }
 
     func disconnectAndUnbind() async throws {
-        print("[SyncEngine] disconnectAndUnbind")
+        NSLog("[SyncEngine] disconnectAndUnbind")
         bindingService.clearPairingToken()
         try uploadStore?.clearBinding()
         transport.disconnect()
@@ -175,7 +181,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
     // MARK: - Settings
 
     func renameBoundDeviceAlias(alias: String) async throws {
-        print("[SyncEngine] renameBoundDeviceAlias \(alias)")
+        NSLog("[SyncEngine] renameBoundDeviceAlias \(alias)")
         guard var binding = uploadStore?.getBinding() else {
             throw SyncEngineError.pairingError("No active binding to rename")
         }

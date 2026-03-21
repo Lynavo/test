@@ -22,21 +22,32 @@ class DiscoveryService {
     private let queue = DispatchQueue(label: "com.syncflow.discovery")
     private var devices: [String: DiscoveredDevice] = [:]  // keyed by deviceId
     weak var delegate: DiscoveryServiceDelegate?
+    var browserState: String = "not_started"
 
     func startBrowsing() {
+        NSLog("[DiscoveryService] startBrowsing called")
+        // Use _syncflow._tcp without trailing dot — Apple's API adds it automatically
+        let descriptor = NWBrowser.Descriptor.bonjour(type: "_syncflow._tcp", domain: nil)
         let params = NWParameters()
         params.includePeerToPeer = true
-        browser = NWBrowser(for: .bonjourWithTXTRecord(type: "_syncflow._tcp", domain: nil), using: params)
+        browser = NWBrowser(for: descriptor, using: params)
 
-        browser?.browseResultsChangedHandler = { [weak self] results, _ in
+        browser?.browseResultsChangedHandler = { [weak self] results, changes in
+            NSLog("[DiscoveryService] results changed: \(results.count) results, \(changes.count) changes")
             self?.handleResults(results)
         }
 
-        browser?.stateUpdateHandler = { state in
-            print("[DiscoveryService] state: \(state)")
+        browser?.stateUpdateHandler = { [weak self] state in
+            NSLog("[DiscoveryService] state: \(state)")
+            self?.browserState = String(describing: state)
+            if case .failed(let error) = state {
+                NSLog("[DiscoveryService] FAILED: \(error)")
+                self?.browserState = "failed: \(error)"
+            }
         }
 
         browser?.start(queue: queue)
+        NSLog("[DiscoveryService] browser started")
     }
 
     func stopBrowsing() {
@@ -49,17 +60,56 @@ class DiscoveryService {
         var updated: [String: DiscoveredDevice] = [:]
 
         for result in results {
-            if case .service(let name, _, _, _) = result.endpoint {
-                if case .bonjour(let txtRecord) = result.metadata {
+            NSLog("[DiscoveryService] result: endpoint=\(result.endpoint) metadata=\(result.metadata)")
+
+            if case .service(let name, let type, let domain, _) = result.endpoint {
+                NSLog("[DiscoveryService] found service: name=\(name) type=\(type) domain=\(domain)")
+
+                switch result.metadata {
+                case .bonjour(let txtRecord):
+                    NSLog("[DiscoveryService] has TXT record")
                     let device = parseTXTRecord(serviceName: name, txtRecord: txtRecord)
                     if let device {
                         updated[device.deviceId] = device
+                        NSLog("[DiscoveryService] parsed device: \(device.name) id=\(device.deviceId)")
+                    } else {
+                        // Service found but no valid TXT — create device from service name
+                        let fallbackDevice = DiscoveredDevice(
+                            deviceId: name,
+                            name: name,
+                            type: "mac",
+                            ip: "",
+                            port: 39393,
+                            protoVersion: 2,
+                            authMode: "code",
+                            shareEnabled: false,
+                            shareName: nil
+                        )
+                        updated[name] = fallbackDevice
+                        NSLog("[DiscoveryService] created fallback device from service name")
                     }
+                case .none:
+                    NSLog("[DiscoveryService] no metadata, creating fallback device")
+                    let fallbackDevice = DiscoveredDevice(
+                        deviceId: name,
+                        name: name,
+                        type: "mac",
+                        ip: "",
+                        port: 39393,
+                        protoVersion: 2,
+                        authMode: "code",
+                        shareEnabled: false,
+                        shareName: nil
+                    )
+                    updated[name] = fallbackDevice
+                default:
+                    NSLog("[DiscoveryService] unexpected metadata type")
                 }
             }
         }
 
         devices = updated
+        NSLog("[DiscoveryService] emitting \(updated.count) devices")
         delegate?.discoveryDidUpdate(devices: Array(updated.values))
     }
 
