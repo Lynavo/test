@@ -1,0 +1,237 @@
+package store
+
+import (
+	"testing"
+	"time"
+)
+
+func sampleUpload(fileKey, clientID string) Upload {
+	now := time.Now().UTC().Format(time.RFC3339)
+	sess := "sess-1"
+	return Upload{
+		FileKey:          fileKey,
+		SessionID:        &sess,
+		ClientID:         clientID,
+		OriginalFilename: "IMG_001.jpg",
+		MediaType:        "image/jpeg",
+		FileSize:         1024000,
+		Status:           "transferring",
+		CommittedBytes:   0,
+		UpdatedAt:        now,
+	}
+}
+
+func TestUpsertGetUpload_Roundtrip(t *testing.T) {
+	s := newTestStore(t)
+	u := sampleUpload("file-1", "client-1")
+
+	if err := s.UpsertUpload(u); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	got, err := s.GetUpload("file-1")
+	if err != nil {
+		t.Fatalf("GetUpload: %v", err)
+	}
+	if got.FileKey != "file-1" {
+		t.Errorf("expected file_key 'file-1', got %q", got.FileKey)
+	}
+	if got.OriginalFilename != "IMG_001.jpg" {
+		t.Errorf("expected original_filename 'IMG_001.jpg', got %q", got.OriginalFilename)
+	}
+	if got.Status != "transferring" {
+		t.Errorf("expected status 'transferring', got %q", got.Status)
+	}
+}
+
+func TestListUploadsByDeviceAndDate(t *testing.T) {
+	s := newTestStore(t)
+	today := time.Now().UTC().Format("2006-01-02")
+
+	for _, fk := range []string{"f1", "f2", "f3"} {
+		u := sampleUpload(fk, "client-A")
+		u.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := s.UpsertUpload(u); err != nil {
+			t.Fatalf("UpsertUpload: %v", err)
+		}
+	}
+
+	// Different client
+	other := sampleUpload("f4", "client-B")
+	other.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := s.UpsertUpload(other); err != nil {
+		t.Fatalf("UpsertUpload other: %v", err)
+	}
+
+	uploads, err := s.ListUploadsByDeviceAndDate("client-A", today)
+	if err != nil {
+		t.Fatalf("ListUploadsByDeviceAndDate: %v", err)
+	}
+	if len(uploads) != 3 {
+		t.Errorf("expected 3 uploads, got %d", len(uploads))
+	}
+}
+
+func TestCompleteUpload(t *testing.T) {
+	s := newTestStore(t)
+	u := sampleUpload("complete-me", "client-1")
+
+	if err := s.UpsertUpload(u); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	if err := s.CompleteUpload("complete-me", "/final/path.jpg", "abc123hash", 5000); err != nil {
+		t.Fatalf("CompleteUpload: %v", err)
+	}
+
+	got, err := s.GetUpload("complete-me")
+	if err != nil {
+		t.Fatalf("GetUpload: %v", err)
+	}
+	if got.Status != "completed" {
+		t.Errorf("expected status 'completed', got %q", got.Status)
+	}
+	if got.FinalPath == nil || *got.FinalPath != "/final/path.jpg" {
+		t.Errorf("expected final_path '/final/path.jpg', got %v", got.FinalPath)
+	}
+	if got.SHA256 == nil || *got.SHA256 != "abc123hash" {
+		t.Errorf("expected sha256 'abc123hash', got %v", got.SHA256)
+	}
+	if got.ActiveTransmissionMs != 5000 {
+		t.Errorf("expected active_transmission_ms 5000, got %d", got.ActiveTransmissionMs)
+	}
+	if got.CompletedAt == nil {
+		t.Error("expected completed_at to be set")
+	}
+}
+
+func TestUpdateUploadProgress(t *testing.T) {
+	s := newTestStore(t)
+	u := sampleUpload("progress-me", "client-1")
+
+	if err := s.UpsertUpload(u); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	if err := s.UpdateUploadProgress("progress-me", 512000); err != nil {
+		t.Fatalf("UpdateUploadProgress: %v", err)
+	}
+
+	got, err := s.GetUpload("progress-me")
+	if err != nil {
+		t.Fatalf("GetUpload: %v", err)
+	}
+	if got.CommittedBytes != 512000 {
+		t.Errorf("expected committed_bytes 512000, got %d", got.CommittedBytes)
+	}
+}
+
+func TestGetAvailableDates(t *testing.T) {
+	s := newTestStore(t)
+
+	dates := []string{"2026-03-20", "2026-03-19", "2026-03-21"}
+	for i, d := range dates {
+		u := sampleUpload("date-"+d, "client-1")
+		u.UpdatedAt = d + "T12:00:00Z"
+		u.FileKey = u.FileKey + string(rune('a'+i))
+		if err := s.UpsertUpload(u); err != nil {
+			t.Fatalf("UpsertUpload: %v", err)
+		}
+	}
+
+	got, err := s.GetAvailableDates("client-1")
+	if err != nil {
+		t.Fatalf("GetAvailableDates: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 dates, got %d", len(got))
+	}
+	// Should be descending
+	if got[0] != "2026-03-21" {
+		t.Errorf("expected first date '2026-03-21', got %q", got[0])
+	}
+	if got[2] != "2026-03-19" {
+		t.Errorf("expected last date '2026-03-19', got %q", got[2])
+	}
+}
+
+func TestUpsertDailyStats_And_GetDashboardSummary(t *testing.T) {
+	s := newTestStore(t)
+	today := "2026-03-21"
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	stats := []DailyStats{
+		{StatDate: today, ClientID: "c1", ClientNameSnapshot: "Phone A", FileCount: 10, TotalBytes: 5000, UpdatedAt: now},
+		{StatDate: today, ClientID: "c2", ClientNameSnapshot: "Phone B", FileCount: 5, TotalBytes: 3000, UpdatedAt: now},
+		{StatDate: "2026-03-20", ClientID: "c1", ClientNameSnapshot: "Phone A", FileCount: 100, TotalBytes: 99999, UpdatedAt: now},
+	}
+	for _, stat := range stats {
+		if err := s.UpsertDailyStats(stat); err != nil {
+			t.Fatalf("UpsertDailyStats: %v", err)
+		}
+	}
+
+	summary, err := s.GetDashboardSummary(today)
+	if err != nil {
+		t.Fatalf("GetDashboardSummary: %v", err)
+	}
+	if summary.TotalFiles != 15 {
+		t.Errorf("expected 15 total files, got %d", summary.TotalFiles)
+	}
+	if summary.TotalBytes != 8000 {
+		t.Errorf("expected 8000 total bytes, got %d", summary.TotalBytes)
+	}
+}
+
+func TestGetDashboardSummary_EmptyDate(t *testing.T) {
+	s := newTestStore(t)
+
+	summary, err := s.GetDashboardSummary("2099-01-01")
+	if err != nil {
+		t.Fatalf("GetDashboardSummary: %v", err)
+	}
+	if summary.TotalFiles != 0 || summary.TotalBytes != 0 {
+		t.Errorf("expected zeros, got files=%d bytes=%d", summary.TotalFiles, summary.TotalBytes)
+	}
+}
+
+func TestGetDashboardDevices(t *testing.T) {
+	s := newTestStore(t)
+	today := "2026-03-21"
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Insert a paired device
+	alias := "WorkPhone"
+	ip := "192.168.1.10"
+	d := PairedDevice{
+		ClientID: "c1", ClientName: "iPhone 15", DeviceAlias: &alias, LastIP: &ip,
+		Platform: "ios", PairingID: "p1", PairingTokenHash: "h1",
+		CreatedAt: now, LastSeenAt: now,
+	}
+	if err := s.UpsertPairedDevice(d); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+
+	// Insert daily stats
+	stat := DailyStats{StatDate: today, ClientID: "c1", ClientNameSnapshot: "iPhone 15", FileCount: 7, TotalBytes: 2048, UpdatedAt: now}
+	if err := s.UpsertDailyStats(stat); err != nil {
+		t.Fatalf("UpsertDailyStats: %v", err)
+	}
+
+	devices, err := s.GetDashboardDevices(today)
+	if err != nil {
+		t.Fatalf("GetDashboardDevices: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("expected 1 device, got %d", len(devices))
+	}
+	if devices[0].ClientID != "c1" {
+		t.Errorf("expected client_id 'c1', got %q", devices[0].ClientID)
+	}
+	if devices[0].FileCount != 7 {
+		t.Errorf("expected 7 files, got %d", devices[0].FileCount)
+	}
+	if devices[0].TotalBytes != 2048 {
+		t.Errorf("expected 2048 bytes, got %d", devices[0].TotalBytes)
+	}
+}
