@@ -1,45 +1,36 @@
 import type { TurboModule } from 'react-native';
 import { TurboModuleRegistry } from 'react-native';
+import type {
+  BindingStateDTO,
+  DiscoveredDeviceDTO,
+  HistoryLedgerCardDTO,
+  ReadOnlyQueueItemDTO,
+  SyncSummaryDTO,
+} from '@syncflow/contracts';
 
 export interface Spec extends TurboModule {
-  startDiscovery(): void;
-  stopDiscovery(): void;
-  getDiscoveredDevices(): Promise<Array<{
-    deviceId: string;
-    displayName: string;
-    ip: string;
-    type: 'mac' | 'win';
-    connectionState: 'discovering' | 'bound' | 'connecting' | 'connected' | 'offline';
-    requiresCode: boolean;
-  }>>;
-
-  verifyConnectionCode(deviceId: string, code: string): Promise<{
-    success: boolean;
-    token?: string;
-    errorCode?: string;
-  }>;
-
-  getSyncSummary(): Promise<{
-    currentDeviceId: string | null;
-    currentDeviceName: string | null;
-    currentSpeedMbps: number;
-    transferredBytes: number;
-    totalBytes: number;
-    progressPercent: number;
-    uploadState: string;
-  }>;
-
-  getHistoryCards(): Promise<Array<{
-    dateKey: string;
-    deviceId: string;
-    deviceName: string;
-    deviceIp: string;
-    totalFileCount: number;
-    totalBytes: number;
-    activeTransmissionSeconds: number;
-  }>>;
-
-  disconnectCurrentDevice(): Promise<void>;
+  // 权限
+  requestPhotoPermission(): Promise<'granted' | 'limited' | 'denied'>;
+  // 发现 (同时触发本地网络权限)
+  startDiscovery(): Promise<void>;
+  stopDiscovery(): Promise<void>;
+  // 绑定
+  pairDevice(params: { deviceId: string; host: string; port: number; connectionCode: string }): Promise<void>;
+  disconnectAndUnbind(): Promise<void>;
+  // 状态查询
+  getBindingState(): Promise<BindingStateDTO | null>;
+  getSyncOverview(): Promise<SyncSummaryDTO>;
+  getReadOnlyQueue(): Promise<ReadOnlyQueueItemDTO[]>;
+  getHistoryDays(cursor?: string): Promise<{ items: HistoryLedgerCardDTO[]; nextCursor: string | null }>;
+  // 设置
+  renameBoundDeviceAlias(alias: string): Promise<void>;
+  // 事件 (Codegen EventEmitter)
+  readonly onDiscoveredDevicesChanged: (devices: DiscoveredDeviceDTO[]) => void;
+  readonly onSyncStateChanged: (summary: SyncSummaryDTO) => void;
+  readonly onQueueUpdated: (queue: ReadOnlyQueueItemDTO[]) => void;
+  readonly onHistoryUpdated: (card: HistoryLedgerCardDTO) => void;
+  readonly onBindingStateChanged: (state: BindingStateDTO | null) => void;
+  readonly onError: (error: { code: string; message: string }) => void;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('NativeSyncEngine');
