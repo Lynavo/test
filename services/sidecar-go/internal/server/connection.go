@@ -31,15 +31,16 @@ const (
 
 // connection represents a single LMUP/2 client connection and its state machine.
 type connection struct {
-	conn      net.Conn
-	store     *store.Store
-	config    *config.Config
-	hub       *events.Hub
-	state     connState
-	clientID  string
-	sessionID string
-	nonce     string      // generated on HELLO_RES for HMAC auth
-	pingTimer *time.Timer // 15s inactivity -> send PING
+	conn       net.Conn
+	store      *store.Store
+	config     *config.Config
+	hub        *events.Hub
+	state      connState
+	clientID   string
+	sessionID  string
+	nonce      string      // generated on HELLO_RES for HMAC auth
+	fileWriter *FileWriter // current .part file being written
+	pingTimer  *time.Timer // 15s inactivity -> send PING
 }
 
 func newConnection(conn net.Conn, s *store.Store, cfg *config.Config, hub *events.Hub) *connection {
@@ -56,6 +57,10 @@ func newConnection(conn net.Conn, s *store.Store, cfg *config.Config, hub *event
 // resets deadlines, and dispatches to the appropriate handler.
 func (c *connection) handle() {
 	defer func() {
+		if c.fileWriter != nil {
+			c.fileWriter.Close()
+			// Leave .part for resume; only remove on SHA256 mismatch (in handleFileEnd)
+		}
 		c.stopPingTimer()
 		c.conn.Close()
 		slog.Info("tcp client disconnected", "remote", c.conn.RemoteAddr(), "clientID", c.clientID)
@@ -160,40 +165,3 @@ func (c *connection) sendError(code, msg string) error {
 	})
 }
 
-// --- Placeholder handlers (implemented in T4.2-T4.6) ---
-
-func (c *connection) handleHello(body []byte) error {
-	return nil
-}
-
-func (c *connection) handleAuth(body []byte) error {
-	return nil
-}
-
-func (c *connection) handlePair(body []byte) error {
-	return nil
-}
-
-func (c *connection) handleSyncBegin(body []byte) error {
-	return nil
-}
-
-func (c *connection) handleFileInit(body []byte) error {
-	return nil
-}
-
-func (c *connection) handleFileData(hdr *protocol.FrameHeader, body []byte) error {
-	return nil
-}
-
-func (c *connection) handleFileEnd(body []byte) error {
-	return nil
-}
-
-func (c *connection) handleSyncEnd(body []byte) error {
-	return nil
-}
-
-func (c *connection) handlePing() error {
-	return protocol.WriteFrame(c.conn, protocol.TypePong, nil)
-}
