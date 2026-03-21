@@ -2,11 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Dashboard } from '../Dashboard';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
+import { mockDashboardSummary } from '@renderer/mocks/dashboard';
+import { mockDevices } from '@renderer/mocks/devices';
 
 describe('Dashboard', () => {
   beforeEach(() => {
-    // Reset store to defaults (with mock data) before each test
     useDashboardStore.setState({
+      summary: mockDashboardSummary,
+      devices: mockDevices,
       diskWarningDismissed: false,
     });
   });

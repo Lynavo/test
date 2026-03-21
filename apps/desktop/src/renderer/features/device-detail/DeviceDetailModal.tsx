@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogPortal,
@@ -23,6 +23,13 @@ export function DeviceDetailModal() {
   const selectedDate = useDeviceDetailStore((s) => s.selectedDate);
   const availableDates = useDeviceDetailStore((s) => s.availableDates);
   const setDate = useDeviceDetailStore((s) => s.setDate);
+
+  // Fetch files when modal opens with a device
+  useEffect(() => {
+    if (isModalOpen && selectedDevice) {
+      useDeviceDetailStore.getState().fetchDeviceFiles(selectedDevice.deviceId);
+    }
+  }, [isModalOpen, selectedDevice]);
 
   const { fileCount, totalBytes, totalTransmissionMs } = useMemo(() => {
     let bytes = 0;

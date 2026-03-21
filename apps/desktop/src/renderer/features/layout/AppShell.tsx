@@ -1,6 +1,8 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Skeleton } from '@renderer/components/ui/skeleton';
 import { useAppStore } from '@renderer/stores/app-store';
+import { useDashboardStore } from '@renderer/stores/dashboard-store';
+import { useSettingsStore } from '@renderer/stores/settings-store';
 import { Sidebar } from './Sidebar';
 
 const Dashboard = lazy(() =>
@@ -26,6 +28,42 @@ function PageFallback() {
 export function AppShell() {
   const currentView = useAppStore((s) => s.currentView);
   const isModalOpen = useAppStore((s) => s.isModalOpen);
+
+  // Fetch data on mount
+  useEffect(() => {
+    useDashboardStore.getState().fetchDashboard();
+    useSettingsStore.getState().fetchSettings();
+  }, []);
+
+  // Subscribe to sidecar events for real-time updates
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+    const unsub = api.events.onSidecarEvent((event) => {
+      switch (event.type) {
+        case 'dashboard.updated':
+          useDashboardStore.getState().updateSummary(event.payload);
+          break;
+        case 'device.state.changed':
+        case 'upload.progress':
+        case 'upload.completed':
+        case 'upload.failed':
+          useDashboardStore.getState().fetchDashboard();
+          break;
+        case 'disk.low':
+          useDashboardStore.getState().updateSummary({
+            ...useDashboardStore.getState().summary,
+            isDiskLow: true,
+            remainingBytes: event.payload.remainingBytes,
+          });
+          break;
+        case 'share.status.changed':
+          useSettingsStore.getState().fetchSettings();
+          break;
+      }
+    });
+    return unsub;
+  }, []);
 
   return (
     <div

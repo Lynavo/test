@@ -11,6 +11,7 @@ describe('device-detail-store', () => {
       availableDates: mockAvailableDates,
       sortField: 'completedAt',
       sortDirection: 'desc',
+      loading: false,
     });
   });
 
