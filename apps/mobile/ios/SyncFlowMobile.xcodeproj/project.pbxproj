@@ -26,6 +26,7 @@
 		FC3ECC392F6F05B5000460F8 /* HistoryLedgerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC232F6F05B5000460F8 /* HistoryLedgerStore.swift */; };
 		FC3ECC3A2F6F05B5000460F8 /* SyncEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC292F6F05B5000460F8 /* SyncEngineManager.swift */; };
 		FC3ECC3B2F6F05B5000460F8 /* SyncEngineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC282F6F05B5000460F8 /* SyncEngineError.swift */; };
+		FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -53,6 +54,7 @@
 		FC3ECC2A2F6F05B5000460F8 /* TcpTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TcpTransport.swift; sourceTree = "<group>"; };
 		FC3ECC2B2F6F05B5000460F8 /* UploadQueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadQueueManager.swift; sourceTree = "<group>"; };
 		FC3ECC2C2F6F05B5000460F8 /* UploadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadStore.swift; sourceTree = "<group>"; };
+		FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +138,7 @@
 				FC3ECC222F6F05B5000460F8 /* DiscoveryService.swift */,
 				FC3ECC232F6F05B5000460F8 /* HistoryLedgerStore.swift */,
 				FC3ECC242F6F05B5000460F8 /* PhotoScanner.swift */,
+				FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */,
 				FC3ECC252F6F05B5000460F8 /* RNBridge.m */,
 				FC3ECC262F6F05B5000460F8 /* RNBridge.swift */,
 				FC3ECC272F6F05B5000460F8 /* SessionService.swift */,
@@ -319,6 +322,7 @@
 				FC3ECC392F6F05B5000460F8 /* HistoryLedgerStore.swift in Sources */,
 				FC3ECC3A2F6F05B5000460F8 /* SyncEngineManager.swift in Sources */,
 				FC3ECC3B2F6F05B5000460F8 /* SyncEngineError.swift in Sources */,
+				FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

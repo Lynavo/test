@@ -1,6 +1,7 @@
 import Foundation
 import Photos
 import UIKit
+import CryptoKit
 
 @objc
 class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
@@ -16,6 +17,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
     let transport = TcpTransport()
     private var uploadStore: UploadStore?
     private var historyStore: HistoryLedgerStore?
+    private var protocolSession: ProtocolSession?
 
     private override init() {
         super.init()
@@ -64,11 +66,261 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         }
     }
 
-    // MARK: - Sync
+    // MARK: - Sync Pipeline (spec Section 7.3)
 
-    /// Start or resume a sync session. Currently a stub — full pipeline wired in a follow-up task.
+    /// Start a full photo scan and serial upload session over the open TCP connection.
     func startSync() {
-        NSLog("[SyncEngine] startSync (stub)")
+        NSLog("[SyncEngine] startSync")
+        sessionService.transitionTo(.scanning)
+
+        Task {
+            do {
+                try await runSyncPipeline()
+            } catch {
+                NSLog("[SyncEngine] sync pipeline failed: \(error)")
+                sessionService.transitionTo(.idle)
+                NativeSyncEngineModule.shared?.emitError([
+                    "code": "SYNC_PIPELINE_ERROR",
+                    "message": "\(error)",
+                ])
+            }
+        }
+    }
+
+    private func runSyncPipeline() async throws {
+        // 1. Request photo permission
+        let status = await photoScanner.requestPermission()
+        guard status == .authorized || status == .limited else {
+            NSLog("[SyncEngine] photo permission denied")
+            sessionService.transitionTo(.pausedNoPermission)
+            return
+        }
+
+        // 2. Scan for assets not yet uploaded
+        let clientId = bindingService.getOrCreateClientId()
+        let allItems = uploadStore?.getPendingUploadItems() ?? []
+        let completedKeys = Set(
+            allItems.filter { $0.status == "completed" }.compactMap { $0.fileKey }
+        )
+        let newAssets = photoScanner.scanForNewAssets(clientId: clientId, completedFileKeys: completedKeys)
+
+        NSLog("[SyncEngine] found \(newAssets.count) new assets to sync")
+
+        guard !newAssets.isEmpty else {
+            sessionService.transitionTo(.idle)
+            NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                "uploadState": "completed",
+                "progressPercent": 100,
+            ])
+            return
+        }
+
+        // 3. Start a new session
+        let sessionId = sessionService.startNewSession()
+
+        guard let session = protocolSession else {
+            throw SyncEngineError.networkError("No active protocol session")
+        }
+
+        // 4. SYNC_BEGIN_REQ → SYNC_BEGIN_RES
+        let (beginType, beginRes) = try await session.sendAndReceive(type: .syncBeginReq, payload: [
+            "sessionId": sessionId,
+            "queueTotalCount": newAssets.count,
+            "queueTotalBytes": 0,  // actual sizes known only after export
+        ])
+
+        guard beginType == .syncBeginRes, beginRes["ok"] as? Bool == true else {
+            throw SyncEngineError.networkError("SYNC_BEGIN rejected")
+        }
+
+        // 5. Upload each file serially (spec: single file at a time)
+        for (index, asset) in newAssets.enumerated() {
+            do {
+                try await uploadSingleFile(
+                    asset: asset,
+                    sessionId: sessionId,
+                    index: index,
+                    total: newAssets.count,
+                    session: session
+                )
+            } catch {
+                NSLog("[SyncEngine] upload failed for \(asset.fileKey): \(error)")
+                try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "failed")
+                // Continue to next file — don't abort the whole session
+            }
+        }
+
+        // 6. SYNC_END_REQ → SYNC_END_RES
+        let (_, _) = try await session.sendAndReceive(type: .syncEndReq, payload: [:])
+
+        sessionService.transitionTo(.idle)
+        NativeSyncEngineModule.shared?.emitSyncStateChanged([
+            "uploadState": "completed",
+            "progressPercent": 100,
+        ])
+        NSLog("[SyncEngine] sync session \(sessionId) complete")
+    }
+
+    // MARK: - Single File Upload (spec Sections 7.3, 7.4)
+
+    private func uploadSingleFile(
+        asset: ScannedAsset,
+        sessionId: String,
+        index: Int,
+        total: Int,
+        session: ProtocolSession
+    ) async throws {
+        // Export PHAsset to a temp file
+        let exported = try await exportService.exportAsset(asset.asset)
+        defer { exportService.cleanup(tempURL: exported.tempURL) }
+
+        try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "uploading")
+
+        // FILE_INIT_REQ → FILE_INIT_RES
+        let (initType, initRes) = try await session.sendAndReceive(type: .fileInitReq, payload: [
+            "sessionId": sessionId,
+            "fileKey": asset.fileKey,
+            "originalFilename": exported.originalFilename,
+            "mediaType": exported.mediaType,
+            "mimeType": exported.mimeType,
+            "fileSize": exported.fileSize,
+            "createdAt": exported.createdAt,
+            "modifiedAt": exported.modifiedAt,
+            "queueIndex": index,
+            "queueTotalCount": total,
+        ])
+
+        guard initType == .fileInitRes else {
+            throw SyncEngineError.networkError("Expected FILE_INIT_RES, got \(initType)")
+        }
+
+        let action = initRes["action"] as? String ?? "REJECT"
+
+        switch action {
+        case "SKIP":
+            NSLog("[SyncEngine] SKIP \(exported.originalFilename) (already exists)")
+            try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
+            return
+        case "REJECT":
+            let reason = initRes["reason"] as? String ?? "unknown"
+            NSLog("[SyncEngine] REJECT \(exported.originalFilename): \(reason)")
+            try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "skipped")
+            return
+        case "RESUME":
+            let offset = initRes["resumeOffset"] as? Int64 ?? 0
+            NSLog("[SyncEngine] RESUME \(exported.originalFilename) from offset \(offset)")
+            try await streamFileData(
+                fileURL: exported.tempURL, fileKey: asset.fileKey,
+                startOffset: offset, fileSize: exported.fileSize
+            )
+        case "UPLOAD":
+            NSLog("[SyncEngine] UPLOAD \(exported.originalFilename) (\(exported.fileSize) bytes)")
+            try await streamFileData(
+                fileURL: exported.tempURL, fileKey: asset.fileKey,
+                startOffset: 0, fileSize: exported.fileSize
+            )
+        default:
+            throw SyncEngineError.networkError("Unknown FILE_INIT action: \(action)")
+        }
+
+        // FILE_END_REQ → FILE_END_RES
+        let sha256 = Self.computeSHA256(fileURL: exported.tempURL)
+        let (endType, endRes) = try await session.sendAndReceive(type: .fileEndReq, payload: [
+            "fileKey": asset.fileKey,
+            "fileSize": exported.fileSize,
+            "sha256": sha256,
+        ])
+
+        if endType == .fileEndRes, endRes["ok"] as? Bool == true {
+            NSLog("[SyncEngine] completed: \(exported.originalFilename)")
+            try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
+
+            // Update daily ledger
+            let storedBytes = endRes["storedBytes"] as? Int64 ?? exported.fileSize
+            let transmissionMs = endRes["activeTransmissionMs"] as? Int64 ?? 0
+            if let binding = uploadStore?.getBinding() {
+                let dateStr = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+                try? historyStore?.upsertDailyLedger(
+                    date: dateStr,
+                    deviceId: binding.deviceId,
+                    deviceName: binding.deviceName,
+                    deviceIp: binding.host,
+                    fileCount: 1,
+                    totalBytes: storedBytes,
+                    transmissionMs: transmissionMs
+                )
+            }
+        } else {
+            throw SyncEngineError.networkError("FILE_END_RES not ok")
+        }
+    }
+
+    // MARK: - Stream FILE_DATA Chunks (spec Section 7.4, 7.7: 8 MiB chunks)
+
+    private func streamFileData(
+        fileURL: URL,
+        fileKey: String,
+        startOffset: Int64,
+        fileSize: Int64
+    ) async throws {
+        let chunkSize = 8 * 1024 * 1024  // 8 MiB per spec Section 7.7
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { handle.closeFile() }
+
+        handle.seek(toFileOffset: UInt64(startOffset))
+        var offset = startOffset
+
+        guard let session = protocolSession else {
+            throw SyncEngineError.networkError("No active protocol session")
+        }
+
+        while offset < fileSize {
+            let data = handle.readData(ofLength: chunkSize)
+            if data.isEmpty { break }
+
+            // Send binary FILE_DATA frame
+            transport.sendFileData(fileKey: fileKey, offset: offset, chunk: data)
+
+            // Wait for FILE_ACK from server
+            let (ackType, ackRes) = try await session.waitForNextMessage()
+            if ackType == .fileAck {
+                let committedOffset = ackRes["committedOffset"] as? Int64 ?? (offset + Int64(data.count))
+                try? uploadStore?.updateUploadOffset(fileKey: fileKey, offset: committedOffset)
+            } else if ackType == .error {
+                let errMsg = ackRes["message"] as? String ?? "server error"
+                throw SyncEngineError.networkError("FILE_DATA error: \(errMsg)")
+            }
+            // For other unexpected types, just continue
+
+            offset += Int64(data.count)
+
+            // Emit progress to RN
+            let progressPercent = fileSize > 0 ? Int(Double(offset) / Double(fileSize) * 100) : 0
+            NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                "uploadState": "uploading",
+                "progressPercent": progressPercent,
+                "transferredBytes": offset,
+                "totalBytes": fileSize,
+                "currentFile": fileKey,
+            ])
+        }
+    }
+
+    // MARK: - SHA-256
+
+    static func computeSHA256(fileURL: URL) -> String {
+        guard let handle = try? FileHandle(forReadingFrom: fileURL) else { return "" }
+        defer { handle.closeFile() }
+
+        var hasher = SHA256()
+        let bufferSize = 1024 * 1024  // 1 MiB chunks for hashing
+        while true {
+            let data = handle.readData(ofLength: bufferSize)
+            if data.isEmpty { break }
+            hasher.update(data: data)
+        }
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - DiscoveryServiceDelegate
@@ -128,18 +380,98 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         }
     }
 
-    // MARK: - Pairing
+    // MARK: - Pairing (LMUP/2 handshake — spec Section 7.2)
 
     func pairDevice(deviceId: String, host: String, port: Int, connectionCode: String) async throws {
-        // Stub: full LMUP handshake will be wired in a follow-up task.
-        // For now, log and return success so the UI flow works end-to-end.
-        NSLog("[SyncEngine] pairDevice \(deviceId) at \(host):\(port) code=\(connectionCode) (stub)")
+        NSLog("[SyncEngine] pairDevice: connecting to \(host):\(port)")
+
+        let session = ProtocolSession(transport: transport)
+        protocolSession = session
+
+        // 1. Connect TCP and await .ready
+        try await session.connect(host: host, port: UInt16(port))
+
+        let clientId = bindingService.getOrCreateClientId()
+
+        // 2. HELLO_REQ → HELLO_RES  (spec Section 7.8)
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
+            "clientId": clientId,
+            "clientName": UIDevice.current.name,
+            "clientPlatform": "ios",
+            "appVersion": "1.0.0",
+            "appState": "foreground",
+        ])
+
+        guard helloType == .helloRes else {
+            throw SyncEngineError.pairingError("Expected HELLO_RES, got \(helloType)")
+        }
+
+        let authRequired = helloRes["authRequired"] as? Bool ?? true
+
+        guard authRequired else {
+            // Already bound — no PAIR_REQ needed
+            NSLog("[SyncEngine] already bound, skipping PAIR_REQ")
+            startSync()
+            return
+        }
+
+        // 3. PAIR_REQ → PAIR_RES  (spec Section 7.8)
+        let (pairType, pairRes) = try await session.sendAndReceive(type: .pairReq, payload: [
+            "clientId": clientId,
+            "clientName": UIDevice.current.name,
+            "connectionCode": connectionCode,
+        ])
+
+        guard pairType == .pairRes else {
+            throw SyncEngineError.pairingError("Expected PAIR_RES, got \(pairType)")
+        }
+
+        guard pairRes["ok"] as? Bool == true else {
+            let errMsg = pairRes["error"] as? String ?? "unknown"
+            throw SyncEngineError.pairingError("Pairing rejected: \(errMsg)")
+        }
+
+        // 4. Persist pairing token in Keychain
+        if let token = pairRes["pairingToken"] as? String {
+            bindingService.savePairingToken(token)
+        }
+
+        // 5. Persist binding record in SQLite
+        let serverInfo = pairRes["serverInfo"] as? [String: Any] ?? [:]
+        let binding = BindingRecord(
+            deviceId: serverInfo["serverId"] as? String ?? deviceId,
+            deviceName: serverInfo["serverName"] as? String ?? "",
+            deviceAlias: nil,
+            deviceType: "mac",
+            host: host,
+            port: port,
+            pairingId: pairRes["pairingId"] as? String ?? "",
+            pairingTokenKeychainRef: "syncflow_pairing_token",
+            shareName: serverInfo["shareName"] as? String,
+            lastBoundAt: ISO8601DateFormatter().string(from: Date())
+        )
+        try uploadStore?.saveBinding(binding)
+
+        // 6. Notify RN bridge
+        NativeSyncEngineModule.shared?.emitBindingStateChanged([
+            "deviceId": binding.deviceId,
+            "deviceName": binding.deviceName,
+            "deviceType": binding.deviceType,
+            "host": binding.host,
+            "port": binding.port,
+            "shareName": binding.shareName ?? NSNull(),
+            "lastBoundAt": binding.lastBoundAt,
+        ])
+
+        NSLog("[SyncEngine] pairing successful — starting sync")
+        startSync()
     }
 
     func disconnectAndUnbind() async throws {
         NSLog("[SyncEngine] disconnectAndUnbind")
         bindingService.clearPairingToken()
         try uploadStore?.clearBinding()
+        protocolSession = nil
         transport.disconnect()
         sessionService.endSession()
     }
