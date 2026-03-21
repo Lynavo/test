@@ -1,5 +1,6 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { ElectronAPI } from './api';
+import type { SidecarEvent } from '@syncflow/contracts';
 
 // IPC channel constants — duplicated from main/ipc-handlers.ts
 // because electron-vite builds preload and main as separate targets.
@@ -47,10 +48,11 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC.FILES_COPY_CLIPBOARD, text),
   },
   events: {
-    onSidecarEvent: (_callback) => {
-      // Stub — real WebSocket bridge comes in Phase 3
+    onSidecarEvent: (callback) => {
+      const handler = (_event: IpcRendererEvent, data: SidecarEvent) => callback(data);
+      ipcRenderer.on('sidecar:event', handler);
       return () => {
-        // no-op unsubscribe
+        ipcRenderer.removeListener('sidecar:event', handler);
       };
     },
   },

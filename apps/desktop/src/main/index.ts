@@ -3,9 +3,11 @@ import { join } from 'path';
 import { is } from '@electron-toolkit/utils';
 import { registerIpcHandlers } from './ipc-handlers';
 import { SidecarManager } from './sidecar-manager';
+import { WsBridge } from './ws-bridge';
 
 let mainWindow: BrowserWindow | null = null;
 const sidecar = new SidecarManager();
+let wsBridge: WsBridge;
 
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -31,6 +33,8 @@ async function createMainWindow() {
 app.whenReady().then(async () => {
   registerIpcHandlers();
   await sidecar.start();
+  wsBridge = new WsBridge(() => mainWindow);
+  wsBridge.connect();
   await createMainWindow();
 
   app.on('activate', async () => {
@@ -47,5 +51,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
+  wsBridge?.disconnect();
   await sidecar.stop();
 });
