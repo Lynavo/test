@@ -69,14 +69,16 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 		if d.LastIP != nil {
 			ip = *d.LastIP
 		}
-		// Derive status from session state
+		// Derive status from live TCP connection, not stale session DB
 		status := "offline"
-		if d.SessionState != nil {
-			switch *d.SessionState {
-			case "syncing", "receiving":
-				status = "transferring"
-			case "authenticated", "connected", "completed":
-				status = "connected_idle"
+		if s.clientStates != nil {
+			liveStates := s.clientStates.ConnectedClientStates()
+			if st, ok := liveStates[d.ClientID]; ok {
+				if st == "syncing" {
+					status = "transferring"
+				} else {
+					status = "connected_idle"
+				}
 			}
 		}
 

@@ -65,6 +65,9 @@ func (c *connection) handleSyncBegin(body []byte) error {
 		"queueBytes", req.QueueTotalBytes,
 	)
 	c.state = stateSyncing
+	if c.server != nil {
+		c.server.SetClientState(c.clientID, "syncing")
+	}
 	return nil
 }
 

@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net"
+	"sync"
 
 	"github.com/nicksyncflow/sidecar/internal/config"
 	"github.com/nicksyncflow/sidecar/internal/events"
@@ -15,11 +16,46 @@ type TCPServer struct {
 	store    *store.Store
 	config   *config.Config
 	hub      *events.Hub
+
+	mu               sync.RWMutex
+	connectedClients map[string]string // clientID → state ("authenticated"|"syncing")
 }
 
 // NewTCPServer creates a new TCPServer backed by the given store, config, and event hub.
 func NewTCPServer(s *store.Store, cfg *config.Config, hub *events.Hub) *TCPServer {
-	return &TCPServer{store: s, config: cfg, hub: hub}
+	return &TCPServer{store: s, config: cfg, hub: hub, connectedClients: make(map[string]string)}
+}
+
+// SetClientState marks a client as connected with the given state.
+func (s *TCPServer) SetClientState(clientID, state string) {
+	s.mu.Lock()
+	s.connectedClients[clientID] = state
+	s.mu.Unlock()
+}
+
+// RemoveClient removes a client from the connected map.
+func (s *TCPServer) RemoveClient(clientID string) {
+	s.mu.Lock()
+	delete(s.connectedClients, clientID)
+	s.mu.Unlock()
+}
+
+// GetClientState returns the connection state for a client, or empty string if offline.
+func (s *TCPServer) GetClientState(clientID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.connectedClients[clientID]
+}
+
+// ConnectedClientStates returns a snapshot of all connected client states.
+func (s *TCPServer) ConnectedClientStates() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m := make(map[string]string, len(s.connectedClients))
+	for k, v := range s.connectedClients {
+		m[k] = v
+	}
+	return m
 }
 
 // Start begins listening on addr and accepting connections in a background goroutine.
@@ -49,6 +85,6 @@ func (s *TCPServer) acceptLoop() {
 			return
 		}
 		slog.Info("tcp client connected", "remote", conn.RemoteAddr())
-		go newConnection(conn, s.store, s.config, s.hub).handle()
+		go newConnection(conn, s.store, s.config, s.hub, s).handle()
 	}
 }

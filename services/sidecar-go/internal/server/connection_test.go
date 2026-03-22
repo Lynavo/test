@@ -57,7 +57,7 @@ func setupTestConnection(t *testing.T) (clientConn net.Conn, st *store.Store, cf
 	hub := events.NewHub()
 
 	client, server := net.Pipe()
-	conn := newConnection(server, st, cfg, hub)
+	conn := newConnection(server, st, cfg, hub, nil)
 	go conn.handle()
 
 	return client, st, cfg, func() {
@@ -73,7 +73,7 @@ func setupTestConnectionWithStore(t *testing.T, st *store.Store, cfg *config.Con
 	hub := events.NewHub()
 
 	client, server := net.Pipe()
-	conn := newConnection(server, st, cfg, hub)
+	conn := newConnection(server, st, cfg, hub, nil)
 	go conn.handle()
 
 	return client, func() { client.Close() }

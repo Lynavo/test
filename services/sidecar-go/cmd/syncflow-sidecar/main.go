@@ -54,19 +54,18 @@ func main() {
 	// Bootstrap reconciliation: ensure DB has config defaults
 	bootstrapReconciliation(st, cfg)
 
-	// Create API server
-	handler := api.NewServer(st, cfg, hub)
-
-	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
-		Handler: handler,
-	}
-
-	// Start TCP server for LMUP/2 protocol
+	// Create TCP server first (API needs its client state tracker)
 	tcpSrv := server.NewTCPServer(st, cfg, hub)
 	if err := tcpSrv.Start(fmt.Sprintf(":%d", cfg.TCPPort)); err != nil {
 		slog.Error("tcp server failed", "err", err)
 		os.Exit(1)
+	}
+
+	// Create API server (uses tcpSrv for live client state)
+	handler := api.NewServer(st, cfg, hub, tcpSrv)
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
+		Handler: handler,
 	}
 
 	// Start Bonjour/mDNS broadcast

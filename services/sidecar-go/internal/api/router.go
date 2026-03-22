@@ -8,16 +8,22 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
+// ClientStateProvider returns live TCP connection states per clientID.
+type ClientStateProvider interface {
+	ConnectedClientStates() map[string]string
+}
+
 // Server holds the dependencies for the HTTP API handlers.
 type Server struct {
-	store  *store.Store
-	config *config.Config
-	hub    *events.Hub
+	store        *store.Store
+	config       *config.Config
+	hub          *events.Hub
+	clientStates ClientStateProvider
 }
 
 // NewServer creates a new HTTP handler with all API routes registered.
-func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub) http.Handler {
-	srv := &Server{store: s, config: cfg, hub: hub}
+func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientStateProvider) http.Handler {
+	srv := &Server{store: s, config: cfg, hub: hub, clientStates: csp}
 	mux := http.NewServeMux()
 
 	// Health

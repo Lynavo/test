@@ -35,6 +35,7 @@ type connection struct {
 	store      *store.Store
 	config     *config.Config
 	hub        *events.Hub
+	server     *TCPServer  // for tracking connected clients
 	state      connState
 	clientID   string
 	sessionID  string
@@ -43,12 +44,13 @@ type connection struct {
 	pingTimer  *time.Timer // 15s inactivity -> send PING
 }
 
-func newConnection(conn net.Conn, s *store.Store, cfg *config.Config, hub *events.Hub) *connection {
+func newConnection(conn net.Conn, s *store.Store, cfg *config.Config, hub *events.Hub, srv *TCPServer) *connection {
 	return &connection{
 		conn:   conn,
 		store:  s,
 		config: cfg,
 		hub:    hub,
+		server: srv,
 		state:  stateWaitHello,
 	}
 }
@@ -59,10 +61,12 @@ func (c *connection) handle() {
 	defer func() {
 		if c.fileWriter != nil {
 			c.fileWriter.Close()
-			// Leave .part for resume; only remove on SHA256 mismatch (in handleFileEnd)
 		}
 		c.stopPingTimer()
 		c.conn.Close()
+		if c.clientID != "" && c.server != nil {
+			c.server.RemoveClient(c.clientID)
+		}
 		slog.Info("tcp client disconnected", "remote", c.conn.RemoteAddr(), "clientID", c.clientID)
 	}()
 

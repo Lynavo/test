@@ -181,6 +181,9 @@ func (c *connection) handleAuth(body []byte) error {
 
 	slog.Info("client authenticated via HMAC", "clientID", c.clientID)
 	c.state = stateAuthenticated
+	if c.server != nil {
+		c.server.SetClientState(c.clientID, "connected")
+	}
 
 	// Send AUTH_RES so the client isn't stuck waiting
 	if err := c.sendJSON(protocol.TypeAuthRes, map[string]interface{}{"ok": true}); err != nil {
@@ -278,6 +281,9 @@ func (c *connection) handlePair(body []byte) error {
 
 	slog.Info("device paired successfully", "clientID", req.ClientID, "pairingID", pairingID)
 	c.state = stateAuthenticated
+	if c.server != nil {
+		c.server.SetClientState(c.clientID, "connected")
+	}
 	return nil
 }
 
