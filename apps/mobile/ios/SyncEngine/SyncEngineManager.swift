@@ -341,15 +341,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             let transmissionMs = endRes["activeTransmissionMs"] as? Int64 ?? 0
             if let binding = uploadStore?.getBinding() {
                 let dateStr = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+                let ip = binding.host.isEmpty ? (binding.deviceAlias ?? binding.deviceName) : binding.host
                 try? historyStore?.upsertDailyLedger(
                     date: dateStr,
                     deviceId: binding.deviceId,
                     deviceName: binding.deviceName,
-                    deviceIp: binding.host,
+                    deviceIp: ip,
                     fileCount: 1,
-                    totalBytes: storedBytes,
-                    transmissionMs: transmissionMs
+                    totalBytes: exported.fileSize,  // use actual exported size (storedBytes may be 0)
+                    transmissionMs: max(transmissionMs, 100)  // at least 100ms per file
                 )
+                // Emit history update event
+                NativeSyncEngineModule.shared?.emitHistoryUpdated()
             }
         } else {
             throw SyncEngineError.networkError("FILE_END_RES not ok")

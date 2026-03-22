@@ -232,7 +232,7 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'History'>;
 
 export function HistoryScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const [sections, setSections] = useState<HistorySection[]>(mockSections);
+  const [sections, setSections] = useState<HistorySection[]>([]);
 
   // ---------------------------------------------------------------------------
   // Load real history from native module with mock fallback
@@ -247,7 +247,7 @@ export function HistoryScreen() {
         if (!NativeSyncEngine) return;
 
         const result = await NativeSyncEngine.getHistoryDays(null);
-        if (result && result.items && result.items.length > 0) {
+        if (result && result.items) {
           const grouped = groupByDate(result.items);
           setSections(grouped);
         }
@@ -257,7 +257,7 @@ export function HistoryScreen() {
         historySub = emitter.addListener('onHistoryUpdated', async () => {
           try {
             const updated = await NativeSyncEngine.getHistoryDays(null);
-            if (updated && updated.items && updated.items.length > 0) {
+            if (updated && updated.items) {
               setSections(groupByDate(updated.items));
             }
           } catch {
