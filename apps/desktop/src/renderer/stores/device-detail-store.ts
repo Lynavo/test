@@ -31,14 +31,14 @@ export const useDeviceDetailStore = create<DeviceDetailState>((set, get) => ({
     if (!api) return;
     set({ loading: true });
     try {
-      const selectedDate = date || get().selectedDate;
-      const [files, datesRes] = await Promise.all([
-        api.sidecar.getDeviceFiles(deviceId, selectedDate),
-        api.sidecar.getDeviceDates(deviceId),
-      ]);
+      // Fetch available dates first so we can default to the latest
+      const datesRes = await api.sidecar.getDeviceDates(deviceId);
+      const dates = datesRes.dates ?? [];
+      const selectedDate = date || get().selectedDate || dates[0] || '';
+      const files = await api.sidecar.getDeviceFiles(deviceId, selectedDate);
       set({
         files,
-        availableDates: datesRes.dates,
+        availableDates: dates,
         selectedDate,
         loading: false,
       });
