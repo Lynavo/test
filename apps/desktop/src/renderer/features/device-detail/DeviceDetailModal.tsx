@@ -63,8 +63,8 @@ export function DeviceDetailModal() {
             borderRadius: 20,
             boxShadow:
               '0 24px 80px rgba(80,150,200,0.18), 0 4px 20px rgba(0,0,0,0.06)',
-            width: 'min(720px, 92vw)',
-            maxWidth: 'min(720px, 92vw)',
+            width: 'min(960px, 92vw)',
+            maxWidth: 'min(960px, 92vw)',
             maxHeight: '82vh',
           }}
         >
