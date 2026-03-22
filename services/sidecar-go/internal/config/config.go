@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -48,7 +49,9 @@ func (c *Config) setDefaults() {
 		c.ReceiveDir = filepath.Join(c.DataDir, "received")
 	}
 	if c.DeviceName == "" {
-		c.DeviceName, _ = os.Hostname()
+		hostname, _ := os.Hostname()
+		// Remove .local suffix for friendlier display name
+		c.DeviceName = strings.TrimSuffix(hostname, ".local")
 	}
 }
 
