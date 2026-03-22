@@ -22,7 +22,7 @@ export function DeviceDetailModal() {
   const files = useDeviceDetailStore((s) => s.files);
   const selectedDate = useDeviceDetailStore((s) => s.selectedDate);
   const availableDates = useDeviceDetailStore((s) => s.availableDates);
-  const setDate = useDeviceDetailStore((s) => s.setDate);
+  const loading = useDeviceDetailStore((s) => s.loading);
 
   // Fetch files when modal opens with a device
   useEffect(() => {
@@ -79,7 +79,11 @@ export function DeviceDetailModal() {
             <DateFilter
               dates={availableDates}
               selected={selectedDate}
-              onSelect={setDate}
+              onSelect={(date) => {
+                if (selectedDevice) {
+                  useDeviceDetailStore.getState().fetchDeviceFiles(selectedDevice.deviceId, date);
+                }
+              }}
             />
           </div>
 
@@ -90,7 +94,13 @@ export function DeviceDetailModal() {
           />
 
           <ScrollArea className="flex-1 px-6 pb-6">
-            <FileLedgerTable />
+            {loading ? (
+              <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+                加载中...
+              </div>
+            ) : (
+              <FileLedgerTable />
+            )}
           </ScrollArea>
         </DialogContent>
       </DialogPortal>
