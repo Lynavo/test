@@ -75,15 +75,16 @@ type DashboardSummaryResult struct {
 }
 
 // DashboardDeviceResult holds per-device dashboard data including current transfer info.
+// JSON tags match the DashboardDeviceDTO contract expected by the desktop renderer.
 type DashboardDeviceResult struct {
-	ClientID    string  `json:"clientId"`
-	ClientName  string  `json:"clientName"`
-	DeviceAlias *string `json:"deviceAlias,omitempty"`
-	LastIP      *string `json:"ip,omitempty"`
-	Platform    string  `json:"platform"`
-	LastSeenAt  string  `json:"lastSeenAt"`
-	FileCount   int     `json:"fileCount"`
-	TotalBytes  int64   `json:"totalBytes"`
-	CurrentFile *string `json:"currentFile,omitempty"`
+	ClientID     string  `json:"deviceId"`
+	ClientName   string  `json:"clientName"`
+	DeviceAlias  *string `json:"deviceAlias,omitempty"`
+	LastIP       *string `json:"ip,omitempty"`
+	Platform     string  `json:"platform"`
+	LastSeenAt   string  `json:"lastSeenAt"`
+	FileCount    int     `json:"todayFileCount"`
+	TotalBytes   int64   `json:"todayBytes"`
+	CurrentFile  *string `json:"currentFile,omitempty"`
 	SessionState *string `json:"sessionState,omitempty"`
 }

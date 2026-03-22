@@ -187,6 +187,7 @@ func (s *Store) GetDashboardSummary(today string) (DashboardSummaryResult, error
 
 // GetDashboardDevices returns per-device dashboard data for a given date,
 // joining paired_devices with daily stats and optionally including current session info.
+// Uses subquery to pick only the latest session per device, avoiding duplicates.
 func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, error) {
 	rows, err := s.db.Query(`
 		SELECT
@@ -199,11 +200,15 @@ func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, erro
 			COALESCE(ds.file_count, 0),
 			COALESCE(ds.total_bytes, 0),
 			u.original_filename,
-			sess.state
+			latest_sess.state
 		FROM paired_devices pd
 		LEFT JOIN device_daily_stats ds ON ds.client_id = pd.client_id AND ds.stat_date = ?
-		LEFT JOIN sessions sess ON sess.client_id = pd.client_id AND sess.state NOT IN ('ended', 'error')
-		LEFT JOIN uploads u ON u.file_key = sess.active_file_key
+		LEFT JOIN (
+			SELECT client_id, state, active_file_key,
+				ROW_NUMBER() OVER (PARTITION BY client_id ORDER BY started_at DESC) AS rn
+			FROM sessions
+		) latest_sess ON latest_sess.client_id = pd.client_id AND latest_sess.rn = 1
+		LEFT JOIN uploads u ON u.file_key = latest_sess.active_file_key
 		WHERE pd.revoked_at IS NULL
 		ORDER BY pd.last_seen_at DESC`, today,
 	)
