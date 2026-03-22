@@ -212,6 +212,16 @@ export function SyncStatusScreen() {
           console.log('[SyncStatus] Sync state changed:', JSON.stringify(state));
         });
 
+        // Auto-start sync if we have a binding (coming from app launch or after pairing)
+        const binding = await NativeSyncEngine.getBindingState();
+        if (binding && binding.deviceId) {
+          // Start discovery first (so sync pipeline can find the target device)
+          await NativeSyncEngine.startDiscovery();
+          // Trigger sync — runs in background: scans photos → connects → uploads
+          NativeSyncEngine.triggerSync?.()
+            .catch((e: Error) => console.warn('[SyncStatus] triggerSync failed:', e));
+        }
+
         // Load initial overview
         const syncData = await NativeSyncEngine.getSyncOverview();
         if (syncData) {

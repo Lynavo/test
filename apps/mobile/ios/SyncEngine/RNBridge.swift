@@ -159,4 +159,10 @@ class NativeSyncEngineModule: RCTEventEmitter {
             }
         }
     }
+
+    @objc
+    func triggerSync(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        SyncEngineManager.shared.startSync()
+        resolve(nil)
+    }
 }
