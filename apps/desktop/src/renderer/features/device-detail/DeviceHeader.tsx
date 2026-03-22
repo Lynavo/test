@@ -2,6 +2,13 @@ import { Smartphone, Monitor, FolderOpen, X } from 'lucide-react';
 import type { DashboardDeviceDTO } from '@syncflow/contracts';
 import { Button } from '@renderer/components/ui/button';
 
+const colors = {
+  titleText: '#1a2a3a',
+  subtitleText: '#8a9ab0',
+  folderButton: '#3b82f6',
+  closeButton: '#8a9ab0',
+} as const;
+
 interface DeviceHeaderProps {
   device: DashboardDeviceDTO;
   onClose: () => void;
@@ -33,16 +40,16 @@ export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <h2 className="text-base font-bold" style={{ color: '#1a2a3a' }}>
+        <h2 className="text-base font-bold" style={{ color: colors.titleText }}>
           {device.clientName}
           <span
             className="ml-2 text-xs font-normal"
-            style={{ color: '#8a9ab0' }}
+            style={{ color: colors.subtitleText }}
           >
             {device.ip}
           </span>
         </h2>
-        <p className="truncate text-xs" style={{ color: '#8a9ab0' }}>
+        <p className="truncate text-xs" style={{ color: colors.subtitleText }}>
           {device.storagePath}
         </p>
       </div>
@@ -52,7 +59,7 @@ export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
         className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
         style={{
           background: 'rgba(59,130,246,0.08)',
-          color: '#3b82f6',
+          color: colors.folderButton,
           border: '1px solid rgba(59,130,246,0.15)',
         }}
       >
@@ -65,7 +72,7 @@ export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
         size="icon-sm"
         onClick={onClose}
         className="shrink-0"
-        style={{ color: '#8a9ab0' }}
+        style={{ color: colors.closeButton }}
       >
         <X className="h-4 w-4" />
       </Button>

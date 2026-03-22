@@ -7,7 +7,6 @@ export const IPC = {
   SIDECAR_HEALTH: 'sidecar:health',
   SIDECAR_DASHBOARD_SUMMARY: 'sidecar:dashboard-summary',
   SIDECAR_DASHBOARD_DEVICES: 'sidecar:dashboard-devices',
-  SIDECAR_DEVICE_DETAIL: 'sidecar:device-detail',
   SIDECAR_DEVICE_FILES: 'sidecar:device-files',
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
@@ -26,9 +25,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.SIDECAR_HEALTH, () => sidecarClient.getHealth());
   ipcMain.handle(IPC.SIDECAR_DASHBOARD_SUMMARY, () => sidecarClient.getDashboardSummary());
   ipcMain.handle(IPC.SIDECAR_DASHBOARD_DEVICES, () => sidecarClient.getDashboardDevices());
-  ipcMain.handle(IPC.SIDECAR_DEVICE_DETAIL, (_e, deviceId: string) =>
-    sidecarClient.getDeviceDetail(deviceId),
-  );
   ipcMain.handle(IPC.SIDECAR_DEVICE_FILES, (_e, deviceId: string, date: string) =>
     sidecarClient.getDeviceFiles(deviceId, date),
   );

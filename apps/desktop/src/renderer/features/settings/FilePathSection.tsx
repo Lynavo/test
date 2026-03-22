@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { FolderOpen } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
@@ -16,7 +17,7 @@ export function FilePathSection() {
         // Phase 1: read-only display; will wire to updateSettings when backend is ready
       }
     } catch {
-      // silent fail
+      toast.error('选择文件夹失败');
     }
   }, []);
 

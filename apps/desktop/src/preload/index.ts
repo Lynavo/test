@@ -8,7 +8,6 @@ const IPC = {
   SIDECAR_HEALTH: 'sidecar:health',
   SIDECAR_DASHBOARD_SUMMARY: 'sidecar:dashboard-summary',
   SIDECAR_DASHBOARD_DEVICES: 'sidecar:dashboard-devices',
-  SIDECAR_DEVICE_DETAIL: 'sidecar:device-detail',
   SIDECAR_DEVICE_FILES: 'sidecar:device-files',
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
@@ -27,8 +26,6 @@ const electronAPI: ElectronAPI = {
     getHealth: () => ipcRenderer.invoke(IPC.SIDECAR_HEALTH),
     getDashboardSummary: () => ipcRenderer.invoke(IPC.SIDECAR_DASHBOARD_SUMMARY),
     getDashboardDevices: () => ipcRenderer.invoke(IPC.SIDECAR_DASHBOARD_DEVICES),
-    getDeviceDetail: (deviceId: string) =>
-      ipcRenderer.invoke(IPC.SIDECAR_DEVICE_DETAIL, deviceId),
     getDeviceFiles: (deviceId: string, date: string) =>
       ipcRenderer.invoke(IPC.SIDECAR_DEVICE_FILES, deviceId, date),
     getDeviceDates: (deviceId: string) =>

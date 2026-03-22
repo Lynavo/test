@@ -18,6 +18,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { formatBytes, formatDuration } from '../utils/format';
+import { Icon } from '../components/Icon';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,7 +136,7 @@ function DeviceCard({ deviceName, deviceIp, fileCount, totalSize, duration }: De
       {/* Row 1: device icon + name + IP */}
       <View style={styles.cardHeader}>
         <View style={styles.monitorIconWrapper}>
-          <Text style={styles.monitorIcon}>{'🖥'}</Text>
+          <Icon name="desktop-outline" size={20} color="#fff" />
         </View>
         <View style={styles.cardDeviceInfo}>
           <Text style={styles.cardDeviceName} numberOfLines={1}>
@@ -257,7 +258,7 @@ export function HistoryScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>{'←'}</Text>
+            <Icon name="chevron-back" size={20} color={colors.screenTitle} />
           </TouchableOpacity>
           <Text style={styles.title}>{'历史记录'}</Text>
         </View>
@@ -358,11 +359,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backArrow: {
-    fontSize: 18,
-    color: colors.screenTitle,
-    fontWeight: '500',
-  },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -447,9 +443,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 2,
-  },
-  monitorIcon: {
-    fontSize: 18,
   },
   cardDeviceInfo: {
     flex: 1,

@@ -73,5 +73,10 @@
 		<string>com.syncflow.sync.continued</string>
 		<string>com.syncflow.sync.maintenance</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Ionicons.ttf</string>
+		<string>MaterialCommunityIcons.ttf</string>
+	</array>
 </dict>
 </plist>

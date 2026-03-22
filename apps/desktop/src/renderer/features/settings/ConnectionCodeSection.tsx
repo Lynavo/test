@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
@@ -14,7 +15,7 @@ export function ConnectionCodeSection() {
       const result = await window.electronAPI.sidecar.regenerateConnectionCode();
       updateSettings({ ...settings, connectionCode: result.code });
     } catch {
-      // Phase 1: silent fail; toast can be added later
+      toast.error('重新生成连接码失败');
     }
   }, [settings, updateSettings]);
 

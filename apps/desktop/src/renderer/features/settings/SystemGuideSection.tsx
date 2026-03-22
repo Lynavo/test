@@ -1,10 +1,21 @@
+import { useCallback } from 'react';
 import { BookOpen } from 'lucide-react';
 
+const MAC_SHARING_GUIDE_URL =
+  'https://support.apple.com/guide/mac-help/set-up-file-sharing-on-mac-mh17131/mac';
+
 export function SystemGuideSection() {
+  const handleOpen = useCallback(() => {
+    window.open(MAC_SHARING_GUIDE_URL, '_blank');
+  }, []);
+
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-col gap-3">
-        <button className="flex items-center gap-3 rounded-xl bg-secondary px-4 py-3 text-left transition-colors hover:bg-secondary/80">
+        <button
+          onClick={handleOpen}
+          className="flex items-center gap-3 rounded-xl bg-secondary px-4 py-3 text-left transition-colors hover:bg-secondary/80"
+        >
           <BookOpen className="h-5 w-5 text-primary" />
           <div>
             <p className="text-sm font-medium text-foreground">

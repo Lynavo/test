@@ -1,4 +1,14 @@
+import type { SettingsDTO } from '@syncflow/contracts';
 import type { ElectronAPI } from '../../preload/api';
+
+const defaultSettings: SettingsDTO = {
+  deviceName: 'SyncFlow',
+  connectionCode: '000000',
+  receivePath: '',
+  shareAddress: '',
+  shareStatus: 'unknown',
+  shareName: 'SyncFlow',
+};
 
 const mockSidecar: ElectronAPI['sidecar'] = {
   getHealth: async () => ({ ok: true, service: 'syncflow-sidecar' }),
@@ -9,33 +19,11 @@ const mockSidecar: ElectronAPI['sidecar'] = {
     isDiskLow: false,
   }),
   getDashboardDevices: async () => [],
-  getDeviceDetail: async () => ({
-    deviceId: '',
-    clientName: '',
-    ip: '',
-    status: 'offline' as const,
-    todayFileCount: 0,
-    todayBytes: 0,
-    storageLeft: '—',
-    storagePath: '',
-  }),
   getDeviceFiles: async () => [],
   getDeviceDates: async () => ({ dates: [] }),
-  getSettings: async () => ({
-    connectionCode: '000000',
-    receivePath: '',
-    shareAddress: '',
-    shareStatus: 'unknown' as const,
-    shareName: 'SyncFlow',
-  }),
-  updateSettings: async (s) => ({
-    connectionCode: '000000',
-    receivePath: '',
-    shareAddress: '',
-    shareStatus: 'unknown' as const,
-    shareName: 'SyncFlow',
-    ...s,
-  }) as any,
+  getSettings: async () => ({ ...defaultSettings }),
+  updateSettings: async (s) =>
+    ({ ...defaultSettings, ...s }) as SettingsDTO,
   regenerateConnectionCode: async () => ({ code: '000000' }),
   getShareStatus: async () => ({
     enabled: false,

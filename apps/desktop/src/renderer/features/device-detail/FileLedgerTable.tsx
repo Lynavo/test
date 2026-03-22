@@ -15,6 +15,14 @@ import {
   type SortField,
 } from '@renderer/stores/device-detail-store';
 
+const colors = {
+  headerText: '#8a9ab0',
+  emptyText: '#8a9ab0',
+  fileName: '#1a2a3a',
+  cellText: '#6b7a8d',
+  actionButton: '#3b82f6',
+} as const;
+
 function SortIcon({ field }: { field: SortField }) {
   const sortField = useDeviceDetailStore((s) => s.sortField);
   const sortDirection = useDeviceDetailStore((s) => s.sortDirection);
@@ -92,7 +100,7 @@ export function FileLedgerTable() {
               <button
                 onClick={() => toggleSort(col.field)}
                 className="flex items-center gap-1 text-xs font-medium transition-colors hover:text-blue-500"
-                style={{ color: '#8a9ab0' }}
+                style={{ color: colors.headerText }}
               >
                 {col.label}
                 <SortIcon field={col.field} />
@@ -100,7 +108,7 @@ export function FileLedgerTable() {
             </TableHead>
           ))}
           <TableHead className="text-right">
-            <span className="text-xs font-medium" style={{ color: '#8a9ab0' }}>
+            <span className="text-xs font-medium" style={{ color: colors.headerText }}>
               操作
             </span>
           </TableHead>
@@ -112,7 +120,7 @@ export function FileLedgerTable() {
             <TableCell
               colSpan={6}
               className="py-16 text-center text-sm"
-              style={{ color: '#8a9ab0' }}
+              style={{ color: colors.emptyText }}
             >
               该日期暂无传输记录
             </TableCell>
@@ -128,7 +136,7 @@ export function FileLedgerTable() {
                   <FileIcon name={file.originalFilename} />
                   <span
                     className="font-medium"
-                    style={{ color: '#1a2a3a' }}
+                    style={{ color: colors.fileName }}
                   >
                     {file.originalFilename}
                   </span>
@@ -136,25 +144,25 @@ export function FileLedgerTable() {
               </TableCell>
               <TableCell
                 className="pr-4 text-sm"
-                style={{ color: '#6b7a8d' }}
+                style={{ color: colors.cellText }}
               >
                 {formatBytes(file.fileSize)}
               </TableCell>
               <TableCell
                 className="pr-4 text-sm"
-                style={{ color: '#6b7a8d' }}
+                style={{ color: colors.cellText }}
               >
                 {formatTime(file.completedAt)}
               </TableCell>
               <TableCell
                 className="pr-4 text-sm"
-                style={{ color: '#6b7a8d' }}
+                style={{ color: colors.cellText }}
               >
                 {formatTime(file.createdAtRemote)}
               </TableCell>
               <TableCell
                 className="pr-4 text-sm"
-                style={{ color: '#6b7a8d' }}
+                style={{ color: colors.cellText }}
               >
                 {formatDuration(file.activeTransmissionMs)}
               </TableCell>
@@ -163,7 +171,7 @@ export function FileLedgerTable() {
                   onClick={() => handleOpen(file.finalPath)}
                   className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-blue-50"
                   style={{
-                    color: '#3b82f6',
+                    color: colors.actionButton,
                     border: '1px solid rgba(59,130,246,0.18)',
                   }}
                   title="打开文件"

@@ -6,6 +6,11 @@ import { Progress } from '@renderer/components/ui/progress';
 import { formatBytes } from '@renderer/lib/format';
 import { cn } from '@renderer/lib/utils';
 
+const colors = {
+  iconGradient: 'linear-gradient(135deg, #3b82f6 0%, #60c4f0 100%)',
+  iconOfflineBg: 'rgba(0,0,0,0.06)',
+} as const;
+
 interface DeviceCardProps {
   device: DashboardDeviceDTO;
   onClick: () => void;
@@ -38,8 +43,8 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
               style={{
                 background: isOffline
-                  ? 'rgba(0,0,0,0.06)'
-                  : 'linear-gradient(135deg, #3b82f6 0%, #60c4f0 100%)',
+                  ? colors.iconOfflineBg
+                  : colors.iconGradient,
                 boxShadow: isOffline
                   ? 'none'
                   : '0 2px 8px rgba(59,130,246,0.3)',

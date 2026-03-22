@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { Icon } from '../components/Icon';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,8 +64,10 @@ const RING_THICKNESS = 9;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fileIcon(type: 'video' | 'image'): string {
-  return type === 'video' ? '📹' : '🖼';
+function fileIcon(type: 'video' | 'image'): React.ReactElement {
+  return type === 'video'
+    ? <Icon name="videocam-outline" size={16} color="#3b82f6" />
+    : <Icon name="image-outline" size={16} color="#06b6d4" />;
 }
 
 function formatBytes(bytes: number): string {
@@ -149,7 +152,7 @@ function CompletionCard({ fileCount, totalSize }: { fileCount: number; totalSize
       <View style={styles.completionGlow} />
       {/* Checkmark circle */}
       <View style={styles.completionCircle}>
-        <Text style={styles.completionCheck}>{'✓'}</Text>
+        <Icon name="checkmark-circle" size={64} color="#22c55e" />
       </View>
       <Text style={styles.completionTitle}>{'所有文件已同步'}</Text>
       <View style={styles.completionMeta}>
@@ -173,7 +176,7 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
       ]}
     >
       <View style={styles.queueIcon}>
-        <Text style={styles.queueIconText}>{fileIcon(item.type)}</Text>
+        {fileIcon(item.type)}
       </View>
       <View style={styles.queueInfo}>
         <Text style={styles.queueFileName} numberOfLines={1}>
@@ -373,14 +376,14 @@ export function SyncStatusScreen() {
             style={styles.headerBtn}
             accessibilityLabel={'历史记录'}
           >
-            <Text style={styles.headerBtnIcon}>{'⧖'}</Text>
+            <Icon name="time-outline" size={20} color="#4a6a8a" />
           </Pressable>
           <Pressable
             onPress={handleSettings}
             style={styles.headerBtn}
             accessibilityLabel={'设置'}
           >
-            <Text style={styles.headerBtnIcon}>{'⚙'}</Text>
+            <Icon name="settings-outline" size={20} color="#4a6a8a" />
           </Pressable>
         </View>
       </View>
@@ -457,11 +460,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerBtnIcon: {
-    fontSize: 20,
-    color: DARK,
-    opacity: 0.5,
   },
 
   // Progress card
@@ -590,9 +588,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  queueIconText: {
-    fontSize: 18,
-  },
   queueInfo: {
     flex: 1,
     minWidth: 0,
@@ -664,11 +659,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
-  },
-  completionCheck: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: BLUE,
   },
   completionTitle: {
     fontSize: 22,

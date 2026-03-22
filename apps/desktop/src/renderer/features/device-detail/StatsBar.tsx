@@ -1,6 +1,14 @@
 import { FileVideo2, HardDrive, Clock } from 'lucide-react';
 import { formatBytes, formatDuration } from '@renderer/lib/format';
 
+const colors = {
+  fileIcon: '#3b82f6',
+  titleText: '#1a2a3a',
+  labelText: '#8a9ab0',
+  storageIcon: '#7c6fdd',
+  clockIcon: '#f59e0b',
+} as const;
+
 interface StatsBarProps {
   fileCount: number;
   totalBytes: number;
@@ -23,10 +31,10 @@ export function StatsBar({
       }}
     >
       <div className="flex items-center gap-2">
-        <FileVideo2 className="h-3.5 w-3.5" style={{ color: '#3b82f6' }} />
-        <span className="text-xs font-semibold" style={{ color: '#1a2a3a' }}>
+        <FileVideo2 className="h-3.5 w-3.5" style={{ color: colors.fileIcon }} />
+        <span className="text-xs font-semibold" style={{ color: colors.titleText }}>
           {fileCount}
-          <span className="ml-1 font-normal" style={{ color: '#8a9ab0' }}>
+          <span className="ml-1 font-normal" style={{ color: colors.labelText }}>
             个文件
           </span>
         </span>
@@ -38,8 +46,8 @@ export function StatsBar({
       />
 
       <div className="flex items-center gap-2">
-        <HardDrive className="h-3.5 w-3.5" style={{ color: '#7c6fdd' }} />
-        <span className="text-xs font-semibold" style={{ color: '#1a2a3a' }}>
+        <HardDrive className="h-3.5 w-3.5" style={{ color: colors.storageIcon }} />
+        <span className="text-xs font-semibold" style={{ color: colors.titleText }}>
           {formatBytes(totalBytes)}
         </span>
       </div>
@@ -50,10 +58,10 @@ export function StatsBar({
       />
 
       <div className="flex items-center gap-2">
-        <Clock className="h-3.5 w-3.5" style={{ color: '#f59e0b' }} />
-        <span className="text-xs font-semibold" style={{ color: '#1a2a3a' }}>
+        <Clock className="h-3.5 w-3.5" style={{ color: colors.clockIcon }} />
+        <span className="text-xs font-semibold" style={{ color: colors.titleText }}>
           耗时{' '}
-          <span className="font-normal" style={{ color: '#8a9ab0' }}>
+          <span className="font-normal" style={{ color: colors.labelText }}>
             {formatDuration(activeTransmissionMs)}
           </span>
         </span>

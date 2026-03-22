@@ -12,7 +12,6 @@ export interface ElectronAPI {
     getHealth(): Promise<{ ok: boolean; service: string }>;
     getDashboardSummary(): Promise<DashboardSummaryDTO>;
     getDashboardDevices(): Promise<DashboardDeviceDTO[]>;
-    getDeviceDetail(deviceId: string): Promise<DashboardDeviceDTO>;
     getDeviceFiles(deviceId: string, date: string): Promise<DeviceFileLedgerDTO[]>;
     getDeviceDates(deviceId: string): Promise<{ dates: string[] }>;
     getSettings(): Promise<SettingsDTO>;

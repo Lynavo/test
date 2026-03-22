@@ -38,8 +38,6 @@ export const sidecarClient = {
     request<import('@syncflow/contracts').DashboardSummaryDTO>('GET', '/dashboard/summary'),
   getDashboardDevices: () =>
     request<import('@syncflow/contracts').DashboardDeviceDTO[]>('GET', '/dashboard/devices'),
-  getDeviceDetail: (id: string) =>
-    request<import('@syncflow/contracts').DashboardDeviceDTO>('GET', `/devices/${id}`),
   getDeviceFiles: (id: string, date: string) =>
     request<import('@syncflow/contracts').DeviceFileLedgerDTO[]>(
       'GET',

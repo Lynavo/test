@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Save } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
 import { Button } from '@renderer/components/ui/button';
 import { useSettingsStore } from '@renderer/stores/settings-store';
@@ -24,7 +25,7 @@ export function DeviceNameSection() {
       updateSettings({ ...settings, ...updated });
       setDraft(null);
     } catch {
-      // Phase 1: silent fail; toast can be added later
+      toast.error('保存设备名称失败');
     } finally {
       setSaving(false);
     }

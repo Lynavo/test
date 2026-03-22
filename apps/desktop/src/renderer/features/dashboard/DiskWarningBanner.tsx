@@ -1,6 +1,10 @@
 import { AlertTriangle, X } from 'lucide-react';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 
+const colors = {
+  errorText: '#dc2626',
+} as const;
+
 export function DiskWarningBanner() {
   const { summary, diskWarningDismissed, dismissDiskWarning } =
     useDashboardStore();
@@ -13,7 +17,7 @@ export function DiskWarningBanner() {
       style={{
         background: 'rgba(254,226,226,0.85)',
         border: '1px solid rgba(252,165,165,0.5)',
-        color: '#dc2626',
+        color: colors.errorText,
         backdropFilter: 'blur(8px)',
       }}
       role="alert"
@@ -25,7 +29,7 @@ export function DiskWarningBanner() {
       <button
         onClick={dismissDiskWarning}
         className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-red-100"
-        style={{ color: '#dc2626' }}
+        style={{ color: colors.errorText }}
         aria-label="dismiss"
       >
         <X className="h-3.5 w-3.5" />

@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
+import { Icon } from '../components/Icon';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,7 +82,7 @@ function PulseRings() {
       })}
       {/* Center circle */}
       <View style={styles.pulseCenter}>
-        <Text style={styles.wifiIconSmall}>{'📡'}</Text>
+        <Icon name="radio-outline" size={22} color="#3b9fd8" />
       </View>
     </View>
   );
@@ -184,7 +185,7 @@ export function DeviceDiscoveryScreen() {
       >
         {/* Monitor icon with gradient bg */}
         <View style={styles.deviceIconWrapper}>
-          <Text style={styles.monitorIcon}>{'🖥'}</Text>
+          <Icon name="desktop-outline" size={20} color="#fff" />
         </View>
 
         {/* Device info */}
@@ -194,7 +195,7 @@ export function DeviceDiscoveryScreen() {
         </View>
 
         {/* Chevron */}
-        <Text style={styles.chevron}>{'›'}</Text>
+        <Icon name="chevron-forward" size={20} color="#b0c8da" />
       </TouchableOpacity>
     ),
     [handleDevicePress],
@@ -208,7 +209,7 @@ export function DeviceDiscoveryScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.wifiIconBox}>
-            <Text style={styles.wifiIcon}>{'📶'}</Text>
+            <Icon name="wifi" size={24} color="#3b9fd8" />
           </View>
           <Text style={styles.title}>{'搜索设备'}</Text>
           <Text style={styles.subtitle}>{'正在扫描局域网中的电脑端应用...'}</Text>
@@ -248,7 +249,10 @@ export function DeviceDiscoveryScreen() {
               activeOpacity={0.7}
               onPress={handleRescan}
             >
-              <Text style={styles.rescanText}>{'🔄'}  {'重新扫描'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="refresh" size={16} color="#5a9abf" />
+                <Text style={styles.rescanText}>{'重新扫描'}</Text>
+              </View>
             </TouchableOpacity>
           </View>
         )}
@@ -286,9 +290,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  wifiIcon: {
-    fontSize: 28,
-  },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
@@ -325,9 +326,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(59,159,216,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  wifiIconSmall: {
-    fontSize: 24,
   },
   scanningText: {
     fontSize: 14,
@@ -380,9 +378,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
-  monitorIcon: {
-    fontSize: 20,
-  },
   deviceInfo: {
     flex: 1,
     minWidth: 0,
@@ -396,11 +391,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8aabbd',
     marginTop: 2,
-  },
-  chevron: {
-    fontSize: 22,
-    color: '#b0c8da',
-    fontWeight: '300',
   },
 
   // Empty state

@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
+import { Icon } from '../components/Icon';
 
 // ---------------------------------------------------------------------------
 // SettingsScreen
@@ -23,7 +24,6 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const [editing, setEditing] = useState(false);
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
   const [connected, setConnected] = useState(false);
@@ -81,22 +81,6 @@ export function SettingsScreen() {
   }, [myName]);
 
   // ---------------------------------------------------------------------------
-  // Rename device alias
-  // ---------------------------------------------------------------------------
-
-  const handleConfirmEdit = useCallback(async () => {
-    setEditing(false);
-    try {
-      const { NativeSyncEngine } = NativeModules;
-      if (NativeSyncEngine) {
-        await NativeSyncEngine.renameBoundDeviceAlias(deviceName);
-      }
-    } catch (e) {
-      console.warn('Failed to rename device alias');
-    }
-  }, [deviceName]);
-
-  // ---------------------------------------------------------------------------
   // Disconnect and unbind
   // ---------------------------------------------------------------------------
 
@@ -138,7 +122,7 @@ export function SettingsScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>{'←'}</Text>
+            <Icon name="chevron-back" size={20} color={colors.screenTitle} />
           </TouchableOpacity>
           <Text style={styles.title}>{'设置'}</Text>
         </View>
@@ -153,7 +137,7 @@ export function SettingsScreen() {
             <View style={styles.deviceRow}>
               {/* Phone icon */}
               <View style={[styles.monitorIconWrapper, styles.phoneIconWrapper]}>
-                <Text style={styles.monitorIcon}>{'📱'}</Text>
+                <Icon name="phone-portrait-outline" size={20} color="#fff" />
               </View>
 
               {/* Name display / edit */}
@@ -174,7 +158,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={handleConfirmMyName}
                     >
-                      <Text style={styles.confirmIcon}>{'✓'}</Text>
+                      <Icon name="checkmark" size={16} color="#3b9fd8" />
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -187,7 +171,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={() => setEditingMyName(true)}
                     >
-                      <Text style={styles.editIcon}>{'✏️'}</Text>
+                      <Icon name="pencil-outline" size={14} color="#3b9fd8" />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -204,44 +188,14 @@ export function SettingsScreen() {
             <View style={styles.deviceRow}>
               {/* Monitor icon */}
               <View style={styles.monitorIconWrapper}>
-                <Text style={styles.monitorIcon}>{'🖥'}</Text>
+                <Icon name="desktop-outline" size={20} color="#fff" />
               </View>
 
               {/* Name + IP + status */}
               <View style={styles.deviceInfo}>
-                {editing ? (
-                  <View style={styles.editRow}>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={deviceName}
-                      onChangeText={setDeviceName}
-                      autoFocus
-                      selectTextOnFocus
-                      returnKeyType="done"
-                      onSubmitEditing={handleConfirmEdit}
-                    />
-                    <TouchableOpacity
-                      style={styles.confirmButton}
-                      activeOpacity={0.7}
-                      onPress={handleConfirmEdit}
-                    >
-                      <Text style={styles.confirmIcon}>{'✓'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.nameRow}>
-                    <Text style={styles.deviceNameText} numberOfLines={1}>
-                      {deviceName}
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      activeOpacity={0.7}
-                      onPress={() => setEditing(true)}
-                    >
-                      <Text style={styles.editIcon}>{'✏️'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <Text style={styles.deviceNameText} numberOfLines={1}>
+                  {deviceName}
+                </Text>
 
                 <Text style={styles.deviceIp}>{deviceIp}</Text>
 
@@ -267,7 +221,7 @@ export function SettingsScreen() {
 
           {/* Hint text */}
           <Text style={styles.hintText}>
-            {'设备名称默认格式：设备名 + IP 地址，可点击编辑图标自定义名称'}
+            {'电脑端名称在电脑端设置中修改'}
           </Text>
         </ScrollView>
       </View>
@@ -304,11 +258,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backArrow: {
-    fontSize: 18,
-    color: colors.screenTitle,
-    fontWeight: '500',
   },
   title: {
     fontSize: 18,
@@ -354,9 +303,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
-  monitorIcon: {
-    fontSize: 24,
-  },
   deviceInfo: {
     flex: 1,
     minWidth: 0,
@@ -379,9 +325,6 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  editIcon: {
-    fontSize: 14,
   },
 
   // Name editing
@@ -409,10 +352,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59,159,216,0.12)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  confirmIcon: {
-    fontSize: 14,
-    color: '#3b9fd8',
   },
 
   // IP + status
