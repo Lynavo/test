@@ -556,8 +556,27 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         else { authRequired = true }
 
         guard authRequired else {
-            // Already bound — no PAIR_REQ needed
-            NSLog("[SyncEngine] already bound, skipping PAIR_REQ")
+            // Already bound on server — ensure we have a local binding record too
+            NSLog("[SyncEngine] already bound on server, ensuring local binding exists")
+            if uploadStore?.getBinding() == nil {
+                // Recreate binding from HELLO_RES info
+                let serverName = helloRes["serverName"] as? String ?? ""
+                let serverId = helloRes["serverId"] as? String ?? deviceId
+                let binding = BindingRecord(
+                    deviceId: serverId,
+                    deviceName: serverName,
+                    deviceAlias: nil,
+                    deviceType: "mac",
+                    host: host,
+                    port: port,
+                    pairingId: "",
+                    pairingTokenKeychainRef: "syncflow_pairing_token",
+                    shareName: helloRes["serverCapabilities"].flatMap { ($0 as? [String: Any])?["shareName"] as? String },
+                    lastBoundAt: ISO8601DateFormatter().string(from: Date())
+                )
+                try? uploadStore?.saveBinding(binding)
+                NSLog("[SyncEngine] recreated local binding for \(serverId)")
+            }
             startSync()
             return
         }
