@@ -69,7 +69,7 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 		if d.LastIP != nil {
 			ip = *d.LastIP
 		}
-		// Derive status: live TCP connection > recent activity > offline
+		// Derive status: live TCP > HTTP presence > offline
 		status := "offline"
 		if s.clientStates != nil {
 			liveStates := s.clientStates.ConnectedClientStates()
@@ -80,6 +80,9 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 					status = "connected_idle"
 				}
 			}
+		}
+		if status == "offline" && s.presence.IsAlive(d.ClientID, 90*time.Second) {
+			status = "connected_idle"
 		}
 
 		dto := deviceDTO{

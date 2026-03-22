@@ -135,24 +135,28 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NSLog("[SyncPipeline] round %d: %d new assets (completed: %d)", roundNumber, newAssets.count, completedKeys.count)
 
             if newAssets.isEmpty {
-                // Nothing to upload — wait for photo library changes (no TCP connection)
+                // Nothing to upload — wait for photo library changes
                 NativeSyncEngineModule.shared?.emitSyncStateChanged([
                     "uploadState": "completed",
                     "progressPercent": 100,
                 ])
 
-                NSLog("[SyncPipeline] idle — waiting for new photos (TCP disconnected)...")
+                NSLog("[SyncPipeline] idle — waiting for new photos...")
                 photoLibraryChanged = false
 
-                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                    if photoLibraryChanged {
-                        cont.resume()
-                        return
-                    }
-                    watchLoopContinuation = cont
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 60) { [weak self] in
-                        self?.watchLoopContinuation?.resume()
-                        self?.watchLoopContinuation = nil
+                // Wait loop: send HTTP presence heartbeat every 30s while idle
+                while !photoLibraryChanged {
+                    sendPresenceHeartbeat(clientId: clientId, host: binding.host)
+                    await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                        if photoLibraryChanged {
+                            cont.resume()
+                            return
+                        }
+                        watchLoopContinuation = cont
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
+                            self?.watchLoopContinuation?.resume()
+                            self?.watchLoopContinuation = nil
+                        }
                     }
                 }
                 try await Task.sleep(nanoseconds: 2_000_000_000) // debounce
@@ -838,6 +842,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     // MARK: - Client Display Name
 
     private static let clientNameKey = "syncflow_client_display_name"
+
+    // MARK: - HTTP Presence Heartbeat
+
+    private func sendPresenceHeartbeat(clientId: String, host: String) {
+        // Send lightweight HTTP POST to sidecar to indicate we're alive
+        let port = 39394
+        let urlStr = "http://127.0.0.1:\(port)/presence/\(clientId)"
+        guard let url = URL(string: urlStr) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 5
+        URLSession.shared.dataTask(with: request) { _, _, _ in }.resume()
+    }
 
     func getClientDisplayName() -> String {
         return UserDefaults.standard.string(forKey: Self.clientNameKey) ?? UIDevice.current.name

@@ -19,13 +19,16 @@ type Server struct {
 	config       *config.Config
 	hub          *events.Hub
 	clientStates ClientStateProvider
+	presence     *PresenceTracker
 }
 
 // NewServer creates a new HTTP handler with all API routes registered.
 func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientStateProvider) http.Handler {
-	srv := &Server{store: s, config: cfg, hub: hub, clientStates: csp}
+	srv := &Server{store: s, config: cfg, hub: hub, clientStates: csp, presence: NewPresenceTracker()}
 	mux := http.NewServeMux()
 
+	// Presence (mobile heartbeat)
+	mux.HandleFunc("POST /presence/{clientId}", withJSON(srv.handlePresence))
 	// Health
 	mux.HandleFunc("GET /health", withJSON(srv.handleHealth))
 	// Dashboard
