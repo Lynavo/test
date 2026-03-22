@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
+import { formatBytes, formatDuration } from '../utils/format';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,28 +42,20 @@ interface HistorySection {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
 function isToday(dateStr: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
   return dateStr === today;
 }
 
+function isYesterday(dateStr: string): boolean {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return dateStr === yesterday.toISOString().slice(0, 10);
+}
+
 function formatDateLabel(dateStr: string): string {
   if (isToday(dateStr)) return '\u4ECA\u5929';
-  // Format as month/day in Chinese
+  if (isYesterday(dateStr)) return '\u6628\u5929';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
     return `${parseInt(parts[1], 10)}\u6708${parseInt(parts[2], 10)}\u65E5`;
@@ -351,43 +344,45 @@ export function HistoryScreen() {
 // ---------------------------------------------------------------------------
 
 interface LedgerItem {
-  ledgerDate: string;
+  ledgerDate?: string;
+  dateKey?: string;
   deviceId: string;
-  deviceName: string;
-  deviceIp: string;
+  deviceName?: string;
+  deviceNameSnapshot?: string;
+  deviceIp?: string;
+  deviceIpSnapshot?: string;
   fileCount: number;
   totalBytes: number;
-  transmissionMs: number;
+  transmissionMs?: number;
+  activeTransmissionMs?: number;
 }
 
 function groupByDate(items: LedgerItem[]): HistorySection[] {
   const map = new Map<string, SessionCard[]>();
 
   for (const item of items) {
-    const key = item.ledgerDate;
-    if (!map.has(key)) {
-      map.set(key, []);
+    const date = item.ledgerDate || item.dateKey || 'unknown';
+    if (!map.has(date)) {
+      map.set(date, []);
     }
-    map.get(key)!.push({
-      id: `${item.ledgerDate}-${item.deviceId}`,
-      deviceName: item.deviceName,
-      deviceIp: item.deviceIp,
+    map.get(date)!.push({
+      id: `${date}-${item.deviceId}`,
+      deviceName: item.deviceName || item.deviceNameSnapshot || 'Unknown',
+      deviceIp: item.deviceIp || item.deviceIpSnapshot || '',
       fileCount: item.fileCount,
       totalSize: formatBytes(item.totalBytes),
-      duration: formatDuration(item.transmissionMs),
+      duration: formatDuration(item.transmissionMs || item.activeTransmissionMs || 0),
     });
   }
 
-  const sections: HistorySection[] = [];
-  for (const [date, data] of map.entries()) {
-    sections.push({
+  // Sort dates descending and build sections
+  return Array.from(map.keys())
+    .sort((a, b) => b.localeCompare(a))
+    .map(date => ({
       title: formatDateLabel(date),
       isToday: isToday(date),
-      data,
-    });
-  }
-
-  return sections;
+      data: map.get(date)!,
+    }));
 }
 
 // ---------------------------------------------------------------------------
