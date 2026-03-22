@@ -123,7 +123,36 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let clientId = bindingService.getOrCreateClientId()
 
-        // 3. Find target device
+        // 3. Connect + sync with auto-reconnect
+        var reconnectAttempt = 0
+        let maxReconnectDelay: UInt64 = 30_000_000_000 // 30s max
+
+        while true {
+            do {
+                try await connectAndSync(binding: binding, token: token, clientId: clientId)
+                // connectAndSync only returns on unrecoverable error (throw) or never (loops forever)
+            } catch {
+                reconnectAttempt += 1
+                let delay = min(UInt64(reconnectAttempt) * 5_000_000_000, maxReconnectDelay)
+                NSLog("[SyncPipeline] connection lost: %@ — reconnecting in %ds (attempt %d)",
+                      "\(error)", delay / 1_000_000_000, reconnectAttempt)
+
+                NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                    "uploadState": "reconnecting",
+                ])
+
+                try await Task.sleep(nanoseconds: delay)
+                // Restart discovery in case endpoint changed
+                discoveryService.startBrowsing()
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
+    }
+
+    /// Connect TCP, authenticate, and run the continuous sync loop.
+    /// Throws on connection/auth/protocol errors (caller handles reconnect).
+    private func connectAndSync(binding: BindingRecord, token: String, clientId: String) async throws {
+        // Find target device
         func findDevice() -> DiscoveredDevice? {
             if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
                 return exact
@@ -143,11 +172,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
         }
         guard let endpoint = targetEndpoint else {
-            NSLog("[SyncPipeline] target device not found after discovery")
             throw SyncEngineError.networkError("Target device not found on network")
         }
 
-        // 4. Connect TCP + auth (one connection for the entire session)
+        // Connect TCP + auth
         let newTransport = TcpTransport()
         let session = ProtocolSession(transport: newTransport)
         protocolSession = session
@@ -177,7 +205,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NSLog("[SyncPipeline] auth successful")
         }
 
-        // 5. Continuous sync loop — scan, upload, wait for new photos, repeat
+        // Continuous sync loop — scan, upload, wait for new photos, repeat
         var roundNumber = 0
         while true {
             roundNumber += 1
@@ -398,13 +426,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - Stream FILE_DATA Chunks (spec Section 7.4, 7.7: 8 MiB chunks)
 
+    // MARK: - Upload Throttle (set to 0 for full speed)
+    /// Bytes per second limit. 0 = unlimited. Set to e.g. 500_000 for ~500 KB/s during testing.
+    private let uploadThrottleBytesPerSec: Int64 = 500_000  // TODO: remove after testing
+
     private func streamFileData(
         fileURL: URL,
         fileKey: String,
         startOffset: Int64,
         fileSize: Int64
     ) async throws {
-        let chunkSize = 8 * 1024 * 1024  // 8 MiB per spec Section 7.7
+        let chunkSize = uploadThrottleBytesPerSec > 0
+            ? Int(min(Int64(512 * 1024), uploadThrottleBytesPerSec))  // smaller chunks when throttled
+            : 8 * 1024 * 1024  // 8 MiB per spec Section 7.7
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { handle.closeFile() }
 
@@ -434,6 +468,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             // For other unexpected types, just continue
 
             offset += Int64(data.count)
+
+            // Throttle: sleep to limit upload speed
+            if uploadThrottleBytesPerSec > 0 {
+                let sleepNs = UInt64(Double(data.count) / Double(uploadThrottleBytesPerSec) * 1_000_000_000)
+                try await Task.sleep(nanoseconds: sleepNs)
+            }
 
             // Emit progress to RN
             let progressPercent = fileSize > 0 ? Int(Double(offset) / Double(fileSize) * 100) : 0
