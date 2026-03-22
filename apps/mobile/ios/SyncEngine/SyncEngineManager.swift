@@ -444,6 +444,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         handle.seek(toFileOffset: UInt64(startOffset))
         var offset = startOffset
+        var speedBytesLastCheck = startOffset
+        var speedLastTime = CFAbsoluteTimeGetCurrent()
 
         guard let session = protocolSession else {
             throw SyncEngineError.networkError("No active protocol session")
@@ -475,6 +477,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 try await Task.sleep(nanoseconds: sleepNs)
             }
 
+            // Calculate speed (MB/s)
+            let now = CFAbsoluteTimeGetCurrent()
+            let elapsed = now - speedLastTime
+            var speedMbps: Double = 0
+            if elapsed >= 0.5 {
+                let bytesTransferred = Double(offset - speedBytesLastCheck)
+                speedMbps = (bytesTransferred / elapsed) / (1024 * 1024)
+                speedBytesLastCheck = offset
+                speedLastTime = now
+            }
+
             // Emit progress to RN
             let progressPercent = fileSize > 0 ? Int(Double(offset) / Double(fileSize) * 100) : 0
             NativeSyncEngineModule.shared?.emitSyncStateChanged([
@@ -483,6 +496,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 "transferredBytes": offset,
                 "totalBytes": fileSize,
                 "currentFile": fileKey,
+                "currentSpeedMbps": round(speedMbps * 10) / 10,
             ])
         }
     }
