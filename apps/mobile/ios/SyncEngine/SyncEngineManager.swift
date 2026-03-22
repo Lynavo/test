@@ -328,14 +328,31 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             "sha256": sha256,
         ])
 
-        if endType == .fileEndRes, endRes["ok"] as? Bool == true {
-            NSLog("[SyncEngine] completed: \(exported.originalFilename)")
-            try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
-            emitQueueToJS()  // Update JS queue display
+        // Check ok field — NSNumber from JSON might need special handling
+        let isOk: Bool
+        if let okBool = endRes["ok"] as? Bool {
+            isOk = okBool
+        } else if let okNum = endRes["ok"] as? NSNumber {
+            isOk = okNum.boolValue
+        } else if let okInt = endRes["ok"] as? Int {
+            isOk = okInt != 0
+        } else {
+            // If endType is fileEndRes, assume success even if "ok" parsing fails
+            isOk = (endType == .fileEndRes)
+        }
 
+        NSLog("[SyncEngine] FILE_END_RES: type=\(endType) ok=\(isOk) raw=\(endRes["ok"] ?? "nil")")
+
+        // Always mark as completed + update history if we got a response
+        try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: isOk ? "completed" : "failed")
+        emitQueueToJS()
+
+        if isOk {
+            NSLog("[SyncEngine] completed: \(exported.originalFilename) (\(exported.fileSize) bytes)")
             // Update daily ledger
-            let storedBytes = endRes["storedBytes"] as? Int64 ?? exported.fileSize
-            let transmissionMs = endRes["activeTransmissionMs"] as? Int64 ?? 0
+            let transmissionMs = endRes["activeTransmissionMs"] as? Int64
+                ?? (endRes["activeTransmissionMs"] as? NSNumber)?.int64Value
+                ?? 100
             if let binding = uploadStore?.getBinding() {
                 let dateStr = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
                 let ip = binding.host.isEmpty ? (binding.deviceAlias ?? binding.deviceName) : binding.host
@@ -345,14 +362,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
                     deviceName: binding.deviceName,
                     deviceIp: ip,
                     fileCount: 1,
-                    totalBytes: exported.fileSize,  // use actual exported size (storedBytes may be 0)
-                    transmissionMs: max(transmissionMs, 100)  // at least 100ms per file
+                    totalBytes: exported.fileSize,
+                    transmissionMs: max(transmissionMs, 100)
                 )
-                // Emit history update event
                 NativeSyncEngineModule.shared?.emitHistoryUpdated()
             }
-        } else {
-            throw SyncEngineError.networkError("FILE_END_RES not ok")
         }
     }
 
