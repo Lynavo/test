@@ -76,7 +76,7 @@ func (c *connection) handleFileData(hdr *protocol.FrameHeader, body []byte) erro
 	c.hub.Broadcast(events.Event{
 		Type: "upload.progress",
 		Payload: map[string]any{
-			"clientId": c.clientID,
+			"deviceId": c.clientID,
 			"fileKey":  fileKey,
 			"progress": progress,
 		},
@@ -156,7 +156,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 		c.hub.Broadcast(events.Event{
 			Type: "upload.failed",
 			Payload: map[string]any{
-				"clientId": c.clientID,
+				"deviceId": c.clientID,
 				"fileKey":  req.FileKey,
 				"reason":   "SHA256_MISMATCH",
 			},
@@ -283,8 +283,8 @@ func (c *connection) handleSyncEnd(body []byte) error {
 	c.hub.Broadcast(events.Event{
 		Type: "device.state.changed",
 		Payload: map[string]any{
-			"clientId": c.clientID,
-			"state":    "connected_idle",
+			"deviceId": c.clientID,
+			"status":   "connected_idle",
 		},
 	})
 

@@ -49,16 +49,20 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - App State Transitions
 
+    private var bgTaskId: UIBackgroundTaskIdentifier = .invalid
+
     @objc private func appDidEnterBackground() {
-        NSLog("[SyncEngine] app entered background")
-        if sessionService.state == .syncingForeground {
+        NSLog("[SyncEngine] app entered background, isSyncing=\(isSyncing)")
+        if isSyncing {
             sessionService.transitionTo(.syncingBackground)
-            let taskId = backgroundService.beginTransitionTask()
-            backgroundService.submitContinuedTask()
-            // End transition task after a delay to allow BGTask scheduling
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                self.backgroundService.endTransitionTask(taskId)
+            // Keep app alive in background while uploading (iOS gives ~30s, sometimes more)
+            bgTaskId = UIApplication.shared.beginBackgroundTask(withName: "SyncFlow Upload") { [weak self] in
+                NSLog("[SyncEngine] background task expiring")
+                self?.bgTaskId = .invalid
             }
+            NSLog("[SyncEngine] background task started, remaining: %.0fs", UIApplication.shared.backgroundTimeRemaining)
+            // Also submit BGProcessingTask for later wake-up if we get killed
+            backgroundService.submitContinuedTask()
         }
     }
 
@@ -66,6 +70,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncEngine] app entering foreground")
         if sessionService.state == .syncingBackground {
             sessionService.transitionTo(.syncingForeground)
+        }
+        // End background task if we had one
+        if bgTaskId != .invalid {
+            UIApplication.shared.endBackgroundTask(bgTaskId)
+            bgTaskId = .invalid
         }
     }
 

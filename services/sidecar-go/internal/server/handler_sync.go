@@ -49,8 +49,8 @@ func (c *connection) handleSyncBegin(body []byte) error {
 	c.hub.Broadcast(events.Event{
 		Type: "device.state.changed",
 		Payload: map[string]any{
-			"clientId": c.clientID,
-			"state":    "transferring",
+			"deviceId": c.clientID,
+			"status":   "transferring",
 		},
 	})
 
