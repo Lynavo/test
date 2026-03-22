@@ -139,10 +139,32 @@ class TcpTransport {
     // MARK: - HMAC Auth (spec Section 7.9)
 
     /// Compute HMAC-SHA256(pairingToken, nonce) for anti-replay authentication.
+    /// Compute HMAC-SHA256 matching the sidecar's verification.
+    /// Sidecar stores SHA256(pairingToken) and computes HMAC(key=sha256_bytes, data=nonce_hex_decoded).
     func computeHMAC(token: String, nonce: String) -> String {
-        let key = SymmetricKey(data: Data(token.utf8))
-        let mac = HMAC<SHA256>.authenticationCode(for: Data(nonce.utf8), using: key)
+        // 1. Hash the token with SHA256 (same as sidecar stores)
+        let tokenHash = SHA256.hash(data: Data(token.utf8))
+        let key = SymmetricKey(data: Data(tokenHash))
+
+        // 2. Hex-decode the nonce (sidecar sends hex-encoded nonce)
+        let nonceBytes = hexDecode(nonce)
+
+        // 3. HMAC-SHA256(key=tokenHash, data=nonceBytes)
+        let mac = HMAC<SHA256>.authenticationCode(for: nonceBytes, using: key)
         return mac.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func hexDecode(_ hex: String) -> Data {
+        var data = Data()
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let nextIndex = hex.index(index, offsetBy: 2, limitedBy: hex.endIndex) ?? hex.endIndex
+            if let byte = UInt8(hex[index..<nextIndex], radix: 16) {
+                data.append(byte)
+            }
+            index = nextIndex
+        }
+        return data
     }
 
     // MARK: - Receive
