@@ -65,7 +65,7 @@ func (s *Store) ListUploadsByDeviceAndDate(clientID, date string) ([]Upload, err
 		       file_size, created_at_remote, modified_at_remote, status, part_path, final_path,
 		       committed_bytes, sha256, active_transmission_ms, completed_at, updated_at
 		FROM uploads
-		WHERE client_id = ? AND DATE(updated_at) = ?
+		WHERE client_id = ? AND DATE(updated_at, 'localtime') = ?
 		ORDER BY updated_at DESC`, clientID, date,
 	)
 	if err != nil {
@@ -91,7 +91,7 @@ func (s *Store) ListUploadsByDeviceAndDate(clientID, date string) ([]Upload, err
 // GetAvailableDates returns distinct dates (YYYY-MM-DD) that have uploads for a given client, descending.
 func (s *Store) GetAvailableDates(clientID string) ([]string, error) {
 	rows, err := s.db.Query(`
-		SELECT DISTINCT DATE(updated_at) AS d
+		SELECT DISTINCT DATE(updated_at, 'localtime') AS d
 		FROM uploads
 		WHERE client_id = ?
 		ORDER BY d DESC`, clientID,
@@ -158,9 +158,9 @@ func (s *Store) UpsertDailyStats(stat DailyStats) error {
 		ON CONFLICT(stat_date, client_id) DO UPDATE SET
 			client_name_snapshot = excluded.client_name_snapshot,
 			client_ip_snapshot = excluded.client_ip_snapshot,
-			file_count = excluded.file_count,
-			total_bytes = excluded.total_bytes,
-			active_transmission_ms = excluded.active_transmission_ms,
+			file_count = file_count + excluded.file_count,
+			total_bytes = total_bytes + excluded.total_bytes,
+			active_transmission_ms = active_transmission_ms + excluded.active_transmission_ms,
 			updated_at = excluded.updated_at`,
 		stat.StatDate, stat.ClientID, stat.ClientNameSnapshot, stat.ClientIPSnapshot,
 		stat.FileCount, stat.TotalBytes, stat.ActiveTransmissionMs, stat.UpdatedAt,
