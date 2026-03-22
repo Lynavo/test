@@ -20,13 +20,17 @@ function getDateLabel(iso: string): string {
 }
 
 export function DateFilter({ dates, selected, onSelect }: DateFilterProps) {
+  // Ensure today is always in the list and at the top
+  const today = new Date().toISOString().slice(0, 10);
+  const allDates = dates.includes(today) ? dates : [today, ...dates];
+
   return (
     <Select value={selected} onValueChange={onSelect}>
       <SelectTrigger className="rounded-xl">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {dates.map((date) => (
+        {allDates.map((date) => (
           <SelectItem key={date} value={date}>
             {getDateLabel(date)}
           </SelectItem>
