@@ -86,12 +86,6 @@ class DiscoveryService {
                         }
                     }
 
-                    // Send debug info through error event (visible in JS console)
-                    NativeSyncEngineModule.shared?.emitError([
-                        "code": "TXT_DEBUG",
-                        "message": "TXT for \(name): dictCount=\(rawDict.count) parsedCount=\(txtDict.count) keys=\(Array(txtDict.keys))",
-                    ])
-
                     if let id = txtDict["id"], !id.isEmpty {
                         device = DiscoveredDevice(
                             deviceId: id,

@@ -227,9 +227,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             "queueTotalBytes": 0,  // actual sizes known only after export
         ])
 
-        guard beginType == .syncBeginRes, beginRes["ok"] as? Bool == true else {
+        NativeSyncEngineModule.shared?.emitError(["code": "SYNC_DEBUG", "message": "SYNC_BEGIN_RES: type=\(beginType.rawValue) ok_raw=\(String(describing: beginRes["ok"])) ok_type=\(type(of: beginRes["ok"]))"])
+
+        let syncOk: Bool
+        if let b = beginRes["ok"] as? Bool { syncOk = b }
+        else if let n = beginRes["ok"] as? NSNumber { syncOk = n.boolValue }
+        else { syncOk = (beginType == .syncBeginRes) }
+
+        guard syncOk else {
             throw SyncEngineError.networkError("SYNC_BEGIN rejected")
         }
+
+        NativeSyncEngineModule.shared?.emitError(["code": "SYNC_DEBUG", "message": "Starting upload of \(newAssets.count) files"])
 
         // 5. Upload each file serially (spec: single file at a time)
         for (index, asset) in newAssets.enumerated() {
@@ -270,8 +279,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         session: ProtocolSession
     ) async throws {
         // Export PHAsset to a temp file
+        NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] exporting \(asset.originalFilename)"])
         let exported = try await exportService.exportAsset(asset.asset)
         defer { exportService.cleanup(tempURL: exported.tempURL) }
+        NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] exported \(exported.originalFilename) (\(exported.fileSize) bytes)"])
 
         try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "uploading")
         // Update filename + size now that we know them from export
@@ -331,51 +342,64 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
 
         // FILE_END_REQ → FILE_END_RES
         let sha256 = Self.computeSHA256(fileURL: exported.tempURL)
+        NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] sending FILE_END_REQ sha256=\(sha256.prefix(8))..."])
+
         let (endType, endRes) = try await session.sendAndReceive(type: .fileEndReq, payload: [
             "fileKey": asset.fileKey,
             "fileSize": exported.fileSize,
             "sha256": sha256,
         ])
 
+        NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] FILE_END_RES received: type=\(endType.rawValue) keys=\(Array(endRes.keys)) ok_raw=\(String(describing: endRes["ok"])) ok_type=\(type(of: endRes["ok"]))"])
+
         // Check ok field — NSNumber from JSON might need special handling
         let isOk: Bool
         if let okBool = endRes["ok"] as? Bool {
             isOk = okBool
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ok parsed as Bool: \(okBool)"])
         } else if let okNum = endRes["ok"] as? NSNumber {
             isOk = okNum.boolValue
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ok parsed as NSNumber: \(okNum.boolValue)"])
         } else if let okInt = endRes["ok"] as? Int {
             isOk = okInt != 0
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ok parsed as Int: \(okInt)"])
         } else {
-            // If endType is fileEndRes, assume success even if "ok" parsing fails
             isOk = (endType == .fileEndRes)
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ok parse FALLBACK, endType=\(endType.rawValue), isOk=\(isOk)"])
         }
-
-        NSLog("[SyncEngine] FILE_END_RES: type=\(endType) ok=\(isOk) raw=\(endRes["ok"] ?? "nil")")
 
         // Always mark as completed + update history if we got a response
         try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: isOk ? "completed" : "failed")
         emitQueueToJS()
 
         if isOk {
-            NSLog("[SyncEngine] completed: \(exported.originalFilename) (\(exported.fileSize) bytes)")
-            // Update daily ledger
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] COMPLETED \(exported.originalFilename) — updating ledger"])
             let transmissionMs = endRes["activeTransmissionMs"] as? Int64
                 ?? (endRes["activeTransmissionMs"] as? NSNumber)?.int64Value
                 ?? 100
-            if let binding = uploadStore?.getBinding() {
+            let binding = uploadStore?.getBinding()
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "binding=\(binding != nil ? binding!.deviceId : "nil")"])
+            if let binding = binding {
                 let dateStr = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
                 let ip = binding.host.isEmpty ? (binding.deviceAlias ?? binding.deviceName) : binding.host
-                try? historyStore?.upsertDailyLedger(
-                    date: dateStr,
-                    deviceId: binding.deviceId,
-                    deviceName: binding.deviceName,
-                    deviceIp: ip,
-                    fileCount: 1,
-                    totalBytes: exported.fileSize,
-                    transmissionMs: max(transmissionMs, 100)
-                )
+                do {
+                    try historyStore?.upsertDailyLedger(
+                        date: dateStr,
+                        deviceId: binding.deviceId,
+                        deviceName: binding.deviceName,
+                        deviceIp: ip,
+                        fileCount: 1,
+                        totalBytes: exported.fileSize,
+                        transmissionMs: max(transmissionMs, 100)
+                    )
+                    NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ledger updated OK for \(dateStr)"])
+                } catch {
+                    NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "ledger update FAILED: \(error)"])
+                }
                 NativeSyncEngineModule.shared?.emitHistoryUpdated()
             }
+        } else {
+            NativeSyncEngineModule.shared?.emitError(["code": "UPLOAD_DEBUG", "message": "[\(index+1)/\(total)] NOT OK — skipping ledger"])
         }
     }
 
@@ -584,6 +608,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
                     lastBoundAt: ISO8601DateFormatter().string(from: Date())
                 )
                 try? uploadStore?.saveBinding(binding)
+                // Cache endpoint under binding deviceId so startSync finds it immediately
+                if let cachedDevice = discoveredDevices.values.first(where: { $0.endpoint != nil }) {
+                    discoveredDevices[serverId] = cachedDevice
+                }
                 NSLog("[SyncEngine] recreated local binding for \(serverId)")
             }
             startSync()
@@ -631,6 +659,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             lastBoundAt: ISO8601DateFormatter().string(from: Date())
         )
         try uploadStore?.saveBinding(binding)
+
+        // Cache endpoint under binding deviceId so startSync finds it immediately
+        let bindingDeviceId = serverInfo["serverId"] as? String ?? deviceId
+        if let cachedDevice = discoveredDevices.values.first(where: { $0.endpoint != nil }) {
+            discoveredDevices[bindingDeviceId] = cachedDevice
+        }
 
         // 6. Notify RN bridge
         NativeSyncEngineModule.shared?.emitBindingStateChanged([

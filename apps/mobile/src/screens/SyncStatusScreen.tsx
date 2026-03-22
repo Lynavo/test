@@ -162,7 +162,7 @@ function CircularProgress({ progress, speed }: { progress: number; speed: string
   );
 }
 
-function CompletionCard({ completed, total }: { completed: string; total: string }) {
+function CompletionCard({ fileCount, totalSize }: { fileCount: number; totalSize: string }) {
   return (
     <View style={styles.completionContainer}>
       {/* Glow backdrop */}
@@ -174,7 +174,7 @@ function CompletionCard({ completed, total }: { completed: string; total: string
       <Text style={styles.completionTitle}>{'\u6240\u6709\u6587\u4EF6\u5DF2\u540C\u6B65'}</Text>
       <View style={styles.completionMeta}>
         <Text style={styles.completionStats}>
-          {completed}{' / '}{total}
+          {fileCount} {'\u4E2A\u6587\u4EF6'} {'\u00B7'} {totalSize}
         </Text>
         <Text style={styles.completionSubtext}>{'\u672C\u6B21\u540C\u6B65\u5DF2\u5168\u90E8\u5B8C\u6210'}</Text>
       </View>
@@ -227,6 +227,27 @@ export function SyncStatusScreen() {
     uploadState: 'idle',
   });
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
+
+  const loadTodayStats = useCallback(async (engine?: any) => {
+    try {
+      const mod = engine || NativeModules.NativeSyncEngine;
+      if (!mod) return;
+      const history = await mod.getHistoryDays(null);
+      if (history?.items) {
+        const today = new Date().toISOString().slice(0, 10);
+        let totalFiles = 0;
+        let totalBytesSum = 0;
+        for (const item of history.items) {
+          if ((item.ledgerDate || item.dateKey) === today) {
+            totalFiles += item.fileCount || 0;
+            totalBytesSum += item.totalBytes || 0;
+          }
+        }
+        setTodayStats({ fileCount: totalFiles, totalBytes: totalBytesSum });
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Load real data from native module with mock fallback
@@ -259,6 +280,9 @@ export function SyncStatusScreen() {
           NativeSyncEngine.triggerSync?.()
             .catch((e: Error) => console.warn('[SyncStatus] triggerSync failed:', e));
         }
+
+        // Load today's stats from history
+        loadTodayStats(NativeSyncEngine);
 
         // Load initial overview
         const syncData = await NativeSyncEngine.getSyncOverview();
@@ -295,6 +319,10 @@ export function SyncStatusScreen() {
             total: state.totalBytes ? formatBytes(state.totalBytes as number) : prev.total,
             uploadState: (state.uploadState as string) ?? prev.uploadState,
           }));
+          // Reload today stats when sync completes
+          if (state.uploadState === 'completed') {
+            loadTodayStats(NativeModules.NativeSyncEngine);
+          }
         });
 
         queueSub = emitter.addListener('onQueueUpdated', (updatedQueue: Array<Record<string, unknown>>) => {
@@ -367,7 +395,7 @@ export function SyncStatusScreen() {
       {isDone ? (
         /* ---- Completion card ---- */
         <View style={styles.progressCard}>
-          <CompletionCard completed={overview.completed} total={overview.total} />
+          <CompletionCard fileCount={todayStats.fileCount} totalSize={formatBytes(todayStats.totalBytes)} />
         </View>
       ) : (
         <>
