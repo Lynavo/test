@@ -44,7 +44,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
         api.sidecar.getDashboardSummary(),
         api.sidecar.getDashboardDevices(),
       ]);
-      set({ summary, devices: sortDevices(devices) });
+      if (summary) set({ summary });
+      if (devices) set({ devices: sortDevices(devices) });
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
     }
@@ -52,7 +53,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
   dismissDiskWarning: () => set({ diskWarningDismissed: true }),
 
-  updateSummary: (summary) => set({ summary }),
+  updateSummary: (summary) => { if (summary) set({ summary }); },
 
   updateDevices: (devices) => set({ devices: sortDevices(devices) }),
 
