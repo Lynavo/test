@@ -2,6 +2,7 @@ import Foundation
 import Photos
 import UIKit
 import CryptoKit
+import Network
 
 @objc
 class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
@@ -89,7 +90,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
     }
 
     private func runSyncPipeline() async throws {
-        // 1. Request photo permission
+        // 0. Check prerequisites — do this BEFORE connecting TCP
+        guard let binding = uploadStore?.getBinding() else {
+            throw SyncEngineError.pairingError("No binding found — pair first")
+        }
+        guard let token = bindingService.getPairingToken() else {
+            throw SyncEngineError.pairingError("No pairing token found")
+        }
+
+        // 1. Request photo permission FIRST (user may take time to select photos)
         let status = await photoScanner.requestPermission()
         guard status == .authorized || status == .limited else {
             NSLog("[SyncEngine] photo permission denied")
@@ -97,7 +106,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             return
         }
 
-        // 2. Scan for assets not yet uploaded
+        // 2. Scan for assets not yet uploaded (offline — no TCP needed)
         let clientId = bindingService.getOrCreateClientId()
         let allItems = uploadStore?.getPendingUploadItems() ?? []
         let completedKeys = Set(
@@ -116,12 +125,75 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             return
         }
 
-        // 3. Start a new session
-        let sessionId = sessionService.startNewSession()
+        // 3. Find the target device — use any discovered _syncflow._tcp device
+        //    (v2 supports single target only, so first match is correct)
+        var targetEndpoint: NWEndpoint?
 
-        guard let session = protocolSession else {
-            throw SyncEngineError.networkError("No active protocol session")
+        // Try to find the target device by binding.deviceId first, then fallback to any device
+        func findDevice() -> DiscoveredDevice? {
+            // Exact match by sidecar device ID
+            if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
+                return exact
+            }
+            // Fallback: any _syncflow._tcp device (v2 single-target)
+            return discoveredDevices.values.first(where: { $0.endpoint != nil })
         }
+
+        if let cached = findDevice() {
+            targetEndpoint = cached.endpoint
+            NSLog("[SyncEngine] sync: using cached endpoint for \(cached.name) (id=\(cached.deviceId))")
+        }
+
+        if targetEndpoint == nil {
+            NSLog("[SyncEngine] sync: starting discovery to find target...")
+            discoveryService.startBrowsing()
+
+            for _ in 0..<20 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                if let found = findDevice() {
+                    targetEndpoint = found.endpoint
+                    NSLog("[SyncEngine] sync: discovered \(found.name) (id=\(found.deviceId))")
+                    break
+                }
+            }
+        }
+
+        guard let endpoint = targetEndpoint else {
+            throw SyncEngineError.networkError("Target device not found on network")
+        }
+
+        // 4. Connect TCP
+        let newTransport = TcpTransport()
+        let session = ProtocolSession(transport: newTransport)
+        protocolSession = session
+        try await session.connect(endpoint: endpoint)
+
+        // 4. Auto-auth with pairingToken
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
+            "clientId": clientId,
+            "clientName": UIDevice.current.name,
+            "clientPlatform": "ios",
+            "appVersion": "1.0.0",
+            "pairingToken": token,
+            "appState": "foreground",
+        ])
+        guard helloType == .helloRes else {
+            throw SyncEngineError.networkError("Expected HELLO_RES")
+        }
+        if let nonce = helloRes["nonce"] as? String {
+            let hmac = newTransport.computeHMAC(token: token, nonce: nonce)
+            let (authType, _) = try await session.sendAndReceive(type: .authReq, payload: [
+                "clientId": clientId,
+                "auth": hmac,
+            ])
+            if authType == .error {
+                throw SyncEngineError.pairingError("HMAC auth failed")
+            }
+            NSLog("[SyncEngine] sync: auto-auth successful")
+        }
+
+        // 5. Start sync session
+        let sessionId = sessionService.startNewSession()
 
         // 4. SYNC_BEGIN_REQ → SYNC_BEGIN_RES
         let (beginType, beginRes) = try await session.sendAndReceive(type: .syncBeginReq, payload: [

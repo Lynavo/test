@@ -43,9 +43,15 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     // MARK: - Send & Receive
 
     /// Send a JSON control message and wait for the next server response.
+    /// Sets the continuation BEFORE sending to avoid race conditions.
     func sendAndReceive(type: LMUPMessageType, payload: [String: Any]) async throws -> (LMUPMessageType, [String: Any]) {
-        transport.sendJSON(type: type, payload: payload)
-        let (respType, respData) = try await waitForResponse()
+        let (respType, respData): (LMUPMessageType, Data) = try await withCheckedThrowingContinuation { cont in
+            lock.lock()
+            pendingContinuation = cont
+            lock.unlock()
+            // Send AFTER continuation is set — so we can't miss the response
+            transport.sendJSON(type: type, payload: payload)
+        }
         if respData.isEmpty {
             return (respType, [:])
         }

@@ -197,6 +197,15 @@ export function SyncStatusScreen() {
         const { NativeSyncEngine } = NativeModules;
         if (!NativeSyncEngine) return;
 
+        // Listen for errors from native engine
+        const debugEmitter = new NativeEventEmitter(NativeSyncEngine);
+        const errorSub = debugEmitter.addListener('onError', (error: Record<string, unknown>) => {
+          console.error('[SyncStatus] Native error:', JSON.stringify(error));
+        });
+        const syncEventSub = debugEmitter.addListener('onSyncStateChanged', (state: Record<string, unknown>) => {
+          console.log('[SyncStatus] Sync state changed:', JSON.stringify(state));
+        });
+
         // Load initial overview
         const syncData = await NativeSyncEngine.getSyncOverview();
         if (syncData) {

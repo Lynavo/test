@@ -8,14 +8,13 @@ protocol DiscoveryServiceDelegate: AnyObject {
 struct DiscoveredDevice {
     let deviceId: String
     let name: String
-    let type: String  // "mac"
+    let type: String
     let ip: String
     let port: UInt16
     let protoVersion: Int
-    let authMode: String  // "code"
+    let authMode: String
     let shareEnabled: Bool
     let shareName: String?
-    /// The raw NWEndpoint for direct connection (avoids IP resolution issues)
     let endpoint: NWEndpoint?
 }
 
@@ -28,12 +27,12 @@ class DiscoveryService {
 
     func startBrowsing() {
         NSLog("[DiscoveryService] startBrowsing called")
-        let descriptor = NWBrowser.Descriptor.bonjour(type: "_syncflow._tcp", domain: nil)
+        let descriptor = NWBrowser.Descriptor.bonjourWithTXTRecord(type: "_syncflow._tcp", domain: nil)
         let params = NWParameters()
         params.includePeerToPeer = true
         browser = NWBrowser(for: descriptor, using: params)
 
-        browser?.browseResultsChangedHandler = { [weak self] results, changes in
+        browser?.browseResultsChangedHandler = { [weak self] results, _ in
             NSLog("[DiscoveryService] results changed: \(results.count) results")
             self?.handleResults(results)
         }
@@ -52,99 +51,79 @@ class DiscoveryService {
         devices.removeAll()
     }
 
-    /// Resolve a discovered device's endpoint to get its IP address
-    func resolveEndpoint(_ device: DiscoveredDevice, completion: @escaping (String?) -> Void) {
-        guard let endpoint = device.endpoint else {
-            completion(nil)
-            return
-        }
-        // Create a temporary connection to resolve the endpoint to an IP
-        let connection = NWConnection(to: endpoint, using: .tcp)
-        connection.stateUpdateHandler = { state in
-            switch state {
-            case .ready:
-                // Extract IP from the resolved path
-                if let path = connection.currentPath,
-                   let remoteEndpoint = path.remoteEndpoint,
-                   case .hostPort(let host, _) = remoteEndpoint {
-                    let ip = "\(host)"
-                    NSLog("[DiscoveryService] resolved IP: \(ip)")
-                    connection.cancel()
-                    completion(ip)
-                } else {
-                    connection.cancel()
-                    completion(nil)
-                }
-            case .failed, .cancelled:
-                completion(nil)
-            default:
-                break
-            }
-        }
-        connection.start(queue: queue)
-    }
-
     private func handleResults(_ results: Set<NWBrowser.Result>) {
         var updated: [String: DiscoveredDevice] = [:]
 
         for result in results {
             if case .service(let name, _, _, _) = result.endpoint {
-                var device: DiscoveredDevice
+                var device: DiscoveredDevice?
 
-                switch result.metadata {
-                case .bonjour(let txtRecord):
-                    if let parsed = parseTXTRecord(serviceName: name, txtRecord: txtRecord, endpoint: result.endpoint) {
-                        device = parsed
-                    } else {
-                        device = makeFallbackDevice(name: name, endpoint: result.endpoint)
+                if case .bonjour(let txtRecord) = result.metadata {
+                    // Try multiple approaches to read TXT record
+                    var txtDict: [String: String] = [:]
+
+                    // Approach 1: .dictionary property
+                    let rawDict = txtRecord.dictionary
+                    for (k, v) in rawDict {
+                        txtDict[k] = v
                     }
-                default:
-                    device = makeFallbackDevice(name: name, endpoint: result.endpoint)
+
+                    // Approach 2: getEntry(for:) API if dictionary was empty
+                    if txtDict.isEmpty {
+                        let keys = ["id", "name", "type", "proto", "auth", "share", "shareName"]
+                        for key in keys {
+                            if let entry = txtRecord.getEntry(for: key) {
+                                switch entry {
+                                case .string(let s):
+                                    txtDict[key] = s
+                                case .empty:
+                                    txtDict[key] = ""
+                                @unknown default:
+                                    // Try to extract string from unknown entry types
+                                    txtDict[key] = "\(entry)"
+                                }
+                            }
+                        }
+                    }
+
+                    // Send debug info through error event (visible in JS console)
+                    NativeSyncEngineModule.shared?.emitError([
+                        "code": "TXT_DEBUG",
+                        "message": "TXT for \(name): dictCount=\(rawDict.count) parsedCount=\(txtDict.count) keys=\(Array(txtDict.keys))",
+                    ])
+
+                    if let id = txtDict["id"], !id.isEmpty {
+                        device = DiscoveredDevice(
+                            deviceId: id,
+                            name: txtDict["name"] ?? name,
+                            type: txtDict["type"] ?? "mac",
+                            ip: "",
+                            port: 39393,
+                            protoVersion: Int(txtDict["proto"] ?? "2") ?? 2,
+                            authMode: txtDict["auth"] ?? "code",
+                            shareEnabled: txtDict["share"] == "1",
+                            shareName: txtDict["shareName"],
+                            endpoint: result.endpoint
+                        )
+                    }
                 }
 
-                updated[device.deviceId] = device
+                // Fallback: use service name as device ID, include debug metadata type
+                if device == nil {
+                    device = DiscoveredDevice(
+                        deviceId: name, name: name, type: "mac", ip: "",
+                        port: 39393, protoVersion: 2, authMode: "code",
+                        shareEnabled: false, shareName: nil, endpoint: result.endpoint
+                    )
+                }
+
+                if let d = device {
+                    updated[d.deviceId] = d
+                }
             }
         }
 
         devices = updated
         delegate?.discoveryDidUpdate(devices: Array(updated.values))
-    }
-
-    private func parseTXTRecord(serviceName: String, txtRecord: NWTXTRecord, endpoint: NWEndpoint) -> DiscoveredDevice? {
-        guard let id = txtString(from: txtRecord, key: "id"),
-              let deviceName = txtString(from: txtRecord, key: "name"),
-              let type = txtString(from: txtRecord, key: "type") else {
-            return nil
-        }
-
-        let proto = Int(txtString(from: txtRecord, key: "proto") ?? "2") ?? 2
-        let auth = txtString(from: txtRecord, key: "auth") ?? "code"
-        let share = txtString(from: txtRecord, key: "share") == "1"
-        let shareName = txtString(from: txtRecord, key: "shareName")
-
-        return DiscoveredDevice(
-            deviceId: id,
-            name: deviceName,
-            type: type,
-            ip: "", // Will be resolved on demand
-            port: 39393,
-            protoVersion: proto,
-            authMode: auth,
-            shareEnabled: share,
-            shareName: shareName,
-            endpoint: endpoint
-        )
-    }
-
-    private func makeFallbackDevice(name: String, endpoint: NWEndpoint) -> DiscoveredDevice {
-        DiscoveredDevice(
-            deviceId: name, name: name, type: "mac", ip: "",
-            port: 39393, protoVersion: 2, authMode: "code",
-            shareEnabled: false, shareName: nil, endpoint: endpoint
-        )
-    }
-
-    private func txtString(from record: NWTXTRecord, key: String) -> String? {
-        return record[key]
     }
 }
