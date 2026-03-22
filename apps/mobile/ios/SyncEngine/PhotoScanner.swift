@@ -24,17 +24,28 @@ class PhotoScanner {
             let fileKey = Self.computeFileKey(
                 clientId: clientId,
                 assetLocalId: asset.localIdentifier,
-                resourceSize: 0,  // Will be determined during export
+                resourceSize: 0,
                 modifiedAt: asset.modificationDate?.iso8601String ?? "",
                 mediaType: asset.mediaType == .video ? "video" : "image"
             )
 
             if !completedFileKeys.contains(fileKey) {
+                // Get filename and estimated size from PHAssetResource
+                let resources = PHAssetResource.assetResources(for: asset)
+                let primaryResource = resources.first(where: {
+                    $0.type == .fullSizePhoto || $0.type == .video
+                }) ?? resources.first
+
+                let filename = primaryResource?.originalFilename ?? "unknown"
+                let estimatedSize = primaryResource?.value(forKey: "fileSize") as? Int64 ?? 0
+
                 results.append(ScannedAsset(
                     asset: asset,
                     fileKey: fileKey,
                     mediaType: asset.mediaType == .video ? "video" : "image",
-                    creationDate: asset.creationDate
+                    creationDate: asset.creationDate,
+                    originalFilename: filename,
+                    estimatedSize: estimatedSize
                 ))
             }
         }
@@ -44,7 +55,6 @@ class PhotoScanner {
 
     /// Compute fileKey per spec Section 8.10
     static func computeFileKey(clientId: String, assetLocalId: String, resourceSize: Int64, modifiedAt: String, mediaType: String) -> String {
-        // Note: originalFilename is not available until export, use assetLocalId for initial key
         let input = "\(clientId)|\(assetLocalId)||||\(modifiedAt)|\(mediaType)"
         let hash = SHA256.hash(data: Data(input.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
@@ -56,6 +66,8 @@ struct ScannedAsset {
     let fileKey: String
     let mediaType: String
     let creationDate: Date?
+    let originalFilename: String
+    let estimatedSize: Int64
 }
 
 extension Date {

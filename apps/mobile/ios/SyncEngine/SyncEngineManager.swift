@@ -116,16 +116,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
 
         NSLog("[SyncEngine] found \(newAssets.count) new assets to sync")
 
-        // Write scanned assets to DB + emit queue to JS
+        // Write scanned assets to DB with filename + estimated size from PHAssetResource
         for asset in newAssets {
             let item = UploadItemRecord(
                 id: nil,
                 assetLocalId: asset.asset.localIdentifier,
                 modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
                 mediaType: asset.mediaType,
-                originalFilename: nil,  // known after export
+                originalFilename: asset.originalFilename,
                 fileKey: asset.fileKey,
-                fileSize: nil,
+                fileSize: asset.estimatedSize,
                 status: "queued",
                 tempFilePath: nil,
                 ackedOffset: 0,
