@@ -54,11 +54,11 @@ function isYesterday(dateStr: string): boolean {
 }
 
 function formatDateLabel(dateStr: string): string {
-  if (isToday(dateStr)) return '\u4ECA\u5929';
-  if (isYesterday(dateStr)) return '\u6628\u5929';
+  if (isToday(dateStr)) return '今天';
+  if (isYesterday(dateStr)) return '昨天';
   const parts = dateStr.split('-');
   if (parts.length === 3) {
-    return `${parseInt(parts[1], 10)}\u6708${parseInt(parts[2], 10)}\u65E5`;
+    return `${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日`;
   }
   return dateStr;
 }
@@ -69,12 +69,12 @@ function formatDateLabel(dateStr: string): string {
 
 const mockSections: HistorySection[] = [
   {
-    title: '\u4ECA\u5929',
+    title: '今天',
     isToday: true,
     data: [
       {
         id: 's1',
-        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
+        deviceName: '剪辑工作站-A',
         deviceIp: '192.168.1.101',
         fileCount: 15,
         totalSize: '16.3 GB',
@@ -91,12 +91,12 @@ const mockSections: HistorySection[] = [
     ],
   },
   {
-    title: '3\u670818\u65E5',
+    title: '3月18日',
     isToday: false,
     data: [
       {
         id: 's3',
-        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
+        deviceName: '剪辑工作站-A',
         deviceIp: '192.168.1.101',
         fileCount: 45,
         totalSize: '86.5 GB',
@@ -105,12 +105,12 @@ const mockSections: HistorySection[] = [
     ],
   },
   {
-    title: '3\u670817\u65E5',
+    title: '3月17日',
     isToday: false,
     data: [
       {
         id: 's4',
-        deviceName: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
+        deviceName: '剪辑工作站-A',
         deviceIp: '192.168.1.101',
         fileCount: 29,
         totalSize: '51.0 GB',
@@ -192,7 +192,7 @@ function DeviceCard({ deviceName, deviceIp, fileCount, totalSize, duration }: De
       {/* Row 1: device icon + name + IP */}
       <View style={styles.cardHeader}>
         <View style={styles.monitorIconWrapper}>
-          <Text style={styles.monitorIcon}>{'\uD83D\uDDA5'}</Text>
+          <Text style={styles.monitorIcon}>{'🖥'}</Text>
         </View>
         <View style={styles.cardDeviceInfo}>
           <Text style={styles.cardDeviceName} numberOfLines={1}>
@@ -208,15 +208,15 @@ function DeviceCard({ deviceName, deviceIp, fileCount, totalSize, duration }: De
       {/* Row 2: stats */}
       <View style={styles.cardStats}>
         <View style={styles.cardStatsLeft}>
-          <Text style={styles.statsLabel}>{'\u5171\u540C\u6B65\u5A92\u4F53\u6587\u4EF6'}</Text>
+          <Text style={styles.statsLabel}>{'共同步媒体文件'}</Text>
           <Text style={styles.statsValue}>
             <Text style={styles.statsCount}>{fileCount}</Text>
-            <Text style={styles.statsSep}> {'\u4E2A'} {'\u00B7'} </Text>
+            <Text style={styles.statsSep}> {'个'} {'·'} </Text>
             <Text style={styles.statsSize}>{totalSize}</Text>
           </Text>
         </View>
         <View style={styles.cardStatsRight}>
-          <Text style={styles.durationLabel}>{'\u8017\u65F6'}</Text>
+          <Text style={styles.durationLabel}>{'耗时'}</Text>
           <Text style={styles.durationValue}>{duration}</Text>
         </View>
       </View>
@@ -287,7 +287,7 @@ export function HistoryScreen() {
       {section.isToday && (
         <>
           <PulsingDot />
-          <Text style={styles.liveLabel}>{'\u5B9E\u65F6\u540C\u6B65\u4E2D'}</Text>
+          <Text style={styles.liveLabel}>{'实时同步中'}</Text>
         </>
       )}
     </View>
@@ -315,9 +315,9 @@ export function HistoryScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>{'\u2190'}</Text>
+            <Text style={styles.backArrow}>{'←'}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{'\u5386\u53F2\u8BB0\u5F55'}</Text>
+          <Text style={styles.title}>{'历史记录'}</Text>
         </View>
 
         {/* Content */}
@@ -331,7 +331,7 @@ export function HistoryScreen() {
           stickySectionHeadersEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>{'\u6682\u65E0\u540C\u6B65\u8BB0\u5F55'}</Text>
+              <Text style={styles.emptyText}>{'暂无同步记录'}</Text>
             </View>
           }
         />

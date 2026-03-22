@@ -19,7 +19,7 @@ import { colors } from '../theme/colors';
 // ---------------------------------------------------------------------------
 
 const mockDevice = {
-  name: '\u526A\u8F91\u5DE5\u4F5C\u7AD9-A',
+  name: '剪辑工作站-A',
   ip: '192.168.1.101',
   connected: true,
 };
@@ -134,9 +134,9 @@ export function SettingsScreen() {
             activeOpacity={0.7}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backArrow}>{'\u2190'}</Text>
+            <Text style={styles.backArrow}>{'←'}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{'\u8BBE\u7F6E'}</Text>
+          <Text style={styles.title}>{'设置'}</Text>
         </View>
 
         <ScrollView
@@ -145,11 +145,11 @@ export function SettingsScreen() {
         >
           {/* My iPhone display name card */}
           <View style={styles.deviceCard}>
-            <Text style={styles.sectionLabel}>{'\u6211\u7684\u8BBE\u5907\u540D\u79F0'}</Text>
+            <Text style={styles.sectionLabel}>{'我的设备名称'}</Text>
             <View style={styles.deviceRow}>
               {/* Phone icon */}
               <View style={[styles.monitorIconWrapper, styles.phoneIconWrapper]}>
-                <Text style={styles.monitorIcon}>{'\uD83D\uDCF1'}</Text>
+                <Text style={styles.monitorIcon}>{'📱'}</Text>
               </View>
 
               {/* Name display / edit */}
@@ -170,7 +170,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={handleConfirmMyName}
                     >
-                      <Text style={styles.confirmIcon}>{'\u2713'}</Text>
+                      <Text style={styles.confirmIcon}>{'✓'}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -183,12 +183,12 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={() => setEditingMyName(true)}
                     >
-                      <Text style={styles.editIcon}>{'\u270F\uFE0F'}</Text>
+                      <Text style={styles.editIcon}>{'✏️'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
                 <Text style={styles.myNameHint}>
-                  {'\u6B64\u540D\u79F0\u5C06\u5728 Mac \u7AEF\u663E\u793A'}
+                  {'此名称将在 Mac 端显示'}
                 </Text>
               </View>
             </View>
@@ -200,7 +200,7 @@ export function SettingsScreen() {
             <View style={styles.deviceRow}>
               {/* Monitor icon */}
               <View style={styles.monitorIconWrapper}>
-                <Text style={styles.monitorIcon}>{'\uD83D\uDDA5'}</Text>
+                <Text style={styles.monitorIcon}>{'🖥'}</Text>
               </View>
 
               {/* Name + IP + status */}
@@ -221,7 +221,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={handleConfirmEdit}
                     >
-                      <Text style={styles.confirmIcon}>{'\u2713'}</Text>
+                      <Text style={styles.confirmIcon}>{'✓'}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -234,7 +234,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={() => setEditing(true)}
                     >
-                      <Text style={styles.editIcon}>{'\u270F\uFE0F'}</Text>
+                      <Text style={styles.editIcon}>{'✏️'}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -245,7 +245,7 @@ export function SettingsScreen() {
                 <View style={styles.statusRow}>
                   <View style={[styles.statusDot, !connected && styles.statusDotDisconnected]} />
                   <Text style={[styles.statusText, !connected && styles.statusTextDisconnected]}>
-                    {connected ? '\u5DF2\u8FDE\u63A5' : '\u672A\u8FDE\u63A5'}
+                    {connected ? '已连接' : '未连接'}
                   </Text>
                 </View>
               </View>
@@ -257,13 +257,13 @@ export function SettingsScreen() {
               activeOpacity={0.7}
               onPress={handleDisconnect}
             >
-              <Text style={styles.disconnectText}>{'\u65AD\u5F00\u8FDE\u63A5 / \u5207\u6362\u8BBE\u5907'}</Text>
+              <Text style={styles.disconnectText}>{'断开连接 / 切换设备'}</Text>
             </TouchableOpacity>
           </View>
 
           {/* Hint text */}
           <Text style={styles.hintText}>
-            {'\u8BBE\u5907\u540D\u79F0\u9ED8\u8BA4\u683C\u5F0F\uFF1A\u8BBE\u5907\u540D + IP \u5730\u5740\uFF0C\u53EF\u70B9\u51FB\u7F16\u8F91\u56FE\u6807\u81EA\u5B9A\u4E49\u540D\u79F0'}
+            {'设备名称默认格式：设备名 + IP 地址，可点击编辑图标自定义名称'}
           </Text>
         </ScrollView>
       </View>

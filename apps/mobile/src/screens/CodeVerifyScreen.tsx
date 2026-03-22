@@ -131,10 +131,10 @@ export function CodeVerifyScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Device name context */}
-        <Text style={styles.deviceLabel}>{'\u6B63\u5728\u8FDE\u63A5'}: {deviceName}</Text>
+        <Text style={styles.deviceLabel}>{'正在连接'}: {deviceName}</Text>
 
         {/* Prompt */}
-        <Text style={styles.prompt}>{'\u8BF7\u8F93\u5165\u7535\u8111\u7AEF\u663E\u793A\u7684 6 \u4F4D\u8FDE\u63A5\u7801'}</Text>
+        <Text style={styles.prompt}>{'请输入电脑端显示的 6 位连接码'}</Text>
 
         {/* Code input boxes */}
         <View style={styles.codeRow}>
@@ -167,19 +167,19 @@ export function CodeVerifyScreen() {
         {verifying && (
           <View style={styles.statusRow}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.statusText}>{'\u6B63\u5728\u9A8C\u8BC1\u8FDE\u63A5\u7801...'}</Text>
+            <Text style={styles.statusText}>{'正在验证连接码...'}</Text>
           </View>
         )}
 
         {/* Status: error */}
         {error && (
-          <Text style={styles.errorText}>{'\u8FDE\u63A5\u7801\u9519\u8BEF\uFF0C\u8BF7\u91CD\u65B0\u8F93\u5165'}</Text>
+          <Text style={styles.errorText}>{'连接码错误，请重新输入'}</Text>
         )}
 
         {/* Help text */}
         <View style={styles.helpCard}>
           <Text style={styles.helpText}>
-            {'\u8BF7\u786E\u4FDD\u624B\u673A\u4E0E\u7535\u8111\u5904\u4E8E\u540C\u4E00\u5C40\u57DF\u7F51\u4E0B\uFF0C\u5728\u7535\u8111\u7AEF\u6253\u5F00\u5E94\u7528\u5373\u53EF\u770B\u5230\u8FDE\u63A5\u7801'}
+            {'请确保手机与电脑处于同一局域网下，在电脑端打开应用即可看到连接码'}
           </Text>
         </View>
       </View>

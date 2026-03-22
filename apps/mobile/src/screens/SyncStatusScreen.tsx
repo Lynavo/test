@@ -84,7 +84,7 @@ const RING_THICKNESS = 9;
 // ---------------------------------------------------------------------------
 
 function fileIcon(type: 'video' | 'image'): string {
-  return type === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDDBC';
+  return type === 'video' ? '📹' : '🖼';
 }
 
 function formatBytes(bytes: number): string {
@@ -169,14 +169,14 @@ function CompletionCard({ fileCount, totalSize }: { fileCount: number; totalSize
       <View style={styles.completionGlow} />
       {/* Checkmark circle */}
       <View style={styles.completionCircle}>
-        <Text style={styles.completionCheck}>{'\u2713'}</Text>
+        <Text style={styles.completionCheck}>{'✓'}</Text>
       </View>
-      <Text style={styles.completionTitle}>{'\u6240\u6709\u6587\u4EF6\u5DF2\u540C\u6B65'}</Text>
+      <Text style={styles.completionTitle}>{'所有文件已同步'}</Text>
       <View style={styles.completionMeta}>
         <Text style={styles.completionStats}>
-          {fileCount} {'\u4E2A\u6587\u4EF6'} {'\u00B7'} {totalSize}
+          {fileCount} {'个文件'} {'·'} {totalSize}
         </Text>
-        <Text style={styles.completionSubtext}>{'\u672C\u6B21\u540C\u6B65\u5DF2\u5168\u90E8\u5B8C\u6210'}</Text>
+        <Text style={styles.completionSubtext}>{'本次同步已全部完成'}</Text>
       </View>
     </View>
   );
@@ -204,7 +204,7 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
           {isUploading && (
             <View style={styles.uploadingBadge}>
               <View style={styles.uploadingDot} />
-              <Text style={styles.uploadingLabel}>{'\u4F20\u8F93\u4E2D'}</Text>
+              <Text style={styles.uploadingLabel}>{'传输中'}</Text>
             </View>
           )}
         </View>
@@ -373,21 +373,21 @@ export function SyncStatusScreen() {
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
       {/* ---- Header ---- */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>{'\u540C\u6B65\u52A8\u6001'}</Text>
+        <Text style={styles.headerTitle}>{'同步动态'}</Text>
         <View style={styles.headerActions}>
           <Pressable
             onPress={handleHistory}
             style={styles.headerBtn}
-            accessibilityLabel={'\u5386\u53F2\u8BB0\u5F55'}
+            accessibilityLabel={'历史记录'}
           >
-            <Text style={styles.headerBtnIcon}>{'\u29D6'}</Text>
+            <Text style={styles.headerBtnIcon}>{'⧖'}</Text>
           </Pressable>
           <Pressable
             onPress={handleSettings}
             style={styles.headerBtn}
-            accessibilityLabel={'\u8BBE\u7F6E'}
+            accessibilityLabel={'设置'}
           >
-            <Text style={styles.headerBtnIcon}>{'\u2699'}</Text>
+            <Text style={styles.headerBtnIcon}>{'⚙'}</Text>
           </Pressable>
         </View>
       </View>
@@ -403,14 +403,14 @@ export function SyncStatusScreen() {
           <View style={styles.progressCard}>
             <CircularProgress progress={overview.progressPercent} speed={overview.speed} />
             <Text style={styles.completedText}>
-              {'\u5DF2\u5B8C\u6210 '}{overview.completed}{' / '}{overview.total}
+              {'已完成 '}{overview.completed}{' / '}{overview.total}
             </Text>
           </View>
 
           {/* ---- Queue card ---- */}
           <View style={styles.queueCard}>
             <View style={styles.queueHeader}>
-              <Text style={styles.queueTitle}>{'\u6392\u961F\u4E2D'}</Text>
+              <Text style={styles.queueTitle}>{'排队中'}</Text>
               <View style={styles.queueBadge}>
                 <Text style={styles.queueBadgeText}>{queue.length}</Text>
               </View>
