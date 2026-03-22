@@ -57,11 +57,19 @@ export const useDashboardStore = create<DashboardState>((set) => ({
 
   updateDevices: (devices) => set({ devices: sortDevices(devices) }),
 
-  updateDeviceProgress: (deviceId, _fileKey, progress) => {
+  updateDeviceProgress: (deviceId, fileKey, progress) => {
     set((state) => ({
       devices: state.devices.map((d) =>
-        d.deviceId === deviceId && d.currentFile
-          ? { ...d, currentFile: { ...d.currentFile, progress } }
+        d.deviceId === deviceId
+          ? {
+              ...d,
+              status: 'transferring' as DeviceDashboardStatus,
+              currentFile: {
+                filename: d.currentFile?.filename ?? fileKey,
+                progress,
+                fileSize: d.currentFile?.fileSize ?? 0,
+              },
+            }
           : d,
       ),
     }));

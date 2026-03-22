@@ -123,35 +123,90 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let clientId = bindingService.getOrCreateClientId()
 
-        // 3. Connect + sync with auto-reconnect
-        var reconnectAttempt = 0
-        let maxReconnectDelay: UInt64 = 30_000_000_000 // 30s max
+        // 3. Continuous loop: scan → connect → upload → disconnect → wait → repeat
+        var roundNumber = 0
 
         while true {
-            do {
-                try await connectAndSync(binding: binding, token: token, clientId: clientId)
-                // connectAndSync only returns on unrecoverable error (throw) or never (loops forever)
-            } catch {
-                reconnectAttempt += 1
-                let delay = min(UInt64(reconnectAttempt) * 5_000_000_000, maxReconnectDelay)
-                NSLog("[SyncPipeline] connection lost: %@ — reconnecting in %ds (attempt %d)",
-                      "\(error)", delay / 1_000_000_000, reconnectAttempt)
+            roundNumber += 1
 
+            // Scan for new assets
+            let completedKeys = Set(uploadStore?.getCompletedFileKeys() ?? [])
+            let newAssets = photoScanner.scanForNewAssets(clientId: clientId, completedFileKeys: completedKeys)
+            NSLog("[SyncPipeline] round %d: %d new assets (completed: %d)", roundNumber, newAssets.count, completedKeys.count)
+
+            if newAssets.isEmpty {
+                // Nothing to upload — wait for photo library changes (no TCP connection)
                 NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                    "uploadState": "reconnecting",
+                    "uploadState": "completed",
+                    "progressPercent": 100,
                 ])
 
-                try await Task.sleep(nanoseconds: delay)
-                // Restart discovery in case endpoint changed
-                discoveryService.startBrowsing()
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+                NSLog("[SyncPipeline] idle — waiting for new photos (TCP disconnected)...")
+                photoLibraryChanged = false
+
+                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                    if photoLibraryChanged {
+                        cont.resume()
+                        return
+                    }
+                    watchLoopContinuation = cont
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 60) { [weak self] in
+                        self?.watchLoopContinuation?.resume()
+                        self?.watchLoopContinuation = nil
+                    }
+                }
+                try await Task.sleep(nanoseconds: 2_000_000_000) // debounce
+                photoLibraryChanged = false
+                continue
+            }
+
+            // Write scanned assets to DB
+            for asset in newAssets {
+                let item = UploadItemRecord(
+                    id: nil,
+                    assetLocalId: asset.asset.localIdentifier,
+                    modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                    mediaType: asset.mediaType,
+                    originalFilename: asset.originalFilename,
+                    fileKey: asset.fileKey,
+                    fileSize: asset.estimatedSize,
+                    status: "queued",
+                    tempFilePath: nil,
+                    ackedOffset: 0,
+                    lastErrorCode: nil,
+                    updatedAt: ISO8601DateFormatter().string(from: Date())
+                )
+                try? uploadStore?.upsertUploadItem(item)
+            }
+            emitQueueToJS()
+
+            // Connect, upload, disconnect — with retry on error
+            var retryAttempt = 0
+            let maxRetryDelay: UInt64 = 30_000_000_000
+            var uploaded = false
+
+            while !uploaded {
+                do {
+                    try await connectAndUpload(binding: binding, token: token, clientId: clientId, assets: newAssets)
+                    uploaded = true
+                    photoLibraryChanged = false // reset after round
+                } catch {
+                    retryAttempt += 1
+                    let delay = min(UInt64(retryAttempt) * 5_000_000_000, maxRetryDelay)
+                    NSLog("[SyncPipeline] upload failed: %@ — retrying in %ds (attempt %d)",
+                          "\(error)", delay / 1_000_000_000, retryAttempt)
+                    NativeSyncEngineModule.shared?.emitSyncStateChanged(["uploadState": "reconnecting"])
+                    try await Task.sleep(nanoseconds: delay)
+                    discoveryService.startBrowsing()
+                    try await Task.sleep(nanoseconds: 2_000_000_000)
+                }
             }
         }
     }
 
-    /// Connect TCP, authenticate, and run the continuous sync loop.
-    /// Throws on connection/auth/protocol errors (caller handles reconnect).
-    private func connectAndSync(binding: BindingRecord, token: String, clientId: String) async throws {
+    /// Connect TCP, authenticate, upload given assets, disconnect.
+    /// Throws on connection/auth/protocol errors (caller handles retry).
+    private func connectAndUpload(binding: BindingRecord, token: String, clientId: String, assets: [ScannedAsset]) async throws {
         // Find target device
         func findDevice() -> DiscoveredDevice? {
             if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
@@ -205,134 +260,66 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NSLog("[SyncPipeline] auth successful")
         }
 
-        // Continuous sync loop — scan, upload, wait for new photos, repeat
-        var roundNumber = 0
-        while true {
-            roundNumber += 1
-            let completedKeys = Set(uploadStore?.getCompletedFileKeys() ?? [])
-            let newAssets = photoScanner.scanForNewAssets(clientId: clientId, completedFileKeys: completedKeys)
-            NSLog("[SyncPipeline] round %d: %d new assets (completed: %d, photoChanged: %@)",
-                  roundNumber, newAssets.count, completedKeys.count,
-                  photoLibraryChanged ? "yes" : "no")
+        // SYNC_BEGIN
+        let sessionId = sessionService.startNewSession()
+        let (beginType, beginRes) = try await session.sendAndReceive(type: .syncBeginReq, payload: [
+            "sessionId": sessionId,
+            "queueTotalCount": assets.count,
+            "queueTotalBytes": 0,
+        ])
+        let syncOk: Bool
+        if let b = beginRes["ok"] as? Bool { syncOk = b }
+        else if let n = beginRes["ok"] as? NSNumber { syncOk = n.boolValue }
+        else { syncOk = (beginType == .syncBeginRes) }
 
-            if newAssets.isEmpty {
-                // Nothing to upload — emit completed and wait for photo library changes
-                NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                    "uploadState": "completed",
-                    "progressPercent": 100,
-                ])
-
-                NSLog("[SyncPipeline] waiting for new photos...")
-                photoLibraryChanged = false
-
-                // Wait for photo library change or timeout (60s check interval)
-                await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                    if photoLibraryChanged {
-                        // Already changed while we were setting up
-                        cont.resume()
-                        return
-                    }
-                    watchLoopContinuation = cont
-                    // Timeout: wake up periodically to check even without notification
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 60) { [weak self] in
-                        self?.watchLoopContinuation?.resume()
-                        self?.watchLoopContinuation = nil
-                    }
-                }
-
-                // Small debounce — photos may still be saving
-                try await Task.sleep(nanoseconds: 2_000_000_000)
-                continue
-            }
-
-            // Write scanned assets to DB
-            for asset in newAssets {
-                let item = UploadItemRecord(
-                    id: nil,
-                    assetLocalId: asset.asset.localIdentifier,
-                    modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
-                    mediaType: asset.mediaType,
-                    originalFilename: asset.originalFilename,
-                    fileKey: asset.fileKey,
-                    fileSize: asset.estimatedSize,
-                    status: "queued",
-                    tempFilePath: nil,
-                    ackedOffset: 0,
-                    lastErrorCode: nil,
-                    updatedAt: ISO8601DateFormatter().string(from: Date())
-                )
-                try? uploadStore?.upsertUploadItem(item)
-            }
-            emitQueueToJS()
-
-            // SYNC_BEGIN
-            let sessionId = sessionService.startNewSession()
-            let (beginType, beginRes) = try await session.sendAndReceive(type: .syncBeginReq, payload: [
-                "sessionId": sessionId,
-                "queueTotalCount": newAssets.count,
-                "queueTotalBytes": 0,
-            ])
-            let syncOk: Bool
-            if let b = beginRes["ok"] as? Bool { syncOk = b }
-            else if let n = beginRes["ok"] as? NSNumber { syncOk = n.boolValue }
-            else { syncOk = (beginType == .syncBeginRes) }
-
-            guard syncOk else {
-                throw SyncEngineError.networkError("SYNC_BEGIN rejected")
-            }
-
-            NSLog("[SyncPipeline] uploading %d files", newAssets.count)
-
-            // Upload files with prefetch: export next file while current uploads
-            var nextExport: ExportedFile? = nil
-            if !newAssets.isEmpty {
-                nextExport = try? await exportService.exportAsset(newAssets[0].asset)
-            }
-
-            for (index, asset) in newAssets.enumerated() {
-                // Use pre-exported file if available, otherwise export now
-                let exported: ExportedFile
-                if let prefetched = nextExport {
-                    exported = prefetched
-                    nextExport = nil
-                } else {
-                    exported = try await exportService.exportAsset(asset.asset)
-                }
-
-                // Start pre-exporting next file in background
-                let nextIndex = index + 1
-                if nextIndex < newAssets.count {
-                    let nextAsset = newAssets[nextIndex]
-                    Task {
-                        nextExport = try? await self.exportService.exportAsset(nextAsset.asset)
-                    }
-                }
-
-                // Upload current file (pass exported instead of re-exporting)
-                do {
-                    try await uploadSingleFileWithExport(
-                        asset: asset,
-                        exported: exported,
-                        sessionId: sessionId,
-                        index: index,
-                        total: newAssets.count,
-                        session: session
-                    )
-                } catch {
-                    NSLog("[SyncEngine] upload failed for \(asset.fileKey): \(error)")
-                    try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "failed")
-                }
-                exportService.cleanup(tempURL: exported.tempURL)
-            }
-
-            // SYNC_END
-            let (_, _) = try await session.sendAndReceive(type: .syncEndReq, payload: [:])
-            NSLog("[SyncPipeline] round %d complete", roundNumber)
-
-            // Reset change flag — exports during upload may have triggered false positives
-            photoLibraryChanged = false
+        guard syncOk else {
+            throw SyncEngineError.networkError("SYNC_BEGIN rejected")
         }
-        // Note: loop exits only via throw (error) or task cancellation
+
+        NSLog("[SyncPipeline] uploading %d files", assets.count)
+
+        // Upload files with prefetch: export next file while current uploads
+        var nextExport: ExportedFile? = nil
+        if !assets.isEmpty {
+            nextExport = try? await exportService.exportAsset(assets[0].asset)
+        }
+
+        for (index, asset) in assets.enumerated() {
+            let exported: ExportedFile
+            if let prefetched = nextExport {
+                exported = prefetched
+                nextExport = nil
+            } else {
+                exported = try await exportService.exportAsset(asset.asset)
+            }
+
+            let nextIndex = index + 1
+            if nextIndex < assets.count {
+                let nextAsset = assets[nextIndex]
+                Task {
+                    nextExport = try? await self.exportService.exportAsset(nextAsset.asset)
+                }
+            }
+
+            do {
+                try await uploadSingleFileWithExport(
+                    asset: asset,
+                    exported: exported,
+                    sessionId: sessionId,
+                    index: index,
+                    total: assets.count,
+                    session: session
+                )
+            } catch {
+                NSLog("[SyncEngine] upload failed for \(asset.fileKey): \(error)")
+                try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "failed")
+            }
+            exportService.cleanup(tempURL: exported.tempURL)
+        }
+
+        // SYNC_END — then TCP will be closed as this function returns
+        let (_, _) = try await session.sendAndReceive(type: .syncEndReq, payload: [:])
+        NSLog("[SyncPipeline] upload round complete, disconnecting TCP")
     }
 
     // MARK: - Single File Upload (spec Sections 7.3, 7.4)
