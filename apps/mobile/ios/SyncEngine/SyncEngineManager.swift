@@ -124,7 +124,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let clientId = bindingService.getOrCreateClientId()
 
-        // 3. Continuous loop: scan → connect → upload → disconnect → wait → repeat
+        // 3. Resolve sidecar IP for HTTP heartbeat (connect TCP briefly)
+        if sidecarHost == nil {
+            do {
+                try await resolveSidecarHost(binding: binding, token: token, clientId: clientId)
+            } catch {
+                NSLog("[SyncPipeline] failed to resolve sidecar host: %@", "\(error)")
+            }
+        }
+
+        // 4. Continuous loop: scan → connect → upload → disconnect → wait → repeat
         var roundNumber = 0
 
         while true {
@@ -844,6 +853,47 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     // MARK: - Client Display Name
 
     private static let clientNameKey = "syncflow_client_display_name"
+
+    // MARK: - Sidecar Host Resolution
+
+    /// Connect TCP briefly to resolve the sidecar's IP for HTTP heartbeats, then disconnect.
+    private func resolveSidecarHost(binding: BindingRecord, token: String, clientId: String) async throws {
+        func findDevice() -> DiscoveredDevice? {
+            if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil { return exact }
+            return discoveredDevices.values.first(where: { $0.endpoint != nil })
+        }
+
+        var endpoint = findDevice()?.endpoint
+        if endpoint == nil {
+            discoveryService.startBrowsing()
+            for _ in 0..<20 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                if let found = findDevice() { endpoint = found.endpoint; break }
+            }
+        }
+        guard let ep = endpoint else { return }
+
+        let transport = TcpTransport()
+        let session = ProtocolSession(transport: transport)
+        try await session.connect(endpoint: ep)
+        sidecarHost = transport.remoteHost
+        NSLog("[SyncPipeline] resolved sidecar host: %@", sidecarHost ?? "nil")
+
+        // Auth so sidecar registers us as connected
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
+            "clientId": clientId, "clientName": getClientDisplayName(),
+            "clientPlatform": "ios", "appVersion": "1.0.0",
+            "pairingToken": token, "appState": "foreground",
+        ])
+        if helloType == .helloRes, let nonce = helloRes["nonce"] as? String {
+            let hmac = transport.computeHMAC(token: token, nonce: nonce)
+            let _ = try? await session.sendAndReceive(type: .authReq, payload: [
+                "clientId": clientId, "auth": hmac,
+            ])
+        }
+        // Disconnect — we just needed the IP
+        transport.disconnect()
+    }
 
     // MARK: - HTTP Presence Heartbeat
 
