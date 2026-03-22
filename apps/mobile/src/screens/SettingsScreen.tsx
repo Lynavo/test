@@ -37,29 +37,57 @@ export function SettingsScreen() {
   const [deviceIp, setDeviceIp] = useState(mockDevice.ip);
   const [connected, setConnected] = useState(mockDevice.connected);
 
+  // My iPhone display name
+  const [myName, setMyName] = useState('iPhone');
+  const [editingMyName, setEditingMyName] = useState(false);
+
   // ---------------------------------------------------------------------------
-  // Load real binding state from native module
+  // Load real binding state + client display name from native module
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    const loadBindingState = async () => {
+    const loadState = async () => {
       try {
         const { NativeSyncEngine } = NativeModules;
         if (!NativeSyncEngine) return;
 
-        const state = await NativeSyncEngine.getBindingState();
+        const [state, clientName] = await Promise.all([
+          NativeSyncEngine.getBindingState(),
+          NativeSyncEngine.getClientDisplayName(),
+        ]);
         if (state) {
           setDeviceName(state.deviceAlias || state.deviceName || mockDevice.name);
           setDeviceIp(state.host || mockDevice.ip);
           setConnected(true);
+        }
+        if (clientName) {
+          setMyName(clientName);
         }
       } catch (e) {
         console.warn('Native module not available for Settings, using mock data');
       }
     };
 
-    loadBindingState();
+    loadState();
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Save my iPhone display name
+  // ---------------------------------------------------------------------------
+
+  const handleConfirmMyName = useCallback(async () => {
+    setEditingMyName(false);
+    const trimmed = myName.trim();
+    if (!trimmed) return;
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine) {
+        await NativeSyncEngine.setClientDisplayName(trimmed);
+      }
+    } catch (e) {
+      console.warn('Failed to save client display name');
+    }
+  }, [myName]);
 
   // ---------------------------------------------------------------------------
   // Rename device alias
@@ -115,6 +143,57 @@ export function SettingsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* My iPhone display name card */}
+          <View style={styles.deviceCard}>
+            <Text style={styles.sectionLabel}>{'\u6211\u7684\u8BBE\u5907\u540D\u79F0'}</Text>
+            <View style={styles.deviceRow}>
+              {/* Phone icon */}
+              <View style={[styles.monitorIconWrapper, styles.phoneIconWrapper]}>
+                <Text style={styles.monitorIcon}>{'\uD83D\uDCF1'}</Text>
+              </View>
+
+              {/* Name display / edit */}
+              <View style={styles.deviceInfo}>
+                {editingMyName ? (
+                  <View style={styles.editRow}>
+                    <TextInput
+                      style={styles.nameInput}
+                      value={myName}
+                      onChangeText={setMyName}
+                      autoFocus
+                      selectTextOnFocus
+                      returnKeyType="done"
+                      onSubmitEditing={handleConfirmMyName}
+                    />
+                    <TouchableOpacity
+                      style={styles.confirmButton}
+                      activeOpacity={0.7}
+                      onPress={handleConfirmMyName}
+                    >
+                      <Text style={styles.confirmIcon}>{'\u2713'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.nameRow}>
+                    <Text style={styles.deviceNameText} numberOfLines={1}>
+                      {myName}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      activeOpacity={0.7}
+                      onPress={() => setEditingMyName(true)}
+                    >
+                      <Text style={styles.editIcon}>{'\u270F\uFE0F'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Text style={styles.myNameHint}>
+                  {'\u6B64\u540D\u79F0\u5C06\u5728 Mac \u7AEF\u663E\u793A'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
           {/* Connected device card */}
           <View style={styles.deviceCard}>
             {/* Device info row */}
@@ -377,6 +456,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#3b9fd8',
+  },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#90b0c8',
+    marginBottom: 12,
+  },
+
+  // Phone icon
+  phoneIconWrapper: {
+    backgroundColor: '#6366f1',
+    shadowColor: 'rgba(99,102,241,0.5)',
+  },
+
+  // My name hint
+  myNameHint: {
+    fontSize: 11,
+    color: '#90b0c8',
+    marginTop: 4,
   },
 
   // Hint

@@ -138,6 +138,17 @@ class NativeSyncEngineModule: RCTEventEmitter {
     }
 
     @objc
+    func getClientDisplayName(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        resolve(SyncEngineManager.shared.getClientDisplayName())
+    }
+
+    @objc
+    func setClientDisplayName(_ name: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        SyncEngineManager.shared.setClientDisplayName(name as String)
+        resolve(nil)
+    }
+
+    @objc
     func renameBoundDeviceAlias(_ alias: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         Task {
             do {

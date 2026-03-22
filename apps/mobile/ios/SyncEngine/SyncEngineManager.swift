@@ -191,7 +191,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         // 4. Auto-auth with pairingToken
         let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
             "clientId": clientId,
-            "clientName": UIDevice.current.name,
+            "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": "1.0.0",
             "pairingToken": token,
@@ -526,7 +526,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         // 2. HELLO_REQ → HELLO_RES  (spec Section 7.8)
         let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
             "clientId": clientId,
-            "clientName": UIDevice.current.name,
+            "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": "1.0.0",
             "appState": "foreground",
@@ -548,7 +548,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
         // 3. PAIR_REQ → PAIR_RES  (spec Section 7.8)
         let (pairType, pairRes) = try await session.sendAndReceive(type: .pairReq, payload: [
             "clientId": clientId,
-            "clientName": UIDevice.current.name,
+            "clientName": getClientDisplayName(),
             "connectionCode": connectionCode,
         ])
 
@@ -681,6 +681,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate {
             "items": items,
             "nextCursor": result.nextCursor ?? NSNull(),
         ]
+    }
+
+    // MARK: - Client Display Name
+
+    private static let clientNameKey = "syncflow_client_display_name"
+
+    func getClientDisplayName() -> String {
+        return UserDefaults.standard.string(forKey: Self.clientNameKey) ?? UIDevice.current.name
+    }
+
+    func setClientDisplayName(_ name: String) {
+        UserDefaults.standard.set(name, forKey: Self.clientNameKey)
     }
 
     // MARK: - Settings
