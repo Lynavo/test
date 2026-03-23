@@ -12,6 +12,7 @@
     "build:mobile": "cd apps/mobile/ios && xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -destination 'generic/platform=iOS' -configuration Debug build",
     "dev:sidecar": "cd services/sidecar-go && make run",
     "build:sidecar": "cd services/sidecar-go && make build",
+    "package:desktop": "pnpm build && pnpm --filter @syncflow/desktop package",
     "test:sidecar": "cd services/sidecar-go && make test",
     "lint": "turbo run lint",
     "test": "turbo run test",

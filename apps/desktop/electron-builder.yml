@@ -6,5 +6,8 @@ mac:
     - zip
   category: public.app-category.utilities
 directories:
-  output: out
+  output: release
   buildResources: resources
+extraResources:
+  - from: resources/syncflow-sidecar
+    to: syncflow-sidecar

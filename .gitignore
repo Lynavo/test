@@ -9,6 +9,10 @@ out/
 .playwright-mcp/
 *.png
 
+# Desktop release/resources
+apps/desktop/release/
+apps/desktop/resources/syncflow-sidecar
+
 # Go sidecar
 services/sidecar-go/syncflow-sidecar
 services/sidecar-go/syncflow.db
