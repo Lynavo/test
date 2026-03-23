@@ -6,13 +6,18 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
-  if (m > 0) return `${m}m ${String(sec).padStart(2, '0')}s`;
-  if (s > 0) return `${sec}s`;
+  const totalSec = ms / 1000;
+  if (totalSec >= 3600) {
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    return `${h}h ${String(m).padStart(2, '0')}m`;
+  }
+  if (totalSec >= 60) {
+    const m = Math.floor(totalSec / 60);
+    const s = Math.floor(totalSec % 60);
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+  if (totalSec >= 1) return `${totalSec.toFixed(1)}s`;
   return `${ms}ms`;
 }
 

@@ -215,10 +215,10 @@ func (c *connection) handleFileEnd(body []byte) error {
 		})
 	}
 
-	activeTransmissionMs := c.fileWriter.ElapsedMs()
+	thisSegmentMs := c.fileWriter.ElapsedMs()
 
-	// Update store
-	if err := c.store.CompleteUpload(req.FileKey, relativePath, req.SHA256, activeTransmissionMs); err != nil {
+	// Update store (accumulates active_transmission_ms)
+	if err := c.store.CompleteUpload(req.FileKey, relativePath, req.SHA256, thisSegmentMs); err != nil {
 		slog.Warn("failed to complete upload in store", "fileKey", req.FileKey, "err", err)
 	}
 
@@ -229,6 +229,12 @@ func (c *connection) handleFileEnd(body []byte) error {
 		clientName = dev.ClientName
 	}
 
+	// Read back accumulated total transmission time
+	var totalTransmissionMs int64 = thisSegmentMs
+	if upload, err := c.store.GetUpload(req.FileKey); err == nil {
+		totalTransmissionMs = upload.ActiveTransmissionMs
+	}
+
 	if err := c.store.UpsertDailyStats(store.DailyStats{
 		StatDate:             date,
 		ClientID:             c.clientID,
@@ -236,7 +242,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 		ClientIPSnapshot:     clientIP,
 		FileCount:            1,
 		TotalBytes:           req.FileSize,
-		ActiveTransmissionMs: activeTransmissionMs,
+		ActiveTransmissionMs: totalTransmissionMs,
 		UpdatedAt:            time.Now().UTC().Format(time.RFC3339),
 	}); err != nil {
 		slog.Warn("failed to upsert daily stats", "err", err)
@@ -261,7 +267,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 		FileKey:              req.FileKey,
 		RelativePath:         relativePath,
 		StoredBytes:          req.FileSize,
-		ActiveTransmissionMs: activeTransmissionMs,
+		ActiveTransmissionMs: totalTransmissionMs,
 	}); err != nil {
 		return err
 	}
@@ -270,7 +276,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 		"fileKey", req.FileKey,
 		"relativePath", relativePath,
 		"size", req.FileSize,
-		"durationMs", activeTransmissionMs,
+		"durationMs", totalTransmissionMs,
 	)
 
 	c.fileWriter = nil

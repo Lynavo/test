@@ -135,7 +135,7 @@ func (s *Store) CompleteUpload(fileKey, finalPath, sha256 string, transmissionMs
 	result, err := s.db.Exec(`
 		UPDATE uploads
 		SET status = 'completed', final_path = ?, sha256 = ?,
-		    active_transmission_ms = ?, completed_at = ?, updated_at = ?
+		    active_transmission_ms = active_transmission_ms + ?, completed_at = ?, updated_at = ?
 		WHERE file_key = ?`,
 		finalPath, sha256, transmissionMs, now, now, fileKey,
 	)
