@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -41,6 +41,14 @@ export function CodeVerifyScreen() {
   const [error, setError] = useState(false);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
+
+  // Auto-focus first input on mount (iOS autoFocus can be unreliable)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputRefs.current[0]?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   // -----------------------------------------------------------------------
   // Submit code via native module
