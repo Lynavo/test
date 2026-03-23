@@ -34,10 +34,13 @@ export class SidecarManager {
     });
 
     this.process.stdout?.on('data', (data) => {
-      log.info(`[sidecar] ${data.toString().trim()}`);
+      try { log.info(`[sidecar] ${data.toString().trim()}`); } catch { /* pipe closed */ }
     });
     this.process.stderr?.on('data', (data) => {
-      log.error(`[sidecar] ${data.toString().trim()}`);
+      try { log.error(`[sidecar] ${data.toString().trim()}`); } catch { /* pipe closed */ }
+    });
+    this.process.on('error', (err) => {
+      log.error(`[SidecarManager] process error: ${err.message}`);
     });
 
     this.process.on('exit', (code) => {

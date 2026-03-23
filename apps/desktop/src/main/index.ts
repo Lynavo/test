@@ -5,6 +5,12 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { SidecarManager } from './sidecar-manager';
 import { WsBridge } from './ws-bridge';
 
+// Prevent crash on broken pipe (sidecar stdout/stderr)
+process.on('uncaughtException', (err) => {
+  if (err.message.includes('write EIO') || err.message.includes('EPIPE')) return;
+  console.error('Uncaught exception:', err);
+});
+
 let mainWindow: BrowserWindow | null = null;
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
