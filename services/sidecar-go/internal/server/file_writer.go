@@ -16,7 +16,8 @@ type FileWriter struct {
 	partPath     string
 	offset       int64
 	expectedSize int64
-	startTime    time.Time
+	firstWrite   time.Time
+	hasWritten   bool
 }
 
 // NewFileWriter creates a new FileWriter for the given file key.
@@ -50,13 +51,16 @@ func NewFileWriter(stagingDir, clientID, fileKey string, expectedSize int64) (*F
 		partPath:     partPath,
 		offset:       offset,
 		expectedSize: expectedSize,
-		startTime:    time.Now(),
 	}, nil
 }
 
 // WriteAt writes data at the specified offset in the .part file. It returns
 // the new committed offset (end of written data).
 func (fw *FileWriter) WriteAt(data []byte, offset int64) (int64, error) {
+	if !fw.hasWritten {
+		fw.firstWrite = time.Now()
+		fw.hasWritten = true
+	}
 	n, err := fw.file.WriteAt(data, offset)
 	if err != nil {
 		return fw.offset, fmt.Errorf("write at offset %d: %w", offset, err)
@@ -85,9 +89,12 @@ func (fw *FileWriter) PartPath() string {
 	return fw.partPath
 }
 
-// ElapsedMs returns the milliseconds since the writer was created.
+// ElapsedMs returns milliseconds since the first data was written.
 func (fw *FileWriter) ElapsedMs() int64 {
-	return time.Since(fw.startTime).Milliseconds()
+	if !fw.hasWritten {
+		return 0
+	}
+	return time.Since(fw.firstWrite).Milliseconds()
 }
 
 // Close closes the underlying file handle.
