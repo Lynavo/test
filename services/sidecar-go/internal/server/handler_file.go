@@ -294,6 +294,11 @@ func (c *connection) handleSyncEnd(body []byte) error {
 		slog.Warn("failed to update session state", "sessionID", c.sessionID, "err", err)
 	}
 
+	// Update live TCP state back to connected
+	if c.server != nil {
+		c.server.SetClientState(c.clientID, "connected")
+	}
+
 	c.hub.Broadcast(events.Event{
 		Type: "device.state.changed",
 		Payload: map[string]any{
