@@ -46,11 +46,12 @@ func TestUpsertGetUpload_Roundtrip(t *testing.T) {
 
 func TestListUploadsByDeviceAndDate(t *testing.T) {
 	s := newTestStore(t)
-	today := time.Now().UTC().Format("2006-01-02")
+	today := time.Now().Format("2006-01-02") // local date to match DATE(updated_at, 'localtime')
 
 	for _, fk := range []string{"f1", "f2", "f3"} {
 		u := sampleUpload(fk, "client-A")
 		u.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		u.Status = "completed"
 		if err := s.UpsertUpload(u); err != nil {
 			t.Fatalf("UpsertUpload: %v", err)
 		}
@@ -59,6 +60,7 @@ func TestListUploadsByDeviceAndDate(t *testing.T) {
 	// Different client
 	other := sampleUpload("f4", "client-B")
 	other.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	other.Status = "completed"
 	if err := s.UpsertUpload(other); err != nil {
 		t.Fatalf("UpsertUpload other: %v", err)
 	}
@@ -133,6 +135,7 @@ func TestGetAvailableDates(t *testing.T) {
 	for i, d := range dates {
 		u := sampleUpload("date-"+d, "client-1")
 		u.UpdatedAt = d + "T12:00:00Z"
+		u.Status = "completed"
 		u.FileKey = u.FileKey + string(rune('a'+i))
 		if err := s.UpsertUpload(u); err != nil {
 			t.Fatalf("UpsertUpload: %v", err)
