@@ -23,7 +23,7 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col text-left transition-all active:scale-[0.99]"
+      className="group flex cursor-pointer flex-col rounded-2xl text-left transition-transform duration-150 ease-out hover:-translate-y-0.5 active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35 focus-visible:ring-offset-2"
       style={{ opacity: isOffline ? 0.65 : 1 }}
       data-testid="device-card"
     >
@@ -31,7 +31,7 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
         variant={isOffline ? 'muted' : 'default'}
         shadow={isTransferring ? 'card' : 'card'}
         className={cn(
-          'flex w-full flex-col px-5 py-[18px]',
+          'flex w-full flex-col px-5 py-[18px] transition-[box-shadow,transform,border-color] duration-150 group-hover:shadow-[0_10px_30px_rgba(15,23,42,0.10),0_2px_6px_rgba(15,23,42,0.06)]',
           isTransferring &&
             'ring-1 ring-blue-500/35 shadow-[0_4px_24px_rgba(59,130,246,0.12),0_1px_4px_rgba(0,0,0,0.04)]',
         )}

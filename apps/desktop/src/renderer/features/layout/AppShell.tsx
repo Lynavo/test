@@ -120,7 +120,7 @@ export function AppShell() {
       <Sidebar />
 
       {/* Content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden pt-3">
         <SidecarStatusBanner />
         <Suspense fallback={<PageFallback />}>
           {currentView === 'dashboard' && <Dashboard />}

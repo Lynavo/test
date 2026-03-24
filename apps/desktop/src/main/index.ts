@@ -34,6 +34,8 @@ async function createMainWindow() {
     height: 960,
     minWidth: 1200,
     minHeight: 800,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    backgroundColor: '#f4f8fb',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

@@ -13,10 +13,9 @@ export function DiskWarningBanner() {
 
   return (
     <div
-      className="mx-6 mt-5 flex items-center gap-3 rounded-xl px-4 py-3 text-sm"
+      className="mx-6 mt-4 flex items-center gap-3 rounded-2xl px-4 py-3 text-sm shadow-[0_12px_30px_rgba(220,38,38,0.08),0_2px_6px_rgba(220,38,38,0.04)]"
       style={{
         background: 'rgba(254,226,226,0.85)',
-        border: '1px solid rgba(252,165,165,0.5)',
         color: colors.errorText,
         backdropFilter: 'blur(8px)',
       }}
@@ -28,7 +27,7 @@ export function DiskWarningBanner() {
       </span>
       <button
         onClick={dismissDiskWarning}
-        className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-red-100"
+        className="ml-auto flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-[background-color,transform] duration-150 ease-out hover:bg-red-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
         style={{ color: colors.errorText }}
         aria-label="dismiss"
       >

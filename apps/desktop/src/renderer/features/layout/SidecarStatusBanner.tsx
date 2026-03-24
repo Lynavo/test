@@ -37,10 +37,9 @@ export function SidecarStatusBanner() {
 
   return (
     <div
-      className="mx-6 mt-5 flex items-start gap-3 rounded-2xl border px-4 py-3"
+      className="mx-6 mt-4 flex items-start gap-3 rounded-2xl px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.08),0_2px_6px_rgba(15,23,42,0.04)]"
       style={{
         background: isStarting ? 'rgba(255,247,237,0.9)' : 'rgba(254,226,226,0.9)',
-        borderColor: isStarting ? 'rgba(251,191,36,0.45)' : 'rgba(252,165,165,0.55)',
         color: isStarting ? '#92400e' : '#b91c1c',
         backdropFilter: 'blur(10px)',
       }}

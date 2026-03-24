@@ -128,7 +128,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
             >
               <button
                 onClick={() => toggleSort(col.field)}
-                className="flex items-center gap-1 text-xs font-medium transition-colors hover:text-blue-500 whitespace-nowrap"
+                className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium transition-[color,background-color,transform] duration-150 ease-out hover:bg-blue-50 hover:text-blue-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                 style={{ color: colors.headerText }}
               >
                 {col.label}
@@ -199,7 +199,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
               <TableCell className="text-right pr-2">
                 <button
                   onClick={() => handleOpen(file.finalPath)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors hover:opacity-80"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium shadow-sm transition-[opacity,transform,box-shadow] duration-150 ease-out hover:opacity-90 hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35 focus-visible:ring-offset-1"
                   style={{
                     color: '#fff',
                     background: colors.actionButton,

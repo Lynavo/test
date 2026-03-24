@@ -14,7 +14,7 @@ export function SystemGuideSection() {
       <div className="flex flex-col gap-3">
         <button
           onClick={handleOpen}
-          className="flex items-center gap-3 rounded-xl bg-secondary px-4 py-3 text-left transition-colors hover:bg-secondary/80"
+          className="flex cursor-pointer items-center gap-3 rounded-xl bg-secondary px-4 py-3 text-left transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-secondary/80 hover:shadow-sm active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2"
         >
           <BookOpen className="h-5 w-5 text-primary" />
           <div>

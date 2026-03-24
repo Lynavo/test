@@ -56,7 +56,7 @@ export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
 
       <button
         onClick={handleOpenFolder}
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
+        className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-[opacity,transform,box-shadow] duration-150 ease-out hover:opacity-95 hover:shadow-sm active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2"
         style={{
           background: 'rgba(59,130,246,0.08)',
           color: colors.folderButton,

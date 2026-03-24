@@ -22,7 +22,7 @@ export function CopyButton({ text, label, className }: CopyButtonProps) {
       type="button"
       onClick={handleCopy}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground',
+        'inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-[color,background-color,transform,box-shadow] duration-150 ease-out hover:bg-secondary/70 hover:text-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2',
         className,
       )}
     >
