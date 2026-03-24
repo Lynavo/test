@@ -22,6 +22,9 @@ class DiscoveryService {
     private var browser: NWBrowser?
     private let queue = DispatchQueue(label: "com.syncflow.discovery")
     private var devices: [String: DiscoveredDevice] = [:]
+    private var reachableDevices: [String: DiscoveredDevice] = [:]
+    private var probeConnections: [String: NWConnection] = [:]
+    private var probeGeneration: UInt64 = 0
     weak var delegate: DiscoveryServiceDelegate?
     var browserState: String = "not_started"
 
@@ -48,7 +51,13 @@ class DiscoveryService {
     func stopBrowsing() {
         browser?.cancel()
         browser = nil
+        for connection in probeConnections.values {
+            connection.cancel()
+        }
+        probeConnections.removeAll()
         devices.removeAll()
+        reachableDevices.removeAll()
+        delegate?.discoveryDidUpdate(devices: [])
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>) {
@@ -118,6 +127,125 @@ class DiscoveryService {
         }
 
         devices = updated
-        delegate?.discoveryDidUpdate(devices: Array(updated.values))
+        probeGeneration &+= 1
+        let generation = probeGeneration
+
+        let activeIDs = Set(updated.keys)
+        let staleProbeIDs = probeConnections.keys.filter { !activeIDs.contains($0) }
+        for deviceID in staleProbeIDs {
+            guard let connection = probeConnections[deviceID] else { continue }
+            connection.cancel()
+            probeConnections.removeValue(forKey: deviceID)
+        }
+        let staleReachableIDs = reachableDevices.keys.filter { !activeIDs.contains($0) }
+        for deviceID in staleReachableIDs {
+            reachableDevices.removeValue(forKey: deviceID)
+        }
+
+        if updated.isEmpty {
+            delegate?.discoveryDidUpdate(devices: [])
+            return
+        }
+
+        emitReachableDevices()
+        for device in updated.values {
+            probeReachability(for: device, generation: generation)
+        }
+    }
+
+    private func emitReachableDevices() {
+        let sorted = reachableDevices.values.sorted {
+            if $0.name == $1.name {
+                return $0.deviceId < $1.deviceId
+            }
+            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+        delegate?.discoveryDidUpdate(devices: sorted)
+    }
+
+    private func probeReachability(for device: DiscoveredDevice, generation: UInt64) {
+        guard let endpoint = device.endpoint else {
+            if reachableDevices.removeValue(forKey: device.deviceId) != nil {
+                emitReachableDevices()
+            }
+            return
+        }
+
+        probeConnections[device.deviceId]?.cancel()
+
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.noDelay = true
+
+        let params = NWParameters(tls: nil, tcp: tcpOptions)
+        params.includePeerToPeer = true
+
+        let connection = NWConnection(to: endpoint, using: params)
+        probeConnections[device.deviceId] = connection
+
+        let timeoutWork = DispatchWorkItem { [weak self, weak connection] in
+            guard let self else { return }
+            guard generation == self.probeGeneration else { return }
+            guard let current = self.probeConnections[device.deviceId],
+                  let probedConnection = connection,
+                  current === probedConnection
+            else { return }
+            current.cancel()
+            self.probeConnections.removeValue(forKey: device.deviceId)
+            if self.reachableDevices.removeValue(forKey: device.deviceId) != nil {
+                self.emitReachableDevices()
+            }
+        }
+
+        connection.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            guard generation == self.probeGeneration else {
+                connection.cancel()
+                return
+            }
+
+            switch state {
+            case .ready:
+                timeoutWork.cancel()
+                self.probeConnections.removeValue(forKey: device.deviceId)
+
+                var resolvedIP = device.ip
+                if let remoteEndpoint = connection.currentPath?.remoteEndpoint,
+                   case .hostPort(let host, _) = remoteEndpoint
+                {
+                    resolvedIP = "\(host)"
+                }
+
+                self.reachableDevices[device.deviceId] = DiscoveredDevice(
+                    deviceId: device.deviceId,
+                    name: device.name,
+                    type: device.type,
+                    ip: resolvedIP,
+                    port: device.port,
+                    protoVersion: device.protoVersion,
+                    authMode: device.authMode,
+                    shareEnabled: device.shareEnabled,
+                    shareName: device.shareName,
+                    endpoint: device.endpoint
+                )
+                connection.cancel()
+                self.emitReachableDevices()
+
+            case .failed, .waiting, .cancelled:
+                timeoutWork.cancel()
+                if let current = self.probeConnections[device.deviceId], current === connection {
+                    self.probeConnections.removeValue(forKey: device.deviceId)
+                }
+                connection.cancel()
+                if self.reachableDevices.removeValue(forKey: device.deviceId) != nil {
+                    self.emitReachableDevices()
+                }
+
+            default:
+                break
+            }
+        }
+
+        connection.start(queue: queue)
+        queue.asyncAfter(deadline: .now() + .seconds(2), execute: timeoutWork)
     }
 }

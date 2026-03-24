@@ -1220,10 +1220,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     func discoveryDidUpdate(devices: [DiscoveredDevice]) {
         NSLog("[SyncEngine] discoveryDidUpdate called with \(devices.count) devices")
-        // Cache devices for endpoint lookup during pairing
-        for device in devices {
-            discoveredDevices[device.deviceId] = device
-        }
+        discoveredDevices = Dictionary(uniqueKeysWithValues: devices.map { ($0.deviceId, $0) })
         let mapped: [[String: Any]] = devices.map { device in
             [
                 "deviceId": device.deviceId,
@@ -1255,6 +1252,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func stopDiscovery() {
         NSLog("[SyncEngine] stopDiscovery")
         discoveryService.stopBrowsing()
+        discoveredDevices.removeAll()
     }
 
     // MARK: - Permissions

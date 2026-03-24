@@ -86,3 +86,28 @@ func TestShutdown_NilCmd(t *testing.T) {
 	// Must not panic.
 	b.Shutdown()
 }
+
+func TestParseSyncFlowBroadcastPID(t *testing.T) {
+	pid, ok := parseSyncFlowBroadcastPID("29320 dns-sd -R bloomingdeMacBook-Pro-Online _syncflow._tcp local. 39393 id=abc")
+	if !ok {
+		t.Fatal("expected syncflow dns-sd process to match")
+	}
+	if pid != 29320 {
+		t.Fatalf("pid = %d, want 29320", pid)
+	}
+}
+
+func TestParseSyncFlowBroadcastPID_IgnoresOtherProcesses(t *testing.T) {
+	cases := []string{
+		"",
+		"29320 /Applications/Other.app/Contents/MacOS/Other",
+		"29320 dns-sd -R some-service _other._tcp local. 12345",
+		"not-a-pid dns-sd -R bloom _syncflow._tcp local. 39393",
+	}
+
+	for _, input := range cases {
+		if _, ok := parseSyncFlowBroadcastPID(input); ok {
+			t.Fatalf("expected %q to be ignored", input)
+		}
+	}
+}

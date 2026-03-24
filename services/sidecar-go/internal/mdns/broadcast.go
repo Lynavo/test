@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -41,6 +42,10 @@ func BuildTXTRecords(cfg BroadcastConfig) []string {
 func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 	txt := BuildTXTRecords(cfg)
 
+	if err := cleanupStaleBroadcastProcesses(); err != nil {
+		slog.Warn("failed to clean stale bonjour broadcasts", "err", err)
+	}
+
 	// Build dns-sd command: dns-sd -R <name> <type> <domain> <port> [TXT key=value ...]
 	args := []string{"-R", cfg.DeviceName, "_syncflow._tcp", "local.", fmt.Sprintf("%d", cfg.TCPPort)}
 	args = append(args, txt...)
@@ -76,4 +81,50 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func cleanupStaleBroadcastProcesses() error {
+	out, err := exec.Command("ps", "-axo", "pid=,command=").Output()
+	if err != nil {
+		return fmt.Errorf("list processes: %w", err)
+	}
+
+	for _, line := range strings.Split(string(out), "\n") {
+		pid, ok := parseSyncFlowBroadcastPID(line)
+		if !ok {
+			continue
+		}
+		if killErr := exec.Command("kill", strconv.Itoa(pid)).Run(); killErr != nil {
+			slog.Warn("failed to terminate stale dns-sd broadcast", "pid", pid, "err", killErr)
+			continue
+		}
+		slog.Info("terminated stale dns-sd broadcast", "pid", pid)
+	}
+
+	return nil
+}
+
+func parseSyncFlowBroadcastPID(line string) (int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return 0, false
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return 0, false
+	}
+
+	command := strings.Join(fields[1:], " ")
+	if !strings.Contains(command, "dns-sd -R") ||
+		!strings.Contains(command, "_syncflow._tcp") ||
+		!strings.Contains(command, "local.") {
+		return 0, false
+	}
+
+	pid, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return 0, false
+	}
+	return pid, true
 }
