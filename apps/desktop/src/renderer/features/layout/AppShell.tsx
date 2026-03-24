@@ -3,7 +3,9 @@ import { Skeleton } from '@renderer/components/ui/skeleton';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
+import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { Sidebar } from './Sidebar';
+import { SidecarStatusBanner } from './SidecarStatusBanner';
 
 const Dashboard = lazy(() =>
   import('@renderer/features/dashboard/Dashboard').then((m) => ({
@@ -33,6 +35,29 @@ export function AppShell() {
   useEffect(() => {
     useDashboardStore.getState().fetchDashboard();
     useSettingsStore.getState().fetchSettings();
+  }, []);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    void api.sidecar.getRuntimeState().then((runtime) => {
+      useSidecarRuntimeStore.getState().setRuntime(runtime);
+      if (runtime.status === 'healthy') {
+        useDashboardStore.getState().fetchDashboard();
+        useSettingsStore.getState().fetchSettings();
+      }
+    });
+
+    const unsub = api.events.onSidecarRuntimeState((runtime) => {
+      useSidecarRuntimeStore.getState().setRuntime(runtime);
+      if (runtime.status === 'healthy') {
+        useDashboardStore.getState().fetchDashboard();
+        useSettingsStore.getState().fetchSettings();
+      }
+    });
+
+    return unsub;
   }, []);
 
   // Subscribe to sidecar events for real-time updates
@@ -96,6 +121,7 @@ export function AppShell() {
 
       {/* Content area */}
       <div className="flex flex-1 flex-col overflow-hidden">
+        <SidecarStatusBanner />
         <Suspense fallback={<PageFallback />}>
           {currentView === 'dashboard' && <Dashboard />}
           {currentView === 'settings' && <SettingsPage />}

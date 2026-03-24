@@ -101,10 +101,14 @@ describe('dashboard-store', () => {
     expect(d1?.currentFile?.filename).toBe('DJI_0421_4K_RAW.mp4');
   });
 
-  it('updateDeviceProgress is no-op for device without currentFile', () => {
+  it('updateDeviceProgress backfills currentFile when API snapshot is stale', () => {
     useDashboardStore.getState().updateDeviceProgress('d2', 'file-key-2', 50);
     const d2 = useDashboardStore.getState().devices.find((d) => d.deviceId === 'd2');
-    expect(d2?.currentFile).toBeUndefined();
+    expect(d2?.currentFile).toEqual({
+      filename: 'file-key-2',
+      progress: 50,
+      fileSize: 0,
+    });
   });
 
   it('updateDeviceProgress is no-op for unknown device', () => {

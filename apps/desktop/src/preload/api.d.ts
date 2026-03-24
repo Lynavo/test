@@ -6,6 +6,7 @@ import type {
   ShareStatusDTO,
 } from '@syncflow/contracts';
 import type { SidecarEvent } from '@syncflow/contracts';
+import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 
 export interface ElectronAPI {
   sidecar: {
@@ -17,6 +18,8 @@ export interface ElectronAPI {
     getSettings(): Promise<SettingsDTO>;
     updateSettings(settings: Partial<SettingsDTO>): Promise<SettingsDTO>;
     regenerateConnectionCode(): Promise<{ code: string }>;
+    getRuntimeState(): Promise<SidecarRuntimeState>;
+    retryStart(): Promise<void>;
     getShareStatus(): Promise<ShareStatusDTO>;
     validateShare(): Promise<ShareStatusDTO>;
   };
@@ -28,6 +31,7 @@ export interface ElectronAPI {
   };
   events: {
     onSidecarEvent(callback: (event: SidecarEvent) => void): () => void;
+    onSidecarRuntimeState(callback: (state: SidecarRuntimeState) => void): () => void;
   };
   platform: {
     isMac(): boolean;

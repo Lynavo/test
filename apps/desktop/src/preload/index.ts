@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { ElectronAPI } from './api';
 import type { SidecarEvent } from '@syncflow/contracts';
+import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 
 // IPC channel constants — duplicated from main/ipc-handlers.ts
 // because electron-vite builds preload and main as separate targets.
@@ -13,6 +14,8 @@ const IPC = {
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
+  SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
+  SIDECAR_RETRY_START: 'sidecar:retry-start',
   SIDECAR_SHARE_STATUS: 'sidecar:share-status',
   SIDECAR_VALIDATE_SHARE: 'sidecar:validate-share',
   FILES_OPEN_FOLDER: 'files:open-folder',
@@ -34,6 +37,8 @@ const electronAPI: ElectronAPI = {
     updateSettings: (settings) =>
       ipcRenderer.invoke(IPC.SIDECAR_UPDATE_SETTINGS, settings),
     regenerateConnectionCode: () => ipcRenderer.invoke(IPC.SIDECAR_REGENERATE_CODE),
+    getRuntimeState: () => ipcRenderer.invoke(IPC.SIDECAR_RUNTIME_STATE),
+    retryStart: () => ipcRenderer.invoke(IPC.SIDECAR_RETRY_START),
     getShareStatus: () => ipcRenderer.invoke(IPC.SIDECAR_SHARE_STATUS),
     validateShare: () => ipcRenderer.invoke(IPC.SIDECAR_VALIDATE_SHARE),
   },
@@ -50,6 +55,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.on('sidecar:event', handler);
       return () => {
         ipcRenderer.removeListener('sidecar:event', handler);
+      };
+    },
+    onSidecarRuntimeState: (callback) => {
+      const handler = (_event: IpcRendererEvent, data: SidecarRuntimeState) => callback(data);
+      ipcRenderer.on('sidecar:runtime-state', handler);
+      return () => {
+        ipcRenderer.removeListener('sidecar:runtime-state', handler);
       };
     },
   },

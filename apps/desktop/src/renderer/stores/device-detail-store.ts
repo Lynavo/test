@@ -34,7 +34,14 @@ export const useDeviceDetailStore = create<DeviceDetailState>((set, get) => ({
       const datesRes = await api.sidecar.getDeviceDates(deviceId);
       const dates = datesRes.dates ?? [];
       const today = new Date().toLocaleDateString('sv-SE');
-      const selectedDate = date || get().selectedDate || today;
+      const currentSelectedDate = get().selectedDate;
+      const selectedDate =
+        date ||
+        (currentSelectedDate && dates.includes(currentSelectedDate)
+          ? currentSelectedDate
+          : dates.includes(today)
+            ? today
+            : dates[0] ?? today);
       const files = await api.sidecar.getDeviceFiles(deviceId, selectedDate);
       set({
         files,

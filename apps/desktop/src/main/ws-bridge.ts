@@ -10,6 +10,13 @@ export class WsBridge {
   constructor(private getWindow: () => BrowserWindow | null) {}
 
   connect(): void {
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
     const url = `ws://127.0.0.1:${SIDECAR_HTTP_PORT}/events/stream`;
     log.info(`[WsBridge] connecting to ${url}`);
 
@@ -53,6 +60,7 @@ export class WsBridge {
   }
 
   private scheduleReconnect(): void {
+    if (this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => this.connect(), 3000);
   }
 }

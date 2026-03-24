@@ -4,6 +4,7 @@ import { is } from '@electron-toolkit/utils';
 import { registerIpcHandlers } from './ipc-handlers';
 import { SidecarManager } from './sidecar-manager';
 import { WsBridge } from './ws-bridge';
+import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 
 // Prevent crash on broken pipe (sidecar stdout/stderr)
 process.on('uncaughtException', (err) => {
@@ -14,6 +15,18 @@ process.on('uncaughtException', (err) => {
 let mainWindow: BrowserWindow | null = null;
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
+
+function broadcastSidecarRuntimeState(state: SidecarRuntimeState) {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send('sidecar:runtime-state', state);
+    }
+  }
+}
+
+sidecar.on('state', (state: SidecarRuntimeState) => {
+  broadcastSidecarRuntimeState(state);
+});
 
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -37,11 +50,13 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
-  registerIpcHandlers();
-  await sidecar.start();
+  registerIpcHandlers(sidecar);
+  await createMainWindow();
   wsBridge = new WsBridge(() => mainWindow);
   wsBridge.connect();
-  await createMainWindow();
+  void sidecar.start().catch((err) => {
+    console.error('Failed to start sidecar:', err);
+  });
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

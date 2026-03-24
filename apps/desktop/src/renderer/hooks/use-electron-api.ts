@@ -1,5 +1,6 @@
 import type { SettingsDTO } from '@syncflow/contracts';
 import type { ElectronAPI } from '../../preload/api';
+import { INITIAL_SIDECAR_RUNTIME_STATE } from '../../shared/sidecar-runtime';
 
 const defaultSettings: SettingsDTO = {
   deviceName: 'SyncFlow',
@@ -25,6 +26,8 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   updateSettings: async (s) =>
     ({ ...defaultSettings, ...s }) as SettingsDTO,
   regenerateConnectionCode: async () => ({ code: '000000' }),
+  getRuntimeState: async () => ({ ...INITIAL_SIDECAR_RUNTIME_STATE, status: 'healthy', message: null }),
+  retryStart: async () => {},
   getShareStatus: async () => ({
     enabled: false,
     smbUrl: null,
@@ -46,6 +49,7 @@ const mockFiles: ElectronAPI['files'] = {
 
 const mockEvents: ElectronAPI['events'] = {
   onSidecarEvent: () => () => {},
+  onSidecarRuntimeState: () => () => {},
 };
 
 const mockPlatform: ElectronAPI['platform'] = {

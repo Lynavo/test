@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
@@ -8,24 +8,36 @@ import { useSettingsStore } from '@renderer/stores/settings-store';
 
 export function FilePathSection() {
   const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
   const receivePath = settings.receivePath;
+  const [saving, setSaving] = useState(false);
 
   const handleSelectFolder = useCallback(async () => {
     try {
       const selected = await window.electronAPI.files.selectFolder();
-      if (selected) {
-        // Phase 1: read-only display; will wire to updateSettings when backend is ready
+      if (selected && selected !== receivePath) {
+        setSaving(true);
+        const updated = await window.electronAPI.sidecar.updateSettings({
+          receivePath: selected,
+        });
+        updateSettings(updated);
       }
     } catch {
-      toast.error('选择文件夹失败');
+      toast.error('保存接收路径失败');
+    } finally {
+      setSaving(false);
     }
-  }, []);
+  }, [receivePath, updateSettings]);
 
   const handleOpenFolder = useCallback(async () => {
+    if (!receivePath) {
+      toast.error('当前还没有可打开的接收路径');
+      return;
+    }
     try {
       await window.electronAPI.files.openFolder(receivePath);
     } catch {
-      // silent fail
+      toast.error('打开文件夹失败');
     }
   }, [receivePath]);
 
@@ -45,6 +57,7 @@ export function FilePathSection() {
           variant="outline"
           size="icon"
           onClick={handleSelectFolder}
+          disabled={saving}
           aria-label="选择文件夹"
         >
           <FolderOpen className="h-4 w-4" />
@@ -58,6 +71,7 @@ export function FilePathSection() {
         variant="outline"
         size="sm"
         onClick={handleOpenFolder}
+        disabled={!receivePath}
       >
         <FolderOpen className="h-4 w-4" />
         打开文件夹

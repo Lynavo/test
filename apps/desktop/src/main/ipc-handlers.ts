@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { sidecarClient } from './sidecar-client';
 import { openFolder, openFile, selectFolder, copyToClipboard } from './file-operations';
+import type { SidecarManager } from './sidecar-manager';
 
 // Channel constants — shared between main and preload
 export const IPC = {
@@ -12,6 +13,8 @@ export const IPC = {
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
+  SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
+  SIDECAR_RETRY_START: 'sidecar:retry-start',
   SIDECAR_SHARE_STATUS: 'sidecar:share-status',
   SIDECAR_VALIDATE_SHARE: 'sidecar:validate-share',
   FILES_OPEN_FOLDER: 'files:open-folder',
@@ -20,7 +23,7 @@ export const IPC = {
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
 } as const;
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   // Sidecar — real HTTP calls
   ipcMain.handle(IPC.SIDECAR_HEALTH, () => sidecarClient.getHealth());
   ipcMain.handle(IPC.SIDECAR_DASHBOARD_SUMMARY, () => sidecarClient.getDashboardSummary());
@@ -36,6 +39,8 @@ export function registerIpcHandlers(): void {
     sidecarClient.updateSettings(partial),
   );
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => sidecarClient.regenerateConnectionCode());
+  ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
+  ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());
   ipcMain.handle(IPC.SIDECAR_SHARE_STATUS, () => sidecarClient.getShareStatus());
   ipcMain.handle(IPC.SIDECAR_VALIDATE_SHARE, () => sidecarClient.validateShare());
 
