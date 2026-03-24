@@ -29,18 +29,119 @@ func TestDetect_ReturnsValidResult(t *testing.T) {
 	t.Logf("detect result: status=%s enabled=%v", result.Status, result.Enabled)
 }
 
-func TestDetect_NeedsManualEnable_WhenSmbdNotRunning(t *testing.T) {
-	// On most test/CI environments smbd is not running, so this should return
-	// needs_manual_enable. If SMB happens to be on, skip instead of failing.
-	result := Detect("/tmp/syncflow", "SyncFlow")
+func TestDetectFromSharePoints_Ready_WhenNameAndPathMatch(t *testing.T) {
+	result := detectFromSharePoints(
+		"/Volumes/workspace/temp/syncFolwData",
+		"SyncFlow",
+		[]sharePoint{
+			{Name: "SyncFlow", Path: "/Volumes/workspace/temp/syncFolwData", SMBShared: true},
+		},
+		"192.168.1.10",
+	)
+
+	if result.Status != StatusReady {
+		t.Fatalf("expected ready, got %s", result.Status)
+	}
+	if !result.Enabled {
+		t.Fatal("expected enabled=true")
+	}
+	if result.SmbURL == nil || *result.SmbURL != "smb://192.168.1.10/SyncFlow" {
+		t.Fatalf("unexpected smb url: %v", result.SmbURL)
+	}
+}
+
+func TestDetectFromSharePoints_Ready_WhenPathMatchesButNameDiffers(t *testing.T) {
+	result := detectFromSharePoints(
+		"/Volumes/workspace/temp/syncFolwData",
+		"SyncFlow",
+		[]sharePoint{
+			{Name: "syncFolwData", Path: "/Volumes/workspace/temp/syncFolwData", SMBShared: true},
+		},
+		"192.168.1.10",
+	)
+
+	if result.Status != StatusReady {
+		t.Fatalf("expected ready, got %s", result.Status)
+	}
+	if !result.Enabled {
+		t.Fatal("expected enabled=true")
+	}
+	if result.SmbURL == nil || *result.SmbURL != "smb://192.168.1.10/syncFolwData" {
+		t.Fatalf("unexpected smb url: %v", result.SmbURL)
+	}
+	if result.ShareName == nil || *result.ShareName != "syncFolwData" {
+		t.Fatalf("unexpected share name: %v", result.ShareName)
+	}
+}
+
+func TestDetectFromSharePoints_ShareRegistered_WhenOtherShareExistsButPathMismatch(t *testing.T) {
+	result := detectFromSharePoints(
+		"/Volumes/workspace/temp/syncFolwData",
+		"SyncFlow",
+		[]sharePoint{
+			{Name: "OtherShare", Path: "/Users/example/Public", SMBShared: true},
+		},
+		"192.168.1.10",
+	)
+
+	if result.Status != StatusShareRegistered {
+		t.Fatalf("expected share_registered, got %s", result.Status)
+	}
+	if !result.Enabled {
+		t.Fatal("expected enabled=true")
+	}
+	if result.ShareName == nil || *result.ShareName != "OtherShare" {
+		t.Fatalf("unexpected share name: %v", result.ShareName)
+	}
+}
+
+func TestDetectFromSharePoints_NeedsManualEnable_WhenNoSMBShares(t *testing.T) {
+	result := detectFromSharePoints(
+		"/tmp/syncflow",
+		"SyncFlow",
+		[]sharePoint{
+			{Name: "Public", Path: "/Users/example/Public", SMBShared: false},
+		},
+		"192.168.1.10",
+	)
+
 	if result.Status != StatusNeedsManualEnable {
-		t.Skipf("smbd appears to be running (status=%s); skipping", result.Status)
+		t.Fatalf("expected needs_manual_enable, got %s", result.Status)
 	}
 	if result.Enabled {
-		t.Error("expected enabled=false when smbd is not running")
+		t.Fatal("expected enabled=false")
 	}
-	if result.SmbURL != nil {
-		t.Error("expected nil smbUrl when smbd is not running")
+}
+
+func TestParseSharePoints(t *testing.T) {
+	output := `
+			List of Share Points
+name:		“blooming”的公共文件夹
+path:		/Users/blooming/Public
+	smb:	{
+    		name:		“blooming”的公共文件夹
+    		shared:	1
+	}
+
+name:		syncFolwData
+path:		/Volumes/workspace/temp/syncFolwData
+	smb:	{
+    		name:		syncFolwData
+    		shared:	1
+	}
+`
+	shares := parseSharePoints(output)
+	if len(shares) != 2 {
+		t.Fatalf("expected 2 shares, got %d", len(shares))
+	}
+	if shares[1].Name != "syncFolwData" {
+		t.Fatalf("unexpected share name: %q", shares[1].Name)
+	}
+	if shares[1].Path != "/Volumes/workspace/temp/syncFolwData" {
+		t.Fatalf("unexpected share path: %q", shares[1].Path)
+	}
+	if !shares[1].SMBShared {
+		t.Fatal("expected share to be smb-enabled")
 	}
 }
 

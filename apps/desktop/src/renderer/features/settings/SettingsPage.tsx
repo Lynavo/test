@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useSettingsStore } from '@renderer/stores/settings-store';
 import { ConnectionCodeSection } from './ConnectionCodeSection';
 import { DeviceNameSection } from './DeviceNameSection';
 import { FilePathSection } from './FilePathSection';
@@ -5,6 +7,12 @@ import { ShareAddressSection } from './ShareAddressSection';
 import { SystemGuideSection } from './SystemGuideSection';
 
 export function SettingsPage() {
+  const refreshShareStatus = useSettingsStore((s) => s.refreshShareStatus);
+
+  useEffect(() => {
+    void refreshShareStatus(true);
+  }, [refreshShareStatus]);
+
   return (
     <div className="flex-1 overflow-auto">
       <div className="mx-auto max-w-2xl px-6 py-8">

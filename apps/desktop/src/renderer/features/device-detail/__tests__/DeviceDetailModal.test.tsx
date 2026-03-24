@@ -13,7 +13,8 @@ const mockDevice: DashboardDeviceDTO = {
   todayFileCount: 3,
   todayBytes: 5_000_000_000,
   storageLeft: '1.2 TB',
-  storagePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+  storagePath: '/Users/alice/SyncFlow',
+  devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
 };
 
 beforeEach(() => {

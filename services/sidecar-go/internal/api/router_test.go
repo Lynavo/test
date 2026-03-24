@@ -13,6 +13,7 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/api"
 	"github.com/nicksyncflow/sidecar/internal/config"
 	"github.com/nicksyncflow/sidecar/internal/events"
+	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
@@ -246,6 +247,99 @@ func TestDeviceDates(t *testing.T) {
 	// Should be an array (possibly empty)
 	if _, ok := dates.([]any); !ok {
 		t.Errorf("expected dates to be an array, got %T", dates)
+	}
+}
+
+func TestDeviceDates_FilesystemFallback(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         "test-device-1",
+		ClientName:       "Test iPhone",
+		Platform:         "ios",
+		PairingID:        "pair-1",
+		PairingTokenHash: "hash-1",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+	})
+	if err != nil {
+		t.Fatalf("insert device: %v", err)
+	}
+	dirName := internalserver.SanitizeDirName("Test iPhone")
+	if err := st.UpdateReceiveDirName("test-device-1", dirName); err != nil {
+		t.Fatalf("update dir name: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cfg.ReceiveDir, dirName, "2026-03-22"), 0o755); err != nil {
+		t.Fatalf("mkdir fallback date dir: %v", err)
+	}
+
+	resp, err := http.Get(srv.URL + "/devices/test-device-1/dates")
+	if err != nil {
+		t.Fatalf("GET /devices/.../dates: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		Dates []string `json:"dates"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Dates) == 0 || body.Dates[0] != "2026-03-22" {
+		t.Fatalf("expected filesystem fallback date, got %v", body.Dates)
+	}
+}
+
+func TestDeviceFiles_FilesystemFallback(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         "test-device-1",
+		ClientName:       "Test iPhone",
+		Platform:         "ios",
+		PairingID:        "pair-1",
+		PairingTokenHash: "hash-1",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+	})
+	if err != nil {
+		t.Fatalf("insert device: %v", err)
+	}
+	dirName := internalserver.SanitizeDirName("Test iPhone")
+	if err := st.UpdateReceiveDirName("test-device-1", dirName); err != nil {
+		t.Fatalf("update dir name: %v", err)
+	}
+	dateDir := filepath.Join(cfg.ReceiveDir, dirName, "2026-03-22")
+	if err := os.MkdirAll(dateDir, 0o755); err != nil {
+		t.Fatalf("mkdir fallback date dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dateDir, "IMG_0001.JPG"), []byte("demo"), 0o644); err != nil {
+		t.Fatalf("write fallback file: %v", err)
+	}
+
+	resp, err := http.Get(srv.URL + "/devices/test-device-1/files?date=2026-03-22")
+	if err != nil {
+		t.Fatalf("GET /devices/.../files: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var body []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 fallback file, got %d", len(body))
+	}
+	if body[0]["originalFilename"] != "IMG_0001.JPG" {
+		t.Fatalf("expected fallback filename, got %v", body[0]["originalFilename"])
 	}
 }
 

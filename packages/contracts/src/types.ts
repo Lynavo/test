@@ -39,7 +39,10 @@ export interface DashboardDeviceDTO {
   todayBytes: number;
   /** Pre-formatted display value such as "1.2 TB" */
   storageLeft: string;
+  /** Receive root used to resolve per-file relative paths */
   storagePath: string;
+  /** Device-specific directory under receive root */
+  devicePath: string;
   currentFile?: {
     filename: string;
     progress: number;
@@ -75,6 +78,7 @@ export interface ShareStatusDTO {
   enabled: boolean;
   smbUrl: string | null;
   status: ShareStatus;
+  shareName?: string;
   lastValidatedAt?: string;
   lastError?: string;
 }

@@ -64,6 +64,14 @@ func (s *Server) handleDeviceFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list files")
 		return
 	}
+	if len(uploads) == 0 {
+		fsUploads, err := s.filesystemUploads(deviceID, date)
+		if err != nil {
+			slog.Warn("list filesystem uploads fallback failed", "err", err, "deviceId", deviceID, "date", date)
+		} else {
+			uploads = fsUploads
+		}
+	}
 
 	// Ensure JSON array (not null) when empty
 	if uploads == nil {
@@ -86,6 +94,11 @@ func (s *Server) handleDeviceDates(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get dates")
 		return
 	}
+	fsDates, err := s.filesystemDates(deviceID)
+	if err != nil {
+		slog.Warn("list filesystem dates fallback failed", "err", err, "deviceId", deviceID)
+	}
+	dates = mergeDateKeys(dates, fsDates)
 
 	if dates == nil {
 		dates = []string{}

@@ -1,4 +1,5 @@
 import { Smartphone, Monitor, FolderOpen, X } from 'lucide-react';
+import { toast } from 'sonner';
 import type { DashboardDeviceDTO } from '@syncflow/contracts';
 import { Button } from '@renderer/components/ui/button';
 
@@ -11,17 +12,43 @@ const colors = {
 
 interface DeviceHeaderProps {
   device: DashboardDeviceDTO;
+  selectedDate: string;
+  availableDates: string[];
   onClose: () => void;
 }
 
-export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
+export function DeviceHeader({
+  device,
+  selectedDate,
+  availableDates,
+  onClose,
+}: DeviceHeaderProps) {
   const isPhone = /iphone|ipad|galaxy|pixel|android|mobile/i.test(
     device.clientName,
   );
   const DeviceIcon = isPhone ? Smartphone : Monitor;
+  const hasMaterializedDateDir = availableDates.includes(selectedDate);
+  const selectedFolderPath =
+    hasMaterializedDateDir && selectedDate
+      ? `${device.devicePath}/${selectedDate}`
+      : device.devicePath;
 
-  const handleOpenFolder = () => {
-    window.electronAPI?.files.openFolder(device.storagePath);
+  const handleOpenFolder = async () => {
+    const api = window.electronAPI;
+    if (!api) return;
+    try {
+      await api.files.openFolder(selectedFolderPath);
+    } catch {
+      if (selectedFolderPath !== device.devicePath) {
+        try {
+          await api.files.openFolder(device.devicePath);
+          return;
+        } catch {
+          // Fall through to toast below.
+        }
+      }
+      toast.error('打开文件夹失败');
+    }
   };
 
   return (
@@ -50,7 +77,7 @@ export function DeviceHeader({ device, onClose }: DeviceHeaderProps) {
           </span>
         </h2>
         <p className="truncate text-xs" style={{ color: colors.subtitleText }}>
-          {device.storagePath}
+          {selectedFolderPath}
         </p>
       </div>
 

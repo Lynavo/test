@@ -32,11 +32,13 @@ const mockSidecar: ElectronAPI['sidecar'] = {
     enabled: false,
     smbUrl: null,
     status: 'unknown' as const,
+    shareName: 'SyncFlow',
   }),
   validateShare: async () => ({
     enabled: false,
     smbUrl: null,
     status: 'unknown' as const,
+    shareName: 'SyncFlow',
   }),
 };
 

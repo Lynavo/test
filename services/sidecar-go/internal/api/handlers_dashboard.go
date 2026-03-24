@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/disk"
+	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 )
 
 func (s *Server) handleDashboardSummary(w http.ResponseWriter, _ *http.Request) {
@@ -48,15 +50,16 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 
 	// Transform to DashboardDeviceDTO shape expected by desktop renderer
 	type deviceDTO struct {
-		DeviceID      string  `json:"deviceId"`
-		ClientName    string  `json:"clientName"`
-		IP            string  `json:"ip"`
-		Status        string  `json:"status"`
+		DeviceID       string `json:"deviceId"`
+		ClientName     string `json:"clientName"`
+		IP             string `json:"ip"`
+		Status         string `json:"status"`
 		TodayFileCount int    `json:"todayFileCount"`
-		TodayBytes    int64   `json:"todayBytes"`
-		StorageLeft   string  `json:"storageLeft"`
-		StoragePath   string  `json:"storagePath"`
-		CurrentFile   *struct {
+		TodayBytes     int64  `json:"todayBytes"`
+		StorageLeft    string `json:"storageLeft"`
+		StoragePath    string `json:"storagePath"`
+		DevicePath     string `json:"devicePath"`
+		CurrentFile    *struct {
 			Filename string  `json:"filename"`
 			Progress float64 `json:"progress"`
 			FileSize int64   `json:"fileSize"`
@@ -85,6 +88,17 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 			status = "connected_idle"
 		}
 
+		deviceDirName := d.ClientID
+		switch {
+		case d.ReceiveDirName != nil && *d.ReceiveDirName != "":
+			deviceDirName = *d.ReceiveDirName
+		case d.DeviceAlias != nil && *d.DeviceAlias != "":
+			deviceDirName = internalserver.SanitizeDirName(*d.DeviceAlias)
+		case d.ClientName != "":
+			deviceDirName = internalserver.SanitizeDirName(d.ClientName)
+		}
+		devicePath := filepath.Join(s.config.ReceiveDir, deviceDirName)
+
 		dto := deviceDTO{
 			DeviceID:       d.ClientID,
 			ClientName:     d.ClientName,
@@ -94,6 +108,7 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 			TodayBytes:     d.TotalBytes,
 			StorageLeft:    formatBytesHuman(remainingBytes),
 			StoragePath:    s.config.ReceiveDir,
+			DevicePath:     devicePath,
 		}
 		if d.CurrentFile != nil && status == "transferring" {
 			dto.CurrentFile = &struct {

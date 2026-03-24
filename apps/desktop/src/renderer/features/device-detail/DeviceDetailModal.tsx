@@ -73,7 +73,12 @@ export function DeviceDetailModal() {
             {selectedDevice.clientName} 设备详情
           </DialogTitle>
 
-          <DeviceHeader device={selectedDevice} onClose={closeDeviceDetail} />
+          <DeviceHeader
+            device={selectedDevice}
+            selectedDate={selectedDate}
+            availableDates={availableDates}
+            onClose={closeDeviceDetail}
+          />
 
           <div className="flex items-center gap-3 px-6 py-3">
             <DateFilter

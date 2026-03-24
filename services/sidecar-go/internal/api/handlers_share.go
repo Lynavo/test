@@ -12,6 +12,7 @@ import (
 type shareStatusDTO struct {
 	Enabled         bool    `json:"enabled"`
 	SmbURL          string  `json:"smbUrl"`
+	ShareName       string  `json:"shareName,omitempty"`
 	Status          string  `json:"status"`
 	LastValidatedAt *string `json:"lastValidatedAt"`
 	LastError       *string `json:"lastError"`
@@ -28,6 +29,7 @@ func (s *Server) handleShareStatus(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, shareStatusDTO{
 		Enabled:         cfg.ShareURL != "",
 		SmbURL:          cfg.ShareURL,
+		ShareName:       cfg.ShareName,
 		Status:          cfg.ShareStatus,
 		LastValidatedAt: cfg.LastValidatedAt,
 		LastError:       cfg.LastError,
@@ -49,7 +51,7 @@ func (s *Server) handleShareValidate(w http.ResponseWriter, _ *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if err := s.store.UpdateShareConfig(store.ShareConfig{
 		ReceiveRoot:     cfg.ReceiveRoot,
-		ShareName:       cfg.ShareName,
+		ShareName:       firstNonEmpty(result.ShareName, cfg.ShareName),
 		ShareURL:        derefStr(result.SmbURL),
 		ShareStatus:     string(result.Status),
 		LastValidatedAt: &now,
@@ -69,4 +71,11 @@ func derefStr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+func firstNonEmpty(value *string, fallback string) string {
+	if value == nil || *value == "" {
+		return fallback
+	}
+	return *value
 }

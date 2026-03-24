@@ -9,6 +9,7 @@ import { useSettingsStore } from '@renderer/stores/settings-store';
 export function FilePathSection() {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const refreshShareStatus = useSettingsStore((s) => s.refreshShareStatus);
   const receivePath = settings.receivePath;
   const [saving, setSaving] = useState(false);
 
@@ -21,13 +22,14 @@ export function FilePathSection() {
           receivePath: selected,
         });
         updateSettings(updated);
+        void refreshShareStatus(true);
       }
     } catch {
       toast.error('保存接收路径失败');
     } finally {
       setSaving(false);
     }
-  }, [receivePath, updateSettings]);
+  }, [receivePath, refreshShareStatus, updateSettings]);
 
   const handleOpenFolder = useCallback(async () => {
     if (!receivePath) {

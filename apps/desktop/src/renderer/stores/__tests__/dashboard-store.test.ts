@@ -13,7 +13,8 @@ describe('dashboard-store', () => {
         todayFileCount: 0,
         todayBytes: 0,
         storageLeft: '--',
-        storagePath: '/Users/alice/SyncFlow/GoPro12',
+        storagePath: '/Users/alice/SyncFlow',
+        devicePath: '/Users/alice/SyncFlow/GoPro12',
       },
       {
         deviceId: 'd1',
@@ -23,7 +24,8 @@ describe('dashboard-store', () => {
         todayFileCount: 12,
         todayBytes: 24.5 * 1024 ** 3,
         storageLeft: '1.2 TB',
-        storagePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+        storagePath: '/Users/alice/SyncFlow',
+        devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
         currentFile: { filename: 'DJI_0421_4K_RAW.mp4', progress: 67, fileSize: 3_435_973_837 },
       },
       {
@@ -34,7 +36,8 @@ describe('dashboard-store', () => {
         todayFileCount: 8,
         todayBytes: 16.3 * 1024 ** 3,
         storageLeft: '860 GB',
-        storagePath: '/Users/alice/SyncFlow/GalaxyS24',
+        storagePath: '/Users/alice/SyncFlow',
+        devicePath: '/Users/alice/SyncFlow/GalaxyS24',
       },
     ]);
     useDashboardStore.setState({ diskWarningDismissed: false });
@@ -58,6 +61,7 @@ describe('dashboard-store', () => {
         todayBytes: 0,
         storageLeft: '--',
         storagePath: '/tmp',
+        devicePath: '/tmp/Offline Device',
       },
       {
         deviceId: 'x2',
@@ -68,6 +72,7 @@ describe('dashboard-store', () => {
         todayBytes: 1024,
         storageLeft: '500 GB',
         storagePath: '/tmp',
+        devicePath: '/tmp/Active Device',
         currentFile: { filename: 'test.mp4', progress: 50, fileSize: 100 },
       },
     ];

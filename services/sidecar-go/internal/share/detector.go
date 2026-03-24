@@ -1,9 +1,11 @@
 package share
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -20,64 +22,170 @@ const (
 
 // Result holds the outcome of a share detection check.
 type Result struct {
-	Enabled bool    `json:"enabled"`
-	SmbURL  *string `json:"smbUrl"`
-	Status  Status  `json:"status"`
-	Error   *string `json:"lastError,omitempty"`
+	Enabled   bool    `json:"enabled"`
+	SmbURL    *string `json:"smbUrl"`
+	ShareName *string `json:"shareName,omitempty"`
+	Status    Status  `json:"status"`
+	Error     *string `json:"lastError,omitempty"`
 }
 
-// Detect performs a 4-step SMB share status verification:
-//  1. Check if smbd is running
-//  2. Check if shareName exists in the system share list
-//  3. Verify the share path matches receivePath
-//  4. Build the smb:// URL using the local IP
-func Detect(receivePath, shareName string) Result {
-	// Step 1: Check if smbd is running
-	out, err := exec.Command("pgrep", "-x", "smbd").Output()
-	if err != nil || len(strings.TrimSpace(string(out))) == 0 {
-		return Result{Status: StatusNeedsManualEnable}
-	}
+type sharePoint struct {
+	Name      string
+	Path      string
+	SMBShared bool
+}
 
-	// Step 2: Check if share name exists in system share list
+// Detect verifies whether the current receive path is exposed via macOS file sharing.
+// It relies on `sharing -l`, which reflects system sharing configuration more reliably
+// than checking whether smbd happens to be running at this instant.
+func Detect(receivePath, shareName string) Result {
 	sharesOut, err := exec.Command("sharing", "-l").Output()
 	if err != nil {
 		errMsg := fmt.Sprintf("cannot list shares: %v", err)
 		return Result{Status: StatusError, Error: &errMsg}
 	}
 
-	sharesStr := string(sharesOut)
-	if !strings.Contains(sharesStr, shareName) {
-		return Result{Status: StatusShareRegistered, Enabled: true}
+	shares := parseSharePoints(string(sharesOut))
+	return detectFromSharePoints(receivePath, shareName, shares, GetLocalIP())
+}
+
+func detectFromSharePoints(receivePath, shareName string, shares []sharePoint, localIP string) Result {
+	smbShares := make([]sharePoint, 0, len(shares))
+	for _, share := range shares {
+		if share.SMBShared {
+			smbShares = append(smbShares, share)
+		}
+	}
+	if len(smbShares) == 0 {
+		return Result{Status: StatusNeedsManualEnable}
 	}
 
-	// Step 3: Verify share path contains receivePath
-	shareFound := false
-	for _, line := range strings.Split(sharesStr, "\n") {
-		if strings.Contains(line, "name:") && strings.Contains(line, shareName) {
-			shareFound = true
-		}
-		if shareFound && strings.Contains(line, "path:") {
-			pathPart := strings.TrimSpace(strings.SplitN(line, "path:", 2)[1])
-			if pathPart != "" && !strings.HasPrefix(receivePath, pathPart) {
-				return Result{Status: StatusShareRegistered, Enabled: true}
+	normalizedReceivePath := filepath.Clean(receivePath)
+	var nameAndPathMatch *sharePoint
+	var pathMatch *sharePoint
+	var nameMatch *sharePoint
+
+	for i := range smbShares {
+		share := &smbShares[i]
+		if sharePathCoversReceivePath(share.Path, normalizedReceivePath) {
+			if pathMatch == nil {
+				pathMatch = share
 			}
-			break
+			if share.Name == shareName {
+				nameAndPathMatch = share
+				break
+			}
+		}
+		if share.Name == shareName && nameMatch == nil {
+			nameMatch = share
 		}
 	}
 
-	// Step 4: Get local IP and build SMB URL
-	ip := GetLocalIP()
-	if ip == "" {
-		errMsg := "cannot determine local IP"
-		return Result{Status: StatusError, Error: &errMsg}
+	switch {
+	case nameAndPathMatch != nil:
+		return Result{
+			Enabled:   true,
+			SmbURL:    buildSMBURL(localIP, nameAndPathMatch.Name),
+			ShareName: strPtr(nameAndPathMatch.Name),
+			Status:    StatusReady,
+		}
+	case pathMatch != nil:
+		return Result{
+			Enabled:   true,
+			SmbURL:    buildSMBURL(localIP, pathMatch.Name),
+			ShareName: strPtr(pathMatch.Name),
+			Status:    StatusReady,
+		}
+	case nameMatch != nil:
+		return Result{
+			Enabled:   true,
+			SmbURL:    buildSMBURL(localIP, nameMatch.Name),
+			ShareName: strPtr(nameMatch.Name),
+			Status:    StatusShareRegistered,
+		}
+	default:
+		firstShare := smbShares[0]
+		return Result{
+			Enabled:   true,
+			SmbURL:    buildSMBURL(localIP, firstShare.Name),
+			ShareName: strPtr(firstShare.Name),
+			Status:    StatusShareRegistered,
+		}
+	}
+}
+
+func parseSharePoints(output string) []sharePoint {
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	entries := make([]sharePoint, 0)
+	var current *sharePoint
+	inSMBBlock := false
+
+	flush := func() {
+		if current == nil {
+			return
+		}
+		if current.Name != "" || current.Path != "" {
+			entries = append(entries, *current)
+		}
+		current = nil
 	}
 
-	smbURL := fmt.Sprintf("smb://%s/%s", ip, shareName)
-	return Result{
-		Enabled: true,
-		SmbURL:  &smbURL,
-		Status:  StatusReady,
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		switch {
+		case inSMBBlock && line == "}":
+			inSMBBlock = false
+			continue
+		case inSMBBlock && strings.HasPrefix(line, "shared:"):
+			current.SMBShared = strings.TrimSpace(strings.TrimPrefix(line, "shared:")) == "1"
+			continue
+		case inSMBBlock:
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(line, "name:"):
+			flush()
+			current = &sharePoint{
+				Name: normalizeShareToken(strings.TrimSpace(strings.TrimPrefix(line, "name:"))),
+			}
+		case current != nil && strings.HasPrefix(line, "path:"):
+			current.Path = filepath.Clean(strings.TrimSpace(strings.TrimPrefix(line, "path:")))
+		case current != nil && strings.HasPrefix(line, "smb:"):
+			current.SMBShared = true
+			inSMBBlock = true
+		}
 	}
+	flush()
+	return entries
+}
+
+func normalizeShareToken(value string) string {
+	return strings.Trim(value, "\"“”")
+}
+
+func sharePathCoversReceivePath(sharePath, receivePath string) bool {
+	normalizedSharePath := filepath.Clean(sharePath)
+	if normalizedSharePath == receivePath {
+		return true
+	}
+	prefix := normalizedSharePath + string(filepath.Separator)
+	return strings.HasPrefix(receivePath, prefix)
+}
+
+func buildSMBURL(localIP, shareName string) *string {
+	if localIP == "" || shareName == "" {
+		return nil
+	}
+	smbURL := fmt.Sprintf("smb://%s/%s", localIP, shareName)
+	return &smbURL
+}
+
+func strPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 // GetLocalIP returns the first non-loopback IPv4 address found on the host.
