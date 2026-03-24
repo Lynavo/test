@@ -33,12 +33,12 @@ func (c *connection) handleSyncBegin(body []byte) error {
 	}
 
 	sess := store.Session{
-		SessionID: req.SessionID,
-		ClientID:  c.clientID,
+		SessionID:  req.SessionID,
+		ClientID:   c.clientID,
 		ClientName: clientName,
-		State:     "transferring",
-		StartedAt: now,
-		UpdatedAt: now,
+		State:      "transferring",
+		StartedAt:  now,
+		UpdatedAt:  now,
 	}
 	if err := c.store.UpsertSession(sess); err != nil {
 		return fmt.Errorf("create session: %w", err)
@@ -124,13 +124,33 @@ func (c *connection) handleFileInit(body []byte) error {
 			}
 			c.fileWriter = fw
 
+			// Resume offset must match on-disk .part size to avoid stale DB offsets.
+			resumeOffset := fw.CommittedOffset()
+			if resumeOffset > req.FileSize {
+				resumeOffset = req.FileSize
+			}
+			if resumeOffset != existing.CommittedBytes {
+				slog.Info("adjusted resume offset to on-disk size",
+					"fileKey", req.FileKey,
+					"dbOffset", existing.CommittedBytes,
+					"diskOffset", fw.CommittedOffset(),
+					"resumeOffset", resumeOffset,
+				)
+				if err := c.store.UpdateUploadProgress(req.FileKey, resumeOffset); err != nil {
+					slog.Warn("failed to reconcile upload progress offset", "fileKey", req.FileKey, "err", err)
+				}
+			}
+			c.resetProgressFlush(req.FileKey, resumeOffset)
+			c.startTransferTimer(req.FileKey)
+			c.resetAckState(req.FileKey, resumeOffset)
+
 			slog.Info("resuming partial upload",
 				"fileKey", req.FileKey,
-				"committedBytes", existing.CommittedBytes,
+				"committedBytes", resumeOffset,
 			)
 			return c.sendJSON(protocol.TypeFileInitRes, protocol.FileInitRes{
 				Action:       "RESUME",
-				ResumeOffset: existing.CommittedBytes,
+				ResumeOffset: resumeOffset,
 			})
 		}
 	}
@@ -160,6 +180,9 @@ func (c *connection) handleFileInit(body []byte) error {
 		return fmt.Errorf("create file writer: %w", err)
 	}
 	c.fileWriter = fw
+	c.resetProgressFlush(req.FileKey, 0)
+	c.startTransferTimer(req.FileKey)
+	c.resetAckState(req.FileKey, 0)
 
 	return c.sendJSON(protocol.TypeFileInitRes, protocol.FileInitRes{
 		Action: "UPLOAD",

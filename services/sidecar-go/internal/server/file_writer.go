@@ -9,15 +9,19 @@ import (
 	"time"
 )
 
+const defaultSyncEveryBytes int64 = 256 * 1024 * 1024 // 256 MiB
+
 // FileWriter manages writing to a .part staging file during an upload.
 // It supports resuming from a previous offset if the .part file already exists.
 type FileWriter struct {
-	file         *os.File
-	partPath     string
-	offset       int64
-	expectedSize int64
-	firstWrite   time.Time
-	hasWritten   bool
+	file           *os.File
+	partPath       string
+	offset         int64
+	expectedSize   int64
+	firstWrite     time.Time
+	hasWritten     bool
+	bytesSinceSync int64
+	syncEveryBytes int64
 }
 
 // NewFileWriter creates a new FileWriter for the given file key.
@@ -45,12 +49,17 @@ func NewFileWriter(stagingDir, clientID, fileKey string, expectedSize int64) (*F
 		return nil, fmt.Errorf("stat part file: %w", err)
 	}
 	offset := info.Size()
+	if _, err := f.Seek(offset, 0); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("seek part file to resume offset: %w", err)
+	}
 
 	return &FileWriter{
-		file:         f,
-		partPath:     partPath,
-		offset:       offset,
-		expectedSize: expectedSize,
+		file:           f,
+		partPath:       partPath,
+		offset:         offset,
+		expectedSize:   expectedSize,
+		syncEveryBytes: defaultSyncEveryBytes,
 	}, nil
 }
 
@@ -61,7 +70,16 @@ func (fw *FileWriter) WriteAt(data []byte, offset int64) (int64, error) {
 		fw.firstWrite = time.Now()
 		fw.hasWritten = true
 	}
-	n, err := fw.file.WriteAt(data, offset)
+	var (
+		n   int
+		err error
+	)
+	// Fast path for normal sequential uploads.
+	if offset == fw.offset {
+		n, err = fw.file.Write(data)
+	} else {
+		n, err = fw.file.WriteAt(data, offset)
+	}
 	if err != nil {
 		return fw.offset, fmt.Errorf("write at offset %d: %w", offset, err)
 	}
@@ -70,13 +88,37 @@ func (fw *FileWriter) WriteAt(data []byte, offset int64) (int64, error) {
 	if newEnd > fw.offset {
 		fw.offset = newEnd
 	}
+	fw.bytesSinceSync += int64(n)
 
 	return fw.offset, nil
 }
 
+// MaybeSync flushes data to disk when the buffered-write threshold is reached.
+func (fw *FileWriter) MaybeSync() error {
+	if fw.file == nil {
+		return nil
+	}
+	if fw.syncEveryBytes <= 0 || fw.bytesSinceSync >= fw.syncEveryBytes {
+		return fw.ForceSync()
+	}
+	return nil
+}
+
+// ForceSync flushes all buffered writes to disk.
+func (fw *FileWriter) ForceSync() error {
+	if fw.file == nil {
+		return nil
+	}
+	if err := fw.file.Sync(); err != nil {
+		return err
+	}
+	fw.bytesSinceSync = 0
+	return nil
+}
+
 // Sync flushes the .part file to disk.
 func (fw *FileWriter) Sync() error {
-	return fw.file.Sync()
+	return fw.ForceSync()
 }
 
 // CommittedOffset returns the current committed byte offset.

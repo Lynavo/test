@@ -4,9 +4,98 @@ import UIKit
 import CryptoKit
 import Network
 
+private let syncFlowTruthyValues: Set<String> = ["1", "true", "yes", "on"]
+
+func syncFlowBoolSetting(envKey: String, userDefaultsKey: String, defaultValue: Bool = false) -> Bool {
+    #if DEBUG
+    if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !raw.isEmpty
+    {
+        return syncFlowTruthyValues.contains(raw.lowercased())
+    }
+
+    if let raw = UserDefaults.standard.object(forKey: userDefaultsKey) {
+        switch raw {
+        case let value as Bool:
+            return value
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            return syncFlowTruthyValues.contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        default:
+            break
+        }
+    }
+
+    return defaultValue
+    #else
+    return defaultValue
+    #endif
+}
+
+func syncFlowIntSetting(envKey: String, userDefaultsKey: String) -> Int? {
+    #if DEBUG
+    if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !raw.isEmpty,
+       let value = Int(raw)
+    {
+        return value
+    }
+
+    if let raw = UserDefaults.standard.object(forKey: userDefaultsKey) {
+        switch raw {
+        case let value as Int:
+            return value
+        case let value as NSNumber:
+            return value.intValue
+        case let value as String:
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        default:
+            break
+        }
+    }
+
+    return nil
+    #else
+    return nil
+    #endif
+}
+
+func syncFlowStringSetting(envKey: String, userDefaultsKey: String) -> String? {
+    #if DEBUG
+    if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !raw.isEmpty
+    {
+        return raw
+    }
+
+    if let raw = UserDefaults.standard.object(forKey: userDefaultsKey) {
+        switch raw {
+        case let value as String:
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        default:
+            break
+        }
+    }
+
+    return nil
+    #else
+    return nil
+    #endif
+}
+
 @objc
 class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegate {
     static let shared = SyncEngineManager()
+
+    private enum BindingConnectionState: String {
+        case discovering
+        case bound
+        case connecting
+        case connected
+        case offline
+    }
 
     let discoveryService = DiscoveryService()
     let bindingService = BindingService()
@@ -22,6 +111,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var photoLibraryChanged = false  // set by observer, consumed by watch loop
     private var watchLoopContinuation: CheckedContinuation<Void, Never>?
     private var sidecarHost: String?  // resolved IP of Mac, for HTTP heartbeat
+    private var transitionBackgroundTaskId: UIBackgroundTaskIdentifier = .invalid
+    private var bindingConnectionState: BindingConnectionState = .offline
 
     private override init() {
         super.init()
@@ -30,6 +121,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             historyStore = HistoryLedgerStore(store: uploadStore!)
         } catch {
             NSLog("[SyncEngine] Failed to init stores: \(error)")
+        }
+        if uploadStore?.getBinding() != nil {
+            bindingConnectionState = .bound
         }
         discoveryService.delegate = self
         photoScanner.delegate = self
@@ -52,14 +146,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     @objc private func appDidEnterBackground() {
         NSLog("[SyncEngine] app entered background, isSyncing=\(isSyncing)")
-        // Silent audio keeps us alive — just update state
-        if isSyncing {
+        guard isSyncing else { return }
+        beginBackgroundTransitionIfNeeded(reason: "didEnterBackground")
+        if sessionService.state == .syncingForeground {
             sessionService.transitionTo(.syncingBackground)
         }
     }
 
     @objc private func appWillEnterForeground() {
         NSLog("[SyncEngine] app entering foreground")
+        endBackgroundTransitionIfNeeded(reason: "willEnterForeground")
         if sessionService.state == .syncingBackground {
             sessionService.transitionTo(.syncingForeground)
         }
@@ -68,6 +164,179 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     // MARK: - Sync Pipeline (spec Section 7.3)
 
     private var isSyncing = false
+
+    private func bindingStatePayload(
+        binding overrideBinding: BindingRecord? = nil,
+        connectionState overrideConnectionState: BindingConnectionState? = nil
+    ) -> [String: Any]? {
+        guard let binding = overrideBinding ?? uploadStore?.getBinding() else {
+            return nil
+        }
+
+        return [
+            "deviceId": binding.deviceId,
+            "deviceName": binding.deviceName,
+            "deviceAlias": binding.deviceAlias ?? binding.deviceName,
+            "deviceType": binding.deviceType,
+            "host": binding.host,
+            "port": binding.port,
+            "connectionState": (overrideConnectionState ?? bindingConnectionState).rawValue,
+            "pairingId": binding.pairingId,
+            "shareEnabled": binding.shareName != nil,
+            "shareName": binding.shareName ?? NSNull(),
+            "lastBoundAt": binding.lastBoundAt,
+        ]
+    }
+
+    private func emitBindingStateChanged() {
+        NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload())
+    }
+
+    private func updateBindingConnectionState(_ newState: BindingConnectionState, reason: String) {
+        guard bindingConnectionState != newState else { return }
+        NSLog("[SyncEngine] binding connection state %@ -> %@ (%@)",
+              bindingConnectionState.rawValue,
+              newState.rawValue,
+              reason)
+        bindingConnectionState = newState
+        emitBindingStateChanged()
+    }
+
+    private func currentAppStateLabel() -> String {
+        switch UIApplication.shared.applicationState {
+        case .background:
+            return "background"
+        default:
+            return sessionService.state == .syncingBackground ? "background" : "foreground"
+        }
+    }
+
+    private func beginBackgroundTransitionIfNeeded(reason: String) {
+        guard transitionBackgroundTaskId == .invalid else { return }
+        transitionBackgroundTaskId = backgroundService.beginTransitionTask()
+        NSLog("[BackgroundExec] began transition task reason=%@", reason)
+    }
+
+    private func endBackgroundTransitionIfNeeded(reason: String) {
+        guard transitionBackgroundTaskId != .invalid else { return }
+        backgroundService.endTransitionTask(transitionBackgroundTaskId)
+        transitionBackgroundTaskId = .invalid
+        NSLog("[BackgroundExec] ended transition task reason=%@", reason)
+    }
+
+    private func stopSyncLifecycle(finalState: SessionService.SyncEngineState) {
+        isSyncing = false
+        endBackgroundTransitionIfNeeded(reason: "syncStopped")
+        SilentAudioService.shared.stop()
+        sessionService.transitionTo(finalState)
+    }
+
+    private struct UploadTuning {
+        let perfLoggingEnabled: Bool
+        let chunkSizeBytes: Int
+        let targetInFlightBytes: Int64
+        let maxPipelineChunks: Int
+        let ackTimeoutNs: UInt64
+    }
+
+    private func resolvedUploadTuning() -> UploadTuning {
+        let perfLoggingEnabled = syncFlowBoolSetting(
+            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
+            userDefaultsKey: "SyncFlowUploadPerfLog"
+        )
+        let chunkMB = min(
+            max(syncFlowIntSetting(
+                envKey: "SYNCFLOW_UPLOAD_CHUNK_MB",
+                userDefaultsKey: "SyncFlowUploadChunkMB"
+            ) ?? 32, 1),
+            48
+        )
+        let windowMB = min(
+            max(syncFlowIntSetting(
+                envKey: "SYNCFLOW_UPLOAD_WINDOW_MB",
+                userDefaultsKey: "SyncFlowUploadWindowMB"
+            ) ?? 512, chunkMB),
+            1024
+        )
+        let maxPipelineChunks = min(
+            max(syncFlowIntSetting(
+                envKey: "SYNCFLOW_UPLOAD_PIPELINE_CHUNKS",
+                userDefaultsKey: "SyncFlowUploadPipelineChunks"
+            ) ?? 64, 1),
+            128
+        )
+        let ackTimeoutSec = min(
+            max(syncFlowIntSetting(
+                envKey: "SYNCFLOW_UPLOAD_ACK_TIMEOUT_SEC",
+                userDefaultsKey: "SyncFlowUploadAckTimeoutSec"
+            ) ?? 8, 2),
+            60
+        )
+
+        return UploadTuning(
+            perfLoggingEnabled: perfLoggingEnabled,
+            chunkSizeBytes: chunkMB * 1024 * 1024,
+            targetInFlightBytes: Int64(windowMB) * 1024 * 1024,
+            maxPipelineChunks: maxPipelineChunks,
+            ackTimeoutNs: UInt64(ackTimeoutSec) * 1_000_000_000
+        )
+    }
+
+    private func perfLog(_ message: String) {
+        guard syncFlowBoolSetting(
+            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
+            userDefaultsKey: "SyncFlowUploadPerfLog"
+        ) else {
+            return
+        }
+        NSLog("[SyncPerf] %@", message)
+    }
+
+    private func resolvedForcedSidecarTarget() -> (host: String, port: UInt16)? {
+        guard let host = syncFlowStringSetting(
+            envKey: "SYNCFLOW_UPLOAD_FORCE_HOST",
+            userDefaultsKey: "SyncFlowUploadForceHost"
+        ) else {
+            return nil
+        }
+
+        let portValue = syncFlowIntSetting(
+            envKey: "SYNCFLOW_UPLOAD_FORCE_PORT",
+            userDefaultsKey: "SyncFlowUploadForcePort"
+        ) ?? 39393
+        let clampedPort = min(max(portValue, 1), Int(UInt16.max))
+        return (host: host, port: UInt16(clampedPort))
+    }
+
+    private func isRetryableSyncError(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return false
+        }
+        if let syncError = error as? SyncEngineError {
+            switch syncError {
+            case .networkError:
+                return true
+            case .databaseError, .pairingError, .permissionError:
+                return false
+            }
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain
+    }
+
+    private func retryDelayNs(forAttempt attempt: Int) -> UInt64 {
+        let clampedAttempt = max(1, attempt)
+        let exponent = min(clampedAttempt - 1, 4)
+        let baseDelaySeconds = UInt64(2 << exponent)
+        let jitterMs = UInt64(Int.random(in: 0...1000))
+        let jitterNs = jitterMs * 1_000_000
+        return min(baseDelaySeconds * 1_000_000_000 + jitterNs, 30_000_000_000)
+    }
+
+    private func clearResolvedSidecarHost() {
+        guard resolvedForcedSidecarTarget() == nil else { return }
+        sidecarHost = nil
+    }
 
     /// Start a full photo scan and serial upload session over the open TCP connection.
     func startSync() {
@@ -78,15 +347,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         isSyncing = true
         NSLog("[SyncEngine] startSync")
         sessionService.transitionTo(.scanning)
+        backgroundService.submitContinuedTask()
         SilentAudioService.shared.start()
+        if UIApplication.shared.applicationState == .background {
+            beginBackgroundTransitionIfNeeded(reason: "startSyncWhileBackgrounded")
+        }
 
         Task {
             do {
                 try await runSyncPipeline()
             } catch {
                 NSLog("[SyncEngine] sync pipeline failed: \(error)")
-                isSyncing = false
-                sessionService.transitionTo(.idle)
+                self.protocolSession?.disconnect()
+                self.protocolSession = nil
+                self.clearResolvedSidecarHost()
+                if self.uploadStore?.getBinding() != nil {
+                    self.updateBindingConnectionState(.offline, reason: "pipeline_failed")
+                }
+                self.stopSyncLifecycle(finalState: .idle)
                 NativeSyncEngineModule.shared?.emitError([
                     "code": "SYNC_PIPELINE_ERROR",
                     "message": "\(error)",
@@ -105,9 +383,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard let token = bindingService.getPairingToken() else {
             NSLog("[SyncPipeline] pairing token missing — clearing stale binding, need re-pair")
             try? uploadStore?.clearBinding()
-            isSyncing = false
-            sessionService.transitionTo(.idle)
-            NativeSyncEngineModule.shared?.emitBindingStateChanged([:])
+            bindingConnectionState = .offline
+            stopSyncLifecycle(finalState: .idle)
+            NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
             return
         }
 
@@ -115,7 +393,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let permStatus = await photoScanner.requestPermission()
         guard permStatus == .authorized || permStatus == .limited else {
             NSLog("[SyncEngine] photo permission denied")
-            sessionService.transitionTo(.pausedNoPermission)
+            stopSyncLifecycle(finalState: .pausedNoPermission)
             return
         }
 
@@ -138,6 +416,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         while true {
             roundNumber += 1
+            sessionService.transitionTo(.scanning)
 
             // Scan for new assets
             let completedKeys = Set(uploadStore?.getCompletedFileKeys() ?? [])
@@ -152,6 +431,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 ])
 
                 NSLog("[SyncPipeline] idle — waiting for new photos...")
+                sessionService.transitionTo(.idle)
                 photoLibraryChanged = false
 
                 // Wait loop: send HTTP presence heartbeat every 30s while idle
@@ -201,18 +481,37 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
             while !uploaded {
                 do {
-                    try await connectAndUpload(binding: binding, token: token, clientId: clientId, assets: newAssets)
+                    try await connectAndUpload(
+                        binding: binding,
+                        token: token,
+                        clientId: clientId,
+                        assets: newAssets,
+                        recoveryMode: retryAttempt > 0
+                    )
                     uploaded = true
                     photoLibraryChanged = false // reset after round
                 } catch {
+                    if !isRetryableSyncError(error) {
+                        NSLog("[SyncPipeline] upload failed with non-retryable error: %@", "\(error)")
+                        throw error
+                    }
+
                     retryAttempt += 1
-                    let delay = min(UInt64(retryAttempt) * 5_000_000_000, maxRetryDelay)
-                    NSLog("[SyncPipeline] upload failed: %@ — retrying in %ds (attempt %d)",
-                          "\(error)", delay / 1_000_000_000, retryAttempt)
-                    NativeSyncEngineModule.shared?.emitSyncStateChanged(["uploadState": "reconnecting"])
+                    let delay = min(retryDelayNs(forAttempt: retryAttempt), maxRetryDelay)
+                    let delaySeconds = Double(delay) / 1_000_000_000
+
+                    clearResolvedSidecarHost()
+                    updateBindingConnectionState(.offline, reason: "retryable_upload_failure")
+                    sessionService.transitionTo(.backoffWaiting)
+                    NSLog("[SyncPipeline] upload failed with retryable error: %@ — reconnecting in %.1fs (attempt %d)",
+                          "\(error)", delaySeconds, retryAttempt)
+                    NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                        "uploadState": "reconnecting",
+                        "retryAttempt": retryAttempt,
+                        "retryDelaySec": round(delaySeconds * 10) / 10,
+                    ])
                     try await Task.sleep(nanoseconds: delay)
                     discoveryService.startBrowsing()
-                    try await Task.sleep(nanoseconds: 2_000_000_000)
                 }
             }
         }
@@ -220,37 +519,70 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     /// Connect TCP, authenticate, upload given assets, disconnect.
     /// Throws on connection/auth/protocol errors (caller handles retry).
-    private func connectAndUpload(binding: BindingRecord, token: String, clientId: String, assets: [ScannedAsset]) async throws {
-        // Find target device
-        func findDevice() -> DiscoveredDevice? {
-            if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
-                return exact
-            }
-            return discoveredDevices.values.first(where: { $0.endpoint != nil })
-        }
-
-        var targetEndpoint = findDevice()?.endpoint
-        if targetEndpoint == nil {
-            discoveryService.startBrowsing()
-            for _ in 0..<20 {
-                try await Task.sleep(nanoseconds: 500_000_000)
-                if let found = findDevice() {
-                    targetEndpoint = found.endpoint
-                    break
-                }
-            }
-        }
-        guard let endpoint = targetEndpoint else {
-            throw SyncEngineError.networkError("Target device not found on network")
-        }
-
+    private func connectAndUpload(
+        binding: BindingRecord,
+        token: String,
+        clientId: String,
+        assets: [ScannedAsset],
+        recoveryMode: Bool
+    ) async throws {
         // Connect TCP + auth
         let newTransport = TcpTransport()
         let session = ProtocolSession(transport: newTransport)
         protocolSession = session
-        try await session.connect(endpoint: endpoint)
-        sidecarHost = newTransport.remoteHost
-        NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
+        updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
+        sessionService.transitionTo(.preparing)
+        var activeSessionId: String?
+        var uploadRoundCompleted = false
+
+        defer {
+            if let activeSessionId, sessionService.currentSessionId == activeSessionId {
+                sessionService.endSession()
+            }
+            if protocolSession === session {
+                protocolSession = nil
+            }
+            session.disconnect()
+            if !uploadRoundCompleted {
+                clearResolvedSidecarHost()
+                if uploadStore?.getBinding() != nil {
+                    updateBindingConnectionState(.offline, reason: "upload_round_incomplete")
+                }
+            }
+        }
+
+        if let forcedTarget = resolvedForcedSidecarTarget() {
+            try await session.connect(host: forcedTarget.host, port: forcedTarget.port)
+            sidecarHost = forcedTarget.host
+            NSLog("[SyncPipeline] TCP connected via forced host %@:%d", forcedTarget.host, Int(forcedTarget.port))
+        } else {
+            // Find target device
+            func findDevice() -> DiscoveredDevice? {
+                if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
+                    return exact
+                }
+                return discoveredDevices.values.first(where: { $0.endpoint != nil })
+            }
+
+            var targetEndpoint = findDevice()?.endpoint
+            if targetEndpoint == nil {
+                discoveryService.startBrowsing()
+                for _ in 0..<20 {
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    if let found = findDevice() {
+                        targetEndpoint = found.endpoint
+                        break
+                    }
+                }
+            }
+            guard let endpoint = targetEndpoint else {
+                throw SyncEngineError.networkError("Target device not found on network")
+            }
+
+            try await session.connect(endpoint: endpoint)
+            sidecarHost = newTransport.remoteHost
+            NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
+        }
 
         let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
             "clientId": clientId,
@@ -258,7 +590,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "clientPlatform": "ios",
             "appVersion": "1.0.0",
             "pairingToken": token,
-            "appState": "foreground",
+            "appState": currentAppStateLabel(),
         ])
         guard helloType == .helloRes else {
             throw SyncEngineError.networkError("Expected HELLO_RES")
@@ -274,9 +606,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             NSLog("[SyncPipeline] auth successful")
         }
+        updateBindingConnectionState(.connected, reason: "auth_success")
 
         // SYNC_BEGIN
         let sessionId = sessionService.startNewSession()
+        activeSessionId = sessionId
         let (beginType, beginRes) = try await session.sendAndReceive(type: .syncBeginReq, payload: [
             "sessionId": sessionId,
             "queueTotalCount": assets.count,
@@ -317,23 +651,35 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             do {
+                defer {
+                    exportService.cleanup(tempURL: exported.tempURL)
+                }
                 try await uploadSingleFileWithExport(
                     asset: asset,
                     exported: exported,
                     sessionId: sessionId,
                     index: index,
                     total: assets.count,
-                    session: session
+                    session: session,
+                    recoveryMode: recoveryMode
                 )
             } catch {
-                NSLog("[SyncEngine] upload failed for \(asset.fileKey): \(error)")
+                if isRetryableSyncError(error) {
+                    NSLog("[SyncEngine] retryable upload failure for %@: %@", asset.fileKey, "\(error)")
+                    try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "queued")
+                    emitQueueToJS()
+                    throw error
+                }
+
+                NSLog("[SyncEngine] non-retryable upload failure for %@: %@", asset.fileKey, "\(error)")
                 try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "failed")
+                emitQueueToJS()
             }
-            exportService.cleanup(tempURL: exported.tempURL)
         }
 
         // SYNC_END — then TCP will be closed as this function returns
         let (_, _) = try await session.sendAndReceive(type: .syncEndReq, payload: [:])
+        uploadRoundCompleted = true
         NSLog("[SyncPipeline] upload round complete, disconnecting TCP")
     }
 
@@ -345,8 +691,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         sessionId: String,
         index: Int,
         total: Int,
-        session: ProtocolSession
+        session: ProtocolSession,
+        recoveryMode: Bool
     ) async throws {
+        let tuning = resolvedUploadTuning()
+        let fileTransferStart = CFAbsoluteTimeGetCurrent()
         try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "uploading")
         // Update filename + size now that we know them from export
         if var item = uploadStore?.getUploadItemByFileKey(asset.fileKey) {
@@ -378,26 +727,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         switch action {
         case "SKIP":
+            if tuning.perfLoggingEnabled {
+                perfLog("file=\(asset.fileKey) action=SKIP size=\(exported.fileSize)")
+            }
             NSLog("[SyncEngine] SKIP \(exported.originalFilename) (already exists)")
             try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
             return
         case "REJECT":
             let reason = initRes["reason"] as? String ?? "unknown"
+            if tuning.perfLoggingEnabled {
+                perfLog("file=\(asset.fileKey) action=REJECT reason=\(reason) size=\(exported.fileSize)")
+            }
             NSLog("[SyncEngine] REJECT \(exported.originalFilename): \(reason)")
             try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "skipped")
             return
         case "RESUME":
             let offset = initRes["resumeOffset"] as? Int64 ?? 0
+            if tuning.perfLoggingEnabled {
+                perfLog("file=\(asset.fileKey) action=RESUME resumeOffset=\(offset) size=\(exported.fileSize)")
+            }
             NSLog("[SyncEngine] RESUME \(exported.originalFilename) from offset \(offset)")
             try await streamFileData(
                 fileURL: exported.tempURL, fileKey: asset.fileKey,
-                startOffset: offset, fileSize: exported.fileSize
+                startOffset: offset, fileSize: exported.fileSize,
+                recoveryMode: true
             )
         case "UPLOAD":
+            if tuning.perfLoggingEnabled {
+                perfLog("file=\(asset.fileKey) action=UPLOAD size=\(exported.fileSize)")
+            }
             NSLog("[SyncEngine] UPLOAD \(exported.originalFilename) (\(exported.fileSize) bytes)")
             try await streamFileData(
                 fileURL: exported.tempURL, fileKey: asset.fileKey,
-                startOffset: 0, fileSize: exported.fileSize
+                startOffset: 0, fileSize: exported.fileSize,
+                recoveryMode: recoveryMode
             )
         default:
             throw SyncEngineError.networkError("Unknown FILE_INIT action: \(action)")
@@ -406,11 +769,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // FILE_END_REQ → FILE_END_RES
         let sha256 = "" // Skip SHA256 for speed; server validates file size instead
 
-        let (endType, endRes) = try await session.sendAndReceive(type: .fileEndReq, payload: [
+        var (endType, endRes) = try await session.sendAndReceive(type: .fileEndReq, payload: [
             "fileKey": asset.fileKey,
             "fileSize": exported.fileSize,
             "sha256": sha256,
         ])
+
+        // FILE_ACK can still arrive in-flight because FILE_DATA uses a small pipeline.
+        // Keep draining until we get FILE_END_RES / ERROR.
+        if endType != .fileEndRes && endType != .error {
+            for _ in 0..<8 {
+                let (nextType, nextRes) = try await session.waitForNextMessage()
+                endType = nextType
+                endRes = nextRes
+                if endType == .fileEndRes || endType == .error {
+                    break
+                }
+            }
+        }
 
         // Check ok field — NSNumber from JSON might need special handling
         let isOk: Bool
@@ -446,8 +822,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
                 NativeSyncEngineModule.shared?.emitHistoryUpdated()
             }
+            if tuning.perfLoggingEnabled {
+                let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - fileTransferStart) * 1000)
+                perfLog(
+                    "file=\(asset.fileKey) action=COMPLETE size=\(exported.fileSize) endToEndMs=\(elapsedMs) sidecarActiveMs=\(transmissionMs)"
+                )
+            }
             NSLog("[SyncUpload] [%d/%d] completed %@", index + 1, total, exported.originalFilename)
         } else {
+            if tuning.perfLoggingEnabled {
+                let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - fileTransferStart) * 1000)
+                perfLog("file=\(asset.fileKey) action=FAILED size=\(exported.fileSize) endToEndMs=\(elapsedMs)")
+            }
             NSLog("[SyncUpload] [%d/%d] FILE_END not ok for %@", index + 1, total, exported.originalFilename)
         }
     }
@@ -462,70 +848,322 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         fileURL: URL,
         fileKey: String,
         startOffset: Int64,
-        fileSize: Int64
+        fileSize: Int64,
+        recoveryMode: Bool
     ) async throws {
+        struct InFlightChunk {
+            let offset: Int64
+            let size: Int64
+            let sendStartedAt: CFTimeInterval
+        }
+
+        let tuning = resolvedUploadTuning()
+        let ackTimeoutNs = tuning.ackTimeoutNs
+        let ackTimeoutSafetyMarginNs: UInt64 = 2_000_000_000
+        let ackTimeoutFloorBytesPerSec = Double(3 * 1024 * 1024)
+
+        func waitForAck(
+            session: ProtocolSession,
+            timeoutNs: UInt64
+        ) async throws -> (LMUPMessageType, [String: Any]) {
+            try await withThrowingTaskGroup(of: (LMUPMessageType, [String: Any]).self) { group in
+                group.addTask {
+                    try await session.waitForNextMessage()
+                }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: timeoutNs)
+                    throw SyncEngineError.networkError("FILE_ACK timeout")
+                }
+                guard let next = try await group.next() else {
+                    throw SyncEngineError.networkError("No FILE_ACK result")
+                }
+                group.cancelAll()
+                return next
+            }
+        }
+
+        func adaptiveAckTimeoutNs(
+            baseTimeoutNs: UInt64,
+            chunkSize: Int,
+            maxObservedAckWait: CFTimeInterval
+        ) -> UInt64 {
+            let chunkBudgetNs = UInt64((Double(chunkSize) / ackTimeoutFloorBytesPerSec) * 1_000_000_000)
+            let sizeBasedTimeoutNs = chunkBudgetNs + ackTimeoutSafetyMarginNs
+
+            var observedTimeoutNs: UInt64 = 0
+            if maxObservedAckWait > 0 {
+                observedTimeoutNs = UInt64(maxObservedAckWait * 2.0 * 1_000_000_000) + ackTimeoutSafetyMarginNs
+            }
+
+            return max(baseTimeoutNs, sizeBasedTimeoutNs, observedTimeoutNs)
+        }
+
         let chunkSize = uploadThrottleBytesPerSec > 0
             ? Int(min(Int64(512 * 1024), uploadThrottleBytesPerSec))  // smaller chunks when throttled
-            : 32 * 1024 * 1024  // 32 MiB for throughput (was 8 MiB per spec Section 7.7)
+            : tuning.chunkSizeBytes
+        // Keep a deep flight window for high-bandwidth LANs.
+        let targetInFlightBytes = tuning.targetInFlightBytes
+        let maxPipelineChunks = tuning.maxPipelineChunks
+        let computedWindowChunks = Int(targetInFlightBytes / Int64(chunkSize))
+        let steadyStatePipelineWindowChunks = uploadThrottleBytesPerSec > 0
+            ? 2
+            : min(max(2, computedWindowChunks), maxPipelineChunks)
+        let conservativeStart = recoveryMode || startOffset > 0
+        let recoveryPipelineWindowChunks = min(2, steadyStatePipelineWindowChunks)
+        let recoveryMaxInFlightBytes = Int64(chunkSize * recoveryPipelineWindowChunks)
+        let steadyStateMaxInFlightBytes = Int64(chunkSize * steadyStatePipelineWindowChunks)
+        let recoveryAckTimeoutNs = max(ackTimeoutNs, 30_000_000_000)
+        let progressPersistBytes: Int64 = 64 * 1024 * 1024
+        let progressPersistInterval: CFTimeInterval = 2.0
+        let progressEmitInterval: CFTimeInterval = 0.5
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { handle.closeFile() }
 
         handle.seek(toFileOffset: UInt64(startOffset))
-        var offset = startOffset
+        var nextOffset = startOffset
+        var acknowledgedOffset = startOffset
+        var inFlight: [InFlightChunk] = []
+        var inFlightBytes: Int64 = 0
         var speedBytesLastCheck = startOffset
         var speedLastTime = CFAbsoluteTimeGetCurrent()
+        var progressPersistOffset = startOffset
+        var progressPersistTime = speedLastTime
+        var lastProgressEmitTime = speedLastTime
+        var speedMbps: Double = 0
+        var totalReadBytes: Int64 = 0
+        var totalReadTime: CFTimeInterval = 0
+        var totalAckWaitTime: CFTimeInterval = 0
+        var ackCount = 0
+        var peakInFlightBytes: Int64 = 0
+        var totalAckRoundTripTime: CFTimeInterval = 0
+        var maxAckRoundTripTime: CFTimeInterval = 0
+        var ackedChunkCount = 0
+        var totalSendEnqueueTime: CFTimeInterval = 0
+        var maxSendEnqueueTime: CFTimeInterval = 0
+        var sendEnqueueCount = 0
+        var totalWindowFillTime: CFTimeInterval = 0
+        var maxWindowFillTime: CFTimeInterval = 0
+        var windowFillCount = 0
+        var maxAckWaitTime: CFTimeInterval = 0
+        let transferStart = CFAbsoluteTimeGetCurrent()
+        var streamOutcome = "STREAM_DONE"
+        var streamFailure = ""
 
         guard let session = protocolSession else {
             throw SyncEngineError.networkError("No active protocol session")
         }
 
-        while offset < fileSize {
-            let data = handle.readData(ofLength: chunkSize)
-            if data.isEmpty { break }
+        func oldestInFlightAgeMs(now: CFTimeInterval) -> Int {
+            guard let first = inFlight.first else { return 0 }
+            return Int(max(now - first.sendStartedAt, 0) * 1000)
+        }
 
-            // Send binary FILE_DATA frame via the session's transport (not self.transport)
-            session.sendFileData(fileKey: fileKey, offset: offset, chunk: data)
+        func emitStreamSummary() {
+            guard tuning.perfLoggingEnabled else { return }
+            let elapsed = max(CFAbsoluteTimeGetCurrent() - transferStart, 0.001)
+            let ackedBytes = max(acknowledgedOffset - startOffset, 0)
+            let avgAckWaitMs = ackCount > 0 ? (totalAckWaitTime * 1000) / Double(ackCount) : 0
+            let avgAckRoundTripMs = ackedChunkCount > 0 ? (totalAckRoundTripTime * 1000) / Double(ackedChunkCount) : 0
+            let avgSendEnqueueMs = sendEnqueueCount > 0 ? (totalSendEnqueueTime * 1000) / Double(sendEnqueueCount) : 0
+            let avgWindowFillMs = windowFillCount > 0 ? (totalWindowFillTime * 1000) / Double(windowFillCount) : 0
+            let throughputMBps = Double(ackedBytes) / elapsed / (1024 * 1024)
+            let bufferedMessages = session.debugBufferedMessageCount()
+            let now = CFAbsoluteTimeGetCurrent()
 
-            // Wait for FILE_ACK from server
-            let (ackType, ackRes) = try await session.waitForNextMessage()
+            var logLine =
+                "file=\(fileKey) action=\(streamOutcome) ackedMiB=\(String(format: "%.1f", Double(ackedBytes) / (1024 * 1024))) elapsedMs=\(Int(elapsed * 1000)) throughputMBps=\(String(format: "%.1f", throughputMBps)) readMs=\(Int(totalReadTime * 1000)) sendEnqueueMs=\(Int(totalSendEnqueueTime * 1000)) avgSendEnqueueMs=\(String(format: "%.1f", avgSendEnqueueMs)) maxSendEnqueueMs=\(Int(maxSendEnqueueTime * 1000)) windowFillMs=\(Int(totalWindowFillTime * 1000)) avgWindowFillMs=\(String(format: "%.1f", avgWindowFillMs)) maxWindowFillMs=\(Int(maxWindowFillTime * 1000)) windowFillCount=\(windowFillCount) ackWaitMs=\(Int(totalAckWaitTime * 1000)) avgAckWaitMs=\(String(format: "%.1f", avgAckWaitMs)) maxAckWaitMs=\(Int(maxAckWaitTime * 1000)) ackCount=\(ackCount) avgAckRttMs=\(String(format: "%.1f", avgAckRoundTripMs)) maxAckRttMs=\(Int(maxAckRoundTripTime * 1000)) bufferedMessages=\(bufferedMessages) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) oldestInFlightMs=\(oldestInFlightAgeMs(now: now)) peakInFlightMiB=\(String(format: "%.1f", Double(peakInFlightBytes) / (1024 * 1024))) readMiB=\(String(format: "%.1f", Double(totalReadBytes) / (1024 * 1024)))"
+
+            if !streamFailure.isEmpty {
+                logLine += " error=\(streamFailure)"
+            }
+
+            perfLog(logLine)
+        }
+
+        defer {
+            emitStreamSummary()
+        }
+
+        if tuning.perfLoggingEnabled {
+            perfLog(
+                "file=\(fileKey) action=STREAM_START chunkMiB=\(String(format: "%.1f", Double(chunkSize) / (1024 * 1024))) windowMiB=\(String(format: "%.1f", Double(steadyStateMaxInFlightBytes) / (1024 * 1024))) pipelineChunks=\(steadyStatePipelineWindowChunks) ackTimeoutNs=\(ackTimeoutNs) recoveryMode=\(conservativeStart) recoveryWindowMiB=\(String(format: "%.1f", Double(recoveryMaxInFlightBytes) / (1024 * 1024))) recoveryAckTimeoutNs=\(recoveryAckTimeoutNs)"
+            )
+        }
+
+        while acknowledgedOffset < fileSize {
+            let activeMaxInFlightBytes = conservativeStart && ackCount == 0
+                ? recoveryMaxInFlightBytes
+                : steadyStateMaxInFlightBytes
+            // Fill pipeline window with new chunks.
+            let windowFillStart = CFAbsoluteTimeGetCurrent()
+            var windowFillReadTime: CFTimeInterval = 0
+            var windowFillEnqueueTime: CFTimeInterval = 0
+            var windowFillChunks = 0
+            let windowFillStartOffset = nextOffset
+            while nextOffset < fileSize && inFlightBytes < activeMaxInFlightBytes {
+                let remaining = fileSize - nextOffset
+                let readSize = Int(min(Int64(chunkSize), remaining))
+                let readStart = CFAbsoluteTimeGetCurrent()
+                let data = handle.readData(ofLength: readSize)
+                let readElapsed = CFAbsoluteTimeGetCurrent() - readStart
+                totalReadTime += readElapsed
+                windowFillReadTime += readElapsed
+                if data.isEmpty { break }
+
+                let chunkOffset = nextOffset
+                let sendStartedAt = CFAbsoluteTimeGetCurrent()
+                session.sendFileData(fileKey: fileKey, offset: chunkOffset, chunk: data)
+                let sendEnqueueElapsed = CFAbsoluteTimeGetCurrent() - sendStartedAt
+                totalSendEnqueueTime += sendEnqueueElapsed
+                maxSendEnqueueTime = max(maxSendEnqueueTime, sendEnqueueElapsed)
+                windowFillEnqueueTime += sendEnqueueElapsed
+                sendEnqueueCount += 1
+                let sentBytes = Int64(data.count)
+                totalReadBytes += sentBytes
+                inFlight.append(InFlightChunk(
+                    offset: chunkOffset,
+                    size: sentBytes,
+                    sendStartedAt: sendStartedAt
+                ))
+                inFlightBytes += sentBytes
+                peakInFlightBytes = max(peakInFlightBytes, inFlightBytes)
+                nextOffset += sentBytes
+                windowFillChunks += 1
+
+                // Throttle: sleep to limit upload speed
+                if uploadThrottleBytesPerSec > 0 {
+                    let sleepNs = UInt64(Double(data.count) / Double(uploadThrottleBytesPerSec) * 1_000_000_000)
+                    try await Task.sleep(nanoseconds: sleepNs)
+                }
+            }
+
+            let windowFillElapsed = CFAbsoluteTimeGetCurrent() - windowFillStart
+            totalWindowFillTime += windowFillElapsed
+            maxWindowFillTime = max(maxWindowFillTime, windowFillElapsed)
+            windowFillCount += 1
+
+            if tuning.perfLoggingEnabled
+                && (
+                    windowFillCount <= 3
+                        || windowFillElapsed >= 0.5
+                        || windowFillChunks <= 1
+                        || windowFillCount % 16 == 0
+                        || nextOffset == fileSize
+                )
+            {
+                let avgWindowEnqueueMs = windowFillChunks > 0
+                    ? (windowFillEnqueueTime * 1000) / Double(windowFillChunks)
+                    : 0
+                perfLog(
+                    "file=\(fileKey) action=WINDOW_FILL iteration=\(windowFillCount) ackedMiB=\(String(format: "%.1f", Double(acknowledgedOffset - startOffset) / (1024 * 1024))) filledChunks=\(windowFillChunks) fillMiB=\(String(format: "%.1f", Double(nextOffset - windowFillStartOffset) / (1024 * 1024))) fillMs=\(Int(windowFillElapsed * 1000)) fillReadMs=\(Int(windowFillReadTime * 1000)) fillEnqueueMs=\(Int(windowFillEnqueueTime * 1000)) avgEnqueueMs=\(String(format: "%.1f", avgWindowEnqueueMs)) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) activeWindowMiB=\(String(format: "%.1f", Double(activeMaxInFlightBytes) / (1024 * 1024)))"
+                )
+            }
+
+            if inFlight.isEmpty {
+                break
+            }
+
+            // Drain one ACK per loop and advance cumulative progress.
+            let ackWaitStart = CFAbsoluteTimeGetCurrent()
+            let ackType: LMUPMessageType
+            let ackRes: [String: Any]
+            do {
+                let baseAckTimeoutNs = conservativeStart && ackCount == 0
+                    ? recoveryAckTimeoutNs
+                    : ackTimeoutNs
+                let activeAckTimeoutNs = adaptiveAckTimeoutNs(
+                    baseTimeoutNs: baseAckTimeoutNs,
+                    chunkSize: chunkSize,
+                    maxObservedAckWait: maxAckWaitTime
+                )
+                (ackType, ackRes) = try await waitForAck(session: session, timeoutNs: activeAckTimeoutNs)
+            } catch {
+                streamOutcome = "STREAM_ABORT"
+                streamFailure = "\(error)"
+                if tuning.perfLoggingEnabled {
+                    perfLog(
+                        "file=\(fileKey) action=ACK_WAIT_FAILED ackedMiB=\(String(format: "%.1f", Double(max(acknowledgedOffset - startOffset, 0)) / (1024 * 1024))) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) oldestInFlightMs=\(oldestInFlightAgeMs(now: CFAbsoluteTimeGetCurrent())) bufferedMessages=\(session.debugBufferedMessageCount()) ackTimeoutNs=\(adaptiveAckTimeoutNs(baseTimeoutNs: (conservativeStart && ackCount == 0 ? recoveryAckTimeoutNs : ackTimeoutNs), chunkSize: chunkSize, maxObservedAckWait: maxAckWaitTime)) error=\(error)"
+                    )
+                }
+                throw error
+            }
+            let ackReceivedAt = CFAbsoluteTimeGetCurrent()
+            let ackWaitElapsed = ackReceivedAt - ackWaitStart
+            totalAckWaitTime += ackWaitElapsed
+            maxAckWaitTime = max(maxAckWaitTime, ackWaitElapsed)
             if ackType == .fileAck {
-                let committedOffset = ackRes["committedOffset"] as? Int64 ?? (offset + Int64(data.count))
-                try? uploadStore?.updateUploadOffset(fileKey: fileKey, offset: committedOffset)
+                ackCount += 1
+                let committedOffset = (ackRes["committedOffset"] as? Int64)
+                    ?? (ackRes["committedOffset"] as? NSNumber)?.int64Value
+                    ?? acknowledgedOffset
+                let clampedOffset = min(max(committedOffset, acknowledgedOffset), min(nextOffset, fileSize))
+                acknowledgedOffset = clampedOffset
+
+                let persistNow = CFAbsoluteTimeGetCurrent()
+                if acknowledgedOffset - progressPersistOffset >= progressPersistBytes
+                    || persistNow - progressPersistTime >= progressPersistInterval
+                    || acknowledgedOffset == fileSize
+                {
+                    try? uploadStore?.updateUploadOffset(fileKey: fileKey, offset: acknowledgedOffset)
+                    progressPersistOffset = acknowledgedOffset
+                    progressPersistTime = persistNow
+                }
+
+                // Remove fully ACKed chunks from the pipeline window.
+                while let first = inFlight.first, first.offset + first.size <= acknowledgedOffset {
+                    let ackRoundTrip = ackReceivedAt - first.sendStartedAt
+                    totalAckRoundTripTime += ackRoundTrip
+                    maxAckRoundTripTime = max(maxAckRoundTripTime, ackRoundTrip)
+                    ackedChunkCount += 1
+
+                    inFlightBytes -= first.size
+                    inFlight.removeFirst()
+                }
+
+                if tuning.perfLoggingEnabled && (ackCount <= 3 || ackWaitElapsed >= 0.5 || ackCount % 8 == 0) {
+                    perfLog(
+                        "file=\(fileKey) action=ACK_PROGRESS ackCount=\(ackCount) ackWaitMs=\(Int(ackWaitElapsed * 1000)) ackedMiB=\(String(format: "%.1f", Double(acknowledgedOffset - startOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) bufferedMessages=\(session.debugBufferedMessageCount())"
+                    )
+                }
             } else if ackType == .error {
                 let errMsg = ackRes["message"] as? String ?? "server error"
                 throw SyncEngineError.networkError("FILE_DATA error: \(errMsg)")
             }
             // For other unexpected types, just continue
 
-            offset += Int64(data.count)
-
-            // Throttle: sleep to limit upload speed
-            if uploadThrottleBytesPerSec > 0 {
-                let sleepNs = UInt64(Double(data.count) / Double(uploadThrottleBytesPerSec) * 1_000_000_000)
-                try await Task.sleep(nanoseconds: sleepNs)
-            }
-
-            // Calculate speed (MB/s)
+            // Calculate speed (MB/s) from ACKed bytes (true committed progress).
             let now = CFAbsoluteTimeGetCurrent()
             let elapsed = now - speedLastTime
-            var speedMbps: Double = 0
             if elapsed >= 0.5 {
-                let bytesTransferred = Double(offset - speedBytesLastCheck)
+                let bytesTransferred = Double(acknowledgedOffset - speedBytesLastCheck)
                 speedMbps = (bytesTransferred / elapsed) / (1024 * 1024)
-                speedBytesLastCheck = offset
+                speedBytesLastCheck = acknowledgedOffset
                 speedLastTime = now
             }
 
             // Emit progress to RN
-            let progressPercent = fileSize > 0 ? Int(Double(offset) / Double(fileSize) * 100) : 0
-            NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                "uploadState": "uploading",
-                "progressPercent": progressPercent,
-                "transferredBytes": offset,
-                "totalBytes": fileSize,
-                "currentFile": fileKey,
-                "currentSpeedMbps": round(speedMbps * 10) / 10,
-            ])
+            if now - lastProgressEmitTime >= progressEmitInterval || acknowledgedOffset == fileSize {
+                let progressPercent = fileSize > 0
+                    ? Int(Double(acknowledgedOffset) / Double(fileSize) * 100)
+                    : 0
+                NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                    "uploadState": "uploading",
+                    "progressPercent": progressPercent,
+                    "transferredBytes": acknowledgedOffset,
+                    "totalBytes": fileSize,
+                    "currentFile": fileKey,
+                    "currentSpeedMbps": round(speedMbps * 10) / 10,
+                ])
+                lastProgressEmitTime = now
+            }
+        }
+
+        if acknowledgedOffset < fileSize {
+            streamOutcome = "STREAM_ABORT"
+            streamFailure = "FILE_DATA stream incomplete: acked \(acknowledgedOffset)/\(fileSize)"
+            throw SyncEngineError.networkError(
+                "FILE_DATA stream incomplete: acked \(acknowledgedOffset)/\(fileSize)"
+            )
         }
     }
 
@@ -641,9 +1279,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let session = ProtocolSession(transport: transport)
         protocolSession = session
+        defer {
+            if protocolSession === session {
+                protocolSession = nil
+            }
+            session.disconnect()
+        }
 
-        // 1. Connect TCP — prefer Bonjour endpoint (avoids IP resolution issues)
-        if let cachedDevice = discoveredDevices[deviceId], let endpoint = cachedDevice.endpoint {
+        // 1. Connect TCP — allow explicit host override for Wi-Fi-only profiling.
+        if let forcedTarget = resolvedForcedSidecarTarget() {
+            NSLog("[SyncEngine] connecting via forced host:port")
+            try await session.connect(host: forcedTarget.host, port: forcedTarget.port)
+        } else if let cachedDevice = discoveredDevices[deviceId], let endpoint = cachedDevice.endpoint {
             NSLog("[SyncEngine] connecting via Bonjour endpoint")
             try await session.connect(endpoint: endpoint)
         } else if !host.isEmpty {
@@ -661,7 +1308,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": "1.0.0",
-            "appState": "foreground",
+            "appState": currentAppStateLabel(),
         ])
 
         guard helloType == .helloRes else {
@@ -752,15 +1399,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         // 6. Notify RN bridge
-        NativeSyncEngineModule.shared?.emitBindingStateChanged([
-            "deviceId": binding.deviceId,
-            "deviceName": binding.deviceName,
-            "deviceType": binding.deviceType,
-            "host": binding.host,
-            "port": binding.port,
-            "shareName": binding.shareName ?? NSNull(),
-            "lastBoundAt": binding.lastBoundAt,
-        ])
+        bindingConnectionState = .bound
+        NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload(binding: binding))
 
         NSLog("[SyncEngine] pairing successful — starting sync")
         startSync()
@@ -770,27 +1410,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncEngine] disconnectAndUnbind")
         bindingService.clearPairingToken()
         try uploadStore?.clearBinding()
+        bindingConnectionState = .offline
+        sidecarHost = nil
+        endBackgroundTransitionIfNeeded(reason: "disconnectAndUnbind")
+        SilentAudioService.shared.stop()
+        isSyncing = false
+        protocolSession?.disconnect()
         protocolSession = nil
         transport.disconnect()
         sessionService.endSession()
+        NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
     }
 
     // MARK: - State Queries
 
     func getBindingState() async -> [String: Any]? {
-        guard let binding = uploadStore?.getBinding() else {
-            return nil
-        }
-        return [
-            "deviceId": binding.deviceId,
-            "deviceName": binding.deviceName,
-            "deviceAlias": binding.deviceAlias ?? NSNull(),
-            "deviceType": binding.deviceType,
-            "host": binding.host,
-            "port": binding.port,
-            "shareName": binding.shareName ?? NSNull(),
-            "lastBoundAt": binding.lastBoundAt,
-        ]
+        bindingStatePayload()
     }
 
     func getSyncOverview() async -> [String: Any] {
@@ -858,6 +1493,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     /// Connect TCP briefly to resolve the sidecar's IP for HTTP heartbeats, then disconnect.
     private func resolveSidecarHost(binding: BindingRecord, token: String, clientId: String) async throws {
+        if let forcedTarget = resolvedForcedSidecarTarget() {
+            sidecarHost = forcedTarget.host
+            updateBindingConnectionState(.connected, reason: "forced_sidecar_host")
+            NSLog("[SyncPipeline] using forced sidecar host: %@:%d", forcedTarget.host, Int(forcedTarget.port))
+            return
+        }
+
         func findDevice() -> DiscoveredDevice? {
             if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil { return exact }
             return discoveredDevices.values.first(where: { $0.endpoint != nil })
@@ -883,13 +1525,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
             "clientId": clientId, "clientName": getClientDisplayName(),
             "clientPlatform": "ios", "appVersion": "1.0.0",
-            "pairingToken": token, "appState": "foreground",
+            "pairingToken": token, "appState": currentAppStateLabel(),
         ])
         if helloType == .helloRes, let nonce = helloRes["nonce"] as? String {
             let hmac = transport.computeHMAC(token: token, nonce: nonce)
             let _ = try? await session.sendAndReceive(type: .authReq, payload: [
                 "clientId": clientId, "auth": hmac,
             ])
+            updateBindingConnectionState(.connected, reason: "resolved_sidecar_host")
         }
         // Disconnect — we just needed the IP
         transport.disconnect()
@@ -910,6 +1553,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         URLSession.shared.dataTask(with: request) { _, _, error in
             if let error {
                 NSLog("[Presence] heartbeat failed: %@", "\(error)")
+                self.updateBindingConnectionState(.offline, reason: "presence_heartbeat_failed")
+            } else {
+                self.updateBindingConnectionState(.connected, reason: "presence_heartbeat_succeeded")
             }
         }.resume()
     }

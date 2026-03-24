@@ -9,12 +9,36 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/events"
 	"github.com/nicksyncflow/sidecar/internal/protocol"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
+
+var (
+	uploadPerfLoggingOnce    sync.Once
+	uploadPerfLoggingEnabled bool
+)
+
+func sidecarUploadPerfLoggingEnabled() bool {
+	uploadPerfLoggingOnce.Do(func() {
+		raw := strings.TrimSpace(os.Getenv("SYNCFLOW_UPLOAD_PERF_LOG"))
+		switch strings.ToLower(raw) {
+		case "1", "true", "yes", "on":
+			uploadPerfLoggingEnabled = true
+		}
+	})
+	return uploadPerfLoggingEnabled
+}
+
+func sidecarPerfLog(msg string, args ...any) {
+	if sidecarUploadPerfLoggingEnabled() {
+		slog.Info(msg, args...)
+	}
+}
 
 // handleFileData processes a FILE_DATA binary frame. The body layout is:
 //
@@ -23,6 +47,7 @@ func (c *connection) handleFileData(hdr *protocol.FrameHeader, body []byte) erro
 	if c.state != stateSyncing {
 		return fmt.Errorf("FILE_DATA unexpected in state %d", c.state)
 	}
+	frameStart := time.Now()
 
 	// Parse binary body with bounds checking
 	if len(body) < 2 {
@@ -42,31 +67,44 @@ func (c *connection) handleFileData(hdr *protocol.FrameHeader, body []byte) erro
 	}
 
 	// Write data to .part file
+	writeStart := time.Now()
 	committedOffset, err := c.fileWriter.WriteAt(data, offset)
+	writeElapsed := time.Since(writeStart)
 	if err != nil {
 		return fmt.Errorf("write file data: %w", err)
 	}
 
-	if err := c.fileWriter.Sync(); err != nil {
-		slog.Warn("file sync failed", "fileKey", fileKey, "err", err)
+	syncStart := time.Now()
+	if err := c.fileWriter.MaybeSync(); err != nil {
+		slog.Warn("file periodic sync failed", "fileKey", fileKey, "err", err)
+	}
+	syncElapsed := time.Since(syncStart)
+
+	// Send coalesced FILE_ACK to reduce control-frame overhead.
+	ackSent := false
+	var ackElapsed time.Duration
+	if c.shouldSendAck(fileKey, committedOffset) {
+		ack := protocol.FileAck{
+			FileKey:         fileKey,
+			CommittedOffset: committedOffset,
+		}
+		ackStart := time.Now()
+		if err := c.sendJSON(protocol.TypeFileAck, ack); err != nil {
+			return err
+		}
+		c.markAckSent(fileKey, committedOffset)
+		ackElapsed = time.Since(ackStart)
+		ackSent = true
+	} else {
+		c.scheduleAckFlush(fileKey, committedOffset)
 	}
 
-	// Send FILE_ACK
-	ack := protocol.FileAck{
-		FileKey:         fileKey,
-		CommittedOffset: committedOffset,
+	// Persist progress with throttling to reduce SQLite write pressure.
+	progressStart := time.Now()
+	if err := c.maybeFlushProgress(fileKey, committedOffset); err != nil {
+		slog.Warn("failed to persist throttled upload progress", "fileKey", fileKey, "err", err)
 	}
-	if err := c.sendJSON(protocol.TypeFileAck, ack); err != nil {
-		return err
-	}
-
-	// Update store: upload progress + session active file
-	if err := c.store.UpdateUploadProgress(fileKey, committedOffset); err != nil {
-		slog.Warn("failed to update upload progress", "fileKey", fileKey, "err", err)
-	}
-	if err := c.store.UpdateSessionActiveFile(c.sessionID, fileKey, committedOffset); err != nil {
-		slog.Warn("failed to update session active file", "sessionID", c.sessionID, "err", err)
-	}
+	progressElapsed := time.Since(progressStart)
 
 	// Emit progress event
 	var progress int
@@ -82,6 +120,20 @@ func (c *connection) handleFileData(hdr *protocol.FrameHeader, body []byte) erro
 		},
 	})
 
+	sidecarPerfLog("upload perf frame",
+		"clientID", c.clientID,
+		"fileKey", fileKey,
+		"offset", offset,
+		"chunkBytes", len(data),
+		"committedOffset", committedOffset,
+		"writeMs", writeElapsed.Milliseconds(),
+		"syncMs", syncElapsed.Milliseconds(),
+		"ackSent", ackSent,
+		"ackMs", ackElapsed.Milliseconds(),
+		"progressMs", progressElapsed.Milliseconds(),
+		"frameMs", time.Since(frameStart).Milliseconds(),
+	)
+
 	return nil
 }
 
@@ -92,6 +144,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 	if c.state != stateSyncing {
 		return fmt.Errorf("FILE_END_REQ unexpected in state %d", c.state)
 	}
+	fileEndStart := time.Now()
 
 	var req protocol.FileEndReq
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -101,6 +154,8 @@ func (c *connection) handleFileEnd(body []byte) error {
 	if c.fileWriter == nil {
 		return fmt.Errorf("FILE_END_REQ received but no file writer active")
 	}
+	defer c.clearTransferTimer(req.FileKey)
+	defer c.clearAckState(req.FileKey)
 
 	slog.Info("FILE_END_REQ received",
 		"fileKey", req.FileKey,
@@ -116,16 +171,35 @@ func (c *connection) handleFileEnd(body []byte) error {
 		)
 	}
 
+	// Ensure final progress is persisted for reliable resume metadata.
+	flushProgressStart := time.Now()
+	if err := c.flushProgress(req.FileKey, c.fileWriter.CommittedOffset()); err != nil {
+		slog.Warn("failed to flush final upload progress", "fileKey", req.FileKey, "err", err)
+	}
+	flushProgressElapsed := time.Since(flushProgressStart)
+
+	// Force flush staged bytes at file boundary.
+	forceSyncStart := time.Now()
+	if err := c.fileWriter.ForceSync(); err != nil {
+		slog.Warn("failed to force sync part file before close", "fileKey", req.FileKey, "err", err)
+	}
+	forceSyncElapsed := time.Since(forceSyncStart)
+
 	// Close file before computing hash
+	closeStart := time.Now()
 	if err := c.fileWriter.Close(); err != nil {
 		slog.Warn("failed to close file writer before hash", "err", err)
 	}
+	closeElapsed := time.Since(closeStart)
 
 	// Compute and verify SHA256 only if client provided one (empty = skipped for speed)
 	computedHash := ""
+	hashElapsed := time.Duration(0)
 	if req.SHA256 != "" {
 		var err error
+		hashStart := time.Now()
 		computedHash, err = hashFile(c.fileWriter.PartPath())
+		hashElapsed = time.Since(hashStart)
 		if err != nil {
 			slog.Error("failed to hash .part file", "err", err)
 			c.fileWriter.Cleanup()
@@ -206,7 +280,9 @@ func (c *connection) handleFileEnd(body []byte) error {
 		filename = upload.OriginalFilename
 	}
 
+	finalizeStart := time.Now()
 	relativePath, err := c.fileWriter.Finalize(c.config.ReceiveDir, deviceAlias, date, filename, req.FileKey)
+	finalizeElapsed := time.Since(finalizeStart)
 	if err != nil {
 		slog.Error("failed to finalize file", "fileKey", req.FileKey, "err", err)
 		return c.sendJSON(protocol.TypeFileEndRes, protocol.FileEndRes{
@@ -215,12 +291,18 @@ func (c *connection) handleFileEnd(body []byte) error {
 		})
 	}
 
-	thisSegmentMs := c.fileWriter.ElapsedMs()
+	thisSegmentMs := c.transferElapsedMs(req.FileKey)
+	if thisSegmentMs <= 0 {
+		// Fallback for older/incomplete timing state.
+		thisSegmentMs = c.fileWriter.ElapsedMs()
+	}
 
 	// Update store (accumulates active_transmission_ms)
+	storeCompleteStart := time.Now()
 	if err := c.store.CompleteUpload(req.FileKey, relativePath, req.SHA256, thisSegmentMs); err != nil {
 		slog.Warn("failed to complete upload in store", "fileKey", req.FileKey, "err", err)
 	}
+	storeCompleteElapsed := time.Since(storeCompleteStart)
 
 	// Update daily stats
 	clientIP := extractIP(c.conn)
@@ -235,6 +317,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 		totalTransmissionMs = upload.ActiveTransmissionMs
 	}
 
+	dailyStatsStart := time.Now()
 	if err := c.store.UpsertDailyStats(store.DailyStats{
 		StatDate:             date,
 		ClientID:             c.clientID,
@@ -247,6 +330,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 	}); err != nil {
 		slog.Warn("failed to upsert daily stats", "err", err)
 	}
+	dailyStatsElapsed := time.Since(dailyStatsStart)
 
 	// Emit events
 	c.hub.Broadcast(events.Event{
@@ -277,6 +361,20 @@ func (c *connection) handleFileEnd(body []byte) error {
 		"relativePath", relativePath,
 		"size", req.FileSize,
 		"durationMs", totalTransmissionMs,
+	)
+	sidecarPerfLog("upload perf file complete",
+		"clientID", c.clientID,
+		"fileKey", req.FileKey,
+		"fileSize", req.FileSize,
+		"flushProgressMs", flushProgressElapsed.Milliseconds(),
+		"forceSyncMs", forceSyncElapsed.Milliseconds(),
+		"closeMs", closeElapsed.Milliseconds(),
+		"hashMs", hashElapsed.Milliseconds(),
+		"finalizeMs", finalizeElapsed.Milliseconds(),
+		"completeUploadMs", storeCompleteElapsed.Milliseconds(),
+		"dailyStatsMs", dailyStatsElapsed.Milliseconds(),
+		"activeTransmissionMs", totalTransmissionMs,
+		"totalMs", time.Since(fileEndStart).Milliseconds(),
 	)
 
 	c.fileWriter = nil

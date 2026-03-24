@@ -78,12 +78,22 @@ class TcpTransport {
     }
 
     private func connectToEndpoint(_ endpoint: NWEndpoint) {
-        connection = NWConnection(to: endpoint, using: .tcp)
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.noDelay = true
+
+        let params = NWParameters(tls: nil, tcp: tcpOptions)
+        // Throughput mode: stay on infrastructure Wi-Fi and avoid AWDL peer links.
+        params.includePeerToPeer = false
+
+        connection = NWConnection(to: endpoint, using: params)
         connection?.stateUpdateHandler = { [weak self] state in
             switch state {
             case .ready:
                 self?.delegate?.transportDidConnect()
                 self?.startReceiving()
+            case .waiting(let error):
+                NSLog("[TcpTransport] waiting: %@", "\(error)")
+                self?.delegate?.transportDidDisconnect(error: error)
             case .failed(let error):
                 self?.delegate?.transportDidDisconnect(error: error)
             default:
@@ -134,19 +144,37 @@ class TcpTransport {
     /// byte   data[...]
     /// ```
     func sendFileData(fileKey: String, offset: Int64, chunk: Data) {
+        guard let connection else { return }
+
         let keyData = Data(fileKey.utf8)
-        var body = Data()
+        let bodyLen = 2 + keyData.count + 8 + chunk.count
+
+        // Header + FILE_DATA metadata prefix. Chunk is sent separately to avoid
+        // building a second large Data copy for every frame.
+        var header = Data(count: 12)
+        header[0...3] = Data("LMUP".utf8)[0...3]
+        header.withUnsafeMutableBytes { buf in
+            buf.storeBytes(of: UInt16(2).bigEndian, toByteOffset: 4, as: UInt16.self)
+            buf.storeBytes(of: LMUPMessageType.fileData.rawValue.bigEndian, toByteOffset: 6, as: UInt16.self)
+            buf.storeBytes(of: UInt32(bodyLen).bigEndian, toByteOffset: 8, as: UInt32.self)
+        }
+
+        var prefix = Data(capacity: 12 + 2 + keyData.count + 8)
+        prefix.append(header)
+
         // uint16 fileKeyLen (big-endian)
         var keyLen = UInt16(keyData.count).bigEndian
-        body.append(Data(bytes: &keyLen, count: 2))
+        prefix.append(Data(bytes: &keyLen, count: 2))
         // fileKey bytes
-        body.append(keyData)
+        prefix.append(keyData)
         // uint64 offset (big-endian)
         var off = UInt64(offset).bigEndian
-        body.append(Data(bytes: &off, count: 8))
-        // chunk data
-        body.append(chunk)
-        sendFrame(type: .fileData, body: body)
+        prefix.append(Data(bytes: &off, count: 8))
+
+        connection.batch {
+            connection.send(content: prefix, completion: .idempotent)
+            connection.send(content: chunk, completion: .idempotent)
+        }
     }
 
     // MARK: - HMAC Auth (spec Section 7.9)

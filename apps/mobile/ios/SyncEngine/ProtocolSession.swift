@@ -8,9 +8,14 @@ import Network
 /// we simply await the next incoming frame after each chunk.
 class ProtocolSession: NSObject, TcpTransportDelegate {
 
+    private static let connectTimeoutNs: UInt64 = 5_000_000_000
+
     private let transport: TcpTransport
     private var pendingContinuation: CheckedContinuation<(LMUPMessageType, Data), Error>?
     private var connectContinuation: CheckedContinuation<Void, Error>?
+    private var bufferedMessages: [(LMUPMessageType, Data)] = []
+    private var disconnectedError: Error?
+    private var connectAttemptId: UInt64 = 0
     private let lock = NSLock()
 
     init(transport: TcpTransport) {
@@ -25,8 +30,12 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     func connect(host: String, port: UInt16) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             lock.lock()
+            disconnectedError = nil
+            connectAttemptId += 1
+            let attemptId = connectAttemptId
             connectContinuation = cont
             lock.unlock()
+            scheduleConnectTimeout(forAttempt: attemptId)
             transport.connect(host: host, port: port)
         }
     }
@@ -34,10 +43,18 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     func connect(endpoint: NWEndpoint) async throws {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             lock.lock()
+            disconnectedError = nil
+            connectAttemptId += 1
+            let attemptId = connectAttemptId
             connectContinuation = cont
             lock.unlock()
+            scheduleConnectTimeout(forAttempt: attemptId)
             transport.connect(endpoint: endpoint)
         }
+    }
+
+    func disconnect() {
+        transport.disconnect()
     }
 
     // MARK: - Binary Send (FILE_DATA)
@@ -54,6 +71,11 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     func sendAndReceive(type: LMUPMessageType, payload: [String: Any]) async throws -> (LMUPMessageType, [String: Any]) {
         let (respType, respData): (LMUPMessageType, Data) = try await withCheckedThrowingContinuation { cont in
             lock.lock()
+            if let disconnectedError {
+                lock.unlock()
+                cont.resume(throwing: SyncEngineError.networkError("Disconnected: \(disconnectedError)"))
+                return
+            }
             pendingContinuation = cont
             lock.unlock()
             // Send AFTER continuation is set — so we can't miss the response
@@ -83,12 +105,48 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
 
     // MARK: - Private
 
+    private func scheduleConnectTimeout(forAttempt attemptId: UInt64) {
+        let delay = DispatchTimeInterval.nanoseconds(Int(Self.connectTimeoutNs))
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+
+            self.lock.lock()
+            guard self.connectAttemptId == attemptId, let cont = self.connectContinuation else {
+                self.lock.unlock()
+                return
+            }
+            self.connectContinuation = nil
+            self.disconnectedError = SyncEngineError.networkError("Connection timed out")
+            self.lock.unlock()
+
+            self.transport.disconnect()
+            cont.resume(throwing: SyncEngineError.networkError("Connection timed out"))
+        }
+    }
+
     private func waitForResponse() async throws -> (LMUPMessageType, Data) {
         try await withCheckedThrowingContinuation { cont in
             lock.lock()
+            if let disconnectedError {
+                lock.unlock()
+                cont.resume(throwing: SyncEngineError.networkError("Disconnected: \(disconnectedError)"))
+                return
+            }
+            if !bufferedMessages.isEmpty {
+                let next = bufferedMessages.removeFirst()
+                lock.unlock()
+                cont.resume(returning: next)
+                return
+            }
             pendingContinuation = cont
             lock.unlock()
         }
+    }
+
+    func debugBufferedMessageCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return bufferedMessages.count
     }
 
     // MARK: - TcpTransportDelegate
@@ -96,6 +154,7 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     func transportDidConnect() {
         NSLog("[ProtocolSession] TCP connected")
         lock.lock()
+        disconnectedError = nil
         let cont = connectContinuation
         connectContinuation = nil
         lock.unlock()
@@ -107,10 +166,12 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
         NSLog("[ProtocolSession] TCP disconnected: \(err)")
 
         lock.lock()
+        disconnectedError = err
         let connCont = connectContinuation
         connectContinuation = nil
         let msgCont = pendingContinuation
         pendingContinuation = nil
+        bufferedMessages.removeAll(keepingCapacity: false)
         lock.unlock()
 
         connCont?.resume(throwing: SyncEngineError.networkError("Connection failed: \(err)"))
@@ -118,21 +179,29 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     }
 
     func transportDidReceive(type: LMUPMessageType, body: Data) {
-        // Silently handle PONG — don't deliver to pending continuation
+        // Heartbeats are transport-level concerns and should not consume message continuations.
         if type == .pong {
-            NSLog("[ProtocolSession] received PONG (ignored)")
+            return
+        }
+        if type == .ping {
+            transport.sendFrame(type: .pong, body: Data())
             return
         }
 
         lock.lock()
         let cont = pendingContinuation
-        pendingContinuation = nil
+        if cont != nil {
+            pendingContinuation = nil
+        } else {
+            if bufferedMessages.count >= 512 {
+                bufferedMessages.removeFirst(bufferedMessages.count - 511)
+            }
+            bufferedMessages.append((type, body))
+        }
         lock.unlock()
 
         if let cont {
             cont.resume(returning: (type, body))
-        } else {
-            NSLog("[ProtocolSession] received \(type) but no continuation pending — dropped")
         }
     }
 }

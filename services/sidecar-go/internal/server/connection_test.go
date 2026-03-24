@@ -345,6 +345,9 @@ func TestResumeAfterDisconnect(t *testing.T) {
 	if ack.CommittedOffset != int64(halfLen) {
 		t.Fatalf("ack committedOffset=%d, want %d", ack.CommittedOffset, halfLen)
 	}
+	if err := st.UpdateUploadProgress(fileKey, int64(halfLen)); err != nil {
+		t.Fatalf("UpdateUploadProgress: %v", err)
+	}
 
 	// Step 3: Disconnect (close client side)
 	client.Close()
@@ -387,8 +390,8 @@ func TestResumeAfterDisconnect(t *testing.T) {
 		Auth:     authHMAC,
 	})
 
-	// After AUTH_REQ, the server transitions to stateAuthenticated without sending
-	// a response frame. We proceed directly with SYNC_BEGIN_REQ.
+	var authRes map[string]any
+	recvJSON(t, client2, protocol.TypeAuthRes, &authRes)
 
 	// Step 9: SYNC_BEGIN
 	sessionID2 := "sess-resume-002"
@@ -435,6 +438,53 @@ func TestResumeAfterDisconnect(t *testing.T) {
 		if content[i] != payload[i] {
 			t.Fatalf("file content mismatch at byte %d after resume", i)
 		}
+	}
+}
+
+func TestAckFlushesOnIntervalWithoutMoreFrames(t *testing.T) {
+	client, _, _, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	_ = doPairing(t, client)
+
+	sessionID := "sess-ack-flush-001"
+	chunkSize := 1 * 1024 * 1024
+	payload := make([]byte, chunkSize*3)
+	for i := range payload {
+		payload[i] = byte((i * 11) % 251)
+	}
+
+	doSyncBegin(t, client, sessionID, 1, int64(len(payload)))
+
+	fileKey := "photo-ack-flush"
+	filename := "ack-flush.jpg"
+	initRes := doFileInit(t, client, fileKey, filename, int64(len(payload)))
+	if initRes.Action != "UPLOAD" {
+		t.Fatalf("expected action=UPLOAD, got %q", initRes.Action)
+	}
+
+	sendFileData(t, client, fileKey, 0, payload[:chunkSize])
+
+	var ack1 protocol.FileAck
+	recvJSON(t, client, protocol.TypeFileAck, &ack1)
+	if ack1.CommittedOffset != int64(chunkSize) {
+		t.Fatalf("first ack committedOffset=%d, want %d", ack1.CommittedOffset, chunkSize)
+	}
+
+	sendFileData(t, client, fileKey, int64(chunkSize), payload[chunkSize:chunkSize*2])
+	sendFileData(t, client, fileKey, int64(chunkSize*2), payload[chunkSize*2:])
+
+	var ack2 protocol.FileAck
+	recvJSON(t, client, protocol.TypeFileAck, &ack2)
+	if ack2.CommittedOffset != int64(len(payload)) {
+		t.Fatalf("second ack committedOffset=%d, want %d", ack2.CommittedOffset, len(payload))
+	}
+
+	hash := sha256.Sum256(payload)
+	sha256Hex := hex.EncodeToString(hash[:])
+	endRes := doFileEnd(t, client, fileKey, int64(len(payload)), sha256Hex)
+	if !endRes.OK {
+		t.Fatal("FileEndRes.OK=false")
 	}
 }
 

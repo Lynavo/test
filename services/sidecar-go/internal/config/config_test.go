@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -95,7 +96,8 @@ func TestSetDefaultsFillsDataDirReceiveDirDeviceName(t *testing.T) {
 	}
 
 	hostname, _ := os.Hostname()
-	if cfg.DeviceName != hostname {
-		t.Errorf("DeviceName = %q, want %q", cfg.DeviceName, hostname)
+	expectedDeviceName := strings.TrimSuffix(hostname, ".local")
+	if cfg.DeviceName != expectedDeviceName {
+		t.Errorf("DeviceName = %q, want %q", cfg.DeviceName, expectedDeviceName)
 	}
 }

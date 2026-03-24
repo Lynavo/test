@@ -5,6 +5,11 @@ class AssetExportService {
 
     /// Export a PHAsset to a temporary file
     func exportAsset(_ asset: PHAsset) async throws -> ExportedFile {
+        let perfLoggingEnabled = syncFlowBoolSetting(
+            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
+            userDefaultsKey: "SyncFlowUploadPerfLog"
+        )
+        let exportStart = CFAbsoluteTimeGetCurrent()
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first(where: { $0.type == .fullSizePhoto || $0.type == .video }) ?? resources.first else {
             throw SyncEngineError.permissionError("No resource found for asset")
@@ -23,12 +28,20 @@ class AssetExportService {
         return try await withCheckedThrowingContinuation { continuation in
             PHAssetResourceManager.default().writeData(for: resource, toFile: tempURL, options: options) { error in
                 if let error {
+                    if perfLoggingEnabled {
+                        let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - exportStart) * 1000)
+                        NSLog("[SyncPerf] export asset=%@ file=%@ status=FAILED elapsedMs=%d error=%@", asset.localIdentifier, filename, elapsedMs, error.localizedDescription)
+                    }
                     continuation.resume(throwing: error)
                 } else {
                     do {
                         let attrs = try FileManager.default.attributesOfItem(atPath: tempURL.path)
                         let size = attrs[.size] as? Int64 ?? 0
                         let mimeType = Self.mimeType(for: filename)
+                        if perfLoggingEnabled {
+                            let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - exportStart) * 1000)
+                            NSLog("[SyncPerf] export asset=%@ file=%@ size=%lld mediaType=%@ elapsedMs=%d", asset.localIdentifier, filename, size, asset.mediaType == .video ? "video" : "image", elapsedMs)
+                        }
 
                         continuation.resume(returning: ExportedFile(
                             tempURL: tempURL,

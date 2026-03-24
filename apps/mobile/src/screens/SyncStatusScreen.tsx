@@ -9,7 +9,7 @@ import {
   NativeEventEmitter,
   type ListRenderItemInfo,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -35,6 +35,22 @@ interface SyncOverview {
   completed: string;
   total: string;
   uploadState: string;
+  retryAttempt?: number;
+  retryDelaySec?: number;
+}
+
+interface BindingState {
+  deviceId: string;
+  deviceName: string;
+  deviceAlias?: string;
+  host: string;
+  connectionState: 'bound' | 'connecting' | 'connected' | 'offline' | 'discovering';
+}
+
+interface RetryBannerState {
+  attempt: number;
+  retryAtMs: number;
+  startedAtMs: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +75,8 @@ const UPLOADING_BORDER = BLUE;
 
 const RING_SIZE = 200;
 const RING_THICKNESS = 9;
+const RECONNECT_PAUSED_THRESHOLD_MS = 15_000;
+const RECONNECT_PAUSED_THRESHOLD_ATTEMPT = 3;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -202,16 +220,22 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
 
 export function SyncStatusScreen() {
   const navigation = useNavigation<SyncStatusNav>();
+  const insets = useSafeAreaInsets();
   const [overview, setOverview] = useState<SyncOverview>({
     progressPercent: 0,
     speed: '0 MB/s',
     completed: '0 B',
     total: '0 B',
     uploadState: 'idle',
+    retryAttempt: 0,
+    retryDelaySec: 0,
   });
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
+  const [bindingState, setBindingState] = useState<BindingState | null>(null);
+  const [retryBanner, setRetryBanner] = useState<RetryBannerState | null>(null);
+  const [retryCountdownSec, setRetryCountdownSec] = useState(0);
 
   const loadTodayStats = useCallback(async (engine?: any) => {
     try {
@@ -233,14 +257,48 @@ export function SyncStatusScreen() {
     } catch { /* ignore */ }
   }, []);
 
+  useEffect(() => {
+    if (!retryBanner) {
+      setRetryCountdownSec(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const remainingMs = retryBanner.retryAtMs - Date.now();
+      setRetryCountdownSec(Math.max(0, Math.ceil(remainingMs / 1000)));
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 250);
+    return () => clearInterval(timer);
+  }, [retryBanner]);
+
   // ---------------------------------------------------------------------------
   // Load real data from native module
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
+    let errorSub: { remove: () => void } | undefined;
     let syncSub: { remove: () => void } | undefined;
     let queueSub: { remove: () => void } | undefined;
     let bindingSub: { remove: () => void } | undefined;
+
+    const applyBindingState = (state: Record<string, unknown> | null | undefined) => {
+      if (!state || !state.deviceId) {
+        setBindingState(null);
+        navigation.reset({ index: 0, routes: [{ name: 'DeviceDiscovery' }] });
+        return false;
+      }
+
+      setBindingState({
+        deviceId: state.deviceId as string,
+        deviceName: (state.deviceName as string) || '',
+        deviceAlias: state.deviceAlias as string | undefined,
+        host: (state.host as string) || '',
+        connectionState: ((state.connectionState as BindingState['connectionState']) || 'bound'),
+      });
+      return true;
+    };
 
     const loadReal = async () => {
       try {
@@ -249,23 +307,19 @@ export function SyncStatusScreen() {
 
         // Listen for errors from native engine
         const debugEmitter = new NativeEventEmitter(NativeSyncEngine);
-        debugEmitter.addListener('onError', (error: Record<string, unknown>) => {
+        errorSub = debugEmitter.addListener('onError', (error: Record<string, unknown>) => {
           console.error('[SyncStatus] Native error:', JSON.stringify(error));
         });
 
         // Listen for binding cleared (e.g. token lost → need re-pair)
         const bindingEmitter = new NativeEventEmitter(NativeSyncEngine);
         bindingSub = bindingEmitter.addListener('onBindingStateChanged', (state: Record<string, unknown>) => {
-          if (!state || !state.deviceId) {
-            // Binding cleared — navigate back to discovery for re-pairing
-            navigation.reset({ index: 0, routes: [{ name: 'DeviceDiscovery' }] });
-          }
+          applyBindingState(state);
         });
 
         // Check binding before loading data
         const binding = await NativeSyncEngine.getBindingState();
-        if (!binding || !binding.deviceId) {
-          navigation.reset({ index: 0, routes: [{ name: 'DeviceDiscovery' }] });
+        if (!applyBindingState(binding)) {
           return;
         }
 
@@ -280,6 +334,8 @@ export function SyncStatusScreen() {
             completed: formatBytes(syncData.transferredBytes ?? 0),
             total: formatBytes(syncData.totalBytes ?? 0),
             uploadState: syncData.uploadState ?? 'idle',
+            retryAttempt: 0,
+            retryDelaySec: 0,
           });
         }
 
@@ -305,13 +361,35 @@ export function SyncStatusScreen() {
         // Subscribe to live updates
         const emitter = new NativeEventEmitter(NativeSyncEngine);
         syncSub = emitter.addListener('onSyncStateChanged', (state: Record<string, unknown>) => {
+          const uploadState = (state.uploadState as string) ?? undefined;
+          if (uploadState === 'reconnecting') {
+            const nextRetryAttempt = Number(state.retryAttempt ?? 0);
+            const nextRetryDelaySec = Number(state.retryDelaySec ?? 0);
+            const now = Date.now();
+            setRetryBanner((prev) => ({
+              attempt: nextRetryAttempt,
+              retryAtMs: now + Math.max(nextRetryDelaySec, 0) * 1000,
+              startedAtMs: prev?.startedAtMs ?? now,
+            }));
+          } else if (uploadState === 'uploading' || uploadState === 'completed') {
+            setRetryBanner(null);
+          }
+
           setOverview((prev) => ({
             ...prev,
             progressPercent: (state.progressPercent as number) ?? prev.progressPercent,
-            speed: state.currentSpeedMbps ? `${state.currentSpeedMbps} MB/s` : prev.speed,
+            speed: uploadState === 'reconnecting'
+              ? '0 MB/s'
+              : state.currentSpeedMbps ? `${state.currentSpeedMbps} MB/s` : prev.speed,
             completed: state.transferredBytes ? formatBytes(state.transferredBytes as number) : prev.completed,
             total: state.totalBytes ? formatBytes(state.totalBytes as number) : prev.total,
-            uploadState: (state.uploadState as string) ?? prev.uploadState,
+            uploadState: uploadState ?? prev.uploadState,
+            retryAttempt: uploadState === 'reconnecting'
+              ? ((state.retryAttempt as number) ?? prev.retryAttempt ?? 0)
+              : 0,
+            retryDelaySec: uploadState === 'reconnecting'
+              ? ((state.retryDelaySec as number) ?? prev.retryDelaySec ?? 0)
+              : 0,
           }));
           // Reload today stats when sync completes
           if (state.uploadState === 'completed') {
@@ -339,6 +417,7 @@ export function SyncStatusScreen() {
     loadReal();
 
     return () => {
+      errorSub?.remove();
       syncSub?.remove();
       queueSub?.remove();
       bindingSub?.remove();
@@ -364,6 +443,50 @@ export function SyncStatusScreen() {
 
   const isDone = overview.uploadState === 'completed' ||
     (overview.uploadState === 'idle' && queue.length === 0 && (overview.progressPercent >= 100 || todayStats.fileCount > 0));
+  const boundDeviceName = bindingState?.deviceAlias || bindingState?.deviceName || 'Mac';
+  const isConnectionError = bindingState?.connectionState === 'offline' || bindingState?.connectionState === 'bound';
+  const isTransferInterrupted = retryBanner !== null || overview.uploadState === 'reconnecting';
+  const reconnectElapsedMs = retryBanner ? Date.now() - retryBanner.startedAtMs : 0;
+  const isWaitingForNetworkRecovery = isTransferInterrupted && (
+    reconnectElapsedMs >= RECONNECT_PAUSED_THRESHOLD_MS ||
+    (retryBanner?.attempt ?? overview.retryAttempt ?? 0) >= RECONNECT_PAUSED_THRESHOLD_ATTEMPT
+  );
+  const connectionNotice = (
+    isTransferInterrupted
+      ? (
+        isWaitingForNetworkRecovery
+          ? '传输已暂停，等待网络恢复。'
+          : `传输已中断，正在重连“${boundDeviceName}”。`
+      )
+      : isConnectionError
+      ? (
+        `未连接到“${boundDeviceName}”，请确认 Mac 端 Sidecar 正在运行。`
+      )
+      : bindingState?.connectionState === 'connecting' || bindingState?.connectionState === 'discovering'
+        ? `正在连接到“${boundDeviceName}”。`
+        : null
+  );
+  const connectionDetail = (
+    isTransferInterrupted
+      ? (
+        isWaitingForNetworkRecovery
+          ? (
+            retryCountdownSec > 0
+              ? `已保留当前进度 ${overview.completed} / ${overview.total}，网络恢复后将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+              : `已保留当前进度 ${overview.completed} / ${overview.total}，网络恢复后会自动继续。`
+          )
+          : (
+            retryCountdownSec > 0
+              ? `已保留当前进度 ${overview.completed} / ${overview.total}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+              : `已保留当前进度 ${overview.completed} / ${overview.total}，正在重新建立连接。`
+          )
+      )
+      : isConnectionError
+        ? '恢复网络或重新打开 Mac 端 Sidecar 后会自动继续。'
+        : bindingState?.connectionState === 'connecting' || bindingState?.connectionState === 'discovering'
+          ? '连接建立后会自动继续当前同步任务。'
+          : null
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -387,6 +510,49 @@ export function SyncStatusScreen() {
           </Pressable>
         </View>
       </View>
+
+      {initialLoading || !connectionNotice ? null : (
+        <View
+          style={[
+            styles.connectionBanner,
+            styles.connectionBannerFloating,
+            { top: insets.top + 56 },
+            isTransferInterrupted || isConnectionError
+              ? styles.connectionBannerError
+              : styles.connectionBannerWarning,
+          ]}
+        >
+          <Icon
+            name={isTransferInterrupted || isConnectionError ? 'alert-circle-outline' : 'sync-outline'}
+            size={18}
+            color={isTransferInterrupted || isConnectionError ? '#b91c1c' : '#9a3412'}
+          />
+          <View style={styles.connectionBannerCopy}>
+            <Text
+              style={[
+                styles.connectionBannerText,
+                isTransferInterrupted || isConnectionError
+                  ? styles.connectionBannerTextError
+                  : styles.connectionBannerTextWarning,
+              ]}
+            >
+              {connectionNotice}
+            </Text>
+            {connectionDetail ? (
+              <Text
+                style={[
+                  styles.connectionBannerDetail,
+                  isTransferInterrupted || isConnectionError
+                    ? styles.connectionBannerDetailError
+                    : styles.connectionBannerDetailWarning,
+                ]}
+              >
+                {connectionDetail}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      )}
 
       {initialLoading ? null : isDone ? (
         /* ---- Completion card ---- */
@@ -460,6 +626,62 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  connectionBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  connectionBannerFloating: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    marginHorizontal: 0,
+    zIndex: 20,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  connectionBannerCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  connectionBannerError: {
+    backgroundColor: 'rgba(254,226,226,0.94)',
+    borderColor: 'rgba(220,38,38,0.18)',
+  },
+  connectionBannerWarning: {
+    backgroundColor: 'rgba(255,243,199,0.92)',
+    borderColor: 'rgba(217,119,6,0.18)',
+  },
+  connectionBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  connectionBannerDetail: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  connectionBannerTextError: {
+    color: '#991b1b',
+  },
+  connectionBannerDetailError: {
+    color: '#b91c1c',
+  },
+  connectionBannerTextWarning: {
+    color: '#8a4b08',
+  },
+  connectionBannerDetailWarning: {
+    color: '#9a3412',
   },
 
   // Progress card

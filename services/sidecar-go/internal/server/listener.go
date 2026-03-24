@@ -10,6 +10,8 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
+const tcpSocketBufferBytes = 16 * 1024 * 1024
+
 // TCPServer listens for incoming LMUP/2 connections from mobile clients.
 type TCPServer struct {
 	listener net.Listener
@@ -84,7 +86,24 @@ func (s *TCPServer) acceptLoop() {
 			slog.Debug("tcp accept stopped", "err", err)
 			return
 		}
+		tuneTCPConnection(conn)
 		slog.Info("tcp client connected", "remote", conn.RemoteAddr())
 		go newConnection(conn, s.store, s.config, s.hub, s).handle()
+	}
+}
+
+func tuneTCPConnection(conn net.Conn) {
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return
+	}
+	if err := tcpConn.SetNoDelay(true); err != nil {
+		slog.Debug("failed to set TCP_NODELAY", "remote", conn.RemoteAddr(), "err", err)
+	}
+	if err := tcpConn.SetReadBuffer(tcpSocketBufferBytes); err != nil {
+		slog.Debug("failed to set TCP read buffer", "remote", conn.RemoteAddr(), "err", err)
+	}
+	if err := tcpConn.SetWriteBuffer(tcpSocketBufferBytes); err != nil {
+		slog.Debug("failed to set TCP write buffer", "remote", conn.RemoteAddr(), "err", err)
 	}
 }

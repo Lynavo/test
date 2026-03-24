@@ -7,6 +7,7 @@ import {
   TextInput,
   ScrollView,
   NativeModules,
+  NativeEventEmitter,
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,7 +27,7 @@ export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
-  const [connected, setConnected] = useState(false);
+  const [connectionState, setConnectionState] = useState<'bound' | 'connecting' | 'connected' | 'offline' | 'discovering'>('offline');
 
   // My iPhone display name
   const [myName, setMyName] = useState('iPhone');
@@ -37,20 +38,34 @@ export function SettingsScreen() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
+    let bindingSub: { remove: () => void } | undefined;
+
+    const applyBindingState = (state: Record<string, unknown> | null | undefined) => {
+      if (!state || !state.deviceId) {
+        setDeviceName('');
+        setDeviceIp('');
+        setConnectionState('offline');
+        return;
+      }
+
+      setDeviceName((state.deviceAlias as string) || (state.deviceName as string) || '');
+      setDeviceIp((state.host as string) || '');
+      setConnectionState(((state.connectionState as typeof connectionState) || 'bound'));
+    };
+
     const loadState = async () => {
       try {
         const { NativeSyncEngine } = NativeModules;
         if (!NativeSyncEngine) return;
 
+        const emitter = new NativeEventEmitter(NativeSyncEngine);
+        bindingSub = emitter.addListener('onBindingStateChanged', applyBindingState);
+
         const [state, clientName] = await Promise.all([
           NativeSyncEngine.getBindingState(),
           NativeSyncEngine.getClientDisplayName(),
         ]);
-        if (state) {
-          setDeviceName(state.deviceAlias || state.deviceName || '');
-          setDeviceIp(state.host || '');
-          setConnected(true);
-        }
+        applyBindingState(state);
         if (clientName) {
           setMyName(clientName);
         }
@@ -60,7 +75,19 @@ export function SettingsScreen() {
     };
 
     loadState();
+
+    return () => {
+      bindingSub?.remove();
+    };
   }, []);
+
+  const connectionLabel = (
+    connectionState === 'connected' ? '已连接'
+      : connectionState === 'connecting' || connectionState === 'discovering' ? '连接中'
+        : '未连接'
+  );
+  const isConnected = connectionState === 'connected';
+  const isConnecting = connectionState === 'connecting' || connectionState === 'discovering';
 
   // ---------------------------------------------------------------------------
   // Save my iPhone display name
@@ -201,9 +228,21 @@ export function SettingsScreen() {
 
                 {/* Connection status */}
                 <View style={styles.statusRow}>
-                  <View style={[styles.statusDot, !connected && styles.statusDotDisconnected]} />
-                  <Text style={[styles.statusText, !connected && styles.statusTextDisconnected]}>
-                    {connected ? '已连接' : '未连接'}
+                  <View
+                    style={[
+                      styles.statusDot,
+                      !isConnected && styles.statusDotDisconnected,
+                      isConnecting && styles.statusDotConnecting,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      !isConnected && styles.statusTextDisconnected,
+                      isConnecting && styles.statusTextConnecting,
+                    ]}
+                  >
+                    {connectionLabel}
                   </Text>
                 </View>
               </View>
@@ -373,14 +412,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
   },
   statusDotDisconnected: {
-    backgroundColor: '#9ca3af',
+    backgroundColor: '#ef4444',
+  },
+  statusDotConnecting: {
+    backgroundColor: '#f59e0b',
   },
   statusText: {
     fontSize: 12,
     color: '#22c55e',
   },
   statusTextDisconnected: {
-    color: '#9ca3af',
+    color: '#dc2626',
+  },
+  statusTextConnecting: {
+    color: '#b45309',
   },
 
   // Disconnect button
