@@ -5,6 +5,7 @@ mac:
     - dmg
     - zip
   category: public.app-category.utilities
+  icon: resources/icon.icns
 directories:
   output: release
   buildResources: resources

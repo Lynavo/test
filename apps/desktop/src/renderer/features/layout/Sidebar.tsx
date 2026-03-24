@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { LayoutDashboard, Settings } from 'lucide-react';
 import { glass, elevation } from '@syncflow/design-tokens';
+import syncflowLogo from '@renderer/assets/syncflow-mark-transparent.png';
 import { useAppStore, type AppState } from '@renderer/stores/app-store';
 
 const navItems: { key: AppState['currentView']; label: string; icon: typeof LayoutDashboard }[] = [
@@ -35,19 +36,12 @@ export function Sidebar() {
         className="flex items-center gap-3 px-5 py-5"
         style={dragRegionStyle}
       >
-        <div
-          className="flex h-9 w-9 items-center justify-center rounded-xl"
-          style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #60c4f0 100%)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"
-              fill="white"
-              opacity="0.3"
-            />
-            <path d="M17 12l-5-5-5 5h3v4h4v-4h3z" fill="white" />
-          </svg>
-        </div>
+        <img
+          src={syncflowLogo}
+          alt="SyncFlow"
+          draggable={false}
+          className="h-9 w-9 object-contain"
+        />
         <span className="text-base font-bold" style={{ color: '#1a2a3a' }}>
           SyncFlow
         </span>

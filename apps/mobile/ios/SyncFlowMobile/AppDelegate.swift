@@ -27,7 +27,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     SyncEngineManager.shared.backgroundService.registerBackgroundTasks()
 
     factory.startReactNative(
-      withModuleName: "SyncFlowMobile",
+      withModuleName: "SyncFlow",
       in: window,
       launchOptions: launchOptions
     )
