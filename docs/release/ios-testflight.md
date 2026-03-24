@@ -50,53 +50,79 @@
 1. 第一包：`0.1.0 (1)`
 2. 第二包：`0.1.0 (2)`
 
-## 4. 本地归档
+## 4. 脚本入口
+
+现在仓库已经提供固定脚本，不再要求手动走 Xcode Organizer。
+
+从仓库根目录执行：
+
+```bash
+cd /Volumes/workspace/work/sync-flow
+pnpm package:mobile:testflight:archive
+pnpm package:mobile:testflight:upload
+pnpm package:mobile:testflight
+```
+
+分别对应：
+
+1. `archive`：只生成 `xcarchive`
+2. `upload`：把现有 `xcarchive` 上传到 TestFlight
+3. `archive-upload`：先归档，再上传
+
+脚本位置：
+
+- [testflight-release.sh](/Volumes/workspace/work/sync-flow/apps/mobile/ios/scripts/testflight-release.sh)
+
+## 5. 本地归档
 
 在仓库根目录执行：
 
 ```bash
-cd /Volumes/workspace/work/sync-flow/apps/mobile/ios
-
-xcodebuild \
-  -workspace SyncFlowMobile.xcworkspace \
-  -scheme SyncFlowMobile \
-  -configuration Release \
-  -destination 'generic/platform=iOS' \
-  -archivePath /tmp/SyncFlowMobile.xcarchive \
-  archive
+cd /Volumes/workspace/work/sync-flow
+pnpm package:mobile:testflight:archive
 ```
 
 验收口径：
 
 1. 命令成功退出
-2. 产物存在：`/tmp/SyncFlowMobile.xcarchive`
+2. 产物存在：
+   - `/Volumes/workspace/work/sync-flow/apps/mobile/ios/build/archives/SyncFlow-<version>-b<build>.xcarchive`
 
-## 5. 上传 TestFlight
+## 6. 上传 TestFlight
 
-当前最稳妥的路径是走 Xcode Organizer，不额外维护 CLI export 配置。
+当前默认路径已经切到 CLI，不再要求手工点 Organizer。
 
 步骤：
 
-1. 打开 Xcode
-2. 进入 `Window -> Organizer`
-3. 选中最新的 `SyncFlowMobile` archive
-4. 点击 `Distribute App`
-5. 选择 `App Store Connect`
-6. 选择 `Upload`
-7. 按默认选项继续，完成上传
+```bash
+cd /Volumes/workspace/work/sync-flow
+pnpm package:mobile:testflight
+```
 
-这样做的原因：
+如果只想上传已经存在的 archive：
 
-1. 当前仓库没有维护 `ExportOptions.plist`
-2. 内测阶段先用 Xcode 官方上传路径，变量最少
-3. 出问题时更容易从 Organizer 看见签名、校验、上传报错
+```bash
+cd /Volumes/workspace/work/sync-flow
+pnpm package:mobile:testflight:upload
+```
 
-## 6. App Store Connect 操作
+当前脚本使用：
+
+1. [ExportOptions-TestFlight.plist](/Volumes/workspace/work/sync-flow/apps/mobile/ios/ExportOptions-TestFlight.plist)
+2. `xcodebuild -exportArchive`
+
+因此前提是：
+
+1. 当前 Mac 的 Xcode 账号已登录
+2. 对应团队在本机可用
+3. `com.syncflow.mobile` 已在 App Store Connect 建立 app 记录
+
+## 7. App Store Connect 操作
 
 上传完成后：
 
 1. 打开 [App Store Connect](https://appstoreconnect.apple.com/)
-2. 进入 `My Apps -> SyncFlowMobile -> TestFlight`
+2. 进入 `My Apps -> SyncFlow -> TestFlight`
 3. 等待 build 处理完成
 4. 填写本次 beta 说明
 5. 添加 Internal Testers 或 External Testers
@@ -113,7 +139,7 @@ xcodebuild \
    - 仅支持 iPhone -> Mac
    - 当前 beta 重点验证局域网同步与异常恢复
 
-## 7. 建议的发布顺序
+## 8. 建议的发布顺序
 
 建议按下面顺序发：
 
@@ -122,7 +148,7 @@ xcodebuild \
 3. 先让内部同事跑一次完整闭环
 4. 再决定是否扩展到更大范围 external beta
 
-## 8. 发布后回归
+## 9. 发布后回归
 
 TestFlight build 可安装后，至少做一次：
 
@@ -133,13 +159,12 @@ TestFlight build 可安装后，至少做一次：
 5. 中途断 Wi‑Fi，再恢复
 6. 确认最终完成态和历史记录正常
 
-## 9. 当前缺口
+## 10. 当前缺口
 
 当前仓库还没有这些自动化发布资产：
 
-1. `ExportOptions.plist`
-2. `xcodebuild -exportArchive` 的固定脚本
-3. App Store Connect API 上传脚本
-4. Fastlane lane
+1. 自动递增 `CURRENT_PROJECT_VERSION`
+2. App Store Connect 元数据自动填充
+3. Fastlane lane
 
-如果后续发布频率升高，建议再补一条标准化流水线；在当前 beta 阶段，先用 Organizer 上传更稳。
+如果后续发布频率继续升高，再补 Fastlane 或 CI 发布流水线；当前 beta 阶段，这套本地脚本已经足够稳定。

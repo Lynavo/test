@@ -8,6 +8,9 @@
     "start": "react-native start",
     "test": "jest",
     "build": "cd ios && xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -destination 'generic/platform=iOS' -configuration Debug build",
+    "archive:testflight": "bash ./ios/scripts/testflight-release.sh archive",
+    "upload:testflight": "bash ./ios/scripts/testflight-release.sh upload",
+    "release:testflight": "bash ./ios/scripts/testflight-release.sh archive-upload",
     "bundle": "react-native bundle --platform ios --dev true --entry-file index.js --bundle-output ios/main.jsbundle --assets-dest ios"
   },
   "dependencies": {

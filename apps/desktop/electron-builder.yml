@@ -6,6 +6,13 @@ mac:
     - zip
   category: public.app-category.utilities
   icon: resources/icon.icns
+  sign: ./scripts/mac-sign.cjs
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  binaries:
+    - Contents/Resources/syncflow-sidecar
 directories:
   output: release
   buildResources: resources
