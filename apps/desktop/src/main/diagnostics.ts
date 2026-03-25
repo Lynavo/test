@@ -13,6 +13,7 @@ const execFileAsync = promisify(execFile);
 type AppInfo = {
   name: string;
   version: string;
+  buildNumber: string;
 };
 
 type DiagnosticSnapshot = {
@@ -59,10 +60,33 @@ async function safeCall<T>(fn: () => Promise<T>): Promise<T | { error: string }>
 }
 
 export function getAppInfo(): AppInfo {
+  const buildNumber = resolveBuildNumber();
   return {
     name: app.getName(),
     version: app.getVersion(),
+    buildNumber,
   };
+}
+
+function resolveBuildNumber(): string {
+  const fallback = '';
+  const packagedPackageJson = join(app.getAppPath(), 'package.json');
+  const repoProject = join(process.cwd(), 'apps', 'mobile', 'ios', 'SyncFlowMobile.xcodeproj', 'project.pbxproj');
+
+  try {
+    const packaged = require(packagedPackageJson) as { syncflowBuildNumber?: string };
+    if (packaged.syncflowBuildNumber) return packaged.syncflowBuildNumber;
+  } catch {
+    // Fall through to repo build settings in development.
+  }
+
+  try {
+    const project = require('node:fs').readFileSync(repoProject, 'utf8') as string;
+    const match = project.match(/CURRENT_PROJECT_VERSION = (\d+);/);
+    return match?.[1] ?? fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function exportDiagnostics(sidecarManager: SidecarManager): Promise<string | null> {

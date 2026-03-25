@@ -7,7 +7,7 @@ import { useDashboardStore } from '@renderer/stores/dashboard-store';
 
 export function SupportSection() {
   const summary = useDashboardStore((s) => s.summary);
-  const [appInfo, setAppInfo] = useState<{ name: string; version: string } | null>(null);
+  const [appInfo, setAppInfo] = useState<{ name: string; version: string; buildNumber: string } | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -79,7 +79,9 @@ export function SupportSection() {
               桌面端版本
             </div>
             <p className="text-sm font-medium text-foreground">
-              {appInfo ? `${appInfo.name} v${appInfo.version}` : '读取中…'}
+              {appInfo
+                ? `${appInfo.name} v${appInfo.version}${appInfo.buildNumber ? ` (${appInfo.buildNumber})` : ''}`
+                : '读取中…'}
             </p>
           </div>
         </div>

@@ -38,6 +38,6 @@ export interface ElectronAPI {
   };
   support: {
     exportDiagnostics(): Promise<string | null>;
-    getAppInfo(): Promise<{ name: string; version: string }>;
+    getAppInfo(): Promise<{ name: string; version: string; buildNumber: string }>;
   };
 }
