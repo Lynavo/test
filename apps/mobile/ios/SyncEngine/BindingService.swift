@@ -5,6 +5,7 @@ class BindingService {
     private static let keychainServiceName = "com.syncflow.mobile"
     private static let clientIdKey = "syncflow_client_id"
     private static let pairingTokenKey = "syncflow_pairing_token"
+    private static let clientDisplayNameKey = "syncflow_client_display_name"
 
     // MARK: - Client ID (generated once, persisted in Keychain)
 
@@ -29,6 +30,20 @@ class BindingService {
 
     func clearPairingToken() {
         deleteKeychain(key: Self.pairingTokenKey)
+    }
+
+    // MARK: - Client Display Name
+
+    func getClientDisplayName() -> String? {
+        return readKeychain(key: Self.clientDisplayNameKey)
+    }
+
+    func saveClientDisplayName(_ name: String) {
+        writeKeychain(key: Self.clientDisplayNameKey, value: name)
+    }
+
+    func clearClientDisplayName() {
+        deleteKeychain(key: Self.clientDisplayNameKey)
     }
 
     // MARK: - Keychain Helpers
@@ -62,6 +77,9 @@ class BindingService {
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return nil
+        }
         if status != errSecSuccess {
             NSLog("[BindingService] Keychain read failed for %@: OSStatus=%d", key, status)
             return nil

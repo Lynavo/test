@@ -177,6 +177,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var discoveredDevices: [String: DiscoveredDevice] = [:]  // keyed by deviceId
     private var photoLibraryChanged = false  // set by observer, consumed by watch loop
     private var watchLoopContinuation: CheckedContinuation<Void, Never>?
+    private var watchLoopContinuationToken: UUID?
+    private let watchLoopContinuationLock = NSLock()
+    private let incrementalQueueRescanLock = NSLock()
+    private let incrementalQueueRescanQueue = DispatchQueue(
+        label: "com.syncflow.incremental-photo-rescan",
+        qos: .utility
+    )
+    private var incrementalQueueRescanWorkItem: DispatchWorkItem?
     private var sidecarHost: String?  // resolved IP of Mac, for HTTP heartbeat
     private var transitionBackgroundTaskId: UIBackgroundTaskIdentifier = .invalid
     private var bindingConnectionState: BindingConnectionState = .offline
@@ -189,6 +197,68 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             return device.ip
         }
         return probedHost
+    }
+
+    private func connectSession(
+        _ session: ProtocolSession,
+        device: DiscoveredDevice?,
+        fallbackHost: String? = nil,
+        fallbackPort: UInt16? = nil
+    ) async throws {
+        if let forcedTarget = resolvedForcedSidecarTarget() {
+            try await session.connect(host: forcedTarget.host, port: forcedTarget.port)
+            return
+        }
+
+        if let preferredHost = preferredSidecarHost(probedHost: nil, device: device),
+           !preferredHost.isEmpty
+        {
+            try await session.connect(
+                host: preferredHost,
+                port: device?.port ?? fallbackPort ?? 39393
+            )
+            return
+        }
+
+        if let endpoint = device?.endpoint {
+            try await session.connect(endpoint: endpoint)
+            return
+        }
+
+        if let fallbackHost, !fallbackHost.isEmpty {
+            try await session.connect(
+                host: fallbackHost,
+                port: fallbackPort ?? 39393
+            )
+            return
+        }
+
+        throw SyncEngineError.networkError("No sidecar endpoint available")
+    }
+
+    private func installWatchLoopContinuation(_ continuation: CheckedContinuation<Void, Never>) -> UUID {
+        let token = UUID()
+        watchLoopContinuationLock.lock()
+        watchLoopContinuation = continuation
+        watchLoopContinuationToken = token
+        watchLoopContinuationLock.unlock()
+        return token
+    }
+
+    private func resumeWatchLoopIfNeeded(expectedToken: UUID? = nil) {
+        watchLoopContinuationLock.lock()
+        guard let continuation = watchLoopContinuation else {
+            watchLoopContinuationLock.unlock()
+            return
+        }
+        if let expectedToken, watchLoopContinuationToken != expectedToken {
+            watchLoopContinuationLock.unlock()
+            return
+        }
+        watchLoopContinuation = nil
+        watchLoopContinuationToken = nil
+        watchLoopContinuationLock.unlock()
+        continuation.resume()
     }
 
     private override init() {
@@ -309,6 +379,80 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return suffix.isEmpty ? model : "\(model) \(suffix)"
     }
 
+    private func buildClientHelloPayload(clientId: String, pairingToken: String? = nil) -> [String: Any] {
+        var payload: [String: Any] = [
+            "clientId": clientId,
+            "clientName": getClientDisplayName(),
+            "clientPlatform": "ios",
+            "appVersion": currentAppVersionLabel(),
+            "appState": currentAppStateLabel(),
+        ]
+        if let pairingToken, !pairingToken.isEmpty {
+            payload["pairingToken"] = pairingToken
+        }
+        if let clientIP = currentClientIPv4() {
+            payload["clientIp"] = clientIP
+        }
+        return payload
+    }
+
+    private func connectMetadataRefreshSession(
+        binding: BindingRecord,
+        discoveredDevice: DiscoveredDevice?,
+        session: ProtocolSession
+    ) async throws {
+        try await connectSession(
+            session,
+            device: discoveredDevice,
+            fallbackHost: binding.host,
+            fallbackPort: UInt16(binding.port)
+        )
+    }
+
+    private func pushClientMetadataUpdateIfPossible() {
+        guard let binding = uploadStore?.getBinding(),
+              let token = bindingService.getPairingToken()
+        else {
+            return
+        }
+
+        let discoveredDevice = discoveredDevices[binding.deviceId]
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+
+            let transport = TcpTransport()
+            let session = ProtocolSession(transport: transport)
+            defer { session.disconnect() }
+
+            do {
+                try await self.connectMetadataRefreshSession(
+                    binding: binding,
+                    discoveredDevice: discoveredDevice,
+                    session: session
+                )
+                let clientId = self.bindingService.getOrCreateClientId()
+                let (helloType, helloRes) = try await session.sendAndReceive(
+                    type: .helloReq,
+                    payload: self.buildClientHelloPayload(clientId: clientId, pairingToken: token)
+                )
+                guard helloType == .helloRes else {
+                    return
+                }
+                if let nonce = helloRes["nonce"] as? String {
+                    let hmac = transport.computeHMAC(token: token, nonce: nonce)
+                    let _ = try? await session.sendAndReceive(type: .authReq, payload: [
+                        "clientId": clientId,
+                        "auth": hmac,
+                    ])
+                }
+                NSLog("[SyncEngine] pushed client metadata update to sidecar")
+            } catch {
+                NSLog("[SyncEngine] metadata refresh skipped: %@", "\(error)")
+            }
+        }
+    }
+
     private func beginBackgroundTransitionIfNeeded(reason: String) {
         guard transitionBackgroundTaskId == .invalid else { return }
         transitionBackgroundTaskId = backgroundService.beginTransitionTask()
@@ -346,21 +490,21 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             max(syncFlowIntSetting(
                 envKey: "SYNCFLOW_UPLOAD_CHUNK_MB",
                 userDefaultsKey: "SyncFlowUploadChunkMB"
-            ) ?? 32, 1),
+            ) ?? 8, 1),
             48
         )
         let windowMB = min(
             max(syncFlowIntSetting(
                 envKey: "SYNCFLOW_UPLOAD_WINDOW_MB",
                 userDefaultsKey: "SyncFlowUploadWindowMB"
-            ) ?? 512, chunkMB),
+            ) ?? 128, chunkMB),
             1024
         )
         let maxPipelineChunks = min(
             max(syncFlowIntSetting(
                 envKey: "SYNCFLOW_UPLOAD_PIPELINE_CHUNKS",
                 userDefaultsKey: "SyncFlowUploadPipelineChunks"
-            ) ?? 64, 1),
+            ) ?? 16, 1),
             128
         )
         let ackTimeoutSec = min(
@@ -434,6 +578,62 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func clearResolvedSidecarHost() {
         guard resolvedForcedSidecarTarget() == nil else { return }
         sidecarHost = nil
+    }
+
+    private func scheduleIncrementalQueueRescan(reason: String) {
+        guard isSyncing else { return }
+
+        incrementalQueueRescanLock.lock()
+        incrementalQueueRescanWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.performIncrementalQueueRescan(reason: reason)
+        }
+        incrementalQueueRescanWorkItem = workItem
+        incrementalQueueRescanLock.unlock()
+
+        incrementalQueueRescanQueue.asyncAfter(deadline: .now() + 2, execute: workItem)
+    }
+
+    private func performIncrementalQueueRescan(reason: String) {
+        guard isSyncing, let store = uploadStore else { return }
+
+        let clientId = bindingService.getOrCreateClientId()
+        let trackedFileKeys = Set(store.getTrackedFileKeys())
+        let untrackedAssets = photoScanner.scanForUntrackedAssets(
+            clientId: clientId,
+            trackedFileKeys: trackedFileKeys
+        )
+
+        guard !untrackedAssets.isEmpty else {
+            NSLog("[SyncEngine] incremental photo rescan found no new assets (%@)", reason)
+            return
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        for asset in untrackedAssets {
+            let item = UploadItemRecord(
+                id: nil,
+                assetLocalId: asset.asset.localIdentifier,
+                modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                mediaType: asset.mediaType,
+                originalFilename: asset.originalFilename,
+                fileKey: asset.fileKey,
+                fileSize: asset.estimatedSize,
+                status: "queued",
+                tempFilePath: nil,
+                ackedOffset: 0,
+                lastErrorCode: nil,
+                updatedAt: now
+            )
+            try? store.upsertUploadItem(item)
+        }
+
+        NSLog(
+            "[SyncEngine] incremental photo rescan queued %d new assets (%@)",
+            untrackedAssets.count,
+            reason
+        )
+        emitQueueToJS()
     }
 
     /// Start a full photo scan and serial upload session over the open TCP connection.
@@ -515,6 +715,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         while true {
             roundNumber += 1
             sessionService.transitionTo(.scanning)
+            NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                "uploadState": "scanning",
+                "progressPercent": 0,
+            ])
 
             // Scan for new assets
             let completedKeys = Set(uploadStore?.getCompletedFileKeys() ?? [])
@@ -540,10 +744,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                             cont.resume()
                             return
                         }
-                        watchLoopContinuation = cont
-                        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [weak self] in
-                            self?.watchLoopContinuation?.resume()
-                            self?.watchLoopContinuation = nil
+                        let token = installWatchLoopContinuation(cont)
+                        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [token] in
+                            SyncEngineManager.shared.resumeWatchLoopIfNeeded(expectedToken: token)
                         }
                     }
                 }
@@ -553,8 +756,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             // Write scanned assets to DB
-            for asset in newAssets {
-                let item = UploadItemRecord(
+            let queuePersistStart = CFAbsoluteTimeGetCurrent()
+            let queuedItems = newAssets.map { asset in
+                UploadItemRecord(
                     id: nil,
                     assetLocalId: asset.asset.localIdentifier,
                     modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
@@ -568,8 +772,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     lastErrorCode: nil,
                     updatedAt: ISO8601DateFormatter().string(from: Date())
                 )
-                try? uploadStore?.upsertUploadItem(item)
             }
+            try? uploadStore?.upsertUploadItems(queuedItems)
+            NSLog(
+                "[SyncPipeline] persisted %d queued assets in %d ms",
+                queuedItems.count,
+                Int((CFAbsoluteTimeGetCurrent() - queuePersistStart) * 1000)
+            )
             emitQueueToJS()
 
             // Connect, upload, disconnect — with retry on error
@@ -630,6 +839,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         protocolSession = session
         updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
         sessionService.transitionTo(.preparing)
+        NativeSyncEngineModule.shared?.emitSyncStateChanged([
+            "uploadState": "preparing",
+            "progressPercent": 0,
+        ])
         var activeSessionId: String?
         var uploadRoundCompleted = false
 
@@ -649,53 +862,39 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
         }
 
-        if let forcedTarget = resolvedForcedSidecarTarget() {
-            try await session.connect(host: forcedTarget.host, port: forcedTarget.port)
-            sidecarHost = forcedTarget.host
-            NSLog("[SyncPipeline] TCP connected via forced host %@:%d", forcedTarget.host, Int(forcedTarget.port))
-        } else {
-            // Find target device
-            func findDevice() -> DiscoveredDevice? {
-                if let exact = discoveredDevices[binding.deviceId], exact.endpoint != nil {
-                    return exact
-                }
-                return discoveredDevices.values.first(where: { $0.endpoint != nil })
+        // Find target device
+        func findDevice() -> DiscoveredDevice? {
+            if let exact = discoveredDevices[binding.deviceId] {
+                return exact
             }
-
-            var targetDevice = findDevice()
-            var targetEndpoint = targetDevice?.endpoint
-            if targetEndpoint == nil {
-                discoveryService.startBrowsing()
-                for _ in 0..<20 {
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    if let found = findDevice() {
-                        targetDevice = found
-                        targetEndpoint = found.endpoint
-                        break
-                    }
-                }
-            }
-            guard let endpoint = targetEndpoint else {
-                throw SyncEngineError.networkError("Target device not found on network")
-            }
-
-            try await session.connect(endpoint: endpoint)
-            sidecarHost = preferredSidecarHost(probedHost: newTransport.remoteHost, device: targetDevice)
-            NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
+            return discoveredDevices.values.first
         }
 
-        var helloPayload: [String: Any] = [
-            "clientId": clientId,
-            "clientName": getClientDisplayName(),
-            "clientPlatform": "ios",
-            "appVersion": currentAppVersionLabel(),
-            "pairingToken": token,
-            "appState": currentAppStateLabel(),
-        ]
-        if let clientIP = currentClientIPv4() {
-            helloPayload["clientIp"] = clientIP
+        var targetDevice = findDevice()
+        if targetDevice == nil {
+            discoveryService.startBrowsing()
+            for _ in 0..<20 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+                if let found = findDevice() {
+                    targetDevice = found
+                    break
+                }
+            }
         }
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
+
+        try await connectSession(
+            session,
+            device: targetDevice,
+            fallbackHost: binding.host,
+            fallbackPort: UInt16(binding.port)
+        )
+        sidecarHost = preferredSidecarHost(probedHost: newTransport.remoteHost, device: targetDevice)
+        NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
+
+        let (helloType, helloRes) = try await session.sendAndReceive(
+            type: .helloReq,
+            payload: buildClientHelloPayload(clientId: clientId, pairingToken: token)
+        )
         guard helloType == .helloRes else {
             throw SyncEngineError.networkError("Expected HELLO_RES")
         }
@@ -1019,7 +1218,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let recoveryAckTimeoutNs = max(ackTimeoutNs, 30_000_000_000)
         let progressPersistBytes: Int64 = 64 * 1024 * 1024
         let progressPersistInterval: CFTimeInterval = 2.0
-        let progressEmitInterval: CFTimeInterval = 0.5
+        let progressEmitInterval: CFTimeInterval = 0.25
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { handle.closeFile() }
 
@@ -1082,6 +1281,28 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             perfLog(logLine)
+        }
+
+        func emitUploadProgress(now: CFTimeInterval) {
+            let confirmedProgressPercent = fileSize > 0
+                ? Int(Double(acknowledgedOffset) / Double(fileSize) * 100)
+                : 0
+            let sentProgressPercent = fileSize > 0
+                ? Int(Double(nextOffset) / Double(fileSize) * 100)
+                : 0
+            NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                "uploadState": "uploading",
+                "progressPercent": confirmedProgressPercent,
+                "transferredBytes": acknowledgedOffset,
+                "confirmedBytes": acknowledgedOffset,
+                "sentBytes": nextOffset,
+                "pendingConfirmBytes": max(nextOffset - acknowledgedOffset, 0),
+                "sentProgressPercent": sentProgressPercent,
+                "totalBytes": fileSize,
+                "currentFile": fileKey,
+                "currentSpeedMbps": round(speedMbps * 10) / 10,
+            ])
+            lastProgressEmitTime = now
         }
 
         defer {
@@ -1161,6 +1382,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 perfLog(
                     "file=\(fileKey) action=WINDOW_FILL iteration=\(windowFillCount) ackedMiB=\(String(format: "%.1f", Double(acknowledgedOffset - startOffset) / (1024 * 1024))) filledChunks=\(windowFillChunks) fillMiB=\(String(format: "%.1f", Double(nextOffset - windowFillStartOffset) / (1024 * 1024))) fillMs=\(Int(windowFillElapsed * 1000)) fillReadMs=\(Int(windowFillReadTime * 1000)) fillEnqueueMs=\(Int(windowFillEnqueueTime * 1000)) avgEnqueueMs=\(String(format: "%.1f", avgWindowEnqueueMs)) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) activeWindowMiB=\(String(format: "%.1f", Double(activeMaxInFlightBytes) / (1024 * 1024)))"
                 )
+            }
+
+            let postFillNow = CFAbsoluteTimeGetCurrent()
+            if nextOffset > acknowledgedOffset
+                && (
+                    ackCount == 0
+                        || postFillNow - lastProgressEmitTime >= progressEmitInterval
+                        || nextOffset == fileSize
+                )
+            {
+                emitUploadProgress(now: postFillNow)
             }
 
             if inFlight.isEmpty {
@@ -1247,18 +1479,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
             // Emit progress to RN
             if now - lastProgressEmitTime >= progressEmitInterval || acknowledgedOffset == fileSize {
-                let progressPercent = fileSize > 0
-                    ? Int(Double(acknowledgedOffset) / Double(fileSize) * 100)
-                    : 0
-                NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                    "uploadState": "uploading",
-                    "progressPercent": progressPercent,
-                    "transferredBytes": acknowledgedOffset,
-                    "totalBytes": fileSize,
-                    "currentFile": fileKey,
-                    "currentSpeedMbps": round(speedMbps * 10) / 10,
-                ])
-                lastProgressEmitTime = now
+                emitUploadProgress(now: now)
             }
         }
 
@@ -1310,9 +1531,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func photoLibraryDidChange() {
         NSLog("[SyncEngine] photo library changed — flagging rescan")
         photoLibraryChanged = true
+        scheduleIncrementalQueueRescan(reason: "photo_library_changed")
         // Wake up the watch loop if it's sleeping
-        watchLoopContinuation?.resume()
-        watchLoopContinuation = nil
+        resumeWatchLoopIfNeeded()
     }
 
     // MARK: - DiscoveryServiceDelegate
@@ -1405,17 +1626,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let clientId = bindingService.getOrCreateClientId()
 
         // 2. HELLO_REQ → HELLO_RES  (spec Section 7.8)
-        var helloPayload: [String: Any] = [
-            "clientId": clientId,
-            "clientName": getClientDisplayName(),
-            "clientPlatform": "ios",
-            "appVersion": currentAppVersionLabel(),
-            "appState": currentAppStateLabel(),
-        ]
-        if let clientIP = currentClientIPv4() {
-            helloPayload["clientIp"] = clientIP
-        }
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
+        let (helloType, helloRes) = try await session.sendAndReceive(
+            type: .helloReq,
+            payload: buildClientHelloPayload(clientId: clientId)
+        )
 
         guard helloType == .helloRes else {
             throw SyncEngineError.pairingError("Expected HELLO_RES, got \(helloType)")
@@ -1614,7 +1828,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - Client Display Name
 
-    private static let clientNameKey = "syncflow_client_display_name"
+    private static let legacyClientNameKey = "syncflow_client_display_name"
 
     // MARK: - Sidecar Host Resolution
 
@@ -1622,7 +1836,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func resolveSidecarHost(binding: BindingRecord, token: String, clientId: String) async throws {
         if let forcedTarget = resolvedForcedSidecarTarget() {
             sidecarHost = forcedTarget.host
-            updateBindingConnectionState(.connected, reason: "forced_sidecar_host")
             NSLog("[SyncPipeline] using forced sidecar host: %@:%d", forcedTarget.host, Int(forcedTarget.port))
             return
         }
@@ -1645,33 +1858,27 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
             }
         }
-        guard let ep = endpoint else { return }
-
         let transport = TcpTransport()
         let session = ProtocolSession(transport: transport)
-        try await session.connect(endpoint: ep)
+        try await connectSession(
+            session,
+            device: targetDevice,
+            fallbackHost: binding.host,
+            fallbackPort: UInt16(binding.port)
+        )
         sidecarHost = preferredSidecarHost(probedHost: transport.remoteHost, device: targetDevice)
         NSLog("[SyncPipeline] resolved sidecar host: %@", sidecarHost ?? "nil")
 
         // Auth so sidecar registers us as connected
-        var helloPayload: [String: Any] = [
-            "clientId": clientId,
-            "clientName": getClientDisplayName(),
-            "clientPlatform": "ios",
-            "appVersion": currentAppVersionLabel(),
-            "pairingToken": token,
-            "appState": currentAppStateLabel(),
-        ]
-        if let clientIP = currentClientIPv4() {
-            helloPayload["clientIp"] = clientIP
-        }
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
+        let (helloType, helloRes) = try await session.sendAndReceive(
+            type: .helloReq,
+            payload: buildClientHelloPayload(clientId: clientId, pairingToken: token)
+        )
         if helloType == .helloRes, let nonce = helloRes["nonce"] as? String {
             let hmac = transport.computeHMAC(token: token, nonce: nonce)
             let _ = try? await session.sendAndReceive(type: .authReq, payload: [
                 "clientId": clientId, "auth": hmac,
             ])
-            updateBindingConnectionState(.connected, reason: "resolved_sidecar_host")
         }
         // Disconnect — we just needed the IP
         transport.disconnect()
@@ -1700,22 +1907,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     func getClientDisplayName() -> String {
-        if let stored = UserDefaults.standard.string(forKey: Self.clientNameKey)?
+        if let stored = bindingService.getClientDisplayName()?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !stored.isEmpty
         {
             return stored
         }
-        return defaultClientDisplayName()
+
+        let defaults = UserDefaults.standard
+        if let legacy = defaults.string(forKey: Self.legacyClientNameKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !legacy.isEmpty,
+           !syncFlowGenericClientName(legacy)
+        {
+            bindingService.saveClientDisplayName(legacy)
+            defaults.removeObject(forKey: Self.legacyClientNameKey)
+            return legacy
+        }
+
+        let generated = defaultClientDisplayName()
+        defaults.removeObject(forKey: Self.legacyClientNameKey)
+        return generated
     }
 
     func setClientDisplayName(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            UserDefaults.standard.removeObject(forKey: Self.clientNameKey)
+            bindingService.clearClientDisplayName()
+            UserDefaults.standard.removeObject(forKey: Self.legacyClientNameKey)
+            pushClientMetadataUpdateIfPossible()
             return
         }
-        UserDefaults.standard.set(trimmed, forKey: Self.clientNameKey)
+        bindingService.saveClientDisplayName(trimmed)
+        UserDefaults.standard.removeObject(forKey: Self.legacyClientNameKey)
+        pushClientMetadataUpdateIfPossible()
     }
 
     // MARK: - Settings

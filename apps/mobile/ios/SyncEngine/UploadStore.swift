@@ -236,33 +236,14 @@ class UploadStore {
 
     func upsertUploadItem(_ item: UploadItemRecord) throws {
         try queue.sync {
-            let sql = """
-            INSERT INTO upload_items (asset_local_id, modified_at, media_type, original_filename, file_key, file_size, status, temp_file_path, acked_offset, last_error_code, updated_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-            ON CONFLICT(asset_local_id) DO UPDATE SET
-              media_type = excluded.media_type,
-              original_filename = excluded.original_filename,
-              file_key = excluded.file_key,
-              file_size = excluded.file_size,
-              status = excluded.status,
-              temp_file_path = excluded.temp_file_path,
-              acked_offset = excluded.acked_offset,
-              last_error_code = excluded.last_error_code,
-              updated_at = excluded.updated_at
-            """
-            try executeWithBindings(sql, bindings: [
-                .text(item.assetLocalId),
-                .text(item.modifiedAt),
-                .text(item.mediaType),
-                .textOrNull(item.originalFilename),
-                .textOrNull(item.fileKey),
-                .intOrNull(item.fileSize),
-                .text(item.status),
-                .textOrNull(item.tempFilePath),
-                .int(item.ackedOffset),
-                .textOrNull(item.lastErrorCode),
-                .text(item.updatedAt)
-            ])
+            try upsertUploadItemsInternal([item])
+        }
+    }
+
+    func upsertUploadItems(_ items: [UploadItemRecord]) throws {
+        guard !items.isEmpty else { return }
+        try queue.sync {
+            try upsertUploadItemsInternal(items)
         }
     }
 
@@ -298,6 +279,14 @@ class UploadStore {
         }
     }
 
+    func getTrackedFileKeys() -> [String] {
+        return queue.sync {
+            let sql = "SELECT file_key FROM upload_items WHERE file_key IS NOT NULL"
+            let rows = queryInternal(sql, bind: [])
+            return rows.compactMap { $0["file_key"] as? String }
+        }
+    }
+
     func updateUploadStatus(fileKey: String, status: String) throws {
         try queue.sync {
             let now = ISO8601DateFormatter().string(from: Date())
@@ -319,6 +308,46 @@ class UploadStore {
                 .text(now),
                 .text(fileKey)
             ])
+        }
+    }
+
+    private func upsertUploadItemsInternal(_ items: [UploadItemRecord]) throws {
+        let sql = """
+        INSERT INTO upload_items (asset_local_id, modified_at, media_type, original_filename, file_key, file_size, status, temp_file_path, acked_offset, last_error_code, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+        ON CONFLICT(asset_local_id) DO UPDATE SET
+          media_type = excluded.media_type,
+          original_filename = excluded.original_filename,
+          file_key = excluded.file_key,
+          file_size = excluded.file_size,
+          status = excluded.status,
+          temp_file_path = excluded.temp_file_path,
+          acked_offset = excluded.acked_offset,
+          last_error_code = excluded.last_error_code,
+          updated_at = excluded.updated_at
+        """
+
+        try executeInternal("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            for item in items {
+                try executeWithBindings(sql, bindings: [
+                    .text(item.assetLocalId),
+                    .text(item.modifiedAt),
+                    .text(item.mediaType),
+                    .textOrNull(item.originalFilename),
+                    .textOrNull(item.fileKey),
+                    .intOrNull(item.fileSize),
+                    .text(item.status),
+                    .textOrNull(item.tempFilePath),
+                    .int(item.ackedOffset),
+                    .textOrNull(item.lastErrorCode),
+                    .text(item.updatedAt)
+                ])
+            }
+            try executeInternal("COMMIT")
+        } catch {
+            try? executeInternal("ROLLBACK")
+            throw error
         }
     }
 

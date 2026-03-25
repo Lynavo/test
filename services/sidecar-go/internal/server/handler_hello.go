@@ -13,6 +13,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/nicksyncflow/sidecar/internal/events"
 	"github.com/nicksyncflow/sidecar/internal/protocol"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
@@ -91,17 +92,21 @@ func (c *connection) handleHello(body []byte) error {
 		}
 
 		shouldUpsertDevice := false
+		metadataChanged := false
 		if req.ClientName != "" && device.ClientName != req.ClientName {
 			device.ClientName = req.ClientName
 			shouldUpsertDevice = true
+			metadataChanged = true
 		}
 		if req.DeviceAlias != "" && (device.DeviceAlias == nil || *device.DeviceAlias != req.DeviceAlias) {
 			device.DeviceAlias = &req.DeviceAlias
 			shouldUpsertDevice = true
+			metadataChanged = true
 		}
 		if c.clientIP != "" && (device.LastIP == nil || *device.LastIP != c.clientIP) {
 			device.LastIP = &c.clientIP
 			shouldUpsertDevice = true
+			metadataChanged = true
 		}
 
 		if shouldUpsertDevice {
@@ -111,6 +116,9 @@ func (c *connection) handleHello(body []byte) error {
 			}
 		} else if err := c.store.UpdateLastSeen(req.ClientID, c.clientIP); err != nil {
 			slog.Warn("failed to update last_seen", "err", err)
+		}
+		if metadataChanged && c.hub != nil {
+			c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
 		}
 
 		slog.Info("sending HELLO_RES (returning device, authRequired=false)", "clientID", req.ClientID)

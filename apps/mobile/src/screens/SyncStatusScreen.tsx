@@ -8,6 +8,8 @@ import {
   NativeModules,
   NativeEventEmitter,
   Linking,
+  AppState,
+  type AppStateStatus,
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -83,6 +85,9 @@ const RING_SIZE = 200;
 const RING_THICKNESS = 9;
 const RECONNECT_PAUSED_THRESHOLD_MS = 15_000;
 const RECONNECT_PAUSED_THRESHOLD_ATTEMPT = 3;
+const STARTUP_CONNECTION_GRACE_MS = 2500;
+const CONNECTION_BANNER_SHOW_DELAY_MS = 700;
+const COMPLETION_CARD_HOLD_MS = 1200;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -270,11 +275,14 @@ export function SyncStatusScreen() {
   const [retryBanner, setRetryBanner] = useState<RetryBannerState | null>(null);
   const [retryCountdownSec, setRetryCountdownSec] = useState(0);
   const [latestSync, setLatestSync] = useState<LatestSyncInfo | null>(null);
+  const [suppressInitialOfflineBanner, setSuppressInitialOfflineBanner] = useState(false);
+  const [showConnectionBanner, setShowConnectionBanner] = useState(false);
+  const [holdCompletionCardUntilMs, setHoldCompletionCardUntilMs] = useState<number | null>(null);
 
   const loadTodayStats = useCallback(async (engine?: any) => {
     try {
       const mod = engine || NativeModules.NativeSyncEngine;
-      if (!mod) return;
+      if (!mod) return null;
       const history = await mod.getHistoryDays(null);
       if (history?.items) {
         const today = new Date().toISOString().slice(0, 10);
@@ -286,9 +294,12 @@ export function SyncStatusScreen() {
             totalBytesSum += item.totalBytes || 0;
           }
         }
-        setTodayStats({ fileCount: totalFiles, totalBytes: totalBytesSum });
+        const stats = { fileCount: totalFiles, totalBytes: totalBytesSum };
+        setTodayStats(stats);
+        return stats;
       }
     } catch { /* ignore */ }
+    return null;
   }, []);
 
   const loadLatestSync = useCallback(async (engine?: any) => {
@@ -342,6 +353,7 @@ export function SyncStatusScreen() {
     let syncSub: { remove: () => void } | undefined;
     let queueSub: { remove: () => void } | undefined;
     let bindingSub: { remove: () => void } | undefined;
+    let startupBannerTimer: ReturnType<typeof setTimeout> | undefined;
 
     const applyBindingState = (state: Record<string, unknown> | null | undefined) => {
       if (!state || !state.deviceId) {
@@ -357,6 +369,11 @@ export function SyncStatusScreen() {
         host: (state.host as string) || '',
         connectionState: ((state.connectionState as BindingState['connectionState']) || 'bound'),
       });
+
+      const connectionState = (state.connectionState as BindingState['connectionState']) || 'bound';
+      if (connectionState === 'connected') {
+        setSuppressInitialOfflineBanner(false);
+      }
       return true;
     };
 
@@ -383,33 +400,61 @@ export function SyncStatusScreen() {
           return;
         }
 
+        setSuppressInitialOfflineBanner(true);
+        startupBannerTimer = setTimeout(() => {
+          setSuppressInitialOfflineBanner(false);
+        }, STARTUP_CONNECTION_GRACE_MS);
+
         // Load initial state FIRST (before triggering sync, to avoid flash)
-        await loadTodayStats(NativeSyncEngine);
+        const loadedTodayStats = await loadTodayStats(NativeSyncEngine);
         await loadLatestSync(NativeSyncEngine);
 
         const syncData = await NativeSyncEngine.getSyncOverview();
+        const initialOverview: SyncOverview = syncData ? {
+          progressPercent: syncData.progressPercent ?? 0,
+          speed: syncData.currentSpeedMbps ? `${syncData.currentSpeedMbps} MB/s` : '0 MB/s',
+          completed: formatBytes(syncData.transferredBytes ?? 0),
+          total: formatBytes(syncData.totalBytes ?? 0),
+          uploadState: syncData.uploadState ?? 'idle',
+          retryAttempt: 0,
+          retryDelaySec: 0,
+        } : {
+          progressPercent: 0,
+          speed: '0 MB/s',
+          completed: '0 B',
+          total: '0 B',
+          uploadState: 'idle',
+          retryAttempt: 0,
+          retryDelaySec: 0,
+        };
         if (syncData) {
-          setOverview({
-            progressPercent: syncData.progressPercent ?? 0,
-            speed: syncData.currentSpeedMbps ? `${syncData.currentSpeedMbps} MB/s` : '0 MB/s',
-            completed: formatBytes(syncData.transferredBytes ?? 0),
-            total: formatBytes(syncData.totalBytes ?? 0),
-            uploadState: syncData.uploadState ?? 'idle',
-            retryAttempt: 0,
-            retryDelaySec: 0,
-          });
+          setOverview(initialOverview);
         }
 
         // Load initial queue
         const queueData = await NativeSyncEngine.getReadOnlyQueue();
-        if (queueData) {
-          setQueue(queueData.map((item: Record<string, unknown>, index: number) => ({
+        const initialQueue = queueData
+          ? queueData.map((item: Record<string, unknown>, index: number) => ({
             id: String(item.id ?? index),
             name: (item.originalFilename as string) || 'Unknown',
             size: formatBytes((item.fileSize as number) ?? 0),
             type: (item.mediaType as string) === 'video' ? 'video' : 'image',
             status: ((item.status as string) ?? 'queued') as QueueItem['status'],
-          })));
+          }))
+          : [];
+        if (queueData) {
+          setQueue(initialQueue);
+        }
+
+        const initialDone =
+          initialOverview.uploadState === 'completed' ||
+          (
+            initialOverview.uploadState === 'idle' &&
+            initialQueue.length === 0 &&
+            (initialOverview.progressPercent >= 100 || (loadedTodayStats?.fileCount ?? 0) > 0)
+          );
+        if (initialDone) {
+          setHoldCompletionCardUntilMs(Date.now() + COMPLETION_CARD_HOLD_MS);
         }
 
         setInitialLoading(false);
@@ -434,6 +479,11 @@ export function SyncStatusScreen() {
             }));
           } else if (uploadState === 'uploading' || uploadState === 'completed') {
             setRetryBanner(null);
+            setSuppressInitialOfflineBanner(false);
+          }
+
+          if (uploadState === 'preparing' || uploadState === 'uploading' || uploadState === 'reconnecting' || uploadState === 'paused_no_permission') {
+            setHoldCompletionCardUntilMs(null);
           }
 
           setOverview((prev) => ({
@@ -479,10 +529,39 @@ export function SyncStatusScreen() {
     loadReal();
 
     return () => {
+      if (startupBannerTimer) {
+        clearTimeout(startupBannerTimer);
+      }
       errorSub?.remove();
       syncSub?.remove();
       queueSub?.remove();
       bindingSub?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let appState = AppState.currentState;
+    let foregroundBannerTimer: ReturnType<typeof setTimeout> | undefined;
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const becameActive = appState !== 'active' && nextState === 'active';
+      appState = nextState;
+      if (!becameActive) {
+        return;
+      }
+      setSuppressInitialOfflineBanner(true);
+      if (foregroundBannerTimer) {
+        clearTimeout(foregroundBannerTimer);
+      }
+      foregroundBannerTimer = setTimeout(() => {
+        setSuppressInitialOfflineBanner(false);
+      }, STARTUP_CONNECTION_GRACE_MS);
+    });
+
+    return () => {
+      if (foregroundBannerTimer) {
+        clearTimeout(foregroundBannerTimer);
+      }
+      subscription.remove();
     };
   }, []);
 
@@ -505,18 +584,29 @@ export function SyncStatusScreen() {
 
   const isDone = overview.uploadState === 'completed' ||
     (overview.uploadState === 'idle' && queue.length === 0 && (overview.progressPercent >= 100 || todayStats.fileCount > 0));
+  const holdCompletionCard =
+    holdCompletionCardUntilMs !== null &&
+    Date.now() < holdCompletionCardUntilMs &&
+    overview.uploadState !== 'preparing' &&
+    overview.uploadState !== 'uploading' &&
+    overview.uploadState !== 'reconnecting' &&
+    overview.uploadState !== 'paused_no_permission';
   const boundDeviceName = bindingState?.deviceAlias || bindingState?.deviceName || 'Mac';
   const isConnectionError = bindingState?.connectionState === 'offline' || bindingState?.connectionState === 'bound';
   const isTransferInterrupted = retryBanner !== null || overview.uploadState === 'reconnecting';
   const isPermissionBlocked = overview.uploadState === 'paused_no_permission';
+  const suppressConnectionNotice = suppressInitialOfflineBanner && !isPermissionBlocked;
   const reconnectElapsedMs = retryBanner ? Date.now() - retryBanner.startedAtMs : 0;
   const isWaitingForNetworkRecovery = isTransferInterrupted && (
     reconnectElapsedMs >= RECONNECT_PAUSED_THRESHOLD_MS ||
     (retryBanner?.attempt ?? overview.retryAttempt ?? 0) >= RECONNECT_PAUSED_THRESHOLD_ATTEMPT
   );
+  const enableConnectionBanner = true;
   const connectionNotice = (
     isPermissionBlocked
       ? '需要授予照片访问权限。'
+      : suppressConnectionNotice
+      ? null
       : isTransferInterrupted
       ? (
         isWaitingForNetworkRecovery
@@ -534,6 +624,8 @@ export function SyncStatusScreen() {
   const connectionDetail = (
     isPermissionBlocked
       ? '打开系统设置后允许访问照片，恢复后会自动继续同步。'
+      : suppressConnectionNotice
+      ? null
       : isTransferInterrupted
       ? (
         isWaitingForNetworkRecovery
@@ -551,9 +643,27 @@ export function SyncStatusScreen() {
       : isConnectionError
         ? '恢复网络或重新打开 Mac 端 Sidecar 后会自动继续。'
         : bindingState?.connectionState === 'connecting' || bindingState?.connectionState === 'discovering'
-          ? '连接建立后会自动继续当前同步任务。'
-          : null
+        ? '连接建立后会自动继续当前同步任务。'
+        : null
   );
+
+  useEffect(() => {
+    if (!connectionNotice) {
+      setShowConnectionBanner(false);
+      return;
+    }
+
+    if (isPermissionBlocked) {
+      setShowConnectionBanner(true);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setShowConnectionBanner(true);
+    }, CONNECTION_BANNER_SHOW_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [connectionNotice, isPermissionBlocked]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
@@ -578,7 +688,7 @@ export function SyncStatusScreen() {
         </View>
       </View>
 
-      {initialLoading || !connectionNotice ? null : (
+      {initialLoading || !enableConnectionBanner || !connectionNotice || !showConnectionBanner ? null : (
         <View
           style={[
             styles.connectionBanner,
@@ -632,7 +742,7 @@ export function SyncStatusScreen() {
         </View>
       )}
 
-      {initialLoading ? null : isDone ? (
+      {initialLoading ? null : (isDone || holdCompletionCard) ? (
         /* ---- Completion card ---- */
         <View style={styles.progressCard}>
           <CompletionCard
@@ -798,6 +908,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 14,
     color: BLUE_MUTED,
+  },
+  pendingText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#587894',
   },
   lastSyncText: {
     marginTop: 8,

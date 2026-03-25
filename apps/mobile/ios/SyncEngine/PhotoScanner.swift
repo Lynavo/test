@@ -41,8 +41,8 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    /// Scan all photos and videos, return items not yet uploaded
-    func scanForNewAssets(clientId: String, completedFileKeys: Set<String>) -> [ScannedAsset] {
+    /// Scan all photos and videos, return items whose fileKey is not already tracked.
+    func scanForUntrackedAssets(clientId: String, trackedFileKeys: Set<String>) -> [ScannedAsset] {
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
         fetchOptions.predicate = NSPredicate(format: "mediaType == %d OR mediaType == %d",
@@ -50,7 +50,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
                                               PHAssetMediaType.video.rawValue)
 
         let assets = PHAsset.fetchAssets(with: fetchOptions)
-        NSLog("[PhotoScanner] library has %d authorized assets, %d completed keys", assets.count, completedFileKeys.count)
+        NSLog("[PhotoScanner] library has %d authorized assets, %d tracked keys", assets.count, trackedFileKeys.count)
         var results: [ScannedAsset] = []
         var skippedCount = 0
 
@@ -63,10 +63,10 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
                 mediaType: asset.mediaType == .video ? "video" : "image"
             )
 
-            if completedFileKeys.contains(fileKey) {
+            if trackedFileKeys.contains(fileKey) {
                 skippedCount += 1
             }
-            if !completedFileKeys.contains(fileKey) {
+            if !trackedFileKeys.contains(fileKey) {
                 // Get filename and estimated size from PHAssetResource
                 let resources = PHAssetResource.assetResources(for: asset)
                 let primaryResource = resources.first(where: {
@@ -87,8 +87,13 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
             }
         }
 
-        NSLog("[PhotoScanner] scan result: %d new, %d skipped (already completed)", results.count, skippedCount)
+        NSLog("[PhotoScanner] scan result: %d new, %d skipped (already tracked)", results.count, skippedCount)
         return results
+    }
+
+    /// Scan assets that are not yet completed on the mobile side.
+    func scanForNewAssets(clientId: String, completedFileKeys: Set<String>) -> [ScannedAsset] {
+        scanForUntrackedAssets(clientId: clientId, trackedFileKeys: completedFileKeys)
     }
 
     /// Compute fileKey — stable identifier for a file from this client.

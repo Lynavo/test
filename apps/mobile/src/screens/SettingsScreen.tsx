@@ -358,7 +358,7 @@ export function SettingsScreen() {
               activeOpacity={0.7}
               onPress={handleDisconnect}
             >
-              <Text style={styles.disconnectText}>{'断开连接 / 切换设备'}</Text>
+              <Text style={styles.disconnectText}>{'切换设备'}</Text>
             </TouchableOpacity>
           </View>
 
