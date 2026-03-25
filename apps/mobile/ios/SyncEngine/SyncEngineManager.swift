@@ -3,6 +3,7 @@ import Photos
 import UIKit
 import CryptoKit
 import Network
+import Darwin
 
 private let syncFlowTruthyValues: Set<String> = ["1", "true", "yes", "on"]
 
@@ -83,6 +84,72 @@ func syncFlowStringSetting(envKey: String, userDefaultsKey: String) -> String? {
     #else
     return nil
     #endif
+}
+
+private func syncFlowGenericClientName(_ rawName: String) -> Bool {
+    let normalized = rawName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if normalized.isEmpty {
+        return true
+    }
+    let genericNames = [
+        "iphone",
+        "ipad",
+        "ipod",
+        "ipod touch",
+        UIDevice.current.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+    ]
+    return genericNames.contains(normalized)
+}
+
+private func syncFlowPreferredClientIPv4() -> String? {
+    var addressList: UnsafeMutablePointer<ifaddrs>?
+    guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
+        return nil
+    }
+    defer { freeifaddrs(addressList) }
+
+    let preferredPrefixes = ["en", "bridge"]
+    var fallback: String?
+    var pointer: UnsafeMutablePointer<ifaddrs>? = firstAddress
+
+    while let current = pointer {
+        let interface = current.pointee
+        pointer = interface.ifa_next
+
+        guard let addr = interface.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET) else {
+            continue
+        }
+
+        let name = String(cString: interface.ifa_name)
+        if name == "lo0" || name.hasPrefix("awdl") || name.hasPrefix("llw") || name.hasPrefix("utun") {
+            continue
+        }
+
+        var hostBuffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+        let result = getnameinfo(
+            addr,
+            socklen_t(addr.pointee.sa_len),
+            &hostBuffer,
+            socklen_t(hostBuffer.count),
+            nil,
+            0,
+            NI_NUMERICHOST
+        )
+        guard result == 0 else { continue }
+
+        let host = String(cString: hostBuffer)
+        if host == "127.0.0.1" || host.isEmpty {
+            continue
+        }
+        if preferredPrefixes.contains(where: { name.hasPrefix($0) }) {
+            return host
+        }
+        if fallback == nil {
+            fallback = host
+        }
+    }
+
+    return fallback
 }
 
 @objc
@@ -224,6 +291,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func currentAppVersionLabel() -> String {
         let bundle = Bundle.main
         return bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+    }
+
+    private func currentClientIPv4() -> String? {
+        return syncFlowPreferredClientIPv4()
+    }
+
+    private func defaultClientDisplayName() -> String {
+        let rawName = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard syncFlowGenericClientName(rawName) else {
+            return rawName
+        }
+
+        let clientId = bindingService.getOrCreateClientId().replacingOccurrences(of: "-", with: "")
+        let suffix = String(clientId.suffix(4)).uppercased()
+        let model = UIDevice.current.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return suffix.isEmpty ? model : "\(model) \(suffix)"
     }
 
     private func beginBackgroundTransitionIfNeeded(reason: String) {
@@ -601,14 +684,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
         }
 
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
+        var helloPayload: [String: Any] = [
             "clientId": clientId,
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": currentAppVersionLabel(),
             "pairingToken": token,
             "appState": currentAppStateLabel(),
-        ])
+        ]
+        if let clientIP = currentClientIPv4() {
+            helloPayload["clientIp"] = clientIP
+        }
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
         guard helloType == .helloRes else {
             throw SyncEngineError.networkError("Expected HELLO_RES")
         }
@@ -1318,13 +1405,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let clientId = bindingService.getOrCreateClientId()
 
         // 2. HELLO_REQ → HELLO_RES  (spec Section 7.8)
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
+        var helloPayload: [String: Any] = [
             "clientId": clientId,
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": currentAppVersionLabel(),
             "appState": currentAppStateLabel(),
-        ])
+        ]
+        if let clientIP = currentClientIPv4() {
+            helloPayload["clientIp"] = clientIP
+        }
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
 
         guard helloType == .helloRes else {
             throw SyncEngineError.pairingError("Expected HELLO_RES, got \(helloType)")
@@ -1366,11 +1457,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         // 3. PAIR_REQ → PAIR_RES  (spec Section 7.8)
-        let (pairType, pairRes) = try await session.sendAndReceive(type: .pairReq, payload: [
+        var pairPayload: [String: Any] = [
             "clientId": clientId,
             "clientName": getClientDisplayName(),
             "connectionCode": connectionCode,
-        ])
+        ]
+        if let clientIP = currentClientIPv4() {
+            pairPayload["clientIp"] = clientIP
+        }
+        let (pairType, pairRes) = try await session.sendAndReceive(type: .pairReq, payload: pairPayload)
 
         guard pairType == .pairRes else {
             throw SyncEngineError.pairingError("Expected PAIR_RES, got \(pairType)")
@@ -1559,11 +1654,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncPipeline] resolved sidecar host: %@", sidecarHost ?? "nil")
 
         // Auth so sidecar registers us as connected
-        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: [
-            "clientId": clientId, "clientName": getClientDisplayName(),
-            "clientPlatform": "ios", "appVersion": currentAppVersionLabel(),
-            "pairingToken": token, "appState": currentAppStateLabel(),
-        ])
+        var helloPayload: [String: Any] = [
+            "clientId": clientId,
+            "clientName": getClientDisplayName(),
+            "clientPlatform": "ios",
+            "appVersion": currentAppVersionLabel(),
+            "pairingToken": token,
+            "appState": currentAppStateLabel(),
+        ]
+        if let clientIP = currentClientIPv4() {
+            helloPayload["clientIp"] = clientIP
+        }
+        let (helloType, helloRes) = try await session.sendAndReceive(type: .helloReq, payload: helloPayload)
         if helloType == .helloRes, let nonce = helloRes["nonce"] as? String {
             let hmac = transport.computeHMAC(token: token, nonce: nonce)
             let _ = try? await session.sendAndReceive(type: .authReq, payload: [
@@ -1598,11 +1700,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     func getClientDisplayName() -> String {
-        return UserDefaults.standard.string(forKey: Self.clientNameKey) ?? UIDevice.current.name
+        if let stored = UserDefaults.standard.string(forKey: Self.clientNameKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !stored.isEmpty
+        {
+            return stored
+        }
+        return defaultClientDisplayName()
     }
 
     func setClientDisplayName(_ name: String) {
-        UserDefaults.standard.set(name, forKey: Self.clientNameKey)
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Self.clientNameKey)
+            return
+        }
+        UserDefaults.standard.set(trimmed, forKey: Self.clientNameKey)
     }
 
     // MARK: - Settings

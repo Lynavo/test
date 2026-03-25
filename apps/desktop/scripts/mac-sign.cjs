@@ -1,4 +1,6 @@
 const { execFile } = require('node:child_process');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
@@ -40,7 +42,87 @@ function buildCodesignArgs(identity, target, signOptions = {}, extraArgs = []) {
 
 async function runCodesign(identity, target, signOptions, extraArgs = []) {
   const args = buildCodesignArgs(identity, target, signOptions, extraArgs);
-  await execFileAsync('codesign', args, { maxBuffer: 10 * 1024 * 1024 });
+  const attempts = signOptions.timestamp === false ? 1 : 4;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await execFileAsync('codesign', args, { maxBuffer: 10 * 1024 * 1024 });
+      return;
+    } catch (error) {
+      const stderr = `${error.stderr || ''}`;
+      const shouldRetry =
+        attempt < attempts &&
+        stderr.includes('The timestamp service is not available.');
+
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      const backoffMs = attempt * 5000;
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+}
+
+async function pathExists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function listImmediateChildren(dir, suffix) {
+  if (!(await pathExists(dir))) {
+    return [];
+  }
+
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.name.endsWith(suffix))
+    .map((entry) => path.join(dir, entry.name))
+    .sort();
+}
+
+async function collectExecutableFiles(dir, files = []) {
+  if (!(await pathExists(dir))) {
+    return files;
+  }
+
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      await collectExecutableFiles(fullPath, files);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    if (entry.name.endsWith('.dylib')) {
+      files.push(fullPath);
+      continue;
+    }
+
+    const stat = await fs.stat(fullPath);
+    if ((stat.mode & 0o111) !== 0) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+async function signTarget(opts, target, extraArgs = []) {
+  const signOptions = opts.optionsForFile ? opts.optionsForFile(target) : {};
+  await runCodesign(opts.identity, target, signOptions, extraArgs);
 }
 
 module.exports = async function sign(opts) {
@@ -48,12 +130,30 @@ module.exports = async function sign(opts) {
     return;
   }
 
+  const frameworksDir = path.join(opts.app, 'Contents', 'Frameworks');
+  const helperApps = await listImmediateChildren(frameworksDir, '.app');
+  const frameworks = await listImmediateChildren(frameworksDir, '.framework');
+  const nestedExecutables = await collectExecutableFiles(frameworksDir);
+
   const binaries = Array.isArray(opts.binaries) ? opts.binaries : [];
   for (const binary of binaries) {
-    const binaryOptions = opts.optionsForFile ? opts.optionsForFile(binary) : {};
-    await runCodesign(opts.identity, binary, binaryOptions);
+    await signTarget(opts, binary);
   }
 
-  const appOptions = opts.optionsForFile ? opts.optionsForFile(opts.app) : {};
-  await runCodesign(opts.identity, opts.app, appOptions, ['--deep']);
+  for (const executable of nestedExecutables) {
+    if (binaries.includes(executable)) {
+      continue;
+    }
+    await signTarget(opts, executable);
+  }
+
+  for (const helperApp of helperApps) {
+    await signTarget(opts, helperApp);
+  }
+
+  for (const framework of frameworks) {
+    await signTarget(opts, framework);
+  }
+
+  await signTarget(opts, opts.app);
 };

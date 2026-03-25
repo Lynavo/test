@@ -9,6 +9,7 @@ func TestHelloReqMarshalRoundtrip(t *testing.T) {
 	orig := HelloReq{
 		ClientID:          "device-abc-123",
 		ClientName:        "iPhone 16 Pro",
+		ClientIP:          "192.168.1.88",
 		ClientPlatform:    "ios",
 		AppVersion:        "1.0.0",
 		PairingToken:      "tok_abc",
@@ -51,7 +52,7 @@ func TestHelloReqOmitsEmptyOptionals(t *testing.T) {
 		t.Fatalf("Unmarshal to map: %v", err)
 	}
 
-	for _, key := range []string{"pairingToken", "previousSessionId", "deviceAlias"} {
+	for _, key := range []string{"pairingToken", "previousSessionId", "deviceAlias", "clientIp"} {
 		if _, ok := m[key]; ok {
 			t.Errorf("expected %q to be omitted when empty", key)
 		}

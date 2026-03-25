@@ -305,7 +305,10 @@ func (c *connection) handleFileEnd(body []byte) error {
 	storeCompleteElapsed := time.Since(storeCompleteStart)
 
 	// Update daily stats
-	clientIP := extractIP(c.conn)
+	clientIP := c.clientIP
+	if clientIP == "" {
+		clientIP = extractIP(c.conn)
+	}
 	clientName := c.clientID
 	if dev, err := c.store.GetPairedDevice(c.clientID); err == nil {
 		clientName = dev.ClientName

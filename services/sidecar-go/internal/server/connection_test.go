@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	testClientID   = "test-iphone-001"
-	testClientName = "Test iPhone"
-	testConnCode   = "123456"
+	testClientID    = "test-iphone-001"
+	testClientName  = "Test iPhone"
+	testConnCode    = "123456"
 	testReadTimeout = 5 * time.Second
 )
 
@@ -438,6 +438,48 @@ func TestResumeAfterDisconnect(t *testing.T) {
 		if content[i] != payload[i] {
 			t.Fatalf("file content mismatch at byte %d after resume", i)
 		}
+	}
+}
+
+func TestReturningHelloRefreshesClientNameAndIPv4(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	pairingToken := doPairing(t, client)
+	client.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanup2()
+
+	const updatedName = "iPhone 9C2A"
+	const advertisedIPv4 = "192.168.1.88"
+
+	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:       testClientID,
+		ClientName:     updatedName,
+		ClientIP:       advertisedIPv4,
+		ClientPlatform: "ios",
+		AppVersion:     "0.1.0",
+		PairingToken:   pairingToken,
+		AppState:       "foreground",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
+	if helloRes.AuthRequired {
+		t.Fatal("expected authRequired=false for returning device")
+	}
+
+	paired, err := st.GetPairedDevice(testClientID)
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if paired.ClientName != updatedName {
+		t.Fatalf("client name=%q, want %q", paired.ClientName, updatedName)
+	}
+	if paired.LastIP == nil || *paired.LastIP != advertisedIPv4 {
+		t.Fatalf("last ip=%v, want %q", paired.LastIP, advertisedIPv4)
 	}
 }
 

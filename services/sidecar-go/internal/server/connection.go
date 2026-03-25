@@ -46,6 +46,7 @@ type connection struct {
 	sessionID  string
 	nonce      string      // generated on HELLO_RES for HMAC auth
 	fileWriter *FileWriter // current .part file being written
+	clientIP   string
 	pingTimer  *time.Timer // 15s inactivity -> send PING
 	writeMu    sync.Mutex
 	ackMu      sync.Mutex

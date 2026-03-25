@@ -4,6 +4,7 @@ package protocol
 type HelloReq struct {
 	ClientID          string `json:"clientId"`
 	ClientName        string `json:"clientName"`
+	ClientIP          string `json:"clientIp,omitempty"`
 	ClientPlatform    string `json:"clientPlatform"`
 	AppVersion        string `json:"appVersion"`
 	PairingToken      string `json:"pairingToken,omitempty"`
@@ -51,6 +52,7 @@ type AuthReq struct {
 type PairReq struct {
 	ClientID       string `json:"clientId"`
 	ClientName     string `json:"clientName"`
+	ClientIP       string `json:"clientIp,omitempty"`
 	ConnectionCode string `json:"connectionCode"`
 	DeviceAlias    string `json:"deviceAlias,omitempty"`
 }

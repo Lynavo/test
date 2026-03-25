@@ -30,6 +30,7 @@ func (c *connection) handleHello(body []byte) error {
 		return fmt.Errorf("parse HELLO_REQ: %w", err)
 	}
 	c.clientID = req.ClientID
+	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
 
 	slog.Info("HELLO_REQ received",
 		"clientID", req.ClientID,
@@ -89,17 +90,26 @@ func (c *connection) handleHello(body []byte) error {
 			}
 		}
 
-		// Update device_alias if provided
+		shouldUpsertDevice := false
+		if req.ClientName != "" && device.ClientName != req.ClientName {
+			device.ClientName = req.ClientName
+			shouldUpsertDevice = true
+		}
 		if req.DeviceAlias != "" && (device.DeviceAlias == nil || *device.DeviceAlias != req.DeviceAlias) {
 			device.DeviceAlias = &req.DeviceAlias
-			if err := c.store.UpsertPairedDevice(*device); err != nil {
-				slog.Warn("failed to update device alias", "err", err)
-			}
+			shouldUpsertDevice = true
+		}
+		if c.clientIP != "" && (device.LastIP == nil || *device.LastIP != c.clientIP) {
+			device.LastIP = &c.clientIP
+			shouldUpsertDevice = true
 		}
 
-		// Update last_seen with client IP
-		clientIP := extractIP(c.conn)
-		if err := c.store.UpdateLastSeen(req.ClientID, clientIP); err != nil {
+		if shouldUpsertDevice {
+			device.LastSeenAt = time.Now().UTC().Format(time.RFC3339)
+			if err := c.store.UpsertPairedDevice(*device); err != nil {
+				slog.Warn("failed to refresh paired device metadata", "err", err)
+			}
+		} else if err := c.store.UpdateLastSeen(req.ClientID, c.clientIP); err != nil {
 			slog.Warn("failed to update last_seen", "err", err)
 		}
 
@@ -233,7 +243,8 @@ func (c *connection) handlePair(body []byte) error {
 	tokenHash := hex.EncodeToString(hash[:])
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	clientIP := extractIP(c.conn)
+	clientIP := preferredClientIP(req.ClientIP, c.conn)
+	c.clientIP = clientIP
 
 	var alias *string
 	if req.DeviceAlias != "" {
@@ -310,4 +321,23 @@ func extractIP(conn net.Conn) string {
 		return conn.RemoteAddr().String()
 	}
 	return host
+}
+
+func preferredClientIP(advertisedIP string, conn net.Conn) string {
+	advertisedIP = normalizeClientIP(advertisedIP)
+	if advertisedIP != "" {
+		return advertisedIP
+	}
+	return normalizeClientIP(extractIP(conn))
+}
+
+func normalizeClientIP(raw string) string {
+	ip := net.ParseIP(raw)
+	if ip == nil || ip.IsLoopback() {
+		return ""
+	}
+	if ipv4 := ip.To4(); ipv4 != nil {
+		return ipv4.String()
+	}
+	return ip.String()
 }
