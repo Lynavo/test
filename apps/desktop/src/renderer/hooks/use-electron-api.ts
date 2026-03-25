@@ -72,7 +72,7 @@ const mockAPI: ElectronAPI = {
   platform: mockPlatform,
   support: {
     exportDiagnostics: async () => null,
-    getAppInfo: async () => ({ name: 'SyncFlow', version: '0.1.0', buildNumber: '4' }),
+    getAppInfo: async () => ({ name: 'SyncFlow', version: '0.1.0', buildNumber: '5' }),
   },
 };
 
