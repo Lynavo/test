@@ -84,8 +84,7 @@ func TestSetDefaultsFillsDataDirReceiveDirDeviceName(t *testing.T) {
 	cfg := &Config{}
 	cfg.setDefaults()
 
-	home, _ := os.UserHomeDir()
-	expectedDataDir := filepath.Join(home, "Library", "Application Support", "SyncFlow")
+	expectedDataDir := defaultDataDir()
 	if cfg.DataDir != expectedDataDir {
 		t.Errorf("DataDir = %q, want %q", cfg.DataDir, expectedDataDir)
 	}

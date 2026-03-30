@@ -1,0 +1,67 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "desktop: build contracts",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["--filter", "@syncflow/contracts", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "desktop: build design tokens",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["--filter", "@syncflow/design-tokens", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "desktop: build shared packages",
+      "dependsOn": ["desktop: build contracts", "desktop: build design tokens"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "mobile: start metro",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["--filter", "@syncflow/mobile", "start"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "custom",
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": ".*(Welcome to Metro|Metro waiting on|Dev server ready).*"
+        }
+      }
+    },
+    {
+      "label": "mobile: stop metro",
+      "type": "shell",
+      "command": "pkill",
+      "args": ["-f", "react-native start"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -61,7 +61,7 @@ export function SettingsPage() {
             系统权限指引
           </h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            局域网共享需要开启系统文件共享权限
+            局域网共享需要开启系统文件共享权限，并按系统类型完成共享目录配置
           </p>
           <SystemGuideSection />
         </section>

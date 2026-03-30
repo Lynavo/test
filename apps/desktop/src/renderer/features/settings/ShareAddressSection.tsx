@@ -1,23 +1,41 @@
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Link2, Loader2, RefreshCw, Settings2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  CheckCircle2,
+  CopyPlus,
+  FolderOpen,
+  Link2,
+  Loader2,
+  RefreshCw,
+  Settings2,
+} from 'lucide-react';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 
 const MAC_SHARING_GUIDE_URL =
   'https://support.apple.com/guide/mac-help/set-up-file-sharing-on-mac-mh17131/mac';
+const WINDOWS_SHARING_SETTINGS_URI = 'ms-settings:network-advancedsettings';
 
 export function ShareAddressSection() {
-  const { shareAddress, shareName, shareStatus } = useSettingsStore((s) => s.settings);
+  const { receivePath, shareAddress, shareName, shareStatus } = useSettingsStore((s) => s.settings);
   const shareStatusInfo = useSettingsStore((s) => s.shareStatusInfo);
   const validatingShare = useSettingsStore((s) => s.validatingShare);
   const refreshShareStatus = useSettingsStore((s) => s.refreshShareStatus);
+  const isMac = window.electronAPI?.platform.isMac() ?? true;
+  const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
+  const hostName = window.electronAPI?.platform.getHostName?.() ?? '';
 
   const effectiveStatus = validatingShare ? 'validating' : shareStatusInfo.status ?? shareStatus;
   const effectiveShareName = shareStatusInfo.shareName || shareName || 'SyncFlow';
+  const recommendedShareAddress = `\\\\${hostName || '电脑名'}\\${effectiveShareName}`;
+  const effectiveShareAddress = shareAddress || recommendedShareAddress;
   const statusMeta = {
     validating: {
       label: '检测中',
-      detail: '正在检查当前接收目录是否已在 macOS 文件共享中开放。',
+      detail: isMac
+        ? '正在检查当前接收目录是否已在 macOS 文件共享中开放。'
+        : '正在检查当前接收目录的共享状态。',
       tone: 'text-amber-700 bg-amber-50 border-amber-200',
       icon: Loader2,
       iconClassName: 'animate-spin',
@@ -31,19 +49,23 @@ export function ShareAddressSection() {
     },
     needs_manual_enable: {
       label: '未开启共享',
-      detail: '尚未检测到 macOS 文件共享服务，请先在系统设置中启用文件共享。',
+      detail: isMac
+        ? '尚未检测到 macOS 文件共享服务，请先在系统设置中启用文件共享。'
+        : 'Windows 版本暂未支持自动检测共享状态。请先在系统里手动配置 SMB 共享，再继续验证共享地址。',
       tone: 'text-amber-700 bg-amber-50 border-amber-200',
       icon: Settings2,
       iconClassName: '',
-      showGuide: true,
+      showGuide: isMac,
     },
     share_registered: {
       label: '已检测到共享',
-      detail: '系统里已经存在 SMB 共享，但当前接收目录还没有被这条共享覆盖。',
+      detail: isMac
+        ? '系统里已经存在 SMB 共享，但当前接收目录还没有被这条共享覆盖。'
+        : '检测到系统里已有 SMB 共享，但当前接收目录还没有被这条共享覆盖。',
       tone: 'text-sky-700 bg-sky-50 border-sky-200',
       icon: Link2,
       iconClassName: '',
-      showGuide: true,
+      showGuide: isMac,
     },
     error: {
       label: '检测失败',
@@ -63,6 +85,7 @@ export function ShareAddressSection() {
 
   const meta = statusMeta[effectiveStatus];
   const StatusIcon = meta.icon;
+  const showWindowsQuickActions = isWindows && effectiveStatus !== 'ready';
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -95,10 +118,63 @@ export function ShareAddressSection() {
         {meta.detail}
       </p>
 
+      {showWindowsQuickActions ? (
+        <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3">
+          <div className="mb-2">
+            <p className="text-sm font-medium text-sky-900">
+              Windows 快速配置
+            </p>
+            <p className="mt-1 text-xs text-sky-700">
+              先打开系统共享设置，再打开当前接收目录做共享；共享名建议与应用里的目录别名保持一致。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void window.electronAPI?.files.openExternal(WINDOWS_SHARING_SETTINGS_URI)}
+              className="bg-white"
+            >
+              <Settings2 className="h-4 w-4" />
+              打开高级共享设置
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void window.electronAPI?.files.openFolder(receivePath)}
+              disabled={!receivePath}
+              className="bg-white"
+            >
+              <FolderOpen className="h-4 w-4" />
+              打开接收目录
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                void window.electronAPI?.files.copyToClipboard(effectiveShareAddress)
+              }
+              className="bg-white"
+            >
+              <CopyPlus className="h-4 w-4" />
+              复制推荐地址
+            </Button>
+          </div>
+
+          <p className="mt-2 text-xs text-sky-700">
+            推荐地址：<span className="font-mono">{effectiveShareAddress}</span>
+          </p>
+        </div>
+      ) : null}
+
       {'showGuide' in meta && meta.showGuide ? (
         <button
           type="button"
-          onClick={() => window.open(MAC_SHARING_GUIDE_URL, '_blank')}
+          onClick={() => void window.electronAPI?.files.openExternal(MAC_SHARING_GUIDE_URL)}
           className="mb-3 inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
         >
           查看系统共享设置指南
@@ -109,10 +185,10 @@ export function ShareAddressSection() {
       <div className="flex items-center gap-2">
         <div className="flex flex-1 items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
           <Link2 className="h-4 w-4 shrink-0" />
-          <span className="truncate">{shareAddress || '当前还没有可用的共享地址'}</span>
+          <span className="truncate">{effectiveShareAddress}</span>
         </div>
         <CopyButton
-          text={shareAddress}
+          text={effectiveShareAddress}
           label="复制"
           className="shrink-0 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-secondary"
         />

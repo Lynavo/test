@@ -1,6 +1,12 @@
 import { ipcMain } from 'electron';
 import { sidecarClient } from './sidecar-client';
-import { openFolder, openFile, selectFolder, copyToClipboard } from './file-operations';
+import {
+  openFolder,
+  openFile,
+  openExternal,
+  selectFolder,
+  copyToClipboard,
+} from './file-operations';
 import type { SidecarManager } from './sidecar-manager';
 import { exportDiagnostics, getAppInfo } from './diagnostics';
 
@@ -22,6 +28,7 @@ export const IPC = {
   SUPPORT_APP_INFO: 'support:app-info',
   FILES_OPEN_FOLDER: 'files:open-folder',
   FILES_OPEN_FILE: 'files:open-file',
+  FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
 } as const;
@@ -63,6 +70,7 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   // File operations — real Electron APIs
   ipcMain.handle(IPC.FILES_OPEN_FOLDER, (_e, path: string) => openFolder(path));
   ipcMain.handle(IPC.FILES_OPEN_FILE, (_e, path: string) => openFile(path));
+  ipcMain.handle(IPC.FILES_OPEN_EXTERNAL, (_e, target: string) => openExternal(target));
   ipcMain.handle(IPC.FILES_SELECT_FOLDER, () => selectFolder());
   ipcMain.handle(IPC.FILES_COPY_CLIPBOARD, (_e, text: string) => copyToClipboard(text));
 }

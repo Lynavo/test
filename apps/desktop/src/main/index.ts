@@ -1,6 +1,5 @@
 import { app, BrowserWindow } from 'electron';
 import { join } from 'path';
-import { is } from '@electron-toolkit/utils';
 import { registerIpcHandlers } from './ipc-handlers';
 import { SidecarManager } from './sidecar-manager';
 import { WsBridge } from './ws-bridge';
@@ -15,6 +14,7 @@ process.on('uncaughtException', (err) => {
 let mainWindow: BrowserWindow | null = null;
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
+const isDev = !app.isPackaged;
 
 function broadcastSidecarRuntimeState(state: SidecarRuntimeState) {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -44,7 +44,7 @@ async function createMainWindow() {
     },
   });
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     await mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
   } else {
     await mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
@@ -52,6 +52,7 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
+
   registerIpcHandlers(sidecar);
   await createMainWindow();
   wsBridge = new WsBridge(() => mainWindow);

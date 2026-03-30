@@ -2,11 +2,16 @@ import { EventEmitter } from 'node:events';
 import { spawn, ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { app } from 'electron';
-import { is } from '@electron-toolkit/utils';
 import log from 'electron-log';
 import { sidecarClient } from './sidecar-client';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../shared/sidecar-runtime';
+
+const isDev = !app.isPackaged;
+const sidecarBinaryName = process.platform === 'win32' ? 'syncflow-sidecar.exe' : 'syncflow-sidecar';
+const HEALTHCHECK_INTERVAL_MS = 500;
+const DEV_HEALTHCHECK_RETRIES = 120;
+const PROD_HEALTHCHECK_RETRIES = 10;
 
 export class SidecarManager extends EventEmitter {
   private process: ChildProcess | null = null;
@@ -30,12 +35,12 @@ export class SidecarManager extends EventEmitter {
   }
 
   private getSpawnArgs(): { command: string; args: string[] } {
-    if (is.dev) {
+    if (isDev) {
       // Dev mode: use `go run` from source
       return { command: 'go', args: ['run', './cmd/syncflow-sidecar/'] };
     }
     // Production: bundled binary in app resources
-    return { command: join(process.resourcesPath, 'syncflow-sidecar'), args: [] };
+    return { command: join(process.resourcesPath, sidecarBinaryName), args: [] };
   }
 
   async start(): Promise<void> {
@@ -45,8 +50,20 @@ export class SidecarManager extends EventEmitter {
     this.clearRestartTimer();
     this.stopHealthCheck();
 
+    if (await this.healthCheck()) {
+      this.restartCount = 0;
+      this.startHealthCheck();
+      this.setState({
+        status: 'healthy',
+        message: null,
+        lastExitCode: null,
+      });
+      log.info('[SidecarManager] reusing existing healthy sidecar');
+      return;
+    }
+
     const { command, args } = this.getSpawnArgs();
-    const cwd = is.dev
+    const cwd = isDev
       ? join(app.getAppPath(), '..', '..', 'services', 'sidecar-go')
       : undefined;
     this.setState({
@@ -86,7 +103,10 @@ export class SidecarManager extends EventEmitter {
     });
 
     try {
-      await this.waitForHealth(10, 500);
+      await this.waitForHealth(
+        isDev ? DEV_HEALTHCHECK_RETRIES : PROD_HEALTHCHECK_RETRIES,
+        HEALTHCHECK_INTERVAL_MS,
+      );
       this.restartCount = 0;
       this.startHealthCheck();
       this.setState({

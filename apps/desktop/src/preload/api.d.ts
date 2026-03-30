@@ -37,6 +37,7 @@ export interface ElectronAPI {
   files: {
     openFolder(path: string): Promise<void>;
     openFile(path: string): Promise<void>;
+    openExternal(target: string): Promise<void>;
     selectFolder(): Promise<string | null>;
     copyToClipboard(text: string): Promise<void>;
   };
@@ -46,6 +47,8 @@ export interface ElectronAPI {
   };
   platform: {
     isMac(): boolean;
+    isWindows(): boolean;
+    getHostName(): string;
   };
   support: {
     exportDiagnostics(): Promise<string | null>;

@@ -52,6 +52,7 @@ const mockSidecar: ElectronAPI['sidecar'] = {
 const mockFiles: ElectronAPI['files'] = {
   openFolder: async () => {},
   openFile: async () => {},
+  openExternal: async () => {},
   selectFolder: async () => null,
   copyToClipboard: async () => {},
 };
@@ -63,6 +64,8 @@ const mockEvents: ElectronAPI['events'] = {
 
 const mockPlatform: ElectronAPI['platform'] = {
   isMac: () => true,
+  isWindows: () => false,
+  getHostName: () => 'localhost',
 };
 
 const mockAPI: ElectronAPI = {

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -39,6 +40,13 @@ type sharePoint struct {
 // It relies on `sharing -l`, which reflects system sharing configuration more reliably
 // than checking whether smbd happens to be running at this instant.
 func Detect(receivePath, shareName string) Result {
+	if runtime.GOOS != "darwin" {
+		return Result{
+			ShareName: strPtr(shareName),
+			Status:    StatusNeedsManualEnable,
+		}
+	}
+
 	sharesOut, err := exec.Command("sharing", "-l").Output()
 	if err != nil {
 		errMsg := fmt.Sprintf("cannot list shares: %v", err)

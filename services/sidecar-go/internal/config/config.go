@@ -42,8 +42,7 @@ func Load(path string) (*Config, error) {
 
 func (c *Config) setDefaults() {
 	if c.DataDir == "" {
-		home, _ := os.UserHomeDir()
-		c.DataDir = filepath.Join(home, "Library", "Application Support", "SyncFlow")
+		c.DataDir = defaultDataDir()
 	}
 	if c.ReceiveDir == "" {
 		c.ReceiveDir = filepath.Join(c.DataDir, "received")
@@ -53,6 +52,16 @@ func (c *Config) setDefaults() {
 		// Remove .local suffix for friendlier display name
 		c.DeviceName = strings.TrimSuffix(hostname, ".local")
 	}
+}
+
+func defaultDataDir() string {
+	configDir, err := os.UserConfigDir()
+	if err == nil && configDir != "" {
+		return filepath.Join(configDir, "SyncFlow")
+	}
+
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "SyncFlow")
 }
 
 func (c *Config) DBPath() string {

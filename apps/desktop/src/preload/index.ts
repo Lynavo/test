@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import os from 'node:os';
 import type { ElectronAPI } from './api';
 import type { SidecarEvent } from '@syncflow/contracts';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
@@ -22,6 +23,7 @@ const IPC = {
   SUPPORT_APP_INFO: 'support:app-info',
   FILES_OPEN_FOLDER: 'files:open-folder',
   FILES_OPEN_FILE: 'files:open-file',
+  FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
 } as const;
@@ -56,6 +58,7 @@ const electronAPI: ElectronAPI = {
   files: {
     openFolder: (path: string) => ipcRenderer.invoke(IPC.FILES_OPEN_FOLDER, path),
     openFile: (path: string) => ipcRenderer.invoke(IPC.FILES_OPEN_FILE, path),
+    openExternal: (target: string) => ipcRenderer.invoke(IPC.FILES_OPEN_EXTERNAL, target),
     selectFolder: () => ipcRenderer.invoke(IPC.FILES_SELECT_FOLDER),
     copyToClipboard: (text: string) =>
       ipcRenderer.invoke(IPC.FILES_COPY_CLIPBOARD, text),
@@ -78,6 +81,8 @@ const electronAPI: ElectronAPI = {
   },
   platform: {
     isMac: () => process.platform === 'darwin',
+    isWindows: () => process.platform === 'win32',
+    getHostName: () => os.hostname(),
   },
   support: {
     exportDiagnostics: () => ipcRenderer.invoke(IPC.SUPPORT_EXPORT_DIAGNOSTICS),

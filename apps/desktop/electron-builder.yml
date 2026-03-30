@@ -13,9 +13,15 @@ mac:
   entitlementsInherit: resources/entitlements.mac.inherit.plist
   binaries:
     - Contents/Resources/syncflow-sidecar
+  extraResources:
+    - from: resources/syncflow-sidecar
+      to: syncflow-sidecar
+win:
+  target:
+    - zip
+  extraResources:
+    - from: resources/syncflow-sidecar.exe
+      to: syncflow-sidecar.exe
 directories:
   output: release
   buildResources: resources
-extraResources:
-  - from: resources/syncflow-sidecar
-    to: syncflow-sidecar

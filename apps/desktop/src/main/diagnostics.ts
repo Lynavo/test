@@ -2,7 +2,7 @@ import { app, dialog, shell } from 'electron';
 import log from 'electron-log';
 import { execFile } from 'node:child_process';
 import { copyFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { sidecarClient } from './sidecar-client';
@@ -104,7 +104,7 @@ export async function exportDiagnostics(sidecarManager: SidecarManager): Promise
   const tempRoot = join(tmpdir(), `syncflow-diagnostics-${timestamp}`);
   const bundleDir = join(tempRoot, `SyncFlow-Diagnostics-${timestamp}`);
   const filesDir = join(bundleDir, 'files');
-  const sidecarDataDir = join(homedir(), 'Library', 'Application Support', 'SyncFlow');
+  const sidecarDataDir = app.getPath('userData');
   const sidecarDbPath = join(sidecarDataDir, 'sidecar.db');
   const desktopLogPath = log.transports.file.getFile().path;
 
@@ -157,14 +157,22 @@ export async function exportDiagnostics(sidecarManager: SidecarManager): Promise
     await copyFile(sidecarDbPath, join(filesDir, 'sidecar.db'));
   }
 
-  await execFileAsync('ditto', [
-    '-c',
-    '-k',
-    '--sequesterRsrc',
-    '--keepParent',
-    bundleDir,
-    dialogResult.filePath,
-  ]);
+  if (process.platform === 'win32') {
+    await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      `Compress-Archive -Path '${bundleDir.replace(/'/g, "''")}\\*' -DestinationPath '${dialogResult.filePath.replace(/'/g, "''")}' -Force`,
+    ]);
+  } else {
+    await execFileAsync('ditto', [
+      '-c',
+      '-k',
+      '--sequesterRsrc',
+      '--keepParent',
+      bundleDir,
+      dialogResult.filePath,
+    ]);
+  }
   await rm(tempRoot, { recursive: true, force: true });
   shell.showItemInFolder(dialogResult.filePath);
   return dialogResult.filePath;

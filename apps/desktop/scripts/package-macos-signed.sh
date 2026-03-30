@@ -77,6 +77,7 @@ echo "Target: ${TARGET}"
 
 cd "${REPO_ROOT}"
 
+pnpm --filter @syncflow/desktop build
 pnpm --filter @syncflow/desktop build:sidecar
 
 BUILD_ARGS=(
