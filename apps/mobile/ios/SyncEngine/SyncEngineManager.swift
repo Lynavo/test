@@ -654,6 +654,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+        // Sweep leftover export temp files from previous sessions (crash / jetsam kills leave
+        // large video files on disk that accumulate across launches and cause OOM).
+        let exportTempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("syncflow_export", isDirectory: true)
+        try? FileManager.default.removeItem(at: exportTempDir)
+        NSLog("[SyncEngine] cleared export temp dir on init")
     }
 
     // MARK: - App State Transitions
@@ -884,15 +890,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             max(syncFlowIntSetting(
                 envKey: "SYNCFLOW_UPLOAD_WINDOW_MB",
                 userDefaultsKey: "SyncFlowUploadWindowMB"
-            ) ?? 128, chunkMB),
-            1024
+            ) ?? 32, chunkMB),
+            256
         )
         let maxPipelineChunks = min(
             max(syncFlowIntSetting(
                 envKey: "SYNCFLOW_UPLOAD_PIPELINE_CHUNKS",
                 userDefaultsKey: "SyncFlowUploadPipelineChunks"
-            ) ?? 16, 1),
-            128
+            ) ?? 8, 1),
+            32
         )
         let ackTimeoutSec = min(
             max(syncFlowIntSetting(
@@ -1394,8 +1400,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncPipeline] uploading %d files", assets.count)
         syncDiagnosticsLog("SyncPipeline", "uploading \(assets.count) files")
 
-        // Upload files with prefetch: export next file while current uploads
+        // Upload files with prefetch: export next file while current uploads.
+        // Track the prefetch Task so we can cancel it on early exit and avoid leaking temp files.
         var nextExport: ExportedFile? = nil
+        var prefetchTask: Task<Void, Never>? = nil
+
         if !assets.isEmpty {
             nextExport = try? await exportAssetForUpload(assets[0])
         }
@@ -1404,6 +1413,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             if index > 0 {
                 emitPreparingStateForNextFile(nextAsset: asset)
             }
+
+            // Wait for any in-flight prefetch before consuming its result.
+            await prefetchTask?.value
+            prefetchTask = nil
 
             let exported: ExportedFile
             if let prefetched = nextExport {
@@ -1416,7 +1429,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             let nextIndex = index + 1
             if nextIndex < assets.count {
                 let nextAsset = assets[nextIndex]
-                Task {
+                prefetchTask = Task {
                     nextExport = try? await self.exportAssetForUpload(nextAsset)
                 }
             }
@@ -1440,6 +1453,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     syncDiagnosticsLog("SyncEngine", "retryable upload failure for \(asset.fileKey): \(error)")
                     try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "queued")
                     emitQueueToJS()
+                    // Cancel prefetch and clean up any already-exported temp file to prevent leak.
+                    prefetchTask?.cancel()
+                    await prefetchTask?.value
+                    if let leakedExport = nextExport {
+                        exportService.cleanup(tempURL: leakedExport.tempURL)
+                        nextExport = nil
+                    }
                     throw error
                 }
 
@@ -1449,6 +1469,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 try? uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "failed")
                 emitQueueToJS()
             }
+        }
+
+        // Clean up any remaining prefetch on normal loop exit.
+        await prefetchTask?.value
+        if let remaining = nextExport {
+            exportService.cleanup(tempURL: remaining.tempURL)
         }
 
         // SYNC_END — then TCP will be closed as this function returns
