@@ -30,6 +30,7 @@ export class SidecarManager extends EventEmitter {
   private healthInterval: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private stopping = false;
+  private healthFailureRecoveryScheduled = false;
   private state: SidecarRuntimeState = INITIAL_SIDECAR_RUNTIME_STATE;
 
   constructor() {
@@ -122,6 +123,7 @@ export class SidecarManager extends EventEmitter {
     if (this.process) return;
 
     this.stopping = false;
+    this.healthFailureRecoveryScheduled = false;
     this.clearRestartTimer();
     this.stopHealthCheck();
     const bonjour = this.detectBonjourRuntime();
@@ -296,6 +298,7 @@ export class SidecarManager extends EventEmitter {
       const ok = await this.healthCheck();
       if (!ok) {
         log.warn('[SidecarManager] health check failed');
+        this.handleHealthCheckFailure();
       }
     }, 3000);
   }
@@ -314,8 +317,27 @@ export class SidecarManager extends EventEmitter {
     }
   }
 
+  private handleHealthCheckFailure(): void {
+    if (this.stopping || this.healthFailureRecoveryScheduled) {
+      return;
+    }
+
+    this.healthFailureRecoveryScheduled = true;
+    this.stopHealthCheck();
+
+    if (this.process && !this.process.killed) {
+      log.warn('[SidecarManager] terminating unhealthy managed sidecar');
+      this.process.kill('SIGTERM');
+      return;
+    }
+
+    this.process = null;
+    this.handleFailure('后台服务健康检查失败', null);
+  }
+
   private handleFailure(message: string, code: number | null): void {
     this.stopHealthCheck();
+    this.healthFailureRecoveryScheduled = false;
 
     if (this.stopping) {
       this.setState({
