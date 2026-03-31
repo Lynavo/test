@@ -12,6 +12,7 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/events"
 	"github.com/nicksyncflow/sidecar/internal/protocol"
 	"github.com/nicksyncflow/sidecar/internal/store"
+	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
 // handleSyncBegin processes SYNC_BEGIN_REQ, creating a session and
@@ -111,12 +112,20 @@ func (c *connection) handleFileInit(body []byte) error {
 
 	if existing != nil {
 		if existing.Status == "completed" {
-			slog.Info("file already completed, skipping", "fileKey", req.FileKey)
-			return c.sendJSON(protocol.TypeFileInitRes, protocol.FileInitRes{
-				Action: "SKIP",
-			})
+			if uploadfs.FinalFileExists(c.config.ReceiveDir, existing.FinalPath) {
+				slog.Info("file already completed, skipping", "fileKey", req.FileKey)
+				return c.sendJSON(protocol.TypeFileInitRes, protocol.FileInitRes{
+					Action: "SKIP",
+				})
+			}
+
+			slog.Warn("completed upload missing finalized file, restarting transfer",
+				"fileKey", req.FileKey,
+				"finalPath", existing.FinalPath,
+			)
+			existing = nil
 		}
-		if existing.CommittedBytes > 0 {
+		if existing != nil && existing.CommittedBytes > 0 {
 			// Partial upload — resume
 			fw, err := NewFileWriter(c.config.StagingDir(), c.clientID, req.FileKey, req.FileSize)
 			if err != nil {

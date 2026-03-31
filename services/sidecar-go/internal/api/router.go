@@ -39,6 +39,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /devices/{deviceId}", withJSON(srv.handleDeviceDetail))
 	mux.HandleFunc("GET /devices/{deviceId}/files", withJSON(srv.handleDeviceFiles))
 	mux.HandleFunc("GET /devices/{deviceId}/dates", withJSON(srv.handleDeviceDates))
+	mux.HandleFunc("GET /devices/{deviceId}/existing-file-keys", withJSON(srv.handleDeviceExistingFileKeys))
 	// Settings
 	mux.HandleFunc("GET /settings", withJSON(srv.handleGetSettings))
 	mux.HandleFunc("PUT /settings", withJSON(srv.handleUpdateSettings))

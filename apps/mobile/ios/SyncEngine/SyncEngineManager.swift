@@ -241,6 +241,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private let diagnosticsIssueLock = NSLock()
     private var recentRetryDiagnostic: [String: Any]?
     private var recentErrorDiagnostic: [String: Any]?
+    private var didAttemptRemoteHistoryReconciliation = false
+    private var runtimeQueueTotalCount = 0
+    private var runtimeQueueCompletedCount = 0
+    private var runtimeQueueTotalBytes: Int64 = 0
+    private var runtimeQueueCompletedBytes: Int64 = 0
+    private var runtimeCurrentFileKey: String?
+    private var runtimeCurrentFilename: String?
+    private var runtimeCurrentFileConfirmedBytes: Int64 = 0
+    private var runtimeCurrentFileTotalBytes: Int64 = 0
+    private var runtimeCurrentSpeedMbps: Double = 0
+    private var runtimeUploadState = "idle"
 
     private func preferredSidecarHost(probedHost: String?, device: DiscoveredDevice?) -> String? {
         if let probedHost, !probedHost.isEmpty, !probedHost.contains(":") {
@@ -297,6 +308,53 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         diagnosticsIssueLock.lock()
         defer { diagnosticsIssueLock.unlock() }
         return (recentRetryDiagnostic, recentErrorDiagnostic)
+    }
+
+    private func clearRuntimeCurrentFile() {
+        runtimeCurrentFileKey = nil
+        runtimeCurrentFilename = nil
+        runtimeCurrentFileConfirmedBytes = 0
+        runtimeCurrentFileTotalBytes = 0
+        runtimeCurrentSpeedMbps = 0
+    }
+
+    private func beginRuntimeSyncOverview(totalCount: Int, totalBytes: Int64) {
+        runtimeQueueTotalCount = totalCount
+        runtimeQueueCompletedCount = 0
+        runtimeQueueTotalBytes = totalBytes
+        runtimeQueueCompletedBytes = 0
+        clearRuntimeCurrentFile()
+    }
+
+    private func runtimeSyncOverviewPayload(
+        uploadState: String,
+        progressPercent: Int? = nil
+    ) -> [String: Any] {
+        runtimeUploadState = uploadState
+        let derivedProgressPercent: Int
+        if let progressPercent {
+            derivedProgressPercent = progressPercent
+        } else if runtimeCurrentFileTotalBytes > 0 {
+            derivedProgressPercent = Int(
+                (Double(runtimeCurrentFileConfirmedBytes) / Double(runtimeCurrentFileTotalBytes)) * 100
+            )
+        } else {
+            derivedProgressPercent = uploadState == "completed" ? 100 : 0
+        }
+
+        return [
+            "completedCount": runtimeQueueCompletedCount,
+            "completedBytes": runtimeQueueCompletedBytes,
+            "currentFile": runtimeCurrentFileKey ?? NSNull(),
+            "currentFilename": runtimeCurrentFilename ?? NSNull(),
+            "currentFileConfirmedBytes": runtimeCurrentFileConfirmedBytes,
+            "currentFileTotalBytes": runtimeCurrentFileTotalBytes,
+            "currentSpeedMbps": round(runtimeCurrentSpeedMbps * 10) / 10,
+            "progressPercent": derivedProgressPercent,
+            "totalBytes": runtimeQueueTotalBytes,
+            "totalCount": runtimeQueueTotalCount,
+            "uploadState": runtimeUploadState,
+        ]
     }
 
     private func buildPendingUploadAssets(clientId: String) -> [ScannedAsset] {
@@ -363,13 +421,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func emitPreparingStateForNextFile(nextAsset: ScannedAsset) {
-        NativeSyncEngineModule.shared?.emitSyncStateChanged([
-            "uploadState": "preparing",
-            "progressPercent": 0,
-            "currentSpeedMbps": 0,
-            "transferredBytes": 0,
-            "totalBytes": nextAsset.estimatedSize,
-        ])
+        runtimeCurrentFileKey = nextAsset.fileKey
+        runtimeCurrentFilename = nextAsset.originalFilename
+        runtimeCurrentFileConfirmedBytes = 0
+        runtimeCurrentFileTotalBytes = nextAsset.estimatedSize
+        runtimeCurrentSpeedMbps = 0
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(
+            runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
+        )
     }
 
     private func queueItemIdentity(_ item: UploadItemRecord) -> String {
@@ -457,9 +516,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return pending.map { item in
             [
                 "id": item.id ?? 0,
+                "assetLocalId": item.assetLocalId,
+                "fileKey": item.fileKey ?? "",
                 "originalFilename": item.originalFilename ?? item.assetLocalId,
                 "mediaType": item.mediaType,
                 "fileSize": item.fileSize ?? 0,
+                "ackedOffset": item.ackedOffset,
                 "status": item.status,
                 "isCloudAsset": cachedCloudAssetFlag(for: item) ?? false,
             ] as [String: Any]
@@ -771,6 +833,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func stopSyncLifecycle(finalState: SessionService.SyncEngineState) {
         isSyncing = false
+        didAttemptRemoteHistoryReconciliation = false
         endBackgroundTransitionIfNeeded(reason: "syncStopped")
         SilentAudioService.shared.stop()
         sessionService.endSession(transitionTo: finalState)
@@ -1047,13 +1110,26 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         while true {
             roundNumber += 1
             sessionService.transitionTo(.scanning)
-            NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                "uploadState": "scanning",
-                "progressPercent": 0,
-            ])
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(uploadState: "scanning", progressPercent: 0)
+            )
 
             // Scan only truly untracked assets. Pending items already live in upload_items.
-            let trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+            var trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+            if trackedKeys.isEmpty {
+                let restoredCount = await restoreCompletedUploadHistoryIfNeeded(
+                    clientId: clientId,
+                    fallbackHost: binding.host
+                )
+                if restoredCount > 0 {
+                    trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+                    NSLog(
+                        "[SyncPipeline] restored %d historical completed uploads before scan",
+                        restoredCount
+                    )
+                    syncDiagnosticsLog("SyncPipeline", "restored \(restoredCount) historical completed uploads before scan")
+                }
+            }
             let newAssets = photoScanner.scanForUntrackedAssets(clientId: clientId, trackedFileKeys: trackedKeys)
 
             if !newAssets.isEmpty {
@@ -1096,10 +1172,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
             if pendingAssets.isEmpty {
                 // Nothing to upload — wait for photo library changes
-                NativeSyncEngineModule.shared?.emitSyncStateChanged([
+                NativeSyncEngineModule.shared?.emitSyncStateChanged(([
                     "uploadState": "completed",
                     "progressPercent": 100,
-                ])
+                ] as [String: Any]).merging(
+                    runtimeSyncOverviewPayload(uploadState: "completed", progressPercent: 100)
+                ) { _, new in new })
 
                 NSLog("[SyncPipeline] idle — waiting for new photos...")
                 syncDiagnosticsLog("SyncPipeline", "idle — waiting for new photos")
@@ -1162,11 +1240,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                           "\(error)", delaySeconds, retryAttempt)
                     syncDiagnosticsLog("SyncPipeline", "upload failed with retryable error: \(error) — reconnecting in \(String(format: "%.1f", delaySeconds))s (attempt \(retryAttempt))")
                     recordRecentRetry(error: error, attempt: retryAttempt, delaySeconds: delaySeconds)
-                    NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                        "uploadState": "reconnecting",
+                    NativeSyncEngineModule.shared?.emitSyncStateChanged(([
                         "retryAttempt": retryAttempt,
                         "retryDelaySec": round(delaySeconds * 10) / 10,
-                    ])
+                    ] as [String: Any]).merging(
+                        runtimeSyncOverviewPayload(uploadState: "reconnecting")
+                    ) { _, new in new })
                     try await Task.sleep(nanoseconds: delay)
                     discoveryService.startBrowsing()
                 }
@@ -1189,10 +1268,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         protocolSession = session
         updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
         sessionService.transitionTo(.preparing)
-        NativeSyncEngineModule.shared?.emitSyncStateChanged([
-            "uploadState": "preparing",
-            "progressPercent": 0,
-        ])
+        let estimatedQueueTotalBytes = assets.reduce(Int64(0)) { partialResult, asset in
+            partialResult + max(asset.estimatedSize, 0)
+        }
+        beginRuntimeSyncOverview(totalCount: assets.count, totalBytes: estimatedQueueTotalBytes)
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(
+            runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
+        )
         var activeSessionId: String?
         var uploadRoundCompleted = false
 
@@ -1367,7 +1449,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             item.fileSize = exported.fileSize
             try? uploadStore?.upsertUploadItem(item)
         }
+        runtimeCurrentFileKey = asset.fileKey
+        runtimeCurrentFilename = exported.originalFilename
+        runtimeCurrentFileConfirmedBytes = 0
+        runtimeCurrentFileTotalBytes = exported.fileSize
+        runtimeCurrentSpeedMbps = 0
         emitQueueToJS()
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(
+            runtimeSyncOverviewPayload(uploadState: "uploading", progressPercent: 0)
+        )
 
         // FILE_INIT_REQ → FILE_INIT_RES
         let (initType, initRes) = try await session.sendAndReceive(type: .fileInitReq, payload: [
@@ -1396,6 +1486,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             NSLog("[SyncEngine] SKIP \(exported.originalFilename) (already exists)")
             try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
+            runtimeQueueCompletedCount = max(runtimeQueueCompletedCount, index + 1)
+            runtimeQueueCompletedBytes += exported.fileSize
+            runtimeCurrentFileConfirmedBytes = exported.fileSize
+            runtimeCurrentFileTotalBytes = exported.fileSize
+            runtimeCurrentSpeedMbps = 0
+            emitQueueToJS()
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(uploadState: "uploading", progressPercent: 100)
+            )
             return
         case "REJECT":
             let reason = initRes["reason"] as? String ?? "unknown"
@@ -1404,6 +1503,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             NSLog("[SyncEngine] REJECT \(exported.originalFilename): \(reason)")
             try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "skipped")
+            clearRuntimeCurrentFile()
+            emitQueueToJS()
             return
         case "RESUME":
             let offset = initRes["resumeOffset"] as? Int64 ?? 0
@@ -1464,6 +1565,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         emitQueueToJS()
 
         if isOk {
+            runtimeQueueCompletedCount = max(runtimeQueueCompletedCount, index + 1)
+            runtimeQueueCompletedBytes += exported.fileSize
+            runtimeCurrentFileConfirmedBytes = exported.fileSize
+            runtimeCurrentFileTotalBytes = exported.fileSize
+            runtimeCurrentSpeedMbps = 0
             let transmissionMs = endRes["activeTransmissionMs"] as? Int64
                 ?? (endRes["activeTransmissionMs"] as? NSNumber)?.int64Value
                 ?? 100
@@ -1494,11 +1600,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             NSLog("[SyncUpload] [%d/%d] completed %@", index + 1, total, exported.originalFilename)
         } else {
+            runtimeCurrentSpeedMbps = 0
             if tuning.perfLoggingEnabled {
                 let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - fileTransferStart) * 1000)
                 perfLog("file=\(asset.fileKey) action=FAILED size=\(exported.fileSize) endToEndMs=\(elapsedMs)")
             }
             NSLog("[SyncUpload] [%d/%d] FILE_END not ok for %@", index + 1, total, exported.originalFilename)
+            clearRuntimeCurrentFile()
         }
     }
 
@@ -1651,18 +1759,23 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             let sentProgressPercent = fileSize > 0
                 ? Int(Double(nextOffset) / Double(fileSize) * 100)
                 : 0
-            NativeSyncEngineModule.shared?.emitSyncStateChanged([
-                "uploadState": "uploading",
-                "progressPercent": confirmedProgressPercent,
-                "transferredBytes": acknowledgedOffset,
-                "confirmedBytes": acknowledgedOffset,
-                "sentBytes": nextOffset,
-                "pendingConfirmBytes": max(nextOffset - acknowledgedOffset, 0),
-                "sentProgressPercent": sentProgressPercent,
-                "totalBytes": fileSize,
-                "currentFile": fileKey,
-                "currentSpeedMbps": round(speedMbps * 10) / 10,
-            ])
+            runtimeCurrentFileKey = fileKey
+            runtimeCurrentFileConfirmedBytes = acknowledgedOffset
+            runtimeCurrentFileTotalBytes = fileSize
+            runtimeCurrentSpeedMbps = speedMbps
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                ([
+                    "confirmedBytes": acknowledgedOffset,
+                    "pendingConfirmBytes": max(nextOffset - acknowledgedOffset, 0),
+                    "sentBytes": nextOffset,
+                    "sentProgressPercent": sentProgressPercent,
+                ] as [String: Any]).merging(
+                    runtimeSyncOverviewPayload(
+                        uploadState: "uploading",
+                        progressPercent: confirmedProgressPercent
+                    )
+                ) { _, new in new }
+            )
             lastProgressEmitTime = now
         }
 
@@ -2127,18 +2240,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func getSyncOverview() async -> [String: Any] {
         let state = sessionService.state.rawValue
         let sessionId = sessionService.currentSessionId ?? ""
-
         return [
             "sessionId": sessionId,
             "state": state,
-            "completedCount": 0,
-            "totalCount": 0,
-            "currentSpeedMbps": 0,
-            "transferredBytes": 0,
-            "totalBytes": 0,
-            "progressPercent": 0,
-            "uploadState": state,
-        ]
+        ].merging(runtimeSyncOverviewPayload(uploadState: runtimeUploadState.isEmpty ? state : runtimeUploadState)) { _, new in new }
     }
 
     func getReadOnlyQueue() async -> [[String: Any]] {
@@ -2404,6 +2509,127 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         // Disconnect — we just needed the IP
         transport.disconnect()
+    }
+
+    // MARK: - Sidecar History Reconciliation
+
+    private struct SidecarExistingFileKeysResponse: Decodable {
+        let fileKeys: [String]
+    }
+
+    private func restoreCompletedUploadHistoryIfNeeded(
+        clientId: String,
+        fallbackHost: String
+    ) async -> Int {
+        guard !didAttemptRemoteHistoryReconciliation else { return 0 }
+
+        guard let store = uploadStore else { return 0 }
+        guard store.getTrackedFileKeys().isEmpty else { return 0 }
+        let host = (sidecarHost?.isEmpty == false ? sidecarHost : fallbackHost)
+        guard let host, !host.isEmpty else {
+            NSLog("[SyncPipeline] skip history reconciliation: sidecar host unavailable")
+            syncDiagnosticsLog("SyncPipeline", "skip history reconciliation: sidecar host unavailable")
+            return 0
+        }
+        didAttemptRemoteHistoryReconciliation = true
+
+        do {
+            let remoteCompletedFileKeys = try await fetchRemoteExistingFileKeys(clientId: clientId, host: host)
+            guard !remoteCompletedFileKeys.isEmpty else {
+                NSLog("[SyncPipeline] no remote files available on sidecar for reconciliation")
+                syncDiagnosticsLog("SyncPipeline", "no remote files available on sidecar for reconciliation")
+                return 0
+            }
+
+            let scannedAssets = photoScanner.scanForUntrackedAssets(clientId: clientId, trackedFileKeys: [])
+            let matchingAssets = scannedAssets.filter { remoteCompletedFileKeys.contains($0.fileKey) }
+            guard !matchingAssets.isEmpty else {
+                NSLog(
+                    "[SyncPipeline] sidecar existing-file-keys returned %d keys but none match current photo library",
+                    remoteCompletedFileKeys.count
+                )
+                syncDiagnosticsLog(
+                    "SyncPipeline",
+                    "sidecar existing-file-keys returned \(remoteCompletedFileKeys.count) keys but none match current photo library"
+                )
+                return 0
+            }
+
+            let now = ISO8601DateFormatter().string(from: Date())
+            let restoredItems = matchingAssets.map { asset in
+                UploadItemRecord(
+                    id: nil,
+                    assetLocalId: asset.asset.localIdentifier,
+                    modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                    mediaType: asset.mediaType,
+                    originalFilename: asset.originalFilename,
+                    fileKey: asset.fileKey,
+                    fileSize: asset.estimatedSize,
+                    status: "completed",
+                    tempFilePath: nil,
+                    ackedOffset: asset.estimatedSize,
+                    lastErrorCode: nil,
+                    updatedAt: now
+                )
+            }
+            try store.upsertUploadItems(restoredItems)
+            emitQueueToJS()
+
+            NSLog(
+                "[SyncPipeline] restored %d/%d sidecar-confirmed uploads into local history",
+                restoredItems.count,
+                remoteCompletedFileKeys.count
+            )
+            syncDiagnosticsLog(
+                "SyncPipeline",
+                "restored \(restoredItems.count)/\(remoteCompletedFileKeys.count) sidecar-confirmed uploads into local history"
+            )
+            return restoredItems.count
+        } catch {
+            NSLog("[SyncPipeline] history reconciliation failed: %@", "\(error)")
+            syncDiagnosticsLog("SyncPipeline", "history reconciliation failed: \(error)")
+            return 0
+        }
+    }
+
+    private func fetchRemoteExistingFileKeys(clientId: String, host: String) async throws -> Set<String> {
+        let response: SidecarExistingFileKeysResponse = try await fetchSidecarJSON(
+            path: "/devices/\(clientId)/existing-file-keys",
+            queryItems: [],
+            host: host
+        )
+
+        return Set(response.fileKeys)
+    }
+
+    private func fetchSidecarJSON<T: Decodable>(
+        path: String,
+        queryItems: [URLQueryItem],
+        host: String
+    ) async throws -> T {
+        let hostPart = host.contains(":") ? "[\(host)]" : host
+        var components = URLComponents()
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        let querySuffix = components.percentEncodedQuery.map { "?\($0)" } ?? ""
+        let urlStr = "http://\(hostPart):39394\(path)\(querySuffix)"
+
+        guard let url = URL(string: urlStr) else {
+            throw SyncEngineError.networkError("Invalid sidecar URL for path \(path)")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SyncEngineError.networkError("Sidecar response missing HTTP status")
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw SyncEngineError.networkError("Sidecar returned HTTP \(httpResponse.statusCode) for \(path)")
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     // MARK: - HTTP Presence Heartbeat

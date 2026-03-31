@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/store"
+	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
 func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +123,38 @@ func (s *Server) handleDeviceDates(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"dates": dates,
+	})
+}
+
+func (s *Server) handleDeviceExistingFileKeys(w http.ResponseWriter, r *http.Request) {
+	deviceID := r.PathValue("deviceId")
+	if deviceID == "" {
+		writeError(w, http.StatusBadRequest, "missing deviceId")
+		return
+	}
+
+	uploads, err := s.store.ListCompletedUploadsByDevice(deviceID)
+	if err != nil {
+		slog.Error("list completed uploads for existing file keys", "err", err, "deviceId", deviceID)
+		writeError(w, http.StatusInternalServerError, "failed to list existing file keys")
+		return
+	}
+
+	fileKeys := make([]string, 0, len(uploads))
+	seen := make(map[string]struct{}, len(uploads))
+	for _, upload := range uploads {
+		if !uploadfs.FinalFileExists(s.config.ReceiveDir, upload.FinalPath) {
+			continue
+		}
+		if _, ok := seen[upload.FileKey]; ok {
+			continue
+		}
+		seen[upload.FileKey] = struct{}{}
+		fileKeys = append(fileKeys, upload.FileKey)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"fileKeys": fileKeys,
 	})
 }
 

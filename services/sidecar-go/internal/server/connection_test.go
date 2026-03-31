@@ -629,6 +629,64 @@ func TestErrorPaths(t *testing.T) {
 		}
 	})
 
+	t.Run("ReuploadWhenCompletedFileMissing", func(t *testing.T) {
+		client, st, cfg, cleanup := setupTestConnection(t)
+		defer cleanup()
+
+		_ = doPairing(t, client)
+
+		sessionID := "sess-missing-final-001"
+		payload := make([]byte, 512)
+		for i := range payload {
+			payload[i] = byte((i * 3) % 251)
+		}
+		doSyncBegin(t, client, sessionID, 1, int64(len(payload)))
+
+		fileKey := "photo-missing-final-123"
+		filename := "missing-final.jpg"
+		initRes := doFileInit(t, client, fileKey, filename, int64(len(payload)))
+		if initRes.Action != "UPLOAD" {
+			t.Fatalf("expected initial UPLOAD, got %q", initRes.Action)
+		}
+
+		sendFileData(t, client, fileKey, 0, payload)
+		var ack protocol.FileAck
+		recvJSON(t, client, protocol.TypeFileAck, &ack)
+
+		hash := sha256.Sum256(payload)
+		sha256Hex := hex.EncodeToString(hash[:])
+		endRes := doFileEnd(t, client, fileKey, int64(len(payload)), sha256Hex)
+		if !endRes.OK {
+			t.Fatal("first upload FileEndRes.OK=false")
+		}
+
+		sendJSON(t, client, protocol.TypeSyncEndReq, struct{}{})
+		var syncEndRes protocol.SyncEndRes
+		recvJSON(t, client, protocol.TypeSyncEndRes, &syncEndRes)
+
+		date := time.Now().Format("2006-01-02")
+		finalPath := filepath.Join(cfg.ReceiveDir, testClientName, date, filename)
+		if err := os.Remove(finalPath); err != nil {
+			t.Fatalf("remove finalized file: %v", err)
+		}
+
+		sessionID2 := "sess-missing-final-002"
+		doSyncBegin(t, client, sessionID2, 1, int64(len(payload)))
+
+		initRes2 := doFileInit(t, client, fileKey, filename, int64(len(payload)))
+		if initRes2.Action != "UPLOAD" {
+			t.Fatalf("expected UPLOAD after finalized file was removed, got %q", initRes2.Action)
+		}
+
+		upload, err := st.GetUpload(fileKey)
+		if err != nil {
+			t.Fatalf("GetUpload: %v", err)
+		}
+		if upload.Status != "receiving" {
+			t.Fatalf("upload status=%q, want receiving", upload.Status)
+		}
+	})
+
 	t.Run("SHA256Mismatch", func(t *testing.T) {
 		client, _, cfg, cleanup := setupTestConnection(t)
 		defer cleanup()

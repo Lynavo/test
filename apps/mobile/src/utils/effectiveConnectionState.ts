@@ -8,8 +8,10 @@ export type MobileConnectionState =
 type SyncConnectionEvidence = {
   progressPercent?: number | null;
   queueHasUploadingItem?: boolean;
+  queueHasActiveItem?: boolean;
   transferredBytes?: number | null;
   uploadState?: string | null;
+  currentFileKey?: string | null;
 };
 
 export function syncActivityImpliesConnected(
@@ -23,13 +25,21 @@ export function syncActivityImpliesConnected(
     return true;
   }
 
-  return evidence.queueHasUploadingItem === true;
+  if (evidence.currentFileKey) {
+    return true;
+  }
+
+  return evidence.queueHasUploadingItem === true || evidence.queueHasActiveItem === true;
 }
 
 export function getEffectiveConnectionState(
   connectionState: MobileConnectionState | null | undefined,
   evidence: SyncConnectionEvidence,
 ): MobileConnectionState | null | undefined {
+  if (connectionState === 'connected') {
+    return 'connected';
+  }
+
   if (syncActivityImpliesConnected(evidence)) {
     return 'connected';
   }

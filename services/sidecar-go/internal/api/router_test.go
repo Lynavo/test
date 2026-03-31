@@ -358,6 +358,77 @@ func TestDeviceFiles_FilesystemFallback(t *testing.T) {
 	}
 }
 
+func TestDeviceExistingFileKeys(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	finalPathExisting := filepath.Join("Test iPhone", "2026-03-22", "IMG_0001.JPG")
+	absoluteExisting := filepath.Join(cfg.ReceiveDir, finalPathExisting)
+	if err := os.MkdirAll(filepath.Dir(absoluteExisting), 0o755); err != nil {
+		t.Fatalf("mkdir existing file dir: %v", err)
+	}
+	if err := os.WriteFile(absoluteExisting, []byte("demo"), 0o644); err != nil {
+		t.Fatalf("write existing file: %v", err)
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:          "file-existing",
+		ClientID:         "test-device-1",
+		OriginalFilename: "IMG_0001.JPG",
+		MediaType:        "image",
+		FileSize:         4,
+		Status:           "completed",
+		FinalPath:        &finalPathExisting,
+		CommittedBytes:   4,
+		CompletedAt:      &now,
+		UpdatedAt:        now,
+	}); err != nil {
+		t.Fatalf("insert existing upload: %v", err)
+	}
+
+	finalPathMissing := filepath.Join("Test iPhone", "2026-03-22", "IMG_0002.JPG")
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:          "file-missing",
+		ClientID:         "test-device-1",
+		OriginalFilename: "IMG_0002.JPG",
+		MediaType:        "image",
+		FileSize:         4,
+		Status:           "completed",
+		FinalPath:        &finalPathMissing,
+		CommittedBytes:   4,
+		CompletedAt:      &now,
+		UpdatedAt:        now,
+	}); err != nil {
+		t.Fatalf("insert missing upload: %v", err)
+	}
+
+	resp, err := http.Get(srv.URL + "/devices/test-device-1/existing-file-keys")
+	if err != nil {
+		t.Fatalf("GET /devices/.../existing-file-keys: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		FileKeys []string `json:"fileKeys"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.FileKeys) != 1 {
+		t.Fatalf("expected 1 existing file key, got %v", body.FileKeys)
+	}
+	if body.FileKeys[0] != "file-existing" {
+		t.Fatalf("expected file-existing, got %v", body.FileKeys)
+	}
+}
+
 func TestGetSettings(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()

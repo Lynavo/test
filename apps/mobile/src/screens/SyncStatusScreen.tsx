@@ -29,18 +29,35 @@ type SyncStatusNav = StackNavigationProp<RootStackParamList, 'SyncStatus'>;
 interface QueueItem {
   id: string;
   name: string;
-  size: string;
+  fileKey: string;
+  rawFileSize: number;
+  ackedOffset: number;
   type: 'video' | 'image';
-  status: 'queued' | 'preparing' | 'cloud_downloading' | 'uploading' | 'completed';
+  status:
+    | 'queued'
+    | 'discovered'
+    | 'preparing'
+    | 'ready'
+    | 'cloud_downloading'
+    | 'uploading'
+    | 'completed'
+    | 'failed'
+    | 'skipped';
   isCloudAsset: boolean;
 }
 
 interface SyncOverview {
   progressPercent: number;
-  speed: string;
-  completed: string;
-  total: string;
+  currentSpeedMbps: number;
   uploadState: string;
+  completedCount: number;
+  totalCount: number;
+  completedBytes: number;
+  totalBytes: number;
+  currentFile?: string;
+  currentFilename?: string;
+  currentFileConfirmedBytes: number;
+  currentFileTotalBytes: number;
   retryAttempt?: number;
   retryDelaySec?: number;
 }
@@ -85,13 +102,24 @@ const SCREEN_BG = '#d6ecf8';
 const UPLOADING_BG = 'rgba(59,159,216,0.08)';
 const UPLOADING_BORDER = BLUE;
 
-const RING_SIZE = 200;
-const RING_THICKNESS = 9;
 const RECONNECT_PAUSED_THRESHOLD_MS = 15_000;
 const RECONNECT_PAUSED_THRESHOLD_ATTEMPT = 3;
 const STARTUP_CONNECTION_GRACE_MS = 2500;
 const CONNECTION_BANNER_SHOW_DELAY_MS = 700;
 const COMPLETION_CARD_HOLD_MS = 1200;
+const EMPTY_OVERVIEW: SyncOverview = {
+  progressPercent: 0,
+  currentSpeedMbps: 0,
+  uploadState: 'idle',
+  completedCount: 0,
+  totalCount: 0,
+  completedBytes: 0,
+  totalBytes: 0,
+  currentFileConfirmedBytes: 0,
+  currentFileTotalBytes: 0,
+  retryAttempt: 0,
+  retryDelaySec: 0,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -110,6 +138,99 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+function formatSpeedMbps(speedMbps: number): string {
+  if (!Number.isFinite(speedMbps) || speedMbps <= 0) {
+    return '0 MB/s';
+  }
+  return `${speedMbps >= 10 ? speedMbps.toFixed(0) : speedMbps.toFixed(1)} MB/s`;
+}
+
+function buildOverviewFromPayload(
+  payload: Record<string, unknown> | null | undefined,
+  previous: SyncOverview,
+): SyncOverview {
+  if (!payload) {
+    return previous;
+  }
+
+  const nextUploadState = (payload.uploadState as string | undefined) ?? previous.uploadState;
+  const hasCurrentFile = Object.prototype.hasOwnProperty.call(payload, 'currentFile');
+  const hasCurrentFilename = Object.prototype.hasOwnProperty.call(payload, 'currentFilename');
+  const hasCurrentFileConfirmedBytes = Object.prototype.hasOwnProperty.call(payload, 'currentFileConfirmedBytes');
+  const hasCurrentFileTotalBytes = Object.prototype.hasOwnProperty.call(payload, 'currentFileTotalBytes');
+
+  const nextCurrentFile = hasCurrentFile
+    ? (typeof payload.currentFile === 'string' ? payload.currentFile : undefined)
+    : previous.currentFile;
+  const nextCurrentFilename = hasCurrentFilename
+    ? (typeof payload.currentFilename === 'string' ? payload.currentFilename : undefined)
+    : previous.currentFilename;
+  const nextCurrentFileConfirmedBytes = hasCurrentFileConfirmedBytes
+    ? ((payload.currentFileConfirmedBytes as number | undefined)
+      ?? (payload.confirmedBytes as number | undefined)
+      ?? 0)
+    : (payload.confirmedBytes as number | undefined)
+    ?? previous.currentFileConfirmedBytes;
+  const nextCurrentFileTotalBytes = hasCurrentFileTotalBytes
+    ? ((payload.currentFileTotalBytes as number | undefined) ?? 0)
+    : previous.currentFileTotalBytes;
+  const derivedProgressPercent = nextCurrentFileTotalBytes > 0
+    ? Math.round((nextCurrentFileConfirmedBytes / nextCurrentFileTotalBytes) * 100)
+    : 0;
+
+  return {
+    progressPercent: (payload.progressPercent as number | undefined)
+      ?? derivedProgressPercent
+      ?? previous.progressPercent,
+    currentSpeedMbps: (payload.currentSpeedMbps as number | undefined)
+      ?? previous.currentSpeedMbps,
+    uploadState: nextUploadState,
+    completedCount: (payload.completedCount as number | undefined)
+      ?? previous.completedCount,
+    totalCount: (payload.totalCount as number | undefined)
+      ?? (payload.queueTotalCount as number | undefined)
+      ?? previous.totalCount,
+    completedBytes: (payload.completedBytes as number | undefined)
+      ?? previous.completedBytes,
+    totalBytes: (payload.totalBytes as number | undefined)
+      ?? (payload.queueTotalBytes as number | undefined)
+      ?? previous.totalBytes,
+    currentFile: nextUploadState === 'completed' || nextUploadState === 'idle'
+      ? undefined
+      : nextCurrentFile,
+    currentFilename: nextUploadState === 'completed' || nextUploadState === 'idle'
+      ? undefined
+      : nextCurrentFilename,
+    currentFileConfirmedBytes: nextUploadState === 'completed' || nextUploadState === 'idle'
+      ? 0
+      : nextCurrentFileConfirmedBytes,
+    currentFileTotalBytes: nextUploadState === 'completed' || nextUploadState === 'idle'
+      ? 0
+      : nextCurrentFileTotalBytes,
+    retryAttempt: (payload.retryAttempt as number | undefined)
+      ?? previous.retryAttempt,
+    retryDelaySec: (payload.retryDelaySec as number | undefined)
+      ?? previous.retryDelaySec,
+  };
+}
+
+function summaryTitleForUploadState(uploadState: string): string {
+  switch (uploadState) {
+    case 'uploading':
+      return '正在同步';
+    case 'preparing':
+      return '准备同步';
+    case 'cloud_downloading':
+      return '准备素材中';
+    case 'reconnecting':
+      return '等待重连';
+    case 'paused_no_permission':
+      return '等待权限';
+    default:
+      return '同步摘要';
+  }
+}
+
 function formatDateTimeLabel(iso?: string): string {
   if (!iso) return '暂无记录';
   const date = new Date(iso);
@@ -126,73 +247,9 @@ function formatDateTimeLabel(iso?: string): string {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
-/**
- * Build an array of small arc segments for the circular progress ring.
- */
-function buildRingSegments(progress: number): Array<{ angle: number; active: boolean }> {
-  const TOTAL_SEGMENTS = 72;
-  const filled = Math.round((progress / 100) * TOTAL_SEGMENTS);
-  const segments: Array<{ angle: number; active: boolean }> = [];
-  for (let i = 0; i < TOTAL_SEGMENTS; i++) {
-    segments.push({ angle: (360 / TOTAL_SEGMENTS) * i - 90, active: i < filled });
-  }
-  return segments;
-}
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function CircularProgress({ progress, speed }: { progress: number; speed: string }) {
-  const segments = buildRingSegments(progress);
-  const centre = RING_SIZE / 2;
-  const radius = (RING_SIZE - RING_THICKNESS) / 2;
-
-  return (
-    <View style={[styles.ringContainer, { width: RING_SIZE, height: RING_SIZE }]}>
-      {/* Background track */}
-      <View
-        style={[
-          styles.ringTrack,
-          {
-            width: RING_SIZE,
-            height: RING_SIZE,
-            borderRadius: RING_SIZE / 2,
-            borderWidth: RING_THICKNESS,
-            borderColor: RING_BG,
-          },
-        ]}
-      />
-
-      {/* Progress segments */}
-      {segments.map((seg) => {
-        const rad = (seg.angle * Math.PI) / 180;
-        const x = centre + radius * Math.cos(rad) - 3;
-        const y = centre + radius * Math.sin(rad) - 3;
-        return (
-          <View
-            key={seg.angle}
-            style={[
-              styles.ringDot,
-              {
-                left: x,
-                top: y,
-                backgroundColor: seg.active ? BLUE : RING_BG,
-              },
-            ]}
-          />
-        );
-      })}
-
-      {/* Centre content */}
-      <View style={styles.ringCentre}>
-        <Text style={styles.transmittingLabel}>TRANSMITTING</Text>
-        <Text style={styles.percentageText}>{progress}%</Text>
-        <Text style={styles.speedText}>{speed}</Text>
-      </View>
-    </View>
-  );
-}
 
 function CompletionCard({
   fileCount,
@@ -225,14 +282,85 @@ function CompletionCard({
   );
 }
 
-function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
-  const isUploading = item.status === 'uploading';
+function SyncSummaryCard({
+  uploadState,
+  completedCount,
+  totalCount,
+  transferredBytes,
+  totalBytes,
+  currentSpeedMbps,
+  activeFileName,
+}: {
+  uploadState: string;
+  completedCount: number;
+  totalCount: number;
+  transferredBytes: number;
+  totalBytes: number;
+  currentSpeedMbps: number;
+  activeFileName?: string;
+}) {
+  return (
+    <>
+      <Text style={styles.summaryEyebrow}>{summaryTitleForUploadState(uploadState)}</Text>
+      <Text style={styles.summaryTitle}>
+        {`${completedCount} / ${totalCount} 个文件已完成`}
+      </Text>
+      <View style={styles.summaryStats}>
+        <View style={styles.summaryStatCard}>
+          <Text style={styles.summaryStatLabel}>{'已传输'}</Text>
+          <Text style={styles.summaryStatValue}>
+            {`${formatBytes(transferredBytes)} / ${formatBytes(totalBytes)}`}
+          </Text>
+        </View>
+        <View style={styles.summaryStatCard}>
+          <Text style={styles.summaryStatLabel}>{'当前速度'}</Text>
+          <Text style={styles.summaryStatValue}>{formatSpeedMbps(currentSpeedMbps)}</Text>
+        </View>
+      </View>
+      {activeFileName ? (
+        <Text style={styles.summaryCurrentFile} numberOfLines={1}>
+          {`当前文件：${activeFileName}`}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
+function QueueItemRow({
+  item,
+  isLast,
+  activeFileKey,
+  activeProgressPercent,
+  activeConfirmedBytes,
+  activeTotalBytes,
+}: {
+  item: QueueItem;
+  isLast: boolean;
+  activeFileKey?: string;
+  activeProgressPercent: number;
+  activeConfirmedBytes: number;
+  activeTotalBytes: number;
+}) {
+  const isActive = item.status === 'uploading' || (item.fileKey.length > 0 && item.fileKey === activeFileKey);
+  const showItemProgress = isActive && activeTotalBytes > 0;
+  const itemStatusLabel = showItemProgress
+    ? `传输中 ${activeProgressPercent}%`
+    : item.status === 'cloud_downloading'
+      ? '下载 iCloud 原件中'
+      : item.status === 'preparing'
+        ? '准备中'
+        : item.status === 'uploading'
+          ? '传输中'
+          : item.status === 'ready' || item.status === 'discovered' || item.status === 'queued'
+            ? '排队中'
+            : null;
+
   return (
     <View
       style={[
         styles.queueRow,
         !isLast && styles.queueRowBorder,
-        isUploading && styles.queueRowUploading,
+        isActive && styles.queueRowUploading,
       ]}
     >
       <View style={styles.queueIcon}>
@@ -243,13 +371,13 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
           {item.name}
         </Text>
         <View style={styles.queueFileMeta}>
-          <Text style={styles.queueFileSize}>{item.size}</Text>
-          {isUploading && (
+          <Text style={styles.queueFileSize}>{formatBytes(item.rawFileSize)}</Text>
+          {itemStatusLabel ? (
             <View style={styles.uploadingBadge}>
               <View style={styles.uploadingDot} />
-              <Text style={styles.uploadingLabel}>{'传输中'}</Text>
+              <Text style={styles.uploadingLabel}>{itemStatusLabel}</Text>
             </View>
-          )}
+          ) : null}
           {item.isCloudAsset && (
             <View style={styles.cloudAssetBadge}>
               <Icon name="cloud-outline" size={11} color={BLUE} />
@@ -257,6 +385,21 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
             </View>
           )}
         </View>
+        {showItemProgress ? (
+          <View style={styles.itemProgressGroup}>
+            <View style={styles.itemProgressTrack}>
+              <View
+                style={[
+                  styles.itemProgressFill,
+                  { width: `${Math.max(0, Math.min(100, activeProgressPercent))}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.itemProgressText}>
+              {`${formatBytes(activeConfirmedBytes)} / ${formatBytes(activeTotalBytes)}`}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -269,15 +412,7 @@ function QueueItemRow({ item, isLast }: { item: QueueItem; isLast: boolean }) {
 export function SyncStatusScreen() {
   const navigation = useNavigation<SyncStatusNav>();
   const insets = useSafeAreaInsets();
-  const [overview, setOverview] = useState<SyncOverview>({
-    progressPercent: 0,
-    speed: '0 MB/s',
-    completed: '0 B',
-    total: '0 B',
-    uploadState: 'idle',
-    retryAttempt: 0,
-    retryDelaySec: 0,
-  });
+  const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
   const [initialLoading, setInitialLoading] = useState(true);
@@ -292,7 +427,9 @@ export function SyncStatusScreen() {
   const mapQueueItem = useCallback((item: Record<string, unknown>, index: number): QueueItem => ({
     id: String(item.id ?? index),
     name: (item.originalFilename as string) || 'Unknown',
-    size: formatBytes((item.fileSize as number) ?? 0),
+    fileKey: (item.fileKey as string) || '',
+    rawFileSize: (item.fileSize as number) ?? 0,
+    ackedOffset: (item.ackedOffset as number) ?? 0,
     type: (item.mediaType as string) === 'video' ? 'video' : 'image',
     status: ((item.status as string) ?? 'queued') as QueueItem['status'],
     isCloudAsset: Boolean(item.isCloudAsset),
@@ -430,23 +567,7 @@ export function SyncStatusScreen() {
         await loadLatestSync(NativeSyncEngine);
 
         const syncData = await NativeSyncEngine.getSyncOverview();
-        const initialOverview: SyncOverview = syncData ? {
-          progressPercent: syncData.progressPercent ?? 0,
-          speed: syncData.currentSpeedMbps ? `${syncData.currentSpeedMbps} MB/s` : '0 MB/s',
-          completed: formatBytes(syncData.transferredBytes ?? 0),
-          total: formatBytes(syncData.totalBytes ?? 0),
-          uploadState: syncData.uploadState ?? 'idle',
-          retryAttempt: 0,
-          retryDelaySec: 0,
-        } : {
-          progressPercent: 0,
-          speed: '0 MB/s',
-          completed: '0 B',
-          total: '0 B',
-          uploadState: 'idle',
-          retryAttempt: 0,
-          retryDelaySec: 0,
-        };
+        const initialOverview = buildOverviewFromPayload(syncData, EMPTY_OVERVIEW);
         if (syncData) {
           setOverview(initialOverview);
         }
@@ -501,20 +622,10 @@ export function SyncStatusScreen() {
           }
 
           setOverview((prev) => ({
-            ...prev,
-            progressPercent: (state.progressPercent as number) ?? prev.progressPercent,
-            speed: uploadState === 'reconnecting'
-              ? '0 MB/s'
-              : state.currentSpeedMbps !== undefined && state.currentSpeedMbps !== null
-                ? `${state.currentSpeedMbps} MB/s`
-                : prev.speed,
-            completed: state.transferredBytes !== undefined && state.transferredBytes !== null
-              ? formatBytes(state.transferredBytes as number)
-              : prev.completed,
-            total: state.totalBytes !== undefined && state.totalBytes !== null
-              ? formatBytes(state.totalBytes as number)
-              : prev.total,
-            uploadState: uploadState ?? prev.uploadState,
+            ...buildOverviewFromPayload(state, prev),
+            currentSpeedMbps: uploadState === 'reconnecting'
+              ? 0
+              : ((state.currentSpeedMbps as number | undefined) ?? prev.currentSpeedMbps),
             retryAttempt: uploadState === 'reconnecting'
               ? ((state.retryAttempt as number) ?? prev.retryAttempt ?? 0)
               : 0,
@@ -589,15 +700,40 @@ export function SyncStatusScreen() {
 
   const renderQueueItem = useCallback(
     ({ item, index }: ListRenderItemInfo<QueueItem>) => (
-      <QueueItemRow item={item} isLast={index === queue.length - 1} />
+      <QueueItemRow
+        item={item}
+        isLast={index === queue.length - 1}
+        activeFileKey={overview.currentFile}
+        activeProgressPercent={overview.progressPercent}
+        activeConfirmedBytes={overview.currentFileConfirmedBytes}
+        activeTotalBytes={overview.currentFileTotalBytes}
+      />
     ),
-    [queue.length],
+    [
+      overview.currentFile,
+      overview.currentFileConfirmedBytes,
+      overview.currentFileTotalBytes,
+      overview.progressPercent,
+      queue.length,
+    ],
   );
 
   const keyExtractor = useCallback((item: QueueItem) => item.id, []);
 
+  const summaryTotalCount = Math.max(overview.totalCount, overview.completedCount + queue.length);
+  const summaryTotalBytes = Math.max(
+    overview.totalBytes,
+    overview.completedBytes + queue.reduce((sum, item) => sum + item.rawFileSize, 0),
+  );
+  const summaryTransferredBytes = Math.min(
+    summaryTotalBytes,
+    overview.completedBytes + overview.currentFileConfirmedBytes,
+  );
+  const activeQueueItem = queue.find((item) => item.fileKey.length > 0 && item.fileKey === overview.currentFile);
+  const activeFileName = overview.currentFilename || activeQueueItem?.name;
+
   const isDone = overview.uploadState === 'completed' ||
-    (overview.uploadState === 'idle' && queue.length === 0 && (overview.progressPercent >= 100 || todayStats.fileCount > 0));
+    (overview.uploadState === 'idle' && queue.length === 0 && todayStats.fileCount > 0);
   const holdCompletionCard =
     holdCompletionCardUntilMs !== null &&
     Date.now() < holdCompletionCardUntilMs &&
@@ -612,8 +748,17 @@ export function SyncStatusScreen() {
     bindingState?.connectionState,
     {
       progressPercent: overview.progressPercent,
+      currentFileKey: overview.currentFile,
+      queueHasActiveItem: queue.some((item) => (
+        item.status === 'preparing' ||
+        item.status === 'cloud_downloading' ||
+        item.status === 'uploading'
+      )),
       queueHasUploadingItem: queue.some((item) => item.status === 'uploading'),
-      uploadState: overview.uploadState,
+      transferredBytes: overview.currentFileConfirmedBytes,
+      uploadState: overview.uploadState === 'cloud_downloading'
+        ? 'preparing'
+        : overview.uploadState,
     },
   );
   const isConnectingState =
@@ -660,19 +805,19 @@ export function SyncStatusScreen() {
       : suppressConnectionNotice
       ? null
       : isTransferInterrupted
-      ? (
-        isWaitingForNetworkRecovery
-          ? (
-            retryCountdownSec > 0
-              ? `已保留当前进度 ${overview.completed} / ${overview.total}，网络恢复后将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
-              : `已保留当前进度 ${overview.completed} / ${overview.total}，网络恢复后会自动继续。`
-          )
-          : (
-            retryCountdownSec > 0
-              ? `已保留当前进度 ${overview.completed} / ${overview.total}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
-              : `已保留当前进度 ${overview.completed} / ${overview.total}，正在重新建立连接。`
-          )
-      )
+              ? (
+                isWaitingForNetworkRecovery
+                  ? (
+                    retryCountdownSec > 0
+                      ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+                      : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后会自动继续。`
+                  )
+                  : (
+                    retryCountdownSec > 0
+                      ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+                      : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，正在重新建立连接。`
+                  )
+              )
       : isConnectionError
         ? '恢复网络或重新打开电脑端 SyncFlow 后会自动继续。'
         : isConnectingState
@@ -787,10 +932,15 @@ export function SyncStatusScreen() {
         <>
           {/* ---- Progress card ---- */}
           <View style={styles.progressCard}>
-            <CircularProgress progress={overview.progressPercent} speed={overview.speed} />
-            <Text style={styles.completedText}>
-              {'已完成 '}{overview.completed}{' / '}{overview.total}
-            </Text>
+            <SyncSummaryCard
+              uploadState={overview.uploadState}
+              completedCount={overview.completedCount}
+              totalCount={summaryTotalCount}
+              transferredBytes={summaryTransferredBytes}
+              totalBytes={summaryTotalBytes}
+              currentSpeedMbps={overview.currentSpeedMbps}
+              activeFileName={activeFileName}
+            />
           </View>
 
           {/* ---- Queue card ---- */}
@@ -926,9 +1076,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     borderRadius: 24,
-    paddingVertical: 32,
+    paddingVertical: 28,
     paddingHorizontal: 24,
-    alignItems: 'center',
     backgroundColor: CARD_BG,
     shadowColor: '#50a0d2',
     shadowOffset: { width: 0, height: 4 },
@@ -936,13 +1085,46 @@ const styles = StyleSheet.create({
     shadowRadius: 32,
     elevation: 4,
   },
-  completedText: {
-    marginTop: 20,
-    fontSize: 14,
+  summaryEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: BLUE,
+    textTransform: 'uppercase',
+  },
+  summaryTitle: {
+    marginTop: 8,
+    fontSize: 28,
+    fontWeight: '700',
+    color: DARK,
+    lineHeight: 34,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+  },
+  summaryStatCard: {
+    flex: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(126,184,216,0.18)',
+  },
+  summaryStatLabel: {
+    fontSize: 12,
     color: BLUE_MUTED,
   },
-  pendingText: {
+  summaryStatValue: {
     marginTop: 6,
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK_FILE,
+  },
+  summaryCurrentFile: {
+    marginTop: 14,
     fontSize: 13,
     color: '#587894',
   },
@@ -1074,8 +1256,28 @@ const styles = StyleSheet.create({
   queueFileMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 2,
+  },
+  itemProgressGroup: {
+    marginTop: 10,
+    gap: 6,
+  },
+  itemProgressTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(59,159,216,0.12)',
+    overflow: 'hidden',
+  },
+  itemProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: BLUE,
+  },
+  itemProgressText: {
+    fontSize: 12,
+    color: '#587894',
   },
 
   // Uploading row highlight
