@@ -18,6 +18,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { formatLocalDateKey } from '../utils/localDateKey';
+import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -607,11 +608,19 @@ export function SyncStatusScreen() {
   const boundDeviceName = bindingState?.deviceAlias || bindingState?.deviceName || (
     bindingState?.deviceType === 'win' ? 'Windows 电脑' : '电脑'
   );
+  const effectiveConnectionState = getEffectiveConnectionState(
+    bindingState?.connectionState,
+    {
+      progressPercent: overview.progressPercent,
+      queueHasUploadingItem: queue.some((item) => item.status === 'uploading'),
+      uploadState: overview.uploadState,
+    },
+  );
   const isConnectingState =
-    bindingState?.connectionState === 'bound' ||
-    bindingState?.connectionState === 'connecting' ||
-    bindingState?.connectionState === 'discovering';
-  const isConnectionError = bindingState?.connectionState === 'offline';
+    effectiveConnectionState === 'bound' ||
+    effectiveConnectionState === 'connecting' ||
+    effectiveConnectionState === 'discovering';
+  const isConnectionError = effectiveConnectionState === 'offline';
   const isTransferInterrupted = retryBanner !== null || overview.uploadState === 'reconnecting';
   const isPermissionBlocked = overview.uploadState === 'paused_no_permission';
   const suppressConnectionNotice = suppressInitialOfflineBanner && !isPermissionBlocked;

@@ -18,6 +18,10 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
 import { isDiagnosticsExportUnavailable, shareDiagnosticsArchive } from '../utils/shareDiagnosticsArchive';
+import {
+  getEffectiveConnectionState,
+  type MobileConnectionState,
+} from '../utils/effectiveConnectionState';
 
 // ---------------------------------------------------------------------------
 // SettingsScreen
@@ -58,7 +62,12 @@ export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
-  const [connectionState, setConnectionState] = useState<'bound' | 'connecting' | 'connected' | 'offline' | 'discovering'>('offline');
+  const [connectionState, setConnectionState] = useState<MobileConnectionState>('offline');
+  const [syncOverviewState, setSyncOverviewState] = useState({
+    progressPercent: 0,
+    transferredBytes: 0,
+    uploadState: 'idle',
+  });
   const [latestSyncLabel, setLatestSyncLabel] = useState('暂无记录');
   const [appVersionLabel, setAppVersionLabel] = useState('读取中…');
   const [isPhotoPermissionBlocked, setIsPhotoPermissionBlocked] = useState(false);
@@ -74,6 +83,7 @@ export function SettingsScreen() {
 
   useEffect(() => {
     let bindingSub: { remove: () => void } | undefined;
+    let syncSub: { remove: () => void } | undefined;
 
     const applyBindingState = (state: Record<string, unknown> | null | undefined) => {
       if (!state || !state.deviceId) {
@@ -95,6 +105,19 @@ export function SettingsScreen() {
 
         const emitter = new NativeEventEmitter(NativeSyncEngine);
         bindingSub = emitter.addListener('onBindingStateChanged', applyBindingState);
+        syncSub = emitter.addListener('onSyncStateChanged', (state: Record<string, unknown>) => {
+          const uploadState = (state.uploadState as string) || 'idle';
+          setSyncOverviewState((prev) => ({
+            progressPercent: typeof state.progressPercent === 'number'
+              ? state.progressPercent
+              : prev.progressPercent,
+            transferredBytes: typeof state.transferredBytes === 'number'
+              ? state.transferredBytes
+              : prev.transferredBytes,
+            uploadState,
+          }));
+          setIsPhotoPermissionBlocked(uploadState === 'paused_no_permission');
+        });
 
         const [stateResult, clientNameResult, appInfoResult, historyResult, syncOverviewResult] = await Promise.allSettled([
           NativeSyncEngine.getBindingState(),
@@ -142,8 +165,17 @@ export function SettingsScreen() {
           }
         }
         const syncOverview = syncOverviewResult.status === 'fulfilled'
-          ? (syncOverviewResult.value as { uploadState?: string } | undefined)
+          ? (syncOverviewResult.value as {
+              progressPercent?: number;
+              transferredBytes?: number;
+              uploadState?: string;
+            } | undefined)
           : undefined;
+        setSyncOverviewState({
+          progressPercent: syncOverview?.progressPercent ?? 0,
+          transferredBytes: syncOverview?.transferredBytes ?? 0,
+          uploadState: syncOverview?.uploadState ?? 'idle',
+        });
         setIsPhotoPermissionBlocked(syncOverview?.uploadState === 'paused_no_permission');
       } catch (e) {
         setAppVersionLabel('未知版本');
@@ -155,16 +187,18 @@ export function SettingsScreen() {
 
     return () => {
       bindingSub?.remove();
+      syncSub?.remove();
     };
   }, []);
 
+  const effectiveConnectionState = getEffectiveConnectionState(connectionState, syncOverviewState);
   const connectionLabel = (
-    connectionState === 'connected' ? '已连接'
-      : connectionState === 'connecting' || connectionState === 'discovering' ? '连接中'
+    effectiveConnectionState === 'connected' ? '已连接'
+      : effectiveConnectionState === 'connecting' || effectiveConnectionState === 'discovering' ? '连接中'
         : '未连接'
   );
-  const isConnected = connectionState === 'connected';
-  const isConnecting = connectionState === 'connecting' || connectionState === 'discovering';
+  const isConnected = effectiveConnectionState === 'connected';
+  const isConnecting = effectiveConnectionState === 'connecting' || effectiveConnectionState === 'discovering';
 
   // ---------------------------------------------------------------------------
   // Save my iPhone display name
