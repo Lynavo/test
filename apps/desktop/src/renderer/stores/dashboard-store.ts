@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { DashboardDeviceDTO, DashboardSummaryDTO } from '@syncflow/contracts';
 import type { DeviceDashboardStatus } from '@syncflow/contracts';
+import { useSidecarRuntimeStore } from './sidecar-runtime-store';
 
 const STATUS_PRIORITY: Record<DeviceDashboardStatus, number> = {
   transferring: 0,
@@ -12,6 +13,10 @@ function sortDevices(devices: DashboardDeviceDTO[]): DashboardDeviceDTO[] {
   return [...devices].sort(
     (a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status],
   );
+}
+
+function isSidecarHealthy(): boolean {
+  return useSidecarRuntimeStore.getState().runtime.status === 'healthy';
 }
 
 export interface DashboardState {
@@ -40,7 +45,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
   fetchDashboard: async () => {
     const api = window.electronAPI;
-    if (!api) return;
+    if (!api || !isSidecarHealthy()) return;
     try {
       const [summary, devices] = await Promise.all([
         api.sidecar.getDashboardSummary(),

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BonjourRuntimeSection } from './BonjourRuntimeSection';
 import { useSettingsStore } from '@renderer/stores/settings-store';
+import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { ConnectionCodeSection } from './ConnectionCodeSection';
 import { DeviceNameSection } from './DeviceNameSection';
 import { FilePathSection } from './FilePathSection';
@@ -10,11 +11,15 @@ import { SystemGuideSection } from './SystemGuideSection';
 
 export function SettingsPage() {
   const refreshShareStatus = useSettingsStore((s) => s.refreshShareStatus);
+  const sidecarStatus = useSidecarRuntimeStore((s) => s.runtime.status);
   const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
 
   useEffect(() => {
+    if (sidecarStatus !== 'healthy') {
+      return;
+    }
     void refreshShareStatus(true);
-  }, [refreshShareStatus]);
+  }, [refreshShareStatus, sidecarStatus]);
 
   return (
     <div className="flex-1 overflow-auto">

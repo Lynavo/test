@@ -1,9 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useDashboardStore } from '../dashboard-store';
 import type { DashboardDeviceDTO, DashboardSummaryDTO } from '@syncflow/contracts';
+import { useSidecarRuntimeStore } from '../sidecar-runtime-store';
 
 describe('dashboard-store', () => {
   beforeEach(() => {
+    Reflect.deleteProperty(window, 'electronAPI');
+    useSidecarRuntimeStore.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        status: 'healthy',
+        message: null,
+      },
+    }));
     useDashboardStore.getState().updateDevices([
       {
         deviceId: 'd4',
@@ -141,5 +150,62 @@ describe('dashboard-store', () => {
     expect(devices[0].status).toBe('connected_idle');
     expect(devices[1].status).toBe('offline');
     expect(devices[2].status).toBe('offline');
+  });
+
+  it('skips dashboard fetch until sidecar is healthy', async () => {
+    const getDashboardSummary = vi.fn();
+    const getDashboardDevices = vi.fn();
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getDashboardSummary,
+        getDashboardDevices,
+      },
+    } as unknown as Window['electronAPI'];
+
+    useSidecarRuntimeStore.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        status: 'starting',
+      },
+    }));
+
+    await useDashboardStore.getState().fetchDashboard();
+
+    expect(getDashboardSummary).not.toHaveBeenCalled();
+    expect(getDashboardDevices).not.toHaveBeenCalled();
+  });
+
+  it('fetches dashboard when sidecar is healthy', async () => {
+    const summary: DashboardSummaryDTO = {
+      todayUploadCount: 3,
+      todayOccupiedBytes: 2048,
+      remainingBytes: 4096,
+      isDiskLow: false,
+    };
+    const devices: DashboardDeviceDTO[] = [
+      {
+        deviceId: 'fresh-1',
+        clientName: 'Fresh Device',
+        ip: '10.0.0.9',
+        status: 'connected_idle',
+        todayFileCount: 3,
+        todayBytes: 2048,
+        storageLeft: '4 GB',
+        storagePath: '/tmp',
+        devicePath: '/tmp/Fresh Device',
+      },
+    ];
+
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getDashboardSummary: vi.fn().mockResolvedValue(summary),
+        getDashboardDevices: vi.fn().mockResolvedValue(devices),
+      },
+    } as unknown as Window['electronAPI'];
+
+    await useDashboardStore.getState().fetchDashboard();
+
+    expect(useDashboardStore.getState().summary).toEqual(summary);
+    expect(useDashboardStore.getState().devices).toEqual(devices);
   });
 });

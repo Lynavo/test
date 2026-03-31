@@ -30,12 +30,7 @@ function PageFallback() {
 export function AppShell() {
   const currentView = useAppStore((s) => s.currentView);
   const isModalOpen = useAppStore((s) => s.isModalOpen);
-
-  // Fetch data on mount
-  useEffect(() => {
-    useDashboardStore.getState().fetchDashboard();
-    useSettingsStore.getState().fetchSettings();
-  }, []);
+  const sidecarStatus = useSidecarRuntimeStore((s) => s.runtime.status);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -103,11 +98,15 @@ export function AppShell() {
 
   // Periodic polling fallback in case WebSocket events are missed
   useEffect(() => {
+    if (sidecarStatus !== 'healthy') {
+      return;
+    }
+
     const interval = setInterval(() => {
       useDashboardStore.getState().fetchDashboard();
     }, 10_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sidecarStatus]);
 
   return (
     <div

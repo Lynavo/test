@@ -24,8 +24,22 @@ function broadcastSidecarRuntimeState(state: SidecarRuntimeState) {
   }
 }
 
+function syncWsBridgeWithRuntimeState(state: SidecarRuntimeState) {
+  if (!wsBridge) {
+    return;
+  }
+
+  if (state.status === 'healthy') {
+    wsBridge.connect();
+    return;
+  }
+
+  wsBridge.disconnect();
+}
+
 sidecar.on('state', (state: SidecarRuntimeState) => {
   broadcastSidecarRuntimeState(state);
+  syncWsBridgeWithRuntimeState(state);
 });
 
 async function createMainWindow() {
@@ -56,7 +70,6 @@ app.whenReady().then(async () => {
   registerIpcHandlers(sidecar);
   await createMainWindow();
   wsBridge = new WsBridge(() => mainWindow);
-  wsBridge.connect();
   void sidecar.start().catch((err) => {
     console.error('Failed to start sidecar:', err);
   });

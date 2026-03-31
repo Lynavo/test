@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SettingsDTO, ShareStatusDTO } from '@syncflow/contracts';
+import { useSidecarRuntimeStore } from './sidecar-runtime-store';
 
 function toShareStatusSnapshot(settings: SettingsDTO): ShareStatusDTO {
   return {
@@ -8,6 +9,10 @@ function toShareStatusSnapshot(settings: SettingsDTO): ShareStatusDTO {
     status: settings.shareStatus,
     shareName: settings.shareName || undefined,
   };
+}
+
+function isSidecarHealthy(): boolean {
+  return useSidecarRuntimeStore.getState().runtime.status === 'healthy';
 }
 
 export interface SettingsState {
@@ -38,7 +43,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   fetchSettings: async () => {
     const api = window.electronAPI;
-    if (!api) return;
+    if (!api || !isSidecarHealthy()) return;
     try {
       const settings = await api.sidecar.getSettings();
       set({
@@ -58,7 +63,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   refreshShareStatus: async (silent = false) => {
     const api = window.electronAPI;
-    if (!api) return;
+    if (!api || !isSidecarHealthy()) return;
 
     set({ validatingShare: true });
     try {
