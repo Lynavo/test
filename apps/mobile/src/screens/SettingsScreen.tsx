@@ -119,15 +119,17 @@ export function SettingsScreen() {
           setIsPhotoPermissionBlocked(uploadState === 'paused_no_permission');
         });
 
+        // Safely call all methods with optional chaining to prevent synchronous TypeErrors
+        // if any method isn't fully exported to the React Native bridge yet.
         const [stateResult, clientNameResult, appInfoResult, historyResult, syncOverviewResult] = await Promise.allSettled([
-          NativeSyncEngine.getBindingState(),
-          NativeSyncEngine.getClientDisplayName(),
-          NativeSyncEngine.getAppInfo?.(),
-          NativeSyncEngine.getHistoryDays?.(null),
-          NativeSyncEngine.getSyncOverview?.(),
+          NativeSyncEngine.getBindingState?.() ?? Promise.resolve(null),
+          NativeSyncEngine.getClientDisplayName?.() ?? Promise.resolve('iPhone'),
+          NativeSyncEngine.getAppInfo?.() ?? Promise.resolve(undefined),
+          NativeSyncEngine.getHistoryDays?.(null) ?? Promise.resolve(undefined),
+          NativeSyncEngine.getSyncOverview?.() ?? Promise.resolve(undefined),
         ]);
 
-        if (stateResult.status === 'fulfilled') {
+        if (stateResult.status === 'fulfilled' && stateResult.value) {
           applyBindingState(stateResult.value as Record<string, unknown> | null | undefined);
         }
 
@@ -135,7 +137,7 @@ export function SettingsScreen() {
           setMyName(clientNameResult.value as string);
         }
 
-        if (appInfoResult.status === 'fulfilled') {
+        if (appInfoResult.status === 'fulfilled' && appInfoResult.value) {
           setAppVersionLabel(formatAppVersionLabel(appInfoResult.value as Record<string, unknown> | undefined));
         } else {
           setAppVersionLabel('未知版本');
