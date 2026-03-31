@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -84,7 +85,7 @@ func main() {
 		broadcaster, err = mdns.NewBroadcaster(mdns.BroadcastConfig{
 			DeviceID:     deviceID,
 			DeviceName:   name,
-			DeviceType:   "mac",
+			DeviceType:   mdns.DeviceTypeForGOOS(runtime.GOOS),
 			TCPPort:      cfg.TCPPort,
 			Proto:        2,
 			ShareEnabled: false,

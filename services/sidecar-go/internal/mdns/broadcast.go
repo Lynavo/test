@@ -31,7 +31,7 @@ var (
 type BroadcastConfig struct {
 	DeviceID     string
 	DeviceName   string
-	DeviceType   string // "mac"
+	DeviceType   string // "mac" | "win"
 	DeviceIP     string
 	TCPPort      int // 39393
 	Proto        int // 2
@@ -60,6 +60,15 @@ func BuildTXTRecords(cfg BroadcastConfig) []string {
 		txt = append(txt, fmt.Sprintf("ip=%s", cfg.DeviceIP))
 	}
 	return txt
+}
+
+// DeviceTypeForGOOS maps the current runtime to the discovery type consumed by
+// the mobile device list.
+func DeviceTypeForGOOS(goos string) string {
+	if goos == "windows" {
+		return "win"
+	}
+	return "mac"
 }
 
 // NewBroadcaster registers a _syncflow._tcp Bonjour service.
