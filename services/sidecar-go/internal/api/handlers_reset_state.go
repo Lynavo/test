@@ -1,0 +1,68 @@
+package api
+
+import (
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+)
+
+type resetStateResponse struct {
+	OK bool `json:"ok"`
+}
+
+func (s *Server) handleResetState(w http.ResponseWriter, _ *http.Request) {
+	if err := s.store.ResetState(); err != nil {
+		slog.Error("reset runtime state", "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to reset state")
+		return
+	}
+
+	protectedReceiveEntries := map[string]struct{}{
+		filepath.Clean(s.config.DBPath()):          {},
+		filepath.Clean(s.config.DBPath() + "-wal"): {},
+		filepath.Clean(s.config.DBPath() + "-shm"): {},
+		filepath.Clean(s.config.LogDir()):          {},
+	}
+
+	if err := clearDirectoryContents(s.config.ReceiveDir, protectedReceiveEntries); err != nil {
+		slog.Error("clear receive dir for reset", "path", s.config.ReceiveDir, "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to reset state")
+		return
+	}
+
+	if err := clearDirectoryContents(s.config.StagingDir(), nil); err != nil {
+		slog.Error("clear staging dir for reset", "path", s.config.StagingDir(), "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to reset state")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, resetStateResponse{OK: true})
+}
+
+func clearDirectoryContents(dir string, preserved map[string]struct{}) error {
+	cleanDir := filepath.Clean(dir)
+	if err := os.MkdirAll(cleanDir, 0o755); err != nil {
+		return fmt.Errorf("ensure dir %s: %w", cleanDir, err)
+	}
+
+	entries, err := os.ReadDir(cleanDir)
+	if err != nil {
+		return fmt.Errorf("read dir %s: %w", cleanDir, err)
+	}
+
+	for _, entry := range entries {
+		target := filepath.Clean(filepath.Join(cleanDir, entry.Name()))
+		if preserved != nil {
+			if _, ok := preserved[target]; ok {
+				continue
+			}
+		}
+		if err := os.RemoveAll(target); err != nil {
+			return fmt.Errorf("remove %s: %w", target, err)
+		}
+	}
+
+	return nil
+}

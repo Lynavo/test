@@ -58,19 +58,14 @@ export const sidecarClient = {
     if (options?.pageSize) params.set('pageSize', String(options.pageSize));
     if (options?.sortField) params.set('sortField', options.sortField);
     if (options?.sortDirection) params.set('sortDirection', options.sortDirection);
-    return request<DeviceFileLedgerPageDTO>(
-      'GET',
-      `/devices/${id}/files?${params.toString()}`,
-    );
+    return request<DeviceFileLedgerPageDTO>('GET', `/devices/${id}/files?${params.toString()}`);
   },
-  getDeviceDates: (id: string) =>
-    request<{ dates: string[] }>('GET', `/devices/${id}/dates`),
-  getSettings: () =>
-    request<import('@syncflow/contracts').SettingsDTO>('GET', '/settings'),
+  getDeviceDates: (id: string) => request<{ dates: string[] }>('GET', `/devices/${id}/dates`),
+  getSettings: () => request<import('@syncflow/contracts').SettingsDTO>('GET', '/settings'),
   updateSettings: (s: Partial<import('@syncflow/contracts').SettingsDTO>) =>
     request<import('@syncflow/contracts').SettingsDTO>('PUT', '/settings', s),
-  regenerateConnectionCode: () =>
-    request<{ code: string }>('POST', '/connection-code/regenerate'),
+  resetState: () => request<{ ok: boolean }>('POST', '/settings/reset-state', {}),
+  regenerateConnectionCode: () => request<{ code: string }>('POST', '/connection-code/regenerate'),
   getShareStatus: () =>
     request<import('@syncflow/contracts').ShareStatusDTO>('GET', '/share/status'),
   validateShare: () =>

@@ -15,7 +15,8 @@ import type {
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../shared/sidecar-runtime';
 
 const isDev = !app.isPackaged;
-const sidecarBinaryName = process.platform === 'win32' ? 'syncflow-sidecar.exe' : 'syncflow-sidecar';
+const sidecarBinaryName =
+  process.platform === 'win32' ? 'syncflow-sidecar.exe' : 'syncflow-sidecar';
 const HEALTHCHECK_INTERVAL_MS = 500;
 const SIDECAR_STOP_TIMEOUT_MS = 5000;
 const DEV_HEALTHCHECK_RETRIES = 120;
@@ -76,7 +77,9 @@ export class SidecarManager extends EventEmitter {
     }
 
     const bundledCandidates = [
-      isDev ? join(app.getAppPath(), 'resources', bonjourBinaryName) : join(process.resourcesPath, bonjourBinaryName),
+      isDev
+        ? join(app.getAppPath(), 'resources', bonjourBinaryName)
+        : join(process.resourcesPath, bonjourBinaryName),
       isDev ? join(app.getAppPath(), '..', 'resources', bonjourBinaryName) : undefined,
     ].filter((candidate): candidate is string => Boolean(candidate));
     for (const candidate of bundledCandidates) {
@@ -109,7 +112,9 @@ export class SidecarManager extends EventEmitter {
       };
     }
 
-    log.warn('[SidecarManager] Bonjour runtime not found; sidecar will fall back to built-in zeroconf');
+    log.warn(
+      '[SidecarManager] Bonjour runtime not found; sidecar will fall back to built-in zeroconf',
+    );
     return {
       status: 'fallback',
       source: 'fallback',
@@ -127,9 +132,9 @@ export class SidecarManager extends EventEmitter {
     this.clearRestartTimer();
     this.stopHealthCheck();
     const bonjour = this.detectBonjourRuntime();
-    const reuseExisting = options.reuseExisting ?? true;
+    const reuseExisting = options.reuseExisting ?? !isDev;
 
-    if (reuseExisting && await this.healthCheck()) {
+    if (reuseExisting && (await this.healthCheck())) {
       this.restartCount = 0;
       this.startHealthCheck();
       this.setState({
@@ -142,10 +147,22 @@ export class SidecarManager extends EventEmitter {
       return;
     }
 
+    if (!reuseExisting) {
+      let shouldWaitForSidecarStop = await this.forceShutdownExistingSidecar();
+
+      if (isDev) {
+        const killedResidualProcesses = await this.forceShutdownResidualSidecars();
+        shouldWaitForSidecarStop = shouldWaitForSidecarStop || killedResidualProcesses;
+        await this.forceShutdownSyncFlowBonjourBroadcasts();
+      }
+
+      if (shouldWaitForSidecarStop) {
+        await this.waitForSidecarToStop(SIDECAR_STOP_TIMEOUT_MS);
+      }
+    }
+
     const { command, args } = this.getSpawnArgs();
-    const cwd = isDev
-      ? join(app.getAppPath(), '..', '..', 'services', 'sidecar-go')
-      : undefined;
+    const cwd = isDev ? join(app.getAppPath(), '..', '..', 'services', 'sidecar-go') : undefined;
     this.setState({
       status: 'starting',
       message:
@@ -169,10 +186,18 @@ export class SidecarManager extends EventEmitter {
     this.process = child;
 
     child.stdout?.on('data', (data) => {
-      try { log.info(`[sidecar] ${data.toString().trim()}`); } catch { /* pipe closed */ }
+      try {
+        log.info(`[sidecar] ${data.toString().trim()}`);
+      } catch {
+        /* pipe closed */
+      }
     });
     child.stderr?.on('data', (data) => {
-      try { log.error(`[sidecar] ${data.toString().trim()}`); } catch { /* pipe closed */ }
+      try {
+        log.error(`[sidecar] ${data.toString().trim()}`);
+      } catch {
+        /* pipe closed */
+      }
     });
     child.on('error', (err) => {
       if (this.process !== child) return;
@@ -214,11 +239,21 @@ export class SidecarManager extends EventEmitter {
   async retryStart(): Promise<void> {
     this.restartCount = 0;
     this.clearRestartTimer();
-    await this.stop({ killExternal: true, killResidualProcesses: true, killBonjourBroadcasts: true });
+    await this.stop({
+      killExternal: true,
+      killResidualProcesses: true,
+      killBonjourBroadcasts: true,
+    });
     await this.start({ reuseExisting: false });
   }
 
-  async stop(options: { killExternal?: boolean; killResidualProcesses?: boolean; killBonjourBroadcasts?: boolean } = {}): Promise<void> {
+  async stop(
+    options: {
+      killExternal?: boolean;
+      killResidualProcesses?: boolean;
+      killBonjourBroadcasts?: boolean;
+    } = {},
+  ): Promise<void> {
     this.stopping = true;
     this.clearRestartTimer();
     this.stopHealthCheck();
@@ -240,8 +275,8 @@ export class SidecarManager extends EventEmitter {
     }
     let shouldWaitForSidecarStop = false;
     if (options.killExternal) {
-      await this.forceShutdownExistingSidecar();
-      shouldWaitForSidecarStop = true;
+      const killedExistingSidecar = await this.forceShutdownExistingSidecar();
+      shouldWaitForSidecarStop = killedExistingSidecar;
     }
     if (options.killResidualProcesses) {
       const killedResidualProcesses = await this.forceShutdownResidualSidecars();
@@ -280,7 +315,7 @@ export class SidecarManager extends EventEmitter {
   private async waitForSidecarToStop(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      if (!await this.healthCheck()) {
+      if (!(await this.healthCheck())) {
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -288,19 +323,20 @@ export class SidecarManager extends EventEmitter {
     throw new Error('Sidecar failed to stop');
   }
 
-  private async forceShutdownExistingSidecar(): Promise<void> {
+  private async forceShutdownExistingSidecar(): Promise<boolean> {
     const pids = await findListeningPIDs(SIDECAR_HTTP_PORT);
     const ownProcessPID = this.process?.pid ?? null;
     const externalPIDs = pids.filter((pid) => pid !== process.pid && pid !== ownProcessPID);
 
     if (externalPIDs.length === 0) {
-      return;
+      return false;
     }
 
     log.info(`[SidecarManager] force stopping existing sidecar PID(s): ${externalPIDs.join(', ')}`);
     for (const pid of externalPIDs) {
       await killProcessByPID(pid);
     }
+    return true;
   }
 
   private async forceShutdownResidualSidecars(): Promise<boolean> {
@@ -316,7 +352,9 @@ export class SidecarManager extends EventEmitter {
       return false;
     }
 
-    log.info(`[SidecarManager] force stopping residual ${sidecarBinaryName} PID(s): ${residualPIDs.join(', ')}`);
+    log.info(
+      `[SidecarManager] force stopping residual ${sidecarBinaryName} PID(s): ${residualPIDs.join(', ')}`,
+    );
     for (const pid of residualPIDs) {
       await killProcessByPID(pid);
     }
@@ -333,7 +371,9 @@ export class SidecarManager extends EventEmitter {
       return;
     }
 
-    log.info(`[SidecarManager] force stopping SyncFlow Bonjour broadcast PID(s): ${pids.join(', ')}`);
+    log.info(
+      `[SidecarManager] force stopping SyncFlow Bonjour broadcast PID(s): ${pids.join(', ')}`,
+    );
     for (const pid of pids) {
       await killProcessByPID(pid);
     }
@@ -402,9 +442,7 @@ export class SidecarManager extends EventEmitter {
         message: `${message}，正在重试（${this.restartCount}/${this.maxRestarts}）`,
         lastExitCode: code,
       });
-      log.info(
-        `[SidecarManager] restarting (attempt ${this.restartCount}/${this.maxRestarts})`,
-      );
+      log.info(`[SidecarManager] restarting (attempt ${this.restartCount}/${this.maxRestarts})`);
       this.clearRestartTimer();
       this.restartTimer = setTimeout(() => {
         this.restartTimer = null;
@@ -441,11 +479,7 @@ async function findListeningPIDs(port: number): Promise<number[]> {
         `$connections = Get-NetTCPConnection -LocalPort ${port} -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`,
         'if ($connections) { $connections | Sort-Object -Unique }',
       ].join('; ');
-      const { stdout } = await execFileAsync('powershell.exe', [
-        '-NoProfile',
-        '-Command',
-        script,
-      ]);
+      const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script]);
       return stdout
         .split(/\r?\n/)
         .map((value) => Number(value.trim()))
@@ -476,11 +510,7 @@ async function findProcessPIDsByName(processName: string): Promise<number[]> {
       `$processes = Get-CimInstance Win32_Process -Filter "Name='${processName}'" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId`,
       'if ($processes) { $processes | Sort-Object -Unique }',
     ].join('; ');
-    const { stdout } = await execFileAsync('powershell.exe', [
-      '-NoProfile',
-      '-Command',
-      script,
-    ]);
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script]);
     return parsePIDList(stdout);
   } catch {
     return [];
@@ -501,11 +531,7 @@ async function findSyncFlowBonjourBroadcastPIDs(): Promise<number[]> {
       '} | Select-Object -ExpandProperty ProcessId',
       'if ($processes) { $processes | Sort-Object -Unique }',
     ].join(' ');
-    const { stdout } = await execFileAsync('powershell.exe', [
-      '-NoProfile',
-      '-Command',
-      script,
-    ]);
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script]);
     return parsePIDList(stdout);
   } catch {
     return [];

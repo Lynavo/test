@@ -29,6 +29,7 @@ export interface ElectronAPI {
     getDeviceDates(deviceId: string): Promise<{ dates: string[] }>;
     getSettings(): Promise<SettingsDTO>;
     updateSettings(settings: Partial<SettingsDTO>): Promise<SettingsDTO>;
+    resetState(): Promise<{ ok: boolean }>;
     regenerateConnectionCode(): Promise<{ code: string }>;
     getRuntimeState(): Promise<SidecarRuntimeState>;
     retryStart(): Promise<void>;

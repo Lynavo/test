@@ -20,6 +20,7 @@ export const IPC = {
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
+  SIDECAR_RESET_STATE: 'sidecar:reset-state',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
@@ -61,6 +62,7 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   ipcMain.handle(IPC.SIDECAR_UPDATE_SETTINGS, (_e, partial) =>
     sidecarClient.updateSettings(partial),
   );
+  ipcMain.handle(IPC.SIDECAR_RESET_STATE, () => sidecarClient.resetState());
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => sidecarClient.regenerateConnectionCode());
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
   ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());

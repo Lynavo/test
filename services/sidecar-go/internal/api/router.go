@@ -43,6 +43,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	// Settings
 	mux.HandleFunc("GET /settings", withJSON(srv.handleGetSettings))
 	mux.HandleFunc("PUT /settings", withJSON(srv.handleUpdateSettings))
+	mux.HandleFunc("POST /settings/reset-state", withJSON(srv.handleResetState))
 	// Connection code
 	mux.HandleFunc("POST /connection-code/regenerate", withJSON(srv.handleRegenerateCode))
 	// Share

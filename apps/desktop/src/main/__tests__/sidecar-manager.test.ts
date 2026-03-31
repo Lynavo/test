@@ -6,6 +6,9 @@ import { sidecarClient } from '../sidecar-client';
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
 }));
+const { execFileMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+}));
 
 vi.mock('electron', () => ({
   app: {
@@ -25,10 +28,10 @@ vi.mock('electron-log', () => ({
 vi.mock('node:child_process', () => ({
   default: {
     spawn: spawnMock,
-    execFile: vi.fn(),
+    execFile: execFileMock,
   },
   spawn: spawnMock,
-  execFile: vi.fn(),
+  execFile: execFileMock,
 }));
 
 vi.mock('../sidecar-client', () => ({
@@ -62,10 +65,19 @@ describe('SidecarManager', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     spawnMock.mockReturnValue(createChildProcessStub());
+    execFileMock.mockImplementation(
+      (_file: string, _args: string[], callback?: (...args: any[]) => void) => {
+        callback?.(null, { stdout: '', stderr: '' });
+        return {} as never;
+      },
+    );
   });
 
   it('restarts with a managed sidecar when a reused external sidecar becomes unhealthy', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValueOnce({ ok: true, service: 'syncflow-sidecar' });
+    vi.mocked(sidecarClient.getHealth).mockResolvedValueOnce({
+      ok: true,
+      service: 'syncflow-sidecar',
+    });
     vi.mocked(sidecarClient.getHealth).mockRejectedValueOnce(new Error('ECONNREFUSED'));
     vi.mocked(sidecarClient.getHealth).mockRejectedValueOnce(new Error('ECONNREFUSED'));
     vi.mocked(sidecarClient.getHealth).mockResolvedValue({ ok: true, service: 'syncflow-sidecar' });
@@ -80,7 +92,18 @@ describe('SidecarManager', () => {
     expect(manager.getState().status).toBe('starting');
     expect(manager.getState().message).toContain('正在重试');
 
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(spawnMock).toHaveBeenCalledTimes(1);
+    expect(manager.getState().status).toBe('healthy');
+  });
+
+  it('cold starts a fresh sidecar by default in dev mode', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue({ ok: true, service: 'syncflow-sidecar' });
+
+    const manager = new SidecarManager();
+
+    await manager.start();
+
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(manager.getState().status).toBe('healthy');
   });

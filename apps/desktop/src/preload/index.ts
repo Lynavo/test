@@ -14,6 +14,7 @@ const IPC = {
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
+  SIDECAR_RESET_STATE: 'sidecar:reset-state',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
@@ -43,13 +44,11 @@ const electronAPI: ElectronAPI = {
         sortField?: import('@syncflow/contracts').DeviceFileSortField;
         sortDirection?: import('@syncflow/contracts').SortDirection;
       },
-    ) =>
-      ipcRenderer.invoke(IPC.SIDECAR_DEVICE_FILES, deviceId, date, options),
-    getDeviceDates: (deviceId: string) =>
-      ipcRenderer.invoke(IPC.SIDECAR_DEVICE_DATES, deviceId),
+    ) => ipcRenderer.invoke(IPC.SIDECAR_DEVICE_FILES, deviceId, date, options),
+    getDeviceDates: (deviceId: string) => ipcRenderer.invoke(IPC.SIDECAR_DEVICE_DATES, deviceId),
     getSettings: () => ipcRenderer.invoke(IPC.SIDECAR_SETTINGS),
-    updateSettings: (settings) =>
-      ipcRenderer.invoke(IPC.SIDECAR_UPDATE_SETTINGS, settings),
+    updateSettings: (settings) => ipcRenderer.invoke(IPC.SIDECAR_UPDATE_SETTINGS, settings),
+    resetState: () => ipcRenderer.invoke(IPC.SIDECAR_RESET_STATE),
     regenerateConnectionCode: () => ipcRenderer.invoke(IPC.SIDECAR_REGENERATE_CODE),
     getRuntimeState: () => ipcRenderer.invoke(IPC.SIDECAR_RUNTIME_STATE),
     retryStart: () => ipcRenderer.invoke(IPC.SIDECAR_RETRY_START),
@@ -62,8 +61,7 @@ const electronAPI: ElectronAPI = {
     openFile: (path: string) => ipcRenderer.invoke(IPC.FILES_OPEN_FILE, path),
     openExternal: (target: string) => ipcRenderer.invoke(IPC.FILES_OPEN_EXTERNAL, target),
     selectFolder: () => ipcRenderer.invoke(IPC.FILES_SELECT_FOLDER),
-    copyToClipboard: (text: string) =>
-      ipcRenderer.invoke(IPC.FILES_COPY_CLIPBOARD, text),
+    copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.FILES_COPY_CLIPBOARD, text),
   },
   events: {
     onSidecarEvent: (callback) => {
