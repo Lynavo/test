@@ -5,6 +5,7 @@ import {
   StyleSheet,
   FlatList,
   Pressable,
+  TouchableOpacity,
   NativeModules,
   NativeEventEmitter,
   Linking,
@@ -12,7 +13,7 @@ import {
   type AppStateStatus,
   type ListRenderItemInfo,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -411,7 +412,6 @@ function QueueItemRow({
 
 export function SyncStatusScreen() {
   const navigation = useNavigation<SyncStatusNav>();
-  const insets = useSafeAreaInsets();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
@@ -849,20 +849,24 @@ export function SyncStatusScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{'同步动态'}</Text>
         <View style={styles.headerActions}>
-          <Pressable
+          <TouchableOpacity
             onPress={handleHistory}
             style={styles.headerBtn}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={'历史记录'}
           >
             <Icon name="time-outline" size={20} color="#4a6a8a" />
-          </Pressable>
-          <Pressable
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={handleSettings}
             style={styles.headerBtn}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityLabel={'设置'}
           >
             <Icon name="settings-outline" size={20} color="#4a6a8a" />
-          </Pressable>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -871,7 +875,7 @@ export function SyncStatusScreen() {
           style={[
             styles.connectionBanner,
             styles.connectionBannerFloating,
-            { top: insets.top + 56 },
+            { top: 56 },  // 56 = header height; SafeAreaView already handles the top inset
             isBannerError
               ? styles.connectionBannerError
               : styles.connectionBannerWarning,
@@ -983,6 +987,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 12,
+    zIndex: 30,  // Must be above connectionBannerFloating (zIndex: 20)
   },
   headerTitle: {
     fontSize: 18,
