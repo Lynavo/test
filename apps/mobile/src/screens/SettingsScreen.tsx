@@ -260,11 +260,37 @@ export function SettingsScreen() {
       if (isDiagnosticsExportUnavailable(error)) {
         Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
       } else {
-        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
+        Alert.alert('导出失败', '诊断包导出失败，请稍后重試');
       }
     } finally {
       setIsExportingDiagnostics(false);
     }
+  }, []);
+
+  const handleResetSyncStatus = useCallback(() => {
+    Alert.alert(
+      '重置所有同步状态',
+      '确定要清除所有本地同步记录吗？此操作不会删除手机或电脑上的照片，但会让手机重新扫描並重新上传所有素材。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确定重置',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { NativeSyncEngine } = NativeModules;
+              if (NativeSyncEngine) {
+                await NativeSyncEngine.resetAllStatus();
+                Alert.alert('已重置', '本地同步记录已清除，正在重新扫描素材。');
+              }
+            } catch (e) {
+              Alert.alert('重置失败', '请稍后重試');
+            }
+          },
+
+        },
+      ],
+    );
   }, []);
 
   return (
@@ -380,22 +406,34 @@ export function SettingsScreen() {
             <Text style={styles.diagnosticsHint}>
               {'导出当前设备状态、队列快照、本地数据库和最近日志，便于排查同步问题。'}
             </Text>
-            <TouchableOpacity
-              style={[
-                styles.diagnosticsButton,
-                isExportingDiagnostics && styles.diagnosticsButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-              disabled={isExportingDiagnostics}
-              onPress={() => {
-                void handleExportDiagnostics();
-              }}
-            >
-              <Icon name="download-outline" size={16} color="#3b9fd8" />
-              <Text style={styles.diagnosticsButtonText}>
-                {isExportingDiagnostics ? '正在导出诊断包…' : '导出诊断包'}
-              </Text>
-            </TouchableOpacity>
+            
+            <View style={styles.actionButtonGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.diagnosticsButton,
+                  isExportingDiagnostics && styles.diagnosticsButtonDisabled,
+                ]}
+                activeOpacity={0.8}
+                disabled={isExportingDiagnostics}
+                onPress={() => {
+                  void handleExportDiagnostics();
+                }}
+              >
+                <Icon name="download-outline" size={16} color="#3b9fd8" />
+                <Text style={styles.diagnosticsButtonText}>
+                  {isExportingDiagnostics ? '正在导出诊断包…' : '导出诊断包'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.resetButton}
+                activeOpacity={0.8}
+                onPress={handleResetSyncStatus}
+              >
+                <Icon name="refresh-outline" size={16} color="#ef4444" />
+                <Text style={styles.resetButtonText}>{'重置同步状态'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.deviceCard}>
@@ -698,8 +736,13 @@ const styles = StyleSheet.create({
     color: '#6e8aa3',
     marginBottom: 12,
   },
+  // Support & Diagnostics
+  actionButtonGroup: {
+    flexDirection: 'column',
+    gap: 12,
+  },
   diagnosticsButton: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -707,8 +750,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(59,159,216,0.18)',
     backgroundColor: 'rgba(59,159,216,0.08)',
     borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
   },
   diagnosticsButtonDisabled: {
     opacity: 0.6,
@@ -717,6 +761,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#3b9fd8',
+  },
+  resetButton: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.12)',
+    backgroundColor: 'rgba(239,68,68,0.06)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  resetButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ef4444',
   },
 
   // Phone icon

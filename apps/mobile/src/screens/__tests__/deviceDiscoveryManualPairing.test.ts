@@ -7,7 +7,7 @@ import {
 
 describe('deviceDiscoveryManualPairing', () => {
   it('normalizes a valid IPv4 address', () => {
-    expect(normalizeManualPairHost(' 172.16.8.83 ')).toBe('172.16.8.83');
+    expect(normalizeManualPairHost(' 192.168.0.1 ')).toBe('192.168.0.1');
   });
 
   it('rejects an invalid IPv4 address', () => {
@@ -16,10 +16,10 @@ describe('deviceDiscoveryManualPairing', () => {
   });
 
   it('builds a manual pairing device from a valid IPv4 address', () => {
-    expect(buildManualPairDevice('172.16.8.83')).toEqual({
-      deviceId: 'manual-172.16.8.83',
-      name: '172.16.8.83',
-      ip: '172.16.8.83',
+    expect(buildManualPairDevice('192.168.0.1')).toEqual({
+      deviceId: 'manual-192.168.0.1',
+      name: '192.168.0.1',
+      ip: '192.168.0.1',
       type: 'win',
       port: PROTOCOL_PORT,
     });

@@ -16,21 +16,30 @@ import {
   LayoutChangeEvent,
   Platform,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { DiscoveredDeviceDTO } from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
-import { isDiagnosticsExportUnavailable, shareDiagnosticsArchive } from '../utils/shareDiagnosticsArchive';
+import {
+  isDiagnosticsExportUnavailable,
+  shareDiagnosticsArchive,
+} from '../utils/shareDiagnosticsArchive';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type DiscoveredDevice = Pick<DiscoveredDeviceDTO, 'deviceId' | 'name' | 'ip' | 'type' | 'port'>;
+type DiscoveredDevice = Pick<
+  DiscoveredDeviceDTO,
+  'deviceId' | 'name' | 'ip' | 'type' | 'port'
+>;
 
 function deviceDiscoveryDebugSummary(devices: DiscoveredDevice[]): string {
   if (devices.length === 0) {
@@ -38,7 +47,12 @@ function deviceDiscoveryDebugSummary(devices: DiscoveredDevice[]): string {
   }
 
   return devices
-    .map((device) => `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${device.type}`)
+    .map(
+      device =>
+        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${
+          device.type
+        }`,
+    )
     .join(', ');
 }
 
@@ -47,7 +61,11 @@ function deviceDiscoveryDebugSummary(devices: DiscoveredDevice[]): string {
 // ---------------------------------------------------------------------------
 
 function PulseRings() {
-  const rings = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
+  const rings = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
 
   useEffect(() => {
     const animations = rings.map((anim, i) =>
@@ -63,8 +81,8 @@ function PulseRings() {
         ]),
       ),
     );
-    animations.forEach((a) => a.start());
-    return () => animations.forEach((a) => a.stop());
+    animations.forEach(a => a.start());
+    return () => animations.forEach(a => a.stop());
   }, []);
 
   return (
@@ -81,10 +99,16 @@ function PulseRings() {
                 height: size,
                 borderRadius: size / 2,
                 borderColor: `rgba(59,159,216,${0.35 - i * 0.1})`,
-                opacity: anim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.8, 0, 0] }),
+                opacity: anim.interpolate({
+                  inputRange: [0, 0.7, 1],
+                  outputRange: [0.8, 0, 0],
+                }),
                 transform: [
                   {
-                    scale: anim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.85, 1.2, 1.2] }),
+                    scale: anim.interpolate({
+                      inputRange: [0, 0.7, 1],
+                      outputRange: [0.85, 1.2, 1.2],
+                    }),
                   },
                 ],
               },
@@ -104,7 +128,10 @@ function PulseRings() {
 // DeviceDiscoveryScreen
 // ---------------------------------------------------------------------------
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'DeviceDiscovery'>;
+type NavigationProp = StackNavigationProp<
+  RootStackParamList,
+  'DeviceDiscovery'
+>;
 
 export function DeviceDiscoveryScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -129,27 +156,39 @@ export function DeviceDiscoveryScreen() {
     try {
       const { NativeSyncEngine } = NativeModules;
       if (NativeSyncEngine) {
-        console.log('[DiscoveryScreen] NativeSyncEngine available, subscribing to discovery events');
+        console.log(
+          '[DiscoveryScreen] NativeSyncEngine available, subscribing to discovery events',
+        );
         const emitter = new NativeEventEmitter(NativeSyncEngine);
-        subscription = emitter.addListener('onDiscoveredDevicesChanged', (discoveredDevices: DiscoveredDevice[]) => {
-          console.log(
-            '[DiscoveryScreen] onDiscoveredDevicesChanged',
-            discoveredDevices.length,
-            deviceDiscoveryDebugSummary(discoveredDevices),
-          );
-          setDevices(discoveredDevices);
-          if (discoveredDevices.length > 0) {
-            setScanning(false);
-            if (timeoutTimer) { clearTimeout(timeoutTimer); timeoutTimer = undefined; }
-          }
-        });
+        subscription = emitter.addListener(
+          'onDiscoveredDevicesChanged',
+          (discoveredDevices: DiscoveredDevice[]) => {
+            console.log(
+              '[DiscoveryScreen] onDiscoveredDevicesChanged',
+              discoveredDevices.length,
+              deviceDiscoveryDebugSummary(discoveredDevices),
+            );
+            setDevices(discoveredDevices);
+            if (discoveredDevices.length > 0) {
+              setScanning(false);
+              if (timeoutTimer) {
+                clearTimeout(timeoutTimer);
+                timeoutTimer = undefined;
+              }
+            }
+          },
+        );
         console.log('[DiscoveryScreen] calling startDiscovery');
         NativeSyncEngine.startDiscovery()
           .then(() => console.log('[DiscoveryScreen] startDiscovery resolved'))
-          .catch((e: Error) => console.warn('[DiscoveryScreen] startDiscovery failed:', e));
+          .catch((e: Error) =>
+            console.warn('[DiscoveryScreen] startDiscovery failed:', e),
+          );
         // Timeout fallback: if no devices found after 8s, stop scanning animation
         timeoutTimer = setTimeout(() => {
-          console.log('[DiscoveryScreen] discovery timeout reached with no devices');
+          console.log(
+            '[DiscoveryScreen] discovery timeout reached with no devices',
+          );
           setScanning(false);
         }, 8000);
       } else {
@@ -162,7 +201,9 @@ export function DeviceDiscoveryScreen() {
     }
 
     return () => {
-      console.log('[DiscoveryScreen] unmounting, cleaning up discovery listeners');
+      console.log(
+        '[DiscoveryScreen] unmounting, cleaning up discovery listeners',
+      );
       subscription?.remove();
       if (timeoutTimer) clearTimeout(timeoutTimer);
       try {
@@ -175,10 +216,12 @@ export function DeviceDiscoveryScreen() {
   }, []);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
-    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+    const showSubscription = Keyboard.addListener(showEvent, event => {
       setKeyboardHeight(event.endCoordinates.height);
     });
     const hideSubscription = Keyboard.addListener(hideEvent, () => {
@@ -233,7 +276,9 @@ export function DeviceDiscoveryScreen() {
     (device: DiscoveredDevice) => {
       console.log(
         '[DiscoveryScreen] handleDevicePress',
-        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${device.type}`,
+        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${
+          device.type
+        }`,
       );
       try {
         NativeModules.NativeSyncEngine?.stopDiscovery();
@@ -256,7 +301,7 @@ export function DeviceDiscoveryScreen() {
 
     if (!manualDevice) {
       console.log('[DiscoveryScreen] handleManualPair rejected invalid host');
-      setManualHostError('请输入有效的 IPv4 地址，例如 172.16.8.83');
+      setManualHostError('请输入有效的 IPv4 地址，例如 192.168.0.1');
       return;
     }
 
@@ -295,17 +340,22 @@ export function DeviceDiscoveryScreen() {
     [handleDevicePress],
   );
 
-  const keyExtractor = useCallback((item: DiscoveredDevice) => item.deviceId, []);
+  const keyExtractor = useCallback(
+    (item: DiscoveredDevice) => item.deviceId,
+    [],
+  );
 
   const handleManualSectionLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.ceil(event.nativeEvent.layout.height);
-    setManualSectionHeight((currentHeight) => (
-      currentHeight === nextHeight ? currentHeight : nextHeight
-    ));
+    setManualSectionHeight(currentHeight =>
+      currentHeight === nextHeight ? currentHeight : nextHeight,
+    );
   }, []);
 
-  const manualDockBottom = keyboardHeight > 0 ? Math.max(12, keyboardHeight - insets.bottom) : 0;
-  const listBottomInset = manualSectionHeight > 0 ? manualSectionHeight + 16 : 220;
+  const manualDockBottom =
+    keyboardHeight > 0 ? Math.max(12, keyboardHeight - insets.bottom) : 0;
+  const listBottomInset =
+    manualSectionHeight > 0 ? manualSectionHeight + 16 : 220;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -334,7 +384,9 @@ export function DeviceDiscoveryScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.title}>{'搜索设备'}</Text>
-          <Text style={styles.subtitle}>{'正在扫描局域网中的电脑端应用...'}</Text>
+          <Text style={styles.subtitle}>
+            {'正在扫描局域网中的电脑端应用...'}
+          </Text>
         </View>
 
         {/* Scanning animation */}
@@ -347,9 +399,13 @@ export function DeviceDiscoveryScreen() {
 
         {/* Device list */}
         {!scanning && (
-          <View style={[styles.listSection, { paddingBottom: listBottomInset }]}>
+          <View
+            style={[styles.listSection, { paddingBottom: listBottomInset }]}
+          >
             {devices.length > 0 && (
-              <Text style={styles.deviceCount}>{'发现'} {devices.length} {'台设备'}</Text>
+              <Text style={styles.deviceCount}>
+                {'发现'} {devices.length} {'台设备'}
+              </Text>
             )}
             {devices.length === 0 ? (
               <View style={styles.emptySection}>
@@ -365,18 +421,6 @@ export function DeviceDiscoveryScreen() {
                 keyboardShouldPersistTaps="handled"
               />
             )}
-
-            {/* Rescan button */}
-            <TouchableOpacity
-              style={styles.rescanButton}
-              activeOpacity={0.7}
-              onPress={handleRescan}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Icon name="refresh" size={16} color="#5a9abf" />
-                <Text style={styles.rescanText}>{'重新扫描'}</Text>
-              </View>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -390,11 +434,31 @@ export function DeviceDiscoveryScreen() {
           ]}
           onLayout={handleManualSectionLayout}
         >
+          {/* Fixed Rescan button above manual entry */}
+          {!scanning && (
+            <View style={styles.manualSection}>
+              <TouchableOpacity
+                style={styles.rescanButton}
+                activeOpacity={0.7}
+                onPress={handleRescan}
+              >
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon name="refresh" size={16} color="#5a9abf" />
+                  <Text style={styles.rescanText}>{'重新扫描'}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.manualSection}>
             <View style={styles.manualCard}>
               <Text style={styles.manualTitle}>{'手动输入 IP 配对'}</Text>
               <Text style={styles.manualDescription}>
-                {'如果扫描不到电脑，尤其是 Windows 设备，可直接输入电脑端 IPv4 地址继续配对。'}
+                {
+                  '如果扫描不到电脑，尤其是 Windows 设备，可直接输入电脑端 IPv4 地址继续配对。'
+                }
               </Text>
               <View style={styles.manualInputRow}>
                 <TextInput
@@ -403,13 +467,13 @@ export function DeviceDiscoveryScreen() {
                     manualHostError && styles.manualInputError,
                   ]}
                   value={manualHost}
-                  onChangeText={(value) => {
+                  onChangeText={value => {
                     setManualHost(value);
                     if (manualHostError) {
                       setManualHostError(null);
                     }
                   }}
-                  placeholder="172.16.8.83"
+                  placeholder="192.168.0.1"
                   placeholderTextColor="#8aa9bc"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -429,7 +493,9 @@ export function DeviceDiscoveryScreen() {
                 <Text style={styles.manualErrorText}>{manualHostError}</Text>
               ) : (
                 <Text style={styles.manualHint}>
-                  {'默认使用同步端口 39393，输入后仍需在下一步填写 6 位连接码。'}
+                  {
+                    '默认使用同步端口 39393，输入后仍需在下一步填写 6 位连接码。'
+                  }
                 </Text>
               )}
             </View>
@@ -615,7 +681,7 @@ const styles = StyleSheet.create({
 
   // Rescan
   rescanButton: {
-    marginTop: 16,
+    marginBottom: 12,
     backgroundColor: 'rgba(255,255,255,0.55)',
     borderRadius: 16,
     paddingVertical: 14,
@@ -623,6 +689,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
   },
+
   rescanText: {
     fontSize: 14,
     fontWeight: '500',

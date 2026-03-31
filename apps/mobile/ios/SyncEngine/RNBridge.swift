@@ -185,4 +185,16 @@ class NativeSyncEngineModule: RCTEventEmitter {
         SyncEngineManager.shared.startSync()
         resolve(nil)
     }
+
+    @objc
+    func resetAllStatus(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            do {
+                try await SyncEngineManager.shared.resetAllStatus()
+                resolve(nil)
+            } catch {
+                reject("RESET_ERROR", error.localizedDescription, error)
+            }
+        }
+    }
 }

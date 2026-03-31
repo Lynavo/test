@@ -251,6 +251,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeCurrentFileConfirmedBytes: Int64 = 0
     private var runtimeCurrentFileTotalBytes: Int64 = 0
     private var runtimeCurrentSpeedMbps: Double = 0
+    private var runtimeLastSpeedCheckTime: CFAbsoluteTime = 0
+    private var runtimeLastBytesTransferred: Int64 = 0
     private var runtimeUploadState = "idle"
 
     private func preferredSidecarHost(probedHost: String?, device: DiscoveredDevice?) -> String? {
@@ -315,15 +317,41 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeCurrentFilename = nil
         runtimeCurrentFileConfirmedBytes = 0
         runtimeCurrentFileTotalBytes = 0
-        runtimeCurrentSpeedMbps = 0
     }
 
-    private func beginRuntimeSyncOverview(totalCount: Int, totalBytes: Int64) {
+    private func beginRuntimeSyncOverview(
+        totalCount: Int,
+        totalBytes: Int64,
+        completedCount: Int = 0,
+        completedBytes: Int64 = 0
+    ) {
         runtimeQueueTotalCount = totalCount
-        runtimeQueueCompletedCount = 0
+        runtimeQueueCompletedCount = completedCount
         runtimeQueueTotalBytes = totalBytes
-        runtimeQueueCompletedBytes = 0
+        runtimeQueueCompletedBytes = completedBytes
+        runtimeLastSpeedCheckTime = CFAbsoluteTimeGetCurrent()
+        runtimeLastBytesTransferred = completedBytes
+        runtimeCurrentSpeedMbps = 0
         clearRuntimeCurrentFile()
+    }
+
+    private func updateRuntimeSpeed() {
+        let now = CFAbsoluteTimeGetCurrent()
+        let elapsed = now - runtimeLastSpeedCheckTime
+        guard elapsed >= 0.5 else { return }
+
+        let totalTransferred = runtimeQueueCompletedBytes + runtimeCurrentFileConfirmedBytes
+        let bytesDelta = totalTransferred - runtimeLastBytesTransferred
+        if bytesDelta < 0 {
+            // Reset if progress goes backward (should not happen with cumulative stats)
+            runtimeLastBytesTransferred = totalTransferred
+            runtimeLastSpeedCheckTime = now
+            return
+        }
+
+        runtimeCurrentSpeedMbps = (Double(bytesDelta) / elapsed) / (1024 * 1024)
+        runtimeLastBytesTransferred = totalTransferred
+        runtimeLastSpeedCheckTime = now
     }
 
     private func runtimeSyncOverviewPayload(
@@ -357,10 +385,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         ]
     }
 
-    private func buildPendingUploadAssets(clientId: String) -> [ScannedAsset] {
+    private func buildPendingUploadAssets(clientId: String, limit: Int? = 200) -> [ScannedAsset] {
         guard let store = uploadStore else { return [] }
 
-        let pendingItems = store.getPendingUploadItems()
+        let pendingItems = store.getPendingUploadItems(limit: limit)
         guard !pendingItems.isEmpty else { return [] }
 
         let localIdentifiers = pendingItems.map(\.assetLocalId)
@@ -1050,6 +1078,34 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
     }
 
+    func resetAllStatus() async throws {
+        NSLog("[SyncEngine] resetAllStatus requested")
+        syncDiagnosticsLog("SyncEngine", "resetAllStatus requested")
+
+        // 1. Clear database status
+        try uploadStore?.resetAllStatusData()
+
+        // 2. Reset runtime variables
+        runtimeQueueTotalCount = 0
+        runtimeQueueCompletedCount = 0
+        runtimeQueueTotalBytes = 0
+        runtimeQueueCompletedBytes = 0
+        runtimeCurrentFileKey = nil
+        runtimeCurrentFilename = nil
+        runtimeCurrentFileConfirmedBytes = 0
+        runtimeCurrentFileTotalBytes = 0
+        runtimeCurrentSpeedMbps = 0
+        runtimeUploadState = "idle"
+
+        // 3. Emit fresh states to JS
+        emitQueueToJS()
+        NativeSyncEngineModule.shared?.emitHistoryUpdated()
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(runtimeSyncOverviewPayload(uploadState: "idle"))
+
+        NSLog("[SyncEngine] resetAllStatus completed")
+        syncDiagnosticsLog("SyncEngine", "resetAllStatus completed")
+    }
+
     private func runStartSyncFlow() async {
         let shouldBeginBackgroundTransition = await MainActor.run {
             UIApplication.shared.applicationState == .background
@@ -1195,13 +1251,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 emitQueueToJS()
             }
 
-            let pendingAssets = buildPendingUploadAssets(clientId: clientId)
+            let stats = uploadStore?.getQueueStats() ?? (totalCount: 0, totalBytes: 0, completedCount: 0, completedBytes: 0)
+            let pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
             NSLog(
-                "[SyncPipeline] round %d: %d pending assets (%d new, tracked: %d)",
+                "[SyncPipeline] round %d: %d pending assets (batch), global: %d/%d items, %lld/%lld bytes",
                 roundNumber,
                 pendingAssets.count,
-                newAssets.count,
-                trackedKeys.count
+                stats.completedCount,
+                stats.totalCount,
+                stats.completedBytes,
+                stats.totalBytes
             )
             syncDiagnosticsLog("SyncPipeline", "round \(roundNumber): \(pendingAssets.count) pending assets (\(newAssets.count) new, tracked: \(trackedKeys.count))")
 
@@ -1250,6 +1309,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         token: token,
                         clientId: clientId,
                         assets: pendingAssets,
+                        totalCount: stats.totalCount,
+                        totalBytes: stats.totalBytes,
+                        completedCount: stats.completedCount,
+                        completedBytes: stats.completedBytes,
                         recoveryMode: retryAttempt > 0
                     )
                     uploaded = true
@@ -1281,7 +1344,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     ] as [String: Any]).merging(
                         runtimeSyncOverviewPayload(uploadState: "reconnecting")
                     ) { _, new in new })
-                    try await Task.sleep(nanoseconds: delay)
+                    let sleepDelay: UInt64 = delay
+                    try await Task.sleep(nanoseconds: sleepDelay)
                     discoveryService.startBrowsing()
                 }
             }
@@ -1295,6 +1359,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         token: String,
         clientId: String,
         assets: [ScannedAsset],
+        totalCount: Int,
+        totalBytes: Int64,
+        completedCount: Int,
+        completedBytes: Int64,
         recoveryMode: Bool
     ) async throws {
         // Connect TCP + auth
@@ -1303,10 +1371,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         protocolSession = session
         updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
         sessionService.transitionTo(.preparing)
-        let estimatedQueueTotalBytes = assets.reduce(Int64(0)) { partialResult, asset in
-            partialResult + max(asset.estimatedSize, 0)
-        }
-        beginRuntimeSyncOverview(totalCount: assets.count, totalBytes: estimatedQueueTotalBytes)
+        beginRuntimeSyncOverview(
+            totalCount: totalCount,
+            totalBytes: totalBytes,
+            completedCount: completedCount,
+            completedBytes: completedBytes
+        )
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
         )
@@ -1442,8 +1512,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     asset: asset,
                     exported: exported,
                     sessionId: sessionId,
-                    index: index,
-                    total: assets.count,
+                    index: completedCount + index,
+                    total: totalCount,
                     session: session,
                     recoveryMode: recoveryMode
                 )
@@ -1624,7 +1694,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             runtimeQueueCompletedBytes += exported.fileSize
             runtimeCurrentFileConfirmedBytes = exported.fileSize
             runtimeCurrentFileTotalBytes = exported.fileSize
-            runtimeCurrentSpeedMbps = 0
+            updateRuntimeSpeed()
+            emitQueueToJS()
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(uploadState: "uploading", progressPercent: 100)
+            )
+
             let transmissionMs = endRes["activeTransmissionMs"] as? Int64
                 ?? (endRes["activeTransmissionMs"] as? NSNumber)?.int64Value
                 ?? 100
@@ -1698,7 +1773,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     try await session.waitForNextMessage()
                 }
                 group.addTask {
-                    try await Task.sleep(nanoseconds: timeoutNs)
+                    let tNs: UInt64 = timeoutNs
+                    try await Task.sleep(nanoseconds: tNs)
                     throw SyncEngineError.networkError("FILE_ACK timeout")
                 }
                 guard let next = try await group.next() else {
@@ -1751,12 +1827,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         var acknowledgedOffset = startOffset
         var inFlight: [InFlightChunk] = []
         var inFlightBytes: Int64 = 0
-        var speedBytesLastCheck = startOffset
-        var speedLastTime = CFAbsoluteTimeGetCurrent()
-        var progressPersistOffset = startOffset
-        var progressPersistTime = speedLastTime
-        var lastProgressEmitTime = speedLastTime
-        var speedMbps: Double = 0
+        let speedLastTime: CFTimeInterval = CFAbsoluteTimeGetCurrent()
+        var lastProgressEmitTime: CFTimeInterval = speedLastTime
+        var progressPersistOffset: Int64 = startOffset
+        var progressPersistTime: CFTimeInterval = speedLastTime
         var totalReadBytes: Int64 = 0
         var totalReadTime: CFTimeInterval = 0
         var totalAckWaitTime: CFTimeInterval = 0
@@ -1795,10 +1869,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             let avgWindowFillMs = windowFillCount > 0 ? (totalWindowFillTime * 1000) / Double(windowFillCount) : 0
             let throughputMBps = Double(ackedBytes) / elapsed / (1024 * 1024)
             let bufferedMessages = session.debugBufferedMessageCount()
-            let now = CFAbsoluteTimeGetCurrent()
+            let currentTimestamp: CFTimeInterval = CFAbsoluteTimeGetCurrent()
 
             var logLine =
-                "file=\(fileKey) action=\(streamOutcome) ackedMiB=\(String(format: "%.1f", Double(ackedBytes) / (1024 * 1024))) elapsedMs=\(Int(elapsed * 1000)) throughputMBps=\(String(format: "%.1f", throughputMBps)) readMs=\(Int(totalReadTime * 1000)) sendEnqueueMs=\(Int(totalSendEnqueueTime * 1000)) avgSendEnqueueMs=\(String(format: "%.1f", avgSendEnqueueMs)) maxSendEnqueueMs=\(Int(maxSendEnqueueTime * 1000)) windowFillMs=\(Int(totalWindowFillTime * 1000)) avgWindowFillMs=\(String(format: "%.1f", avgWindowFillMs)) maxWindowFillMs=\(Int(maxWindowFillTime * 1000)) windowFillCount=\(windowFillCount) ackWaitMs=\(Int(totalAckWaitTime * 1000)) avgAckWaitMs=\(String(format: "%.1f", avgAckWaitMs)) maxAckWaitMs=\(Int(maxAckWaitTime * 1000)) ackCount=\(ackCount) avgAckRttMs=\(String(format: "%.1f", avgAckRoundTripMs)) maxAckRttMs=\(Int(maxAckRoundTripTime * 1000)) bufferedMessages=\(bufferedMessages) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) oldestInFlightMs=\(oldestInFlightAgeMs(now: now)) peakInFlightMiB=\(String(format: "%.1f", Double(peakInFlightBytes) / (1024 * 1024))) readMiB=\(String(format: "%.1f", Double(totalReadBytes) / (1024 * 1024)))"
+                "file=\(fileKey) action=\(streamOutcome) ackedMiB=\(String(format: "%.1f", Double(ackedBytes) / (1024 * 1024))) elapsedMs=\(Int(elapsed * 1000)) throughputMBps=\(String(format: "%.1f", throughputMBps)) readMs=\(Int(totalReadTime * 1000)) sendEnqueueMs=\(Int(totalSendEnqueueTime * 1000)) avgSendEnqueueMs=\(String(format: "%.1f", avgSendEnqueueMs)) maxSendEnqueueMs=\(Int(maxSendEnqueueTime * 1000)) windowFillMs=\(Int(totalWindowFillTime * 1000)) avgWindowFillMs=\(String(format: "%.1f", avgWindowFillMs)) maxWindowFillMs=\(Int(maxWindowFillTime * 1000)) windowFillCount=\(windowFillCount) ackWaitMs=\(Int(totalAckWaitTime * 1000)) avgAckWaitMs=\(String(format: "%.1f", avgAckWaitMs)) maxAckWaitMs=\(Int(maxAckWaitTime * 1000)) ackCount=\(ackCount) avgAckRttMs=\(String(format: "%.1f", avgAckRoundTripMs)) maxAckRttMs=\(Int(maxAckRoundTripTime * 1000)) bufferedMessages=\(bufferedMessages) nextOffsetMiB=\(String(format: "%.1f", Double(nextOffset) / (1024 * 1024))) inFlightMiB=\(String(format: "%.1f", Double(inFlightBytes) / (1024 * 1024))) oldestInFlightMs=\(oldestInFlightAgeMs(now: currentTimestamp)) peakInFlightMiB=\(String(format: "%.1f", Double(peakInFlightBytes) / (1024 * 1024))) readMiB=\(String(format: "%.1f", Double(totalReadBytes) / (1024 * 1024)))"
 
             if !streamFailure.isEmpty {
                 logLine += " error=\(streamFailure)"
@@ -1817,7 +1891,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             runtimeCurrentFileKey = fileKey
             runtimeCurrentFileConfirmedBytes = acknowledgedOffset
             runtimeCurrentFileTotalBytes = fileSize
-            runtimeCurrentSpeedMbps = speedMbps
+            updateRuntimeSpeed()
             NativeSyncEngineModule.shared?.emitSyncStateChanged(
                 ([
                     "confirmedBytes": acknowledgedOffset,
@@ -1887,7 +1961,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // Throttle: sleep to limit upload speed
                 if uploadThrottleBytesPerSec > 0 {
                     let sleepNs = UInt64(Double(data.count) / Double(uploadThrottleBytesPerSec) * 1_000_000_000)
-                    try await Task.sleep(nanoseconds: sleepNs)
+                    let sNs: UInt64 = sleepNs
+                    try await Task.sleep(nanoseconds: sNs)
                 }
             }
 
@@ -1996,19 +2071,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             // For other unexpected types, just continue
 
-            // Calculate speed (MB/s) from ACKed bytes (true committed progress).
-            let now = CFAbsoluteTimeGetCurrent()
-            let elapsed = now - speedLastTime
-            if elapsed >= 0.5 {
-                let bytesTransferred = Double(acknowledgedOffset - speedBytesLastCheck)
-                speedMbps = (bytesTransferred / elapsed) / (1024 * 1024)
-                speedBytesLastCheck = acknowledgedOffset
-                speedLastTime = now
-            }
-
             // Emit progress to RN
-            if now - lastProgressEmitTime >= progressEmitInterval || acknowledgedOffset == fileSize {
-                emitUploadProgress(now: now)
+            let finalNow: CFTimeInterval = CFAbsoluteTimeGetCurrent()
+            if finalNow - lastProgressEmitTime >= progressEmitInterval || acknowledgedOffset == fileSize {
+                emitUploadProgress(now: finalNow)
             }
         }
 
@@ -2042,7 +2108,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func emitQueueToJS() {
         guard let store = uploadStore else { return }
-        let pending = store.getPendingUploadItems()
+        let pending = store.getPendingUploadItems(limit: 100)
         NativeSyncEngineModule.shared?.emitQueueUpdated(bridgeQueueItems(pending))
     }
 
@@ -2304,7 +2370,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func getReadOnlyQueue() async -> [[String: Any]] {
         // Return pending items from the upload store if available
         guard let store = uploadStore else { return [] }
-        let pending = store.getPendingUploadItems()
+        let pending = store.getPendingUploadItems(limit: 100)
         let mapped = bridgeQueueItems(pending)
         return pending.enumerated().map { index, item in
             var row = mapped[index]

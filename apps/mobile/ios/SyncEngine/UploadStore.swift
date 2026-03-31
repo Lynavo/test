@@ -232,6 +232,14 @@ class UploadStore {
         }
     }
 
+    func resetAllStatusData() throws {
+        try queue.sync {
+            try executeInternal("DELETE FROM upload_items")
+            try executeInternal("DELETE FROM sync_sessions")
+            try executeInternal("DELETE FROM daily_ledgers")
+        }
+    }
+
     // MARK: - Upload Items CRUD
 
     func upsertUploadItem(_ item: UploadItemRecord) throws {
@@ -263,11 +271,38 @@ class UploadStore {
         }
     }
 
-    func getPendingUploadItems() -> [UploadItemRecord] {
+    func getPendingUploadItems(limit: Int? = nil) -> [UploadItemRecord] {
         return queue.sync {
-            let sql = "SELECT * FROM upload_items WHERE status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading') ORDER BY id ASC"
+            var sql = "SELECT * FROM upload_items WHERE status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading') ORDER BY id ASC"
+            if let limit = limit {
+                sql += " LIMIT \(limit)"
+            }
             let rows = queryInternal(sql, bind: [])
             return rows.compactMap { uploadItemFromRow($0) }
+        }
+    }
+
+    func getQueueStats() -> (totalCount: Int, totalBytes: Int64, completedCount: Int, completedBytes: Int64) {
+        return queue.sync {
+            let sql = """
+            SELECT 
+                COUNT(*) AS total_count, 
+                SUM(file_size) AS total_bytes,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+                SUM(CASE WHEN status = 'completed' THEN file_size ELSE 0 END) AS completed_bytes
+            FROM upload_items 
+            WHERE status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading', 'completed')
+            """
+            let rows = queryInternal(sql, bind: [])
+            guard let first = rows.first else {
+                return (0, 0, 0, 0)
+            }
+            return (
+                totalCount: Int(first["total_count"] as? Int64 ?? 0),
+                totalBytes: first["total_bytes"] as? Int64 ?? 0,
+                completedCount: Int(first["completed_count"] as? Int64 ?? 0),
+                completedBytes: first["completed_bytes"] as? Int64 ?? 0
+            )
         }
     }
 
