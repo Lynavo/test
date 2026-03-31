@@ -274,6 +274,17 @@ func TestParseSyncFlowBroadcastPID(t *testing.T) {
 	}
 }
 
+func TestParseSyncFlowBroadcastPID_WindowsCommandLine(t *testing.T) {
+	line := `6576 C:\dev\SyncFlow\apps\desktop\resources\dns-sd.exe -R PS2021DFYQCEAF _syncflow._tcp local. 39393 id=c16752f3-c01d name=PS2021DFYQCEAF type=mac proto=2 auth=code share=0 shareName=SyncFlow ip=172.16.8.83`
+	pid, ok := parseSyncFlowBroadcastPID(line)
+	if !ok {
+		t.Fatal("expected Windows syncflow dns-sd process to match")
+	}
+	if pid != 6576 {
+		t.Fatalf("pid = %d, want 6576", pid)
+	}
+}
+
 func TestParseSyncFlowBroadcastPID_IgnoresOtherProcesses(t *testing.T) {
 	cases := []string{
 		"",

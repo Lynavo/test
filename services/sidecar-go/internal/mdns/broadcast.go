@@ -326,11 +326,11 @@ func boolToInt(b bool) int {
 }
 
 func cleanupStaleBroadcastProcesses() error {
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		return nil
 	}
 
-	out, err := exec.Command("ps", "-axo", "pid=,command=").Output()
+	out, err := listBroadcastProcesses()
 	if err != nil {
 		return fmt.Errorf("list processes: %w", err)
 	}
@@ -340,7 +340,7 @@ func cleanupStaleBroadcastProcesses() error {
 		if !ok {
 			continue
 		}
-		if killErr := exec.Command("kill", strconv.Itoa(pid)).Run(); killErr != nil {
+		if killErr := terminateBroadcastProcess(pid); killErr != nil {
 			slog.Warn("failed to terminate stale dns-sd broadcast", "pid", pid, "err", killErr)
 			continue
 		}
@@ -362,7 +362,7 @@ func parseSyncFlowBroadcastPID(line string) (int, bool) {
 	}
 
 	command := strings.Join(fields[1:], " ")
-	if !strings.Contains(command, "dns-sd -R") ||
+	if !(strings.Contains(command, "dns-sd -R") || strings.Contains(command, "dns-sd.exe -R")) ||
 		!strings.Contains(command, "_syncflow._tcp") ||
 		!strings.Contains(command, "local.") {
 		return 0, false
@@ -373,4 +373,21 @@ func parseSyncFlowBroadcastPID(line string) (int, bool) {
 		return 0, false
 	}
 	return pid, true
+}
+
+func listBroadcastProcesses() ([]byte, error) {
+	if runtime.GOOS == "windows" {
+		script := `$processes = Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" -ErrorAction SilentlyContinue; foreach ($process in $processes) { "$($process.ProcessId) $($process.CommandLine)" }`
+		return exec.Command("powershell.exe", "-NoProfile", "-Command", script).Output()
+	}
+
+	return exec.Command("ps", "-axo", "pid=,command=").Output()
+}
+
+func terminateBroadcastProcess(pid int) error {
+	if runtime.GOOS == "windows" {
+		return exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").Run()
+	}
+
+	return exec.Command("kill", strconv.Itoa(pid)).Run()
 }

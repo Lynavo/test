@@ -214,11 +214,11 @@ export class SidecarManager extends EventEmitter {
   async retryStart(): Promise<void> {
     this.restartCount = 0;
     this.clearRestartTimer();
-    await this.stop({ killExternal: true });
+    await this.stop({ killExternal: true, killResidualProcesses: true, killBonjourBroadcasts: true });
     await this.start({ reuseExisting: false });
   }
 
-  async stop(options: { killExternal?: boolean } = {}): Promise<void> {
+  async stop(options: { killExternal?: boolean; killResidualProcesses?: boolean; killBonjourBroadcasts?: boolean } = {}): Promise<void> {
     this.stopping = true;
     this.clearRestartTimer();
     this.stopHealthCheck();
@@ -238,8 +238,19 @@ export class SidecarManager extends EventEmitter {
       });
       this.process = null;
     }
+    let shouldWaitForSidecarStop = false;
     if (options.killExternal) {
       await this.forceShutdownExistingSidecar();
+      shouldWaitForSidecarStop = true;
+    }
+    if (options.killResidualProcesses) {
+      const killedResidualProcesses = await this.forceShutdownResidualSidecars();
+      shouldWaitForSidecarStop = shouldWaitForSidecarStop || killedResidualProcesses;
+    }
+    if (options.killBonjourBroadcasts) {
+      await this.forceShutdownSyncFlowBonjourBroadcasts();
+    }
+    if (shouldWaitForSidecarStop) {
       await this.waitForSidecarToStop(SIDECAR_STOP_TIMEOUT_MS);
     }
     this.setState({
@@ -288,6 +299,42 @@ export class SidecarManager extends EventEmitter {
 
     log.info(`[SidecarManager] force stopping existing sidecar PID(s): ${externalPIDs.join(', ')}`);
     for (const pid of externalPIDs) {
+      await killProcessByPID(pid);
+    }
+  }
+
+  private async forceShutdownResidualSidecars(): Promise<boolean> {
+    if (process.platform !== 'win32') {
+      return false;
+    }
+
+    const ownProcessPID = this.process?.pid ?? null;
+    const pids = await findProcessPIDsByName(sidecarBinaryName);
+    const residualPIDs = pids.filter((pid) => pid !== process.pid && pid !== ownProcessPID);
+
+    if (residualPIDs.length === 0) {
+      return false;
+    }
+
+    log.info(`[SidecarManager] force stopping residual ${sidecarBinaryName} PID(s): ${residualPIDs.join(', ')}`);
+    for (const pid of residualPIDs) {
+      await killProcessByPID(pid);
+    }
+    return true;
+  }
+
+  private async forceShutdownSyncFlowBonjourBroadcasts(): Promise<void> {
+    if (process.platform !== 'win32') {
+      return;
+    }
+
+    const pids = await findSyncFlowBonjourBroadcastPIDs();
+    if (pids.length === 0) {
+      return;
+    }
+
+    log.info(`[SidecarManager] force stopping SyncFlow Bonjour broadcast PID(s): ${pids.join(', ')}`);
+    for (const pid of pids) {
       await killProcessByPID(pid);
     }
   }
@@ -417,6 +464,59 @@ async function findListeningPIDs(port: number): Promise<number[]> {
   } catch {
     return [];
   }
+}
+
+async function findProcessPIDsByName(processName: string): Promise<number[]> {
+  if (process.platform !== 'win32') {
+    return [];
+  }
+
+  try {
+    const script = [
+      `$processes = Get-CimInstance Win32_Process -Filter "Name='${processName}'" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessId`,
+      'if ($processes) { $processes | Sort-Object -Unique }',
+    ].join('; ');
+    const { stdout } = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      script,
+    ]);
+    return parsePIDList(stdout);
+  } catch {
+    return [];
+  }
+}
+
+async function findSyncFlowBonjourBroadcastPIDs(): Promise<number[]> {
+  if (process.platform !== 'win32') {
+    return [];
+  }
+
+  try {
+    const script = [
+      `$processes = Get-CimInstance Win32_Process -Filter "Name='${bonjourBinaryName}'" -ErrorAction SilentlyContinue | Where-Object {`,
+      "  $_.CommandLine -match 'dns-sd(\\\\.exe)?\\s+-R' -and",
+      "  $_.CommandLine -match '_syncflow\\._tcp' -and",
+      "  $_.CommandLine -match 'local\\.'",
+      '} | Select-Object -ExpandProperty ProcessId',
+      'if ($processes) { $processes | Sort-Object -Unique }',
+    ].join(' ');
+    const { stdout } = await execFileAsync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      script,
+    ]);
+    return parsePIDList(stdout);
+  } catch {
+    return [];
+  }
+}
+
+function parsePIDList(stdout: string): number[] {
+  return stdout
+    .split(/\r?\n/)
+    .map((value) => Number(value.trim()))
+    .filter((pid) => Number.isInteger(pid) && pid > 0);
 }
 
 async function killProcessByPID(pid: number): Promise<void> {
