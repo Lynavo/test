@@ -43,14 +43,38 @@ function candidatePaths() {
 
 function copyIfPresent(sourcePath, destinationPath) {
   if (!fs.existsSync(sourcePath)) {
-    return false;
+    return 'missing';
   }
   if (path.resolve(sourcePath) === path.resolve(destinationPath)) {
-    return true;
+    return 'reused';
   }
+
+  const sourceStat = fs.statSync(sourcePath);
+  if (fs.existsSync(destinationPath)) {
+    const destinationStat = fs.statSync(destinationPath);
+    const sameFile =
+      destinationStat.size === sourceStat.size &&
+      destinationStat.mtimeMs === sourceStat.mtimeMs;
+    if (sameFile) {
+      return 'reused';
+    }
+  }
+
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-  fs.copyFileSync(sourcePath, destinationPath);
-  return true;
+  try {
+    fs.copyFileSync(sourcePath, destinationPath);
+  } catch (error) {
+    if ((error?.code === 'EBUSY' || error?.code === 'EPERM') && fs.existsSync(destinationPath)) {
+      console.warn(
+        `[sync-bonjour-runtime] keeping existing ${path.basename(destinationPath)} because the destination is busy`,
+      );
+      return 'reused';
+    }
+    throw error;
+  }
+
+  fs.utimesSync(destinationPath, sourceStat.atime, sourceStat.mtime);
+  return 'copied';
 }
 
 const sourcePath = candidatePaths().find((candidate) => fs.existsSync(candidate));
@@ -63,9 +87,13 @@ const sourceDir = path.dirname(sourcePath);
 const copiedDNS = copyIfPresent(sourcePath, path.join(resourcesDir, dnsSDFileName));
 const copiedDLL = copyIfPresent(path.join(sourceDir, dnsSDDLLName), path.join(resourcesDir, dnsSDDLLName));
 
-if (copiedDNS) {
+if (copiedDNS === 'copied') {
   console.log(`[sync-bonjour-runtime] staged ${dnsSDFileName} from ${sourcePath}`);
+} else if (copiedDNS === 'reused') {
+  console.log(`[sync-bonjour-runtime] reusing existing ${dnsSDFileName}`);
 }
-if (copiedDLL) {
+if (copiedDLL === 'copied') {
   console.log(`[sync-bonjour-runtime] staged ${dnsSDDLLName} from ${sourceDir}`);
+} else if (copiedDLL === 'reused') {
+  console.log(`[sync-bonjour-runtime] reusing existing ${dnsSDDLLName}`);
 }

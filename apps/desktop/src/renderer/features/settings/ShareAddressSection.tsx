@@ -51,7 +51,7 @@ export function ShareAddressSection() {
       label: '未开启共享',
       detail: isMac
         ? '尚未检测到 macOS 文件共享服务，请先在系统设置中启用文件共享。'
-        : 'Windows 版本暂未支持自动检测共享状态。请先在系统里手动配置 SMB 共享，再继续验证共享地址。',
+        : 'Windows 版本暂未支持自动检测共享状态。请根据下方的[Windows 手动配置共享方法]设置',
       tone: 'text-amber-700 bg-amber-50 border-amber-200',
       icon: Settings2,
       iconClassName: '',
@@ -94,24 +94,28 @@ export function ShareAddressSection() {
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             共享地址（局域网）
           </label>
-          <div
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
-          >
-            <StatusIcon className={`h-3.5 w-3.5 ${meta.iconClassName}`} />
-            {meta.label}
-          </div>
+          {isWindows ? null : (
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
+            >
+              <StatusIcon className={`h-3.5 w-3.5 ${meta.iconClassName}`} />
+              {meta.label}
+            </div>
+          )}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void refreshShareStatus(false)}
-          disabled={validatingShare}
-          className="shrink-0"
-        >
-          <RefreshCw className={`h-4 w-4 ${validatingShare ? 'animate-spin' : ''}`} />
-          重新检测
-        </Button>
+        {isWindows ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void refreshShareStatus(false)}
+            disabled={validatingShare}
+            className="shrink-0"
+          >
+            <RefreshCw className={`h-4 w-4 ${validatingShare ? 'animate-spin' : ''}`} />
+            重新检测
+          </Button>
+        )}
       </div>
 
       <p className="mb-3 text-sm text-muted-foreground">

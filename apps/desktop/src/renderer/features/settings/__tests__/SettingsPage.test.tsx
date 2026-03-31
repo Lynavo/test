@@ -135,6 +135,8 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText('Windows 快速配置')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重新检测' })).not.toBeInTheDocument();
+    expect(screen.queryByText('未开启共享')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: '打开高级共享设置' })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: '打开接收目录' })).toHaveLength(2);
     expect(screen.getByRole('button', { name: '复制推荐地址' })).toBeInTheDocument();

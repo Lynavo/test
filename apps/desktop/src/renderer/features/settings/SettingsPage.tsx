@@ -63,7 +63,7 @@ export function SettingsPage() {
               Windows Bonjour 广播
             </h2>
             <p className="mb-4 text-xs text-muted-foreground">
-              iPhone 重新扫描主要依赖 Bonjour/mDNS。Windows 如果缺少 Bonjour 运行时，会退回兼容模式。
+              iPhone 重新扫描主要依赖 Bonjour/mDNS。
             </p>
             <BonjourRuntimeSection />
           </section>
