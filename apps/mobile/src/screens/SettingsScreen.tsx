@@ -272,8 +272,16 @@ export function SettingsScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            activeOpacity={0.7}
-            onPress={() => navigation.goBack()}
+            activeOpacity={0.6}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
+            onPress={() => {
+              if (navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.reset({ index: 0, routes: [{ name: 'SyncStatus' }] });
+              }
+            }}
+            accessibilityLabel={'返回'}
           >
             <Icon name="chevron-back" size={20} color={colors.screenTitle} />
           </TouchableOpacity>
@@ -467,6 +475,7 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 12,
     gap: 12,
+    zIndex: 10,
   },
   backButton: {
     width: 36,
