@@ -1119,6 +1119,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         if sidecarHost == nil {
             do {
                 try await resolveSidecarHost(binding: binding, token: token, clientId: clientId)
+                // Probe succeeded — Mac is reachable and authenticated. Signal connected
+                // so the UI stops showing the 'Connecting to xxx' banner while scanning.
+                updateBindingConnectionState(.connected, reason: "sidecar_probe_success")
             } catch {
                 NSLog("[SyncPipeline] failed to resolve sidecar host: %@", "\(error)")
                 syncDiagnosticsLog("SyncPipeline", "failed to resolve sidecar host: \(error)")
@@ -1134,6 +1137,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NativeSyncEngineModule.shared?.emitSyncStateChanged(
                 runtimeSyncOverviewPayload(uploadState: "scanning", progressPercent: 0)
             )
+            // If sidecar was already resolved (previous round connected successfully),
+            // restore .connected so the UI doesn't flash 'Connecting to...' during scan.
+            if sidecarHost != nil {
+                updateBindingConnectionState(.connected, reason: "scan_round_sidecar_known")
+            }
 
             // Scan only truly untracked assets. Pending items already live in upload_items.
             var trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
