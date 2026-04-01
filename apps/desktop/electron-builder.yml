@@ -46,6 +46,7 @@ nsis:
   createDesktopShortcut: always
   createStartMenuShortcut: true
   shortcutName: SyncFlow
+  include: resources/installer.nsh
 directories:
   output: release
   buildResources: resources
