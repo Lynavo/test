@@ -1,6 +1,7 @@
 package mdns
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -294,6 +295,123 @@ func TestParseSyncFlowBroadcastPID_WindowsCommandLine(t *testing.T) {
 	}
 	if pid != 6576 {
 		t.Fatalf("pid = %d, want 6576", pid)
+	}
+}
+
+func TestIsRFC1918(t *testing.T) {
+	cases := []struct {
+		ip   string
+		want bool
+	}{
+		{"10.0.0.1", true},
+		{"10.255.255.255", true},
+		{"172.16.0.1", true},
+		{"172.31.255.255", true},
+		{"172.32.0.1", false},
+		{"192.168.1.100", true},
+		{"192.168.255.255", true},
+		{"8.8.8.8", false},
+		{"169.254.1.1", false},
+	}
+	for _, tc := range cases {
+		ip := net.ParseIP(tc.ip).To4()
+		if ip == nil {
+			t.Fatalf("invalid IP in test: %s", tc.ip)
+		}
+		if got := isRFC1918(ip); got != tc.want {
+			t.Errorf("isRFC1918(%s) = %v, want %v", tc.ip, got, tc.want)
+		}
+	}
+}
+
+func TestIPAddrScore(t *testing.T) {
+	cases := []struct {
+		ip        string
+		wantAbove int // score must be > wantAbove
+	}{
+		{"192.168.1.1", 0},  // RFC1918 → positive score
+		{"10.0.0.1", 0},     // RFC1918 → positive score
+		{"8.8.8.8", 0},      // public but not APIPA → positive score
+		{"169.254.1.1", -6}, // APIPA → negative score
+	}
+	for _, tc := range cases {
+		ip := net.ParseIP(tc.ip).To4()
+		if ip == nil {
+			t.Fatalf("invalid IP: %s", tc.ip)
+		}
+		score := ipAddrScore(ip)
+		if score <= tc.wantAbove {
+			t.Errorf("ipAddrScore(%s) = %d, want > %d", tc.ip, score, tc.wantAbove)
+		}
+	}
+	// APIPA must score strictly below any RFC1918 address
+	apipa := net.ParseIP("169.254.1.1").To4()
+	rfc := net.ParseIP("192.168.1.1").To4()
+	if ipAddrScore(apipa) >= ipAddrScore(rfc) {
+		t.Error("APIPA score must be lower than RFC1918 score")
+	}
+}
+
+func TestIfaceScore_VirtualPenalised(t *testing.T) {
+	virtualNames := []string{
+		"vEthernet (Default Switch)", // Hyper-V
+		"VMware Network Adapter VMnet1",
+		"docker0",
+		"VirtualBox Host-Only Network",
+		"utun0",
+		"awdl0",
+	}
+	for _, name := range virtualNames {
+		iface := net.Interface{
+			Name:  name,
+			Flags: net.FlagUp | net.FlagMulticast,
+		}
+		if score := ifaceScore(iface); score >= 10 {
+			t.Errorf("ifaceScore(%q) = %d, expected < 10 (penalised as virtual)", name, score)
+		}
+	}
+}
+
+func TestIfaceScore_PhysicalFavoured(t *testing.T) {
+	physical := net.Interface{
+		Name:  "Ethernet",
+		Flags: net.FlagUp | net.FlagMulticast,
+	}
+	if score := ifaceScore(physical); score < 10 {
+		t.Errorf("ifaceScore(Ethernet) = %d, expected >= 10", score)
+	}
+}
+
+func TestGetLocalIPv4_ReturnsNonEmpty(t *testing.T) {
+	ip := getLocalIPv4()
+	if ip == "" {
+		t.Skip("no suitable IPv4 address found in test environment")
+	}
+	if net.ParseIP(ip) == nil {
+		t.Errorf("getLocalIPv4() = %q is not a valid IP", ip)
+	}
+	if net.ParseIP(ip).IsLoopback() {
+		t.Errorf("getLocalIPv4() = %q must not be loopback", ip)
+	}
+}
+
+// TestRoutedLocalIPv4 verifies that routedLocalIPv4 returns a non-loopback
+// IPv4 address.  It is skipped in environments without a default route
+// (e.g. some CI containers).
+func TestRoutedLocalIPv4(t *testing.T) {
+	ip, ok := routedLocalIPv4()
+	if !ok {
+		t.Skip("no default route available in this environment")
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		t.Fatalf("routedLocalIPv4() = %q is not a valid IP", ip)
+	}
+	if parsed.IsLoopback() {
+		t.Errorf("routedLocalIPv4() = %q must not be loopback", ip)
+	}
+	if parsed.IsUnspecified() {
+		t.Errorf("routedLocalIPv4() = %q must not be unspecified", ip)
 	}
 }
 

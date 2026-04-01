@@ -78,6 +78,8 @@ func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 	if cfg.DeviceIP == "" {
 		cfg.DeviceIP = getLocalIPv4()
 	}
+	slog.Info("bonjour broadcaster ip selected", "ip", cfg.DeviceIP, "platform", runtime.GOOS)
+	checkWindowsBonjourService()
 	txt := BuildTXTRecords(cfg)
 
 	backend, dnsSDPath := selectBroadcasterBackend(runtime.GOOS)
@@ -261,7 +263,146 @@ func registerZeroconfService(cfg BroadcastConfig, txt []string) (*zeroconf.Serve
 	)
 }
 
+// getLocalIPv4 returns the best-candidate IPv4 address for mDNS advertisement.
+//
+// Strategy (in order):
+//  1. UDP dial trick — ask the OS routing table which source IP it would use
+//     to reach an external address.  No packet is actually sent; this reliably
+//     returns the IP of the default-route interface (the real LAN adapter)
+//     even on machines with many virtual adapters (WSL, Docker, VPN, VMware).
+//  2. Scored interface walk — prefer RFC-1918 addresses on physical, multicast-
+//     capable interfaces and penalise known virtual adapters.
+//  3. Legacy flat scan — simple fallback when net.Interfaces() is unavailable.
 func getLocalIPv4() string {
+	if ip, ok := routedLocalIPv4(); ok {
+		return ip
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return legacyGetLocalIPv4()
+	}
+
+	bestIP := ""
+	bestScore := -1000
+
+	for _, iface := range ifaces {
+		if !isUsableInterface(iface) {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		ifScore := ifaceScore(iface)
+		for _, addr := range addrs {
+			ip, ok := addrToIPv4(addr)
+			if !ok {
+				continue
+			}
+			score := ifScore + ipAddrScore(ip)
+			if score > bestScore {
+				bestScore = score
+				bestIP = ip.String()
+			}
+		}
+	}
+
+	return bestIP
+}
+
+// routedLocalIPv4 asks the OS routing table for the preferred outbound source
+// address by performing a UDP "connect" to a well-known external IP.  No
+// packet is actually transmitted — the kernel merely selects the source
+// interface.  This correctly ignores virtual adapters (WSL, Docker, VMware,
+// VPN tunnels) because those are not on the default route.
+func routedLocalIPv4() (string, bool) {
+	conn, err := net.Dial("udp4", "8.8.8.8:80")
+	if err != nil {
+		return "", false
+	}
+	defer conn.Close()
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "", false
+	}
+	ip4 := addr.IP.To4()
+	if ip4 == nil || ip4.IsLoopback() || ip4.IsUnspecified() {
+		return "", false
+	}
+	return ip4.String(), true
+}
+
+func isUsableInterface(iface net.Interface) bool {
+	return iface.Flags&net.FlagUp != 0 &&
+		iface.Flags&net.FlagLoopback == 0 &&
+		iface.Flags&net.FlagPointToPoint == 0
+}
+
+// ifaceScore returns a score for how suitable an interface is for LAN mDNS.
+// Multicast-capable interfaces score higher; known virtual adapters score lower.
+func ifaceScore(iface net.Interface) int {
+	score := 0
+	if iface.Flags&net.FlagMulticast != 0 {
+		score += 10
+	}
+	name := strings.ToLower(iface.Name)
+	for _, keyword := range []string{
+		"vmware", "virtualbox", "vbox", "docker",
+		"vethernet", "hyper-v",
+		"utun", "tap", "awdl", "llw",
+		"bridge", "pseudo",
+	} {
+		if strings.Contains(name, keyword) {
+			score -= 20
+			break
+		}
+	}
+	return score
+}
+
+// ipAddrScore prefers RFC-1918 addresses over APIPA link-local ones.
+func ipAddrScore(ip net.IP) int {
+	if ip.IsLinkLocalUnicast() {
+		// 169.254.x.x — APIPA: adapter has no DHCP lease, unreliable for LAN
+		return -5
+	}
+	if isRFC1918(ip) {
+		return 5
+	}
+	return 1
+}
+
+func addrToIPv4(addr net.Addr) (net.IP, bool) {
+	ipnet, ok := addr.(*net.IPNet)
+	if !ok {
+		return nil, false
+	}
+	ip4 := ipnet.IP.To4()
+	if ip4 == nil || ip4.IsLoopback() {
+		return nil, false
+	}
+	return ip4, true
+}
+
+func isRFC1918(ip net.IP) bool {
+	for _, block := range []struct {
+		network net.IP
+		mask    net.IPMask
+	}{
+		{net.IP{10, 0, 0, 0}, net.IPMask{255, 0, 0, 0}},
+		{net.IP{172, 16, 0, 0}, net.IPMask{255, 240, 0, 0}},
+		{net.IP{192, 168, 0, 0}, net.IPMask{255, 255, 0, 0}},
+	} {
+		if ip.Mask(block.mask).Equal(block.network) {
+			return true
+		}
+	}
+	return false
+}
+
+// legacyGetLocalIPv4 is a simple fallback used when net.Interfaces() fails.
+func legacyGetLocalIPv4() string {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return ""
@@ -276,6 +417,27 @@ func getLocalIPv4() string {
 		}
 	}
 	return ""
+}
+
+// checkWindowsBonjourService logs a warning if the Bonjour mDNS responder
+// service is not running on Windows.  The check is best-effort; failures are
+// logged at debug level only.
+func checkWindowsBonjourService() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	out, err := exec.Command("sc", "query", "Bonjour Service").Output()
+	if err != nil {
+		slog.Debug("windows bonjour service query failed", "err", err)
+		return
+	}
+	if !strings.Contains(string(out), "RUNNING") {
+		slog.Warn(
+			"Bonjour Service is not running on Windows; iOS discovery will fail",
+			"fix", "open Services.msc, start 'Bonjour Service', or reinstall Bonjour for Windows",
+			"alt_fix", "open an elevated cmd and run: sc start \"Bonjour Service\"",
+		)
+	}
 }
 
 func serviceHostName(cfg BroadcastConfig) string {
