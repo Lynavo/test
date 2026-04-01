@@ -316,6 +316,11 @@ func getLocalIPv4() string {
 // packet is actually transmitted — the kernel merely selects the source
 // interface.  This correctly ignores virtual adapters (WSL, Docker, VMware,
 // VPN tunnels) because those are not on the default route.
+//
+// Results in the following special-use ranges are rejected and cause a
+// fallback to the scored interface walk:
+//   - 198.18.0.0/15: Apple iCloud Private Relay virtual interface (macOS)
+//   - 100.64.0.0/10: CGNAT shared space used by Tailscale, carrier NAT, etc.
 func routedLocalIPv4() (string, bool) {
 	conn, err := net.Dial("udp4", "8.8.8.8:80")
 	if err != nil {
@@ -327,10 +332,34 @@ func routedLocalIPv4() (string, bool) {
 		return "", false
 	}
 	ip4 := addr.IP.To4()
-	if ip4 == nil || ip4.IsLoopback() || ip4.IsUnspecified() {
+	if ip4 == nil || ip4.IsLoopback() || ip4.IsUnspecified() || ip4.IsLinkLocalUnicast() {
+		return "", false
+	}
+	if isSpecialUseIP(ip4) {
+		slog.Debug("routedLocalIPv4: rejected special-use address, falling back to interface walk", "ip", ip4.String())
 		return "", false
 	}
 	return ip4.String(), true
+}
+
+// isSpecialUseIP reports whether ip is in a range that should never be
+// advertised as the LAN address for mDNS, even though it may be routable.
+//
+//	198.18.0.0/15 — RFC 2544 benchmarking; used by Apple iCloud Private Relay
+//	100.64.0.0/10 — RFC 6598 shared address space (CGNAT, Tailscale, etc.)
+func isSpecialUseIP(ip net.IP) bool {
+	for _, block := range []struct {
+		network net.IP
+		mask    net.IPMask
+	}{
+		{net.IP{198, 18, 0, 0}, net.IPMask{255, 254, 0, 0}}, // 198.18.0.0/15
+		{net.IP{100, 64, 0, 0}, net.IPMask{255, 192, 0, 0}}, // 100.64.0.0/10
+	} {
+		if ip.Mask(block.mask).Equal(block.network) {
+			return true
+		}
+	}
+	return false
 }
 
 func isUsableInterface(iface net.Interface) bool {
@@ -361,11 +390,15 @@ func ifaceScore(iface net.Interface) int {
 	return score
 }
 
-// ipAddrScore prefers RFC-1918 addresses over APIPA link-local ones.
+// ipAddrScore prefers RFC-1918 addresses over special-use and APIPA ranges.
 func ipAddrScore(ip net.IP) int {
 	if ip.IsLinkLocalUnicast() {
 		// 169.254.x.x — APIPA: adapter has no DHCP lease, unreliable for LAN
 		return -5
+	}
+	if isSpecialUseIP(ip) {
+		// 198.18/15 (iCloud Private Relay) or 100.64/10 (CGNAT/Tailscale)
+		return -10
 	}
 	if isRFC1918(ip) {
 		return 5

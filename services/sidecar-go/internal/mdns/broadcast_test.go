@@ -352,6 +352,46 @@ func TestIPAddrScore(t *testing.T) {
 	}
 }
 
+func TestIsSpecialUseIP(t *testing.T) {
+	cases := []struct {
+		ip      string
+		special bool
+	}{
+		{"198.18.0.1", true},   // iCloud Private Relay lower bound
+		{"198.19.255.255", true}, // iCloud Private Relay upper bound
+		{"198.20.0.1", false},  // just outside the block
+		{"100.64.0.1", true},   // CGNAT/Tailscale lower bound
+		{"100.127.255.255", true}, // CGNAT upper bound
+		{"100.128.0.1", false}, // just outside
+		{"192.168.1.1", false}, // RFC 1918 — not special-use
+		{"10.0.0.1", false},    // RFC 1918 — not special-use
+		{"8.8.8.8", false},     // public IP
+	}
+	for _, tc := range cases {
+		ip := net.ParseIP(tc.ip).To4()
+		if ip == nil {
+			t.Fatalf("invalid IP: %s", tc.ip)
+		}
+		if got := isSpecialUseIP(ip); got != tc.special {
+			t.Errorf("isSpecialUseIP(%s) = %v, want %v", tc.ip, got, tc.special)
+		}
+	}
+}
+
+func TestIPAddrScore_SpecialUsePenalised(t *testing.T) {
+	specialIPs := []string{"198.18.0.1", "100.64.0.1"}
+	rfc1918IP := net.ParseIP("192.168.1.1").To4()
+	for _, s := range specialIPs {
+		ip := net.ParseIP(s).To4()
+		if ip == nil {
+			t.Fatalf("invalid IP: %s", s)
+		}
+		if ipAddrScore(ip) >= ipAddrScore(rfc1918IP) {
+			t.Errorf("special-use %s score must be lower than RFC1918 score", s)
+		}
+	}
+}
+
 func TestIfaceScore_VirtualPenalised(t *testing.T) {
 	virtualNames := []string{
 		"vEthernet (Default Switch)", // Hyper-V
