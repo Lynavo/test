@@ -26,10 +26,6 @@ import type { DiscoveredDeviceDTO } from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
-import {
-  isDiagnosticsExportUnavailable,
-  shareDiagnosticsArchive,
-} from '../utils/shareDiagnosticsArchive';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 
 // ---------------------------------------------------------------------------
@@ -138,7 +134,6 @@ export function DeviceDiscoveryScreen() {
   const insets = useSafeAreaInsets();
   const [scanning, setScanning] = useState(true);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
-  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
   const [manualHost, setManualHost] = useState('');
   const [manualHostError, setManualHostError] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -257,20 +252,6 @@ export function DeviceDiscoveryScreen() {
     setScanning(false);
   }, []);
 
-  const handleExportDiagnostics = useCallback(async () => {
-    try {
-      setIsExportingDiagnostics(true);
-      await shareDiagnosticsArchive();
-    } catch (error) {
-      if (isDiagnosticsExportUnavailable(error)) {
-        Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
-      } else {
-        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
-      }
-    } finally {
-      setIsExportingDiagnostics(false);
-    }
-  }, []);
 
   const handleDevicePress = useCallback(
     (device: DiscoveredDevice) => {
@@ -367,19 +348,15 @@ export function DeviceDiscoveryScreen() {
               <Icon name="wifi" size={24} color="#3b9fd8" />
             </View>
             <TouchableOpacity
-              style={[
-                styles.diagnosticsButton,
-                isExportingDiagnostics && styles.diagnosticsButtonDisabled,
-              ]}
+              style={styles.scanButton}
               activeOpacity={0.8}
-              disabled={isExportingDiagnostics}
               onPress={() => {
-                void handleExportDiagnostics();
+                navigation.navigate('QRScanner');
               }}
             >
-              <Icon name="download-outline" size={16} color="#3b9fd8" />
-              <Text style={styles.diagnosticsButtonText}>
-                {isExportingDiagnostics ? '导出中…' : '导出诊断包'}
+              <Icon name="scan-outline" size={16} color="#3b9fd8" />
+              <Text style={styles.scanButtonText}>
+                扫码配对
               </Text>
             </TouchableOpacity>
           </View>
@@ -551,7 +528,7 @@ const styles = StyleSheet.create({
     color: '#6a96b8',
     marginTop: 4,
   },
-  diagnosticsButton: {
+  scanButton: {
     minHeight: 40,
     borderRadius: 14,
     paddingHorizontal: 12,
@@ -568,10 +545,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 2,
   },
-  diagnosticsButtonDisabled: {
+  scanButtonDisabled: {
     opacity: 0.6,
   },
-  diagnosticsButtonText: {
+  scanButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#3b9fd8',

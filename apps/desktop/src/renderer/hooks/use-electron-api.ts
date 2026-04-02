@@ -33,6 +33,7 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   getSettings: async () => ({ ...defaultSettings }),
   updateSettings: async (s) =>
     ({ ...defaultSettings, ...s }) as SettingsDTO,
+  resetState: async () => ({ ok: true }),
   regenerateConnectionCode: async () => ({ code: '000000' }),
   getRuntimeState: async () => ({ ...INITIAL_SIDECAR_RUNTIME_STATE, status: 'healthy', message: null }),
   retryStart: async () => {},
@@ -74,6 +75,7 @@ const mockPlatform: ElectronAPI['platform'] = {
   isMac: () => true,
   isWindows: () => false,
   getHostName: () => 'localhost',
+  getLocalIPs: () => ['192.168.1.100'],
 };
 
 const mockAPI: ElectronAPI = {

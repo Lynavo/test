@@ -34,30 +34,26 @@ const VERIFY_DELAY_MS = 1200;
 export function CodeVerifyScreen() {
   const navigation = useNavigation<CodeVerifyNavProp>();
   const route = useRoute<CodeVerifyRouteProp>();
-  const { deviceId, host, port, deviceName } = route.params;
+  const { deviceId, host, port, deviceName, prefilledCode } = route.params;
 
-  const [code, setCode] = useState<string[]>(Array(CODE_LENGTH).fill(''));
+  const [code, setCode] = useState<string[]>(
+    prefilledCode && prefilledCode.length === CODE_LENGTH 
+      ? prefilledCode.split('') 
+      : Array(CODE_LENGTH).fill('')
+  );
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  // Auto-focus first input on mount (iOS autoFocus can be unreliable)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRefs.current[0]?.focus();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, []);
 
-  // -----------------------------------------------------------------------
-  // Submit code via native module
-  // -----------------------------------------------------------------------
 
   const submitCode = useCallback(
     async (fullCode: string) => {
       setVerifying(true);
       setError(false);
+      setErrorMsg(null);
 
       try {
         const { NativeSyncEngine } = NativeModules;
@@ -72,11 +68,18 @@ export function CodeVerifyScreen() {
           navigation.replace('SyncStatus');
           return;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Native pairing failed:', e);
         // Native module threw a pairing error — show error state
         setVerifying(false);
         setError(true);
+        // Include actual error message so the user knows if it's a network timeout vs incorrect code
+        const msg = e?.message || '';
+        if (msg.includes('Pairing rejected')) {
+           setErrorMsg('连接码错误，请重新输入');
+        } else {
+           setErrorMsg(`连接失败：${msg}`);
+        }
         setCode(Array(CODE_LENGTH).fill(''));
         Vibration.vibrate(300);
         inputRefs.current[0]?.focus();
@@ -92,6 +95,23 @@ export function CodeVerifyScreen() {
     [navigation, deviceId, host, port],
   );
 
+  // Auto-focus first input on mount (iOS autoFocus can be unreliable)
+  useEffect(() => {
+    if (prefilledCode && prefilledCode.length === CODE_LENGTH) {
+      // Defer submit to allow the navigation transition to finish and the native
+      // TCP layer to fully close any previous connection before dialing again.
+      const timer = setTimeout(() => {
+        submitCode(prefilledCode);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      const timer = setTimeout(() => {
+        inputRefs.current[0]?.focus();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [prefilledCode, submitCode]);
+
   // -----------------------------------------------------------------------
   // Handle digit input
   // -----------------------------------------------------------------------
@@ -105,6 +125,7 @@ export function CodeVerifyScreen() {
       newCode[index] = digit;
       setCode(newCode);
       setError(false);
+      setErrorMsg(null);
 
       if (digit && index < CODE_LENGTH - 1) {
         // Advance focus to next box
@@ -139,7 +160,7 @@ export function CodeVerifyScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Device name context */}
-        <Text style={styles.deviceLabel}>{'正在连接'}: {deviceName}</Text>
+        <Text style={styles.deviceLabel}>{'正在连接'}: {deviceName} ({host})</Text>
 
         {/* Prompt */}
         <Text style={styles.prompt}>{'请输入电脑端显示的 6 位连接码'}</Text>
@@ -181,7 +202,9 @@ export function CodeVerifyScreen() {
 
         {/* Status: error */}
         {error && (
-          <Text style={styles.errorText}>{'连接码错误，请重新输入'}</Text>
+          <Text style={styles.errorText} numberOfLines={2}>
+            {errorMsg || '连接码错误，请重新输入'}
+          </Text>
         )}
 
         {/* Help text */}
@@ -282,6 +305,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.destructive,
     marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
 
   // Help card

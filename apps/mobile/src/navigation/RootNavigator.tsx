@@ -7,13 +7,15 @@ import { CodeVerifyScreen } from '../screens/CodeVerifyScreen';
 import { SyncStatusScreen } from '../screens/SyncStatusScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { QRScannerScreen } from '../screens/QRScannerScreen';
 
 export type RootStackParamList = {
   DeviceDiscovery: undefined;
-  CodeVerify: { deviceId: string; host: string; port: number; deviceName: string };
+  CodeVerify: { deviceId?: string; host: string; port: number; deviceName?: string; prefilledCode?: string };
   SyncStatus: undefined;
   History: undefined;
   Settings: undefined;
+  QRScanner: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -57,6 +59,7 @@ export function RootNavigator() {
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name="DeviceDiscovery" component={DeviceDiscoveryScreen} />
+      <Stack.Screen name="QRScanner" component={QRScannerScreen} />
       <Stack.Screen name="CodeVerify" component={CodeVerifyScreen} />
       <Stack.Screen name="SyncStatus" component={SyncStatusScreen} />
       <Stack.Screen name="History" component={HistoryScreen} />

@@ -60,6 +60,8 @@
 	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>小豹闪传 需要访问本地网络以发现和连接同一局域网内的电脑</string>
+	<key>NSCameraUsageDescription</key>
+	<string>小豹闪传需要相机权限来扫描桌面端的二维码连接码</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_syncflow._tcp</string>

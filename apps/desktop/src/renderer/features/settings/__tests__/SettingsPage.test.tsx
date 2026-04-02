@@ -103,6 +103,7 @@ describe('SettingsPage', () => {
         isMac: () => false,
         isWindows: () => true,
         getHostName: () => 'DESKTOP-01',
+        getLocalIPs: () => ['192.168.1.100'],
       },
       events: {
         onSidecarEvent: vi.fn(),

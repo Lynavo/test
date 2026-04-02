@@ -52,6 +52,7 @@ export interface ElectronAPI {
     isMac(): boolean;
     isWindows(): boolean;
     getHostName(): string;
+    getLocalIPs(): string[];
   };
   support: {
     exportDiagnostics(): Promise<string | null>;

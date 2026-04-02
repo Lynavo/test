@@ -78,6 +78,18 @@ class TcpTransport {
     }
 
     private func connectToEndpoint(_ endpoint: NWEndpoint) {
+        NSLog("[TcpTransport] connectToEndpoint: \(endpoint)")
+
+        // Cancel any existing connection before creating a new one.
+        // This prevents stale receive-loop callbacks from delivering old data
+        // into the new session's continuation (the "invalid magic" race).
+        if let existing = connection {
+            NSLog("[TcpTransport] cancelling previous connection before reconnecting")
+            existing.stateUpdateHandler = nil
+            existing.cancel()
+            connection = nil
+        }
+
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.noDelay = true
 
@@ -224,7 +236,9 @@ class TcpTransport {
 
             // Validate magic bytes
             guard String(data: data[0..<4], encoding: .utf8) == "LMUP" else {
-                NSLog("[TcpTransport] invalid magic")
+                let asciiStr = String(data: data, encoding: .ascii)?.replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r") ?? "invalid-ascii"
+                let hexStr = data.map { String(format: "%02x", $0) }.joined(separator: " ")
+                NSLog("[TcpTransport] invalid magic! Ascii=[%@], Hex=[%@]", asciiStr, hexStr)
                 self.disconnect()
                 return
             }

@@ -83,6 +83,20 @@ const electronAPI: ElectronAPI = {
     isMac: () => process.platform === 'darwin',
     isWindows: () => process.platform === 'win32',
     getHostName: () => os.hostname(),
+    getLocalIPs: () => {
+      const interfaces = os.networkInterfaces();
+      const addresses: string[] = [];
+      for (const k in interfaces) {
+        const addrs = interfaces[k];
+        if (!addrs) continue;
+        for (const address of addrs) {
+          if (address.family === 'IPv4' && !address.internal) {
+            addresses.push(address.address);
+          }
+        }
+      }
+      return addresses;
+    },
   },
   support: {
     exportDiagnostics: () => ipcRenderer.invoke(IPC.SUPPORT_EXPORT_DIAGNOSTICS),
