@@ -875,7 +875,7 @@ export function SyncStatusScreen() {
           style={[
             styles.connectionBanner,
             styles.connectionBannerFloating,
-            { top: 56 },  // 56 = header height; SafeAreaView already handles the top inset
+            { top: 106 }, // Header height (56) + 50px offset
             isBannerError
               ? styles.connectionBannerError
               : styles.connectionBannerWarning,
