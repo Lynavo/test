@@ -12,6 +12,10 @@ process.on('uncaughtException', (err) => {
 });
 
 let mainWindow: BrowserWindow | null = null;
+
+if (process.platform === 'darwin') {
+  app.setName('小豹闪传');
+}
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
 const isDev = !app.isPackaged;
@@ -42,8 +46,9 @@ sidecar.on('state', (state: SidecarRuntimeState) => {
   syncWsBridgeWithRuntimeState(state);
 });
 
-async function createMainWindow() {
+export async function createMainWindow() {
   mainWindow = new BrowserWindow({
+    title: '小豹闪传',
     width: 1440,
     height: 960,
     minWidth: 1200,
@@ -66,7 +71,6 @@ async function createMainWindow() {
 }
 
 app.whenReady().then(async () => {
-
   registerIpcHandlers(sidecar);
   await createMainWindow();
   wsBridge = new WsBridge(() => mainWindow);
