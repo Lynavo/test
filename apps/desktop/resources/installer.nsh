@@ -26,13 +26,15 @@
   Pop $R1
 
   ; TCP 39393 – iPhone → sidecar file-transfer.
-  ; Scope to the sidecar executable when it is present so the rule is as
-  ; narrow as possible; fall back to port-only when the path is missing
-  ; (e.g. during development runs or manual rule setup).
+  ; remoteip is intentionally unrestricted: in a typical home or office LAN the
+  ; port is not exposed to the internet (NAT blocks it), so allowing any local
+  ; source is safe.  Restricting to localsubnet would break cross-segment
+  ; transfers (e.g. iPhone on 172.16.22.x connecting to Windows on 172.16.8.x).
+  ; Scope to the sidecar executable when present for additional defence-in-depth.
   IfFileExists "$INSTDIR\resources\syncflow-sidecar.exe" 0 +3
-    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\syncflow-sidecar.exe" remoteip=localsubnet description="SyncFlow sidecar file transfer (TCP 39393)"'
+    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\syncflow-sidecar.exe" description="SyncFlow sidecar file transfer (TCP 39393)"'
     Goto tcp_rule_done
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 remoteip=localsubnet description="SyncFlow sidecar file transfer (TCP 39393)"'
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 description="SyncFlow sidecar file transfer (TCP 39393)"'
   tcp_rule_done:
   Pop $R0
   Pop $R1
