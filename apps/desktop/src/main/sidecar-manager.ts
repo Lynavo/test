@@ -62,6 +62,7 @@ export class SidecarManager extends EventEmitter {
         source: 'not_applicable',
         message: null,
         path: null,
+        advertisedIP: null,
       };
     }
 
@@ -109,6 +110,7 @@ export class SidecarManager extends EventEmitter {
         source: runtime.source,
         message: '已检测到 Bonjour for Windows，手机扫描会优先使用 Apple Bonjour 广播。',
         path: runtime.path,
+        advertisedIP: null,
       };
     }
 
@@ -121,6 +123,7 @@ export class SidecarManager extends EventEmitter {
       message:
         '未检测到 Bonjour for Windows，当前将使用兼容模式广播；iPhone 重新扫描可能不稳定。安装 Bonjour 后点击“重试后台服务”即可重新检测。',
       path: null,
+      advertisedIP: null,
     };
   }
 
@@ -187,7 +190,25 @@ export class SidecarManager extends EventEmitter {
 
     child.stdout?.on('data', (data) => {
       try {
-        log.info(`[sidecar] ${data.toString().trim()}`);
+        const text = data.toString().trim();
+        log.info(`[sidecar] ${text}`);
+        // Extract the advertised IP from the structured log line emitted by
+        // mdns.NewBroadcaster: {"msg":"bonjour broadcaster ip selected","ip":"x.x.x.x"}
+        for (const line of text.split('\n')) {
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+            if (
+              parsed['msg'] === 'bonjour broadcaster ip selected' &&
+              typeof parsed['ip'] === 'string'
+            ) {
+              this.setState({
+                bonjour: { ...this.state.bonjour, advertisedIP: parsed['ip'] },
+              });
+            }
+          } catch {
+            /* non-JSON line – ignore */
+          }
+        }
       } catch {
         /* pipe closed */
       }

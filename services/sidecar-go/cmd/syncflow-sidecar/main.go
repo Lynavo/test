@@ -86,6 +86,7 @@ func main() {
 			DeviceID:     deviceID,
 			DeviceName:   name,
 			DeviceType:   mdns.DeviceTypeForGOOS(runtime.GOOS),
+			DeviceIP:     cfg.DeviceIP, // empty → auto-detect in NewBroadcaster
 			TCPPort:      cfg.TCPPort,
 			Proto:        2,
 			ShareEnabled: false,

@@ -25,16 +25,27 @@
   Pop $R0
   Pop $R1
 
-  ; TCP 39393 – iPhone → sidecar file-transfer, scoped to the sidecar
-  ; executable and restricted to the local subnet.
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\syncflow-sidecar.exe" remoteip=localsubnet description="SyncFlow sidecar file transfer (TCP 39393)"'
+  ; TCP 39393 – iPhone → sidecar file-transfer.
+  ; Scope to the sidecar executable when it is present so the rule is as
+  ; narrow as possible; fall back to port-only when the path is missing
+  ; (e.g. during development runs or manual rule setup).
+  IfFileExists "$INSTDIR\resources\syncflow-sidecar.exe" 0 +3
+    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\syncflow-sidecar.exe" remoteip=localsubnet description="SyncFlow sidecar file transfer (TCP 39393)"'
+    Goto tcp_rule_done
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 remoteip=localsubnet description="SyncFlow sidecar file transfer (TCP 39393)"'
+  tcp_rule_done:
   Pop $R0
   Pop $R1
 
-  ; UDP 5353 – Bonjour/mDNS multicast used by mDNSResponder (Bonjour
-  ; Service).  Not scoped to a program because the traffic originates from
-  ; the Windows service process, not from dns-sd.exe.
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_MDNS}" dir=in action=allow protocol=UDP localport=5353 remoteip=localsubnet description="SyncFlow Bonjour/mDNS discovery (UDP 5353)"'
+  ; UDP 5353 – Bonjour/mDNS multicast used by mDNSResponder (Bonjour Service).
+  ; remoteip is intentionally unrestricted (no localsubnet scope) because:
+  ;   1. mDNS queries arrive at 224.0.0.251:5353 with the SENDER's unicast source
+  ;      IP; when a router mDNS-proxy bridges WiFi ↔ wired, the source may come
+  ;      from a different subnet (e.g. iPhone on 172.16.22.x querying Windows on
+  ;      172.16.8.x).  Limiting to localsubnet would drop those queries and
+  ;      prevent cross-segment discovery.
+  ;   2. Restricting by localsubnet is safe for TCP but not for mDNS multicast.
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_MDNS}" dir=in action=allow protocol=UDP localport=5353 description="SyncFlow Bonjour/mDNS discovery (UDP 5353)"'
   Pop $R0
   Pop $R1
 

@@ -12,6 +12,9 @@ export interface BonjourRuntimeState {
   source: BonjourRuntimeSource;
   message: string | null;
   path: string | null;
+  /** IP address currently being advertised in the Bonjour/mDNS TXT record.
+   *  Populated once the sidecar emits "bonjour broadcaster ip selected". */
+  advertisedIP: string | null;
 }
 
 export interface SidecarRuntimeState {
@@ -34,5 +37,6 @@ export const INITIAL_SIDECAR_RUNTIME_STATE: SidecarRuntimeState = {
     source: 'not_applicable',
     message: null,
     path: null,
+    advertisedIP: null,
   },
 };

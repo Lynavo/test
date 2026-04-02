@@ -104,7 +104,7 @@ export function BonjourRuntimeSection() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl bg-white/70 px-4 py-3">
             <div className="mb-1 text-xs font-medium text-muted-foreground">
               当前广播模式
@@ -112,6 +112,20 @@ export function BonjourRuntimeSection() {
             <p className="text-sm font-medium text-foreground">
               {usingBonjour ? 'Apple Bonjour' : '兼容模式（zeroconf fallback）'}
             </p>
+          </div>
+
+          <div className="rounded-xl bg-white/70 px-4 py-3">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">
+              广播 IP（iPhone 连接地址）
+            </div>
+            <p className="break-all text-sm font-medium text-foreground font-mono">
+              {runtime.bonjour.advertisedIP ?? '启动中…'}
+            </p>
+            {runtime.bonjour.advertisedIP ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                iPhone 需与此 IP 在同一局域网段
+              </p>
+            ) : null}
           </div>
 
           <div className="rounded-xl bg-white/70 px-4 py-3">

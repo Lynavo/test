@@ -15,6 +15,12 @@ type Config struct {
 	ReceiveDir            string `yaml:"receive_dir"`
 	LogLevel              string `yaml:"log_level"`
 	DeviceName            string `yaml:"device_name"`
+	// DeviceIP overrides the IP address advertised in the Bonjour/mDNS TXT
+	// record.  Leave empty to let the sidecar auto-detect the best LAN address.
+	// Useful on multi-homed Windows machines where auto-detection picks the
+	// wrong interface (e.g. wired vs. WiFi on different subnets).
+	// Can also be set via the SYNCFLOW_DEVICE_IP environment variable.
+	DeviceIP              string `yaml:"device_ip"`
 	LowDiskThresholdBytes int64  `yaml:"low_disk_threshold_bytes"`
 }
 
@@ -51,6 +57,11 @@ func (c *Config) setDefaults() {
 		hostname, _ := os.Hostname()
 		// Remove .local suffix for friendlier display name
 		c.DeviceName = strings.TrimSuffix(hostname, ".local")
+	}
+	// Environment variable takes precedence over the YAML value so that
+	// developers can override the IP without touching the config file.
+	if env := strings.TrimSpace(os.Getenv("SYNCFLOW_DEVICE_IP")); env != "" {
+		c.DeviceIP = env
 	}
 }
 
