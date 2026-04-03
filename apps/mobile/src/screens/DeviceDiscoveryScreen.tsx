@@ -29,6 +29,10 @@ import type { DiscoveredDeviceDTO } from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
+import {
+  isDiagnosticsExportUnavailable,
+  shareDiagnosticsArchive,
+} from '../utils/shareDiagnosticsArchive';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 
 // ---------------------------------------------------------------------------
@@ -135,12 +139,14 @@ type NavigationProp = StackNavigationProp<
 export function DeviceDiscoveryScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const isAndroid = Platform.OS === 'android';
   const [scanning, setScanning] = useState(true);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [manualHost, setManualHost] = useState('');
   const [manualHostError, setManualHostError] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [manualSectionHeight, setManualSectionHeight] = useState(0);
+  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
 
   // Popover & Modal state
   const [showPairingMenu, setShowPairingMenu] = useState(false);
@@ -259,7 +265,6 @@ export function DeviceDiscoveryScreen() {
     setScanning(false);
   }, []);
 
-
   const handleDevicePress = useCallback(
     (device: DiscoveredDevice) => {
       console.log(
@@ -301,6 +306,22 @@ export function DeviceDiscoveryScreen() {
     setShowManualModal(false);
     handleDevicePress(manualDevice);
   }, [handleDevicePress, manualHost]);
+
+  const handleExportDiagnostics = useCallback(async () => {
+    try {
+      setIsExportingDiagnostics(true);
+      setShowPairingMenu(false);
+      await shareDiagnosticsArchive();
+    } catch (error) {
+      if (isDiagnosticsExportUnavailable(error)) {
+        Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
+      } else {
+        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
+      }
+    } finally {
+      setIsExportingDiagnostics(false);
+    }
+  }, []);
 
   const renderDevice = useCallback(
     ({ item }: ListRenderItemInfo<DiscoveredDevice>) => (
@@ -358,17 +379,23 @@ export function DeviceDiscoveryScreen() {
             <TouchableOpacity
               style={styles.scanButton}
               activeOpacity={0.8}
-              onPress={() => setShowPairingMenu(true)}
+              onPress={() => {
+                if (isAndroid) {
+                  setShowManualModal(true);
+                  return;
+                }
+                setShowPairingMenu(true);
+              }}
             >
               <Icon name="settings-outline" size={16} color="#3b9fd8" />
-              <Text style={styles.scanButtonText}>
-                手动配对
-              </Text>
+              <Text style={styles.scanButtonText}>手动配对</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.title}>{'搜索设备'}</Text>
           <Text style={styles.subtitle}>
-            {'正在扫描局域网中的电脑端应用...'}
+            {isAndroid
+              ? '正在扫描局域网中的电脑端应用；若未发现设备，可改用手动输入 IPv4。'
+              : '正在扫描局域网中的电脑端应用...'}
           </Text>
         </View>
 
@@ -392,7 +419,11 @@ export function DeviceDiscoveryScreen() {
             )}
             {devices.length === 0 ? (
               <View style={styles.emptySection}>
-                <Text style={styles.emptyText}>{'未发现设备'}</Text>
+                <Text style={styles.emptyText}>
+                  {isAndroid
+                    ? '未发现设备，请手动输入 IP 继续配对'
+                    : '未发现设备'}
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -458,17 +489,34 @@ export function DeviceDiscoveryScreen() {
                 <Icon name="create-outline" size={20} color="#3b9fd8" />
                 <Text style={styles.popoverText}>手动输入 IP</Text>
               </TouchableOpacity>
-              <View style={styles.popoverDivider} />
-              <TouchableOpacity
-                style={styles.popoverItem}
-                onPress={() => {
-                  setShowPairingMenu(false);
-                  navigation.navigate('QRScanner');
-                }}
-              >
-                <Icon name="scan-outline" size={20} color="#3b9fd8" />
-                <Text style={styles.popoverText}>扫码配对</Text>
-              </TouchableOpacity>
+              {isAndroid ? null : (
+                <>
+                  <View style={styles.popoverDivider} />
+                  <TouchableOpacity
+                    style={styles.popoverItem}
+                    onPress={() => {
+                      setShowPairingMenu(false);
+                      navigation.navigate('QRScanner');
+                    }}
+                  >
+                    <Icon name="scan-outline" size={20} color="#3b9fd8" />
+                    <Text style={styles.popoverText}>扫码配对</Text>
+                  </TouchableOpacity>
+                  <View style={styles.popoverDivider} />
+                  <TouchableOpacity
+                    style={styles.popoverItem}
+                    disabled={isExportingDiagnostics}
+                    onPress={() => void handleExportDiagnostics()}
+                  >
+                    <Icon name="download-outline" size={20} color="#3b9fd8" />
+                    <Text style={styles.popoverText}>
+                      {isExportingDiagnostics
+                        ? '正在导出诊断包…'
+                        : '导出诊断包'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </Pressable>
         </Modal>
@@ -532,7 +580,9 @@ export function DeviceDiscoveryScreen() {
                     </TouchableOpacity>
                   </View>
                   {manualHostError ? (
-                    <Text style={styles.manualErrorText}>{manualHostError}</Text>
+                    <Text style={styles.manualErrorText}>
+                      {manualHostError}
+                    </Text>
                   ) : (
                     <Text style={styles.manualHint}>
                       {
