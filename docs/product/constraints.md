@@ -1,10 +1,10 @@
-# SyncFlow 产品约束与非目标
+# Vivi Drop 产品约束与非目标
 
 本文件把当前项目的核心产品约束从工程语言翻译成产品语言，方便交接时统一判断边界。
 
 ## 1. 当前产品边界
 
-SyncFlow V2 当前只做一件事：
+Vivi Drop V2 当前只做一件事：
 
 - `iPhone -> Desktop（macOS / Windows）` 的局域网自动增量同步
 

@@ -1,4 +1,4 @@
-# SyncFlow Beta Test Matrix
+# Vivi Drop Beta Test Matrix
 
 本文件只整理测试范围、执行方式和验收口径，不作为产品规格文档。
 
@@ -48,8 +48,8 @@ cd /Volumes/workspace/work/sync-flow
 pnpm --filter @syncflow/mobile exec tsc --noEmit
 
 cd /Volumes/workspace/work/sync-flow/apps/mobile/ios
-xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -configuration Debug -destination 'generic/platform=iOS' build
-xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+xcodebuild -workspace Vivi DropMobile.xcworkspace -scheme Vivi DropMobile -configuration Debug -destination 'generic/platform=iOS' build
+xcodebuild -workspace Vivi DropMobile.xcworkspace -scheme Vivi DropMobile -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 ```
 
 验收口径：
@@ -140,8 +140,8 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 
 ### 4.5 Windows desktop 冒烟
 
-1. 从 `SyncFlow-Setup.exe` fresh install
-2. 安装后确认 `SyncFlow Sidecar TCP / SyncFlow mDNS UDP` 防火墙规则存在
+1. 从 `Vivi Drop-Setup.exe` fresh install
+2. 安装后确认 `Vivi Drop Sidecar TCP / Vivi Drop mDNS UDP` 防火墙规则存在
 3. 设置页能看到 Bonjour 运行时或 fallback 状态
 4. iPhone 能发现并配对
 5. 触发一轮真实素材同步

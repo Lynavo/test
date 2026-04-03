@@ -34,7 +34,7 @@ func main() {
 	}
 
 	logging.Setup(cfg.LogLevel)
-	slog.Info("starting syncflow-sidecar", "http_port", cfg.HTTPPort, "tcp_port", cfg.TCPPort)
+	slog.Info("starting vivi-drop-sidecar", "http_port", cfg.HTTPPort, "tcp_port", cfg.TCPPort)
 
 	// Ensure data directories exist
 	for _, dir := range []string{cfg.DataDir, cfg.ReceiveDir, cfg.StagingDir(), cfg.LogDir()} {
@@ -90,7 +90,7 @@ func main() {
 			TCPPort:      cfg.TCPPort,
 			Proto:        2,
 			ShareEnabled: false,
-			ShareName:    "SyncFlow",
+			ShareName:    "Vivi Drop",
 		})
 		if err != nil {
 			slog.Warn("bonjour broadcast failed", "err", err)

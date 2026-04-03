@@ -14,7 +14,7 @@ process.on('uncaughtException', (err) => {
 let mainWindow: BrowserWindow | null = null;
 
 if (process.platform === 'darwin') {
-  app.setName('小豹闪传');
+  app.setName('Vivi Drop');
 }
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
@@ -48,7 +48,7 @@ sidecar.on('state', (state: SidecarRuntimeState) => {
 
 export async function createMainWindow() {
   mainWindow = new BrowserWindow({
-    title: '小豹闪传',
+    title: 'Vivi Drop',
     width: 1440,
     height: 960,
     minWidth: 1200,

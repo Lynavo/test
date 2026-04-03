@@ -1,6 +1,6 @@
 # macOS Desktop 签名与公证
 
-本文件描述 SyncFlow 桌面端在本地完成 Developer ID 签名和 Apple notarization 的标准路径。
+本文件描述 Vivi Drop 桌面端在本地完成 Developer ID 签名和 Apple notarization 的标准路径。
 
 ## 1. 前置条件
 
@@ -76,7 +76,7 @@ bash /Volumes/workspace/work/sync-flow/apps/desktop/scripts/package-macos-signed
 
 这会产出已签名但未 notarize 的 `.app` 目录：
 
-- `/Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/SyncFlow.app`
+- `/Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/Vivi Drop.app`
 
 ## 5. 可覆盖的环境变量
 
@@ -104,7 +104,7 @@ pnpm --filter @syncflow/desktop package:signed
 ### 6.1 主 app 签名
 
 ```bash
-codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/SyncFlow.app
+codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/Vivi Drop.app
 ```
 
 预期看到：
@@ -116,7 +116,7 @@ codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/
 ### 6.2 sidecar 签名
 
 ```bash
-codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/SyncFlow.app/Contents/Resources/syncflow-sidecar
+codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/Vivi Drop.app/Contents/Resources/syncflow-sidecar
 ```
 
 预期同样看到 `Developer ID Application` 和正确的 `TeamIdentifier`。
@@ -124,7 +124,7 @@ codesign -dv --verbose=4 /Volumes/workspace/work/sync-flow/apps/desktop/release/
 ### 6.3 Gatekeeper 评估
 
 ```bash
-spctl --assess --type execute -vv /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/SyncFlow.app
+spctl --assess --type execute -vv /Volumes/workspace/work/sync-flow/apps/desktop/release/mac-arm64/Vivi Drop.app
 ```
 
 公证完成并 staple 后，不应再看到：

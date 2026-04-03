@@ -1,6 +1,6 @@
 # iOS TestFlight 发布路径
 
-本文件只描述 SyncFlow iOS 包从本地代码到 TestFlight 的发布步骤，不作为产品规格文档。
+本文件只描述 Vivi Drop iOS 包从本地代码到 TestFlight 的发布步骤，不作为产品规格文档。
 
 ## 1. 当前版本约定
 
@@ -38,7 +38,7 @@
 
 位置：
 
-- [project.pbxproj](/Volumes/workspace/work/sync-flow/apps/mobile/ios/SyncFlowMobile.xcodeproj/project.pbxproj)
+- [project.pbxproj](/Volumes/workspace/work/sync-flow/apps/mobile/ios/Vivi DropMobile.xcodeproj/project.pbxproj)
 
 当前建议：
 
@@ -86,7 +86,7 @@ pnpm package:mobile:testflight:archive
 
 1. 命令成功退出
 2. 产物存在：
-   - `/Volumes/workspace/work/sync-flow/apps/mobile/ios/build/archives/SyncFlow-<version>-b<build>.xcarchive`
+   - `/Volumes/workspace/work/sync-flow/apps/mobile/ios/build/archives/Vivi Drop-<version>-b<build>.xcarchive`
 
 ## 6. 上传 TestFlight
 
@@ -122,7 +122,7 @@ pnpm package:mobile:testflight:upload
 上传完成后：
 
 1. 打开 [App Store Connect](https://appstoreconnect.apple.com/)
-2. 进入 `My Apps -> SyncFlow -> TestFlight`
+2. 进入 `My Apps -> Vivi Drop -> TestFlight`
 3. 等待 build 处理完成
 4. 填写本次 beta 说明
 5. 添加 Internal Testers 或 External Testers

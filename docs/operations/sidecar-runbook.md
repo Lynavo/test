@@ -37,7 +37,7 @@ desktop main 负责 sidecar 生命周期管理。
 
 桌面端打包产物内都包含一份 sidecar 二进制：
 
-- macOS：`SyncFlow.app/Contents/Resources/syncflow-sidecar`
+- macOS：`Vivi Drop.app/Contents/Resources/syncflow-sidecar`
 - Windows：`<InstallDir>\\resources\\syncflow-sidecar.exe`
 
 ## 2. 标准端口
@@ -83,7 +83,7 @@ Get-CimInstance Win32_Process -Filter "Name='syncflow-sidecar.exe'" |
 判断点：
 
 1. 如果路径在 `go-build` cache 下，通常是本地源码临时运行残留
-2. 如果路径在 `SyncFlow.app/Contents/Resources/` 或安装目录 `resources\\` 下，通常是 desktop 包内 sidecar
+2. 如果路径在 `Vivi Drop.app/Contents/Resources/` 或安装目录 `resources\\` 下，通常是 desktop 包内 sidecar
 
 ### 3.3 Bonjour 广播
 
@@ -186,8 +186,8 @@ Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
 
 ```powershell
 Get-Service -Name "Bonjour Service"
-netsh advfirewall firewall show rule name="SyncFlow Sidecar TCP"
-netsh advfirewall firewall show rule name="SyncFlow mDNS UDP"
+netsh advfirewall firewall show rule name="Vivi Drop Sidecar TCP"
+netsh advfirewall firewall show rule name="Vivi Drop mDNS UDP"
 ```
 
 处理原则：

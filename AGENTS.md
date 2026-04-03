@@ -1,8 +1,8 @@
-# AGENTS.md — SyncFlow V2
+# AGENTS.md — Vivi Drop V2
 
 ## 项目概述
 
-SyncFlow V2：iPhone → Desktop（macOS / Windows）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS 原生 `SyncEngine`。
+Vivi Drop V2：iPhone → Desktop（macOS / Windows）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS 原生 `SyncEngine`。
 
 ## 当前开发依据
 

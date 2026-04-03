@@ -6,7 +6,7 @@
 
 mobile 端诊断包导出为一个 zip 文件，命名类似：
 
-- `SyncFlow-Mobile-Diagnostics-20260325-214928.zip`
+- `Vivi Drop-Mobile-Diagnostics-20260325-214928.zip`
 
 导出入口：
 

@@ -1,33 +1,33 @@
-# SyncFlow 数据模型与统计口径
+# Vivi Drop 資料模型與統計口徑
 
-本文件记录 mobile / sidecar 两端的核心持久化结构、身份语义和统计口径。
+本文件記錄 mobile / sidecar 兩端的核心持久化結構、身份語意和統計口徑。
 
-## 1. 身份语义
+## 1. 身份語意
 
-### 1.1 设备身份
+### 1.1 設備身份
 
 - **iPhone 身份**：`clientId`
-- 由 mobile 生成并持久化在 Keychain
-- desktop 端识别“是不是同一台手机”依赖它，而不是设备名或 IP
+- 由 mobile 生成並持久化在 Keychain
+- desktop 端識別「是不是同一台手機」依賴它，而不是設備名或 IP
 
-### 1.2 设备显示名
+### 1.2 設備顯示名
 
-- 系统设备名在 iOS 16+ 并不可靠
-- 当前实现会为通用名生成稳定唯一名，例如 `iPhone 9C2A`
-- 用户手动修改的显示名保存在 Keychain
+- 系統設備名在 iOS 16+ 並不可靠
+- 目前實作會為通用名生成穩定唯一名，例如 `iPhone 9C2A`
+- 使用者手動修改的顯示名保存在 Keychain
 
-### 1.3 双端 `deviceId`
+### 1.3 雙端 `deviceId`
 
-共享 `HistoryLedgerCardDTO` 的 `deviceId` 在两端方向不同：
+共享 `HistoryLedgerCardDTO` 的 `deviceId` 在兩端方向不同：
 
 - desktop：`deviceId = iPhone clientId`
 - mobile：`deviceId = desktop serverId`
 
-读代码时必须注意这个方向差异。
+讀程式碼時必須注意這個方向差異。
 
-## 2. Sidecar 数据库
+## 2. Sidecar 資料庫
 
-sidecar SQLite 初始迁移定义在：
+sidecar SQLite 初始遷移定義在：
 
 - `services/sidecar-go/internal/store/migrations/001_initial.sql`
 
@@ -35,25 +35,25 @@ sidecar SQLite 初始迁移定义在：
 
 用途：
 
-1. 保存已绑定设备
+1. 保存已綁定設備
 2. 保存 `client_name / device_alias / last_ip / pairing_id / pairing_token_hash`
-3. 作为 dashboard 和 detail 的设备主索引
+3. 作為 dashboard 和 detail 的設備主索引
 
 ### 2.2 `sessions`
 
 用途：
 
-1. 当前 sidecar 视角的同步会话
-2. 记录 `state / active_file_key / active_offset / started_at / updated_at`
+1. 目前 sidecar 視角的同步會話
+2. 記錄 `state / active_file_key / active_offset / started_at / updated_at`
 
 ### 2.3 `uploads`
 
 用途：
 
-1. 每个 `file_key` 一条最终上传记录
-2. 记录最终路径、hash、完成时间、传输耗时、已提交字节数
+1. 每個 `file_key` 一條最終上傳記錄
+2. 記錄最終路徑、hash、完成時間、傳輸耗時、已提交位元組數
 
-关键字段：
+關鍵欄位：
 
 - `status`
 - `part_path`
@@ -67,10 +67,10 @@ sidecar SQLite 初始迁移定义在：
 
 用途：
 
-1. 按“设备 + 日期”聚合完成记录
-2. 为 desktop dashboard/history 提供快速统计
+1. 按「設備 + 日期」聚合完成記錄
+2. 為 desktop dashboard/history 提供快速統計
 
-关键字段：
+關鍵欄位：
 
 - `stat_date`
 - `client_id`
@@ -84,10 +84,10 @@ sidecar SQLite 初始迁移定义在：
 
 用途：
 
-1. sidecar 基础设置
-2. 共享目录检测与 SMB URL 状态
+1. sidecar 基礎設定
+2. 共享目錄檢測與 SMB URL 狀態
 
-## 3. Mobile 数据库
+## 3. Mobile 資料庫
 
 mobile SQLite 由 `UploadStore.swift` 管理。
 
@@ -95,17 +95,17 @@ mobile SQLite 由 `UploadStore.swift` 管理。
 
 用途：
 
-1. 当前绑定的 desktop 信息
+1. 目前綁定的 desktop 資訊
 2. 包括 `device_id / host / port / pairing_id / share_name / last_bound_at`
 
 ### 3.2 `upload_items`
 
 用途：
 
-1. 本地上传队列和文件级状态机
-2. 当前同步主循环的真实数据来源
+1. 本地上傳佇列和檔案級狀態機
+2. 目前同步主循環的真實數據來源
 
-关键字段：
+關鍵欄位：
 
 - `asset_local_id`
 - `modified_at`
@@ -119,27 +119,27 @@ mobile SQLite 由 `UploadStore.swift` 管理。
 - `last_error_code`
 - `updated_at`
 
-重要约束：
+重要約束：
 
-- pending 队列来自 `status in ('queued','discovered','preparing','ready','cloud_downloading','uploading')`
-- 真实上传集合必须从这里取
-- 不能只拿“本轮新扫描的素材”做上传集合
+- pending 佇列來自 `status in ('queued','discovered','preparing','ready','cloud_downloading','uploading')`
+- 真實上傳集合必須從這裡取
+- 不能只拿「本輪新掃描的素材」做上傳集合
 
 ### 3.3 `sync_sessions`
 
 用途：
 
-1. mobile 视角的同步会话快照
+1. mobile 視角的同步會話快照
 2. 保存 `queue_total_count / queue_total_bytes / completed_count / completed_bytes / active_file_key`
 
 ### 3.4 `daily_ledgers`
 
 用途：
 
-1. mobile 历史页和首页统计
-2. 保存“哪台 desktop、哪一天、传了多少”
+1. mobile 歷史頁和首頁統計
+2. 保存「哪台 desktop、哪一天、傳了多少」
 
-关键字段：
+關鍵欄位：
 
 - `ledger_date`
 - `device_id`
@@ -149,62 +149,62 @@ mobile SQLite 由 `UploadStore.swift` 管理。
 - `total_bytes`
 - `active_transmission_ms`
 
-## 4. 统计口径
+## 4. 統計口徑
 
-## 4.1 “属于哪一天”
+## 4.1 「屬於哪一天」
 
-当前统一口径：
+目前統一口徑：
 
-- 以 **sidecar / desktop 完成日** 为准
+- 以 **sidecar / desktop 完成日** 為準
 
 原因：
 
-1. 真正落盘发生在 desktop sidecar 接收目录
-2. desktop 统计本来就依赖 sidecar
-3. mobile 过去用 UTC 自己分桶，曾导致与 desktop 分桶错位
+1. 真正落盤發生在 desktop sidecar 接收目錄
+2. desktop 統計本來就依賴 sidecar
+3. mobile 過去用 UTC 自己分桶，曾導致與 desktop 分桶錯位
 
-当前实现：
+目前實作：
 
 1. sidecar 在 `FILE_END_RES` 返回 `ledgerDate`
-2. mobile 优先使用这个 `ledgerDate`
-3. 只有异常 fallback 才用本地日期
+2. mobile 優先使用這個 `ledgerDate`
+3. 只有異常 fallback 才用本地日期
 
-## 4.2 “完成时间”
+## 4.2 「完成時間」
 
-desktop detail 的完成时间来自：
+desktop detail 的完成時間來自：
 
-- 优先 `uploads.completed_at`
-- fallback 时用 `updated_at` 或文件系统 `modTime`
+- 優先 `uploads.completed_at`
+- fallback 時用 `updated_at` 或檔案系統 `modTime`
 
 注意：
 
-- UI 当前默认只显示到分钟 `HH:mm`
-- 因此一批在同一分钟内完成的文件，看起来可能都是同一个时间
+- UI 目前默認只顯示到分鐘 `HH:mm`
+- 因此一批在同一分鐘內完成的檔案，看起來可能都是同一個時間
 
-## 4.3 队列数量
+## 4.3 佇列數量
 
-- mobile 首页队列数字来自本地 `upload_items` pending 集合
-- sidecar 的 `queueCount` 来自当前同步会话 `SYNC_BEGIN_REQ`
+- mobile 首頁佇列數字來自本地 `upload_items` pending 集合
+- sidecar 的 `queueCount` 來自目前同步會話 `SYNC_BEGIN_REQ`
 
-这两个值理论上应一致。
+這兩個值理論上應一致。
 
-如果出现：
+如果出現：
 
-- UI 队列很多
+- UI 佇列很多
 - sidecar `queueCount=1` 或 `0`
 
-通常说明 app 主循环的数据源错了，而不是 sidecar 丢数据。
+通常說明 app 主循環的數據來源錯了，而不是 sidecar 丟數據。
 
-## 5. 文件系统布局
+## 5. 檔案系統佈局
 
-默认接收根目录：
+默認接收根目錄：
 
-- macOS：`~/Library/Application Support/小豹闪传/received`
-- Windows：`%AppData%\\小豹闪传\\received`
+- macOS：`~/Library/Application Support/Vivi Drop/received`
+- Windows：`%AppData%\\Vivi Drop\\received`
 
-以上默认值来自 sidecar 的 `os.UserConfigDir()/小豹闪传/received`。
+以上默認值來自 sidecar 的 `os.UserConfigDir()/Vivi Drop/received`。
 
-实际布局：
+實際佈局：
 
 ```text
 received/
@@ -213,38 +213,38 @@ received/
       <original file>
 ```
 
-说明：
+說明：
 
-1. `storagePath` 指接收根目录
-2. `devicePath` 指设备自己的目录
-3. desktop detail“打开文件夹”应优先打开 `<devicePath>/<selectedDate>`
+1. `storagePath` 指接收根目錄
+2. `devicePath` 指設備自己的目錄
+3. desktop detail「打開資料夾」應優先打開 `<devicePath>/<selectedDate>`
 
-## 6. 设备重命名与目录名
+## 6. 設備重命名與目錄名
 
-当前约束：
+目前約束：
 
-1. desktop 识别设备靠 `clientId`
-2. 设备名变化不应把设备识别成新设备
-3. 磁盘目录迁移不是 UI rename 的唯一触发条件；需要看 sidecar 实际落盘和目录重命名逻辑
+1. desktop 識別設備靠 `clientId`
+2. 設備名變化不應把設備識別成新設備
+3. 磁碟目錄遷移不是 UI rename 的唯一觸發條件；需要看 sidecar 實際落盤和目錄重命名邏輯
 
-读代码时不要把：
+讀程式碼時不要把：
 
-- 设备名
+- 設備名
 - IP
-- 当前目录名
+- 目前目錄名
 
-误认为是设备主键。
+誤認為是設備主鍵。
 
 ## 7. iCloud 素材
 
-iCloud 素材有特殊处理，但不改变数据模型主键：
+iCloud 素材有特殊處理，但不改變資料模型主鍵：
 
-1. 扫描时照常入队
-2. 导出时允许系统从 iCloud 下载到本地临时文件
-3. 队列项可带 `isCloudAsset` 标识
-4. 导出阶段会进入 `cloud_downloading` 状态
+1. 掃描時照常入隊
+2. 匯出時允許系統從 iCloud 下載到本地臨時檔案
+3. 佇列項可帶 `isCloudAsset` 標識
+4. 匯出階段會進入 `cloud_downloading` 狀態
 
-这意味着：
+這意味著：
 
-- iCloud 素材会影响“准备时间”
-- 但不应改变 `queueCount` 的统计语义
+- iCloud 素材會影響「準備時間」
+- 但不應改變 `queueCount` 的統計語意

@@ -1,6 +1,6 @@
 # 环境与密钥说明
 
-本文件记录 SyncFlow 当前本地开发、签名和发布所需的环境、证书、脚本输入和调试开关。
+本文件记录 Vivi Drop 当前本地开发、签名和发布所需的环境、证书、脚本输入和调试开关。
 
 ## 1. 本地开发前置依赖
 
@@ -29,7 +29,7 @@ pnpm build
 
 1. 本机 Xcode 已登录有效 Apple 账号
 2. App Store Connect 已存在 `com.syncflow.mobile`
-3. `SyncFlowMobile.xcworkspace` 能正常 archive 和 export
+3. `Vivi DropMobile.xcworkspace` 能正常 archive 和 export
 
 ### 2.2 macOS 签名与公证
 
