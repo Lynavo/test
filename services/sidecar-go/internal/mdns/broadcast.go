@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grandcat/zeroconf"
 )
@@ -23,8 +24,9 @@ const (
 )
 
 var (
-	lookPath       = exec.LookPath
-	executablePath = os.Executable
+	lookPath               = exec.LookPath
+	executablePath         = os.Executable
+	bonjourServiceAvailable = defaultBonjourServiceAvailable
 )
 
 // BroadcastConfig holds the parameters for Bonjour/mDNS service registration.
@@ -41,8 +43,9 @@ type BroadcastConfig struct {
 
 // Broadcaster wraps the active Bonjour publisher for the current platform.
 type Broadcaster struct {
-	cmd    *exec.Cmd
-	server *zeroconf.Server
+	cmd         *exec.Cmd
+	server      *zeroconf.Server
+	dnssdExited chan struct{} // closed when dns-sd process exits; nil for zeroconf
 }
 
 // BuildTXTRecords constructs the TXT record key-value pairs from config.
@@ -79,14 +82,20 @@ func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 		cfg.DeviceIP = getLocalIPv4()
 	}
 	slog.Info("bonjour broadcaster ip selected", "ip", cfg.DeviceIP, "platform", runtime.GOOS)
-	checkWindowsBonjourService()
+	bonjourServiceOK := bonjourServiceAvailable()
 	txt := BuildTXTRecords(cfg)
 
 	backend, dnsSDPath := selectBroadcasterBackend(runtime.GOOS)
 	if backend == backendDNSSD {
-		return newDNSSDBroadcaster(cfg, txt, dnsSDPath)
-	}
-	if supportsNativeDNSSD(runtime.GOOS) {
+		if bonjourServiceOK {
+			return newDNSSDBroadcaster(cfg, txt, dnsSDPath)
+		}
+		slog.Warn(
+			"dns-sd binary found but Bonjour Service is not running; falling back to zeroconf",
+			"path", dnsSDPath,
+			"fix", "start Bonjour Service or reinstall Bonjour for Windows",
+		)
+	} else if supportsNativeDNSSD(runtime.GOOS) {
 		slog.Warn(
 			"dns-sd unavailable, falling back to zeroconf",
 			"platform", runtime.GOOS,
@@ -101,7 +110,6 @@ func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*
 		slog.Warn("failed to clean stale bonjour broadcasts", "err", err)
 	}
 
-	// Build dns-sd command: dns-sd -R <name> <type> <domain> <port> [TXT key=value ...]
 	args := []string{"-R", cfg.DeviceName, serviceType, serviceDomain, fmt.Sprintf("%d", cfg.TCPPort)}
 	args = append(args, txt...)
 
@@ -113,6 +121,27 @@ func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*
 		return nil, fmt.Errorf("dns-sd start: %w", err)
 	}
 
+	// dns-sd -R is a long-lived process.  An exit within the grace period
+	// means the Bonjour Service is unavailable — fall back to zeroconf.
+	exited := make(chan struct{})
+	var exitErr error
+	go func() {
+		exitErr = cmd.Wait()
+		close(exited)
+	}()
+
+	select {
+	case <-exited:
+		slog.Warn("dns-sd exited immediately, falling back to zeroconf",
+			"err", exitErr,
+			"path", dnsSDPath,
+			"hint", "ensure Bonjour Service is running",
+		)
+		return newCrossPlatformBroadcaster(cfg, txt)
+	case <-time.After(1 * time.Second):
+		// Still running — registration is active
+	}
+
 	slog.Info("bonjour broadcasting (dns-sd)",
 		"service", serviceType,
 		"port", cfg.TCPPort,
@@ -121,7 +150,15 @@ func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*
 		"txt", strings.Join(txt, ", "),
 		"pid", cmd.Process.Pid,
 	)
-	return &Broadcaster{cmd: cmd}, nil
+
+	b := &Broadcaster{cmd: cmd, dnssdExited: exited}
+	go func() {
+		<-exited
+		if exitErr != nil {
+			slog.Warn("dns-sd process exited unexpectedly", "err", exitErr, "pid", cmd.Process.Pid)
+		}
+	}()
+	return b, nil
 }
 
 func selectBroadcasterBackend(goos string) (backend string, dnsSDPath string) {
@@ -216,41 +253,19 @@ func newCrossPlatformBroadcaster(cfg BroadcastConfig, txt []string) (*Broadcaste
 		return nil, fmt.Errorf("zeroconf register: %w", err)
 	}
 
-	logAttrs := []any{
+	slog.Info("bonjour broadcasting (zeroconf)",
 		"service", serviceType,
 		"port", cfg.TCPPort,
 		"name", cfg.DeviceName,
 		"backend", backendZeroconf,
 		"ip", cfg.DeviceIP,
+		"host", serviceHostName(cfg),
 		"txt", strings.Join(txt, ", "),
-	}
-	if runtime.GOOS == "windows" {
-		logAttrs = append(logAttrs, "mode", "local")
-	} else {
-		logAttrs = append(logAttrs,
-			"mode", "proxy",
-			"host", serviceHostName(cfg),
-		)
-	}
-
-	slog.Info("bonjour broadcasting (zeroconf)",
-		logAttrs...,
 	)
 	return &Broadcaster{server: server}, nil
 }
 
 func registerZeroconfService(cfg BroadcastConfig, txt []string) (*zeroconf.Server, error) {
-	if runtime.GOOS == "windows" {
-		return zeroconf.Register(
-			cfg.DeviceName,
-			serviceType,
-			serviceDomain,
-			cfg.TCPPort,
-			txt,
-			nil,
-		)
-	}
-
 	return zeroconf.RegisterProxy(
 		cfg.DeviceName,
 		serviceType,
@@ -452,25 +467,28 @@ func legacyGetLocalIPv4() string {
 	return ""
 }
 
-// checkWindowsBonjourService logs a warning if the Bonjour mDNS responder
-// service is not running on Windows.  The check is best-effort; failures are
-// logged at debug level only.
-func checkWindowsBonjourService() {
+// defaultBonjourServiceAvailable checks whether the Bonjour mDNS responder
+// is available on the current platform.  On non-Windows it always returns
+// true because macOS ships with mDNSResponder as a system daemon.
+// The function is assigned to the bonjourServiceAvailable variable so tests
+// can inject a deterministic answer.
+func defaultBonjourServiceAvailable() bool {
 	if runtime.GOOS != "windows" {
-		return
+		return true
 	}
 	out, err := exec.Command("sc", "query", "Bonjour Service").Output()
 	if err != nil {
 		slog.Debug("windows bonjour service query failed", "err", err)
-		return
+		return false
 	}
-	if !strings.Contains(string(out), "RUNNING") {
+	running := strings.Contains(string(out), "RUNNING")
+	if !running {
 		slog.Warn(
-			"Bonjour Service is not running on Windows; iOS discovery will fail",
+			"Bonjour Service is not running on Windows",
 			"fix", "open Services.msc, start 'Bonjour Service', or reinstall Bonjour for Windows",
-			"alt_fix", "open an elevated cmd and run: sc start \"Bonjour Service\"",
 		)
 	}
+	return running
 }
 
 func serviceHostName(cfg BroadcastConfig) string {
@@ -513,12 +531,17 @@ func serviceIPs(cfg BroadcastConfig) []string {
 
 // Shutdown stops the active Bonjour publisher.
 func (b *Broadcaster) Shutdown() {
-	if b != nil && b.server != nil {
+	if b == nil {
+		return
+	}
+	if b.server != nil {
 		b.server.Shutdown()
 	}
-	if b != nil && b.cmd != nil && b.cmd.Process != nil {
+	if b.cmd != nil && b.cmd.Process != nil {
 		b.cmd.Process.Kill()
-		b.cmd.Wait()
+		if b.dnssdExited != nil {
+			<-b.dnssdExited // wait for the monitor goroutine to finish cmd.Wait()
+		}
 	}
 }
 

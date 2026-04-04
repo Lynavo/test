@@ -1,11 +1,16 @@
 package mdns
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/grandcat/zeroconf"
 )
 
 func testConfig() BroadcastConfig {
@@ -103,6 +108,29 @@ func TestShutdown_NilCmd(t *testing.T) {
 	b := &Broadcaster{cmd: nil, server: nil}
 	// Must not panic.
 	b.Shutdown()
+}
+
+func TestShutdown_NilBroadcaster(t *testing.T) {
+	var b *Broadcaster
+	// Must not panic.
+	b.Shutdown()
+}
+
+func TestShutdown_WithDnssdExited(t *testing.T) {
+	exited := make(chan struct{})
+	close(exited) // simulate already-exited dns-sd process
+	b := &Broadcaster{cmd: nil, server: nil, dnssdExited: exited}
+	// Must not hang or panic.
+	b.Shutdown()
+}
+
+func TestBonjourServiceAvailable_NonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test only applies to non-Windows")
+	}
+	if !defaultBonjourServiceAvailable() {
+		t.Fatal("defaultBonjourServiceAvailable() should return true on non-Windows")
+	}
 }
 
 func TestSelectBroadcasterBackend(t *testing.T) {
@@ -467,5 +495,164 @@ func TestParseSyncFlowBroadcastPID_IgnoresOtherProcesses(t *testing.T) {
 		if _, ok := parseSyncFlowBroadcastPID(input); ok {
 			t.Fatalf("expected %q to be ignored", input)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests — require multicast-capable network; Skip when unavailable
+// ---------------------------------------------------------------------------
+
+// TestNewBroadcaster_BonjourServiceDown verifies that when the Bonjour Service
+// is reported as not running, NewBroadcaster skips dns-sd entirely and produces
+// a working zeroconf broadcaster that is discoverable on the network.
+func TestNewBroadcaster_BonjourServiceDown(t *testing.T) {
+	origAvail := bonjourServiceAvailable
+	origLookPath := lookPath
+	origExecPath := executablePath
+	origEnv := os.Getenv(dnsSDPathEnv)
+	defer func() {
+		bonjourServiceAvailable = origAvail
+		lookPath = origLookPath
+		executablePath = origExecPath
+		_ = os.Setenv(dnsSDPathEnv, origEnv)
+	}()
+
+	// Simulate: dns-sd binary exists but Bonjour Service is down.
+	fakeDir := t.TempDir()
+	fakeDNSSD := filepath.Join(fakeDir, dnsSDExecutableName(runtime.GOOS))
+	if err := os.WriteFile(fakeDNSSD, []byte("fake"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_ = os.Setenv(dnsSDPathEnv, fakeDNSSD)
+	lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	executablePath = func() (string, error) { return "", os.ErrNotExist }
+	bonjourServiceAvailable = func() bool { return false } // Bonjour Service down
+
+	cfg := BroadcastConfig{
+		DeviceID:   "test-svc-down",
+		DeviceName: "BonjourDownTest",
+		DeviceType: "win",
+		DeviceIP:   "192.168.1.10",
+		TCPPort:    39393,
+		Proto:      2,
+		ShareName:  "TestDrop",
+	}
+
+	b, err := NewBroadcaster(cfg)
+	if err != nil {
+		t.Skipf("zeroconf unavailable: %v", err)
+	}
+	defer b.Shutdown()
+
+	// Must use zeroconf, not dns-sd
+	if b.server == nil {
+		t.Fatal("expected zeroconf server when Bonjour Service is down")
+	}
+	if b.cmd != nil {
+		t.Fatal("expected no dns-sd process when Bonjour Service is down")
+	}
+
+	// Service must be discoverable via mDNS browse
+	entry := browseForService(t, cfg.DeviceName, 5*time.Second)
+	if entry == nil {
+		t.Skip("service not discoverable via multicast in this environment")
+	}
+
+	// TXT records must be intact
+	txtMap := parseTXTMap(entry.Text)
+	assertTXT(t, txtMap, "id", cfg.DeviceID)
+	assertTXT(t, txtMap, "name", cfg.DeviceName)
+	assertTXT(t, txtMap, "type", "win")
+	assertTXT(t, txtMap, "ip", cfg.DeviceIP)
+	assertTXT(t, txtMap, "proto", "2")
+	assertTXT(t, txtMap, "auth", "code")
+}
+
+// TestZeroconfBroadcast_Discoverable verifies that RegisterProxy produces a
+// service discoverable via mDNS browse with correct TXT records and port.
+func TestZeroconfBroadcast_Discoverable(t *testing.T) {
+	cfg := BroadcastConfig{
+		DeviceID:     "test-discover-id",
+		DeviceName:   "DiscoverTest",
+		DeviceType:   "win",
+		DeviceIP:     "192.168.1.42",
+		TCPPort:      39393,
+		Proto:        2,
+		ShareEnabled: true,
+		ShareName:    "TestDrop",
+	}
+	txt := BuildTXTRecords(cfg)
+
+	b, err := newCrossPlatformBroadcaster(cfg, txt)
+	if err != nil {
+		t.Skipf("zeroconf registration unavailable: %v", err)
+	}
+	defer b.Shutdown()
+
+	entry := browseForService(t, cfg.DeviceName, 5*time.Second)
+	if entry == nil {
+		t.Skip("service not discoverable via multicast in this environment")
+	}
+
+	// Port
+	if entry.Port != cfg.TCPPort {
+		t.Errorf("port = %d, want %d", entry.Port, cfg.TCPPort)
+	}
+
+	// All TXT fields
+	txtMap := parseTXTMap(entry.Text)
+	wantTXT := map[string]string{
+		"id":        cfg.DeviceID,
+		"name":      cfg.DeviceName,
+		"type":      "win",
+		"ip":        cfg.DeviceIP,
+		"proto":     "2",
+		"auth":      "code",
+		"share":     "1",
+		"shareName": cfg.ShareName,
+	}
+	for key, want := range wantTXT {
+		assertTXT(t, txtMap, key, want)
+	}
+}
+
+// --- helpers ---------------------------------------------------------------
+
+func browseForService(t *testing.T, instanceName string, timeout time.Duration) *zeroconf.ServiceEntry {
+	t.Helper()
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	entries := make(chan *zeroconf.ServiceEntry, 10)
+	go func() { _ = resolver.Browse(ctx, serviceType, serviceDomain, entries) }()
+	for {
+		select {
+		case entry := <-entries:
+			if entry != nil && entry.Instance == instanceName {
+				return entry
+			}
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func parseTXTMap(records []string) map[string]string {
+	m := make(map[string]string, len(records))
+	for _, r := range records {
+		if k, v, ok := strings.Cut(r, "="); ok {
+			m[k] = v
+		}
+	}
+	return m
+}
+
+func assertTXT(t *testing.T, txtMap map[string]string, key, want string) {
+	t.Helper()
+	if got := txtMap[key]; got != want {
+		t.Errorf("TXT[%q] = %q, want %q", key, got, want)
 	}
 }
