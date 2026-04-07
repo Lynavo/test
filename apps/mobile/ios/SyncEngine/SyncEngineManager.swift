@@ -254,6 +254,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeLastSpeedCheckTime: CFAbsoluteTime = 0
     private var runtimeLastBytesTransferred: Int64 = 0
     private var runtimeUploadState = "idle"
+    private var lastBackgroundPhotoLibraryChangeAt: CFAbsoluteTime = 0
+    private let backgroundCaptureCooldown: CFTimeInterval = 90
 
     private func preferredSidecarHost(probedHost: String?, device: DiscoveredDevice?) -> String? {
         if let probedHost, !probedHost.isEmpty, !probedHost.contains(":") {
@@ -762,6 +764,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
     }
 
+    private func isAppBackgrounded() -> Bool {
+        sessionService.state == .syncingBackground
+    }
+
+    private func backgroundCaptureCooldownRemaining(now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> CFTimeInterval {
+        guard lastBackgroundPhotoLibraryChangeAt > 0 else { return 0 }
+        return max(backgroundCaptureCooldown - (now - lastBackgroundPhotoLibraryChangeAt), 0)
+    }
+
+    private func isBackgroundCaptureRecentlyActive(now: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()) -> Bool {
+        isAppBackgrounded() && backgroundCaptureCooldownRemaining(now: now) > 0
+    }
+
     private func currentAppStateLabel() async -> String {
         let applicationState = await MainActor.run { UIApplication.shared.applicationState }
         return currentAppStateLabel(for: applicationState)
@@ -900,6 +915,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let targetInFlightBytes: Int64
         let maxPipelineChunks: Int
         let ackTimeoutNs: UInt64
+        let throttleBytesPerSec: Int64
+        let prefetchNextFile: Bool
+        let profileLabel: String
     }
 
     private func resolvedUploadTuning() -> UploadTuning {
@@ -936,12 +954,81 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             60
         )
 
+        var adjustedChunkMB = chunkMB
+        var adjustedWindowMB = windowMB
+        var adjustedMaxPipelineChunks = maxPipelineChunks
+        var adjustedAckTimeoutSec = ackTimeoutSec
+        var adjustedThrottleBytesPerSec: Int64 = 0
+        var prefetchNextFile = true
+        var profileLabel = "normal"
+
+        let processInfo = ProcessInfo.processInfo
+        let thermalState = processInfo.thermalState
+        let isLowPowerModeEnabled = processInfo.isLowPowerModeEnabled
+        let isBackgroundSync = sessionService.state == .syncingBackground
+        let isActiveBackgroundCapture = isBackgroundCaptureRecentlyActive()
+
+        switch thermalState {
+        case .serious:
+            adjustedChunkMB = min(adjustedChunkMB, 2)
+            adjustedWindowMB = min(adjustedWindowMB, 4)
+            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 2)
+            adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 15)
+            adjustedThrottleBytesPerSec = 6 * 1024 * 1024
+            prefetchNextFile = false
+            profileLabel = "thermal_serious"
+        case .critical:
+            adjustedChunkMB = 1
+            adjustedWindowMB = min(adjustedWindowMB, 2)
+            adjustedMaxPipelineChunks = 1
+            adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 20)
+            adjustedThrottleBytesPerSec = 4 * 1024 * 1024
+            prefetchNextFile = false
+            profileLabel = "thermal_critical"
+        default:
+            break
+        }
+
+        if isLowPowerModeEnabled && thermalState != .serious && thermalState != .critical {
+            adjustedChunkMB = min(adjustedChunkMB, 4)
+            adjustedWindowMB = min(adjustedWindowMB, 8)
+            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 3)
+            adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 12)
+            adjustedThrottleBytesPerSec = max(adjustedThrottleBytesPerSec, 8 * 1024 * 1024)
+            prefetchNextFile = false
+            profileLabel = "low_power"
+        }
+
+        if isBackgroundSync && profileLabel == "normal" {
+            adjustedChunkMB = min(adjustedChunkMB, 4)
+            adjustedWindowMB = min(adjustedWindowMB, 8)
+            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 2)
+            prefetchNextFile = false
+            profileLabel = "background"
+        }
+
+        if isActiveBackgroundCapture {
+            adjustedChunkMB = min(adjustedChunkMB, 2)
+            adjustedWindowMB = min(adjustedWindowMB, 3)
+            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 1)
+            adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 15)
+            adjustedThrottleBytesPerSec = max(adjustedThrottleBytesPerSec, 3 * 1024 * 1024)
+            prefetchNextFile = false
+            profileLabel = "active_capture"
+        }
+
+        adjustedWindowMB = max(adjustedWindowMB, adjustedChunkMB)
+        adjustedMaxPipelineChunks = max(adjustedMaxPipelineChunks, 1)
+
         return UploadTuning(
             perfLoggingEnabled: perfLoggingEnabled,
-            chunkSizeBytes: chunkMB * 1024 * 1024,
-            targetInFlightBytes: Int64(windowMB) * 1024 * 1024,
-            maxPipelineChunks: maxPipelineChunks,
-            ackTimeoutNs: UInt64(ackTimeoutSec) * 1_000_000_000
+            chunkSizeBytes: adjustedChunkMB * 1024 * 1024,
+            targetInFlightBytes: Int64(adjustedWindowMB) * 1024 * 1024,
+            maxPipelineChunks: adjustedMaxPipelineChunks,
+            ackTimeoutNs: UInt64(adjustedAckTimeoutSec) * 1_000_000_000,
+            throttleBytesPerSec: adjustedThrottleBytesPerSec,
+            prefetchNextFile: prefetchNextFile,
+            profileLabel: profileLabel
         )
     }
 
@@ -1234,54 +1321,75 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 updateBindingConnectionState(.connected, reason: "scan_round_sidecar_known")
             }
 
-            // Scan only truly untracked assets. Pending items already live in upload_items.
-            var trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
-            if trackedKeys.isEmpty {
-                let restoredCount = await restoreCompletedUploadHistoryIfNeeded(
-                    clientId: clientId,
-                    fallbackHost: binding.host
-                )
-                if restoredCount > 0 {
-                    trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
-                    NSLog(
-                        "[SyncPipeline] restored %d historical completed uploads before scan",
-                        restoredCount
-                    )
-                    syncDiagnosticsLog("SyncPipeline", "restored \(restoredCount) historical completed uploads before scan")
-                }
-            }
-            let newAssets = photoScanner.scanForUntrackedAssets(clientId: clientId, trackedFileKeys: trackedKeys)
+            var pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
+            var newAssets: [ScannedAsset] = []
+            var trackedAssetCount = uploadStore?.getTrackedFileKeys().count ?? 0
 
-            if !newAssets.isEmpty {
-                let queuePersistStart = CFAbsoluteTimeGetCurrent()
-                let queuedItems = newAssets.map { asset in
-                    UploadItemRecord(
-                        id: nil,
-                        assetLocalId: asset.asset.localIdentifier,
-                        modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
-                        mediaType: asset.mediaType,
-                        originalFilename: asset.originalFilename,
-                        fileKey: asset.fileKey,
-                        fileSize: asset.estimatedSize,
-                        status: "queued",
-                        tempFilePath: nil,
-                        ackedOffset: 0,
-                        lastErrorCode: nil,
-                        updatedAt: ISO8601DateFormatter().string(from: Date())
+            if pendingAssets.isEmpty {
+                // Scan only when the persisted pending queue is empty. Large historical queues
+                // are already stored in upload_items, so rescanning the full library every
+                // 200-file batch just burns CPU/PhotoKit and makes the device hotter.
+                var trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+                trackedAssetCount = trackedKeys.count
+                if trackedKeys.isEmpty {
+                    let restoredCount = await restoreCompletedUploadHistoryIfNeeded(
+                        clientId: clientId,
+                        fallbackHost: binding.host
                     )
+                    if restoredCount > 0 {
+                        trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+                        trackedAssetCount = trackedKeys.count
+                        NSLog(
+                            "[SyncPipeline] restored %d historical completed uploads before scan",
+                            restoredCount
+                        )
+                        syncDiagnosticsLog("SyncPipeline", "restored \(restoredCount) historical completed uploads before scan")
+                    }
                 }
-                try? uploadStore?.upsertUploadItems(queuedItems)
+                newAssets = photoScanner.scanForUntrackedAssets(clientId: clientId, trackedFileKeys: trackedKeys)
+
+                if !newAssets.isEmpty {
+                    let queuePersistStart = CFAbsoluteTimeGetCurrent()
+                    let queuedItems = newAssets.map { asset in
+                        UploadItemRecord(
+                            id: nil,
+                            assetLocalId: asset.asset.localIdentifier,
+                            modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                            mediaType: asset.mediaType,
+                            originalFilename: asset.originalFilename,
+                            fileKey: asset.fileKey,
+                            fileSize: asset.estimatedSize,
+                            status: "queued",
+                            tempFilePath: nil,
+                            ackedOffset: 0,
+                            lastErrorCode: nil,
+                            updatedAt: ISO8601DateFormatter().string(from: Date())
+                        )
+                    }
+                    try? uploadStore?.upsertUploadItems(queuedItems)
+                    NSLog(
+                        "[SyncPipeline] persisted %d queued assets in %d ms",
+                        queuedItems.count,
+                        Int((CFAbsoluteTimeGetCurrent() - queuePersistStart) * 1000)
+                    )
+                    syncDiagnosticsLog("SyncPipeline", "persisted \(queuedItems.count) queued assets")
+                    emitQueueToJS()
+                }
+
+                pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
+            } else {
                 NSLog(
-                    "[SyncPipeline] persisted %d queued assets in %d ms",
-                    queuedItems.count,
-                    Int((CFAbsoluteTimeGetCurrent() - queuePersistStart) * 1000)
+                    "[SyncPipeline] round %d reusing persisted pending queue (%d assets in batch), skipping full library scan",
+                    roundNumber,
+                    pendingAssets.count
                 )
-                syncDiagnosticsLog("SyncPipeline", "persisted \(queuedItems.count) queued assets")
-                emitQueueToJS()
+                syncDiagnosticsLog(
+                    "SyncPipeline",
+                    "round \(roundNumber): reusing persisted pending queue (\(pendingAssets.count) assets in batch), skipping full library scan"
+                )
             }
 
             let stats = uploadStore?.getQueueStats() ?? (totalCount: 0, totalBytes: 0, completedCount: 0, completedBytes: 0)
-            let pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
             NSLog(
                 "[SyncPipeline] round %d: %d pending assets (batch), global: %d/%d items, %lld/%lld bytes",
                 roundNumber,
@@ -1291,7 +1399,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 stats.completedBytes,
                 stats.totalBytes
             )
-            syncDiagnosticsLog("SyncPipeline", "round \(roundNumber): \(pendingAssets.count) pending assets (\(newAssets.count) new, tracked: \(trackedKeys.count))")
+            syncDiagnosticsLog("SyncPipeline", "round \(roundNumber): \(pendingAssets.count) pending assets (\(newAssets.count) new, tracked: \(trackedAssetCount))")
 
             if pendingAssets.isEmpty {
                 // Nothing to upload — wait for photo library changes
@@ -1504,12 +1612,29 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncPipeline] uploading %d files", assets.count)
         syncDiagnosticsLog("SyncPipeline", "uploading \(assets.count) files")
 
-        // Upload files with prefetch: export next file while current uploads.
-        // Track the prefetch Task so we can cancel it on early exit and avoid leaking temp files.
+        let tuning = resolvedUploadTuning()
+        NSLog(
+            "[SyncPipeline] upload tuning profile=%@ chunkMiB=%.1f windowMiB=%.1f pipeline=%d prefetch=%@ throttleMiBps=%.1f",
+            tuning.profileLabel,
+            Double(tuning.chunkSizeBytes) / (1024 * 1024),
+            Double(tuning.targetInFlightBytes) / (1024 * 1024),
+            tuning.maxPipelineChunks,
+            tuning.prefetchNextFile ? "on" : "off",
+            Double(tuning.throttleBytesPerSec) / (1024 * 1024)
+        )
+        syncDiagnosticsLog(
+            "SyncPipeline",
+            "upload tuning profile=\(tuning.profileLabel) chunkMiB=\(String(format: "%.1f", Double(tuning.chunkSizeBytes) / (1024 * 1024))) windowMiB=\(String(format: "%.1f", Double(tuning.targetInFlightBytes) / (1024 * 1024))) pipeline=\(tuning.maxPipelineChunks) prefetch=\(tuning.prefetchNextFile ? "on" : "off") throttleMiBps=\(String(format: "%.1f", Double(tuning.throttleBytesPerSec) / (1024 * 1024)))"
+        )
+
+        // Exporting the next asset while the current one is uploading improves peak
+        // throughput, but it also doubles sustained PhotoKit/disk/network pressure for
+        // large videos. Disable prefetch when the device is already backgrounded,
+        // constrained by Low Power Mode, or thermally limited.
         var nextExport: ExportedFile? = nil
         var prefetchTask: Task<Void, Never>? = nil
 
-        if !assets.isEmpty {
+        if tuning.prefetchNextFile, !assets.isEmpty {
             nextExport = try? await exportAssetForUpload(assets[0])
         }
 
@@ -1531,7 +1656,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             let nextIndex = index + 1
-            if nextIndex < assets.count {
+            if tuning.prefetchNextFile, nextIndex < assets.count {
                 let nextAsset = assets[nextIndex]
                 prefetchTask = Task {
                     nextExport = try? await self.exportAssetForUpload(nextAsset)
@@ -1799,10 +1924,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - Stream FILE_DATA Chunks (spec Section 7.4, 7.7: 8 MiB chunks)
 
-    // MARK: - Upload Throttle (set to 0 for full speed)
-    /// Bytes per second limit. 0 = unlimited.
-    private let uploadThrottleBytesPerSec: Int64 = 0
-
     private func streamFileData(
         fileURL: URL,
         fileKey: String,
@@ -1818,6 +1939,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let tuning = resolvedUploadTuning()
         let ackTimeoutNs = tuning.ackTimeoutNs
+        let uploadThrottleBytesPerSec = tuning.throttleBytesPerSec
         let ackTimeoutSafetyMarginNs: UInt64 = 2_000_000_000
         let ackTimeoutFloorBytesPerSec = Double(3 * 1024 * 1024)
 
@@ -2178,6 +2300,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func photoLibraryDidChange() {
         NSLog("[SyncEngine] photo library changed — flagging rescan")
         photoLibraryChanged = true
+        if isAppBackgrounded() {
+            lastBackgroundPhotoLibraryChangeAt = CFAbsoluteTimeGetCurrent()
+            syncDiagnosticsLog(
+                "SyncEngine",
+                "photo library changed while backgrounded — switching upload tuning to active capture mode"
+            )
+        }
         scheduleIncrementalQueueRescan(reason: "photo_library_changed")
         // Wake up the watch loop if it's sleeping
         resumeWatchLoopIfNeeded()
