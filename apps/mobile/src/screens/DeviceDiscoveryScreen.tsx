@@ -18,6 +18,7 @@ import {
   Modal,
   Pressable,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import {
   SafeAreaView,
@@ -135,6 +136,9 @@ type NavigationProp = StackNavigationProp<
   RootStackParamList,
   'DeviceDiscovery'
 >;
+
+const PRIVACY_POLICY_URL = 'https://www.vividrop.cn/privacy/';
+const TERMS_OF_SERVICE_URL = 'https://www.vividrop.cn/terms';
 
 export function DeviceDiscoveryScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -362,6 +366,15 @@ export function DeviceDiscoveryScreen() {
     );
   }, []);
 
+  const openLegalLink = useCallback(async (url: string, label: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      console.warn(`[DiscoveryScreen] failed to open ${label}:`, error);
+      Alert.alert('打开失败', `暂时无法打开${label}，请稍后重试。`);
+    }
+  }, []);
+
   const manualDockBottom =
     keyboardHeight > 0 ? Math.max(12, keyboardHeight - insets.bottom) : 0;
   const listBottomInset =
@@ -463,6 +476,27 @@ export function DeviceDiscoveryScreen() {
                   <Text style={styles.rescanText}>{'重新扫描'}</Text>
                 </View>
               </TouchableOpacity>
+              <View style={styles.legalLinksRow}>
+                <TouchableOpacity
+                  style={styles.legalLinkButton}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    void openLegalLink(PRIVACY_POLICY_URL, '隐私政策')
+                  }
+                >
+                  <Text style={styles.legalLinkText}>{'隐私政策'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.legalLinkDivider}>{'/'}</Text>
+                <TouchableOpacity
+                  style={styles.legalLinkButton}
+                  activeOpacity={0.7}
+                  onPress={() =>
+                    void openLegalLink(TERMS_OF_SERVICE_URL, '用户协议')
+                  }
+                >
+                  <Text style={styles.legalLinkText}>{'用户协议'}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -780,6 +814,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#5a9abf',
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  legalLinkButton: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6a96b8',
+  },
+  legalLinkDivider: {
+    fontSize: 12,
+    color: '#8aabbd',
   },
 
   // Popover Styles
