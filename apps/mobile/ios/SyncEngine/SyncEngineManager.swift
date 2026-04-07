@@ -251,6 +251,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeCurrentFileConfirmedBytes: Int64 = 0
     private var runtimeCurrentFileTotalBytes: Int64 = 0
     private var runtimeCurrentSpeedMbps: Double = 0
+    private var runtimeLastErrorCode: String?
+    private var runtimeLastErrorMessage: String?
     private var runtimeLastSpeedCheckTime: CFAbsoluteTime = 0
     private var runtimeLastBytesTransferred: Int64 = 0
     private var runtimeUploadState = "idle"
@@ -279,6 +281,23 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             return "win"
         }
         return "mac"
+    }
+
+    private func currentUploadTargetDeviceType() -> String? {
+        guard let binding = uploadStore?.getBinding() else {
+            return nil
+        }
+
+        if let discovered = discoveredDevices[binding.deviceId] {
+            return discovered.type
+        }
+
+        switch binding.deviceType {
+        case "mac", "win":
+            return binding.deviceType
+        default:
+            return nil
+        }
     }
 
     private func recordRecentRetry(error: Error, attempt: Int, delaySeconds: Double) {
@@ -321,6 +340,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeCurrentFileTotalBytes = 0
     }
 
+    private func clearRuntimeReconnectError() {
+        runtimeLastErrorCode = nil
+        runtimeLastErrorMessage = nil
+    }
+
+    private func setRuntimeReconnectError(code: String?, message: String?) {
+        runtimeLastErrorCode = code
+        runtimeLastErrorMessage = message
+    }
+
     private func beginRuntimeSyncOverview(
         totalCount: Int,
         totalBytes: Int64,
@@ -335,6 +364,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeLastBytesTransferred = completedBytes
         runtimeCurrentSpeedMbps = 0
         clearRuntimeCurrentFile()
+        clearRuntimeReconnectError()
     }
 
     private func updateRuntimeSpeed() {
@@ -380,6 +410,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "currentFileConfirmedBytes": runtimeCurrentFileConfirmedBytes,
             "currentFileTotalBytes": runtimeCurrentFileTotalBytes,
             "currentSpeedMbps": round(runtimeCurrentSpeedMbps * 10) / 10,
+            "lastErrorCode": runtimeLastErrorCode ?? NSNull(),
+            "lastErrorMessage": runtimeLastErrorMessage ?? NSNull(),
             "progressPercent": derivedProgressPercent,
             "totalBytes": runtimeQueueTotalBytes,
             "totalCount": runtimeQueueTotalCount,
@@ -967,6 +999,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let isLowPowerModeEnabled = processInfo.isLowPowerModeEnabled
         let isBackgroundSync = sessionService.state == .syncingBackground
         let isActiveBackgroundCapture = isBackgroundCaptureRecentlyActive()
+        let targetDeviceType = currentUploadTargetDeviceType()
 
         switch thermalState {
         case .serious:
@@ -1015,6 +1048,20 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             adjustedThrottleBytesPerSec = max(adjustedThrottleBytesPerSec, 3 * 1024 * 1024)
             prefetchNextFile = false
             profileLabel = "active_capture"
+        }
+
+        if targetDeviceType == "win" {
+            adjustedChunkMB = min(adjustedChunkMB, 2)
+            adjustedWindowMB = min(adjustedWindowMB, 4)
+            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 2)
+            adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 20)
+            adjustedThrottleBytesPerSec = max(adjustedThrottleBytesPerSec, 6 * 1024 * 1024)
+            prefetchNextFile = false
+            if profileLabel == "normal" {
+                profileLabel = "windows_safe"
+            } else {
+                profileLabel += "_windows_safe"
+            }
         }
 
         adjustedWindowMB = max(adjustedWindowMB, adjustedChunkMB)
@@ -1072,6 +1119,57 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         let nsError = error as NSError
         return nsError.domain == NSURLErrorDomain
+    }
+
+    private func classifyRetryableSyncError(
+        _ error: Error,
+        targetDeviceType: String?
+    ) -> (code: String, message: String) {
+        let errorDescription = "\(error)"
+        let normalizedDescription = errorDescription.lowercased()
+
+        if targetDeviceType == "win" {
+            let windowsHostAbortSignatures = [
+                "connection reset by peer",
+                "software caused connection abort",
+                "connection aborted",
+                "broken pipe",
+                "posix(53",
+                "posix(54",
+                "econnreset",
+            ]
+            let looksLikeWindowsHostAbort = windowsHostAbortSignatures.contains(where: {
+                normalizedDescription.contains($0)
+            })
+            let looksLikeTimeout = normalizedDescription.contains("timed out")
+                || normalizedDescription.contains("timeout")
+
+            if looksLikeWindowsHostAbort && !looksLikeTimeout {
+                return (
+                    code: "WINDOWS_HOST_ABORTED_CONNECTION",
+                    message: "Windows host aborted the transfer connection: \(errorDescription)"
+                )
+            }
+        }
+
+        if normalizedDescription.contains("file_ack timeout") {
+            return (
+                code: "FILE_ACK_TIMEOUT",
+                message: "Timed out while waiting for the desktop to acknowledge upload data"
+            )
+        }
+
+        if normalizedDescription.contains("connection timed out") {
+            return (
+                code: "CONNECTION_TIMEOUT",
+                message: "Connection timed out while trying to continue the transfer"
+            )
+        }
+
+        return (
+            code: "RETRYABLE_NETWORK_ERROR",
+            message: errorDescription
+        )
     }
 
     private func retryDelayNs(forAttempt attempt: Int) -> UInt64 {
@@ -1467,15 +1565,26 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     retryAttempt += 1
                     let delay = min(retryDelayNs(forAttempt: retryAttempt), maxRetryDelay)
                     let delaySeconds = Double(delay) / 1_000_000_000
+                    let retryableError = classifyRetryableSyncError(
+                        error,
+                        targetDeviceType: currentUploadTargetDeviceType()
+                    )
 
                     clearResolvedSidecarHost()
                     updateBindingConnectionState(.offline, reason: "retryable_upload_failure")
                     sessionService.transitionTo(.backoffWaiting)
+                    setRuntimeReconnectError(
+                        code: retryableError.code,
+                        message: retryableError.message
+                    )
                     NSLog("[SyncPipeline] upload failed with retryable error: %@ — reconnecting in %.1fs (attempt %d)",
                           "\(error)", delaySeconds, retryAttempt)
                     syncDiagnosticsLog("SyncPipeline", "upload failed with retryable error: \(error) — reconnecting in \(String(format: "%.1f", delaySeconds))s (attempt \(retryAttempt))")
                     recordRecentRetry(error: error, attempt: retryAttempt, delaySeconds: delaySeconds)
+                    recordRecentError(code: retryableError.code, message: retryableError.message)
                     NativeSyncEngineModule.shared?.emitSyncStateChanged(([
+                        "lastErrorCode": retryableError.code,
+                        "lastErrorMessage": retryableError.message,
                         "retryAttempt": retryAttempt,
                         "retryDelaySec": round(delaySeconds * 10) / 10,
                     ] as [String: Any]).merging(
@@ -1614,8 +1723,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let tuning = resolvedUploadTuning()
         NSLog(
-            "[SyncPipeline] upload tuning profile=%@ chunkMiB=%.1f windowMiB=%.1f pipeline=%d prefetch=%@ throttleMiBps=%.1f",
+            "[SyncPipeline] upload tuning profile=%@ target=%@ chunkMiB=%.1f windowMiB=%.1f pipeline=%d prefetch=%@ throttleMiBps=%.1f",
             tuning.profileLabel,
+            currentUploadTargetDeviceType() ?? "unknown",
             Double(tuning.chunkSizeBytes) / (1024 * 1024),
             Double(tuning.targetInFlightBytes) / (1024 * 1024),
             tuning.maxPipelineChunks,
@@ -1624,7 +1734,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         )
         syncDiagnosticsLog(
             "SyncPipeline",
-            "upload tuning profile=\(tuning.profileLabel) chunkMiB=\(String(format: "%.1f", Double(tuning.chunkSizeBytes) / (1024 * 1024))) windowMiB=\(String(format: "%.1f", Double(tuning.targetInFlightBytes) / (1024 * 1024))) pipeline=\(tuning.maxPipelineChunks) prefetch=\(tuning.prefetchNextFile ? "on" : "off") throttleMiBps=\(String(format: "%.1f", Double(tuning.throttleBytesPerSec) / (1024 * 1024)))"
+            "upload tuning profile=\(tuning.profileLabel) target=\(currentUploadTargetDeviceType() ?? "unknown") chunkMiB=\(String(format: "%.1f", Double(tuning.chunkSizeBytes) / (1024 * 1024))) windowMiB=\(String(format: "%.1f", Double(tuning.targetInFlightBytes) / (1024 * 1024))) pipeline=\(tuning.maxPipelineChunks) prefetch=\(tuning.prefetchNextFile ? "on" : "off") throttleMiBps=\(String(format: "%.1f", Double(tuning.throttleBytesPerSec) / (1024 * 1024)))"
         )
 
         // Exporting the next asset while the current one is uploading improves peak
@@ -1755,6 +1865,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeCurrentFileConfirmedBytes = 0
         runtimeCurrentFileTotalBytes = exported.fileSize
         runtimeCurrentSpeedMbps = 0
+        clearRuntimeReconnectError()
         emitQueueToJS()
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             runtimeSyncOverviewPayload(uploadState: "uploading", progressPercent: 0)

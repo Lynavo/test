@@ -21,6 +21,8 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { formatLocalDateKey } from '../utils/localDateKey';
 import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
+import { shouldTreatReconnectAsWaitingForNetworkRecovery } from '../utils/reconnectBannerState';
+import { getReconnectInterruptionReason } from '../utils/reconnectInterruptionReason';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,6 +62,8 @@ interface SyncOverview {
   currentFilename?: string;
   currentFileConfirmedBytes: number;
   currentFileTotalBytes: number;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
   retryAttempt?: number;
   retryDelaySec?: number;
 }
@@ -124,6 +128,8 @@ const EMPTY_OVERVIEW: SyncOverview = {
   totalBytes: 0,
   currentFileConfirmedBytes: 0,
   currentFileTotalBytes: 0,
+  lastErrorCode: undefined,
+  lastErrorMessage: undefined,
   retryAttempt: 0,
   retryDelaySec: 0,
 };
@@ -180,6 +186,14 @@ function buildOverviewFromPayload(
     payload,
     'currentFileTotalBytes',
   );
+  const hasLastErrorCode = Object.prototype.hasOwnProperty.call(
+    payload,
+    'lastErrorCode',
+  );
+  const hasLastErrorMessage = Object.prototype.hasOwnProperty.call(
+    payload,
+    'lastErrorMessage',
+  );
 
   const nextCurrentFile = hasCurrentFile
     ? typeof payload.currentFile === 'string'
@@ -200,6 +214,16 @@ function buildOverviewFromPayload(
   const nextCurrentFileTotalBytes = hasCurrentFileTotalBytes
     ? ((payload.currentFileTotalBytes as number | undefined) ?? 0)
     : previous.currentFileTotalBytes;
+  const nextLastErrorCode = hasLastErrorCode
+    ? typeof payload.lastErrorCode === 'string'
+      ? payload.lastErrorCode
+      : undefined
+    : previous.lastErrorCode;
+  const nextLastErrorMessage = hasLastErrorMessage
+    ? typeof payload.lastErrorMessage === 'string'
+      ? payload.lastErrorMessage
+      : undefined
+    : previous.lastErrorMessage;
   const derivedProgressPercent =
     nextCurrentFileTotalBytes > 0
       ? Math.round(
@@ -244,6 +268,14 @@ function buildOverviewFromPayload(
       nextUploadState === 'completed' || nextUploadState === 'idle'
         ? 0
         : nextCurrentFileTotalBytes,
+    lastErrorCode:
+      nextUploadState === 'completed' || nextUploadState === 'idle'
+        ? undefined
+        : nextLastErrorCode,
+    lastErrorMessage:
+      nextUploadState === 'completed' || nextUploadState === 'idle'
+        ? undefined
+        : nextLastErrorMessage,
     retryAttempt:
       (payload.retryAttempt as number | undefined) ?? previous.retryAttempt,
     retryDelaySec:
@@ -883,25 +915,34 @@ export function SyncStatusScreen() {
     ? Date.now() - retryBanner.startedAtMs
     : 0;
   const isWaitingForNetworkRecovery =
-    isTransferInterrupted &&
-    (reconnectElapsedMs >= RECONNECT_PAUSED_THRESHOLD_MS ||
-      (retryBanner?.attempt ?? overview.retryAttempt ?? 0) >=
-        RECONNECT_PAUSED_THRESHOLD_ATTEMPT);
-  const isTransientReconnect =
-    isTransferInterrupted && !isWaitingForNetworkRecovery;
+    shouldTreatReconnectAsWaitingForNetworkRecovery({
+      isTransferInterrupted,
+      reconnectElapsedMs,
+      retryAttempt: retryBanner?.attempt ?? overview.retryAttempt ?? 0,
+      retryCountdownSec,
+      pausedThresholdMs: RECONNECT_PAUSED_THRESHOLD_MS,
+      pausedThresholdAttempt: RECONNECT_PAUSED_THRESHOLD_ATTEMPT,
+    });
+  const reconnectInterruptionReason = getReconnectInterruptionReason({
+    deviceType: bindingState?.deviceType,
+    isWaitingForNetworkRecovery,
+    lastErrorCode: overview.lastErrorCode,
+  });
   const isBannerError =
     isPermissionBlocked ||
     isConnectionError ||
-    (isTransferInterrupted && isWaitingForNetworkRecovery);
+    (isTransferInterrupted && reconnectInterruptionReason !== 'transient_reconnect');
   const enableConnectionBanner = true;
   const connectionNotice = isPermissionBlocked
     ? '需要授予照片访问权限。'
     : suppressConnectionNotice
       ? null
       : isTransferInterrupted
-        ? isWaitingForNetworkRecovery
-          ? '传输已暂停，等待网络恢复。'
-          : `网络波动，正在重连“${boundDeviceName}”。`
+        ? reconnectInterruptionReason === 'windows_host_interrupted'
+          ? `“${boundDeviceName}”中断了传输连接。`
+          : reconnectInterruptionReason === 'network_recovery'
+            ? '传输已暂停，等待网络恢复。'
+            : `网络波动，正在重连“${boundDeviceName}”。`
         : isConnectionError
           ? `未连接到“${boundDeviceName}”，请确认电脑端 Vivi Drop 正在运行。`
           : isConnectingState
@@ -912,13 +953,17 @@ export function SyncStatusScreen() {
     : suppressConnectionNotice
       ? null
       : isTransferInterrupted
-        ? isWaitingForNetworkRecovery
+        ? reconnectInterruptionReason === 'windows_host_interrupted'
           ? retryCountdownSec > 0
-            ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
-            : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后会自动继续。`
-          : retryCountdownSec > 0
-            ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
-            : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，正在重新建立连接。`
+            ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。请检查这台 Windows 电脑上的防火墙、安全软件或 VPN。`
+            : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，请检查这台 Windows 电脑上的防火墙、安全软件或 VPN，处理后会自动继续。`
+          : reconnectInterruptionReason === 'network_recovery'
+            ? retryCountdownSec > 0
+              ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+              : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，网络恢复后会自动继续。`
+            : retryCountdownSec > 0
+              ? `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，将在 ${retryCountdownSec} 秒后发起第 ${retryBanner?.attempt ?? overview.retryAttempt ?? 0} 次重试。`
+              : `已保留当前进度 ${formatBytes(summaryTransferredBytes)} / ${formatBytes(summaryTotalBytes)}，正在重新建立连接。`
         : isConnectionError
           ? '恢复网络或重新打开电脑端 Vivi Drop 后会自动继续。'
           : isConnectingState
