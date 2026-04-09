@@ -110,6 +110,8 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 1. `recovery-app-suspend`
 2. 锁屏/后台手工 soak
 
+如果这次改动涉及 iOS 热控或上传调参，再额外执行一轮手工 thermal 回归。
+
 ## 4. 手工冒烟清单
 
 ### 4.1 首次安装
@@ -150,6 +152,28 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 4. iPhone 能发现并配对
 5. 触发一轮真实素材同步
 
+### 4.6 iOS thermal 回归
+
+1. 用长视频或大文件触发一轮持续上传
+2. 在上传过程中手动制造高热场景，确认同步不断开但速度下降
+3. thermal serious 时确认：
+   - 首页出现“已降低传输强度”轻提示
+   - `engine.log` 出现 `THERMAL_THROTTLE`
+   - idle heartbeat 间隔变长
+   - cloud asset detection 批次缩小
+4. thermal critical 时确认：
+   - `engine.log` 出现 `THERMAL_PAUSE` 和 `THERMAL_RESUME`
+   - 传输短暂停后继续，不误报为最终失败
+5. 热状态恢复后确认：
+   - `activeTuningProfile` 回到正常或后台档
+   - 首页轻提示消失
+6. thermal serious/critical 期间拍摄的新照片，在热状态恢复到 nominal 后的下一轮 scan 中被正确发现并入队上传（验证 deferred rescan 的补偿链路）
+7. 后台 + thermal fair 时拍摄新照片，回到前台后确认 deferred rescan 被补偿触发（日志出现 `foreground restored — triggering deferred rescan`）
+8. 后台 + thermal != nominal 时确认：
+   - `activeTuningProfile` 显示 `background_thermal`（而非普通 `background`）
+   - incremental rescan 日志显示 `deferring incremental rescan`
+9. Android 不需要复现同等策略，但要确认 idle summary 兼容字段不影响基础构建
+
 ## 5. 当前已覆盖的重点场景
 
 本轮已经验证过：
@@ -162,6 +186,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 6. 切后台继续上传
 7. 锁屏长时上传 soak
 8. ACK 定时 flush 不再卡住 `0 进度 / 0 速度`
+9. iOS thermal 降载策略需要随本轮改动补一次手工回归
 
 ## 6. 发布门槛
 
@@ -173,6 +198,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 4. `batch + recovery-sidecar + recovery-late-sidecar + recovery-app` 至少各过 1 轮
 5. 真实设备上手工验证一次：后台上传 + 断网恢复
 6. 如本轮包含 Windows 桌面包，至少完成一次 NSIS fresh install + 配对上传冒烟
+7. 如本轮包含 iOS thermal 策略改动，至少完成一次 serious/critical thermal 手工回归并导出 mobile diagnostics
 
 ## 7. 日志与产物
 

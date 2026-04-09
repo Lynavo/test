@@ -43,6 +43,13 @@ mobile 端诊断包导出为一个 zip 文件，命名类似：
    - `activeSession`
    - `recentRetry`
    - `recentError`
+6. `thermal`（syncOverview 内）
+   - `thermalState`：当前热状态（nominal / fair / serious / critical）
+   - `activeTuningProfile`：`resolvedUploadTuning()` 输出的档位标签（normal / background / background_thermal / active_capture / thermal_serious / thermal_critical / low_power / windows_safe 等组合）
+   - `isThermalLimited`：是否正在降速
+   - `performanceHint`：UI 层提示类型（none / thermal_limited）
+
+   注：传输中途暂停（thermal critical pause）不会改变 `activeTuningProfile`，而是通过 diagnostics log 中的 `THERMAL_PAUSE` / `THERMAL_RESUME` 事件体现
 
 ### 2.2 `queue.json`
 
@@ -122,6 +129,11 @@ mobile 本地 SQLite 快照。
 - `totalBytes`
 - `progressPercent`
 - `uploadState`
+- `performanceHint`
+- `performanceMessage`
+- `thermalState`
+- `activeTuningProfile`
+- `isThermalLimited`
 
 ### 3.3 `runtime.activeSession`
 
@@ -143,6 +155,35 @@ mobile 本地 SQLite 快照。
 - 最近一次错误是什么
 
 这对“提示连接失败，但几秒后又恢复”“频繁重连”“某轮上传突然停住”很关键。
+
+### 3.5 热控相关信号
+
+用于判断这次“变慢”是不是热控策略主动接管，而不是网络或 sidecar 问题。
+
+优先看：
+
+- `runtime.syncOverview.performanceHint`
+- `runtime.syncOverview.performanceMessage`
+- `runtime.syncOverview.thermalState`
+- `runtime.syncOverview.activeTuningProfile`
+- `runtime.syncOverview.isThermalLimited`
+
+当前口径：
+
+- `performanceHint = thermal_limited`
+  - 代表 iOS 端已经主动降载
+- `activeTuningProfile = background_thermal / thermal_serious / thermal_critical`
+  - 代表当前限速来自热状态或后台热态保护
+- `THERMAL_PAUSE / THERMAL_RESUME`
+  - 代表 critical thermal 下的中途短暂停；这是日志事件，不会写入 `activeTuningProfile`
+
+如果 `isThermalLimited = true` 且 `engine.log` 同时出现这些关键字，基本可以判定是热控而不是传输故障：
+
+- `thermal state changed`
+- `profile changed`
+- `THERMAL_THROTTLE`
+- `THERMAL_PAUSE`
+- `THERMAL_RESUME`
 
 ## 4. 当前大小控制
 
@@ -171,6 +212,7 @@ mobile 本地 SQLite 快照。
 5. 是否是 iCloud 素材
 6. 最近一次错误/重试是什么
 7. 当前是否真的在一个活跃会话里
+8. 当前是否因为热状态而主动降速或短暂停
 
 ## 6. 当前限制
 

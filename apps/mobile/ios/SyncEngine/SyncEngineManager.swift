@@ -236,6 +236,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var cloudAssetFlags: [String: Bool] = [:]
     private var cloudAssetDetectionInFlight: Set<String> = []
     private var sidecarHost: String?  // resolved IP of Mac, for HTTP heartbeat
+    private lazy var heartbeatSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.isDiscretionary = true
+        config.networkServiceType = .background
+        config.timeoutIntervalForRequest = 10
+        return URLSession(configuration: config)
+    }()
     private var transitionBackgroundTaskId: UIBackgroundTaskIdentifier = .invalid
     private var bindingConnectionState: BindingConnectionState = .offline
     private let diagnosticsIssueLock = NSLock()
@@ -258,6 +265,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeUploadState = "idle"
     private var lastBackgroundPhotoLibraryChangeAt: CFAbsoluteTime = 0
     private let backgroundCaptureCooldown: CFTimeInterval = 90
+    private var pendingRescanAfterThermalRecovery = false
+    private var runtimePerformanceHint = "none"
+    private var runtimePerformanceMessage: String?
+    private var runtimeThermalState = "nominal"
+    private var runtimeActiveTuningProfile = "normal"
+    private var runtimeIsThermalLimited = false
+    private var runtimeThermalReason: ThermalPerformanceReason?
 
     private func preferredSidecarHost(probedHost: String?, device: DiscoveredDevice?) -> String? {
         if let probedHost, !probedHost.isEmpty, !probedHost.contains(":") {
@@ -333,6 +347,82 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return (recentRetryDiagnostic, recentErrorDiagnostic)
     }
 
+    private enum ThermalPerformanceReason: String {
+        case backgroundThermal = "background_thermal"
+        case thermalSerious = "thermal_serious"
+        case thermalCritical = "thermal_critical"
+        case thermalStreamPause = "thermal_stream_pause"
+    }
+
+    private func thermalStateLabel(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal:
+            return "nominal"
+        case .fair:
+            return "fair"
+        case .serious:
+            return "serious"
+        case .critical:
+            return "critical"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func thermalPerformanceReason(for profileLabel: String) -> ThermalPerformanceReason? {
+        switch profileLabel {
+        case ThermalPerformanceReason.backgroundThermal.rawValue:
+            return .backgroundThermal
+        case ThermalPerformanceReason.thermalSerious.rawValue:
+            return .thermalSerious
+        case ThermalPerformanceReason.thermalCritical.rawValue:
+            return .thermalCritical
+        default:
+            return nil
+        }
+    }
+
+    private func applyRuntimeThermalState(
+        profileLabel: String,
+        thermalState: ProcessInfo.ThermalState,
+        overrideReason: ThermalPerformanceReason? = nil
+    ) {
+        let previousProfile = runtimeActiveTuningProfile
+        let previousReason = runtimeThermalReason
+        let previousThermalState = runtimeThermalState
+        let nextThermalState = thermalStateLabel(thermalState)
+        let nextReason = overrideReason ?? thermalPerformanceReason(for: profileLabel)
+
+        runtimeActiveTuningProfile = profileLabel
+        runtimeThermalState = nextThermalState
+        runtimeThermalReason = nextReason
+        runtimeIsThermalLimited = nextReason != nil
+        runtimePerformanceHint = nextReason == nil ? "none" : "thermal_limited"
+        runtimePerformanceMessage = nextReason == nil ? nil : "设备温度较高，已降低传输强度"
+
+        if previousProfile != profileLabel || previousReason != nextReason || previousThermalState != nextThermalState {
+            NSLog(
+                "[SyncEngine] profile changed %@ -> %@ (thermal=%@, reason=%@)",
+                previousProfile,
+                profileLabel,
+                nextThermalState,
+                nextReason?.rawValue ?? "none"
+            )
+            syncDiagnosticsLog(
+                "SyncEngine",
+                "profile changed \(previousProfile) -> \(profileLabel) (thermal=\(nextThermalState), reason=\(nextReason?.rawValue ?? "none"))"
+            )
+        }
+
+        if previousReason != .thermalStreamPause && nextReason == .thermalStreamPause {
+            syncDiagnosticsLog("SyncEngine", "THERMAL_PAUSE thermal=\(nextThermalState) profile=\(profileLabel)")
+        } else if previousReason == .thermalStreamPause && nextReason != .thermalStreamPause {
+            syncDiagnosticsLog("SyncEngine", "THERMAL_RESUME thermal=\(nextThermalState) profile=\(profileLabel)")
+        } else if previousReason != .thermalSerious && nextReason == .thermalSerious {
+            syncDiagnosticsLog("SyncEngine", "THERMAL_THROTTLE thermal=\(nextThermalState) profile=\(profileLabel)")
+        }
+    }
+
     private func clearRuntimeCurrentFile() {
         runtimeCurrentFileKey = nil
         runtimeCurrentFilename = nil
@@ -365,6 +455,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeCurrentSpeedMbps = 0
         clearRuntimeCurrentFile()
         clearRuntimeReconnectError()
+        applyRuntimeThermalState(
+            profileLabel: "normal",
+            thermalState: ProcessInfo.processInfo.thermalState
+        )
     }
 
     private func updateRuntimeSpeed() {
@@ -391,6 +485,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         progressPercent: Int? = nil
     ) -> [String: Any] {
         runtimeUploadState = uploadState
+        let currentBinding = uploadStore?.getBinding()
+        let transferredBytes = runtimeQueueCompletedBytes + runtimeCurrentFileConfirmedBytes
         let derivedProgressPercent: Int
         if let progressPercent {
             derivedProgressPercent = progressPercent
@@ -403,6 +499,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         return [
+            "currentDeviceId": currentBinding?.deviceId ?? NSNull(),
+            "currentDeviceName": currentBinding?.deviceAlias ?? currentBinding?.deviceName ?? NSNull(),
             "completedCount": runtimeQueueCompletedCount,
             "completedBytes": runtimeQueueCompletedBytes,
             "currentFile": runtimeCurrentFileKey ?? NSNull(),
@@ -410,11 +508,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "currentFileConfirmedBytes": runtimeCurrentFileConfirmedBytes,
             "currentFileTotalBytes": runtimeCurrentFileTotalBytes,
             "currentSpeedMbps": round(runtimeCurrentSpeedMbps * 10) / 10,
+            "transferredBytes": transferredBytes,
             "lastErrorCode": runtimeLastErrorCode ?? NSNull(),
             "lastErrorMessage": runtimeLastErrorMessage ?? NSNull(),
+            "performanceHint": runtimePerformanceHint,
+            "performanceMessage": runtimePerformanceMessage ?? NSNull(),
             "progressPercent": derivedProgressPercent,
             "totalBytes": runtimeQueueTotalBytes,
             "totalCount": runtimeQueueTotalCount,
+            "thermalState": runtimeThermalState,
+            "activeTuningProfile": runtimeActiveTuningProfile,
+            "isThermalLimited": runtimeIsThermalLimited,
             "uploadState": runtimeUploadState,
         ]
     }
@@ -551,7 +655,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func scheduleCloudAssetDetection(for items: [UploadItemRecord]) {
-        let candidates = Array(items.prefix(64))
+        // Only detect the first 2 items (current + next candidate) to minimise
+        // PhotoKit pressure. The rest will be detected lazily when they reach
+        // the head of the queue. Under thermal pressure, skip entirely.
+        let thermalBatchLimit: Int
+        switch ProcessInfo.processInfo.thermalState {
+        case .critical, .serious: return
+        default:                  thermalBatchLimit = 2
+        }
+        let candidates = Array(items.prefix(thermalBatchLimit))
         for item in candidates {
             let key = queueItemIdentity(item)
 
@@ -716,6 +828,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(thermalStateDidChange),
+            name: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil
+        )
         // Sweep leftover export temp files from previous sessions (crash / jetsam kills leave
         // large video files on disk that accumulate across launches and cause OOM).
         let exportTempDir = FileManager.default.temporaryDirectory
@@ -740,6 +858,46 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         endBackgroundTransitionIfNeeded(reason: "willEnterForeground")
         if sessionService.state == .syncingBackground {
             sessionService.transitionTo(.syncingForeground)
+        }
+        // Returning to foreground removes the "background + non-nominal" defer
+        // condition. If a rescan was deferred while backgrounded, trigger it now —
+        // thermalStateDidChange() won't fire if thermal state hasn't changed.
+        if pendingRescanAfterThermalRecovery && isSyncing {
+            let thermal = ProcessInfo.processInfo.thermalState
+            if thermal != .serious && thermal != .critical {
+                pendingRescanAfterThermalRecovery = false
+                NSLog("[SyncEngine] foreground restored — triggering deferred rescan (thermal=%@)", thermalStateLabel(thermal))
+                syncDiagnosticsLog("SyncEngine", "foreground restored — triggering deferred rescan (thermal=\(thermalStateLabel(thermal)))")
+                scheduleIncrementalQueueRescan(reason: "foreground_recovery_compensation")
+            }
+        }
+    }
+
+    @objc private func thermalStateDidChange() {
+        let state = ProcessInfo.processInfo.thermalState
+        let label = thermalStateLabel(state)
+        NSLog("[SyncEngine] thermal state changed to %@", label)
+        syncDiagnosticsLog("SyncEngine", "thermal state changed to \(label)")
+        _ = resolvedUploadTuning()
+        if isSyncing {
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(
+                    uploadState: runtimeUploadState.isEmpty ? sessionService.state.rawValue : runtimeUploadState
+                )
+            )
+
+            // Compensate for rescans that were deferred while thermally pressured.
+            // Now that thermal state has improved, pick up any photo library changes
+            // that arrived during the hot period.
+            if pendingRescanAfterThermalRecovery
+                && state != .serious && state != .critical
+                && !(isAppBackgrounded() && state != .nominal)
+            {
+                pendingRescanAfterThermalRecovery = false
+                NSLog("[SyncEngine] thermal recovered — triggering deferred rescan")
+                syncDiagnosticsLog("SyncEngine", "thermal recovered to \(label) — triggering deferred rescan")
+                scheduleIncrementalQueueRescan(reason: "thermal_recovery_compensation")
+            }
         }
     }
 
@@ -1033,11 +1191,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         if isBackgroundSync && profileLabel == "normal" {
-            adjustedChunkMB = min(adjustedChunkMB, 4)
-            adjustedWindowMB = min(adjustedWindowMB, 8)
-            adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 2)
-            prefetchNextFile = false
-            profileLabel = "background"
+            if thermalState != .nominal {
+                // Backgrounded + thermal pressure → yield to foreground workload (e.g. video recording)
+                adjustedChunkMB = min(adjustedChunkMB, 2)
+                adjustedWindowMB = min(adjustedWindowMB, 3)
+                adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 1)
+                adjustedAckTimeoutSec = max(adjustedAckTimeoutSec, 15)
+                adjustedThrottleBytesPerSec = max(adjustedThrottleBytesPerSec, 3 * 1024 * 1024)
+                prefetchNextFile = false
+                profileLabel = "background_thermal"
+            } else {
+                adjustedChunkMB = min(adjustedChunkMB, 4)
+                adjustedWindowMB = min(adjustedWindowMB, 8)
+                adjustedMaxPipelineChunks = min(adjustedMaxPipelineChunks, 2)
+                prefetchNextFile = false
+                profileLabel = "background"
+            }
         }
 
         if isActiveBackgroundCapture {
@@ -1066,6 +1235,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         adjustedWindowMB = max(adjustedWindowMB, adjustedChunkMB)
         adjustedMaxPipelineChunks = max(adjustedMaxPipelineChunks, 1)
+
+        applyRuntimeThermalState(
+            profileLabel: profileLabel,
+            thermalState: thermalState
+        )
 
         return UploadTuning(
             perfLoggingEnabled: perfLoggingEnabled,
@@ -1189,6 +1363,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func scheduleIncrementalQueueRescan(reason: String) {
         guard isSyncing else { return }
 
+        // Skip full-library rescan when device is thermally pressured or actively
+        // capturing in the background — the scan is CPU-heavy (SHA256 + PhotoKit
+        // per asset) and can wait until conditions improve. The new photos will be
+        // picked up on the next normal scan round.
+        let thermal = ProcessInfo.processInfo.thermalState
+        if thermal == .serious || thermal == .critical {
+            NSLog("[SyncEngine] deferring incremental rescan — thermal state %@", thermalStateLabel(thermal))
+            pendingRescanAfterThermalRecovery = true
+            return
+        }
+        if isAppBackgrounded() && thermal != .nominal {
+            NSLog("[SyncEngine] deferring incremental rescan — backgrounded + thermal %@", thermalStateLabel(thermal))
+            pendingRescanAfterThermalRecovery = true
+            return
+        }
+
         incrementalQueueRescanLock.lock()
         incrementalQueueRescanWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
@@ -1205,10 +1395,27 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let clientId = bindingService.getOrCreateClientId()
         let trackedFileKeys = Set(store.getTrackedFileKeys())
-        let untrackedAssets = photoScanner.scanForUntrackedAssets(
+
+        // Prefer delta scan (only newly inserted/changed assets) over full-library
+        // enumeration. Falls back to full scan when no cached fetchResult exists
+        // (first run after launch).
+        let untrackedAssets: [ScannedAsset]
+        if let deltaResults = photoScanner.scanChangedAssets(
             clientId: clientId,
             trackedFileKeys: trackedFileKeys
-        )
+        ) {
+            untrackedAssets = deltaResults
+            if !deltaResults.isEmpty {
+                NSLog("[SyncEngine] incremental delta scan found %d new assets (%@)", deltaResults.count, reason)
+                syncDiagnosticsLog("SyncEngine", "incremental delta scan found \(deltaResults.count) new assets (\(reason))")
+            }
+        } else {
+            NSLog("[SyncEngine] no cached fetchResult — falling back to full scan (%@)", reason)
+            untrackedAssets = photoScanner.scanForUntrackedAssets(
+                clientId: clientId,
+                trackedFileKeys: trackedFileKeys
+            )
+        }
 
         guard !untrackedAssets.isEmpty else {
             NSLog("[SyncEngine] incremental photo rescan found no new assets (%@)", reason)
@@ -1522,7 +1729,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                             return
                         }
                         let token = installWatchLoopContinuation(cont)
-                        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { [token] in
+                        let heartbeatInterval: TimeInterval = ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue ? 120 : 30
+                        DispatchQueue.global().asyncAfter(deadline: .now() + heartbeatInterval) { [token] in
                             SyncEngineManager.shared.resumeWatchLoopIfNeeded(expectedToken: token)
                         }
                     }
@@ -1721,7 +1929,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         NSLog("[SyncPipeline] uploading %d files", assets.count)
         syncDiagnosticsLog("SyncPipeline", "uploading \(assets.count) files")
 
-        let tuning = resolvedUploadTuning()
+        var tuning = resolvedUploadTuning()
         NSLog(
             "[SyncPipeline] upload tuning profile=%@ target=%@ chunkMiB=%.1f windowMiB=%.1f pipeline=%d prefetch=%@ throttleMiBps=%.1f",
             tuning.profileLabel,
@@ -1743,6 +1951,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // constrained by Low Power Mode, or thermally limited.
         var nextExport: ExportedFile? = nil
         var prefetchTask: Task<Void, Never>? = nil
+        /// When true, a cancelled prefetch is still running in the background.
+        /// We must not consume `nextExport` and should clean it up when the task
+        /// eventually finishes (handled by the task body itself).
+        var prefetchInvalidated = false
 
         if tuning.prefetchNextFile, !assets.isEmpty {
             nextExport = try? await exportAssetForUpload(assets[0])
@@ -1753,23 +1965,55 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 emitPreparingStateForNextFile(nextAsset: asset)
             }
 
+            // Re-evaluate tuning before each file — thermal state may have changed
+            // since the batch started. If prefetch was on but now should be off,
+            // mark it invalidated so we don't block waiting for a potentially
+            // multi-GB export to finish. The background task will clean up its own
+            // temp file when it completes.
+            let previousProfile = tuning.profileLabel
+            tuning = resolvedUploadTuning()
+            if previousProfile != tuning.profileLabel {
+                NSLog("[SyncPipeline] tuning changed mid-batch: %@ -> %@", previousProfile, tuning.profileLabel)
+            }
+
+            if !tuning.prefetchNextFile, prefetchTask != nil {
+                NSLog("[SyncPipeline] invalidating prefetch — tuning now %@", tuning.profileLabel)
+                prefetchTask?.cancel()
+                // Do NOT await — PHAssetResourceManager.writeData is not cancellable
+                // and blocking here defeats the purpose of thermal-aware cancellation.
+                prefetchTask = nil
+                prefetchInvalidated = true
+                nextExport = nil  // will be cleaned by the task body on completion
+            }
+
             // Wait for any in-flight prefetch before consuming its result.
-            await prefetchTask?.value
+            if !prefetchInvalidated {
+                await prefetchTask?.value
+            }
             prefetchTask = nil
 
             let exported: ExportedFile
-            if let prefetched = nextExport {
+            if !prefetchInvalidated, let prefetched = nextExport {
                 exported = prefetched
                 nextExport = nil
             } else {
+                prefetchInvalidated = false
                 exported = try await exportAssetForUpload(asset)
             }
 
             let nextIndex = index + 1
             if tuning.prefetchNextFile, nextIndex < assets.count {
                 let nextAsset = assets[nextIndex]
+                let exportSvc = self.exportService
                 prefetchTask = Task {
-                    nextExport = try? await self.exportAssetForUpload(nextAsset)
+                    let result = try? await self.exportAssetForUpload(nextAsset)
+                    // If this task was cancelled (thermal escalation), clean up
+                    // the temp file ourselves since nobody else will consume it.
+                    if Task.isCancelled, let orphan = result {
+                        exportSvc.cleanup(tempURL: orphan.tempURL)
+                        return
+                    }
+                    nextExport = result
                 }
             }
 
@@ -2050,7 +2294,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let tuning = resolvedUploadTuning()
         let ackTimeoutNs = tuning.ackTimeoutNs
-        let uploadThrottleBytesPerSec = tuning.throttleBytesPerSec
+        var uploadThrottleBytesPerSec = tuning.throttleBytesPerSec
         let ackTimeoutSafetyMarginNs: UInt64 = 2_000_000_000
         let ackTimeoutFloorBytesPerSec = Double(3 * 1024 * 1024)
 
@@ -2092,7 +2336,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         let chunkSize = uploadThrottleBytesPerSec > 0
-            ? Int(min(Int64(512 * 1024), uploadThrottleBytesPerSec))  // smaller chunks when throttled
+            ? Int(min(Int64(1024 * 1024), uploadThrottleBytesPerSec))  // 1 MiB chunks when throttled (halves protocol overhead vs 512 KiB)
             : tuning.chunkSizeBytes
         // Keep a deep flight window for high-bandwidth LANs.
         let targetInFlightBytes = tuning.targetInFlightBytes
@@ -2253,6 +2497,57 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     let sleepNs = UInt64(Double(data.count) / Double(uploadThrottleBytesPerSec) * 1_000_000_000)
                     let sNs: UInt64 = sleepNs
                     try await Task.sleep(nanoseconds: sNs)
+                }
+
+                // Re-check thermal state every 16 chunks to react mid-transfer
+                if windowFillChunks % 4 == 0 {
+                    let currentThermal = ProcessInfo.processInfo.thermalState
+                    if currentThermal == .critical {
+                        // Apply thermal ceiling: use the stricter of the existing
+                        // throttle and the thermal limit. When unthrottled (0), adopt
+                        // the thermal limit directly.
+                        let thermalCap: Int64 = 4 * 1024 * 1024
+                        uploadThrottleBytesPerSec = uploadThrottleBytesPerSec > 0
+                            ? min(uploadThrottleBytesPerSec, thermalCap)
+                            : thermalCap
+                        applyRuntimeThermalState(
+                            profileLabel: tuning.profileLabel,
+                            thermalState: currentThermal,
+                            overrideReason: .thermalStreamPause
+                        )
+                        perfLog("file=\(fileKey) action=THERMAL_PAUSE thermal=critical — pausing stream")
+                        var pauseElapsed: CFTimeInterval = 0
+                        while ProcessInfo.processInfo.thermalState == .critical && pauseElapsed < 60 {
+                            try await Task.sleep(nanoseconds: 5_000_000_000)
+                            if Task.isCancelled { throw CancellationError() }
+                            pauseElapsed += 5
+                        }
+                        let resumedThermalState = ProcessInfo.processInfo.thermalState
+                        let resumedProfile = resolvedUploadTuning().profileLabel
+                        applyRuntimeThermalState(
+                            profileLabel: resumedProfile,
+                            thermalState: resumedThermalState
+                        )
+                        perfLog("file=\(fileKey) action=THERMAL_RESUME pausedSec=\(Int(pauseElapsed))")
+                    } else if currentThermal == .serious {
+                        let thermalCap: Int64 = 6 * 1024 * 1024
+                        uploadThrottleBytesPerSec = uploadThrottleBytesPerSec > 0
+                            ? min(uploadThrottleBytesPerSec, thermalCap)
+                            : thermalCap
+                        applyRuntimeThermalState(
+                            profileLabel: tuning.profileLabel,
+                            thermalState: currentThermal,
+                            overrideReason: .thermalSerious
+                        )
+                        if tuning.perfLoggingEnabled {
+                            perfLog("file=\(fileKey) action=THERMAL_THROTTLE thermal=serious throttleMBps=6")
+                        }
+                    } else if runtimeIsThermalLimited {
+                        applyRuntimeThermalState(
+                            profileLabel: resolvedUploadTuning().profileLabel,
+                            thermalState: currentThermal
+                        )
+                    }
                 }
             }
 
@@ -3138,7 +3433,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 5
-        URLSession.shared.dataTask(with: request) { _, _, error in
+        heartbeatSession.dataTask(with: request) { _, _, error in
             if let error {
                 NSLog("[Presence] heartbeat failed: %@", "\(error)")
                 self.updateBindingConnectionState(.offline, reason: "presence_heartbeat_failed")

@@ -23,6 +23,7 @@ import { formatLocalDateKey } from '../utils/localDateKey';
 import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
 import { shouldTreatReconnectAsWaitingForNetworkRecovery } from '../utils/reconnectBannerState';
 import { getReconnectInterruptionReason } from '../utils/reconnectInterruptionReason';
+import { SyncPerformanceHint } from './components/SyncPerformanceHint';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,6 +55,11 @@ interface SyncOverview {
   progressPercent: number;
   currentSpeedMbps: number;
   uploadState: string;
+  performanceHint?: 'none' | 'thermal_limited';
+  performanceMessage?: string;
+  thermalState?: 'nominal' | 'fair' | 'serious' | 'critical' | 'unknown';
+  activeTuningProfile?: string;
+  isThermalLimited?: boolean;
   completedCount: number;
   totalCount: number;
   completedBytes: number;
@@ -122,6 +128,11 @@ const EMPTY_OVERVIEW: SyncOverview = {
   progressPercent: 0,
   currentSpeedMbps: 0,
   uploadState: 'idle',
+  performanceHint: 'none',
+  performanceMessage: undefined,
+  thermalState: 'unknown',
+  activeTuningProfile: undefined,
+  isThermalLimited: false,
   completedCount: 0,
   totalCount: 0,
   completedBytes: 0,
@@ -240,6 +251,28 @@ function buildOverviewFromPayload(
       (payload.currentSpeedMbps as number | undefined) ??
       previous.currentSpeedMbps,
     uploadState: nextUploadState,
+    performanceHint:
+      (payload.performanceHint as SyncOverview['performanceHint'] | undefined) ??
+      previous.performanceHint,
+    performanceMessage:
+      typeof payload.performanceMessage === 'string'
+        ? payload.performanceMessage
+        : Object.prototype.hasOwnProperty.call(payload, 'performanceMessage')
+          ? undefined
+          : previous.performanceMessage,
+    thermalState:
+      (payload.thermalState as SyncOverview['thermalState'] | undefined) ??
+      previous.thermalState,
+    activeTuningProfile:
+      typeof payload.activeTuningProfile === 'string'
+        ? payload.activeTuningProfile
+        : Object.prototype.hasOwnProperty.call(payload, 'activeTuningProfile')
+          ? undefined
+          : previous.activeTuningProfile,
+    isThermalLimited:
+      typeof payload.isThermalLimited === 'boolean'
+        ? payload.isThermalLimited
+        : previous.isThermalLimited,
     completedCount:
       (payload.completedCount as number | undefined) ?? previous.completedCount,
     totalCount:
@@ -1101,6 +1134,12 @@ export function SyncStatusScreen() {
         </View>
       ) : (
         <>
+          <SyncPerformanceHint
+            uploadState={overview.uploadState}
+            performanceHint={overview.performanceHint}
+            performanceMessage={overview.performanceMessage}
+          />
+
           {/* ---- Progress card ---- */}
           <View style={styles.progressCard}>
             <SyncSummaryCard

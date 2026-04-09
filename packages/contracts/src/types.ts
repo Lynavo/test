@@ -115,6 +115,11 @@ export interface SyncSummaryDTO {
   totalBytes: number;
   progressPercent: number;
   uploadState: UploadState;
+  performanceHint?: 'none' | 'thermal_limited';
+  performanceMessage?: string | null;
+  thermalState?: 'nominal' | 'fair' | 'serious' | 'critical' | 'unknown';
+  activeTuningProfile?: string | null;
+  isThermalLimited?: boolean;
 }
 
 export interface ReadOnlyQueueItemDTO {

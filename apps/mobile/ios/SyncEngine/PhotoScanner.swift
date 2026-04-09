@@ -11,6 +11,10 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
     weak var delegate: PhotoScannerDelegate?
     private var observing = false
 
+    /// Cached fetch result for incremental change tracking via PHChange.
+    /// Updated after every full scan and after processing each PHChange delta.
+    private var lastFetchResult: PHFetchResult<PHAsset>?
+
     /// Request photo library permission
     func requestPermission() async -> PHAuthorizationStatus {
         await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -41,15 +45,83 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
+    // MARK: - Incremental (delta) scan
+
+    /// Scan only the assets that were inserted or updated since the last fetch,
+    /// using PHChange's changeDetails. Returns nil if no cached fetchResult exists
+    /// (caller should fall back to a full scan).
+    func scanChangedAssets(
+        clientId: String,
+        trackedFileKeys: Set<String>
+    ) -> [ScannedAsset]? {
+        guard let previous = lastFetchResult else { return nil }
+
+        // PHChange.changeDetails requires a fresh PHChange instance — we can
+        // achieve the same by re-fetching with the same options and diffing.
+        let fetchOptions = Self.defaultFetchOptions()
+        let current = PHAsset.fetchAssets(with: fetchOptions)
+
+        // PHFetchResultChangeDetails computes a diff between two fetch results
+        // efficiently inside PhotoKit (backed by the Photos database).
+        let details = PHFetchResultChangeDetails(from: previous, to: current, changedObjects: [])
+
+        lastFetchResult = details.fetchResultAfterChanges
+
+        let insertedIndexes = details.insertedIndexes ?? IndexSet()
+        let changedIndexes = details.changedIndexes ?? IndexSet()
+        let candidateIndexes = insertedIndexes.union(changedIndexes)
+
+        guard !candidateIndexes.isEmpty else { return [] }
+
+        let afterResult = details.fetchResultAfterChanges
+        var results: [ScannedAsset] = []
+
+        for index in candidateIndexes {
+            guard index < afterResult.count else { continue }
+            let asset = afterResult.object(at: index)
+            let fileKey = Self.computeFileKey(
+                clientId: clientId,
+                assetLocalId: asset.localIdentifier,
+                resourceSize: 0,
+                modifiedAt: asset.modificationDate?.iso8601String ?? "",
+                mediaType: asset.mediaType == .video ? "video" : "image"
+            )
+
+            guard !trackedFileKeys.contains(fileKey) else { continue }
+
+            let resources = PHAssetResource.assetResources(for: asset)
+            let primaryResource = resources.first(where: {
+                $0.type == .fullSizePhoto || $0.type == .video
+            }) ?? resources.first
+
+            let filename = primaryResource?.originalFilename ?? "unknown"
+            let estimatedSize = primaryResource?.value(forKey: "fileSize") as? Int64 ?? 0
+
+            results.append(ScannedAsset(
+                asset: asset,
+                fileKey: fileKey,
+                mediaType: asset.mediaType == .video ? "video" : "image",
+                creationDate: asset.creationDate,
+                originalFilename: filename,
+                estimatedSize: estimatedSize
+            ))
+        }
+
+        NSLog("[PhotoScanner] delta scan: %d candidates (%d inserted, %d changed), %d new untracked",
+              candidateIndexes.count, insertedIndexes.count, changedIndexes.count, results.count)
+        return results
+    }
+
+    // MARK: - Full scan (initial / fallback)
+
     /// Scan all photos and videos, return items whose fileKey is not already tracked.
     func scanForUntrackedAssets(clientId: String, trackedFileKeys: Set<String>) -> [ScannedAsset] {
-        let fetchOptions = PHFetchOptions()
-        fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        fetchOptions.predicate = NSPredicate(format: "mediaType == %d OR mediaType == %d",
-                                              PHAssetMediaType.image.rawValue,
-                                              PHAssetMediaType.video.rawValue)
-
+        let fetchOptions = Self.defaultFetchOptions()
         let assets = PHAsset.fetchAssets(with: fetchOptions)
+
+        // Cache for future incremental scans
+        lastFetchResult = assets
+
         NSLog("[PhotoScanner] library has %d authorized assets, %d tracked keys", assets.count, trackedFileKeys.count)
         var results: [ScannedAsset] = []
         var skippedCount = 0
@@ -94,6 +166,17 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
     /// Scan assets that are not yet completed on the mobile side.
     func scanForNewAssets(clientId: String, completedFileKeys: Set<String>) -> [ScannedAsset] {
         scanForUntrackedAssets(clientId: clientId, trackedFileKeys: completedFileKeys)
+    }
+
+    // MARK: - Helpers
+
+    private static func defaultFetchOptions() -> PHFetchOptions {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        options.predicate = NSPredicate(format: "mediaType == %d OR mediaType == %d",
+                                         PHAssetMediaType.image.rawValue,
+                                         PHAssetMediaType.video.rawValue)
+        return options
     }
 
     /// Compute fileKey — stable identifier for a file from this client.

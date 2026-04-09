@@ -96,6 +96,10 @@ class TcpTransport {
         let params = NWParameters(tls: nil, tcp: tcpOptions)
         // Throughput mode: stay on infrastructure Wi-Fi and avoid AWDL peer links.
         params.includePeerToPeer = false
+        // Lower network stack priority so upload yields CPU to foreground tasks
+        // (e.g. camera recording). The kernel schedules network I/O completion
+        // handlers at reduced priority, cutting thermal pressure from WiFi radio.
+        params.serviceClass = .background
 
         connection = NWConnection(to: endpoint, using: params)
         connection?.stateUpdateHandler = { [weak self] state in
