@@ -62,7 +62,7 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
           <StatusBadge status={device.status} />
         </div>
 
-        {/* Transfer progress (only when transferring with a current file) */}
+        {/* Transfer progress */}
         {isTransferring && device.currentFile && (
           <div
             className="mb-3 rounded-xl px-3 py-2.5"
@@ -81,6 +81,18 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
               className="h-1.5"
               style={{ background: 'rgba(59,130,246,0.12)' }}
             />
+          </div>
+        )}
+        {/* Preparing state: transferring but no file data yet */}
+        {isTransferring && !device.currentFile && (
+          <div
+            className="mb-3 rounded-xl px-3 py-2.5"
+            style={{ background: 'rgba(59,130,246,0.06)' }}
+          >
+            <div className="flex items-center gap-2 text-xs text-blue-500">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+              <span className="font-medium">准备传输中…</span>
+            </div>
           </div>
         )}
 

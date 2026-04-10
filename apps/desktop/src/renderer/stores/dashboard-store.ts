@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import type { DashboardDeviceDTO, DashboardSummaryDTO } from '@syncflow/contracts';
 import type { DeviceDashboardStatus } from '@syncflow/contracts';
 import { useSidecarRuntimeStore } from './sidecar-runtime-store';
@@ -23,6 +24,7 @@ export interface DashboardState {
   summary: DashboardSummaryDTO;
   devices: DashboardDeviceDTO[];
   diskWarningDismissed: boolean;
+  error: string | null;
   fetchDashboard(): Promise<void>;
   dismissDiskWarning(): void;
   updateSummary(summary: DashboardSummaryDTO): void;
@@ -42,10 +44,12 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   },
   devices: [],
   diskWarningDismissed: false,
+  error: null,
 
   fetchDashboard: async () => {
     const api = window.electronAPI;
     if (!api || !isSidecarHealthy()) return;
+    set({ error: null });
     try {
       const [summary, devices] = await Promise.all([
         api.sidecar.getDashboardSummary(),
@@ -53,19 +57,31 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       ]);
       if (summary) set({ summary });
       if (devices) {
-        // Merge: keep higher progress from WebSocket if API returns lower/zero
+        // Merge: preserve real-time WebSocket state over stale REST snapshots
         const current = get().devices;
         const merged = devices.map((d) => {
           const existing = current.find((c) => c.deviceId === d.deviceId);
-          if (existing?.currentFile && existing.currentFile.progress > (d.currentFile?.progress ?? 0)) {
-            return { ...d, currentFile: existing.currentFile };
+          if (!existing) return d;
+          const patched = { ...d };
+          // Don't let REST downgrade status set by WebSocket event
+          if (
+            existing.status === 'transferring' &&
+            d.status !== 'transferring'
+          ) {
+            patched.status = existing.status;
           }
-          return d;
+          // Keep higher progress from WebSocket if API returns lower/zero
+          if (existing.currentFile && existing.currentFile.progress > (d.currentFile?.progress ?? 0)) {
+            patched.currentFile = existing.currentFile;
+          }
+          return patched;
         });
         set({ devices: sortDevices(merged) });
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
+      set({ error: '加载设备列表失败' });
+      toast.error('加载设备列表失败', { description: '请检查网络连接后重试' });
     }
   },
 
