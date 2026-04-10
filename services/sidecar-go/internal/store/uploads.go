@@ -72,6 +72,13 @@ func (s *Store) ListUploadsPageByDeviceAndDate(
 	clientID, date, sortField, sortDirection string,
 	page, pageSize int,
 ) (UploadPage, error) {
+	return s.ListUploadsPageByDeviceAndDateRange(clientID, date, "", sortField, sortDirection, page, pageSize)
+}
+
+func (s *Store) ListUploadsPageByDeviceAndDateRange(
+	clientID, startDate, endDate, sortField, sortDirection string,
+	page, pageSize int,
+) (UploadPage, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -88,30 +95,38 @@ func (s *Store) ListUploadsPageByDeviceAndDate(
 	result.Page = page
 	result.PageSize = pageSize
 
-	if err := s.db.QueryRow(`
+	// Build date filter: single day or range
+	dateFilter := "DATE(updated_at, 'localtime') = ?"
+	dateArgs := []any{clientID, startDate}
+	if endDate != "" && endDate != startDate {
+		dateFilter = "DATE(updated_at, 'localtime') BETWEEN ? AND ?"
+		dateArgs = []any{clientID, startDate, endDate}
+	}
+
+	countSQL := fmt.Sprintf(`
 		SELECT
 			COUNT(*),
 			COALESCE(SUM(file_size), 0),
 			COALESCE(SUM(active_transmission_ms), 0)
 		FROM uploads
-		WHERE client_id = ? AND DATE(updated_at, 'localtime') = ? AND status = 'completed'`,
-		clientID, date,
+		WHERE client_id = ? AND %s AND status = 'completed'`, dateFilter)
+	if err := s.db.QueryRow(countSQL, dateArgs...,
 	).Scan(&result.TotalItems, &result.TotalBytes, &result.TotalActiveTransmissionMs); err != nil {
-		return UploadPage{}, fmt.Errorf("list uploads summary for %q on %s: %w", clientID, date, err)
+		return UploadPage{}, fmt.Errorf("list uploads summary for %q on %s..%s: %w", clientID, startDate, endDate, err)
 	}
 
-	rows, err := s.db.Query(fmt.Sprintf(`
+	querySQL := fmt.Sprintf(`
 		SELECT file_key, session_id, client_id, original_filename, media_type,
 		       file_size, created_at_remote, modified_at_remote, status, part_path, final_path,
 		       committed_bytes, sha256, active_transmission_ms, completed_at, updated_at
 		FROM uploads
-		WHERE client_id = ? AND DATE(updated_at, 'localtime') = ? AND status = 'completed'
+		WHERE client_id = ? AND %s AND status = 'completed'
 		ORDER BY %s
-		LIMIT ? OFFSET ?`, orderBy),
-		clientID, date, pageSize, (page-1)*pageSize,
-	)
+		LIMIT ? OFFSET ?`, dateFilter, orderBy)
+	queryArgs := append(dateArgs, pageSize, (page-1)*pageSize)
+	rows, err := s.db.Query(querySQL, queryArgs...)
 	if err != nil {
-		return UploadPage{}, fmt.Errorf("list uploads page for %q on %s: %w", clientID, date, err)
+		return UploadPage{}, fmt.Errorf("list uploads page for %q on %s..%s: %w", clientID, startDate, endDate, err)
 	}
 	defer rows.Close()
 

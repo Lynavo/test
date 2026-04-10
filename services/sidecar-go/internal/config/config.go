@@ -234,3 +234,7 @@ func (c *Config) StagingDir() string {
 func (c *Config) LogDir() string {
 	return filepath.Join(c.DataDir, "logs")
 }
+
+func (c *Config) SharedDir() string {
+	return filepath.Join(filepath.Dir(c.ReceiveDir), "shared")
+}

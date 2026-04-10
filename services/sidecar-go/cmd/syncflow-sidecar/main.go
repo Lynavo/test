@@ -38,7 +38,7 @@ func main() {
 	slog.Info("starting vivi-drop-sidecar", "http_port", cfg.HTTPPort, "tcp_port", cfg.TCPPort)
 
 	// Ensure data directories exist
-	for _, dir := range []string{cfg.DataDir, cfg.ReceiveDir, cfg.StagingDir(), cfg.LogDir()} {
+	for _, dir := range []string{cfg.DataDir, cfg.ReceiveDir, cfg.SharedDir(), cfg.StagingDir(), cfg.LogDir()} {
 		os.MkdirAll(dir, 0755)
 	}
 
@@ -123,6 +123,9 @@ func main() {
 		}
 	}()
 
+	// Watch shared directory for file changes and broadcast events
+	go watchSharedDirectory(ctx, cfg, hub)
+
 	<-ctx.Done()
 	slog.Info("shutting down")
 
@@ -173,6 +176,55 @@ func bootstrapReconciliation(st *store.Store, cfg *config.Config) {
 			slog.Warn("bootstrap: failed to regenerate connection code", "err", err)
 		} else {
 			slog.Info("bootstrap: regenerated connection code", "code", newCode)
+		}
+	}
+}
+
+// watchSharedDirectory polls the shared directory for file changes and
+// broadcasts shared.directory.changed events via the hub. Uses standard
+// library only — no fsnotify dependency needed.
+func watchSharedDirectory(ctx context.Context, cfg *config.Config, hub *events.Hub) {
+	const pollInterval = 3 * time.Second
+	var lastModTime time.Time
+	var lastCount int
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sharedDir := cfg.SharedDir()
+			info, err := os.Stat(sharedDir)
+			if err != nil {
+				continue
+			}
+
+			// Quick check: directory mod time changed, or count files at top level
+			entries, err := os.ReadDir(sharedDir)
+			if err != nil {
+				continue
+			}
+
+			modTime := info.ModTime()
+			count := len(entries)
+
+			if modTime != lastModTime || count != lastCount {
+				if lastModTime.IsZero() {
+					// First run — just record baseline, don't broadcast
+					lastModTime = modTime
+					lastCount = count
+					continue
+				}
+				lastModTime = modTime
+				lastCount = count
+				hub.Broadcast(events.Event{
+					Type:    "shared.directory.changed",
+					Payload: map[string]any{"path": sharedDir},
+				})
+			}
 		}
 	}
 }

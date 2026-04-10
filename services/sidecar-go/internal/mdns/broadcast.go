@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/grandcat/zeroconf"
@@ -43,9 +44,16 @@ type BroadcastConfig struct {
 
 // Broadcaster wraps the active Bonjour publisher for the current platform.
 type Broadcaster struct {
+	mu          sync.Mutex
 	cmd         *exec.Cmd
 	server      *zeroconf.Server
 	dnssdExited chan struct{} // closed when dns-sd process exits; nil for zeroconf
+	done        chan struct{} // closed by Shutdown to stop the watchdog
+
+	// Stored for dns-sd watchdog restarts.
+	dnsSDPath string
+	cfg       BroadcastConfig
+	txt       []string
 }
 
 // BuildTXTRecords constructs the TXT record key-value pairs from config.
@@ -106,34 +114,16 @@ func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 }
 
 func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*Broadcaster, error) {
-	if err := cleanupStaleBroadcastProcesses(); err != nil {
-		slog.Warn("failed to clean stale bonjour broadcasts", "err", err)
-	}
-
-	args := []string{"-R", cfg.DeviceName, serviceType, serviceDomain, fmt.Sprintf("%d", cfg.TCPPort)}
-	args = append(args, txt...)
-
-	cmd := exec.Command(dnsSDPath, args...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("dns-sd start: %w", err)
+	cmd, exited, err := startDNSSDProcess(cfg, txt, dnsSDPath)
+	if err != nil {
+		return nil, err
 	}
 
 	// dns-sd -R is a long-lived process.  An exit within the grace period
 	// means the Bonjour Service is unavailable — fall back to zeroconf.
-	exited := make(chan struct{})
-	var exitErr error
-	go func() {
-		exitErr = cmd.Wait()
-		close(exited)
-	}()
-
 	select {
 	case <-exited:
 		slog.Warn("dns-sd exited immediately, falling back to zeroconf",
-			"err", exitErr,
 			"path", dnsSDPath,
 			"hint", "ensure Bonjour Service is running",
 		)
@@ -151,14 +141,131 @@ func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*
 		"pid", cmd.Process.Pid,
 	)
 
-	b := &Broadcaster{cmd: cmd, dnssdExited: exited}
-	go func() {
-		<-exited
-		if exitErr != nil {
-			slog.Warn("dns-sd process exited unexpectedly", "err", exitErr, "pid", cmd.Process.Pid)
-		}
-	}()
+	b := &Broadcaster{
+		cmd:         cmd,
+		dnssdExited: exited,
+		done:        make(chan struct{}),
+		dnsSDPath:   dnsSDPath,
+		cfg:         cfg,
+		txt:         txt,
+	}
+	go b.watchAndRestart()
 	return b, nil
+}
+
+// startDNSSDProcess spawns a dns-sd -R process and returns the command, an
+// "exited" channel that is closed when the process exits, and any start error.
+func startDNSSDProcess(cfg BroadcastConfig, txt []string, dnsSDPath string) (*exec.Cmd, chan struct{}, error) {
+	if err := cleanupStaleBroadcastProcesses(); err != nil {
+		slog.Warn("failed to clean stale bonjour broadcasts", "err", err)
+	}
+
+	args := []string{"-R", cfg.DeviceName, serviceType, serviceDomain, fmt.Sprintf("%d", cfg.TCPPort)}
+	args = append(args, txt...)
+
+	cmd := exec.Command(dnsSDPath, args...)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	if err := cmd.Start(); err != nil {
+		return nil, nil, fmt.Errorf("dns-sd start: %w", err)
+	}
+
+	exited := make(chan struct{})
+	go func() {
+		cmd.Wait()
+		close(exited)
+	}()
+
+	return cmd, exited, nil
+}
+
+// watchAndRestart monitors the dns-sd process and restarts it with exponential
+// backoff if it exits unexpectedly (e.g. after macOS sleep/wake or network
+// changes).  The loop stops when b.done is closed by Shutdown().
+func (b *Broadcaster) watchAndRestart() {
+	const (
+		initialBackoff = 2 * time.Second
+		maxBackoff     = 60 * time.Second
+		// If a process survives this long before dying, reset the backoff
+		// because the exit is likely a new transient event, not a tight loop.
+		healthyThreshold = 30 * time.Second
+	)
+	backoff := initialBackoff
+	startedAt := time.Now()
+
+	for {
+		// Wait for the current dns-sd process to exit.
+		select {
+		case <-b.done:
+			return
+		case <-b.dnssdExited:
+		}
+
+		b.mu.Lock()
+		pid := 0
+		if b.cmd != nil && b.cmd.Process != nil {
+			pid = b.cmd.Process.Pid
+		}
+		b.mu.Unlock()
+
+		uptime := time.Since(startedAt)
+		if uptime >= healthyThreshold {
+			backoff = initialBackoff
+		}
+
+		slog.Warn("dns-sd broadcast exited, will restart",
+			"pid", pid,
+			"uptime", uptime.Round(time.Second),
+			"backoff", backoff,
+		)
+
+		// Wait before restarting.
+		select {
+		case <-b.done:
+			return
+		case <-time.After(backoff):
+		}
+
+		cmd, exited, err := startDNSSDProcess(b.cfg, b.txt, b.dnsSDPath)
+		if err != nil {
+			slog.Error("dns-sd restart failed", "err", err, "next_retry", backoff*2)
+			backoff = min(backoff*2, maxBackoff)
+			// Create a dummy exited channel so the next loop iteration waits
+			// for the backoff timer instead of spinning.
+			ch := make(chan struct{})
+			close(ch)
+			b.mu.Lock()
+			b.dnssdExited = ch
+			b.mu.Unlock()
+			continue
+		}
+
+		// Check the new process survives the grace period.
+		select {
+		case <-b.done:
+			cmd.Process.Kill()
+			return
+		case <-exited:
+			slog.Warn("dns-sd restarted but exited immediately", "next_retry", backoff*2)
+			backoff = min(backoff*2, maxBackoff)
+			b.mu.Lock()
+			b.dnssdExited = exited
+			b.mu.Unlock()
+			continue
+		case <-time.After(1 * time.Second):
+			// Healthy start
+		}
+
+		slog.Info("dns-sd broadcast restarted successfully", "pid", cmd.Process.Pid)
+		startedAt = time.Now()
+		backoff = initialBackoff
+
+		b.mu.Lock()
+		b.cmd = cmd
+		b.dnssdExited = exited
+		b.mu.Unlock()
+	}
 }
 
 func selectBroadcasterBackend(goos string) (backend string, dnsSDPath string) {
@@ -529,18 +636,32 @@ func serviceIPs(cfg BroadcastConfig) []string {
 	return []string{cfg.DeviceIP}
 }
 
-// Shutdown stops the active Bonjour publisher.
+// Shutdown stops the active Bonjour publisher and its watchdog goroutine.
 func (b *Broadcaster) Shutdown() {
 	if b == nil {
 		return
 	}
+	// Signal the watchdog to stop before killing the process, so it doesn't
+	// attempt a restart while we're shutting down.
+	if b.done != nil {
+		select {
+		case <-b.done:
+			// already closed
+		default:
+			close(b.done)
+		}
+	}
 	if b.server != nil {
 		b.server.Shutdown()
 	}
-	if b.cmd != nil && b.cmd.Process != nil {
-		b.cmd.Process.Kill()
-		if b.dnssdExited != nil {
-			<-b.dnssdExited // wait for the monitor goroutine to finish cmd.Wait()
+	b.mu.Lock()
+	cmd := b.cmd
+	exited := b.dnssdExited
+	b.mu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		cmd.Process.Kill()
+		if exited != nil {
+			<-exited
 		}
 	}
 }

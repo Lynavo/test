@@ -14,6 +14,9 @@ var migrationSQL string
 //go:embed migrations/002_device_dir_name.sql
 var migration002SQL string
 
+//go:embed migrations/003_shared_dir_and_upload_source.sql
+var migration003SQL string
+
 // Store wraps a SQLite database connection and provides CRUD operations
 // for all SyncFlow sidecar tables.
 type Store struct {
@@ -50,5 +53,7 @@ func (s *Store) migrate() error {
 	}
 	// Migration 002: add receive_dir_name column (idempotent — ignore if exists)
 	_, _ = s.db.Exec(migration002SQL)
+	// Migration 003: add source column to uploads (idempotent — ignore if exists)
+	_, _ = s.db.Exec(migration003SQL)
 	return nil
 }

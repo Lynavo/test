@@ -31,15 +31,48 @@ func NewTCPServer(s *store.Store, cfg *config.Config, hub *events.Hub) *TCPServe
 // SetClientState marks a client as connected with the given state.
 func (s *TCPServer) SetClientState(clientID, state string) {
 	s.mu.Lock()
+	wasGlobalActive := s.anyClientSyncingLocked()
 	s.connectedClients[clientID] = state
+	isGlobalActive := s.anyClientSyncingLocked()
 	s.mu.Unlock()
+
+	if wasGlobalActive != isGlobalActive {
+		s.hub.Broadcast(events.Event{
+			Type: "transfer.active.changed",
+			Payload: map[string]any{
+				"isActive": isGlobalActive,
+			},
+		})
+	}
 }
 
 // RemoveClient removes a client from the connected map.
 func (s *TCPServer) RemoveClient(clientID string) {
 	s.mu.Lock()
+	wasGlobalActive := s.anyClientSyncingLocked()
 	delete(s.connectedClients, clientID)
+	isGlobalActive := s.anyClientSyncingLocked()
 	s.mu.Unlock()
+
+	if wasGlobalActive != isGlobalActive {
+		s.hub.Broadcast(events.Event{
+			Type: "transfer.active.changed",
+			Payload: map[string]any{
+				"isActive": isGlobalActive,
+			},
+		})
+	}
+}
+
+// anyClientSyncingLocked checks if any connected client is in syncing state.
+// Caller must hold s.mu.
+func (s *TCPServer) anyClientSyncingLocked() bool {
+	for _, st := range s.connectedClients {
+		if st == "syncing" {
+			return true
+		}
+	}
+	return false
 }
 
 // GetClientState returns the connection state for a client, or empty string if offline.

@@ -3,12 +3,19 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/nicksyncflow/sidecar/internal/events"
 )
 
 type settingsDTO struct {
 	DeviceName     string `json:"deviceName"`
 	ConnectionCode string `json:"connectionCode"`
+	RootPath       string `json:"rootPath"`
 	ReceivePath    string `json:"receivePath"`
+	SharedPath     string `json:"sharedPath"`
 	ShareAddress   string `json:"shareAddress"`
 	ShareStatus    string `json:"shareStatus"`
 	ShareName      string `json:"shareName"`
@@ -16,6 +23,7 @@ type settingsDTO struct {
 
 type updateSettingsRequest struct {
 	DeviceName  *string `json:"deviceName,omitempty"`
+	RootPath    *string `json:"rootPath,omitempty"`
 	ReceivePath *string `json:"receivePath,omitempty"`
 }
 
@@ -47,19 +55,95 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if req.ReceivePath != nil {
+	// Resolve the effective receive path: rootPath takes precedence over
+	// legacy receivePath.  When rootPath is provided the receive directory
+	// is always <rootPath>/received so the model stays consistent.
+	var newReceivePath *string
+	if req.RootPath != nil {
+		root := strings.TrimSpace(*req.RootPath)
+		if root == "" {
+			writeError(w, http.StatusBadRequest, "root path must not be empty")
+			return
+		}
+		if !filepath.IsAbs(root) {
+			writeError(w, http.StatusBadRequest, "root path must be an absolute path")
+			return
+		}
+		derived := filepath.Join(root, "received")
+		newReceivePath = &derived
+	} else if req.ReceivePath != nil {
+		trimmed := strings.TrimSpace(*req.ReceivePath)
+		newReceivePath = &trimmed
+	}
+
+	if newReceivePath != nil {
+		newPath := *newReceivePath
+
+		// Validate: non-empty, absolute path
+		if newPath == "" {
+			writeError(w, http.StatusBadRequest, "receive path must not be empty")
+			return
+		}
+		if !filepath.IsAbs(newPath) {
+			writeError(w, http.StatusBadRequest, "receive path must be an absolute path")
+			return
+		}
+
+		// Reject path changes while a transfer is in progress
+		if s.isTransferActive() {
+			writeError(w, http.StatusConflict, "cannot change receive path while a transfer is active")
+			return
+		}
+
+		// Validate: receive path and shared path must not collide.
+		newSharedPath := filepath.Join(filepath.Dir(newPath), "shared")
+		cleanReceive := filepath.Clean(newPath)
+		cleanShared := filepath.Clean(newSharedPath)
+		if cleanReceive == cleanShared {
+			writeError(w, http.StatusBadRequest, "receive path must not overlap with shared directory")
+			return
+		}
+
+		// Validate: directories must be creatable AND writable before committing.
+		for _, dir := range []string{newPath, newSharedPath} {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				slog.Error("cannot create directory for new path", "path", dir, "err", err)
+				writeError(w, http.StatusBadRequest, "cannot create directory: "+dir)
+				return
+			}
+			// Probe writability with a unique temp file to avoid clobbering existing files.
+			f, err := os.CreateTemp(dir, ".syncflow_probe_*")
+			if err != nil {
+				slog.Error("directory not writable", "path", dir, "err", err)
+				writeError(w, http.StatusBadRequest, "directory is not writable: "+dir)
+				return
+			}
+			probePath := f.Name()
+			f.Close()
+			os.Remove(probePath)
+		}
+
 		shareConfig, err := s.store.GetShareConfig()
 		if err != nil {
 			slog.Error("get share config for update", "err", err)
 			writeError(w, http.StatusInternalServerError, "failed to update settings")
 			return
 		}
-		shareConfig.ReceiveRoot = *req.ReceivePath
+		shareConfig.ReceiveRoot = newPath
 		if err := s.store.UpdateShareConfig(*shareConfig); err != nil {
 			slog.Error("update share config receive_root", "err", err)
 			writeError(w, http.StatusInternalServerError, "failed to update settings")
 			return
 		}
+
+		// Hot-reload: update the in-memory config so all runtime paths
+		// (file writes, dashboard, shared dir) converge immediately.
+		s.config.ReceiveDir = newPath
+		slog.Info("receive path hot-reloaded", "newPath", newPath)
+		s.hub.Broadcast(events.Event{
+			Type:    "shared.directory.changed",
+			Payload: map[string]any{"path": s.config.SharedDir()},
+		})
 	}
 
 	dto, err := s.assembleSettingsDTO()
@@ -90,7 +174,9 @@ func (s *Server) assembleSettingsDTO() (*settingsDTO, error) {
 	return &settingsDTO{
 		DeviceName:     deviceName,
 		ConnectionCode: code,
+		RootPath:       filepath.Dir(shareConfig.ReceiveRoot),
 		ReceivePath:    shareConfig.ReceiveRoot,
+		SharedPath:     s.config.SharedDir(),
 		ShareAddress:   shareConfig.ShareURL,
 		ShareStatus:    shareConfig.ShareStatus,
 		ShareName:      shareConfig.ShareName,

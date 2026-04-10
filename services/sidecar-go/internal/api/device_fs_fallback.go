@@ -174,6 +174,66 @@ func (s *Server) filesystemUploads(deviceID, date string) ([]store.Upload, error
 	return page.Items, nil
 }
 
+// filesystemUploadsPageRange scans multiple date directories within [startDate, endDate].
+func (s *Server) filesystemUploadsPageRange(
+	deviceID, startDate, endDate, sortField, sortDirection string,
+	page, pageSize int,
+) (store.UploadPage, error) {
+	if endDate == "" || endDate == startDate {
+		return s.filesystemUploadsPage(deviceID, startDate, sortField, sortDirection, page, pageSize)
+	}
+
+	allDates, err := s.filesystemDates(deviceID)
+	if err != nil {
+		return store.UploadPage{}, err
+	}
+
+	// Collect files from all date directories in range
+	var allFiles []uploadWithTime
+	totalBytes := int64(0)
+	totalTransmissionMs := int64(0)
+	for _, d := range allDates {
+		if d < startDate || d > endDate {
+			continue
+		}
+		singlePage, err := s.filesystemUploadsPage(deviceID, d, sortField, sortDirection, 1, 10000)
+		if err != nil {
+			continue
+		}
+		for _, u := range singlePage.Items {
+			info, _ := os.Stat(filepath.Join(s.deviceDirPath(deviceID), d, u.OriginalFilename))
+			ts := time.Now()
+			if info != nil {
+				ts = info.ModTime()
+			}
+			allFiles = append(allFiles, uploadWithTime{upload: u, ts: ts})
+		}
+		totalBytes += singlePage.TotalBytes
+		totalTransmissionMs += singlePage.TotalActiveTransmissionMs
+	}
+
+	sortFilesystemUploads(allFiles, sortField, sortDirection)
+
+	page = max(page, 1)
+	pageSize = clampPageSize(pageSize)
+	start := min((page-1)*pageSize, len(allFiles))
+	end := min(start+pageSize, len(allFiles))
+
+	uploads := make([]store.Upload, 0, end-start)
+	for _, f := range allFiles[start:end] {
+		uploads = append(uploads, f.upload)
+	}
+
+	return store.UploadPage{
+		Items:                     uploads,
+		Page:                      page,
+		PageSize:                  pageSize,
+		TotalItems:                len(allFiles),
+		TotalBytes:                totalBytes,
+		TotalActiveTransmissionMs: totalTransmissionMs,
+	}, nil
+}
+
 func sortFilesystemUploads(files []uploadWithTime, sortField, sortDirection string) {
 	desc := strings.ToLower(sortDirection) != "asc"
 

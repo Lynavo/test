@@ -616,6 +616,100 @@ func TestZeroconfBroadcast_Discoverable(t *testing.T) {
 	}
 }
 
+// TestWatchdog_RestartsAfterKill verifies that the watchdog goroutine restarts
+// the dns-sd process after it is killed.  This is an integration test that
+// requires a real dns-sd binary (macOS or Windows with Bonjour installed).
+func TestWatchdog_RestartsAfterKill(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("watchdog integration test requires macOS dns-sd")
+	}
+
+	cfg := BroadcastConfig{
+		DeviceID:   "watchdog-test",
+		DeviceName: "WatchdogTest",
+		DeviceType: "mac",
+		DeviceIP:   "192.168.1.99",
+		TCPPort:    39399, // avoid conflict with a running sidecar
+		Proto:      2,
+		ShareName:  "WatchdogTest",
+	}
+
+	b, err := NewBroadcaster(cfg)
+	if err != nil {
+		t.Skipf("mDNS registration unavailable: %v", err)
+	}
+	defer b.Shutdown()
+
+	// Must be a dns-sd broadcaster with a running process.
+	b.mu.Lock()
+	if b.cmd == nil || b.cmd.Process == nil {
+		b.mu.Unlock()
+		t.Skip("broadcaster did not use dns-sd backend in this environment")
+	}
+	originalPID := b.cmd.Process.Pid
+	b.mu.Unlock()
+
+	// Kill the dns-sd process to trigger the watchdog.
+	if err := b.cmd.Process.Kill(); err != nil {
+		t.Fatalf("failed to kill dns-sd: %v", err)
+	}
+
+	// Wait for the watchdog to restart (initial backoff is 2s + 1s grace).
+	deadline := time.After(10 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	restarted := false
+	for !restarted {
+		select {
+		case <-deadline:
+			t.Fatal("watchdog did not restart dns-sd within timeout")
+		case <-ticker.C:
+			b.mu.Lock()
+			if b.cmd != nil && b.cmd.Process != nil && b.cmd.Process.Pid != originalPID {
+				restarted = true
+			}
+			b.mu.Unlock()
+		}
+	}
+}
+
+// TestShutdown_StopsWatchdog verifies that Shutdown stops a running watchdog
+// without deadlocking, even when the dns-sd process has already exited.
+func TestShutdown_StopsWatchdog(t *testing.T) {
+	exited := make(chan struct{})
+	close(exited) // simulate an already-exited process
+
+	b := &Broadcaster{
+		cmd:         nil,
+		dnssdExited: exited,
+		done:        make(chan struct{}),
+		dnsSDPath:   "/nonexistent",
+		cfg:         testConfig(),
+		txt:         BuildTXTRecords(testConfig()),
+	}
+
+	// Start the watchdog — it will try to restart but fail because the
+	// dnsSDPath doesn't exist.  Shutdown must stop it cleanly.
+	go b.watchAndRestart()
+
+	// Give the watchdog a moment to enter its loop.
+	time.Sleep(100 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		b.Shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Shutdown completed without deadlock
+	case <-time.After(5 * time.Second):
+		t.Fatal("Shutdown deadlocked with active watchdog")
+	}
+}
+
 // --- helpers ---------------------------------------------------------------
 
 func browseForService(t *testing.T, instanceName string, timeout time.Duration) *zeroconf.ServiceEntry {

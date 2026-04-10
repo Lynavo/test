@@ -59,6 +59,7 @@ func (s *Server) handleDeviceFiles(w http.ResponseWriter, r *http.Request) {
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
+	endDate := r.URL.Query().Get("endDate")
 
 	page := parsePositiveInt(r.URL.Query().Get("page"), 1)
 	pageSize := parsePositiveInt(r.URL.Query().Get("pageSize"), 200)
@@ -68,23 +69,24 @@ func (s *Server) handleDeviceFiles(w http.ResponseWriter, r *http.Request) {
 	sortField := r.URL.Query().Get("sortField")
 	sortDirection := r.URL.Query().Get("sortDirection")
 
-	uploadsPage, err := s.store.ListUploadsPageByDeviceAndDate(
+	uploadsPage, err := s.store.ListUploadsPageByDeviceAndDateRange(
 		deviceID,
 		date,
+		endDate,
 		sortField,
 		sortDirection,
 		page,
 		pageSize,
 	)
 	if err != nil {
-		slog.Error("list device files", "err", err, "deviceId", deviceID, "date", date, "page", page, "pageSize", pageSize)
+		slog.Error("list device files", "err", err, "deviceId", deviceID, "date", date, "endDate", endDate, "page", page, "pageSize", pageSize)
 		writeError(w, http.StatusInternalServerError, "failed to list files")
 		return
 	}
 	if uploadsPage.TotalItems == 0 {
-		fsUploads, err := s.filesystemUploadsPage(deviceID, date, sortField, sortDirection, page, pageSize)
+		fsUploads, err := s.filesystemUploadsPageRange(deviceID, date, endDate, sortField, sortDirection, page, pageSize)
 		if err != nil {
-			slog.Warn("list filesystem uploads fallback failed", "err", err, "deviceId", deviceID, "date", date, "page", page, "pageSize", pageSize)
+			slog.Warn("list filesystem uploads fallback failed", "err", err, "deviceId", deviceID, "date", date, "endDate", endDate, "page", page, "pageSize", pageSize)
 		} else {
 			uploadsPage = fsUploads
 		}

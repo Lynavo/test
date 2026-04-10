@@ -49,6 +49,14 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	// Share
 	mux.HandleFunc("GET /share/status", withJSON(srv.handleShareStatus))
 	mux.HandleFunc("POST /share/validate", withJSON(srv.handleShareValidate))
+	// Shared files (binary responses — no withJSON wrapper)
+	mux.HandleFunc("GET /shared/list", withJSON(srv.handleSharedList))
+	mux.HandleFunc("GET /shared/list/{path...}", withJSON(srv.handleSharedListPath))
+	mux.HandleFunc("GET /shared/thumbnail/{path...}", srv.handleSharedThumbnail)
+	mux.HandleFunc("GET /shared/download/{path...}", srv.handleSharedDownload)
+	mux.HandleFunc("GET /shared/stream/{path...}", srv.handleSharedStream)
+	// Transfer state
+	mux.HandleFunc("GET /transfer/active", withJSON(srv.handleTransferActive))
 	// WebSocket
 	mux.HandleFunc("GET /events/stream", srv.handleEventStream)
 
