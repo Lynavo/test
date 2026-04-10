@@ -14,4 +14,6 @@ export type SidecarEvent =
   | { type: 'disk.low'; payload: { remainingBytes: number } }
   | { type: 'share.status.changed'; payload: ShareStatusDTO }
   | { type: 'sync.summary.updated'; payload: SyncSummaryDTO }
-  | { type: 'history.updated'; payload: { dateKey: string; deviceId: string } };
+  | { type: 'history.updated'; payload: { dateKey: string; deviceId: string } }
+  | { type: 'shared.directory.changed'; payload: { path: string } }
+  | { type: 'transfer.active.changed'; payload: { isActive: boolean } };

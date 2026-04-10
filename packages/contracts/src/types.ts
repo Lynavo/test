@@ -1,9 +1,13 @@
 import type {
+  AutoUploadMediaFilter,
+  AutoUploadState,
+  AutoUploadTimeRangeMode,
   ConnectionState,
   DeviceDashboardStatus,
   DeviceType,
   ShareStatus,
   UploadState,
+  UploadTaskSource,
 } from './enums';
 
 // ── Device Discovery ──
@@ -88,7 +92,9 @@ export interface DeviceFileLedgerPageDTO {
 export interface SettingsDTO {
   deviceName: string;
   connectionCode: string;
+  rootPath: string;
   receivePath: string;
+  sharedPath: string;
   shareAddress: string;
   shareStatus: ShareStatus;
   shareName: string;
@@ -120,6 +126,14 @@ export interface SyncSummaryDTO {
   thermalState?: 'nominal' | 'fair' | 'serious' | 'critical' | 'unknown';
   activeTuningProfile?: string | null;
   isThermalLimited?: boolean;
+  /** Source of the currently uploading task (auto or manual) */
+  currentTaskSource?: UploadTaskSource | null;
+  /** Current state of the auto-upload feature */
+  autoUploadState?: AutoUploadState;
+  /** Number of pending items in the current manual batch */
+  manualBatchPending?: number;
+  /** Number of pending auto-upload items */
+  autoPending?: number;
 }
 
 export interface ReadOnlyQueueItemDTO {
@@ -128,8 +142,12 @@ export interface ReadOnlyQueueItemDTO {
   fileSize: number;
   mediaType: string;
   /** Simplified status for RN display; failed/skipped items are excluded from the read-only queue */
-  status: 'uploading' | 'waiting' | 'completed';
+  status: 'uploading' | 'waiting' | 'completed' | 'cancelled';
   progress?: number;
+  /** Upload source: auto-scanned or manually selected */
+  source?: UploadTaskSource;
+  /** Manual batch group identifier */
+  batchId?: string;
 }
 
 // ── Mobile Binding State ──
@@ -163,4 +181,47 @@ export interface HistoryLedgerCardDTO {
   totalFileCount: number;
   totalBytes: number;
   activeTransmissionSeconds: number;
+}
+
+// ── Vivi Drop: Album & Shared Files ──
+
+/** Album asset item for the album workbench browser */
+export interface AlbumAssetDTO {
+  assetLocalId: string;
+  filename: string;
+  mediaType: 'image' | 'video';
+  fileSize: number;
+  creationDate: string;
+  thumbnailUri: string;
+  isTransferred: boolean;
+  isQueued: boolean;
+}
+
+/** Auto-upload configuration (single-row persisted on mobile) */
+export interface AutoUploadConfigDTO {
+  enabled: boolean;
+  mediaFilter: AutoUploadMediaFilter;
+  timeRangeMode: AutoUploadTimeRangeMode;
+  /** ISO 8601 timestamp, only used when timeRangeMode is 'custom' */
+  customTimeFrom?: string;
+  state: AutoUploadState;
+}
+
+/** A single file entry in the shared directory listing */
+export interface SharedFileDTO {
+  name: string;
+  path: string;
+  type: 'image' | 'video' | 'document' | 'other';
+  size: number;
+  modifiedAt: string;
+  thumbnailUrl?: string;
+  streamUrl?: string;
+  isDirectory?: boolean;
+}
+
+/** Shared directory listing response */
+export interface SharedDirectoryDTO {
+  path: string;
+  files: SharedFileDTO[];
+  totalCount: number;
 }

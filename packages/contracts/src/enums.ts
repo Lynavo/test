@@ -24,9 +24,19 @@ export type SyncEngineState =
   | 'idle' | 'discovering' | 'scanning' | 'preparing'
   | 'syncing_foreground' | 'syncing_background'
   | 'backoff_waiting' | 'paused_no_target'
-  | 'paused_no_permission' | 'stopped';
+  | 'paused_no_permission' | 'paused_auto_upload' | 'stopped';
 
 /** iPhone upload_items status */
 export type MobileUploadItemStatus =
   | 'discovered' | 'preparing' | 'ready'
-  | 'uploading' | 'completed' | 'failed' | 'skipped';
+  | 'uploading' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+
+// ── Vivi Drop: Upload source & auto-upload config ──
+
+export type UploadTaskSource = 'auto' | 'manual';
+
+export type AutoUploadTimeRangeMode = 'from_now' | 'from_today' | 'all' | 'custom';
+
+export type AutoUploadMediaFilter = 'all' | 'photos' | 'videos';
+
+export type AutoUploadState = 'disabled' | 'active' | 'paused';
