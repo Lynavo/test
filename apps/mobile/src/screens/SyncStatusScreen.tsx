@@ -24,6 +24,7 @@ import { formatLocalDateKey } from '../utils/localDateKey';
 import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
 import { shouldTreatReconnectAsWaitingForNetworkRecovery } from '../utils/reconnectBannerState';
 import { getReconnectInterruptionReason } from '../utils/reconnectInterruptionReason';
+import { formatQueueCountDisplay } from '../utils/queueCountDisplay';
 import { SyncPerformanceHint } from './components/SyncPerformanceHint';
 
 // ---------------------------------------------------------------------------
@@ -895,6 +896,7 @@ export function SyncStatusScreen() {
     summaryTotalBytes,
     overview.completedBytes + overview.currentFileConfirmedBytes,
   );
+  const queueCountDisplay = formatQueueCountDisplay(queue.length);
   const activeQueueItem = queue.find(
     item => item.fileKey.length > 0 && item.fileKey === overview.currentFile,
   );
@@ -1159,7 +1161,7 @@ export function SyncStatusScreen() {
             <View style={styles.queueHeader}>
               <Text style={styles.queueTitle}>{'排队中'}</Text>
               <View style={styles.queueBadge}>
-                <Text style={styles.queueBadgeText}>{queue.length}</Text>
+                <Text style={styles.queueBadgeText}>{queueCountDisplay}</Text>
               </View>
             </View>
             <FlatList<QueueItem>

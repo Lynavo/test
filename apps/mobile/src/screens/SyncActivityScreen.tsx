@@ -28,6 +28,7 @@ import {
 import { formatBytes } from '../utils/format';
 import { formatLocalDateKey } from '../utils/localDateKey';
 import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
+import { formatQueueCountDisplay } from '../utils/queueCountDisplay';
 import type { MainTabParamList } from '../navigation/RootNavigator';
 
 // ---------------------------------------------------------------------------
@@ -374,6 +375,7 @@ export function SyncActivityScreen() {
 
   const totalPending =
     (overview.manualBatchPending ?? 0) + (overview.autoPending ?? 0);
+  const totalPendingDisplay = formatQueueCountDisplay(totalPending);
 
   const currentTaskSource = overview.currentTaskSource;
 
@@ -507,7 +509,7 @@ export function SyncActivityScreen() {
             {totalPending > 0 && (
               <View style={styles.queueInfo}>
                 <Text style={styles.queueInfoText}>
-                  排队中 {totalPending} 项
+                  排队中 {totalPendingDisplay} 项
                   {(overview.autoPending ?? 0) > 0 &&
                     (overview.manualBatchPending ?? 0) > 0
                     ? ` (自动 ${overview.autoPending} + 手动 ${overview.manualBatchPending})`
