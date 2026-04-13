@@ -376,6 +376,13 @@ export function SyncActivityScreen() {
   const totalPending =
     (overview.manualBatchPending ?? 0) + (overview.autoPending ?? 0);
   const totalPendingDisplay = formatQueueCountDisplay(totalPending);
+  const hasPendingUploads = totalPending > 0;
+  const showTransferProgressCard =
+    isSyncing ||
+    isPausedAuto ||
+    overview.uploadState === 'scanning' ||
+    overview.uploadState === 'reconnecting' ||
+    (overview.autoUploadState === 'active' && hasPendingUploads);
 
   const currentTaskSource = overview.currentTaskSource;
 
@@ -434,7 +441,7 @@ export function SyncActivityScreen() {
         </View>
 
         {/* Transfer progress card */}
-        {(isSyncing || isPausedAuto) && (
+        {showTransferProgressCard && (
           <View style={styles.progressCard}>
             {/* Task source badge */}
             {currentTaskSource && (
