@@ -108,7 +108,11 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
     const api = window.electronAPI;
     if (!api || !isSidecarHealthy()) return;
 
-    set({ loading: true, error: null });
+    // Only show loading indicator on initial load (no files yet)
+    const isInitialLoad = get().receivedFiles.length === 0;
+    if (isInitialLoad) {
+      set({ loading: true, error: null });
+    }
 
     try {
       const devices: DashboardDeviceDTO[] = await api.sidecar.getDashboardDevices();
@@ -153,11 +157,19 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
         }),
       );
 
-      set({
-        receivedFiles: allFiles,
-        receivedTotalBytes: totalBytes,
-        loading: false,
-      });
+      // Build fingerprint from fileKeys to detect actual changes
+      const newFingerprint = allFiles.map((f) => f.fileKey).join('\n');
+      const oldFingerprint = get().receivedFiles.map((f) => f.fileKey).join('\n');
+
+      if (newFingerprint !== oldFingerprint || totalBytes !== get().receivedTotalBytes) {
+        set({
+          receivedFiles: allFiles,
+          receivedTotalBytes: totalBytes,
+          loading: false,
+        });
+      } else if (isInitialLoad) {
+        set({ loading: false });
+      }
     } catch (err) {
       console.error('Failed to fetch received files:', err);
       set({ loading: false, error: '加载接收文件列表失败' });
@@ -168,7 +180,6 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
     const api = window.electronAPI;
     if (!api || !isSidecarHealthy()) return;
 
-    set({ error: null });
     try {
       const result = await api.sidecar.getSharedList();
       const entries: SharedFileEntry[] = result.files
@@ -180,7 +191,14 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
           size: f.size,
           modifiedAt: f.modifiedAt,
         }));
-      set({ sharedFiles: entries });
+
+      // Only update state if the file list actually changed
+      const newFingerprint = entries.map((f) => f.path).join('\n');
+      const oldFingerprint = get().sharedFiles.map((f) => f.path).join('\n');
+
+      if (newFingerprint !== oldFingerprint) {
+        set({ sharedFiles: entries });
+      }
     } catch (err) {
       console.error('Failed to fetch shared files:', err);
       set({ sharedFiles: [], error: '加载共享文件列表失败' });
