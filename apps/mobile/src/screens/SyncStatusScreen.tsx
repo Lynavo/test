@@ -31,7 +31,8 @@ import { SyncPerformanceHint } from './components/SyncPerformanceHint';
 // Types
 // ---------------------------------------------------------------------------
 
-type SyncStatusNav = StackNavigationProp<RootStackParamList, 'SyncStatus'>;
+/** @deprecated — this screen is replaced by SyncActivityScreen */
+type SyncStatusNav = StackNavigationProp<RootStackParamList, 'SyncActivity'>;
 
 interface QueueItem {
   id: string;
@@ -74,6 +75,7 @@ interface SyncOverview {
   lastErrorMessage?: string;
   retryAttempt?: number;
   retryDelaySec?: number;
+  autoUploadState?: string;
 }
 
 interface BindingState {
@@ -315,6 +317,9 @@ function buildOverviewFromPayload(
       (payload.retryAttempt as number | undefined) ?? previous.retryAttempt,
     retryDelaySec:
       (payload.retryDelaySec as number | undefined) ?? previous.retryDelaySec,
+    autoUploadState:
+      (payload.autoUploadState as string | undefined) ??
+      previous.autoUploadState,
   };
 }
 
@@ -723,12 +728,17 @@ export function SyncStatusScreen() {
           setQueue(initialQueue);
         }
 
+        const initialAutoOff =
+          initialOverview.uploadState === 'paused_auto_upload' ||
+          initialOverview.autoUploadState === 'interrupted' ||
+          initialOverview.autoUploadState === 'disabled';
         const initialDone =
-          initialOverview.uploadState === 'completed' ||
-          (initialOverview.uploadState === 'idle' &&
-            initialQueue.length === 0 &&
-            (initialOverview.progressPercent >= 100 ||
-              (loadedTodayStats?.fileCount ?? 0) > 0));
+          !initialAutoOff &&
+          (initialOverview.uploadState === 'completed' ||
+            (initialOverview.uploadState === 'idle' &&
+              initialQueue.length === 0 &&
+              (initialOverview.progressPercent >= 100 ||
+                (loadedTodayStats?.fileCount ?? 0) > 0)));
         if (initialDone) {
           setHoldCompletionCardUntilMs(Date.now() + COMPLETION_CARD_HOLD_MS);
         }
@@ -902,11 +912,17 @@ export function SyncStatusScreen() {
   );
   const activeFileName = overview.currentFilename || activeQueueItem?.name;
 
+  // interrupted / disabled should NOT show the completion card
+  const isAutoUploadOff =
+    overview.uploadState === 'paused_auto_upload' ||
+    overview.autoUploadState === 'interrupted' ||
+    overview.autoUploadState === 'disabled';
   const isDone =
-    overview.uploadState === 'completed' ||
-    (overview.uploadState === 'idle' &&
-      queue.length === 0 &&
-      todayStats.fileCount > 0);
+    !isAutoUploadOff &&
+    (overview.uploadState === 'completed' ||
+      (overview.uploadState === 'idle' &&
+        queue.length === 0 &&
+        todayStats.fileCount > 0));
   const holdCompletionCard =
     holdCompletionCardUntilMs !== null &&
     Date.now() < holdCompletionCardUntilMs &&

@@ -15,6 +15,7 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import type { SharedFileDTO } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import {
@@ -71,6 +72,7 @@ async function checkDeviceAvailable(): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 export function SharedFilesScreen() {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<SharedFileDTO[]>([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -373,23 +375,21 @@ export function SharedFilesScreen() {
 
   // Current folder name for header
   const folderName = currentPath
-    ? currentPath.split('/').filter(Boolean).pop() ?? '共享文件'
-    : '共享文件';
+    ? currentPath.split('/').filter(Boolean).pop() ?? '共享目录'
+    : '共享目录';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          {currentPath !== '' && (
-            <TouchableOpacity
-              style={styles.backButton}
-              activeOpacity={0.7}
-              onPress={navigateBack}
-            >
-              <Icon name="chevron-back" size={18} color={DARK} />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={styles.backButton}
+            activeOpacity={0.7}
+            onPress={currentPath !== '' ? navigateBack : () => navigation.goBack()}
+          >
+            <Icon name="chevron-back" size={18} color={DARK} />
+          </TouchableOpacity>
           <Text style={styles.title}>{folderName}</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity

@@ -50,6 +50,9 @@ const ionicons: Record<string, number> = {
   'toggle-outline': 61167,
   'checkbox-outline': 60182,
   'square-outline': 61079,
+  'cloud-upload-outline': 60262,
+  'apps-outline': 60017,
+  'menu-outline': 60661,
 };
 
 interface IconProps {

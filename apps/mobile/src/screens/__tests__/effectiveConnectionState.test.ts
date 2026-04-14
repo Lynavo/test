@@ -1,5 +1,7 @@
 import {
+  buildSyncConnectionEvidence,
   getEffectiveConnectionState,
+  getConnectionBadgeState,
   syncActivityImpliesConnected,
 } from '../../utils/effectiveConnectionState';
 
@@ -57,5 +59,28 @@ describe('effectiveConnectionState', () => {
         uploadState: 'preparing',
       }),
     ).toBe('connected');
+  });
+
+  it('builds online badge state from current file evidence even if binding temporarily reports offline', () => {
+    expect(
+      getConnectionBadgeState(
+        'offline',
+        buildSyncConnectionEvidence({
+          currentFile: 'abc123',
+          uploadState: 'idle',
+        }),
+      ),
+    ).toBe('online');
+  });
+
+  it('keeps connecting badge state distinct from online when no sync evidence exists', () => {
+    expect(
+      getConnectionBadgeState(
+        'connecting',
+        buildSyncConnectionEvidence({
+          uploadState: 'idle',
+        }),
+      ),
+    ).toBe('connecting');
   });
 });

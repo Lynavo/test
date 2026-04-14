@@ -5,7 +5,7 @@ export type MobileConnectionState =
   | 'offline'
   | 'discovering';
 
-type SyncConnectionEvidence = {
+export type SyncConnectionEvidence = {
   progressPercent?: number | null;
   queueHasUploadingItem?: boolean;
   queueHasActiveItem?: boolean;
@@ -13,6 +13,32 @@ type SyncConnectionEvidence = {
   uploadState?: string | null;
   currentFileKey?: string | null;
 };
+
+export type SyncConnectionSnapshot = {
+  progressPercent?: number | null;
+  queueHasUploadingItem?: boolean;
+  queueHasActiveItem?: boolean;
+  transferredBytes?: number | null;
+  currentFile?: string | null;
+  currentFileConfirmedBytes?: number | null;
+  uploadState?: string | null;
+};
+
+export type ConnectionBadgeState = 'online' | 'connecting' | 'offline';
+
+export function buildSyncConnectionEvidence(
+  snapshot: SyncConnectionSnapshot,
+): SyncConnectionEvidence {
+  return {
+    progressPercent: snapshot.progressPercent,
+    queueHasUploadingItem: snapshot.queueHasUploadingItem,
+    queueHasActiveItem: snapshot.queueHasActiveItem,
+    transferredBytes:
+      snapshot.currentFileConfirmedBytes ?? snapshot.transferredBytes,
+    uploadState: snapshot.uploadState,
+    currentFileKey: snapshot.currentFile,
+  };
+}
 
 export function syncActivityImpliesConnected(
   evidence: SyncConnectionEvidence,
@@ -42,7 +68,7 @@ export function getEffectiveConnectionState(
   connectionState: MobileConnectionState | null | undefined,
   evidence: SyncConnectionEvidence,
 ): MobileConnectionState | null | undefined {
-  if (connectionState === 'connected') {
+  if (connectionState === 'connected' || connectionState === 'bound') {
     return 'connected';
   }
 
@@ -51,4 +77,28 @@ export function getEffectiveConnectionState(
   }
 
   return connectionState;
+}
+
+export function getConnectionBadgeState(
+  connectionState: MobileConnectionState | null | undefined,
+  evidence: SyncConnectionEvidence,
+): ConnectionBadgeState {
+  const effectiveConnectionState = getEffectiveConnectionState(
+    connectionState,
+    evidence,
+  );
+
+  if (effectiveConnectionState === 'connected') {
+    return 'online';
+  }
+
+  if (
+    effectiveConnectionState === 'bound' ||
+    effectiveConnectionState === 'connecting' ||
+    effectiveConnectionState === 'discovering'
+  ) {
+    return 'connecting';
+  }
+
+  return 'offline';
 }

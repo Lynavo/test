@@ -9,7 +9,6 @@ import {
   NativeEventEmitter,
   Alert,
   AppState,
-  Platform,
   type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,25 +16,29 @@ import {
   useNavigation,
   CommonActions,
 } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import type { UploadTaskSource, AutoUploadState } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import {
-  pauseAutoUpload,
-  resumeAutoUpload,
-  cancelManualBatch,
+  cancelAllManualUploads,
+  interruptAutoUpload,
+  enableAutoUpload,
 } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
 import { formatLocalDateKey } from '../utils/localDateKey';
-import { getEffectiveConnectionState } from '../utils/effectiveConnectionState';
+import {
+  buildSyncConnectionEvidence,
+  getConnectionBadgeState,
+} from '../utils/effectiveConnectionState';
 import { formatQueueCountDisplay } from '../utils/queueCountDisplay';
-import type { MainTabParamList } from '../navigation/RootNavigator';
+import { hasPendingManualWork } from '../utils/manualUploadState';
+import type { RootStackParamList } from '../navigation/RootNavigator';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type SyncActivityNav = BottomTabNavigationProp<MainTabParamList, 'SyncActivity'>;
+type SyncActivityNav = StackNavigationProp<RootStackParamList, 'SyncActivity'>;
 
 interface SyncOverview {
   progressPercent: number;
@@ -51,7 +54,7 @@ interface SyncOverview {
   currentFileTotalBytes: number;
   currentTaskSource?: UploadTaskSource | null;
   autoUploadState?: AutoUploadState;
-  manualBatchPending?: number;
+  manualPending?: number;
   autoPending?: number;
   lastErrorCode?: string;
 }
@@ -91,7 +94,7 @@ const EMPTY_OVERVIEW: SyncOverview = {
   currentFileTotalBytes: 0,
   currentTaskSource: null,
   autoUploadState: 'disabled',
-  manualBatchPending: 0,
+  manualPending: 0,
   autoPending: 0,
 };
 
@@ -104,29 +107,6 @@ function formatSpeedMbps(speedMbps: number): string {
     return '0 MB/s';
   }
   return `${speedMbps >= 10 ? speedMbps.toFixed(0) : speedMbps.toFixed(1)} MB/s`;
-}
-
-function uploadStateLabel(state: string): string {
-  switch (state) {
-    case 'uploading':
-      return '正在同步';
-    case 'preparing':
-      return '准备同步';
-    case 'scanning':
-      return '扫描中';
-    case 'cloud_downloading':
-      return '准备素材中';
-    case 'reconnecting':
-      return '等待重连';
-    case 'completed':
-      return '已完成';
-    case 'paused_no_permission':
-      return '等待权限';
-    case 'paused_auto_upload':
-      return '自动上传已暂停';
-    default:
-      return '空闲';
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,10 +205,9 @@ export function SyncActivityScreen() {
         setInitialLoading(false);
 
         await NativeSyncEngine.startDiscovery();
-        NativeSyncEngine.triggerSync?.().catch((e: Error) => {
-          console.warn('[SyncActivity] triggerSync failed:', e);
-          Alert.alert('触发同步失败', '请稍后重试');
-        });
+        // Do NOT call triggerSync() here — per PRD, auto upload must be
+        // explicitly enabled by the user in the album page. Unconditional
+        // triggerSync on mount was the old "always auto sync" behavior.
 
         syncSub = emitter.addListener(
           'onSyncStateChanged',
@@ -281,26 +260,8 @@ export function SyncActivityScreen() {
   // Control handlers
   // ---------------------------------------------------------------------------
 
-  const handlePauseAutoUpload = useCallback(async () => {
-    try {
-      await pauseAutoUpload();
-    } catch (e) {
-      console.warn('[SyncActivity] pauseAutoUpload error:', e);
-      Alert.alert('暂停失败', '无法暂停自动上传，请稍后重试');
-    }
-  }, []);
-
-  const handleResumeAutoUpload = useCallback(async () => {
-    try {
-      await resumeAutoUpload();
-    } catch (e) {
-      console.warn('[SyncActivity] resumeAutoUpload error:', e);
-      Alert.alert('恢复失败', '无法恢复自动上传，请稍后重试');
-    }
-  }, []);
-
   const handleCancelManualBatch = useCallback(() => {
-    Alert.alert('取消手动上传', '确定取消当前的手动上传批次吗？', [
+    Alert.alert('取消手动上传', '确定取消当前的手动上传队列吗？', [
       { text: '再想想', style: 'cancel' },
       {
         text: '确认取消',
@@ -308,28 +269,139 @@ export function SyncActivityScreen() {
         onPress: async () => {
           try {
             setCancellingBatch(true);
-            // Query the pending queue to find the current manual batch ID.
-            // cancelManualBatch requires a real batchId — an empty string
-            // matches nothing in the SQL WHERE clause.
-            const queue = await NativeModules.NativeSyncEngine?.getReadOnlyQueue();
-            const manualItem = (queue as Array<Record<string, unknown>> | undefined)?.find(
-              (item) => item.source === 'manual' && typeof item.batchId === 'string' && item.batchId !== '',
-            );
-            const batchId = (manualItem?.batchId as string) ?? '';
-            if (!batchId) {
-              console.warn('[SyncActivity] no active manual batchId found');
-              return;
-            }
-            await cancelManualBatch(batchId);
+            await cancelAllManualUploads();
           } catch (e) {
-            console.warn('[SyncActivity] cancelManualBatch error:', e);
-            Alert.alert('取消失败', '无法取消当前批次，请稍后重试');
+            console.warn('[SyncActivity] cancelAllManualUploads error:', e);
+            Alert.alert('取消失败', '无法取消当前手动上传，请稍后重试');
           } finally {
             setCancellingBatch(false);
           }
         },
       },
     ]);
+  }, []);
+
+  const handleCloseAutoUpload = useCallback(() => {
+    Alert.alert(
+      '关闭自动上传',
+      '关闭后，当前自动上传任务将停止，后续新素材不会继续自动上传。',
+      [
+        { text: '继续上传', style: 'cancel' },
+        {
+          text: '确认关闭',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await interruptAutoUpload();
+              // Reload overview to reflect the new state
+              const syncData = await NativeModules.NativeSyncEngine?.getSyncOverview();
+              if (syncData) {
+                setOverview(prev => buildOverview(syncData, prev));
+              }
+            } catch (e) {
+              console.warn('[SyncActivity] interruptAutoUpload error:', e);
+              Alert.alert('操作失败', '无法关闭自动上传，请稍后重试');
+            }
+          },
+        },
+      ],
+    );
+  }, []);
+
+  const handleReconnect = useCallback(async () => {
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine) return;
+      await NativeSyncEngine.startDiscovery();
+      NativeSyncEngine.triggerSync?.().catch((e: Error) => {
+        console.warn('[SyncActivity] triggerSync failed:', e);
+      });
+    } catch (e) {
+      console.warn('[SyncActivity] reconnect error:', e);
+      Alert.alert('重连失败', '请稍后重试');
+    }
+  }, []);
+
+  const handleSwitchDevice = useCallback(() => {
+    Alert.alert('切换设备', '将断开当前设备并返回设备扫描页', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '确认切换',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await NativeModules.NativeSyncEngine?.disconnectAndUnbind();
+          } catch (e) {
+            console.warn('[SyncActivity] disconnectAndUnbind error:', e);
+          }
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'DeviceDiscovery' }],
+            }),
+          );
+        },
+      },
+    ]);
+  }, [navigation]);
+
+  const handleEnableAutoUpload = useCallback(async () => {
+    // Check device connection first
+    try {
+      const binding = await NativeModules.NativeSyncEngine?.getBindingState();
+      if (
+        !binding?.deviceId ||
+        (binding.connectionState !== 'connected' &&
+          binding.connectionState !== 'bound')
+      ) {
+        Alert.alert('无法开启', '请先连接设备');
+        return;
+      }
+    } catch {
+      Alert.alert('无法开启', '请先连接设备');
+      return;
+    }
+    try {
+      const syncData = await NativeModules.NativeSyncEngine?.getSyncOverview();
+      if (hasPendingManualWork(syncData)) {
+        Alert.alert(
+          '切换上传模式',
+          '当前正在上传，继续自动上传将中断手动上传，是否继续？',
+          [
+            { text: '取消', style: 'cancel' },
+            {
+              text: '确认切换',
+              onPress: async () => {
+                try {
+                  await cancelAllManualUploads();
+                  await enableAutoUpload();
+                  await NativeModules.NativeSyncEngine?.triggerSync();
+                  const nextSyncData =
+                    await NativeModules.NativeSyncEngine?.getSyncOverview();
+                  if (nextSyncData) {
+                    setOverview(prev => buildOverview(nextSyncData, prev));
+                  }
+                } catch (e) {
+                  console.warn('[SyncActivity] enableAutoUpload error:', e);
+                  Alert.alert('操作失败', '无法开启自动上传，请稍后重试');
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      await enableAutoUpload();
+      await NativeModules.NativeSyncEngine?.triggerSync();
+      const nextSyncData = await NativeModules.NativeSyncEngine?.getSyncOverview();
+      if (nextSyncData) {
+        setOverview(prev => buildOverview(nextSyncData, prev));
+      }
+    } catch (e) {
+      console.warn('[SyncActivity] enableAutoUpload error:', e);
+      Alert.alert('操作失败', '无法开启自动上传，请稍后重试');
+    }
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -341,29 +413,36 @@ export function SyncActivityScreen() {
     bindingState?.deviceName ||
     (bindingState?.deviceType === 'win' ? 'Windows 电脑' : '电脑');
 
-  const effectiveConnectionState = getEffectiveConnectionState(
+  const connectionBadgeState = getConnectionBadgeState(
     bindingState?.connectionState,
-    {
+    buildSyncConnectionEvidence({
       progressPercent: overview.progressPercent,
-      currentFileKey: overview.currentFile,
-      queueHasActiveItem: false,
-      queueHasUploadingItem: false,
-      transferredBytes: overview.currentFileConfirmedBytes,
+      currentFile: overview.currentFile,
+      currentFileConfirmedBytes: overview.currentFileConfirmedBytes,
       uploadState: overview.uploadState,
-    },
+    }),
   );
+  const isConnecting = connectionBadgeState === 'connecting';
+  const isOffline = connectionBadgeState === 'offline';
 
-  const isConnected = effectiveConnectionState === 'connected';
-  const isOffline = effectiveConnectionState === 'offline';
   const isSyncing =
     overview.uploadState === 'uploading' ||
     overview.uploadState === 'preparing' ||
     overview.uploadState === 'cloud_downloading';
-  const isDone = overview.uploadState === 'completed';
-  const isIdle = overview.uploadState === 'idle' && !isDone;
-  const isPausedAuto =
-    overview.uploadState === 'paused_auto_upload' ||
-    overview.autoUploadState === 'paused';
+
+  const isAutoUploadActive = overview.autoUploadState === 'active';
+  const currentTaskSource = overview.currentTaskSource;
+  const hasManualUploadWork = hasPendingManualWork({
+    manualPending: overview.manualPending,
+    currentTaskSource,
+  });
+
+  // Whether there's an active file transfer right now (vs. idle/completed monitoring)
+  const isActivelyTransferring =
+    isSyncing ||
+    overview.uploadState === 'scanning' ||
+    hasManualUploadWork ||
+    (overview.autoPending ?? 0) > 0;
 
   const progressPercent =
     overview.currentFileTotalBytes > 0
@@ -374,17 +453,26 @@ export function SyncActivityScreen() {
       : 0;
 
   const totalPending =
-    (overview.manualBatchPending ?? 0) + (overview.autoPending ?? 0);
+    (overview.manualPending ?? 0) + (overview.autoPending ?? 0);
   const totalPendingDisplay = formatQueueCountDisplay(totalPending);
-  const hasPendingUploads = totalPending > 0;
-  const showTransferProgressCard =
-    isSyncing ||
-    isPausedAuto ||
-    overview.uploadState === 'scanning' ||
-    overview.uploadState === 'reconnecting' ||
-    (overview.autoUploadState === 'active' && hasPendingUploads);
 
-  const currentTaskSource = overview.currentTaskSource;
+  // ---------------------------------------------------------------------------
+  // Card state determination
+  // ---------------------------------------------------------------------------
+
+  // State 1: Upload Running — auto or manual upload active
+  // State 2: Auto Upload Not Started — device online, no upload active
+  // State 3: Device Offline
+
+  const isManualUploading = hasManualUploadWork;
+
+  type MainCardState = 'running' | 'not_started' | 'offline';
+
+  const mainCardState: MainCardState = isOffline && !isSyncing
+    ? 'offline'
+    : (isAutoUploadActive || hasManualUploadWork)
+      ? 'running'
+      : 'not_started';
 
   // ---------------------------------------------------------------------------
   // Render
@@ -400,230 +488,244 @@ export function SyncActivityScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>同步动态</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('History')}
+            >
+              <Icon name="time-outline" size={22} color={DARK} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Icon name="settings-outline" size={22} color={DARK} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Device status card */}
-        <View style={styles.deviceCard}>
-          <View style={styles.deviceIconBox}>
-            <Icon name="desktop-outline" size={22} color="#fff" />
-          </View>
-          <View style={styles.deviceInfo}>
-            <Text style={styles.deviceName}>{boundDeviceName}</Text>
-            <View style={styles.deviceStatusRow}>
-              <View
-                style={[
-                  styles.statusDot,
-                  isConnected
-                    ? styles.statusDotOnline
-                    : isOffline
-                      ? styles.statusDotOffline
-                      : styles.statusDotConnecting,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.statusText,
-                  isConnected
-                    ? styles.statusTextOnline
-                    : isOffline
-                      ? styles.statusTextOffline
-                      : styles.statusTextConnecting,
-                ]}
-              >
-                {isConnected
-                  ? '在线'
-                  : isOffline
-                    ? '离线'
-                    : '连接中'}
-              </Text>
+        {/* Unified main card */}
+        <View style={styles.mainCard}>
+          {/* Device info row — always shown at top of card */}
+          <View style={styles.deviceRow}>
+            <View style={styles.deviceIconBox}>
+              <Icon name="desktop-outline" size={22} color="#fff" />
             </View>
-          </View>
-        </View>
-
-        {/* Transfer progress card */}
-        {showTransferProgressCard && (
-          <View style={styles.progressCard}>
-            {/* Task source badge */}
-            {currentTaskSource && (
-              <View
-                style={[
-                  styles.sourceBadge,
-                  currentTaskSource === 'auto'
-                    ? styles.sourceBadgeAuto
-                    : styles.sourceBadgeManual,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.sourceBadgeText,
-                    currentTaskSource === 'auto'
-                      ? styles.sourceBadgeTextAuto
-                      : styles.sourceBadgeTextManual,
-                  ]}
-                >
-                  {currentTaskSource === 'auto' ? '自动' : '手动'}
-                </Text>
-              </View>
-            )}
-
-            <Text style={styles.progressTitle}>
-              {uploadStateLabel(overview.uploadState)}
-            </Text>
-
-            {/* Progress ring (simplified bar) */}
-            <View style={styles.progressBarContainer}>
-              <View style={styles.progressBarTrack}>
+            <View style={styles.deviceInfo}>
+              <Text style={styles.deviceName}>{boundDeviceName}</Text>
+              <View style={styles.deviceStatusRow}>
                 <View
                   style={[
-                    styles.progressBarFill,
-                    { width: `${Math.min(100, progressPercent)}%` },
+                    styles.statusDot,
+                    connectionBadgeState === 'offline'
+                      ? styles.statusDotOffline
+                      : connectionBadgeState === 'connecting'
+                        ? styles.statusDotConnecting
+                        : styles.statusDotOnline,
                   ]}
                 />
+                <Text
+                  style={[
+                    styles.statusText,
+                    connectionBadgeState === 'offline'
+                      ? styles.statusTextOffline
+                      : connectionBadgeState === 'connecting'
+                        ? styles.statusTextConnecting
+                        : styles.statusTextOnline,
+                  ]}
+                >
+                  {connectionBadgeState === 'offline'
+                    ? '离线'
+                    : isConnecting
+                      ? '连接中'
+                      : '在线'}
+                </Text>
               </View>
-              <Text style={styles.progressPercent}>{progressPercent}%</Text>
             </View>
+          </View>
 
-            {/* Current file */}
-            {overview.currentFilename && (
-              <Text style={styles.currentFileName} numberOfLines={1}>
-                {overview.currentFilename}
+          {/* ---- State 1: Upload Running (auto or manual) ---- */}
+          {mainCardState === 'running' && (
+            <View style={styles.cardBody}>
+              {/* Badge row — dynamic based on upload source */}
+              <View style={styles.badgeRow}>
+                <View style={isManualUploading ? styles.manualBadge : styles.autoBadge}>
+                  <Text style={isManualUploading ? styles.manualBadgeText : styles.autoBadgeText}>
+                    {isManualUploading ? '手动' : '自动'}
+                  </Text>
+                </View>
+                <Text style={styles.badgeLabel}>
+                  {isManualUploading ? '手动上传中' : '自动上传已开启'}
+                </Text>
+              </View>
+
+              {(isActivelyTransferring || isManualUploading) ? (
+                <>
+                  {/* Title row with percentage */}
+                  <View style={styles.runningTitleRow}>
+                    <Text style={styles.runningTitle}>
+                      {isManualUploading ? '手动上传中' : '正在自动上传'}
+                    </Text>
+                    <Text style={styles.runningPercent}>{progressPercent}%</Text>
+                  </View>
+
+                  {/* Progress bar */}
+                  <View style={styles.progressBarTrack}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        { width: `${Math.min(100, progressPercent)}%` },
+                      ]}
+                    />
+                  </View>
+
+                  {/* Current file */}
+                  {overview.currentFilename ? (
+                    <Text style={styles.currentFileName} numberOfLines={1}>
+                      {overview.currentFilename}
+                    </Text>
+                  ) : null}
+
+                  {/* Stats row */}
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statLabel}>速度</Text>
+                      <Text style={styles.statValue}>
+                        {formatSpeedMbps(overview.currentSpeedMbps)}
+                      </Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statLabel}>进度</Text>
+                      <Text style={styles.statValue}>
+                        {`${overview.completedCount} / ${overview.totalCount}`}
+                      </Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statLabel}>已传输</Text>
+                      <Text style={styles.statValue}>
+                        {formatBytes(overview.completedBytes)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Queue info */}
+                  {totalPending > 0 && (
+                    <Text style={styles.queueInfoText}>
+                      排队中 {totalPendingDisplay}项
+                    </Text>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Active but idle — monitoring for new photos */}
+                  <Text style={styles.runningTitle}>自动上传运行中</Text>
+                  <Text style={styles.idleSubtitle}>
+                    新素材将自动传输到 PC 端
+                  </Text>
+                  {overview.completedCount > 0 && (
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>已传输</Text>
+                        <Text style={styles.statValue}>
+                          {overview.completedCount} 个
+                        </Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>数据量</Text>
+                        <Text style={styles.statValue}>
+                          {formatBytes(overview.completedBytes)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* Action button — only one visible at a time per PRD */}
+              {hasManualUploadWork ? (
+                <TouchableOpacity
+                  style={[styles.outlinedButton, styles.dangerButton]}
+                  activeOpacity={0.7}
+                  onPress={handleCancelManualBatch}
+                  disabled={cancellingBatch}
+                >
+                  <Text style={styles.dangerButtonText}>
+                    {cancellingBatch ? '正在取消...' : '取消本次手动上传'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.outlinedButton}
+                  activeOpacity={0.7}
+                  onPress={handleCloseAutoUpload}
+                >
+                  <Text style={styles.outlinedButtonText}>关闭自动上传</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* ---- State 2: Auto Upload Not Started ---- */}
+          {mainCardState === 'not_started' && (
+            <View style={styles.cardBodyCentered}>
+              <View style={styles.emptyIconBox}>
+                <Icon name="cloud-upload-outline" size={44} color={BLUE} />
+              </View>
+              <Text style={styles.centeredTitle}>自动上传未开启</Text>
+              <Text style={styles.centeredSubtitle}>
+                开启自动上传，拍完就同步；或者也可以选手动传输
               </Text>
-            )}
-
-            {/* Stats row */}
-            <View style={styles.progressStats}>
-              <View style={styles.progressStatItem}>
-                <Text style={styles.progressStatLabel}>速度</Text>
-                <Text style={styles.progressStatValue}>
-                  {formatSpeedMbps(overview.currentSpeedMbps)}
-                </Text>
-              </View>
-              <View style={styles.progressStatItem}>
-                <Text style={styles.progressStatLabel}>进度</Text>
-                <Text style={styles.progressStatValue}>
-                  {`${overview.completedCount} / ${overview.totalCount}`}
-                </Text>
-              </View>
-              <View style={styles.progressStatItem}>
-                <Text style={styles.progressStatLabel}>已传输</Text>
-                <Text style={styles.progressStatValue}>
-                  {formatBytes(overview.completedBytes)}
-                </Text>
+              <View style={styles.twoButtonRow}>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonOutlined]}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('AlbumWorkbench')}
+                >
+                  <Text style={styles.rowButtonOutlinedText}>去相册</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonPrimary]}
+                  activeOpacity={0.7}
+                  onPress={() => void handleEnableAutoUpload()}
+                >
+                  <Text style={styles.rowButtonPrimaryText}>开启自动上传</Text>
+                </TouchableOpacity>
               </View>
             </View>
+          )}
 
-            {/* Queue info */}
-            {totalPending > 0 && (
-              <View style={styles.queueInfo}>
-                <Text style={styles.queueInfoText}>
-                  排队中 {totalPendingDisplay} 项
-                  {(overview.autoPending ?? 0) > 0 &&
-                    (overview.manualBatchPending ?? 0) > 0
-                    ? ` (自动 ${overview.autoPending} + 手动 ${overview.manualBatchPending})`
-                    : ''}
-                </Text>
+          {/* ---- State 3: Device Offline ---- */}
+          {mainCardState === 'offline' && (
+            <View style={styles.cardBodyCentered}>
+              <View style={styles.emptyIconBox}>
+                <Icon name="alert-circle-outline" size={44} color="#e53935" />
               </View>
-            )}
-          </View>
-        )}
-
-        {/* Idle / Completed state card */}
-        {(isIdle || isDone) && !isSyncing && (
-          <View style={styles.idleCard}>
-            {isDone ? (
-              <>
-                <View style={styles.idleIconBox}>
-                  <Icon name="checkmark-circle" size={40} color="#22c55e" />
-                </View>
-                <Text style={styles.idleTitle}>所有文件已同步</Text>
-                <Text style={styles.idleSubText}>
-                  今日 {todayStats.fileCount} 个文件 ·{' '}
-                  {formatBytes(todayStats.totalBytes)}
-                </Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.idleIconBox}>
-                  <Icon name="sync-outline" size={36} color={BLUE} />
-                </View>
-                <Text style={styles.idleTitle}>等待同步</Text>
-                <Text style={styles.idleSubText}>
-                  {isConnected
-                    ? '已连接，等待新素材'
-                    : '连接后将自动开始同步'}
-                </Text>
-              </>
-            )}
-          </View>
-        )}
-
-        {/* Disconnected state */}
-        {isOffline && !isSyncing && !isDone && !isIdle && (
-          <View style={styles.idleCard}>
-            <View style={styles.idleIconBox}>
-              <Icon name="alert-circle-outline" size={40} color="#e53935" />
+              <Text style={styles.centeredTitle}>当前设备已离线</Text>
+              <Text style={styles.centeredSubtitle}>
+                请检查电脑是否在线并连接同一局域网。恢复后可继续上传或访问共享目录
+              </Text>
+              <View style={styles.twoButtonRow}>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonOutlined]}
+                  activeOpacity={0.7}
+                  onPress={handleSwitchDevice}
+                >
+                  <Text style={styles.rowButtonOutlinedText}>切换设备</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonPrimary]}
+                  activeOpacity={0.7}
+                  onPress={handleReconnect}
+                >
+                  <Text style={styles.rowButtonPrimaryText}>重新连接</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.idleTitle}>未连接</Text>
-            <Text style={styles.idleSubText}>
-              请确认电脑端 Vivi Drop 正在运行且与手机在同一网络
-            </Text>
-          </View>
-        )}
-
-        {/* Control buttons — state matrix:
-            ┌───────────────────────────────────┬──────────┬──────────┬──────────────┐
-            │ Scenario                          │ Resume   │ Pause    │ Cancel manual│
-            ├───────────────────────────────────┼──────────┼──────────┼──────────────┤
-            │ current=manual, auto=active       │ hidden   │ visible  │ visible      │
-            │ current=manual, auto=paused       │ visible  │ hidden   │ visible      │
-            │ current=auto,   auto=active       │ hidden   │ visible  │ hidden       │
-            │ no current,     auto=paused       │ visible  │ hidden   │ hidden       │
-            │ no current,     auto=active/idle  │ hidden   │ visible  │ hidden       │
-            └───────────────────────────────────┴──────────┴──────────┴──────────────┘ */}
-        {(isSyncing || isPausedAuto || overview.autoUploadState === 'active') && (
-          <View style={styles.controlSection}>
-            {/* Resume — visible when auto is paused (even during manual task) */}
-            {isPausedAuto && (
-              <TouchableOpacity
-                style={[styles.controlButton, styles.controlButtonPrimary]}
-                activeOpacity={0.7}
-                onPress={() => void handleResumeAutoUpload()}
-              >
-                <Icon name="play-circle-outline" size={18} color="#fff" />
-                <Text style={styles.controlButtonTextPrimary}>
-                  恢复自动上传
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Pause — visible when auto is active (regardless of current task source) */}
-            {!isPausedAuto && overview.autoUploadState === 'active' && (
-              <TouchableOpacity
-                style={styles.controlButton}
-                activeOpacity={0.7}
-                onPress={() => void handlePauseAutoUpload()}
-              >
-                <Icon name="pause-circle-outline" size={18} color={BLUE} />
-                <Text style={styles.controlButtonText}>暂停自动上传</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Cancel — visible when current task is manual (regardless of auto state) */}
-            {currentTaskSource === 'manual' && (
-              <TouchableOpacity
-                style={[styles.controlButton, styles.controlButtonDanger]}
-                activeOpacity={0.7}
-                onPress={handleCancelManualBatch}
-                disabled={cancellingBatch}
-              >
-                <Icon name="stop-circle-outline" size={18} color="#e53935" />
-                <Text style={styles.controlButtonTextDanger}>
-                  {cancellingBatch ? '正在取消...' : '取消本次手动上传'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Quick entry cards */}
         <View style={styles.quickEntrySection}>
@@ -642,7 +744,7 @@ export function SyncActivityScreen() {
               >
                 <Icon name="albums-outline" size={22} color={BLUE} />
               </View>
-              <Text style={styles.quickEntryTitle}>相册工作台</Text>
+              <Text style={styles.quickEntryTitle}>相册</Text>
               <Text style={styles.quickEntryDesc}>浏览和手动上传素材</Text>
             </TouchableOpacity>
 
@@ -659,8 +761,8 @@ export function SyncActivityScreen() {
               >
                 <Icon name="folder-outline" size={22} color="#22c55e" />
               </View>
-              <Text style={styles.quickEntryTitle}>共享文件</Text>
-              <Text style={styles.quickEntryDesc}>浏览电脑共享目录</Text>
+              <Text style={styles.quickEntryTitle}>共享目录</Text>
+              <Text style={styles.quickEntryDesc}>浏览PC设备的共享目录</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -742,9 +844,9 @@ function buildOverview(
     autoUploadState:
       (payload.autoUploadState as AutoUploadState | undefined) ??
       prev.autoUploadState,
-    manualBatchPending:
-      (payload.manualBatchPending as number | undefined) ??
-      prev.manualBatchPending,
+    manualPending:
+      (payload.manualPending as number | undefined) ??
+      prev.manualPending,
     autoPending:
       (payload.autoPending as number | undefined) ?? prev.autoPending,
     lastErrorCode:
@@ -779,30 +881,39 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: DARK,
   },
 
-  // Device status card
-  deviceCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Unified main card
+  mainCard: {
     marginHorizontal: 20,
     marginBottom: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 18,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.9)',
+    shadowColor: '#50a0d2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 4,
+  },
+
+  // Device row (top of card)
+  deviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    shadowColor: 'rgba(80,160,210,0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 2,
   },
   deviceIconBox: {
     width: 44,
@@ -840,11 +951,11 @@ const styles = StyleSheet.create({
   statusDotOnline: {
     backgroundColor: '#22c55e',
   },
-  statusDotOffline: {
-    backgroundColor: '#e53935',
-  },
   statusDotConnecting: {
     backgroundColor: '#f59e0b',
+  },
+  statusDotOffline: {
+    backgroundColor: '#94a3b8',
   },
   statusText: {
     fontSize: 12,
@@ -853,193 +964,200 @@ const styles = StyleSheet.create({
   statusTextOnline: {
     color: '#16a34a',
   },
-  statusTextOffline: {
-    color: '#dc2626',
-  },
   statusTextConnecting: {
     color: '#d97706',
   },
-
-  // Progress card
-  progressCard: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    shadowColor: '#50a0d2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 4,
+  statusTextOffline: {
+    color: '#64748b',
   },
-  sourceBadge: {
-    alignSelf: 'flex-start',
+
+  // Card body for state 1 (running)
+  cardBody: {
+    marginTop: 16,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  autoBadge: {
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
-    marginBottom: 8,
+    backgroundColor: 'rgba(34,197,94,0.12)',
   },
-  sourceBadgeAuto: {
-    backgroundColor: 'rgba(59,159,216,0.12)',
-  },
-  sourceBadgeManual: {
-    backgroundColor: 'rgba(249,115,22,0.12)',
-  },
-  sourceBadgeText: {
+  autoBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+    color: '#16a34a',
   },
-  sourceBadgeTextAuto: {
+  manualBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59,159,216,0.12)',
+  },
+  manualBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: BLUE,
   },
-  sourceBadgeTextManual: {
-    color: '#ea580c',
+  badgeLabel: {
+    fontSize: 12,
+    color: '#6a96b8',
   },
-  progressTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: DARK,
-    marginBottom: 12,
-  },
-  progressBarContainer: {
+  runningTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  runningTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK,
+  },
+  idleSubtitle: {
+    fontSize: 14,
+    color: '#6b8da0',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  runningPercent: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: BLUE,
   },
   progressBarTrack: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: 'rgba(59,159,216,0.12)',
     overflow: 'hidden',
+    marginBottom: 10,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
     backgroundColor: BLUE,
-  },
-  progressPercent: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BLUE,
-    minWidth: 40,
-    textAlign: 'right',
   },
   currentFileName: {
     fontSize: 12,
     color: '#6a96b8',
     marginBottom: 12,
   },
-  progressStats: {
+  statsRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    marginBottom: 10,
   },
-  progressStatItem: {
+  statItem: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.5)',
   },
-  progressStatLabel: {
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(106,150,184,0.2)',
+  },
+  statLabel: {
     fontSize: 10,
     color: '#8aabbd',
   },
-  progressStatValue: {
+  statValue: {
     fontSize: 13,
     fontWeight: '600',
     color: DARK,
     marginTop: 2,
   },
-  queueInfo: {
-    marginTop: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: 'rgba(59,159,216,0.06)',
-  },
   queueInfoText: {
     fontSize: 12,
     color: '#6a96b8',
     textAlign: 'center',
+    marginBottom: 12,
   },
 
-  // Idle/Completed card
-  idleCard: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-    borderRadius: 20,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    alignItems: 'center',
-    shadowColor: '#50a0d2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  idleIconBox: {
-    marginBottom: 12,
-  },
-  idleTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK,
-    marginBottom: 6,
-  },
-  idleSubText: {
-    fontSize: 13,
-    color: '#8aabbd',
-    textAlign: 'center',
-  },
-
-  // Control buttons
-  controlSection: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-    gap: 8,
-  },
-  controlButton: {
-    flexDirection: 'row',
+  // Outlined button (close auto upload)
+  outlinedButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingVertical: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: 'rgba(26,58,92,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    marginTop: 4,
   },
-  controlButtonPrimary: {
-    backgroundColor: BLUE,
-    borderColor: BLUE,
+  outlinedButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK,
   },
-  controlButtonDanger: {
+  dangerButton: {
     backgroundColor: 'rgba(229,57,53,0.06)',
     borderColor: 'rgba(229,57,53,0.2)',
   },
-  controlButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: BLUE,
-  },
-  controlButtonTextPrimary: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  controlButtonTextDanger: {
+  dangerButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#e53935',
+  },
+
+  // Card body for state 2 & 3 (centered content)
+  cardBodyCentered: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  emptyIconBox: {
+    marginBottom: 14,
+  },
+  centeredTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK,
+    marginBottom: 8,
+  },
+  centeredSubtitle: {
+    fontSize: 13,
+    color: '#8aabbd',
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  twoButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  rowButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  rowButtonOutlined: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(26,58,92,0.18)',
+  },
+  rowButtonOutlinedText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK,
+  },
+  rowButtonPrimary: {
+    backgroundColor: BLUE,
+  },
+  rowButtonPrimaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   // Quick entry section

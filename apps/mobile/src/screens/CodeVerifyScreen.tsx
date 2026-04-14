@@ -68,7 +68,7 @@ export function CodeVerifyScreen() {
           navigation.dispatch(
             CommonActions.reset({
               index: 0,
-              routes: [{ name: 'MainTabs', state: { routes: [{ name: 'AlbumWorkbench' }] } }],
+              routes: [{ name: 'SyncActivity' }],
             }),
           );
           return;
@@ -97,7 +97,7 @@ export function CodeVerifyScreen() {
         navigation.dispatch(
             CommonActions.reset({
               index: 0,
-              routes: [{ name: 'MainTabs', state: { routes: [{ name: 'AlbumWorkbench' }] } }],
+              routes: [{ name: 'SyncActivity' }],
             }),
           );
       }, VERIFY_DELAY_MS);

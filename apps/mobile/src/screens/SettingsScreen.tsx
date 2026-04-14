@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
@@ -23,15 +23,31 @@ import {
   shareDiagnosticsArchive,
 } from '../utils/shareDiagnosticsArchive';
 import {
-  getEffectiveConnectionState,
+  buildSyncConnectionEvidence,
+  getConnectionBadgeState,
   type MobileConnectionState,
 } from '../utils/effectiveConnectionState';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const BLUE = '#3b9fd8';
+const DARK = '#1a3a5c';
+const SCREEN_BG = '#d6ecf8';
 
 // ---------------------------------------------------------------------------
 // SettingsScreen
 // ---------------------------------------------------------------------------
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
+type SettingsSyncOverviewState = {
+  progressPercent: number;
+  transferredBytes: number;
+  currentFile: string | null;
+  currentFileConfirmedBytes: number;
+  uploadState: string;
+};
 
 function formatAppVersionLabel(appInfo?: Record<string, unknown>): string {
   const version = typeof appInfo?.version === 'string' ? appInfo.version : '';
@@ -69,9 +85,12 @@ export function SettingsScreen() {
   const [deviceIp, setDeviceIp] = useState('');
   const [connectionState, setConnectionState] =
     useState<MobileConnectionState>('offline');
-  const [syncOverviewState, setSyncOverviewState] = useState({
+  const [syncOverviewState, setSyncOverviewState] =
+    useState<SettingsSyncOverviewState>({
     progressPercent: 0,
     transferredBytes: 0,
+    currentFile: null as string | null,
+    currentFileConfirmedBytes: 0,
     uploadState: 'idle',
   });
   const [latestSyncLabel, setLatestSyncLabel] = useState('暂无记录');
@@ -134,6 +153,18 @@ export function SettingsScreen() {
                 typeof state.transferredBytes === 'number'
                   ? state.transferredBytes
                   : prev.transferredBytes,
+              currentFile: Object.prototype.hasOwnProperty.call(
+                state,
+                'currentFile',
+              )
+                ? typeof state.currentFile === 'string'
+                  ? state.currentFile
+                  : null
+                : prev.currentFile,
+              currentFileConfirmedBytes:
+                typeof state.currentFileConfirmedBytes === 'number'
+                  ? state.currentFileConfirmedBytes
+                  : prev.currentFileConfirmedBytes,
               uploadState,
             }));
             setIsPhotoPermissionBlocked(uploadState === 'paused_no_permission');
@@ -213,6 +244,8 @@ export function SettingsScreen() {
                 | {
                     progressPercent?: number;
                     transferredBytes?: number;
+                    currentFile?: string | null;
+                    currentFileConfirmedBytes?: number;
                     uploadState?: string;
                   }
                 | undefined)
@@ -220,6 +253,12 @@ export function SettingsScreen() {
         setSyncOverviewState({
           progressPercent: syncOverview?.progressPercent ?? 0,
           transferredBytes: syncOverview?.transferredBytes ?? 0,
+          currentFile:
+            typeof syncOverview?.currentFile === 'string'
+              ? syncOverview.currentFile
+              : null,
+          currentFileConfirmedBytes:
+            syncOverview?.currentFileConfirmedBytes ?? 0,
           uploadState: syncOverview?.uploadState ?? 'idle',
         });
         setIsPhotoPermissionBlocked(
@@ -239,21 +278,13 @@ export function SettingsScreen() {
     };
   }, []);
 
-  const effectiveConnectionState = getEffectiveConnectionState(
+  const connectionEvidence = buildSyncConnectionEvidence(syncOverviewState);
+  const connectionBadgeState = getConnectionBadgeState(
     connectionState,
-    syncOverviewState,
+    connectionEvidence,
   );
-  const connectionLabel =
-    effectiveConnectionState === 'connected'
-      ? '已连接'
-      : effectiveConnectionState === 'connecting' ||
-          effectiveConnectionState === 'discovering'
-        ? '连接中'
-        : '未连接';
-  const isConnected = effectiveConnectionState === 'connected';
-  const isConnecting =
-    effectiveConnectionState === 'connecting' ||
-    effectiveConnectionState === 'discovering';
+  const isConnected = connectionBadgeState === 'online';
+  const isConnecting = connectionBadgeState === 'connecting';
 
   // ---------------------------------------------------------------------------
   // Save my iPhone display name
@@ -274,17 +305,17 @@ export function SettingsScreen() {
   }, [myName]);
 
   // ---------------------------------------------------------------------------
-  // Disconnect and unbind
+  // Switch device (placeholder)
   // ---------------------------------------------------------------------------
 
-  const handleDisconnect = useCallback(() => {
+  const handleSwitchDevice = useCallback(() => {
     Alert.alert(
-      '断开连接',
-      '确定要断开与电脑的连接吗？断开后需要重新输入连接码配对',
+      '切换设备',
+      '确定要断开当前电脑并切换到其他设备吗？断开后需要重新输入连接码配对。',
       [
         { text: '取消', style: 'cancel' },
         {
-          text: '确定',
+          text: '确定切换',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -313,7 +344,7 @@ export function SettingsScreen() {
       if (isDiagnosticsExportUnavailable(error)) {
         Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
       } else {
-        Alert.alert('导出失败', '诊断包导出失败，请稍后重試');
+        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
       }
     } finally {
       setIsExportingDiagnostics(false);
@@ -323,7 +354,7 @@ export function SettingsScreen() {
   const handleResetSyncStatus = useCallback(() => {
     Alert.alert(
       '重置所有同步状态',
-      '确定要清除所有本地同步记录吗？此操作不会删除手机或电脑上的照片，但会让手机重新扫描並重新上传所有素材。',
+      '将清除所有同步记录并断开当前设备连接，需要重新输入连接码配对。手机和电脑上的照片不会被删除。',
       [
         { text: '取消', style: 'cancel' },
         {
@@ -334,16 +365,22 @@ export function SettingsScreen() {
               const { NativeSyncEngine } = NativeModules;
               if (NativeSyncEngine) {
                 await NativeSyncEngine.resetAllStatus();
-                Alert.alert('已重置', '本地同步记录已清除，正在重新扫描素材。');
+                await NativeSyncEngine.disconnectAndUnbind();
               }
             } catch (e) {
-              Alert.alert('重置失败', '请稍后重試');
+              console.warn('[Settings] reset error:', e);
             }
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'DeviceDiscovery' }],
+              }),
+            );
           },
         },
       ],
     );
-  }, []);
+  }, [navigation]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -360,13 +397,13 @@ export function SettingsScreen() {
               } else {
                 navigation.reset({
                   index: 0,
-                  routes: [{ name: 'MainTabs' as never }],
+                  routes: [{ name: 'SyncActivity' as never }],
                 });
               }
             }}
             accessibilityLabel={'返回'}
           >
-            <Icon name="chevron-back" size={20} color={colors.screenTitle} />
+            <Icon name="chevron-back" size={20} color={DARK} />
           </TouchableOpacity>
           <Text style={styles.title}>{'设置'}</Text>
         </View>
@@ -388,14 +425,79 @@ export function SettingsScreen() {
             </View>
           ) : null}
 
-          {/* My iPhone display name card */}
-          <View style={styles.deviceCard}>
-            <Text style={styles.sectionLabel}>{'我的设备名称'}</Text>
+          {/* ============================================================= */}
+          {/* Section 1: 当前连接电脑信息                                      */}
+          {/* ============================================================= */}
+          <Text style={styles.sectionHeader}>{'当前连接电脑'}</Text>
+          <View style={styles.card}>
+            <View style={styles.deviceRow}>
+              {/* Desktop icon — matches SyncActivityScreen style */}
+              <View style={styles.deviceIconBox}>
+                <Icon name="desktop-outline" size={22} color="#fff" />
+              </View>
+
+              {/* Name + status */}
+              <View style={styles.deviceInfo}>
+                <Text style={styles.deviceNameText} numberOfLines={1}>
+                  {deviceName || '未连接'}
+                </Text>
+                <View style={styles.deviceStatusRow}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      isConnected
+                        ? styles.statusDotOnline
+                        : isConnecting
+                          ? styles.statusDotConnecting
+                          : styles.statusDotOffline,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusLabel,
+                      isConnected
+                        ? styles.statusLabelOnline
+                        : isConnecting
+                          ? styles.statusLabelConnecting
+                          : styles.statusLabelOffline,
+                    ]}
+                  >
+                    {isConnected
+                      ? '在线'
+                      : isConnecting
+                        ? '连接中'
+                        : '离线'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {deviceIp ? (
+              <Text style={styles.deviceIp}>{deviceIp}</Text>
+            ) : null}
+          </View>
+
+          {/* 切换设备 */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.6}
+            onPress={handleSwitchDevice}
+          >
+            <View style={styles.menuRowLeft}>
+              <Icon name="swap-horizontal-outline" size={18} color={BLUE} />
+              <Text style={styles.menuRowText}>{'切换设备'}</Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color="#90b0c8" />
+          </TouchableOpacity>
+
+          {/* ============================================================= */}
+          {/* Section 2: 我的设备                                             */}
+          {/* ============================================================= */}
+          <Text style={styles.sectionHeader}>{'我的设备'}</Text>
+          <View style={styles.card}>
             <View style={styles.deviceRow}>
               {/* Phone icon */}
-              <View
-                style={[styles.monitorIconWrapper, styles.phoneIconWrapper]}
-              >
+              <View style={[styles.deviceIconBox, styles.phoneIconBox]}>
                 <Icon name="phone-portrait-outline" size={20} color="#fff" />
               </View>
 
@@ -417,7 +519,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={handleConfirmMyName}
                     >
-                      <Icon name="checkmark" size={16} color="#3b9fd8" />
+                      <Icon name="checkmark" size={16} color={BLUE} />
                     </TouchableOpacity>
                   </View>
                 ) : (
@@ -430,7 +532,7 @@ export function SettingsScreen() {
                       activeOpacity={0.7}
                       onPress={() => setEditingMyName(true)}
                     >
-                      <Icon name="pencil-outline" size={14} color="#3b9fd8" />
+                      <Icon name="pencil-outline" size={14} color={BLUE} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -439,14 +541,16 @@ export function SettingsScreen() {
             </View>
           </View>
 
-          {/* Connected device card */}
-          <View style={styles.deviceCard}>
-            <Text style={styles.sectionLabel}>{'同步状态'}</Text>
+          {/* ============================================================= */}
+          {/* Section 4: 基础设置                                             */}
+          {/* ============================================================= */}
+          <Text style={styles.sectionHeader}>{'基础设置'}</Text>
+          <View style={styles.card}>
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>{'最近一次成功同步'}</Text>
               <Text style={styles.metaValue}>{latestSyncLabel}</Text>
             </View>
-            <View style={styles.metaRow}>
+            <View style={[styles.metaRow, styles.metaRowLast]}>
               <Text style={styles.metaLabel}>{'应用版本'}</Text>
               <Text style={styles.metaValue}>{appVersionLabel}</Text>
             </View>
@@ -469,8 +573,11 @@ export function SettingsScreen() {
             ) : null}
           </View>
 
-          <View style={styles.deviceCard}>
-            <Text style={styles.sectionLabel}>{'支持与诊断'}</Text>
+          {/* ============================================================= */}
+          {/* Section 5: 支持与诊断                                           */}
+          {/* ============================================================= */}
+          <Text style={styles.sectionHeader}>{'支持与诊断'}</Text>
+          <View style={styles.card}>
             <Text style={styles.diagnosticsHint}>
               {
                 '导出当前设备状态、队列快照、本地数据库和最近日志，便于排查同步问题。'
@@ -489,7 +596,7 @@ export function SettingsScreen() {
                   void handleExportDiagnostics();
                 }}
               >
-                <Icon name="download-outline" size={16} color="#3b9fd8" />
+                <Icon name="download-outline" size={16} color={BLUE} />
                 <Text style={styles.diagnosticsButtonText}>
                   {isExportingDiagnostics ? '正在导出诊断包…' : '导出诊断包'}
                 </Text>
@@ -506,56 +613,8 @@ export function SettingsScreen() {
             </View>
           </View>
 
-          <View style={styles.deviceCard}>
-            {/* Device info row */}
-            <View style={styles.deviceRow}>
-              {/* Monitor icon */}
-              <View style={styles.monitorIconWrapper}>
-                <Icon name="desktop-outline" size={20} color="#fff" />
-              </View>
-
-              {/* Name + IP + status */}
-              <View style={styles.deviceInfo}>
-                <Text style={styles.deviceNameText} numberOfLines={1}>
-                  {deviceName}
-                </Text>
-
-                <Text style={styles.deviceIp}>{deviceIp}</Text>
-
-                {/* Connection status */}
-                <View style={styles.statusRow}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      !isConnected && styles.statusDotDisconnected,
-                      isConnecting && styles.statusDotConnecting,
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      !isConnected && styles.statusTextDisconnected,
-                      isConnecting && styles.statusTextConnecting,
-                    ]}
-                  >
-                    {connectionLabel}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Disconnect button */}
-            <TouchableOpacity
-              style={styles.disconnectButton}
-              activeOpacity={0.7}
-              onPress={handleDisconnect}
-            >
-              <Text style={styles.disconnectText}>{'切换设备'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Hint text */}
-          <Text style={styles.hintText}>{'电脑端名称在电脑端设置中修改'}</Text>
+          {/* Bottom spacing */}
+          <View style={styles.bottomSpacer} />
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -569,7 +628,7 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.screenBackground,
+    backgroundColor: SCREEN_BG,
   },
   container: {
     flex: 1,
@@ -596,17 +655,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: colors.screenTitle,
+    color: DARK,
   },
 
   // Scroll
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 40,
   },
+
+  // Android notice
   androidNoticeCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.76)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.88)',
@@ -626,8 +687,18 @@ const styles = StyleSheet.create({
     color: '#5d7f98',
   },
 
-  // Device card
-  deviceCard: {
+  // Section header
+  sectionHeader: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6e8aa3',
+    marginBottom: 8,
+    marginTop: 16,
+    marginLeft: 4,
+  },
+
+  // Generic card
+  card: {
     backgroundColor: 'rgba(255,255,255,0.8)',
     borderRadius: 16,
     padding: 16,
@@ -636,18 +707,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 2,
-    marginBottom: 16,
   },
+
+  // Device row — matching SyncActivityScreen
   deviceRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
-    marginBottom: 16,
   },
-  monitorIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+  deviceIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#3ba4dc',
@@ -657,9 +728,114 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
+  phoneIconBox: {
+    backgroundColor: '#6366f1',
+    shadowColor: 'rgba(99,102,241,0.5)',
+  },
   deviceInfo: {
     flex: 1,
     minWidth: 0,
+  },
+  deviceNameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: DARK,
+    flexShrink: 1,
+  },
+  deviceStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusDotOnline: {
+    backgroundColor: '#22c55e',
+  },
+  statusDotOffline: {
+    backgroundColor: '#f59e0b',
+  },
+  statusDotConnecting: {
+    backgroundColor: '#f59e0b',
+  },
+  statusLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statusLabelOnline: {
+    color: '#16a34a',
+  },
+  statusLabelOffline: {
+    color: '#d97706',
+  },
+  statusLabelConnecting: {
+    color: '#b45309',
+  },
+  deviceIp: {
+    fontSize: 12,
+    color: '#90b0c8',
+    marginTop: 8,
+    marginLeft: 56,
+  },
+
+  // Menu row (for "切换设备" entry)
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
+    shadowColor: 'rgba(80,150,200,0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  menuRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  menuRowText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: DARK,
+  },
+
+  // Placeholder (account & membership)
+  placeholderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  placeholderIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(144,176,200,0.12)',
+  },
+  placeholderContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  placeholderTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#90b0c8',
+  },
+  placeholderSubtitle: {
+    fontSize: 12,
+    color: '#a8c4d8',
+    marginTop: 2,
   },
 
   // Name display
@@ -667,12 +843,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  deviceNameText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.screenTitle,
-    flexShrink: 1,
   },
   editButton: {
     width: 24,
@@ -697,7 +867,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     fontSize: 14,
     fontWeight: '600',
-    color: colors.screenTitle,
+    color: DARK,
   },
   confirmButton: {
     width: 28,
@@ -708,72 +878,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // IP + status
-  deviceIp: {
-    fontSize: 12,
+  // My name hint
+  myNameHint: {
+    fontSize: 11,
     color: '#90b0c8',
-    marginTop: 2,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     marginTop: 4,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  statusDotDisconnected: {
-    backgroundColor: '#ef4444',
-  },
-  statusDotConnecting: {
-    backgroundColor: '#f59e0b',
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#22c55e',
-  },
-  statusTextDisconnected: {
-    color: '#dc2626',
-  },
-  statusTextConnecting: {
-    color: '#b45309',
-  },
 
-  // Disconnect button
-  disconnectButton: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(59,159,216,0.18)',
-    backgroundColor: 'rgba(59,159,216,0.08)',
-    borderRadius: 14,
-    paddingVertical: 12,
-  },
-  disconnectText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3b9fd8',
-  },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#90b0c8',
-    marginBottom: 12,
-  },
+  // Meta rows (basic settings)
   metaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 10,
+  },
+  metaRowLast: {
+    marginBottom: 0,
   },
   metaLabel: {
     fontSize: 13,
@@ -784,10 +905,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontSize: 13,
     fontWeight: '600',
-    color: colors.screenTitle,
+    color: DARK,
   },
+
+  // Warning box (photo permission)
   warningBox: {
-    marginTop: 6,
+    marginTop: 12,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(220,38,38,0.12)',
@@ -818,13 +941,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#991b1b',
   },
+
+  // Diagnostics hint
   diagnosticsHint: {
     fontSize: 12,
     lineHeight: 18,
     color: '#6e8aa3',
     marginBottom: 12,
   },
-  // Support & Diagnostics
+
+  // Support & Diagnostics buttons
   actionButtonGroup: {
     flexDirection: 'column',
     gap: 12,
@@ -848,7 +974,7 @@ const styles = StyleSheet.create({
   diagnosticsButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#3b9fd8',
+    color: BLUE,
   },
   resetButton: {
     alignSelf: 'stretch',
@@ -869,23 +995,7 @@ const styles = StyleSheet.create({
     color: '#ef4444',
   },
 
-  // Phone icon
-  phoneIconWrapper: {
-    backgroundColor: '#6366f1',
-    shadowColor: 'rgba(99,102,241,0.5)',
-  },
-
-  // My name hint
-  myNameHint: {
-    fontSize: 11,
-    color: '#90b0c8',
-    marginTop: 4,
-  },
-
-  // Hint
-  hintText: {
-    fontSize: 12,
-    color: '#90b0c8',
-    paddingHorizontal: 4,
+  bottomSpacer: {
+    height: 20,
   },
 });

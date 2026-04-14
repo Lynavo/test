@@ -3,7 +3,6 @@ import type {
   AlbumAssetDTO,
   AutoUploadConfigDTO,
   SharedDirectoryDTO,
-  AutoUploadMediaFilter,
   AutoUploadTimeRangeMode,
 } from '@syncflow/contracts';
 
@@ -83,11 +82,17 @@ export async function cancelManualBatch(batchId: string): Promise<void> {
   await NativeSyncEngine.cancelManualBatch(batchId);
 }
 
-export async function pauseAutoUpload(): Promise<void> {
+export async function cancelAllManualUploads(): Promise<void> {
+  await NativeSyncEngine.cancelAllManualUploads();
+}
+
+/** Interrupt auto upload: stops processing auto items, persists 'interrupted' state. */
+export async function interruptAutoUpload(): Promise<void> {
   await NativeSyncEngine.pauseAutoUpload();
 }
 
-export async function resumeAutoUpload(): Promise<void> {
+/** Re-enable auto upload from interrupted/disabled state, persists 'active' state. */
+export async function enableAutoUpload(): Promise<void> {
   await NativeSyncEngine.resumeAutoUpload();
 }
 
@@ -98,7 +103,6 @@ export async function getAutoUploadConfig(): Promise<AutoUploadConfigDTO> {
 
 export async function saveAutoUploadConfig(config: {
   enabled: boolean;
-  mediaFilter: AutoUploadMediaFilter;
   timeRangeMode: AutoUploadTimeRangeMode;
   customTimeFrom?: string;
 }): Promise<void> {

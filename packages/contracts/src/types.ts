@@ -1,5 +1,4 @@
 import type {
-  AutoUploadMediaFilter,
   AutoUploadState,
   AutoUploadTimeRangeMode,
   ConnectionState,
@@ -130,8 +129,8 @@ export interface SyncSummaryDTO {
   currentTaskSource?: UploadTaskSource | null;
   /** Current state of the auto-upload feature */
   autoUploadState?: AutoUploadState;
-  /** Number of pending items in the current manual batch */
-  manualBatchPending?: number;
+  /** Number of pending items in the manual upload queue */
+  manualPending?: number;
   /** Number of pending auto-upload items */
   autoPending?: number;
 }
@@ -200,7 +199,6 @@ export interface AlbumAssetDTO {
 /** Auto-upload configuration (single-row persisted on mobile) */
 export interface AutoUploadConfigDTO {
   enabled: boolean;
-  mediaFilter: AutoUploadMediaFilter;
   timeRangeMode: AutoUploadTimeRangeMode;
   /** ISO 8601 timestamp, only used when timeRangeMode is 'custom' */
   customTimeFrom?: string;

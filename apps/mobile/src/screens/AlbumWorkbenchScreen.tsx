@@ -8,14 +8,20 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  AppState,
   Dimensions,
   NativeModules,
   NativeEventEmitter,
-  TextInput,
   Modal,
+  Platform,
+  type AppStateStatus,
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import type { AlbumAssetDTO, AutoUploadConfigDTO } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import {
@@ -23,15 +29,17 @@ import {
   getAlbumStats,
   getAlbumCollections,
   submitManualUpload,
-  pauseAutoUpload,
-  resumeAutoUpload,
+  cancelAllManualUploads,
   getAutoUploadConfig,
   saveAutoUploadConfig,
+  interruptAutoUpload,
+  enableAutoUpload,
   type AlbumStats,
   type AlbumCollectionInfo,
 } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
 import { sortAlbumAssetsForDisplay } from '../utils/sortAlbumAssets';
+import { hasPendingManualWork } from '../utils/manualUploadState';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -40,54 +48,88 @@ import { sortAlbumAssetsForDisplay } from '../utils/sortAlbumAssets';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_COLUMNS = 3;
 const GRID_GAP = 2;
+const CONTENT_PADDING = 16;
 const GRID_ITEM_SIZE =
-  (SCREEN_WIDTH - GRID_GAP * (GRID_COLUMNS + 1)) / GRID_COLUMNS;
+  (SCREEN_WIDTH - CONTENT_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 const PAGE_SIZE = 60;
 
 const BLUE = '#3b9fd8';
 const DARK = '#1a3a5c';
 const SCREEN_BG = '#d6ecf8';
 
+function formatCustomTime(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}年${m}月${day}日 ${h}:${min}`;
+}
+
 type MediaFilter = 'all' | 'photos' | 'videos';
 type TransferFilter = 'all' | 'untransferred' | 'transferred';
 type ViewMode = 'grid' | 'list';
 
-const TRANSFER_FILTER_TABS: { key: TransferFilter; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'untransferred', label: '未传输' },
-  { key: 'transferred', label: '已传输' },
-];
-
-const MEDIA_FILTER_TABS: { key: MediaFilter; label: string }[] = [
+type UnifiedFilter = 'all' | 'photos' | 'videos' | 'untransferred' | 'transferred';
+const UNIFIED_FILTER_TABS: { key: UnifiedFilter; label: string }[] = [
   { key: 'all', label: '全部' },
   { key: 'photos', label: '照片' },
   { key: 'videos', label: '视频' },
+  { key: 'untransferred', label: '未传' },
+  { key: 'transferred', label: '已传' },
 ];
 
 const TIME_RANGE_OPTIONS: {
   key: AutoUploadConfigDTO['timeRangeMode'];
   label: string;
 }[] = [
+  { key: 'all', label: '全部' },
   { key: 'from_now', label: '此时此刻' },
-  { key: 'from_today', label: '今天开始' },
-  { key: 'all', label: '所有素材' },
-  { key: 'custom', label: '自定义时间点' },
+  { key: 'custom', label: '自定义时间' },
 ];
 
-const MEDIA_FILTER_OPTIONS: {
-  key: AutoUploadConfigDTO['mediaFilter'];
-  label: string;
-}[] = [
-  { key: 'all', label: '全部' },
-  { key: 'videos', label: '仅视频' },
-  { key: 'photos', label: '仅照片' },
-];
+function getEmptyStateCopy(filter: UnifiedFilter): {
+  title: string;
+  subtitle: string;
+} {
+  switch (filter) {
+    case 'transferred':
+      return {
+        title: '暂无已传素材',
+        subtitle: '已上传完成的素材会显示在这里',
+      };
+    case 'untransferred':
+      return {
+        title: '暂无待上传素材',
+        subtitle: '当前没有符合条件的未传素材',
+      };
+    case 'photos':
+      return {
+        title: '暂无照片',
+        subtitle: '当前筛选下没有可显示的照片',
+      };
+    case 'videos':
+      return {
+        title: '暂无视频',
+        subtitle: '当前筛选下没有可显示的视频',
+      };
+    default:
+      return {
+        title: '暂无素材',
+        subtitle: '请确保已授予照片访问权限',
+      };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // AlbumWorkbenchScreen
 // ---------------------------------------------------------------------------
 
 export function AlbumWorkbenchScreen() {
+  const navigation = useNavigation();
+
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
@@ -100,6 +142,7 @@ export function AlbumWorkbenchScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const offsetRef = useRef(0);
+  const hasLoadedInitialAssetsRef = useRef(false);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -110,7 +153,11 @@ export function AlbumWorkbenchScreen() {
     useState<AutoUploadConfigDTO | null>(null);
   const [configExpanded, setConfigExpanded] = useState(false);
 
-  // Album collection filter (subfolder)
+  // Custom time picker
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingDate, setPendingDate] = useState<Date>(new Date());
+
+  // Album collection filter (sub-album)
   const [collectionId, setCollectionId] = useState<string | null>(null);
   const [collectionTitle, setCollectionTitle] = useState<string | null>(null);
   const [collections, setCollections] = useState<AlbumCollectionInfo[]>([]);
@@ -133,9 +180,11 @@ export function AlbumWorkbenchScreen() {
     ) => {
       try {
         const offset = reset ? 0 : offsetRef.current;
-        if (reset) {
+        if (reset && !hasLoadedInitialAssetsRef.current) {
+          // Only show full-screen spinner on the first screen load.
+          // Filter switches should keep the current layout visible.
           setLoading(true);
-        } else {
+        } else if (!reset) {
           setLoadingMore(true);
         }
 
@@ -160,6 +209,7 @@ export function AlbumWorkbenchScreen() {
           setAssets([]);
         }
       } finally {
+        hasLoadedInitialAssetsRef.current = true;
         setLoading(false);
         setLoadingMore(false);
       }
@@ -237,6 +287,28 @@ export function AlbumWorkbenchScreen() {
     };
   }, [mediaFilter, refreshVisibleAssets, loadStats]);
 
+  // Re-fetch when returning from background / permission dialog.
+  // On first install, PHAsset.fetchAssets() triggers the iOS permission
+  // prompt but returns empty synchronously. When the user grants access
+  // and the app goes back to active, we need to reload.
+  const appStateRef = useRef(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener(
+      'change',
+      (next: AppStateStatus) => {
+        if (
+          appStateRef.current.match(/inactive|background/) &&
+          next === 'active'
+        ) {
+          void loadAssets(mediaFilter, transferFilter, true, collectionId);
+          void loadStats();
+        }
+        appStateRef.current = next;
+      },
+    );
+    return () => sub.remove();
+  }, [loadAssets, mediaFilter, transferFilter, loadStats]);
+
   // ---------------------------------------------------------------------------
   // Selection handlers
   // ---------------------------------------------------------------------------
@@ -265,40 +337,33 @@ export function AlbumWorkbenchScreen() {
     });
   }, []);
 
-  const handleSelectAll = useCallback(() => {
-    const selectableAssets = assets.filter(a => !a.isTransferred);
-    if (
-      selectedIds.size === selectableAssets.length &&
-      selectableAssets.length > 0
-    ) {
-      // Deselect all
-      setSelectedIds(new Set());
-      setMultiSelectMode(false);
-    } else {
-      // Select all non-transferred
-      setMultiSelectMode(true);
-      setSelectedIds(new Set(selectableAssets.map(a => a.assetLocalId)));
+  // Unified filter: derives both mediaFilter and transferFilter from a single tab
+  const [unifiedFilter, setUnifiedFilter] = useState<UnifiedFilter>('all');
+
+  const handleUnifiedFilterPress = useCallback((key: UnifiedFilter) => {
+    setUnifiedFilter(key);
+    switch (key) {
+      case 'all':
+        setMediaFilter('all');
+        setTransferFilter('all');
+        break;
+      case 'photos':
+        setMediaFilter('photos');
+        setTransferFilter('all');
+        break;
+      case 'videos':
+        setMediaFilter('videos');
+        setTransferFilter('all');
+        break;
+      case 'untransferred':
+        setMediaFilter('all');
+        setTransferFilter('untransferred');
+        break;
+      case 'transferred':
+        setMediaFilter('all');
+        setTransferFilter('transferred');
+        break;
     }
-  }, [assets, selectedIds.size]);
-
-  const handleTransferFilterPress = useCallback(
-    (nextFilter: TransferFilter) => {
-      setTransferFilter(current => {
-        if (nextFilter !== 'all' && current === nextFilter) {
-          return 'all';
-        }
-        return nextFilter;
-      });
-      setSelectedIds(new Set());
-      setMultiSelectMode(false);
-    },
-    [],
-  );
-
-  const handleMediaFilterPress = useCallback((nextFilter: MediaFilter) => {
-    setMediaFilter(nextFilter);
-    setCollectionId(null);
-    setCollectionTitle(null);
     setSelectedIds(new Set());
     setMultiSelectMode(false);
   }, []);
@@ -309,6 +374,11 @@ export function AlbumWorkbenchScreen() {
 
   const handleUpload = useCallback(async () => {
     if (selectedIds.size === 0) return;
+
+    if (autoUploadConfig?.state === 'active') {
+      Alert.alert('无法上传', '请先关闭自动上传');
+      return;
+    }
 
     // Check device connection before submitting
     try {
@@ -350,6 +420,8 @@ export function AlbumWorkbenchScreen() {
       // Reload assets to update transferred/queued states
       void loadAssets(mediaFilter, transferFilter, true, collectionId);
       void loadStats();
+      // Kick off the sync pipeline so queued items actually upload
+      NativeModules.NativeSyncEngine?.triggerSync?.();
     } catch (e) {
       Alert.alert('提交失败', '无法提交上传任务，请稍后重试');
       console.warn('[AlbumWorkbench] submitManualUpload error:', e);
@@ -357,11 +429,11 @@ export function AlbumWorkbenchScreen() {
       setUploading(false);
     }
   }, [
+    autoUploadConfig?.state,
     selectedIds,
     loadAssets,
     mediaFilter,
     transferFilter,
-    collectionId,
     loadStats,
   ]);
 
@@ -373,38 +445,91 @@ export function AlbumWorkbenchScreen() {
     if (!autoUploadConfig) return;
     try {
       if (autoUploadConfig.state === 'active') {
-        await pauseAutoUpload();
-      } else if (autoUploadConfig.state === 'paused') {
-        await resumeAutoUpload();
+        // active → interrupted: show confirmation dialog per PRD
+        Alert.alert(
+          '关闭自动上传',
+          '确认关闭自动上传？关闭后新素材将不再自动传输到 PC 端。',
+          [
+            { text: '继续上传', style: 'cancel' },
+            {
+              text: '确认关闭',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await interruptAutoUpload();
+                  await loadConfig();
+                } catch (e) {
+                  console.warn('[AlbumWorkbench] interruptAutoUpload error:', e);
+                  Alert.alert('操作失败', '关闭自动上传失败，请重试');
+                }
+              },
+            },
+          ],
+        );
+        return;
       } else {
-        // disabled → enable: check connection first
-        try {
-          const binding =
-            await NativeModules.NativeSyncEngine?.getBindingState();
-          if (
-            !binding?.deviceId ||
-            (binding.connectionState !== 'connected' &&
-              binding.connectionState !== 'bound')
-          ) {
+        // interrupted or disabled → active: check mutual exclusion first
+        // For disabled state, also validate connection and config
+        if (autoUploadConfig.state === 'disabled') {
+          try {
+            const binding =
+              await NativeModules.NativeSyncEngine?.getBindingState();
+            if (
+              !binding?.deviceId ||
+              (binding.connectionState !== 'connected' &&
+                binding.connectionState !== 'bound')
+            ) {
+              Alert.alert('无法开启', '请先连接设备');
+              return;
+            }
+          } catch {
             Alert.alert('无法开启', '请先连接设备');
             return;
           }
+          if (
+            autoUploadConfig.timeRangeMode === 'custom' &&
+            !autoUploadConfig.customTimeFrom
+          ) {
+            Alert.alert('配置不完整', '请先设置自定义时间点');
+            return;
+          }
+        }
+
+        // Check if manual upload is in progress — per PRD, must confirm first
+        try {
+          const syncData =
+            await NativeModules.NativeSyncEngine?.getSyncOverview();
+          if (hasPendingManualWork(syncData)) {
+            Alert.alert(
+              '切换上传模式',
+              '当前正在上传，继续自动上传将中断手动上传，是否继续？',
+              [
+                { text: '取消', style: 'cancel' },
+                {
+                  text: '确认切换',
+                  onPress: async () => {
+                    try {
+                      await cancelAllManualUploads();
+                      await enableAutoUpload();
+                      await NativeModules.NativeSyncEngine?.triggerSync();
+                      await loadConfig();
+                    } catch (e) {
+                      console.warn('[AlbumWorkbench] enableAutoUpload error:', e);
+                      Alert.alert('操作失败', '自动上传开启失败，请重试');
+                    }
+                  },
+                },
+              ],
+            );
+            return;
+          }
         } catch {
-          Alert.alert('无法开启', '请先连接设备');
-          return;
+          // If we can't check, proceed — sync overview unavailable
         }
-        // Validate custom time range before enabling
-        if (
-          autoUploadConfig.timeRangeMode === 'custom' &&
-          !autoUploadConfig.customTimeFrom
-        ) {
-          Alert.alert('配置不完整', '请先设置自定义时间点');
-          return;
-        }
-        await saveAutoUploadConfig({
-          ...autoUploadConfig,
-          enabled: true,
-        });
+
+        await enableAutoUpload();
+        // Ensure sync loop is running after enabling auto upload
+        await NativeModules.NativeSyncEngine?.triggerSync();
       }
       await loadConfig();
     } catch (e) {
@@ -415,7 +540,7 @@ export function AlbumWorkbenchScreen() {
 
   const handleConfigChange = useCallback(
     async (
-      key: 'mediaFilter' | 'timeRangeMode' | 'enabled' | 'customTimeFrom',
+      key: 'timeRangeMode' | 'enabled' | 'customTimeFrom',
       value: string | boolean,
     ) => {
       if (!autoUploadConfig) return;
@@ -469,7 +594,7 @@ export function AlbumWorkbenchScreen() {
   ]);
 
   // ---------------------------------------------------------------------------
-  // Collection filter handlers
+  // Collection filter handlers (sub-album picker)
   // ---------------------------------------------------------------------------
 
   const handleOpenCollectionSheet = useCallback(async () => {
@@ -496,8 +621,25 @@ export function AlbumWorkbenchScreen() {
     [],
   );
 
-  // Total count across all collections (for "全部照片" row)
   const collectionTotalCount = stats?.totalCount ?? 0;
+
+  // ---------------------------------------------------------------------------
+  // Date picker handlers (custom time range)
+  // ---------------------------------------------------------------------------
+
+  const handleDatePickerChange = useCallback(
+    (_event: DateTimePickerEvent, date?: Date) => {
+      if (date) {
+        setPendingDate(date);
+      }
+    },
+    [],
+  );
+
+  const handleDatePickerConfirm = useCallback(() => {
+    setShowDatePicker(false);
+    void handleConfigChange('customTimeFrom', pendingDate.toISOString());
+  }, [pendingDate, handleConfigChange]);
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -598,7 +740,7 @@ export function AlbumWorkbenchScreen() {
               {item.isTransferred && (
                 <View style={styles.listTransferredBadge}>
                   <Icon name="checkmark" size={10} color="#22c55e" />
-                  <Text style={styles.listTransferredText}>已传输</Text>
+                  <Text style={styles.listTransferredText}>已传</Text>
                 </View>
               )}
               {item.isQueued && !item.isTransferred && (
@@ -627,71 +769,51 @@ export function AlbumWorkbenchScreen() {
     [],
   );
 
-  const selectableCount = assets.filter(a => !a.isTransferred).length;
-  const allSelected =
-    selectableCount > 0 && selectedIds.size === selectableCount;
-
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
-  return (
-    <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {collectionTitle ?? '相册工作台'}
-        </Text>
-        <TouchableOpacity
-          style={styles.headerFilterBtn}
-          activeOpacity={0.7}
-          onPress={() => void handleOpenCollectionSheet()}
-        >
-          <Icon
-            name="albums-outline"
-            size={18}
-            color={collectionId ? BLUE : DARK}
-          />
-          {collectionId != null && <View style={styles.headerFilterDot} />}
-        </TouchableOpacity>
-      </View>
+  const isAutoUploadActive = autoUploadConfig?.state === 'active';
 
-      {/* Auto-upload config section */}
+  // Derive custom time display string for summary card
+  const timeRangeDisplayLabel = autoUploadConfig
+    ? TIME_RANGE_OPTIONS.find(o => o.key === autoUploadConfig.timeRangeMode)
+        ?.label ?? '全部'
+    : '全部';
+  const emptyStateCopy = getEmptyStateCopy(unifiedFilter);
+
+  // FlatList header: config card + stats bar + filter tabs
+  const renderListHeader = () => (
+    <>
+      {/* Auto-upload collapsible card */}
       {autoUploadConfig && (
         <View style={styles.configSection}>
+          {/* Card header — always visible, tappable */}
           <TouchableOpacity
             style={styles.configHeader}
             activeOpacity={0.7}
             onPress={() => setConfigExpanded(prev => !prev)}
           >
             <View style={styles.configTitleRow}>
-              <Icon name="flash-outline" size={16} color={BLUE} />
+              <Icon name="options-outline" size={16} color={DARK} />
               <Text style={styles.configTitle}>自动上传</Text>
               <View
                 style={[
                   styles.configStateBadge,
-                  autoUploadConfig.state === 'active'
+                  isAutoUploadActive
                     ? styles.configStateActive
-                    : autoUploadConfig.state === 'paused'
-                      ? styles.configStatePaused
-                      : styles.configStateDisabled,
+                    : styles.configStateDisabled,
                 ]}
               >
                 <Text
                   style={[
                     styles.configStateText,
-                    autoUploadConfig.state === 'active'
+                    isAutoUploadActive
                       ? styles.configStateTextActive
-                      : autoUploadConfig.state === 'paused'
-                        ? styles.configStateTextPaused
-                        : styles.configStateTextDisabled,
+                      : styles.configStateTextDisabled,
                   ]}
                 >
-                  {autoUploadConfig.state === 'active'
-                    ? '运行中'
-                    : autoUploadConfig.state === 'paused'
-                      ? '已暂停'
-                      : '未启用'}
+                  {isAutoUploadActive ? '运行中' : '已关闭'}
                 </Text>
               </View>
             </View>
@@ -702,6 +824,7 @@ export function AlbumWorkbenchScreen() {
             />
           </TouchableOpacity>
 
+          {/* Expanded body: toggle + time range */}
           {configExpanded && (
             <View style={styles.configBody}>
               {/* Enable/Disable toggle */}
@@ -711,58 +834,22 @@ export function AlbumWorkbenchScreen() {
                 onPress={handleToggleAutoUpload}
               >
                 <Text style={styles.configLabel}>
-                  {autoUploadConfig.state === 'active'
-                    ? '暂停自动上传'
-                    : autoUploadConfig.state === 'paused'
-                      ? '恢复自动上传'
-                      : '启用自动上传'}
+                  {isAutoUploadActive ? '暂停自动上传' : '恢复自动上传'}
                 </Text>
                 <View
                   style={[
                     styles.toggleTrack,
-                    autoUploadConfig.state === 'active' && styles.toggleTrackOn,
+                    isAutoUploadActive && styles.toggleTrackOn,
                   ]}
                 >
                   <View
                     style={[
                       styles.toggleThumb,
-                      autoUploadConfig.state === 'active' &&
-                        styles.toggleThumbOn,
+                      isAutoUploadActive && styles.toggleThumbOn,
                     ]}
                   />
                 </View>
               </TouchableOpacity>
-
-              {/* Media filter */}
-              <View style={styles.configGroup}>
-                <Text style={styles.configGroupLabel}>素材类型</Text>
-                <View style={styles.configChips}>
-                  {MEDIA_FILTER_OPTIONS.map(opt => (
-                    <TouchableOpacity
-                      key={opt.key}
-                      style={[
-                        styles.configChip,
-                        autoUploadConfig.mediaFilter === opt.key &&
-                          styles.configChipActive,
-                      ]}
-                      activeOpacity={0.7}
-                      onPress={() =>
-                        void handleConfigChange('mediaFilter', opt.key)
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.configChipText,
-                          autoUploadConfig.mediaFilter === opt.key &&
-                            styles.configChipTextActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
 
               {/* Time range */}
               <View style={styles.configGroup}>
@@ -793,141 +880,89 @@ export function AlbumWorkbenchScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                {/* Custom time input — shown when timeRangeMode is 'custom' */}
+                {/* Custom time display — shown when timeRangeMode is 'custom' */}
                 {autoUploadConfig.timeRangeMode === 'custom' && (
-                  <TextInput
-                    style={styles.customTimeInput}
-                    placeholder="YYYY-MM-DDTHH:mm:ss"
-                    placeholderTextColor="#8aabbd"
-                    defaultValue={autoUploadConfig.customTimeFrom ?? ''}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onEndEditing={e => {
-                      const text = e.nativeEvent.text.trim();
-                      if (text.length > 0) {
-                        const parsed = new Date(text);
-                        if (isNaN(parsed.getTime())) {
-                          Alert.alert(
-                            '时间格式无效',
-                            '请使用 YYYY-MM-DDTHH:mm:ss 格式',
-                          );
-                          return;
-                        }
-                        void handleConfigChange(
-                          'customTimeFrom',
-                          parsed.toISOString(),
-                        );
-                      }
+                  <TouchableOpacity
+                    style={styles.customTimeCard}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const initial = autoUploadConfig.customTimeFrom
+                        ? new Date(autoUploadConfig.customTimeFrom)
+                        : new Date();
+                      setPendingDate(
+                        isNaN(initial.getTime()) ? new Date() : initial,
+                      );
+                      setShowDatePicker(true);
                     }}
-                  />
+                  >
+                    <Text style={styles.customTimeText}>
+                      {autoUploadConfig.customTimeFrom
+                        ? formatCustomTime(autoUploadConfig.customTimeFrom)
+                        : '点击设置时间'}
+                    </Text>
+                  </TouchableOpacity>
                 )}
+              </View>
+            </View>
+          )}
+
+          {/* Summary area — content depends on auto-upload state */}
+          {isAutoUploadActive && stats && (
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryHeaderRow}>
+                <View style={styles.summaryDot} />
+                <Text style={styles.summaryTitle}>自动上传运行中</Text>
+              </View>
+              <Text style={styles.summarySubtitle}>
+                新素材将自动传输到 PC 端
+              </Text>
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryGridItem}>
+                  <Text style={styles.summaryGridLabel}>本次已传</Text>
+                  <Text style={styles.summaryGridValue}>
+                    <Text style={styles.summaryGridNumber}>
+                      {stats.transferredCount}
+                    </Text>{' '}
+                    个
+                  </Text>
+                </View>
+                <View style={styles.summaryGridItem}>
+                  <Text style={styles.summaryGridLabel}>待上传</Text>
+                  <Text style={styles.summaryGridValue}>
+                    <Text style={styles.summaryGridNumberOrange}>
+                      {Math.max(
+                        0,
+                        stats.totalCount -
+                          stats.transferredCount -
+                          stats.queuedCount,
+                      ) + stats.queuedCount}
+                    </Text>{' '}
+                    个
+                  </Text>
+                </View>
+                <View style={styles.summaryGridItem}>
+                  <Text style={styles.summaryGridLabel}>素材总数</Text>
+                  <Text style={styles.summaryGridValue}>
+                    <Text style={styles.summaryGridNumberDark}>
+                      {stats.totalCount}
+                    </Text>{' '}
+                    个
+                  </Text>
+                </View>
+                <View style={styles.summaryGridItem}>
+                  <Text style={styles.summaryGridLabel}>时间范围</Text>
+                  <Text style={[styles.summaryGridValue, { color: BLUE }]}>
+                    {timeRangeDisplayLabel}
+                  </Text>
+                </View>
               </View>
             </View>
           )}
         </View>
       )}
 
-      {/* Filter toolbar */}
-      <View style={styles.toolbarWrap}>
-        <View style={styles.toolbar}>
-          <View style={styles.toolbarChipGroup}>
-            {MEDIA_FILTER_TABS.map(tab => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.toolbarChip,
-                  mediaFilter === tab.key && styles.toolbarChipActive,
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleMediaFilterPress(tab.key)}
-              >
-                <Text
-                  style={[
-                    styles.toolbarChipText,
-                    mediaFilter === tab.key && styles.toolbarChipTextActive,
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.toolbarChipGroup}>
-            {TRANSFER_FILTER_TABS.filter(tab => tab.key !== 'all').map(tab => (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.toolbarChip,
-                  transferFilter === tab.key && styles.toolbarChipActive,
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleTransferFilterPress(tab.key)}
-              >
-                <Text
-                  style={[
-                    styles.toolbarChipText,
-                    transferFilter === tab.key && styles.toolbarChipTextActive,
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={styles.toolbarSpacer} />
-
-          <View style={styles.toolbarActions}>
-            <TouchableOpacity
-              style={[
-                styles.toolbarIconButton,
-                viewMode === 'grid' && styles.toolbarIconButtonActive,
-              ]}
-              activeOpacity={0.7}
-              onPress={() => setViewMode('grid')}
-            >
-              <Icon
-                name="grid-outline"
-                size={16}
-                color={viewMode === 'grid' ? DARK : '#7fa4bf'}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.toolbarIconButton,
-                viewMode === 'list' && styles.toolbarIconButtonActive,
-              ]}
-              activeOpacity={0.7}
-              onPress={() => setViewMode('list')}
-            >
-              <Icon
-                name="list-outline"
-                size={16}
-                color={viewMode === 'list' ? DARK : '#7fa4bf'}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {(multiSelectMode || selectedIds.size > 0) && (
-          <View style={styles.selectionAssistRow}>
-            <TouchableOpacity
-              style={styles.selectionAssistButton}
-              activeOpacity={0.7}
-              onPress={handleSelectAll}
-            >
-              <Text style={styles.selectionAssistText}>
-                {allSelected ? '取消全选' : '全选'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Stats bar */}
-      {stats && (
+      {/* Stats bar — shown only when auto-upload is NOT active */}
+      {!isAutoUploadActive && stats && (
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{stats.totalCount}</Text>
@@ -947,10 +982,12 @@ export function AlbumWorkbenchScreen() {
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: BLUE }]}>
+            <Text style={[styles.statValue, { color: '#f59e0b' }]}>
               {Math.max(
                 0,
-                stats.totalCount - stats.transferredCount - stats.queuedCount,
+                stats.totalCount -
+                  stats.transferredCount -
+                  stats.queuedCount,
               )}
             </Text>
             <Text style={styles.statLabel}>新增</Text>
@@ -958,31 +995,124 @@ export function AlbumWorkbenchScreen() {
         </View>
       )}
 
+      {/* Unified filter tabs + view toggle — shown only when auto-upload is NOT active */}
+      {!isAutoUploadActive && (
+        <View style={styles.filterBarWrap}>
+          <View style={styles.filterBar}>
+            {UNIFIED_FILTER_TABS.map(tab => (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.filterTab,
+                  unifiedFilter === tab.key && styles.filterTabActive,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => handleUnifiedFilterPress(tab.key)}
+              >
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    unifiedFilter === tab.key && styles.filterTabTextActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            <View style={styles.viewToggleGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.viewToggleBtn,
+                  viewMode === 'grid' && styles.viewToggleBtnActive,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setViewMode('grid')}
+              >
+                <Icon
+                  name="apps-outline"
+                  size={16}
+                  color={viewMode === 'grid' ? DARK : '#8aabbd'}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.viewToggleBtn,
+                  viewMode === 'list' && styles.viewToggleBtnActive,
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setViewMode('list')}
+              >
+                <Icon
+                  name="menu-outline"
+                  size={16}
+                  color={viewMode === 'list' ? DARK : '#8aabbd'}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+    </>
+  );
+
+  const renderListEmptyComponent = () => {
+    if (isAutoUploadActive) {
+      return null;
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Icon name="image-outline" size={48} color="#b0c8da" />
+        <Text style={styles.emptyText}>{emptyStateCopy.title}</Text>
+        <Text style={styles.emptySubText}>{emptyStateCopy.subtitle}</Text>
+      </View>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.goBack()}>
+          <Icon name="chevron-back" size={22} color={DARK} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {collectionTitle ?? '相册'}
+        </Text>
+        <TouchableOpacity
+          style={styles.headerFilterBtn}
+          activeOpacity={0.7}
+          onPress={() => void handleOpenCollectionSheet()}
+        >
+          <Icon name="apps-outline" size={20} color={DARK} />
+        </TouchableOpacity>
+      </View>
+
       {/* Asset list */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BLUE} />
           <Text style={styles.loadingText}>正在加载相册...</Text>
         </View>
-      ) : assets.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="image-outline" size={48} color="#b0c8da" />
-          <Text style={styles.emptyText}>暂无素材</Text>
-          <Text style={styles.emptySubText}>请确保已授予照片访问权限</Text>
-        </View>
       ) : viewMode === 'grid' ? (
         <FlatList
           key="grid"
-          data={assets}
+          data={isAutoUploadActive ? [] : assets}
           renderItem={renderGridItem}
           keyExtractor={keyExtractor}
           extraData={selectedIds}
           numColumns={GRID_COLUMNS}
           contentContainerStyle={styles.gridContent}
-          columnWrapperStyle={styles.gridRow}
+          columnWrapperStyle={
+            !isAutoUploadActive && assets.length > 0
+              ? styles.gridRow
+              : undefined
+          }
           showsVerticalScrollIndicator={false}
-          onEndReached={handleEndReached}
+          onEndReached={isAutoUploadActive ? undefined : handleEndReached}
           onEndReachedThreshold={0.5}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderListEmptyComponent}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
@@ -996,14 +1126,16 @@ export function AlbumWorkbenchScreen() {
       ) : (
         <FlatList
           key="list"
-          data={assets}
+          data={isAutoUploadActive ? [] : assets}
           renderItem={renderListItem}
           keyExtractor={keyExtractor}
           extraData={selectedIds}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          onEndReached={handleEndReached}
+          onEndReached={isAutoUploadActive ? undefined : handleEndReached}
           onEndReachedThreshold={0.5}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderListEmptyComponent}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
@@ -1016,10 +1148,17 @@ export function AlbumWorkbenchScreen() {
         />
       )}
 
-      {/* Bottom floating upload bar — always visible, disabled when nothing selected */}
-      <View style={styles.uploadBar}>
-        <Text style={styles.uploadBarText}>
-          {selectedIds.size > 0 ? `已选 ${selectedIds.size} 项` : '未选择素材'}
+      {/* Bottom bar — hidden during auto upload running, visible otherwise */}
+      {!isAutoUploadActive && <View style={styles.uploadBar}>
+        <Text
+          style={[
+            styles.uploadBarText,
+            selectedIds.size > 0 && styles.uploadBarTextActive,
+          ]}
+        >
+          {selectedIds.size > 0
+            ? `已选 ${selectedIds.size} 个素材`
+            : '未选择素材'}
         </Text>
         <TouchableOpacity
           style={[
@@ -1037,7 +1176,42 @@ export function AlbumWorkbenchScreen() {
             <Text style={styles.uploadButtonText}>开始上传</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </View>}
+      {/* Date/time picker modal for custom time range */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.datePickerOverlay}>
+          <View style={styles.datePickerSheet}>
+            <View style={styles.datePickerHeader}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerCancel}>取消</Text>
+              </TouchableOpacity>
+              <Text style={styles.datePickerTitle}>选择时间</Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleDatePickerConfirm}
+              >
+                <Text style={styles.datePickerConfirm}>确认</Text>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={pendingDate}
+              mode="datetime"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDatePickerChange}
+              locale="zh-Hans"
+              style={styles.datePickerSpinner}
+            />
+          </View>
+        </View>
+      </Modal>
       {/* Album collection picker modal */}
       <Modal
         visible={collectionSheetVisible}
@@ -1061,7 +1235,7 @@ export function AlbumWorkbenchScreen() {
               >
                 <Icon name="chevron-back" size={20} color={DARK} />
               </TouchableOpacity>
-              <Text style={styles.collectionSheetTitle}>相册工作台</Text>
+              <Text style={styles.collectionSheetTitle}>选择相册</Text>
               <View style={{ width: 22 }} />
             </View>
 
@@ -1077,25 +1251,21 @@ export function AlbumWorkbenchScreen() {
                 keyExtractor={item => item.collectionId}
                 style={styles.collectionList}
                 ListHeaderComponent={
-                  <>
-                    {/* "全部照片" — clears the collection filter */}
-                    <TouchableOpacity
-                      style={styles.collectionRow}
-                      activeOpacity={0.7}
-                      onPress={() => handleSelectCollection(null, null)}
-                    >
-                      <Text style={styles.collectionName}>全部照片</Text>
-                      <View style={styles.collectionRowRight}>
-                        <Text style={styles.collectionCount}>
-                          {collectionTotalCount}
-                        </Text>
-                        {collectionId == null && (
-                          <Icon name="checkmark" size={16} color={BLUE} />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                    <View style={styles.collectionDivider} />
-                  </>
+                  <TouchableOpacity
+                    style={styles.collectionRow}
+                    activeOpacity={0.7}
+                    onPress={() => handleSelectCollection(null, null)}
+                  >
+                    <Text style={styles.collectionName}>全部照片</Text>
+                    <View style={styles.collectionRowRight}>
+                      <Text style={styles.collectionCount}>
+                        {collectionTotalCount}
+                      </Text>
+                      {collectionId == null && (
+                        <Icon name="checkmark" size={16} color={BLUE} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
                 }
                 renderItem={({ item }) => (
                   <TouchableOpacity
@@ -1146,12 +1316,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: DARK,
+    flex: 1,
+    textAlign: 'center',
   },
   headerFilterBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1167,10 +1338,11 @@ const styles = StyleSheet.create({
 
   // Auto-upload config
   configSection: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
+    marginTop: 8,
     marginBottom: 8,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(255,255,255,0.85)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.9)',
     overflow: 'hidden',
@@ -1200,11 +1372,11 @@ const styles = StyleSheet.create({
   configStateActive: {
     backgroundColor: 'rgba(34,197,94,0.12)',
   },
-  configStatePaused: {
+  configStateInterrupted: {
     backgroundColor: 'rgba(245,158,11,0.12)',
   },
   configStateDisabled: {
-    backgroundColor: 'rgba(148,163,184,0.12)',
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
   configStateText: {
     fontSize: 11,
@@ -1213,7 +1385,7 @@ const styles = StyleSheet.create({
   configStateTextActive: {
     color: '#16a34a',
   },
-  configStateTextPaused: {
+  configStateTextInterrupted: {
     color: '#d97706',
   },
   configStateTextDisabled: {
@@ -1245,7 +1417,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   toggleTrackOn: {
-    backgroundColor: BLUE,
+    backgroundColor: '#22c55e',
   },
   toggleThumb: {
     width: 22,
@@ -1289,107 +1461,135 @@ const styles = StyleSheet.create({
     color: BLUE,
     fontWeight: '600',
   },
-  customTimeInput: {
-    marginTop: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  customTimeCard: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
+  },
+  customTimeText: {
     fontSize: 13,
     color: DARK,
     fontVariant: ['tabular-nums'],
   },
 
-  // Filter toolbar
-  toolbarWrap: {
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 10,
-    gap: 8,
+  // Summary card (shown when auto-upload is active)
+  summaryCard: {
+    marginHorizontal: 14,
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
   },
-  toolbar: {
+  summaryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 6,
-    borderRadius: 18,
+    gap: 8,
+    marginBottom: 4,
+  },
+  summaryDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#22c55e',
+  },
+  summaryTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK,
+  },
+  summarySubtitle: {
+    fontSize: 12,
+    color: '#8aabbd',
+    marginBottom: 16,
+    marginLeft: 18,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  summaryGridItem: {
+    width: '50%',
+    paddingVertical: 8,
+  },
+  summaryGridLabel: {
+    fontSize: 11,
+    color: '#8aabbd',
+    marginBottom: 4,
+  },
+  summaryGridValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK,
+  },
+  summaryGridNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#16a34a',
+  },
+  summaryGridNumberOrange: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#f59e0b',
+  },
+  summaryGridNumberDark: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK,
+  },
+
+  // Unified filter tabs
+  filterBarWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.84)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
-    gap: 6,
+    gap: 4,
   },
-  toolbarChipGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  toolbarChip: {
-    minWidth: 46,
-    paddingHorizontal: 12,
+  filterTab: {
+    flex: 1,
     paddingVertical: 8,
-    borderRadius: 13,
-    backgroundColor: '#e8f3fb',
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toolbarChipActive: {
+  filterTabActive: {
     backgroundColor: DARK,
   },
-  toolbarChipText: {
+  filterTabText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#7d9cb5',
   },
-  toolbarChipTextActive: {
+  filterTabTextActive: {
     color: '#fff',
-  },
-  toolbarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 14,
-    backgroundColor: '#edf6fc',
-    gap: 2,
-  },
-  toolbarSpacer: {
-    flex: 1,
-  },
-  toolbarIconButton: {
-    width: 32,
-    height: 30,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toolbarIconButtonActive: {
-    backgroundColor: '#d8eaf6',
-  },
-  selectionAssistRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  selectionAssistButton: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  selectionAssistText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BLUE,
   },
 
   // Stats bar
   statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
   },
   statItem: {
     flex: 1,
@@ -1413,8 +1613,8 @@ const styles = StyleSheet.create({
 
   // Grid view
   gridContent: {
-    paddingHorizontal: GRID_GAP,
-    paddingBottom: 100,
+    paddingHorizontal: CONTENT_PADDING,
+    paddingBottom: 80,
   },
   gridRow: {
     gap: GRID_GAP,
@@ -1475,8 +1675,8 @@ const styles = StyleSheet.create({
 
   // List view
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingHorizontal: CONTENT_PADDING,
+    paddingBottom: 80,
     gap: 2,
   },
   listRow: {
@@ -1592,17 +1792,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     paddingBottom: 34,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.06)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 6,
   },
   uploadBarText: {
     fontSize: 14,
+    fontWeight: '500',
+    color: '#8aabbd',
+  },
+  uploadBarTextActive: {
     fontWeight: '600',
     color: DARK,
   },
@@ -1615,12 +1819,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   uploadButtonDisabled: {
-    opacity: 0.6,
+    backgroundColor: '#d1d5db',
   },
   uploadButtonText: {
     fontSize: 15,
     fontWeight: '700',
     color: '#fff',
+  },
+
+  // Date/time picker modal
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'flex-end',
+  },
+  datePickerSheet: {
+    backgroundColor: '#eaf4fb',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: DARK,
+  },
+  datePickerCancel: {
+    fontSize: 15,
+    color: '#6b8da0',
+  },
+  datePickerConfirm: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: BLUE,
+  },
+  datePickerSpinner: {
+    height: 200,
+  },
+
+  // View toggle segmented control (grid/list) in filter bar
+  viewToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 8,
+    marginLeft: 8,
+    padding: 2,
+  },
+  viewToggleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewToggleBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
 
   // Album collection picker modal
@@ -1675,10 +1941,5 @@ const styles = StyleSheet.create({
   collectionCount: {
     fontSize: 14,
     color: '#6b8da0',
-  },
-  collectionDivider: {
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    marginHorizontal: 16,
   },
 });
