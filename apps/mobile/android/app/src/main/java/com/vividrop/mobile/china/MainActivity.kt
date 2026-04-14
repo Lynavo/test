@@ -1,4 +1,4 @@
-package com.syncflow.mobile
+package com.vividrop.mobile.china
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

@@ -1,4 +1,4 @@
-package com.syncflow.mobile.sync
+package com.vividrop.mobile.china.sync
 
 import android.content.Context
 import android.content.pm.PackageManager
@@ -272,6 +272,88 @@ class NativeSyncEngineModule(
     emitIdleSyncState(loadBinding())
     emitQueueUpdated(Arguments.createArray())
     promise.resolve(null)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Stub methods — Android native sync engine is not yet implemented.
+  // These stubs return safe defaults so JS screens don't crash when calling
+  // bridge methods that only have real implementations on iOS.
+  // ---------------------------------------------------------------------------
+
+  @ReactMethod
+  fun browseAlbum(params: ReadableMap, promise: Promise) {
+    promise.resolve(Arguments.createArray())
+  }
+
+  @ReactMethod
+  fun getAlbumStats(promise: Promise) {
+    promise.resolve(Arguments.createMap().apply {
+      putInt("totalCount", 0)
+      putInt("transferredCount", 0)
+      putInt("queuedCount", 0)
+    })
+  }
+
+  @ReactMethod
+  fun getAlbumCollections(mediaFilter: String, promise: Promise) {
+    promise.resolve(Arguments.createArray())
+  }
+
+  @ReactMethod
+  fun submitManualUpload(params: ReadableMap, promise: Promise) {
+    promise.reject("ANDROID_NOT_IMPLEMENTED", "手动上传功能暂未在 Android 端实现")
+  }
+
+  @ReactMethod
+  fun cancelManualBatch(batchId: String, promise: Promise) {
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun pauseAutoUpload(promise: Promise) {
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun resumeAutoUpload(promise: Promise) {
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun getAutoUploadConfig(promise: Promise) {
+    promise.resolve(Arguments.createMap().apply {
+      putBoolean("enabled", false)
+      putString("state", "disabled")
+      putString("timeRangeMode", "all")
+    })
+  }
+
+  @ReactMethod
+  fun saveAutoUploadConfig(params: ReadableMap, promise: Promise) {
+    promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun browseSharedFiles(path: String, promise: Promise) {
+    promise.resolve(Arguments.createMap().apply {
+      putString("path", path)
+      putArray("files", Arguments.createArray())
+    })
+  }
+
+  @ReactMethod
+  fun downloadSharedFile(path: String, promise: Promise) {
+    promise.reject("ANDROID_NOT_IMPLEMENTED", "共享文件下载功能暂未在 Android 端实现")
+  }
+
+  @ReactMethod
+  fun getSharedFileStreamUrl(path: String, promise: Promise) {
+    promise.reject("ANDROID_NOT_IMPLEMENTED", "共享文件流功能暂未在 Android 端实现")
+  }
+
+  @ReactMethod
+  fun shareFile(localPath: String, promise: Promise) {
+    promise.reject("ANDROID_NOT_IMPLEMENTED", "文件分享功能暂未在 Android 端实现")
   }
 
   private fun runAsync(promise: Promise, block: () -> Unit) {

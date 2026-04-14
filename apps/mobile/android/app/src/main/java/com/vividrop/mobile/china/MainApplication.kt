@@ -1,4 +1,4 @@
-package com.syncflow.mobile
+package com.vividrop.mobile.china
 
 import android.app.Application
 import com.facebook.react.PackageList
@@ -6,7 +6,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import com.syncflow.mobile.sync.NativeSyncEnginePackage
+import com.vividrop.mobile.china.sync.NativeSyncEnginePackage
 
 class MainApplication : Application(), ReactApplication {
 
