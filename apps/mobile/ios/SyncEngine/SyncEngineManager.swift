@@ -243,13 +243,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var sidecarHost: String?  // resolved IP of Mac, for HTTP heartbeat
     private lazy var heartbeatSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.isDiscretionary = true
-        config.networkServiceType = .background
-        config.timeoutIntervalForRequest = 10
+        config.isDiscretionary = false
+        config.waitsForConnectivity = false
+        config.networkServiceType = .responsiveData
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.timeoutIntervalForRequest = 5
+        config.timeoutIntervalForResource = 5
         return URLSession(configuration: config)
     }()
     private var transitionBackgroundTaskId: UIBackgroundTaskIdentifier = .invalid
     private var bindingConnectionState: BindingConnectionState = .offline
+    private var presenceHeartbeatTimer: DispatchSourceTimer?
+    private let presenceRecoveryQueue = DispatchQueue(
+        label: "com.syncflow.presence-recovery",
+        qos: .utility
+    )
+    private let presenceRecoveryLock = NSLock()
+    private var presenceRecoveryToken = UUID()
+    private var presenceRecoveryWorkItem: DispatchWorkItem?
     private let diagnosticsIssueLock = NSLock()
     private var recentRetryDiagnostic: [String: Any]?
     private var recentErrorDiagnostic: [String: Any]?
@@ -907,6 +918,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 scheduleIncrementalQueueRescan(reason: "foreground_recovery_compensation")
             }
         }
+
+        // Validate connection immediately on foreground — the heartbeat timer
+        // may not have fired while the app was suspended, leaving a stale
+        // .connected state even though the desktop is no longer reachable.
+        if bindingConnectionState == .connected || bindingConnectionState == .bound {
+            let clientId = bindingService.getOrCreateClientId()
+            sendPresenceHeartbeat(clientId: clientId)
+        }
     }
 
     @objc private func thermalStateDidChange() {
@@ -979,6 +998,147 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         syncDiagnosticsLog("SyncEngine", "binding connection state \(bindingConnectionState.rawValue) -> \(newState.rawValue) (\(reason))")
         bindingConnectionState = newState
         emitBindingStateChanged()
+
+        // Keep the standalone heartbeat timer in sync with connection state
+        if newState == .connected {
+            cancelPresenceRecoveryProbe(reason: "state_connected")
+            startPresenceHeartbeatTimer()
+        } else {
+            stopPresenceHeartbeatTimer()
+        }
+    }
+
+    // MARK: - Standalone Presence Heartbeat Timer
+
+    /// Runs independently of the sync pipeline so we detect desktop disappearance
+    /// even when no upload is in progress.
+    private func startPresenceHeartbeatTimer() {
+        stopPresenceHeartbeatTimer()
+        guard uploadStore?.getBinding() != nil else { return }
+        let clientId = bindingService.getOrCreateClientId()
+        let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        timer.schedule(deadline: .now() + 30, repeating: 30, leeway: .seconds(5))
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            // Skip if sync pipeline is running — it has its own heartbeat loop
+            guard !self.isSyncing else { return }
+            self.sendPresenceHeartbeat(clientId: clientId)
+        }
+        timer.resume()
+        presenceHeartbeatTimer = timer
+        NSLog("[SyncEngine] standalone presence heartbeat timer started")
+        syncDiagnosticsLog("SyncEngine", "standalone presence heartbeat timer started")
+    }
+
+    private func stopPresenceHeartbeatTimer() {
+        if let timer = presenceHeartbeatTimer {
+            timer.cancel()
+            presenceHeartbeatTimer = nil
+            NSLog("[SyncEngine] standalone presence heartbeat timer stopped")
+            syncDiagnosticsLog("SyncEngine", "standalone presence heartbeat timer stopped")
+        }
+    }
+
+    private func cancelPresenceRecoveryProbe(reason: String) {
+        presenceRecoveryLock.lock()
+        presenceRecoveryToken = UUID()
+        let workItem = presenceRecoveryWorkItem
+        presenceRecoveryWorkItem = nil
+        presenceRecoveryLock.unlock()
+
+        if let workItem {
+            workItem.cancel()
+            syncDiagnosticsLog("SyncEngine", "presence recovery probe cancelled (\(reason))")
+        }
+    }
+
+    private func setPresenceRecoveryWorkItem(_ workItem: DispatchWorkItem?) {
+        presenceRecoveryLock.lock()
+        presenceRecoveryWorkItem = workItem
+        presenceRecoveryLock.unlock()
+    }
+
+    private func currentPresenceRecoveryToken() -> UUID {
+        presenceRecoveryLock.lock()
+        defer { presenceRecoveryLock.unlock() }
+        return presenceRecoveryToken
+    }
+
+    private func startPresenceRecoveryProbe(
+        clientId: String,
+        maxAttempts: Int = 8,
+        retryInterval: TimeInterval = 1
+    ) {
+        cancelPresenceRecoveryProbe(reason: "start_new_probe")
+        updateBindingConnectionState(.connecting, reason: "presence_recovery_started")
+
+        let token = UUID()
+        presenceRecoveryLock.lock()
+        presenceRecoveryToken = token
+        presenceRecoveryLock.unlock()
+
+        syncDiagnosticsLog(
+            "SyncEngine",
+            "presence recovery probe started attempts=\(maxAttempts) interval=\(retryInterval)s"
+        )
+        performPresenceRecoveryProbe(
+            clientId: clientId,
+            attempt: 1,
+            maxAttempts: maxAttempts,
+            retryInterval: retryInterval,
+            token: token
+        )
+    }
+
+    private func performPresenceRecoveryProbe(
+        clientId: String,
+        attempt: Int,
+        maxAttempts: Int,
+        retryInterval: TimeInterval,
+        token: UUID
+    ) {
+        guard token == currentPresenceRecoveryToken() else { return }
+
+        syncDiagnosticsLog(
+            "SyncEngine",
+            "presence recovery attempt \(attempt)/\(maxAttempts) host=\(sidecarHost ?? uploadStore?.getBinding()?.host ?? "nil")"
+        )
+
+        sendPresenceHeartbeat(
+            clientId: clientId,
+            successReason: "presence_recovery_succeeded",
+            failureReason: "presence_recovery_failed",
+            updateStateOnFailure: false
+        ) { [weak self] success in
+            guard let self = self else { return }
+            guard token == self.currentPresenceRecoveryToken() else { return }
+
+            if success {
+                self.cancelPresenceRecoveryProbe(reason: "heartbeat_succeeded")
+                if !self.isSyncing {
+                    self.startSync()
+                }
+                return
+            }
+
+            guard attempt < maxAttempts else {
+                self.cancelPresenceRecoveryProbe(reason: "exhausted")
+                self.updateBindingConnectionState(.offline, reason: "presence_recovery_exhausted")
+                return
+            }
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.performPresenceRecoveryProbe(
+                    clientId: clientId,
+                    attempt: attempt + 1,
+                    maxAttempts: maxAttempts,
+                    retryInterval: retryInterval,
+                    token: token
+                )
+            }
+            self.setPresenceRecoveryWorkItem(workItem)
+            self.presenceRecoveryQueue.asyncAfter(deadline: .now() + retryInterval, execute: workItem)
+        }
     }
 
     private func currentAppStateLabel(for applicationState: UIApplication.State) -> String {
@@ -1919,7 +2079,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let newTransport = TcpTransport()
         let session = ProtocolSession(transport: newTransport)
         protocolSession = session
-        updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
+        if !recoveryMode {
+            updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
+        }
         sessionService.transitionTo(.preparing)
         beginRuntimeSyncOverview(
             totalCount: totalCount,
@@ -2893,6 +3055,31 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             NSLog("[SyncEngine] WARNING: NativeSyncEngineModule.shared is nil, cannot emit")
             syncDiagnosticsLog("SyncEngine", "warning: NativeSyncEngineModule.shared is nil, cannot emit")
         }
+
+        // Detect bound device disappearing / reappearing from Bonjour
+        if let binding = uploadStore?.getBinding() {
+            let boundDeviceVisible = devices.contains { $0.deviceId == binding.deviceId }
+            if !boundDeviceVisible && (bindingConnectionState == .connected || bindingConnectionState == .bound) {
+                // Bonjour is unreliable — the device can briefly disappear due to
+                // mDNS cache expiry or Wi-Fi transitions. Probe with a heartbeat
+                // before going offline; only mark offline if the probe also fails.
+                NSLog("[SyncEngine] bound device %@ disappeared from discovery, verifying via heartbeat", binding.deviceId)
+                syncDiagnosticsLog("SyncEngine", "bound device \(binding.deviceId) disappeared from discovery, verifying via heartbeat")
+                let clientId = bindingService.getOrCreateClientId()
+                sendPresenceHeartbeat(clientId: clientId)
+            } else if boundDeviceVisible && (bindingConnectionState == .offline || bindingConnectionState == .bound) {
+                NSLog("[SyncEngine] bound device %@ reappeared in discovery, probing connection", binding.deviceId)
+                syncDiagnosticsLog("SyncEngine", "bound device \(binding.deviceId) reappeared in discovery, probing connection")
+                // Resolve sidecar host from the rediscovered Bonjour entry so the
+                // heartbeat has a target, then probe with short retries until the
+                // sidecar HTTP API is ready after desktop restart.
+                if let device = devices.first(where: { $0.deviceId == binding.deviceId }) {
+                    sidecarHost = preferredSidecarHost(probedHost: device.ip, device: device)
+                }
+                let clientId = bindingService.getOrCreateClientId()
+                startPresenceRecoveryProbe(clientId: clientId)
+            }
+        }
     }
 
     // MARK: - Discovery
@@ -3129,7 +3316,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         //    we just confirmed the host is reachable via TCP during pairing.
         //    Also cache sidecarHost so presence heartbeats can reach the desktop.
         sidecarHost = host
-        bindingConnectionState = .connected
+        updateBindingConnectionState(.connected, reason: "pairing_confirmed_reachable")
         NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload(binding: binding))
 
         // 7. Send a presence heartbeat so the desktop UI shows device as online
@@ -3148,6 +3335,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         bindingService.clearPairingToken()  // also wipe any legacy single-key token
         try uploadStore?.clearBinding()
+        stopPresenceHeartbeatTimer()
         bindingConnectionState = .offline
         sidecarHost = nil
         endBackgroundTransitionIfNeeded(reason: "disconnectAndUnbind")
@@ -3575,8 +3763,21 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - HTTP Presence Heartbeat
 
-    private func sendPresenceHeartbeat(clientId: String) {
-        guard let host = sidecarHost, !host.isEmpty else { return }
+    private func sendPresenceHeartbeat(
+        clientId: String,
+        successReason: String = "presence_heartbeat_succeeded",
+        failureReason: String = "presence_heartbeat_failed",
+        updateStateOnFailure: Bool = true,
+        completion: ((Bool) -> Void)? = nil
+    ) {
+        let host: String
+        if let resolved = sidecarHost, !resolved.isEmpty {
+            host = resolved
+        } else if let fallback = uploadStore?.getBinding()?.host, !fallback.isEmpty {
+            host = fallback
+        } else {
+            return
+        }
         let port = 39394
         // IPv6 link-local needs brackets and zone ID in URL
         let hostPart = host.contains(":") ? "[\(host)]" : host
@@ -3585,12 +3786,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 5
-        heartbeatSession.dataTask(with: request) { _, _, error in
+        heartbeatSession.dataTask(with: request) { _, response, error in
             if let error {
                 NSLog("[Presence] heartbeat failed: %@", "\(error)")
-                self.updateBindingConnectionState(.offline, reason: "presence_heartbeat_failed")
+                syncDiagnosticsLog("Presence", "heartbeat failed host=\(host) reason=\(failureReason) error=\(error)")
+                if updateStateOnFailure {
+                    self.updateBindingConnectionState(.offline, reason: failureReason)
+                }
+                completion?(false)
             } else {
-                self.updateBindingConnectionState(.connected, reason: "presence_heartbeat_succeeded")
+                if let httpResponse = response as? HTTPURLResponse {
+                    NSLog("[Presence] heartbeat succeeded: HTTP %d", httpResponse.statusCode)
+                    syncDiagnosticsLog("Presence", "heartbeat succeeded host=\(host) status=\(httpResponse.statusCode) reason=\(successReason)")
+                } else {
+                    NSLog("[Presence] heartbeat succeeded")
+                    syncDiagnosticsLog("Presence", "heartbeat succeeded host=\(host) reason=\(successReason)")
+                }
+                self.updateBindingConnectionState(.connected, reason: successReason)
+                completion?(true)
             }
         }.resume()
     }
