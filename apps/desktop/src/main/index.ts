@@ -109,7 +109,13 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', async () => {
+let isQuitting = false;
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
+  event.preventDefault();
+  isQuitting = true;
   wsBridge?.disconnect();
-  await sidecar.stop();
+  sidecar
+    .stop({ killExternal: true, killBonjourBroadcasts: true })
+    .finally(() => app.quit());
 });

@@ -388,10 +388,6 @@ export class SidecarManager extends EventEmitter {
   }
 
   private async forceShutdownSyncFlowBonjourBroadcasts(): Promise<void> {
-    if (process.platform !== 'win32') {
-      return;
-    }
-
     const pids = await findSyncFlowBonjourBroadcastPIDs();
     if (pids.length === 0) {
       return;
@@ -544,20 +540,22 @@ async function findProcessPIDsByName(processName: string): Promise<number[]> {
 }
 
 async function findSyncFlowBonjourBroadcastPIDs(): Promise<number[]> {
-  if (process.platform !== 'win32') {
-    return [];
-  }
-
   try {
-    const script = [
-      `$processes = Get-CimInstance Win32_Process -Filter "Name='${bonjourBinaryName}'" -ErrorAction SilentlyContinue | Where-Object {`,
-      "  $_.CommandLine -match 'dns-sd(\\\\.exe)?\\s+-R' -and",
-      "  $_.CommandLine -match '_syncflow\\._tcp' -and",
-      "  $_.CommandLine -match 'local\\.'",
-      '} | Select-Object -ExpandProperty ProcessId',
-      'if ($processes) { $processes | Sort-Object -Unique }',
-    ].join(' ');
-    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script]);
+    if (process.platform === 'win32') {
+      const script = [
+        `$processes = Get-CimInstance Win32_Process -Filter "Name='${bonjourBinaryName}'" -ErrorAction SilentlyContinue | Where-Object {`,
+        "  $_.CommandLine -match 'dns-sd(\\\\.exe)?\\s+-R' -and",
+        "  $_.CommandLine -match '_syncflow\\._tcp' -and",
+        "  $_.CommandLine -match 'local\\.'",
+        '} | Select-Object -ExpandProperty ProcessId',
+        'if ($processes) { $processes | Sort-Object -Unique }',
+      ].join(' ');
+      const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', script]);
+      return parsePIDList(stdout);
+    }
+
+    // macOS / Linux: use pgrep to find dns-sd processes advertising _syncflow._tcp
+    const { stdout } = await execFileAsync('pgrep', ['-f', 'dns-sd.*_syncflow._tcp']);
     return parsePIDList(stdout);
   } catch {
     return [];
