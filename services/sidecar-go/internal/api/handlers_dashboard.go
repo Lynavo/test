@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/disk"
-	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 )
 
 func (s *Server) handleDashboardSummary(w http.ResponseWriter, _ *http.Request) {
@@ -54,6 +53,10 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 	type deviceDTO struct {
 		DeviceID       string `json:"deviceId"`
 		ClientName     string `json:"clientName"`
+		DisplayName    string `json:"displayName"`
+		DeviceAlias    string `json:"deviceAlias,omitempty"`
+		ReceiveDirName string `json:"receiveDirName,omitempty"`
+		Platform       string `json:"platform"`
 		IP             string `json:"ip"`
 		Status         string `json:"status"`
 		TodayFileCount int    `json:"todayFileCount"`
@@ -90,20 +93,26 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 			status = "connected_idle"
 		}
 
-		deviceDirName := d.ClientID
-		switch {
-		case d.ReceiveDirName != nil && *d.ReceiveDirName != "":
-			deviceDirName = *d.ReceiveDirName
-		case d.DeviceAlias != nil && *d.DeviceAlias != "":
-			deviceDirName = internalserver.SanitizeDirName(*d.DeviceAlias)
-		case d.ClientName != "":
-			deviceDirName = internalserver.SanitizeDirName(d.ClientName)
+		if d.ReceiveDirName == nil || *d.ReceiveDirName == "" {
+			slog.Error("device missing receive_dir_name, skipping", "clientID", d.ClientID)
+			continue
 		}
-		devicePath := filepath.Join(s.config.ReceiveDir, deviceDirName)
+		devicePath := filepath.Join(s.config.ReceiveDir, *d.ReceiveDirName)
+
+		// Assemble displayName: deviceAlias ?? clientName ?? clientId
+		displayName := d.ClientName
+		if d.DeviceAlias != nil && *d.DeviceAlias != "" {
+			displayName = *d.DeviceAlias
+		}
+		if displayName == "" {
+			displayName = d.ClientID
+		}
 
 		dto := deviceDTO{
 			DeviceID:       d.ClientID,
 			ClientName:     d.ClientName,
+			DisplayName:    displayName,
+			Platform:       d.Platform,
 			IP:             ip,
 			Status:         status,
 			TodayFileCount: d.FileCount,
@@ -111,6 +120,13 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 			StorageLeft:    formatBytesHuman(remainingBytes),
 			StoragePath:    s.config.ReceiveDir,
 			DevicePath:     devicePath,
+		}
+		// Phase 5 observability: expose alias & dir name for diagnostics
+		if d.DeviceAlias != nil {
+			dto.DeviceAlias = *d.DeviceAlias
+		}
+		if d.ReceiveDirName != nil {
+			dto.ReceiveDirName = *d.ReceiveDirName
 		}
 		if d.CurrentFile != nil && status == "transferring" {
 			dto.CurrentFile = &struct {

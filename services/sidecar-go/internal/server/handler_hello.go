@@ -32,6 +32,7 @@ func (c *connection) handleHello(body []byte) error {
 	}
 	c.clientID = req.ClientID
 	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
+	c.clientPlatform = req.ClientPlatform
 
 	slog.Info("HELLO_REQ received",
 		"clientID", req.ClientID,
@@ -93,7 +94,6 @@ func (c *connection) handleHello(body []byte) error {
 
 		shouldUpsertDevice := false
 		metadataChanged := false
-		aliasChanged := false
 		if req.ClientName != "" && device.ClientName != req.ClientName {
 			device.ClientName = req.ClientName
 			shouldUpsertDevice = true
@@ -103,10 +103,14 @@ func (c *connection) handleHello(body []byte) error {
 			device.DeviceAlias = &req.DeviceAlias
 			shouldUpsertDevice = true
 			metadataChanged = true
-			aliasChanged = true
 		}
 		if c.clientIP != "" && (device.LastIP == nil || *device.LastIP != c.clientIP) {
 			device.LastIP = &c.clientIP
+			shouldUpsertDevice = true
+			metadataChanged = true
+		}
+		if req.ClientPlatform != "" && device.Platform != req.ClientPlatform {
+			device.Platform = req.ClientPlatform
 			shouldUpsertDevice = true
 			metadataChanged = true
 		}
@@ -118,15 +122,6 @@ func (c *connection) handleHello(body []byte) error {
 			}
 		} else if err := c.store.UpdateLastSeen(req.ClientID, c.clientIP); err != nil {
 			slog.Warn("failed to update last_seen", "err", err)
-		}
-
-		// Migrate receive directory when device alias changes
-		if aliasChanged && device.ReceiveDirName != nil && *device.ReceiveDirName != "" {
-			newDirName := SanitizeDirName(req.DeviceAlias)
-			if *device.ReceiveDirName != newDirName {
-				MigrateDeviceDir(c.config.ReceiveDir, *device.ReceiveDirName, req.DeviceAlias)
-				_ = c.store.UpdateReceiveDirName(c.clientID, newDirName)
-			}
 		}
 
 		if metadataChanged && c.hub != nil {
@@ -271,19 +266,27 @@ func (c *connection) handlePair(body []byte) error {
 		alias = &req.DeviceAlias
 	}
 
+	platform := c.clientPlatform
+	if platform == "" {
+		platform = "ios" // fallback for clients that don't send clientPlatform
+	}
+
 	device := store.PairedDevice{
 		ClientID:         req.ClientID,
 		ClientName:       req.ClientName,
 		DeviceAlias:      alias,
 		LastIP:           &clientIP,
-		Platform:         "ios", // default for mobile clients
+		Platform:         platform,
 		PairingID:        pairingID,
 		PairingTokenHash: tokenHash,
 		CreatedAt:        now,
 		LastSeenAt:       now,
 	}
-	if err := c.store.UpsertPairedDevice(device); err != nil {
-		return fmt.Errorf("store paired device: %w", err)
+
+	// Generate dir name + store device atomically under the dir-name mutex.
+	// No intermediate state — the device record is complete from birth.
+	if _, err := PairDeviceWithDirName(c.store, c.config.ReceiveDir, device); err != nil {
+		return fmt.Errorf("pair device %q: %w", req.ClientID, err)
 	}
 	c.clientID = req.ClientID
 

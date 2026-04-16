@@ -16,7 +16,9 @@ describe('dashboard-store', () => {
     useDashboardStore.getState().updateDevices([
       {
         deviceId: 'd4',
+        displayName: 'GoPro Hero 12',
         clientName: 'GoPro Hero 12',
+        platform: 'other',
         ip: '192.168.1.188',
         status: 'offline',
         todayFileCount: 0,
@@ -27,7 +29,9 @@ describe('dashboard-store', () => {
       },
       {
         deviceId: 'd1',
+        displayName: 'iPhone 15 Pro',
         clientName: 'iPhone 15 Pro',
+        platform: 'ios',
         ip: '192.168.1.201',
         status: 'transferring',
         todayFileCount: 12,
@@ -39,7 +43,9 @@ describe('dashboard-store', () => {
       },
       {
         deviceId: 'd2',
+        displayName: 'Galaxy S24 Ultra',
         clientName: 'Galaxy S24 Ultra',
+        platform: 'android',
         ip: '192.168.1.205',
         status: 'connected_idle',
         todayFileCount: 8,
@@ -63,7 +69,9 @@ describe('dashboard-store', () => {
     const unsorted: DashboardDeviceDTO[] = [
       {
         deviceId: 'x1',
+        displayName: 'Offline Device',
         clientName: 'Offline Device',
+        platform: 'ios',
         ip: '10.0.0.1',
         status: 'offline',
         todayFileCount: 0,
@@ -74,7 +82,9 @@ describe('dashboard-store', () => {
       },
       {
         deviceId: 'x2',
+        displayName: 'Active Device',
         clientName: 'Active Device',
+        platform: 'android',
         ip: '10.0.0.2',
         status: 'transferring',
         todayFileCount: 5,
@@ -185,7 +195,9 @@ describe('dashboard-store', () => {
     const devices: DashboardDeviceDTO[] = [
       {
         deviceId: 'fresh-1',
+        displayName: 'Fresh Device',
         clientName: 'Fresh Device',
+        platform: 'ios',
         ip: '10.0.0.9',
         status: 'connected_idle',
         todayFileCount: 3,

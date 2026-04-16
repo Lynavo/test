@@ -305,27 +305,11 @@ func (c *connection) handleFileEnd(body []byte) error {
 		)
 	}
 
-	// SHA256 matches — finalize
-	deviceAlias := c.clientID // fallback
-	var oldDirName string
-	if dev, err := c.store.GetPairedDevice(c.clientID); err == nil {
-		if dev.DeviceAlias != nil && *dev.DeviceAlias != "" {
-			deviceAlias = *dev.DeviceAlias
-		} else {
-			deviceAlias = dev.ClientName
-		}
-		if dev.ReceiveDirName != nil {
-			oldDirName = *dev.ReceiveDirName
-		}
+	// Get stable receive directory name (guaranteed non-empty by EnsureReceiveDirName)
+	dirName, err := EnsureReceiveDirName(c.store, c.config.ReceiveDir, c.clientID)
+	if err != nil {
+		return fmt.Errorf("ensure receive dir name: %w", err)
 	}
-
-	// Migrate device directory if name changed
-	newDirName := SanitizeDirName(deviceAlias)
-	if oldDirName != "" && oldDirName != newDirName {
-		MigrateDeviceDir(c.config.ReceiveDir, oldDirName, deviceAlias)
-	}
-	// Always update stored dir name
-	_ = c.store.UpdateReceiveDirName(c.clientID, newDirName)
 
 	date := time.Now().Format("2006-01-02")
 
@@ -336,7 +320,7 @@ func (c *connection) handleFileEnd(body []byte) error {
 	}
 
 	finalizeStart := time.Now()
-	relativePath, err := c.fileWriter.Finalize(c.config.ReceiveDir, deviceAlias, date, filename, req.FileKey)
+	relativePath, err := c.fileWriter.Finalize(c.config.ReceiveDir, dirName, date, filename, req.FileKey)
 	finalizeElapsed := time.Since(finalizeStart)
 	if err != nil {
 		slog.Error("failed to finalize file", "fileKey", req.FileKey, "err", err)

@@ -42,11 +42,12 @@ type connection struct {
 	hub        *events.Hub
 	server     *TCPServer // for tracking connected clients
 	state      connState
-	clientID   string
-	sessionID  string
-	nonce      string      // generated on HELLO_RES for HMAC auth
-	fileWriter *FileWriter // current .part file being written
-	clientIP   string
+	clientID       string
+	clientPlatform string // from HELLO_REQ, used at pairing time
+	sessionID      string
+	nonce          string      // generated on HELLO_RES for HMAC auth
+	fileWriter     *FileWriter // current .part file being written
+	clientIP       string
 	pingTimer  *time.Timer // 15s inactivity -> send PING
 	writeMu    sync.Mutex
 	ackMu      sync.Mutex

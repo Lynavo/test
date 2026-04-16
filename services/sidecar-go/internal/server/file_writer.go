@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,22 +157,23 @@ func (fw *FileWriter) Cleanup() error {
 }
 
 // Finalize moves the .part staging file to its final destination.
-// It creates the target directory structure: <receivePath>/<deviceAlias>/<date>/
+// It creates the target directory structure: <receivePath>/<dirName>/<date>/
 // and handles filename conflicts by appending a suffix.
 // Returns the relative path from receivePath.
-func (fw *FileWriter) Finalize(receivePath, deviceAlias, date, filename, fileKey string) (string, error) {
+func (fw *FileWriter) Finalize(receivePath, dirName, date, filename, fileKey string) (string, error) {
 	if fw.file != nil {
 		fw.file.Close()
 		fw.file = nil
 	}
 
-	// Sanitize alias for use as directory name
-	alias := sanitizeDirName(deviceAlias)
-	if alias == "" {
-		alias = "Unknown"
+	// Defensive sanitize: dirName should already be sanitized from EnsureReceiveDirName,
+	// but Finalize is the last gate before filesystem writes.
+	dir := sanitizeDirName(dirName)
+	if dir == "" {
+		dir = "Unknown"
 	}
 
-	dir := filepath.Join(receivePath, alias, date)
+	dir = filepath.Join(receivePath, dir, date)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create receive dir: %w", err)
 	}
@@ -203,24 +203,6 @@ func (fw *FileWriter) Finalize(receivePath, deviceAlias, date, filename, fileKey
 		return filepath.Base(finalPath), nil
 	}
 	return rel, nil
-}
-
-// MigrateDeviceDir renames a device's receive directory when its display name changes.
-// oldDirName is the previously stored sanitized name, newAlias is the current display name.
-func MigrateDeviceDir(receivePath, oldDirName, newAlias string) {
-	newDir := sanitizeDirName(newAlias)
-	if newDir == "" || oldDirName == "" || oldDirName == newDir {
-		return
-	}
-	oldPath := filepath.Join(receivePath, oldDirName)
-	newPath := filepath.Join(receivePath, newDir)
-	if info, err := os.Stat(oldPath); err == nil && info.IsDir() {
-		if err := os.Rename(oldPath, newPath); err != nil {
-			slog.Warn("failed to migrate device dir", "old", oldPath, "new", newPath, "err", err)
-		} else {
-			slog.Info("migrated device dir", "old", oldDirName, "new", newDir)
-		}
-	}
 }
 
 // SanitizeDirName replaces characters unsafe for directory names.

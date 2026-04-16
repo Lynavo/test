@@ -148,7 +148,7 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
               for (const file of result.items) {
                 allFiles.push({
                   ...file,
-                  deviceName: device.clientName,
+                  deviceName: device.displayName,
                   deviceId: device.deviceId,
                 });
               }

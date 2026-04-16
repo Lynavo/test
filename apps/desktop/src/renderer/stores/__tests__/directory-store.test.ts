@@ -73,7 +73,9 @@ describe('directory-store', () => {
     const mockDevices: DashboardDeviceDTO[] = [
       {
         deviceId: 'dev-1',
+        displayName: 'iPhone 15',
         clientName: 'iPhone 15',
+        platform: 'ios',
         status: 'online',
         todayUploadCount: 2,
         todayOccupiedBytes: 5000,

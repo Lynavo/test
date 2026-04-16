@@ -37,7 +37,12 @@ export interface DashboardSummaryDTO {
 
 export interface DashboardDeviceDTO {
   deviceId: string;
+  /** Resolved display label: deviceAlias ?? clientName ?? clientId */
+  displayName: string;
+  /** Raw device name reported at pairing time; kept for diagnostics */
   clientName: string;
+  /** Device platform identifier, e.g. "ios", "android" */
+  platform: string;
   ip: string;
   status: DeviceDashboardStatus;
   todayFileCount: number;
@@ -48,6 +53,10 @@ export interface DashboardDeviceDTO {
   storagePath: string;
   /** Device-specific directory under receive root */
   devicePath: string;
+  /** User-defined alias, if set (observability / diagnostics) */
+  deviceAlias?: string;
+  /** Stable directory name on disk (observability / diagnostics) */
+  receiveDirName?: string;
   currentFile?: {
     filename: string;
     progress: number;

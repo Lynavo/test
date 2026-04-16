@@ -56,6 +56,11 @@ func main() {
 	// Bootstrap reconciliation: ensure DB has config defaults
 	bootstrapReconciliation(st, cfg)
 
+	// Backfill receive_dir_name for any legacy devices that lack it.
+	// This runs once at startup so all devices are in a clean state
+	// before the TCP server accepts connections.
+	server.BackfillReceiveDirNames(st, cfg.ReceiveDir)
+
 	// Create TCP server first (API needs its client state tracker)
 	tcpSrv := server.NewTCPServer(st, cfg, hub)
 	if err := tcpSrv.Start(fmt.Sprintf(":%d", cfg.TCPPort)); err != nil {

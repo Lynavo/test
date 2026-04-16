@@ -80,7 +80,7 @@ export function DeviceDetailModal() {
         >
           {/* Visually hidden but accessible title */}
           <DialogTitle className="sr-only">
-            {selectedDevice.clientName} 设备详情
+            {selectedDevice.displayName} 设备详情
           </DialogTitle>
 
           <DeviceHeader
