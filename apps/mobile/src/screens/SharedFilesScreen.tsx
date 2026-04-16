@@ -106,8 +106,15 @@ export function SharedFilesScreen() {
       setErrorKind(null);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      // Differentiate error types
-      if (msg.includes('403') || msg.includes('404') || msg.includes('not found')) {
+      // 404 / 403 → directory genuinely missing or access denied.
+      // 400 is intentionally excluded: sidecar returns 400 for path
+      // traversal rejects, "not a directory", and resolve failures —
+      // none of which mean "shared directory inaccessible".
+      if (
+        msg.includes('403') ||
+        msg.includes('404') ||
+        msg.includes('not found')
+      ) {
         setErrorKind('directory_inaccessible');
       } else {
         setErrorKind('network_error');

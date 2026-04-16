@@ -193,7 +193,7 @@ describe('directory-store', () => {
     expect(getSharedList).not.toHaveBeenCalled();
   });
 
-  it('fetchSharedFiles sets empty array on error', async () => {
+  it('fetchSharedFiles sets empty array and sharedError on error', async () => {
     (window as Window & { electronAPI?: unknown }).electronAPI = {
       sidecar: {
         getSharedList: vi.fn().mockRejectedValue(new Error('network error')),
@@ -208,5 +208,27 @@ describe('directory-store', () => {
     await useDirectoryStore.getState().fetchSharedFiles();
 
     expect(useDirectoryStore.getState().sharedFiles).toEqual([]);
+    expect(useDirectoryStore.getState().sharedError).toBe('加载共享文件列表失败');
+  });
+
+  it('fetchSharedFiles clears sharedError on success', async () => {
+    const mockSharedDir: SharedDirectoryDTO = {
+      path: '',
+      files: [],
+      totalCount: 0,
+    };
+
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getSharedList: vi.fn().mockResolvedValue(mockSharedDir),
+      },
+    } as unknown as Window['electronAPI'];
+
+    // Pre-set an error to verify it gets cleared
+    useDirectoryStore.setState({ sharedError: '加载共享文件列表失败' });
+
+    await useDirectoryStore.getState().fetchSharedFiles();
+
+    expect(useDirectoryStore.getState().sharedError).toBeNull();
   });
 });

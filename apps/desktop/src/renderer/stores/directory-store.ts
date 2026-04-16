@@ -38,7 +38,8 @@ export interface DirectoryState {
   sharedFiles: SharedFileEntry[];
   receivedTotalBytes: number;
   loading: boolean;
-  error: string | null;
+  receivedError: string | null;
+  sharedError: string | null;
   sortField: DirectorySortField;
   sortDirection: SortDirection;
   /** Currently visible preview file (derived from previewList + previewIndex) */
@@ -66,7 +67,8 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
   sharedFiles: [],
   receivedTotalBytes: 0,
   loading: false,
-  error: null,
+  receivedError: null,
+  sharedError: null,
   sortField: 'completedAt',
   sortDirection: 'desc',
   previewFile: null,
@@ -111,7 +113,7 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
     // Only show loading indicator on initial load (no files yet)
     const isInitialLoad = get().receivedFiles.length === 0;
     if (isInitialLoad) {
-      set({ loading: true, error: null });
+      set({ loading: true, receivedError: null });
     }
 
     try {
@@ -166,13 +168,14 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
           receivedFiles: allFiles,
           receivedTotalBytes: totalBytes,
           loading: false,
+          receivedError: null,
         });
       } else if (isInitialLoad) {
-        set({ loading: false });
+        set({ loading: false, receivedError: null });
       }
     } catch (err) {
       console.error('Failed to fetch received files:', err);
-      set({ loading: false, error: '加载接收文件列表失败' });
+      set({ loading: false, receivedError: '加载接收文件列表失败' });
     }
   },
 
@@ -197,11 +200,13 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
       const oldFingerprint = get().sharedFiles.map((f) => f.path).join('\n');
 
       if (newFingerprint !== oldFingerprint) {
-        set({ sharedFiles: entries });
+        set({ sharedFiles: entries, sharedError: null });
+      } else if (get().sharedError) {
+        set({ sharedError: null });
       }
     } catch (err) {
       console.error('Failed to fetch shared files:', err);
-      set({ sharedFiles: [], error: '加载共享文件列表失败' });
+      set({ sharedFiles: [], sharedError: '加载共享文件列表失败' });
     }
   },
 

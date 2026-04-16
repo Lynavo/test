@@ -56,7 +56,8 @@ export function DirectoryPage() {
   const receivedFiles = useDirectoryStore((s) => s.receivedFiles);
   const sharedFiles = useDirectoryStore((s) => s.sharedFiles);
   const fetchAll = useDirectoryStore((s) => s.fetchAll);
-  const error = useDirectoryStore((s) => s.error);
+  const receivedError = useDirectoryStore((s) => s.receivedError);
+  const sharedError = useDirectoryStore((s) => s.sharedError);
   const loading = useDirectoryStore((s) => s.loading);
   const fetchSettings = useSettingsStore((s) => s.fetchSettings);
 
@@ -159,23 +160,29 @@ export function DirectoryPage() {
           </div>
 
           {/* Tab content */}
-          {error && !loading ? (
-            <ErrorState
-              message={error}
-              onRetry={() => {
-                if (activeTab === 'received') {
-                  void useDirectoryStore.getState().fetchReceivedFiles();
-                } else {
-                  void useDirectoryStore.getState().fetchSharedFiles();
-                }
-              }}
-            />
-          ) : (
-            <>
-              {activeTab === 'received' && <ReceivedFileList />}
-              {activeTab === 'shared' && <SharedFileList />}
-            </>
-          )}
+          {(() => {
+            const tabError = activeTab === 'received' ? receivedError : sharedError;
+            if (tabError && !loading) {
+              return (
+                <ErrorState
+                  message={tabError}
+                  onRetry={() => {
+                    if (activeTab === 'received') {
+                      void useDirectoryStore.getState().fetchReceivedFiles();
+                    } else {
+                      void useDirectoryStore.getState().fetchSharedFiles();
+                    }
+                  }}
+                />
+              );
+            }
+            return (
+              <>
+                {activeTab === 'received' && <ReceivedFileList />}
+                {activeTab === 'shared' && <SharedFileList />}
+              </>
+            );
+          })()}
         </GlassCard>
       </div>
 
