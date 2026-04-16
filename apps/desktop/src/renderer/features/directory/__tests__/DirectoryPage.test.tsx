@@ -231,7 +231,16 @@ describe('ReceivedFileList', () => {
     expect(screen.getByText('正在加载文件列表...')).toBeInTheDocument();
   });
 
-  it('resolves relative receive paths before opening media preview', () => {
+  it('opens media files via system shell instead of in-app preview', () => {
+    const openFile = vi.fn();
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      ...(window.electronAPI ?? {}),
+      files: {
+        ...(window.electronAPI?.files ?? {}),
+        openFile,
+      },
+    } as unknown as Window['electronAPI'];
+
     useSettingsStore.setState({
       settings: {
         ...mockSettings,
@@ -259,10 +268,9 @@ describe('ReceivedFileList', () => {
     render(<ReceivedFileList />);
     fireEvent.click(screen.getByRole('button', { name: '打开' }));
 
-    expect(useDirectoryStore.getState().previewFile).toMatchObject({
-      mediaType: 'video',
-      url: 'media:///Users/alice/SyncFlow/Received/iPhone%2015/2026-04-10/vacation%20clip.mp4',
-    });
+    expect(openFile).toHaveBeenCalledWith(
+      '/Users/alice/SyncFlow/Received/iPhone 15/2026-04-10/vacation clip.mp4',
+    );
   });
 });
 

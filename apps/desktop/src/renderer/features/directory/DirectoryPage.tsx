@@ -6,7 +6,6 @@ import { ErrorState } from '@renderer/components/shared/ErrorState';
 import { useDirectoryStore, type DirectoryTab } from '@renderer/stores/directory-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { DirectoryPathCard } from './DirectoryPathCard';
-import { PreviewModal } from './PreviewModal';
 import { ReceivedFileList } from './ReceivedFileList';
 import { SharedFileList } from './SharedFileList';
 
@@ -114,8 +113,6 @@ export function DirectoryPage() {
     }
   };
 
-  const previewFile = useDirectoryStore((s) => s.previewFile);
-
   return (
     <div className="flex flex-1 flex-col overflow-auto">
       <div className="mx-auto w-full max-w-5xl px-6 py-8">
@@ -185,8 +182,6 @@ export function DirectoryPage() {
           })()}
         </GlassCard>
       </div>
-
-      {previewFile && <PreviewModal />}
     </div>
   );
 }

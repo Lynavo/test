@@ -24,14 +24,6 @@ function isSidecarHealthy(): boolean {
   return useSidecarRuntimeStore.getState().runtime.status === 'healthy';
 }
 
-/** File preview descriptor */
-export interface PreviewFile {
-  name: string;
-  /** media:// URL usable in <img>/<video> src */
-  url: string;
-  mediaType: 'image' | 'video';
-}
-
 export interface DirectoryState {
   activeTab: DirectoryTab;
   receivedFiles: ReceivedFileEntry[];
@@ -42,20 +34,10 @@ export interface DirectoryState {
   sharedError: string | null;
   sortField: DirectorySortField;
   sortDirection: SortDirection;
-  /** Currently visible preview file (derived from previewList + previewIndex) */
-  previewFile: PreviewFile | null;
-  /** All previewable files in the current list context */
-  previewList: PreviewFile[];
-  /** Index into previewList */
-  previewIndex: number;
 
   setTab(tab: DirectoryTab): void;
   setSortField(field: DirectorySortField): void;
   toggleSort(field: DirectorySortField): void;
-  openPreview(file: PreviewFile, list: PreviewFile[]): void;
-  closePreview(): void;
-  prevPreview(): void;
-  nextPreview(): void;
   fetchReceivedFiles(): Promise<void>;
   fetchSharedFiles(): Promise<void>;
   fetchAll(): Promise<void>;
@@ -71,29 +53,8 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
   sharedError: null,
   sortField: 'completedAt',
   sortDirection: 'desc',
-  previewFile: null,
-  previewList: [],
-  previewIndex: 0,
 
   setTab: (tab) => set({ activeTab: tab }),
-
-  openPreview: (file, list) => {
-    const index = list.findIndex((f) => f.url === file.url);
-    set({ previewFile: file, previewList: list, previewIndex: index >= 0 ? index : 0 });
-  },
-  closePreview: () => set({ previewFile: null, previewList: [], previewIndex: 0 }),
-  prevPreview: () => {
-    const { previewList, previewIndex } = get();
-    if (previewList.length === 0) return;
-    const newIndex = previewIndex > 0 ? previewIndex - 1 : previewList.length - 1;
-    set({ previewIndex: newIndex, previewFile: previewList[newIndex] });
-  },
-  nextPreview: () => {
-    const { previewList, previewIndex } = get();
-    if (previewList.length === 0) return;
-    const newIndex = previewIndex < previewList.length - 1 ? previewIndex + 1 : 0;
-    set({ previewIndex: newIndex, previewFile: previewList[newIndex] });
-  },
 
   setSortField: (field) => set({ sortField: field }),
 
