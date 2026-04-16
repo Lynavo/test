@@ -47,6 +47,8 @@ import {
   saveAutoUploadConfig,
   interruptAutoUpload,
   enableAutoUpload,
+  getPhotoAuthorizationStatus,
+  presentLimitedPhotoPicker,
   type AlbumStats,
   type AlbumCollectionInfo,
 } from '../services/SyncEngineModule';
@@ -183,6 +185,9 @@ export function AlbumWorkbenchScreen() {
   // Device connection state — used to disable upload button when offline
   const [deviceConnected, setDeviceConnected] = useState(false);
 
+  // Photo library authorization status — tracks limited access state
+  const [photoAuthStatus, setPhotoAuthStatus] = useState<string>('unknown');
+
   // Radar pulse animation for auto-upload active icon
   const radarAnims = useRef(
     Array.from({ length: 3 }, () => new Animated.Value(0)),
@@ -290,7 +295,7 @@ export function AlbumWorkbenchScreen() {
     void loadAssets(mediaFilter, transferFilter, true, collectionId);
     void loadStats();
     void loadConfig();
-    // Seed initial connection state
+    // Seed initial connection and photo auth state
     void (async () => {
       try {
         const binding =
@@ -299,6 +304,14 @@ export function AlbumWorkbenchScreen() {
         setDeviceConnected(conn === 'connected' || conn === 'bound');
       } catch {
         setDeviceConnected(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const status = await getPhotoAuthorizationStatus();
+        setPhotoAuthStatus(status);
+      } catch {
+        /* best effort */
       }
     })();
   }, [
@@ -346,12 +359,22 @@ export function AlbumWorkbenchScreen() {
         setDeviceConnected(conn === 'connected' || conn === 'bound');
       },
     );
+    // Reload when photo library changes (e.g. user adds photos via
+    // limited picker or takes new photos while permission is limited)
+    const photoLibSub = emitter.addListener('onPhotoLibraryChanged', () => {
+      void loadAssets(mediaFilter, transferFilter, true, collectionId);
+      void loadStats();
+      void getPhotoAuthorizationStatus()
+        .then(setPhotoAuthStatus)
+        .catch(() => {});
+    });
     return () => {
       queueSub.remove();
       stateSub.remove();
       bindingSub.remove();
+      photoLibSub.remove();
     };
-  }, [mediaFilter, refreshVisibleAssets, loadStats]);
+  }, [mediaFilter, transferFilter, collectionId, loadAssets, refreshVisibleAssets, loadStats]);
 
   // Re-fetch when returning from background / permission dialog.
   // On first install, PHAsset.fetchAssets() triggers the iOS permission
@@ -368,12 +391,17 @@ export function AlbumWorkbenchScreen() {
         ) {
           void loadAssets(mediaFilter, transferFilter, true, collectionId);
           void loadStats();
+          // Re-check auth status — may have changed from notDetermined to
+          // limited/authorized while the permission dialog was showing.
+          void getPhotoAuthorizationStatus()
+            .then(setPhotoAuthStatus)
+            .catch(() => {});
         }
         appStateRef.current = next;
       },
     );
     return () => sub.remove();
-  }, [loadAssets, mediaFilter, transferFilter, loadStats]);
+  }, [loadAssets, mediaFilter, transferFilter, collectionId, loadStats]);
 
   // ---------------------------------------------------------------------------
   // Selection handlers
@@ -879,7 +907,7 @@ export function AlbumWorkbenchScreen() {
                       : styles.configStateTextDisabled,
                   ]}
                 >
-                  {isAutoUploadActive ? '运行中' : '已关闭'}
+                  {isAutoUploadActive ? '已开启' : '已关闭'}
                 </Text>
               </View>
             </View>
@@ -911,7 +939,7 @@ export function AlbumWorkbenchScreen() {
                     !isAutoUploadActive && !deviceConnected && styles.configLabelDisabled,
                   ]}
                 >
-                  {isAutoUploadActive ? '暂停自动上传' : '恢复自动上传'}
+                {'自动上传'}
                 </Text>
                 <View
                   style={[
@@ -1013,10 +1041,10 @@ export function AlbumWorkbenchScreen() {
                   ))}
                   <View style={styles.summaryDot} />
                 </View>
-                <Text style={styles.summaryTitle}>自动上传运行中</Text>
+              <Text style={styles.summaryTitle}>自动上传已开启</Text>
               </View>
               <Text style={styles.summarySubtitle}>
-                新素材将自动传输到 PC 端
+                等待新素材时会自动传输到 PC 端
               </Text>
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryGridItem}>
@@ -1162,6 +1190,27 @@ export function AlbumWorkbenchScreen() {
   );
 
   const renderListEmptyComponent = () => {
+    // Limited access with 0 authorized photos — guide the user to select
+    if (photoAuthStatus === 'limited' && unifiedFilter === 'all') {
+      return (
+        <View style={styles.emptyContainer}>
+          <Icon name="images-outline" size={48} color="#b0c8da" />
+          <Text style={styles.emptyText}>尚未选择照片</Text>
+          <Text style={styles.emptySubText}>
+            当前为「限制访问」模式，请选择要授权的照片
+          </Text>
+          <TouchableOpacity
+            style={styles.limitedPickerButton}
+            activeOpacity={0.7}
+            onPress={() => void presentLimitedPhotoPicker()}
+          >
+            <Icon name="add-circle-outline" size={16} color="#fff" />
+            <Text style={styles.limitedPickerButtonText}>选择照片</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (isAutoUploadActive) {
       return null;
     }
@@ -1923,6 +1972,23 @@ const styles = StyleSheet.create({
   emptySubText: {
     fontSize: 13,
     color: '#aac0d0',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  limitedPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BLUE,
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 12,
+  },
+  limitedPickerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   loadMoreIndicator: {
     paddingVertical: 16,

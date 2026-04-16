@@ -32,6 +32,11 @@ import {
 } from '../utils/effectiveConnectionState';
 import { formatQueueCountDisplay } from '../utils/queueCountDisplay';
 import { hasPendingManualWork } from '../utils/manualUploadState';
+import {
+  getSyncActivityMainCardState,
+  getSyncActivityProgressPercent,
+  isSyncActivityActivelyTransferring,
+} from '../utils/syncActivityTransferState';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 // ---------------------------------------------------------------------------
@@ -505,21 +510,8 @@ export function SyncActivityScreen() {
     manualPending: overview.manualPending,
     currentTaskSource,
   });
-
-  // Whether there's an active file transfer right now (vs. idle/completed monitoring)
-  const isActivelyTransferring =
-    isSyncing ||
-    overview.uploadState === 'scanning' ||
-    hasManualUploadWork ||
-    (overview.autoPending ?? 0) > 0;
-
-  const progressPercent =
-    overview.currentFileTotalBytes > 0
-      ? Math.round(
-          (overview.currentFileConfirmedBytes / overview.currentFileTotalBytes) *
-            100,
-        )
-      : 0;
+  const isActivelyTransferring = isSyncActivityActivelyTransferring(overview);
+  const progressPercent = getSyncActivityProgressPercent(overview);
 
   const totalPending =
     (overview.manualPending ?? 0) + (overview.autoPending ?? 0);
@@ -535,13 +527,7 @@ export function SyncActivityScreen() {
 
   const isManualUploading = hasManualUploadWork;
 
-  type MainCardState = 'running' | 'not_started' | 'offline';
-
-  const mainCardState: MainCardState = stableOffline && !isSyncing
-    ? 'offline'
-    : (isAutoUploadActive || hasManualUploadWork)
-      ? 'running'
-      : 'not_started';
+  const mainCardState = getSyncActivityMainCardState(overview, stableOffline && !isSyncing);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -737,7 +723,50 @@ export function SyncActivityScreen() {
             </View>
           )}
 
-          {/* ---- State 2: Auto Upload Not Started ---- */}
+          {/* ---- State 2: Auto Upload Standby ---- */}
+          {mainCardState === 'standby' && (
+            <View style={styles.cardBody}>
+              <View style={styles.badgeRow}>
+                <View style={styles.autoBadge}>
+                  <Text style={styles.autoBadgeText}>自动</Text>
+                </View>
+                <Text style={styles.badgeLabel}>自动上传已开启</Text>
+              </View>
+
+              <Text style={styles.runningTitle}>等待新素材</Text>
+              <Text style={styles.idleSubtitle}>
+                拍完后会自动传输到 PC 端
+              </Text>
+
+              {overview.completedCount > 0 && (
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>已传输</Text>
+                    <Text style={styles.statValue}>
+                      {overview.completedCount} 个
+                    </Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statLabel}>数据量</Text>
+                    <Text style={styles.statValue}>
+                      {formatBytes(overview.completedBytes)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.outlinedButton}
+                activeOpacity={0.7}
+                onPress={handleCloseAutoUpload}
+              >
+                <Text style={styles.outlinedButtonText}>关闭自动上传</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ---- State 3: Auto Upload Not Started ---- */}
           {mainCardState === 'not_started' && (
             <View style={styles.cardBodyCentered}>
               <View style={styles.notStartedIconCircle}>
@@ -770,7 +799,7 @@ export function SyncActivityScreen() {
             </View>
           )}
 
-          {/* ---- State 3: Device Offline ---- */}
+          {/* ---- State 4: Device Offline ---- */}
           {mainCardState === 'offline' && (
             <View style={styles.cardBodyCentered}>
               <View style={styles.offlineIconCircle}>
@@ -852,7 +881,7 @@ export function SyncActivityScreen() {
 // Overview builder
 // ---------------------------------------------------------------------------
 
-function buildOverview(
+export function buildOverview(
   payload: Record<string, unknown>,
   prev: SyncOverview,
 ): SyncOverview {
@@ -895,23 +924,31 @@ function buildOverview(
     currentFile:
       uploadState === 'completed' || uploadState === 'idle'
         ? undefined
-        : typeof payload.currentFile === 'string'
-          ? payload.currentFile
+        : 'currentFile' in payload
+          ? typeof payload.currentFile === 'string'
+            ? payload.currentFile
+            : undefined
           : prev.currentFile,
     currentFilename:
       uploadState === 'completed' || uploadState === 'idle'
         ? undefined
-        : typeof payload.currentFilename === 'string'
-          ? payload.currentFilename
+        : 'currentFilename' in payload
+          ? typeof payload.currentFilename === 'string'
+            ? payload.currentFilename
+            : undefined
           : prev.currentFilename,
     currentFileConfirmedBytes:
       uploadState === 'completed' || uploadState === 'idle'
         ? 0
-        : currentFileConfirmedBytes,
+        : 'currentFileConfirmedBytes' in payload || 'confirmedBytes' in payload
+          ? currentFileConfirmedBytes
+          : prev.currentFileConfirmedBytes,
     currentFileTotalBytes:
       uploadState === 'completed' || uploadState === 'idle'
         ? 0
-        : currentFileTotalBytes,
+        : 'currentFileTotalBytes' in payload
+          ? currentFileTotalBytes
+          : prev.currentFileTotalBytes,
     // Native sends null (NSNull) when no task is active — respect it as
     // "clear". Only fall back to prev when the key is absent from payload.
     currentTaskSource:

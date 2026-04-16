@@ -1,4 +1,6 @@
 import Foundation
+import Photos
+import PhotosUI
 import React
 import UIKit
 
@@ -19,6 +21,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
             "onQueueUpdated",
             "onHistoryUpdated",
             "onBindingStateChanged",
+            "onPhotoLibraryChanged",
             "onError",
         ]
     }
@@ -53,6 +56,10 @@ class NativeSyncEngineModule: RCTEventEmitter {
         sendEvent(withName: "onError", body: error)
     }
 
+    func emitPhotoLibraryChanged() {
+        sendEvent(withName: "onPhotoLibraryChanged", body: nil)
+    }
+
     // MARK: - Bridge Methods
 
     @objc
@@ -60,6 +67,46 @@ class NativeSyncEngineModule: RCTEventEmitter {
         Task {
             let result = await SyncEngineManager.shared.requestPhotoPermission()
             resolve(result)
+        }
+    }
+
+    @objc
+    func getPhotoAuthorizationStatus(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized:
+            resolve("authorized")
+        case .limited:
+            resolve("limited")
+        case .denied:
+            resolve("denied")
+        case .restricted:
+            resolve("restricted")
+        case .notDetermined:
+            resolve("notDetermined")
+        @unknown default:
+            resolve("unknown")
+        }
+    }
+
+    @objc
+    func presentLimitedPhotoPicker(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        DispatchQueue.main.async {
+            guard let rootVC = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController else {
+                reject("NO_VC", "No root view controller available", nil)
+                return
+            }
+            // Find the topmost presented controller
+            var topVC = rootVC
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+            PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: topVC)
+            resolve(nil)
         }
     }
 

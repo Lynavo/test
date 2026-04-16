@@ -1,11 +1,13 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { NativeModules, Text } from 'react-native';
+import { Animated, NativeModules, Text } from 'react-native';
 import { AlbumWorkbenchScreen } from '../AlbumWorkbenchScreen';
 
 const mockedBrowseAlbum = jest.fn();
 const mockedGetAlbumStats = jest.fn();
 const mockedGetAutoUploadConfig = jest.fn();
+const mockedGetPhotoAuthorizationStatus = jest.fn();
+const mockedPresentLimitedPhotoPicker = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -28,6 +30,9 @@ jest.mock('../../services/SyncEngineModule', () => ({
   saveAutoUploadConfig: jest.fn(),
   interruptAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
+  getPhotoAuthorizationStatus: () => mockedGetPhotoAuthorizationStatus(),
+  presentLimitedPhotoPicker: () => mockedPresentLimitedPhotoPicker(),
+  getAlbumCollections: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('../../components/Icon', () => ({
@@ -41,6 +46,13 @@ jest.mock('../../components/Icon', () => ({
 describe('AlbumWorkbenchScreen', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
+    jest.spyOn(Animated, 'loop').mockReturnValue({
+      start: jest.fn(),
+      stop: jest.fn(),
+      reset: jest.fn(),
+      _startNativeLoop: jest.fn(),
+      _isUsingNativeDriver: jest.fn().mockReturnValue(false),
+    } as unknown as Animated.CompositeAnimation);
 
     const nativeModules = NativeModules as typeof NativeModules & {
       NativeSyncEngine?: {
@@ -71,6 +83,8 @@ describe('AlbumWorkbenchScreen', () => {
       timeRangeMode: 'all',
       customTimeFrom: null,
     });
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+    mockedPresentLimitedPhotoPicker.mockResolvedValue(undefined);
   });
 
   it('keeps filter tabs visible when transferred filter has no assets', async () => {
@@ -159,5 +173,126 @@ describe('AlbumWorkbenchScreen', () => {
     await ReactTestRenderer.act(async () => {
       resolveBrowse?.([]);
     });
+  });
+
+  it('shows limited-access CTA when permission is limited and no assets', async () => {
+    // Simulate: limited permission, 0 authorized assets
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('limited');
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 0,
+      transferredCount: 0,
+      queuedCount: 0,
+    });
+
+    let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+
+    const textValues = tree!.root
+      .findAllByType(Text)
+      .flatMap(node => {
+        const value = node.props.children;
+        return typeof value === 'string' ? [value] : [];
+      });
+
+    // Should show the limited-access guidance, NOT the generic empty state
+    expect(textValues).toContain('尚未选择照片');
+    expect(textValues).toContain('选择照片');
+    expect(textValues).not.toContain('暂无素材');
+  });
+
+  it('calls presentLimitedPhotoPicker when the CTA button is pressed', async () => {
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('limited');
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 0,
+      transferredCount: 0,
+      queuedCount: 0,
+    });
+
+    let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+
+    // Find the "选择照片" button
+    const pressables = tree!.root.findAll(
+      node => typeof node.props.onPress === 'function',
+    );
+    const pickerButton = pressables.find(node => {
+      const textNodes = node.findAllByType(Text);
+      return textNodes.some(textNode => textNode.props.children === '选择照片');
+    });
+
+    expect(pickerButton).toBeDefined();
+
+    await ReactTestRenderer.act(async () => {
+      pickerButton!.props.onPress();
+    });
+
+    expect(mockedPresentLimitedPhotoPicker).toHaveBeenCalled();
+  });
+
+  it('does NOT show limited CTA when permission is authorized with 0 assets', async () => {
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 0,
+      transferredCount: 0,
+      queuedCount: 0,
+    });
+
+    let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+
+    const textValues = tree!.root
+      .findAllByType(Text)
+      .flatMap(node => {
+        const value = node.props.children;
+        return typeof value === 'string' ? [value] : [];
+      });
+
+    // Should show the generic empty state, not the limited CTA
+    expect(textValues).not.toContain('尚未选择照片');
+    expect(textValues).toContain('暂无素材');
+  });
+
+  it('still shows limited-access CTA when auto upload is active', async () => {
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('limited');
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 0,
+      transferredCount: 0,
+      queuedCount: 0,
+    });
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: true,
+      state: 'active',
+      timeRangeMode: 'all',
+      customTimeFrom: null,
+    });
+
+    let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+
+    const textValues = tree!.root
+      .findAllByType(Text)
+      .flatMap(node => {
+        const value = node.props.children;
+        return typeof value === 'string' ? [value] : [];
+      });
+
+    expect(textValues).toContain('尚未选择照片');
+    expect(textValues).toContain('选择照片');
   });
 });

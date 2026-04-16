@@ -135,3 +135,26 @@ export async function shareFile(localPath: string): Promise<boolean> {
   const result = await NativeSyncEngine.shareFile(localPath);
   return result as boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Photo library permission helpers
+// ---------------------------------------------------------------------------
+
+export type PhotoAuthorizationStatus =
+  | 'authorized'
+  | 'limited'
+  | 'denied'
+  | 'restricted'
+  | 'notDetermined'
+  | 'unknown';
+
+/** Check current photo library authorization without prompting. */
+export async function getPhotoAuthorizationStatus(): Promise<PhotoAuthorizationStatus> {
+  const result = await NativeSyncEngine.getPhotoAuthorizationStatus();
+  return result as PhotoAuthorizationStatus;
+}
+
+/** Present the iOS limited photo picker so the user can add more photos. */
+export async function presentLimitedPhotoPicker(): Promise<void> {
+  await NativeSyncEngine.presentLimitedPhotoPicker();
+}

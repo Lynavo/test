@@ -240,7 +240,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     )
     private var cloudAssetFlags: [String: Bool] = [:]
     private var cloudAssetDetectionInFlight: Set<String> = []
-    private var sidecarHost: String?  // resolved IP of Mac, for HTTP heartbeat
+    private var sidecarHost: String? {  // resolved IP of Mac, for HTTP heartbeat
+        didSet { sharedFilesService.sidecarHost = sidecarHost }
+    }
     private lazy var heartbeatSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.isDiscretionary = false
@@ -848,6 +850,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             autoUploadConfigStore = AutoUploadConfigStore(store: uploadStore!)
             manualUploadService = ManualUploadService(uploadStore: uploadStore, bindingService: bindingService)
             photoScanner.autoUploadConfigStore = autoUploadConfigStore
+
+            // Register photo library observer early so album browser receives
+            // change events even before sync starts (e.g. limited picker flow).
+            // Only register when permission is already granted — registering with
+            // .notDetermined implicitly triggers the system permission dialog.
+            // The sync lifecycle calls startObserving() again after explicitly
+            // requesting permission, so this is just an early-start optimization.
+            let photoStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            if photoStatus == .authorized || photoStatus == .limited {
+                photoScanner.startObserving()
+            }
 
             // Restore interrupted state from persisted config across app restarts
             if autoUploadConfigStore?.getConfig().state == "interrupted" {
@@ -1597,7 +1610,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         let clientId = bindingService.getOrCreateClientId()
-        let trackedFileKeys = Set(store.getTrackedFileKeys())
+        let trackedFileKeys = Set(store.getAutoDiscoveryTrackedFileKeys())
 
         // Prefer delta scan (only newly inserted/changed assets) over full-library
         // enumeration. Falls back to full scan when no cached fetchResult exists
@@ -1686,6 +1699,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         isSyncing = true
+        clearRuntimeCurrentFile()
+        runtimeCurrentSpeedMbps = 0
+        clearRuntimeReconnectError()
         NSLog("[SyncEngine] startSync")
         syncDiagnosticsLog("SyncEngine", "startSync")
         sessionService.transitionTo(.scanning)
@@ -1844,6 +1860,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         while true {
             roundNumber += 1
             sessionService.transitionTo(.scanning)
+            clearRuntimeCurrentFile()
+            runtimeCurrentSpeedMbps = 0
             NativeSyncEngineModule.shared?.emitSyncStateChanged(
                 runtimeSyncOverviewPayload(uploadState: "scanning", progressPercent: 0)
             )
@@ -1855,13 +1873,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
             var pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
             var newAssets: [ScannedAsset] = []
-            var trackedAssetCount = uploadStore?.getTrackedFileKeys().count ?? 0
+            var trackedAssetCount = uploadStore?.getAutoDiscoveryTrackedFileKeys().count ?? 0
 
             if pendingAssets.isEmpty {
                 // Scan only when the persisted pending queue is empty. Large historical queues
                 // are already stored in upload_items, so rescanning the full library every
                 // 200-file batch just burns CPU/PhotoKit and makes the device hotter.
-                var trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+                var trackedKeys = Set(uploadStore?.getAutoDiscoveryTrackedFileKeys() ?? [])
                 trackedAssetCount = trackedKeys.count
                 if trackedKeys.isEmpty {
                     let restoredCount = await restoreCompletedUploadHistoryIfNeeded(
@@ -1869,7 +1887,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         fallbackHost: binding.host
                     )
                     if restoredCount > 0 {
-                        trackedKeys = Set(uploadStore?.getTrackedFileKeys() ?? [])
+                        trackedKeys = Set(uploadStore?.getAutoDiscoveryTrackedFileKeys() ?? [])
                         trackedAssetCount = trackedKeys.count
                         NSLog(
                             "[SyncPipeline] restored %d historical completed uploads before scan",
@@ -1963,6 +1981,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     sessionService.transitionTo(.idle)
                 } else {
                     // Active + empty queue: truly completed
+                    clearRuntimeCurrentFile()
+                    runtimeCurrentSpeedMbps = 0
                     NativeSyncEngineModule.shared?.emitSyncStateChanged(([
                         "uploadState": "completed",
                         "progressPercent": 100,
@@ -2143,7 +2163,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             fallbackPort: UInt16(binding.port)
         )
         sidecarHost = preferredSidecarHost(probedHost: newTransport.remoteHost, device: targetDevice)
-        sharedFilesService.sidecarHost = sidecarHost
         NSLog("[SyncPipeline] TCP connected to %@", sidecarHost ?? "unknown")
         syncDiagnosticsLog("SyncPipeline", "TCP connected to \(sidecarHost ?? "unknown")")
 
@@ -3019,6 +3038,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         scheduleIncrementalQueueRescan(reason: "photo_library_changed")
         // Wake up the watch loop if it's sleeping
         resumeWatchLoopIfNeeded()
+        // Notify RN so album browser can refresh (e.g. after limited picker)
+        NativeSyncEngineModule.shared?.emitPhotoLibraryChanged()
     }
 
     // MARK: - DiscoveryServiceDelegate
@@ -3184,6 +3205,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let clientId = bindingService.getOrCreateClientId()
 
+        func resetAutoUploadStateForFreshPairing(reason: String) {
+            try? uploadStore?.resetAutoUploadConfig()
+            isAutoUploadInterrupted = false
+            NSLog("[SyncEngine] reset auto upload config after pairing: %@", reason)
+        }
+
         // 2. HELLO_REQ → HELLO_RES  (spec Section 7.8)
         let (helloType, helloRes) = try await session.sendAndReceive(
             type: .helloReq,
@@ -3211,7 +3238,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         existingBinding.deviceId, serverId
                     )
                     try? uploadStore?.resetUploadQueue()
+                    resetAutoUploadStateForFreshPairing(reason: "device_switch_auth_not_required")
                     didAttemptRemoteHistoryReconciliation = false
+                } else {
+                    // Explicitly entering a connection code is treated as a fresh pairing
+                    // session. The sync screen should start from the default "auto upload
+                    // not enabled" card instead of inheriting the previous active state.
+                    resetAutoUploadStateForFreshPairing(reason: "same_device_repair_auth_not_required")
                 }
             } else {
                 // No local binding — recreate from HELLO_RES info
@@ -3230,6 +3263,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     lastBoundAt: ISO8601DateFormatter().string(from: Date())
                 )
                 try? uploadStore?.saveBinding(binding)
+                resetAutoUploadStateForFreshPairing(reason: "recreate_local_binding_auth_not_required")
                 // Re-index Bonjour entry under the server UUID (only if originally found via Bonjour).
                 if let bonjourDevice = discoveredDevices[deviceId] {
                     discoveredDevices[serverId] = bonjourDevice
@@ -3285,7 +3319,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 existingBinding.deviceId, serverId
             )
             try? uploadStore?.resetUploadQueue()
+            resetAutoUploadStateForFreshPairing(reason: "device_switch_pair_required")
             didAttemptRemoteHistoryReconciliation = false
+        } else {
+            resetAutoUploadStateForFreshPairing(reason: "successful_pairing")
         }
 
         let binding = BindingRecord(
@@ -3335,6 +3372,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         bindingService.clearPairingToken()  // also wipe any legacy single-key token
         try uploadStore?.clearBinding()
+
+        // Reset auto upload config so the next pairing starts with auto upload off.
+        // Without this, a stale "active" state from the previous session would cause
+        // the sync activity screen to show "auto upload running" immediately after
+        // re-pairing, even though the user never enabled it for the new session.
+        try? uploadStore?.resetAutoUploadConfig()
+        isAutoUploadInterrupted = false
+
         stopPresenceHeartbeatTimer()
         bindingConnectionState = .offline
         sidecarHost = nil
@@ -3619,7 +3664,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             fallbackPort: UInt16(binding.port)
         )
         sidecarHost = preferredSidecarHost(probedHost: transport.remoteHost, device: targetDevice)
-        sharedFilesService.sidecarHost = sidecarHost
         NSLog("[SyncPipeline] resolved sidecar host: %@", sidecarHost ?? "nil")
 
         // Auth so sidecar registers us as connected
@@ -3906,15 +3950,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         syncDiagnosticsLog("SyncEngine", "auto upload re-enabled")
         if isSyncing {
             sessionService.transitionTo(.scanning)
+            // Signal the watch loop that a re-scan is needed. Without this,
+            // resumeWatchLoopIfNeeded() wakes the loop but it immediately
+            // goes back to sleep because photoLibraryChanged is still false.
+            photoLibraryChanged = true
+            resumeWatchLoopIfNeeded()
+        } else {
+            // Pipeline not running (e.g. manual upload already finished) —
+            // start it so auto upload actually begins scanning and uploading.
+            startSync()
         }
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             runtimeSyncOverviewPayload(uploadState: isSyncing ? "scanning" : "idle")
         )
-        // Signal the watch loop that a re-scan is needed. Without this,
-        // resumeWatchLoopIfNeeded() wakes the loop but it immediately
-        // goes back to sleep because photoLibraryChanged is still false.
-        photoLibraryChanged = true
-        resumeWatchLoopIfNeeded()
     }
 
     // DEPRECATED: to be removed, use enableAutoUpload/interruptAutoUpload instead

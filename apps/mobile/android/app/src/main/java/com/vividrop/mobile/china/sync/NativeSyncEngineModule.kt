@@ -356,6 +356,20 @@ class NativeSyncEngineModule(
     promise.reject("ANDROID_NOT_IMPLEMENTED", "文件分享功能暂未在 Android 端实现")
   }
 
+  @ReactMethod
+  fun getPhotoAuthorizationStatus(promise: Promise) {
+    // Reuse the same permission check as requestPhotoPermission so both
+    // bridge methods agree on what "authorized" means.
+    val state = currentPhotoPermissionState()
+    promise.resolve(if (state == "granted") "authorized" else "denied")
+  }
+
+  @ReactMethod
+  fun presentLimitedPhotoPicker(promise: Promise) {
+    // No limited-access picker concept on Android; resolve as no-op.
+    promise.resolve(null)
+  }
+
   private fun runAsync(promise: Promise, block: () -> Unit) {
     thread(name = "NativeSyncEngine", isDaemon = true) {
       try {

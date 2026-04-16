@@ -384,6 +384,22 @@ class UploadStore {
         }
     }
 
+    /// File keys that should suppress auto-discovery rescans.
+    /// Completed items stay suppressed permanently; pending/in-flight items stay
+    /// suppressed until they finish. Failed/skipped/cancelled items are excluded
+    /// so a later auto-upload retry can re-queue them.
+    func getAutoDiscoveryTrackedFileKeys() -> [String] {
+        return queue.sync {
+            let sql = """
+            SELECT file_key FROM upload_items
+            WHERE file_key IS NOT NULL
+              AND status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading', 'completed')
+            """
+            let rows = queryInternal(sql, bind: [])
+            return rows.compactMap { $0["file_key"] as? String }
+        }
+    }
+
     func updateUploadStatus(fileKey: String, status: String) throws {
         try queue.sync {
             let now = ISO8601DateFormatter().string(from: Date())
@@ -591,7 +607,7 @@ class UploadStore {
             return AutoUploadConfigRecord(
                 enabled: (row["enabled"] as? Int64 ?? 0) != 0,
                 // media_filter column ignored — auto upload uploads everything
-                timeRangeMode: row["time_range_mode"] as? String ?? "from_now",
+                timeRangeMode: row["time_range_mode"] as? String ?? "all",
                 customTimeFrom: row["custom_time_from"] as? String,
                 state: row["state"] as? String ?? "disabled",
                 updatedAt: row["updated_at"] as? String ?? ""
@@ -620,6 +636,14 @@ class UploadStore {
                 .text(config.state),
                 .text(config.updatedAt)
             ])
+        }
+    }
+
+    /// Resets auto upload config to disabled state. Called when unpairing or switching devices
+    /// so that the next pairing session starts with auto upload off.
+    func resetAutoUploadConfig() throws {
+        try queue.sync {
+            try executeInternal("DELETE FROM auto_upload_config")
         }
     }
 
