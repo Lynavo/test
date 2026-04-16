@@ -53,6 +53,13 @@ const ionicons: Record<string, number> = {
   'cloud-upload-outline': 60262,
   'apps-outline': 60017,
   'menu-outline': 60661,
+  'help-circle-outline': 60543,
+  'swap-horizontal-outline': 61106,
+  'log-out-outline': 60626,
+  'information-circle-outline': 60570,
+  'book-outline': 60071,
+  'mail-outline': 60725,
+  'link-outline': 60602,
 };
 
 interface IconProps {

@@ -9,6 +9,7 @@ import { AlbumWorkbenchScreen } from '../screens/AlbumWorkbenchScreen';
 import { SharedFilesScreen } from '../screens/SharedFilesScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { HelpScreen } from '../screens/HelpScreen';
 import { QRScannerScreen } from '../screens/QRScannerScreen';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   SharedFiles: undefined;
   History: undefined;
   Settings: undefined;
+  Help: undefined;
 };
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ export function RootNavigator() {
       <Stack.Screen name="SharedFiles" component={SharedFilesScreen} />
       <Stack.Screen name="History" component={HistoryScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Help" component={HelpScreen} />
     </Stack.Navigator>
   );
 }

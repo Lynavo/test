@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
 import {
   isDiagnosticsExportUnavailable,
@@ -35,9 +34,22 @@ import {
 const BLUE = '#3b9fd8';
 const DARK = '#1a3a5c';
 const SCREEN_BG = '#d6ecf8';
+const CARD_BG = '#ffffff';
+const CARD_BORDER = 'rgba(187, 214, 233, 0.72)';
+const MUTED_TEXT = '#7893ab';
+const SECTION_TEXT = '#6e8aa3';
+const ROW_CHEVRON = '#b8d0e4';
+const ONLINE_GREEN = '#22c55e';
+const ONLINE_TEXT = '#16a34a';
+const CONNECTING_AMBER = '#f3b24c';
+const CONNECTING_TEXT = '#b45309';
+const OFFLINE_SLATE = '#94a3b8';
+const OFFLINE_TEXT = '#72859a';
+const DANGER_RED = '#ef4444';
+const DANGER_BG = 'rgba(239,68,68,0.04)';
 
 // ---------------------------------------------------------------------------
-// SettingsScreen
+// Helpers
 // ---------------------------------------------------------------------------
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
@@ -52,14 +64,9 @@ type SettingsSyncOverviewState = {
 function formatAppVersionLabel(appInfo?: Record<string, unknown>): string {
   const version = typeof appInfo?.version === 'string' ? appInfo.version : '';
   if (!version) return '未知版本';
-
-  const appName =
-    typeof appInfo?.appName === 'string' && appInfo.appName
-      ? appInfo.appName
-      : 'Vivi Drop';
   const build =
     typeof appInfo?.build === 'string' && appInfo.build ? appInfo.build : '0';
-  return `${appName} v${version} (${build})`;
+  return `v${version} (${build})`;
 }
 
 function formatDateTimeLabel(iso?: string): string {
@@ -78,6 +85,10 @@ function formatDateTimeLabel(iso?: string): string {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
+// ---------------------------------------------------------------------------
+// SettingsScreen
+// ---------------------------------------------------------------------------
+
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const isAndroid = Platform.OS === 'android';
@@ -87,12 +98,12 @@ export function SettingsScreen() {
     useState<MobileConnectionState>('offline');
   const [syncOverviewState, setSyncOverviewState] =
     useState<SettingsSyncOverviewState>({
-    progressPercent: 0,
-    transferredBytes: 0,
-    currentFile: null as string | null,
-    currentFileConfirmedBytes: 0,
-    uploadState: 'idle',
-  });
+      progressPercent: 0,
+      transferredBytes: 0,
+      currentFile: null as string | null,
+      currentFileConfirmedBytes: 0,
+      uploadState: 'idle',
+    });
   const [latestSyncLabel, setLatestSyncLabel] = useState('暂无记录');
   const [appVersionLabel, setAppVersionLabel] = useState('读取中…');
   const [isPhotoPermissionBlocked, setIsPhotoPermissionBlocked] =
@@ -171,8 +182,6 @@ export function SettingsScreen() {
           },
         );
 
-        // Safely call all methods with optional chaining to prevent synchronous TypeErrors
-        // if any method isn't fully exported to the React Native bridge yet.
         const [
           stateResult,
           clientNameResult,
@@ -287,7 +296,7 @@ export function SettingsScreen() {
   const isConnecting = connectionBadgeState === 'connecting';
 
   // ---------------------------------------------------------------------------
-  // Save my iPhone display name
+  // Handlers
   // ---------------------------------------------------------------------------
 
   const handleConfirmMyName = useCallback(async () => {
@@ -303,10 +312,6 @@ export function SettingsScreen() {
       console.warn('Failed to save client display name');
     }
   }, [myName]);
-
-  // ---------------------------------------------------------------------------
-  // Switch device (placeholder)
-  // ---------------------------------------------------------------------------
 
   const handleSwitchDevice = useCallback(() => {
     Alert.alert(
@@ -382,183 +387,161 @@ export function SettingsScreen() {
     );
   }, [navigation]);
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            activeOpacity={0.6}
-            hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
-            onPress={() => {
-              if (navigation.canGoBack()) {
-                navigation.goBack();
-              } else {
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'SyncActivity' as never }],
-                });
-              }
-            }}
-            accessibilityLabel={'返回'}
-          >
-            <Icon name="chevron-back" size={20} color={DARK} />
-          </TouchableOpacity>
-          <Text style={styles.title}>{'设置'}</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.6}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SyncActivity' as never }],
+              });
+            }
+          }}
+          accessibilityLabel="返回"
+        >
+          <Icon name="chevron-back" size={20} color={DARK} />
+        </TouchableOpacity>
+        <Text style={styles.title}>设置</Text>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {isAndroid ? (
+          <View style={styles.androidNoticeCard}>
+            <Text style={styles.androidNoticeTitle}>
+              Android 端能力说明
+            </Text>
+            <Text style={styles.androidNoticeBody}>
+              当前版本已提供 Android 壳层、局域网自动发现、基础配对与诊断导出入口；扫码配对、真实上传队列、后台重连和增量同步仍未移植到
+              Android 原生引擎。
+            </Text>
+          </View>
+        ) : null}
+
+        {/* ============================================================= */}
+        {/* Connected device card                                          */}
+        {/* ============================================================= */}
+        <View style={styles.deviceCard}>
+          <View style={styles.deviceCardTop}>
+            <View style={styles.wifiIconCircle}>
+              <Icon name="wifi" size={22} color="#fff" />
+            </View>
+            <Text style={styles.deviceCardLabel}>已连接设备</Text>
+          </View>
+          <Text style={styles.deviceCardName} numberOfLines={1}>
+            {deviceName || '未连接'}
+          </Text>
+          {deviceIp ? (
+            <Text style={styles.deviceCardIp}>{deviceIp}</Text>
+          ) : null}
+          <View style={styles.deviceCardBottom}>
+            <View style={styles.statusBadge}>
+              <View
+                style={[
+                  styles.statusDot,
+                  isConnected
+                    ? styles.statusDotOnline
+                    : isConnecting
+                      ? styles.statusDotConnecting
+                      : styles.statusDotOffline,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  isConnected
+                    ? styles.statusTextOnline
+                    : isConnecting
+                      ? styles.statusTextConnecting
+                      : styles.statusTextOffline,
+                ]}
+              >
+                {isConnected ? '在线' : isConnecting ? '连接中' : '离线'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.switchButton}
+              activeOpacity={0.6}
+              onPress={handleSwitchDevice}
+            >
+              <Icon name="swap-horizontal-outline" size={14} color={BLUE} />
+              <Text style={styles.switchButtonText}>切换</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {isAndroid ? (
-            <View style={styles.androidNoticeCard}>
-              <Text style={styles.androidNoticeTitle}>
-                {'Android 端能力说明'}
-              </Text>
-              <Text style={styles.androidNoticeBody}>
-                {
-                  '当前版本已提供 Android 壳层、局域网自动发现、基础配对与诊断导出入口；扫码配对、真实上传队列、后台重连和增量同步仍未移植到 Android 原生引擎。'
-                }
-              </Text>
+        {/* ============================================================= */}
+        {/* My device name card                                            */}
+        {/* ============================================================= */}
+        <View style={styles.card}>
+          <View style={styles.myDeviceRow}>
+            <View style={styles.phoneIconCircle}>
+              <Icon name="phone-portrait-outline" size={20} color="#fff" />
             </View>
-          ) : null}
-
-          {/* ============================================================= */}
-          {/* Section 1: 当前连接电脑信息                                      */}
-          {/* ============================================================= */}
-          <Text style={styles.sectionHeader}>{'当前连接电脑'}</Text>
-          <View style={styles.card}>
-            <View style={styles.deviceRow}>
-              {/* Desktop icon — matches SyncActivityScreen style */}
-              <View style={styles.deviceIconBox}>
-                <Icon name="desktop-outline" size={22} color="#fff" />
-              </View>
-
-              {/* Name + status */}
-              <View style={styles.deviceInfo}>
-                <Text style={styles.deviceNameText} numberOfLines={1}>
-                  {deviceName || '未连接'}
-                </Text>
-                <View style={styles.deviceStatusRow}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      isConnected
-                        ? styles.statusDotOnline
-                        : isConnecting
-                          ? styles.statusDotConnecting
-                          : styles.statusDotOffline,
-                    ]}
+            <View style={styles.myDeviceInfo}>
+              <Text style={styles.myDeviceLabel}>我的设备名称</Text>
+              {editingMyName ? (
+                <View style={styles.editRow}>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={myName}
+                    onChangeText={setMyName}
+                    autoFocus
+                    selectTextOnFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleConfirmMyName}
                   />
-                  <Text
-                    style={[
-                      styles.statusLabel,
-                      isConnected
-                        ? styles.statusLabelOnline
-                        : isConnecting
-                          ? styles.statusLabelConnecting
-                          : styles.statusLabelOffline,
-                    ]}
+                  <TouchableOpacity
+                    style={styles.confirmButton}
+                    activeOpacity={0.7}
+                    onPress={handleConfirmMyName}
                   >
-                    {isConnected
-                      ? '在线'
-                      : isConnecting
-                        ? '连接中'
-                        : '离线'}
-                  </Text>
+                    <Icon name="checkmark" size={16} color={BLUE} />
+                  </TouchableOpacity>
                 </View>
-              </View>
-            </View>
-
-            {deviceIp ? (
-              <Text style={styles.deviceIp}>{deviceIp}</Text>
-            ) : null}
-          </View>
-
-          {/* 切换设备 */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            activeOpacity={0.6}
-            onPress={handleSwitchDevice}
-          >
-            <View style={styles.menuRowLeft}>
-              <Icon name="swap-horizontal-outline" size={18} color={BLUE} />
-              <Text style={styles.menuRowText}>{'切换设备'}</Text>
-            </View>
-            <Icon name="chevron-forward" size={16} color="#90b0c8" />
-          </TouchableOpacity>
-
-          {/* ============================================================= */}
-          {/* Section 2: 我的设备                                             */}
-          {/* ============================================================= */}
-          <Text style={styles.sectionHeader}>{'我的设备'}</Text>
-          <View style={styles.card}>
-            <View style={styles.deviceRow}>
-              {/* Phone icon */}
-              <View style={[styles.deviceIconBox, styles.phoneIconBox]}>
-                <Icon name="phone-portrait-outline" size={20} color="#fff" />
-              </View>
-
-              {/* Name display / edit */}
-              <View style={styles.deviceInfo}>
-                {editingMyName ? (
-                  <View style={styles.editRow}>
-                    <TextInput
-                      style={styles.nameInput}
-                      value={myName}
-                      onChangeText={setMyName}
-                      autoFocus
-                      selectTextOnFocus
-                      returnKeyType="done"
-                      onSubmitEditing={handleConfirmMyName}
-                    />
-                    <TouchableOpacity
-                      style={styles.confirmButton}
-                      activeOpacity={0.7}
-                      onPress={handleConfirmMyName}
-                    >
-                      <Icon name="checkmark" size={16} color={BLUE} />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={styles.nameRow}>
-                    <Text style={styles.deviceNameText} numberOfLines={1}>
-                      {myName}
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.editButton}
-                      activeOpacity={0.7}
-                      onPress={() => setEditingMyName(true)}
-                    >
-                      <Icon name="pencil-outline" size={14} color={BLUE} />
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <Text style={styles.myNameHint}>{'此名称将在 Mac 端显示'}</Text>
-              </View>
+              ) : (
+                <View style={styles.nameRow}>
+                  <Text style={styles.myDeviceName} numberOfLines={1}>
+                    {myName}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    activeOpacity={0.7}
+                    onPress={() => setEditingMyName(true)}
+                  >
+                    <Icon name="pencil-outline" size={14} color={MUTED_TEXT} />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
+          <Text style={styles.myDeviceHint}>此名称将在 Mac 端显示</Text>
+        </View>
 
-          {/* ============================================================= */}
-          {/* Section 4: 基础设置                                             */}
-          {/* ============================================================= */}
-          <Text style={styles.sectionHeader}>{'基础设置'}</Text>
-          <View style={styles.card}>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>{'最近一次成功同步'}</Text>
-              <Text style={styles.metaValue}>{latestSyncLabel}</Text>
-            </View>
-            <View style={[styles.metaRow, styles.metaRowLast]}>
-              <Text style={styles.metaLabel}>{'应用版本'}</Text>
-              <Text style={styles.metaValue}>{appVersionLabel}</Text>
-            </View>
-            {isPhotoPermissionBlocked ? (
+        {/* ============================================================= */}
+        {/* Info rows                                                      */}
+        {/* ============================================================= */}
+        <View style={styles.listCard}>
+          {isPhotoPermissionBlocked ? (
+            <>
               <View style={styles.warningBox}>
-                <Text style={styles.warningTitle}>{'照片权限未开启'}</Text>
+                <Text style={styles.warningTitle}>照片权限未开启</Text>
                 <Text style={styles.warningText}>
-                  {'需要允许访问照片后才能继续自动同步。'}
+                  需要允许访问照片后才能继续自动同步。
                 </Text>
                 <TouchableOpacity
                   style={styles.warningAction}
@@ -567,56 +550,80 @@ export function SettingsScreen() {
                     void Linking.openSettings();
                   }}
                 >
-                  <Text style={styles.warningActionText}>{'打开系统设置'}</Text>
+                  <Text style={styles.warningActionText}>打开系统设置</Text>
                 </TouchableOpacity>
               </View>
-            ) : null}
-          </View>
-
-          {/* ============================================================= */}
-          {/* Section 5: 支持与诊断                                           */}
-          {/* ============================================================= */}
-          <Text style={styles.sectionHeader}>{'支持与诊断'}</Text>
-          <View style={styles.card}>
-            <Text style={styles.diagnosticsHint}>
-              {
-                '导出当前设备状态、队列快照、本地数据库和最近日志，便于排查同步问题。'
-              }
-            </Text>
-
-            <View style={styles.actionButtonGroup}>
-              <TouchableOpacity
-                style={[
-                  styles.diagnosticsButton,
-                  isExportingDiagnostics && styles.diagnosticsButtonDisabled,
-                ]}
-                activeOpacity={0.8}
-                disabled={isExportingDiagnostics}
-                onPress={() => {
-                  void handleExportDiagnostics();
-                }}
-              >
-                <Icon name="download-outline" size={16} color={BLUE} />
-                <Text style={styles.diagnosticsButtonText}>
-                  {isExportingDiagnostics ? '正在导出诊断包…' : '导出诊断包'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.resetButton}
-                activeOpacity={0.8}
-                onPress={handleResetSyncStatus}
-              >
-                <Icon name="refresh-outline" size={16} color="#ef4444" />
-                <Text style={styles.resetButtonText}>{'重置同步状态'}</Text>
-              </TouchableOpacity>
+              <View style={styles.listSep} />
+            </>
+          ) : null}
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
+              <Icon name="time-outline" size={16} color={MUTED_TEXT} />
+              <Text style={styles.infoRowLabel}>最近同步</Text>
             </View>
+            <Text style={styles.infoRowValue}>{latestSyncLabel}</Text>
           </View>
+          <View style={styles.listSep} />
+          <View style={styles.infoRow}>
+            <Text style={styles.infoRowLabel}>应用版本</Text>
+            <Text style={styles.infoRowValue}>{appVersionLabel}</Text>
+          </View>
+        </View>
 
-          {/* Bottom spacing */}
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-      </View>
+        {/* ============================================================= */}
+        {/* Support & Help section                                         */}
+        {/* ============================================================= */}
+        <Text style={styles.sectionLabel}>支持与帮助</Text>
+        <View style={styles.listCard}>
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.6}
+            disabled={isExportingDiagnostics}
+            onPress={() => {
+              void handleExportDiagnostics();
+            }}
+          >
+            <View style={styles.actionRowLeft}>
+              <Icon name="download-outline" size={18} color={BLUE} />
+              <Text style={styles.actionRowText}>
+                {isExportingDiagnostics ? '正在导出诊断包…' : '导出诊断包'}
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+          </TouchableOpacity>
+          <View style={styles.listSep} />
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.6}
+            onPress={() => navigation.navigate('Help')}
+          >
+            <View style={styles.actionRowLeft}>
+              <Icon name="help-circle-outline" size={18} color={BLUE} />
+              <Text style={styles.actionRowText}>帮助</Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ============================================================= */}
+        {/* Danger zone                                                    */}
+        {/* ============================================================= */}
+        <View style={[styles.listCard, styles.dangerCard]}>
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.6}
+            onPress={handleResetSyncStatus}
+          >
+            <View style={styles.actionRowLeft}>
+              <Icon name="refresh-outline" size={18} color={DANGER_RED} />
+              <Text style={styles.dangerRowText}>重置同步状态</Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -630,9 +637,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: SCREEN_BG,
   },
-  container: {
-    flex: 1,
-  },
 
   // Header
   header: {
@@ -642,7 +646,6 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingBottom: 12,
     gap: 12,
-    zIndex: 10,
   },
   backButton: {
     width: 36,
@@ -673,7 +676,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.88)',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   androidNoticeTitle: {
     fontSize: 14,
@@ -687,66 +690,70 @@ const styles = StyleSheet.create({
     color: '#5d7f98',
   },
 
-  // Section header
-  sectionHeader: {
+  // Section label
+  sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6e8aa3',
+    color: SECTION_TEXT,
     marginBottom: 8,
-    marginTop: 16,
+    marginTop: 8,
     marginLeft: 4,
   },
 
-  // Generic card
-  card: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: 'rgba(80,150,200,0.3)',
-    shadowOffset: { width: 0, height: 2 },
+  // ---------------------------------------------------------------------------
+  // Connected device card
+  // ---------------------------------------------------------------------------
+  deviceCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: 18,
+    marginBottom: 12,
+    shadowColor: '#4f8fbc',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 2,
   },
-
-  // Device row — matching SyncActivityScreen
-  deviceRow: {
+  deviceCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    marginBottom: 8,
   },
-  deviceIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  wifiIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4abe7b',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#3ba4dc',
-    shadowColor: 'rgba(59,159,216,0.5)',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 3,
   },
-  phoneIconBox: {
-    backgroundColor: '#6366f1',
-    shadowColor: 'rgba(99,102,241,0.5)',
+  deviceCardLabel: {
+    fontSize: 12,
+    color: MUTED_TEXT,
   },
-  deviceInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  deviceNameText: {
-    fontSize: 15,
-    fontWeight: '600',
+  deviceCardName: {
+    fontSize: 20,
+    fontWeight: '700',
     color: DARK,
-    flexShrink: 1,
+    marginBottom: 2,
   },
-  deviceStatusRow: {
+  deviceCardIp: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginBottom: 12,
+  },
+  deviceCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
   },
   statusDot: {
     width: 8,
@@ -754,104 +761,97 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusDotOnline: {
-    backgroundColor: '#22c55e',
-  },
-  statusDotOffline: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: ONLINE_GREEN,
   },
   statusDotConnecting: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: CONNECTING_AMBER,
   },
-  statusLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+  statusDotOffline: {
+    backgroundColor: OFFLINE_SLATE,
   },
-  statusLabelOnline: {
-    color: '#16a34a',
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
-  statusLabelOffline: {
-    color: '#d97706',
+  statusTextOnline: {
+    color: ONLINE_TEXT,
   },
-  statusLabelConnecting: {
-    color: '#b45309',
+  statusTextConnecting: {
+    color: CONNECTING_TEXT,
   },
-  deviceIp: {
-    fontSize: 12,
-    color: '#90b0c8',
-    marginTop: 8,
-    marginLeft: 56,
+  statusTextOffline: {
+    color: OFFLINE_TEXT,
   },
-
-  // Menu row (for "切换设备" entry)
-  menuRow: {
+  switchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginTop: 10,
-    shadowColor: 'rgba(80,150,200,0.3)',
-    shadowOffset: { width: 0, height: 2 },
+    gap: 4,
+  },
+  switchButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: BLUE,
+  },
+
+  // ---------------------------------------------------------------------------
+  // Generic card
+  // ---------------------------------------------------------------------------
+  card: {
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: 18,
+    marginBottom: 12,
+    shadowColor: '#4f8fbc',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 2,
   },
-  menuRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  menuRowText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: DARK,
-  },
 
-  // Placeholder (account & membership)
-  placeholderRow: {
+  // ---------------------------------------------------------------------------
+  // My device name card
+  // ---------------------------------------------------------------------------
+  myDeviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
-  placeholderIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  phoneIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(144,176,200,0.12)',
   },
-  placeholderContent: {
+  myDeviceInfo: {
     flex: 1,
     minWidth: 0,
   },
-  placeholderTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#90b0c8',
-  },
-  placeholderSubtitle: {
+  myDeviceLabel: {
     fontSize: 12,
-    color: '#a8c4d8',
-    marginTop: 2,
+    color: MUTED_TEXT,
+    marginBottom: 2,
   },
-
-  // Name display
+  myDeviceName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK,
+    flexShrink: 1,
+  },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   editButton: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Name editing
   editRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: DARK,
   },
@@ -877,40 +877,95 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // My name hint
-  myNameHint: {
-    fontSize: 11,
-    color: '#90b0c8',
-    marginTop: 4,
+  myDeviceHint: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginTop: 10,
+    marginLeft: 62,
   },
 
-  // Meta rows (basic settings)
-  metaRow: {
+  // ---------------------------------------------------------------------------
+  // List card (info rows, action rows)
+  // ---------------------------------------------------------------------------
+  listCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    overflow: 'hidden',
+    marginBottom: 12,
+    shadowColor: '#4f8fbc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  listSep: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#e4eff7',
+    marginHorizontal: 18,
+  },
+
+  // Info rows
+  infoRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     gap: 12,
-    marginBottom: 10,
   },
-  metaRowLast: {
-    marginBottom: 0,
+  infoRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  metaLabel: {
-    fontSize: 13,
-    color: '#90b0c8',
-  },
-  metaValue: {
-    flex: 1,
-    textAlign: 'right',
-    fontSize: 13,
-    fontWeight: '600',
+  infoRowLabel: {
+    fontSize: 14,
+    fontWeight: '500',
     color: DARK,
+  },
+  infoRowValue: {
+    fontSize: 13,
+    color: MUTED_TEXT,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+
+  // Action rows (support & help)
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+  },
+  actionRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  actionRowText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: DARK,
+  },
+
+  // Danger zone
+  dangerCard: {
+    backgroundColor: DANGER_BG,
+    borderColor: 'rgba(239,68,68,0.12)',
+    marginTop: 8,
+  },
+  dangerRowText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: DANGER_RED,
   },
 
   // Warning box (photo permission)
   warningBox: {
-    marginTop: 12,
+    margin: 14,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(220,38,38,0.12)',
@@ -940,59 +995,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#991b1b',
-  },
-
-  // Diagnostics hint
-  diagnosticsHint: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#6e8aa3',
-    marginBottom: 12,
-  },
-
-  // Support & Diagnostics buttons
-  actionButtonGroup: {
-    flexDirection: 'column',
-    gap: 12,
-  },
-  diagnosticsButton: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(59,159,216,0.18)',
-    backgroundColor: 'rgba(59,159,216,0.08)',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    justifyContent: 'center',
-  },
-  diagnosticsButtonDisabled: {
-    opacity: 0.6,
-  },
-  diagnosticsButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: BLUE,
-  },
-  resetButton: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239,68,68,0.12)',
-    backgroundColor: 'rgba(239,68,68,0.06)',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    justifyContent: 'center',
-  },
-  resetButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#ef4444',
   },
 
   bottomSpacer: {
