@@ -63,5 +63,11 @@
     "devTitle": "提示",
     "devBody": "支付功能開發中，敬請期待",
     "devConfirm": "知道了"
+  },
+  "gate": {
+    "downloadTitle": "需要訂閱",
+    "downloadBody": "下載共享目錄的內容需要有效的訂閱。",
+    "goSubscribe": "查看方案",
+    "cancel": "暫不"
   }
 }

@@ -63,5 +63,11 @@
     "devTitle": "Coming Soon",
     "devBody": "Payment is under development. Stay tuned!",
     "devConfirm": "Got It"
+  },
+  "gate": {
+    "downloadTitle": "Subscription required",
+    "downloadBody": "Downloads from the shared folder need an active subscription.",
+    "goSubscribe": "View Plans",
+    "cancel": "Not now"
   }
 }

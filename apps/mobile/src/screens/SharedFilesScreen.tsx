@@ -18,6 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import type { SharedFileDTO } from '@syncflow/contracts';
+import { FEATURES } from '../constants/features';
+import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
 import { Icon } from '../components/Icon';
 import {
   browseSharedFiles,
@@ -75,6 +77,7 @@ async function checkDeviceAvailable(): Promise<boolean> {
 export function SharedFilesScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const { subscription } = useAuth();
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<SharedFileDTO[]>([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -187,6 +190,24 @@ export function SharedFilesScreen() {
   // ---------------------------------------------------------------------------
 
   const handleDownload = useCallback(async (file: SharedFileDTO) => {
+    // --- PRD §7.1 — downloads require active subscription ---
+    if (!FEATURES.SUBSCRIPTION_ENFORCEMENT) {
+      // Soft-off: skip the gate until enforcement is globally enabled.
+    } else if (!isFeatureAccessAllowed(subscription?.status)) {
+      Alert.alert(
+        t('subscription.gate.downloadTitle'),
+        t('subscription.gate.downloadBody'),
+        [
+          { text: t('subscription.gate.cancel'), style: 'cancel' },
+          {
+            text: t('subscription.gate.goSubscribe'),
+            onPress: () => navigation.navigate('Subscription' as never),
+          },
+        ],
+      );
+      return;
+    }
+
     setDownloading(file.path);
     try {
       const result = await downloadSharedFile(file.path);
@@ -201,7 +222,7 @@ export function SharedFilesScreen() {
     } finally {
       setDownloading(null);
     }
-  }, []);
+  }, [subscription?.status, t, navigation]);
 
   // ---------------------------------------------------------------------------
   // Preview handler
@@ -275,6 +296,7 @@ export function SharedFilesScreen() {
               style={styles.downloadBtn}
               activeOpacity={0.7}
               disabled={isDownloading}
+              testID="shared-file-download-button"
               onPress={() => void handleDownload(item)}
             >
               {isDownloading ? (
