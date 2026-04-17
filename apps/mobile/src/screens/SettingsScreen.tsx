@@ -25,6 +25,8 @@ import {
   getTrialRemainingDays,
 } from '../stores/auth-store';
 import { logout as serverLogout, deleteAccount } from '../services/auth-service';
+import { FEATURES } from '../constants/features';
+import { iapService } from '../services/iap-service';
 import { ApiError } from '../services/api';
 import {
   isDiagnosticsExportUnavailable,
@@ -462,6 +464,27 @@ export function SettingsScreen() {
     ]);
   }, [auth, navigation, t]);
 
+  // Restore Purchases (Apple Review requirement — Position B in Settings)
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleRestore = useCallback(async () => {
+    if (!FEATURES.IAP_ENABLED || !FEATURES.IAP_RESTORE_ENABLED) return;
+    setIsRestoring(true);
+    try {
+      const restored = await iapService.restore();
+      if (restored.length === 0) {
+        Alert.alert(t('subscription.restore.empty'));
+        return;
+      }
+      await auth.loadSubscription();
+      Alert.alert(t('subscription.restore.success'));
+    } catch {
+      Alert.alert(t('subscription.restore.failed'));
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [t, auth]);
+
   // Belt-and-suspenders two-step confirmation for account deletion.
   // Apple App Store Guideline 5.1.1(v) requires the action to be easy to
   // find AND to double-check, and this is irreversible on the server:
@@ -839,6 +862,30 @@ export function SettingsScreen() {
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
         </View>
+
+        {/* ============================================================= */}
+        {/* Restore Purchases (Apple Review requirement)                   */}
+        {/* ============================================================= */}
+        {FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED ? (
+          <View style={styles.listCard}>
+            <TouchableOpacity
+              style={styles.actionRow}
+              activeOpacity={0.6}
+              onPress={() => { void handleRestore(); }}
+              disabled={isRestoring}
+            >
+              <View style={styles.actionRowLeft}>
+                <Icon name="refresh-outline" size={18} color={BLUE} />
+                <Text style={styles.actionRowText}>
+                  {isRestoring
+                    ? t('subscription.restore.inProgress')
+                    : t('subscription.restore.action')}
+                </Text>
+              </View>
+              <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* ============================================================= */}
         {/* Logout                                                         */}
