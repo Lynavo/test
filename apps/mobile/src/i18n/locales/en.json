@@ -318,6 +318,42 @@
       }
     }
   },
+  "sharedFiles": {
+    "defaultFolderName": "Shared Files",
+    "loading": "Loading...",
+    "files": {
+      "folder": "Folder"
+    },
+    "emptyState": {
+      "title": "Shared directory is empty",
+      "message": "Files will appear here once syncing is complete"
+    },
+    "deviceUnavailable": {
+      "title": "Device unavailable",
+      "message": "Please connect to a device first",
+      "recheck": "Check again"
+    },
+    "directoryInaccessible": {
+      "title": "Shared directory inaccessible",
+      "message": "Please check the desktop app settings"
+    },
+    "networkError": {
+      "title": "Failed to load",
+      "message": "Please try again later"
+    },
+    "preview": {
+      "playVideo": "Tap to play video"
+    },
+    "dialogs": {
+      "downloadSavedToPhotos": "{{name}} saved to Photos",
+      "downloadSaved": "{{name}} saved",
+      "downloadComplete": "Download complete",
+      "downloadFailed": "Download failed",
+      "downloadFailedMessage": "Could not download the file. Please try again later.",
+      "previewFailed": "Preview failed",
+      "previewFailedMessage": "Could not load file preview"
+    }
+  },
   "history": {
     "title": "History",
     "emptyState": {
