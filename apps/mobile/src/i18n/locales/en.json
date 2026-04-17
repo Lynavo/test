@@ -17,61 +17,61 @@
   },
   "errors": {
     "title": "Error",
-    "unknown": "An unknown error occurred",
+    "unknown": "An unknown error occurred.",
     "networkUnavailable": "Network unavailable",
-    "sidecarUnreachable": "Cannot reach the desktop app",
-    "authSendTooFrequent": "Too many requests",
+    "sidecarUnreachable": "Cannot reach the desktop app.",
+    "authSendTooFrequent": "Sending too frequently",
     "authSendFailed": "Send failed",
-    "authSendFailedRetry": "Failed to send verification code, please try again later",
+    "authSendFailedRetry": "Failed to send verification code. Please try again later.",
     "authRequestTooFrequent": "Too many requests",
-    "authTryLater": "Please try again later",
-    "networkTitle": "Network error",
-    "networkCheckConnection": "Please check your connection and try again",
-    "smsCodeIncorrect": "Incorrect code, please try again",
-    "smsCodeExpired": "Code expired, please request a new one",
-    "smsVerifyFailedTitle": "Verification failed",
-    "smsTooManyAttempts": "Too many attempts, please request a new code",
-    "smsVerifyFailedRetry": "Verification failed, please try again",
-    "networkCheckRetry": "Network error, please check your connection and try again",
+    "authTryLater": "Please try again later.",
+    "networkTitle": "Network Error",
+    "networkCheckConnection": "Please check your connection and try again.",
+    "smsCodeIncorrect": "Incorrect code. Please try again.",
+    "smsCodeExpired": "Code expired. Please request a new one.",
+    "smsVerifyFailedTitle": "Verification Failed",
+    "smsTooManyAttempts": "Too many attempts. Please request a new code.",
+    "smsVerifyFailedRetry": "Verification failed. Please try again.",
+    "networkCheckRetry": "Network error. Please check your connection and try again.",
     "smsSendFailed": "Failed to send verification code",
-    "pairingWrongCode": "Incorrect pairing code — please try again",
+    "pairingWrongCode": "Incorrect pairing code. Please try again.",
     "pairingConnectFailed": "Connection failed: {{msg}}",
     "exportDiagnosticsUnavailable": "This build does not support exporting the diagnostics bundle.",
     "serverErrorHttp": "Server error (HTTP {{status}})",
-    "responseParseError": "Response parse failed",
-    "profileLoadFailed": "Failed to load user profile",
-    "profileLoadTitle": "Unable to load account info"
+    "responseParseError": "Failed to parse response.",
+    "profileLoadFailed": "Failed to load user profile.",
+    "profileLoadTitle": "Unable to Load Account Info"
   },
   "auth": {
     "login": {
-      "title": "Sign in",
+      "title": "Sign In",
       "subtitle": "Quick sign-in with phone number",
-      "firstLoginHint": "First-time sign-in will auto-register your account",
+      "firstLoginHint": "First-time sign-in will auto-register your account.",
       "phonePlaceholder": "Enter your phone number",
-      "phoneInvalidSimplified": "Please enter a valid phone number",
-      "phoneInvalidTraditional": "Phone number format is invalid",
+      "phoneInvalidSimplified": "Please enter a valid phone number.",
+      "phoneInvalidTraditional": "Phone number format is invalid.",
       "agreePrefix": "I have read and agree to the",
       "agreeConjunction": "and",
-      "requestCode": "Get code",
+      "requestCode": "Get Code",
       "requesting": "Sending..."
     },
     "smsVerify": {
       "subtitlePattern": "Verification code sent to {{phone}}",
       "prompt": "Enter the 6-digit SMS code",
-      "verifying": "Verifying",
+      "verifying": "Verifying...",
       "resendCountdown": "Resend in {{seconds}}s",
-      "resendButton": "Get a new code"
+      "resendButton": "Get a New Code"
     }
   },
   "settings": {
     "title": "Settings",
     "versionLabel": "v{{version}} ({{build}})",
     "sections": {
-      "connectedDevice": "Connected device",
+      "connectedDevice": "Connected Device",
       "supportHelp": "Support & Help"
     },
     "android": {
-      "title": "Android capability notes",
+      "title": "Android Capability Notes",
       "body": "This build ships the Android shell, LAN auto-discovery, basic pairing, and diagnostics export. QR pairing, the real upload queue, background reconnection, and incremental sync have not yet been ported to the Android native engine."
     },
     "connection": {
@@ -87,28 +87,28 @@
       "freeTrial": "Free trial",
       "expired": "Expired",
       "active": "Active",
-      "subscribeCta": "Subscribe now"
+      "subscribeCta": "Subscribe Now"
     },
     "myDevice": {
-      "label": "My device name",
-      "hint": "This name will be shown on your Mac"
+      "label": "My Device Name",
+      "hint": "This name will be shown on your Mac."
     },
     "photoPermission": {
-      "title": "Photo access is off",
+      "title": "Photo Access Is Off",
       "body": "Allow access to Photos to keep auto-sync running.",
-      "openSettings": "Open system settings"
+      "openSettings": "Open System Settings"
     },
     "rows": {
-      "currentAccount": "Current account",
-      "latestSync": "Latest sync",
-      "appVersion": "App version"
+      "currentAccount": "Current Account",
+      "latestSync": "Latest Sync",
+      "appVersion": "App Version"
     },
     "actions": {
-      "exportDiagnostics": "Export diagnostics bundle",
-      "exportingDiagnostics": "Exporting diagnostics bundle...",
+      "exportDiagnostics": "Export Diagnostics",
+      "exportingDiagnostics": "Exporting diagnostics...",
       "help": "Help",
-      "resetSyncStatus": "Reset sync status",
-      "logout": "Log out",
+      "resetSyncStatus": "Reset Sync Status",
+      "logout": "Log Out",
       "switch": "Switch"
     },
     "status": {
@@ -123,26 +123,26 @@
     },
     "dialogs": {
       "switchDevice": {
-        "title": "Switch device",
+        "title": "Switch Device",
         "body": "Disconnect from the current computer and switch to another device? You will need to enter a new pairing code.",
-        "confirm": "Confirm switch"
+        "confirm": "Confirm Switch"
       },
       "resetSync": {
-        "title": "Reset all sync state",
+        "title": "Reset All Sync State",
         "body": "This clears all sync records and disconnects the current device. You will need to re-enter a pairing code. Photos on your phone and Mac will not be deleted.",
-        "confirm": "Confirm reset"
+        "confirm": "Confirm Reset"
       },
       "logout": {
-        "title": "Log out",
+        "title": "Log Out",
         "body": "Are you sure you want to log out?",
-        "confirm": "Confirm log out"
+        "confirm": "Confirm Log Out"
       },
       "exportUnavailable": {
-        "title": "Cannot export",
+        "title": "Cannot Export",
         "body": "This build does not support exporting the diagnostics bundle."
       },
       "exportFailed": {
-        "title": "Export failed",
+        "title": "Export Failed",
         "body": "Failed to export the diagnostics bundle. Please try again later."
       }
     }
@@ -169,26 +169,26 @@
       "autoEnabled": "Auto upload enabled"
     },
     "running": {
-      "manualTitle": "Manual upload in progress",
-      "autoTitle": "Auto uploading",
-      "autoRunningTitle": "Auto upload running",
-      "autoRunningSubtitle": "New photos will transfer to your PC automatically",
+      "manualTitle": "Manual Upload in Progress",
+      "autoTitle": "Auto Uploading",
+      "autoRunningTitle": "Auto Upload Running",
+      "autoRunningSubtitle": "New photos will transfer to your PC automatically.",
       "queueInfo": "{{queued}} queued"
     },
     "standby": {
-      "title": "Waiting for new photos",
-      "subtitle": "New photos will transfer to your PC after you take them"
+      "title": "Waiting for New Photos",
+      "subtitle": "New photos will transfer to your PC after you take them."
     },
     "notStarted": {
-      "title": "Auto upload is off",
-      "subtitle": "Turn on auto upload to sync after you shoot, or use manual upload",
-      "goToAlbum": "Go to album",
-      "enableAuto": "Enable auto upload"
+      "title": "Auto Upload Is Off",
+      "subtitle": "Turn on auto upload to sync after you shoot, or use manual upload.",
+      "goToAlbum": "Go to Album",
+      "enableAuto": "Enable Auto Upload"
     },
     "offline": {
-      "title": "Device is offline",
+      "title": "Device Is Offline",
       "subtitle": "Make sure your computer is on and on the same network. Once it's back, uploads and shared files will resume.",
-      "switchDevice": "Switch device",
+      "switchDevice": "Switch Device",
       "reconnect": "Reconnect"
     },
     "stats": {
@@ -200,71 +200,71 @@
     },
     "actions": {
       "cancelling": "Cancelling...",
-      "cancelManualBatch": "Cancel manual upload",
-      "closeAutoUpload": "Turn off auto upload"
+      "cancelManualBatch": "Cancel Manual Upload",
+      "closeAutoUpload": "Turn Off Auto Upload"
     },
     "quickEntry": {
-      "title": "Quick actions",
+      "title": "Quick Actions",
       "albumTitle": "Album",
       "albumDesc": "Browse and upload photos manually",
-      "sharedFilesTitle": "Shared files",
+      "sharedFilesTitle": "Shared Files",
       "sharedFilesDesc": "Browse shared files on your PC"
     },
     "expired": {
-      "title": "Trial ended",
-      "subtitle": "Subscribe to continue using photo upload, auto upload, and shared file access",
-      "subscribeCta": "Subscribe now",
-      "viewHelp": "View help"
+      "title": "Trial Ended",
+      "subtitle": "Subscribe to continue using photo upload, auto upload, and shared file access.",
+      "subscribeCta": "Subscribe Now",
+      "viewHelp": "View Help"
     },
     "dialogs": {
       "syncError": {
-        "title": "Sync error"
+        "title": "Sync Error"
       },
       "cancelManual": {
-        "title": "Cancel manual upload",
+        "title": "Cancel Manual Upload",
         "body": "Cancel the current manual upload queue?",
-        "rethink": "Keep uploading",
-        "confirm": "Confirm cancel"
+        "rethink": "Keep Uploading",
+        "confirm": "Confirm Cancel"
       },
       "cancelManualFailed": {
-        "title": "Cancel failed",
+        "title": "Cancel Failed",
         "body": "Could not cancel the manual upload. Please try again later."
       },
       "closeAuto": {
-        "title": "Turn off auto upload",
-        "body": "Turning it off stops the current auto upload and new photos will not upload automatically.",
-        "continue": "Keep uploading",
-        "confirm": "Confirm turn off"
+        "title": "Turn Off Auto Upload",
+        "body": "Turning it off stops the current auto upload, and new photos will not upload automatically.",
+        "continue": "Keep Uploading",
+        "confirm": "Confirm Turn Off"
       },
       "closeAutoFailed": {
-        "title": "Action failed",
+        "title": "Action Failed",
         "body": "Could not turn off auto upload. Please try again later."
       },
       "reconnectFailed": {
-        "title": "Reconnect failed",
-        "body": "Please try again later"
+        "title": "Reconnect Failed",
+        "body": "Please try again later."
       },
       "switchDevice": {
-        "title": "Switch device",
+        "title": "Switch Device",
         "body": "This will disconnect the current device and return to the device discovery page.",
-        "confirm": "Confirm switch"
+        "confirm": "Confirm Switch"
       },
       "enableAutoBlocked": {
-        "title": "Cannot enable",
-        "body": "Please connect to a device first"
+        "title": "Cannot Enable",
+        "body": "Please connect to a device first."
       },
       "switchUploadMode": {
-        "title": "Switch upload mode",
+        "title": "Switch Upload Mode",
         "body": "An upload is in progress. Enabling auto upload will interrupt the manual upload. Continue?",
-        "confirm": "Confirm switch"
+        "confirm": "Confirm Switch"
       },
       "enableAutoFailed": {
-        "title": "Action failed",
+        "title": "Action Failed",
         "body": "Could not enable auto upload. Please try again later."
       }
     },
     "performance": {
-      "thermalThrottled": "Device is running hot — transfer throttled"
+      "thermalThrottled": "Device is running hot — transfer throttled."
     }
   },
   "codeVerify": {
@@ -274,20 +274,20 @@
     "helpText": "Make sure your phone and computer are on the same network. Open the app on your computer to see the pairing code."
   },
   "qrScanner": {
-    "title": "Scan pairing QR code",
-    "instruction": "Place the QR code in the frame to connect automatically",
+    "title": "Scan Pairing QR Code",
+    "instruction": "Place the QR code in the frame to connect automatically.",
     "permissionDenied": {
-      "text": "Camera access is required to scan the QR code"
+      "text": "Camera access is required to scan the QR code."
     },
     "noCameraDevice": "No camera found",
     "android": {
-      "title": "QR pairing not available on Android",
+      "title": "QR Pairing Not Available on Android",
       "body": "This Android build only includes basic bridging and manual pairing. Go back and use \"Manual pairing\" to enter the desktop IPv4 address instead.",
-      "backToManual": "Back to manual pairing"
+      "backToManual": "Back to Manual Pairing"
     }
   },
   "deviceDiscovery": {
-    "title": "Find devices",
+    "title": "Find Devices",
     "subtitle": {
       "ios": "Scanning for desktop apps on your local network...",
       "android": "Scanning for desktop apps on your local network. If no device is found, enter the IPv4 address manually."
@@ -302,21 +302,21 @@
     },
     "emptyState": {
       "default": "No devices found",
-      "android": "No devices found — enter the IP address manually to continue pairing"
+      "android": "No devices found. Enter the IP address manually to continue pairing."
     },
     "actions": {
-      "manualPair": "Manual pairing",
-      "rescan": "Scan again",
-      "manualInputIp": "Enter IP manually",
-      "qrPair": "Scan QR code"
+      "manualPair": "Manual Pairing",
+      "rescan": "Scan Again",
+      "manualInputIp": "Enter IP Manually",
+      "qrPair": "Scan QR Code"
     },
     "dialogs": {
       "openLinkFailed": {
-        "title": "Cannot open",
+        "title": "Cannot Open",
         "body": "Could not open {{label}} right now. Please try again later."
       },
       "manualInput": {
-        "title": "Enter IP to pair",
+        "title": "Enter IP to Pair",
         "description": "If the scan can't find your computer — especially Windows — enter the desktop app's IPv4 address directly.",
         "confirm": "Continue",
         "hint": "Uses sync port 39393 by default. You'll still need to enter the 6-digit pairing code in the next step.",
@@ -328,10 +328,10 @@
     "title": "Help",
     "sections": {
       "features": "Overview",
-      "gettingStarted": "Getting started",
-      "uploadShare": "Upload & shared files",
+      "gettingStarted": "Getting Started",
+      "uploadShare": "Upload & Shared Files",
       "faq": "FAQ",
-      "contact": "Contact us"
+      "contact": "Contact Us"
     },
     "features": {
       "feature0": {
@@ -353,33 +353,33 @@
     },
     "steps": {
       "step0": {
-        "title": "Connect to your computer",
+        "title": "Connect to Your Computer",
         "description": "Make sure your phone and computer are on the same Wi-Fi. Open Vivi Drop on your PC, then tap \"Scan for devices\" on your phone to find and connect to the computer, or scan the QR code on the PC."
       },
       "step1": {
-        "title": "Enable auto upload",
+        "title": "Enable Auto Upload",
         "description": "Go to the Album screen, expand the \"Auto upload\" panel, and turn on the switch. New media will then transfer to your computer in the background automatically."
       },
       "step2": {
-        "title": "Manual upload",
+        "title": "Manual Upload",
         "description": "In the Album screen, select the photos or videos you want to upload (already-transferred items are greyed out), then tap the \"Upload\" button at the bottom to add them to the queue."
       },
       "step3": {
-        "title": "Browse shared files",
+        "title": "Browse Shared Files",
         "description": "Tap the \"Shared Files\" card on the home screen to browse the shared folder on your computer. You can preview images and videos; subscribers can download files."
       }
     },
     "uploadShare": {
       "item0": {
-        "title": "Auto upload vs. manual upload",
+        "title": "Auto Upload vs. Manual Upload",
         "answer": "Auto upload: once enabled, the app monitors your photo library and automatically transfers new photos and videos to your computer — great for everyday use.\n\nManual upload: manually select files in the album to transfer in bulk — ideal for one-off batch transfers of older media.\n\nBoth modes can be used together; manual uploads are sent first."
       },
       "item1": {
-        "title": "received directory vs. shared directory",
+        "title": "received Directory vs. shared Directory",
         "answer": "received directory: files transferred from your phone are saved here, automatically sorted by date.\n\nshared directory: a folder on your computer shared for your phone to browse. Set it in the desktop app settings. Your phone can preview images and videos inside."
       },
       "item2": {
-        "title": "Shared directory is read-only",
+        "title": "Shared Directory Is Read-Only",
         "answer": "Browsing the shared directory on your phone is read-only — no files on the computer are modified or deleted. Subscribers can download shared files to the phone's photo library."
       }
     },
@@ -410,10 +410,10 @@
       }
     },
     "contact": {
-      "supportEmail": "Support email",
-      "exportDiagnostics": "Export diagnostics bundle",
+      "supportEmail": "Support Email",
+      "exportDiagnostics": "Export Diagnostics",
       "exportingDiagnostics": "Exporting...",
-      "exportHint": "Send logs to support to help diagnose issues"
+      "exportHint": "Send logs to support to help diagnose issues."
     }
   },
   "sharedFiles": {
@@ -423,21 +423,21 @@
       "folder": "Folder"
     },
     "emptyState": {
-      "title": "Shared directory is empty",
-      "message": "Files will appear here once syncing is complete"
+      "title": "Shared Directory Is Empty",
+      "message": "Files will appear here once syncing is complete."
     },
     "deviceUnavailable": {
-      "title": "Device unavailable",
-      "message": "Please connect to a device first",
-      "recheck": "Check again"
+      "title": "Device Unavailable",
+      "message": "Please connect to a device first.",
+      "recheck": "Check Again"
     },
     "directoryInaccessible": {
-      "title": "Shared directory inaccessible",
-      "message": "Please check the desktop app settings"
+      "title": "Shared Directory Inaccessible",
+      "message": "Please check the desktop app settings."
     },
     "networkError": {
-      "title": "Failed to load",
-      "message": "Please try again later"
+      "title": "Failed to Load",
+      "message": "Please try again later."
     },
     "preview": {
       "playVideo": "Tap to play video"
@@ -446,10 +446,10 @@
       "downloadSavedToPhotos": "{{name}} saved to Photos",
       "downloadSaved": "{{name}} saved",
       "downloadComplete": "Download complete",
-      "downloadFailed": "Download failed",
+      "downloadFailed": "Download Failed",
       "downloadFailedMessage": "Could not download the file. Please try again later.",
-      "previewFailed": "Preview failed",
-      "previewFailedMessage": "Could not load file preview"
+      "previewFailed": "Preview Failed",
+      "previewFailedMessage": "Could not load file preview."
     }
   },
   "syncStatus": {
@@ -462,9 +462,9 @@
       "default": "Sync summary"
     },
     "completion": {
-      "title": "All files synced",
+      "title": "All Files Synced",
       "filesUnit": "files",
-      "subtitle": "This sync is complete",
+      "subtitle": "This sync is complete.",
       "latestSync": "Last successful sync: {{label}}"
     },
     "summary": {
@@ -485,13 +485,13 @@
       "permissionRequired": "Photo library access is required.",
       "permissionDetail": "Allow access in system settings — sync will resume automatically.",
       "windowsInterrupted": "\"{{device}}\" interrupted the transfer.",
-      "networkPaused": "Transfer paused — waiting for network to recover.",
+      "networkPaused": "Transfer paused — waiting for the network to recover.",
       "networkReconnecting": "Network hiccup — reconnecting to \"{{device}}\".",
       "notConnected": "Not connected to \"{{device}}\" — make sure Vivi Drop is running on your computer.",
       "connecting": "Connecting to \"{{device}}\".",
       "progressWindowsRetry": "Progress saved ({{transferred}} / {{total}}). Retry {{attempt}} in {{seconds}}s. Check firewall, security software, or VPN on this Windows PC.",
       "progressWindowsNoRetry": "Progress saved ({{transferred}} / {{total}}). Check firewall, security software, or VPN on this Windows PC — sync will resume automatically.",
-      "networkWithRetry": "Progress saved ({{transferred}} / {{total}}). Retry {{attempt}} in {{seconds}}s after network recovers.",
+      "networkWithRetry": "Progress saved ({{transferred}} / {{total}}). Retry {{attempt}} in {{seconds}}s after the network recovers.",
       "networkAutoResume": "Progress saved ({{transferred}} / {{total}}). Sync will resume when the network recovers.",
       "progressWithRetry": "Progress saved ({{transferred}} / {{total}}). Retry {{attempt}} in {{seconds}}s.",
       "retryingReconnect": "Progress saved ({{transferred}} / {{total}}). Reconnecting...",
@@ -502,7 +502,7 @@
   "subscription": {
     "title": "Subscription",
     "hero": {
-      "title": "Unlock the full version",
+      "title": "Unlock the Full Version",
       "subtitle": "7-day free trial. Subscribe after to keep using all features."
     },
     "divider": "Available after subscribing",
@@ -516,13 +516,13 @@
     },
     "plans": {
       "monthly": {
-        "name": "Monthly plan",
+        "name": "Monthly Plan",
         "title": "Monthly",
         "unit": "/mo"
       },
       "tenMonth": {
-        "name": "10-month plan",
-        "title": "Best value",
+        "name": "10-Month Plan",
+        "title": "Best Value",
         "unit": "/10 months",
         "badge": "Save 12%"
       },
@@ -535,19 +535,19 @@
       "subExpired": "Subscription expired"
     },
     "actions": {
-      "subscribe": "Subscribe now",
-      "start": "Get started"
+      "subscribe": "Subscribe Now",
+      "start": "Get Started"
     },
     "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",
     "modal": {
-      "paymentSuccess": "Payment successful",
+      "paymentSuccess": "Payment Successful",
       "successSubtitle": "You're subscribed — enjoy Vivi Drop!",
       "validUntil": "Valid until {{date}}"
     },
     "alert": {
-      "devTitle": "Coming soon",
+      "devTitle": "Coming Soon",
       "devBody": "Payment is under development. Stay tuned!",
-      "devConfirm": "Got it"
+      "devConfirm": "Got It"
     }
   },
   "history": {
@@ -579,34 +579,34 @@
     },
     "timeFilters": {
       "all": "All",
-      "fromNow": "From now",
-      "custom": "Custom time"
+      "fromNow": "From Now",
+      "custom": "Custom Time"
     },
     "emptyStates": {
       "transferredEmpty": {
-        "title": "No uploaded items yet",
-        "subtitle": "Completed uploads will appear here"
+        "title": "No Uploaded Items Yet",
+        "subtitle": "Completed uploads will appear here."
       },
       "untransferredEmpty": {
-        "title": "No pending items",
-        "subtitle": "Nothing matches the current filter"
+        "title": "No Pending Items",
+        "subtitle": "Nothing matches the current filter."
       },
       "photosEmpty": {
-        "title": "No photos",
-        "subtitle": "No photos match the current filter"
+        "title": "No Photos",
+        "subtitle": "No photos match the current filter."
       },
       "videosEmpty": {
-        "title": "No videos",
-        "subtitle": "No videos match the current filter"
+        "title": "No Videos",
+        "subtitle": "No videos match the current filter."
       },
       "genericEmpty": {
-        "title": "No items",
-        "subtitle": "Make sure photo library access is granted"
+        "title": "No Items",
+        "subtitle": "Make sure photo library access is granted."
       },
       "limitedAccess": {
-        "title": "No photos selected",
-        "subtitle": "Limited access mode — pick the photos you want to share",
-        "selectPhotos": "Select photos"
+        "title": "No Photos Selected",
+        "subtitle": "Limited access mode — pick the photos you want to share.",
+        "selectPhotos": "Select Photos"
       }
     },
     "dates": {
@@ -628,19 +628,19 @@
       "transferred": "Uploaded"
     },
     "actions": {
-      "startUpload": "Start upload",
-      "pickTime": "Tap to set a time"
+      "startUpload": "Start Upload",
+      "pickTime": "Tap to Set a Time"
     },
     "config": {
-      "sectionTitle": "Auto upload",
+      "sectionTitle": "Auto Upload",
       "toggleLabel": "Auto upload",
       "stateOn": "On",
       "stateOff": "Off",
       "timeRangeLabel": "Time range"
     },
     "summary": {
-      "title": "Auto upload is on",
-      "subtitle": "New photos will transfer to your PC automatically",
+      "title": "Auto Upload Is On",
+      "subtitle": "New photos will transfer to your PC automatically.",
       "transferredThisRound": "Uploaded",
       "pending": "Pending",
       "totalAssets": "Total",
@@ -654,19 +654,19 @@
       "new": "New"
     },
     "datePicker": {
-      "title": "Pick a time",
+      "title": "Pick a Time",
       "cancel": "Cancel",
       "confirm": "Confirm"
     },
     "collectionSheet": {
-      "title": "Choose album",
-      "allPhotos": "All photos"
+      "title": "Choose Album",
+      "allPhotos": "All Photos"
     },
     "dialogs": {
       "cannotUpload": {
-        "title": "Cannot upload",
-        "autoActive": "Turn off auto upload first",
-        "notConnected": "Please connect to a device first"
+        "title": "Cannot Upload",
+        "autoActive": "Turn off auto upload first.",
+        "notConnected": "Please connect to a device first."
       },
       "submitted": {
         "title": "Submitted",
@@ -676,48 +676,48 @@
         "queuedWithSkipped": "Queued {{queued}} files; {{skipped}} duplicate(s) skipped"
       },
       "allDuplicate": {
-        "title": "All duplicates",
-        "body": "All {{count}} selected items are already in the upload queue",
-        "body_one": "The selected item is already in the upload queue",
-        "body_other": "All {{count}} selected items are already in the upload queue"
+        "title": "All Duplicates",
+        "body": "All {{count}} selected items are already in the upload queue.",
+        "body_one": "The selected item is already in the upload queue.",
+        "body_other": "All {{count}} selected items are already in the upload queue."
       },
       "submitFailed": {
-        "title": "Submission failed",
+        "title": "Submission Failed",
         "body": "Could not submit the upload. Please try again later."
       },
       "closeAuto": {
-        "title": "Turn off auto upload",
+        "title": "Turn Off Auto Upload",
         "body": "Turn off auto upload? New photos will stop transferring to your PC automatically.",
-        "keepUploading": "Keep uploading",
-        "confirm": "Confirm turn off"
+        "keepUploading": "Keep Uploading",
+        "confirm": "Confirm Turn Off"
       },
       "closeAutoFailed": {
-        "title": "Action failed",
+        "title": "Action Failed",
         "body": "Could not turn off auto upload. Please try again."
       },
       "cannotEnable": {
-        "title": "Cannot enable",
-        "notConnected": "Please connect to a device first"
+        "title": "Cannot Enable",
+        "notConnected": "Please connect to a device first."
       },
       "configIncomplete": {
-        "title": "Configuration incomplete",
-        "body": "Please set a custom start time first"
+        "title": "Configuration Incomplete",
+        "body": "Please set a custom start time first."
       },
       "switchUploadMode": {
-        "title": "Switch upload mode",
+        "title": "Switch Upload Mode",
         "body": "An upload is in progress. Enabling auto upload will interrupt the manual upload. Continue?",
-        "confirm": "Confirm switch"
+        "confirm": "Confirm Switch"
       },
       "enableAutoFailed": {
-        "title": "Action failed",
+        "title": "Action Failed",
         "body": "Could not enable auto upload. Please try again."
       },
       "toggleAutoFailed": {
-        "title": "Action failed",
+        "title": "Action Failed",
         "body": "Could not change auto upload state. Please try again."
       },
       "saveConfigFailed": {
-        "title": "Save failed",
+        "title": "Save Failed",
         "body": "Could not save auto upload configuration. Please try again."
       }
     }
