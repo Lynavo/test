@@ -1,8 +1,26 @@
 PODS:
+  - boost (1.84.0)
+  - DoubleConversion (1.1.6)
+  - fast_float (8.0.0)
   - FBLazyVector (0.84.1)
+  - fmt (11.0.2)
+  - glog (0.3.5)
   - hermes-engine (250829098.0.9):
     - hermes-engine/Pre-built (= 250829098.0.9)
   - hermes-engine/Pre-built (250829098.0.9)
+  - RCT-Folly (2024.11.18.00):
+    - boost
+    - DoubleConversion
+    - fast_float (= 8.0.0)
+    - fmt (= 11.0.2)
+    - glog
+    - RCT-Folly/Default (= 2024.11.18.00)
+  - RCT-Folly/Default (2024.11.18.00):
+    - boost
+    - DoubleConversion
+    - fast_float (= 8.0.0)
+    - fmt (= 11.0.2)
+    - glog
   - RCTDeprecation (0.84.1)
   - RCTRequired (0.84.1)
   - RCTSwiftUI (0.84.1)
@@ -1804,6 +1822,12 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNIap (12.16.4):
+    - RCT-Folly
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - ReactCommon/turbomodule/core
   - RNKeychain (10.0.0):
     - hermes-engine
     - RCTRequired
@@ -1922,8 +1946,14 @@ PODS:
   - Yoga (0.0.0)
 
 DEPENDENCIES:
+  - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
+  - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
+  - fast_float (from `../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
+  - fmt (from `../node_modules/react-native/third-party-podspecs/fmt.podspec`)
+  - glog (from `../node_modules/react-native/third-party-podspecs/glog.podspec`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
+  - RCT-Folly (from `../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
   - RCTSwiftUI (from `../node_modules/react-native/ReactApple/RCTSwiftUI`)
@@ -1998,6 +2028,7 @@ DEPENDENCIES:
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - "RNDateTimePicker (from `../node_modules/@react-native-community/datetimepicker`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
+  - RNIap (from `../node_modules/react-native-iap`)
   - RNKeychain (from `../node_modules/react-native-keychain`)
   - RNLocalize (from `../node_modules/react-native-localize`)
   - RNScreens (from `../node_modules/react-native-screens`)
@@ -2011,11 +2042,23 @@ SPEC REPOS:
     - SSZipArchive
 
 EXTERNAL SOURCES:
+  boost:
+    :podspec: "../node_modules/react-native/third-party-podspecs/boost.podspec"
+  DoubleConversion:
+    :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
+  fast_float:
+    :podspec: "../node_modules/react-native/third-party-podspecs/fast_float.podspec"
   FBLazyVector:
     :path: "../node_modules/react-native/Libraries/FBLazyVector"
+  fmt:
+    :podspec: "../node_modules/react-native/third-party-podspecs/fmt.podspec"
+  glog:
+    :podspec: "../node_modules/react-native/third-party-podspecs/glog.podspec"
   hermes-engine:
     :podspec: "../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec"
     :tag: hermes-v250829098.0.9
+  RCT-Folly:
+    :podspec: "../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec"
   RCTDeprecation:
     :path: "../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -2162,6 +2205,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/datetimepicker"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
+  RNIap:
+    :path: "../node_modules/react-native-iap"
   RNKeychain:
     :path: "../node_modules/react-native-keychain"
   RNLocalize:
@@ -2176,8 +2221,14 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  boost: 7e761d76ca2ce687f7cc98e698152abd03a18f90
+  DoubleConversion: cb417026b2400c8f53ae97020b2be961b59470cb
+  fast_float: b32c788ed9c6a8c584d114d0047beda9664e7cc6
   FBLazyVector: baf9d0492aa305444465c798e972f87e6a60dc69
+  fmt: a40bb5bd0294ea969aaaba240a927bd33d878cdd
+  glog: e56ede4028c4b7418e6b1195a36b1656bb35e225
   hermes-engine: 26040e3aa19ed197ef4c112b89ba07401f6674e4
+  RCT-Folly: 9e4e1ae78413fb0387567f5dc5d5d5672f23f457
   RCTDeprecation: 7489702d717ceea80e271eeacb3fbca39fa3c056
   RCTRequired: 1cceac389e77dc5826c681cb782d864b0ed623fc
   RCTSwiftUI: afc0a0a635860da1040a0b894bfd529da06d7810
@@ -2251,6 +2302,7 @@ SPEC CHECKSUMS:
   RNCAsyncStorage: 446abe7f5eb8df2f00063746a953524937033299
   RNDateTimePicker: 52a5decb243f39119be9e0d62f137e9349f38bfb
   RNGestureHandler: 7e24c85e99d3aa91bfcb05a3f2bede9678a407d5
+  RNIap: f14cb76671570a0144bbf0cb23541f0f3364f393
   RNKeychain: 4530fe0da3b91041852ceeb935ceeffcce8b657a
   RNLocalize: c1673817770082412e9b071e11633c366d448a4a
   RNScreens: 61e55a2d1ea789ae8b234803d7a151190e0c40f4
@@ -2259,6 +2311,6 @@ SPEC CHECKSUMS:
   VisionCamera: 024a4d33a11183851f19553f42658b02d8e4a7eb
   Yoga: 447c8baf495b8d96457a46e6691a2c9952cbd07f
 
-PODFILE CHECKSUM: 1e8b7aba89ba48e6e6ff3a9335f56d5a18696203
+PODFILE CHECKSUM: 8dcf3b51137e7b2d5fb624225e17d70de3b2a62a
 
 COCOAPODS: 1.16.2
