@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/Icon';
 import {
   isDiagnosticsExportUnavailable,
@@ -32,7 +33,7 @@ const ACCENT_LINE = '#3b9fd8';
 const STEP_BG = '#2a6cb5';
 
 // ---------------------------------------------------------------------------
-// Data
+// Data types
 // ---------------------------------------------------------------------------
 
 interface FeatureItem {
@@ -41,65 +42,11 @@ interface FeatureItem {
   description: string;
 }
 
-const FEATURE_ITEMS: FeatureItem[] = [
-  {
-    icon: 'link-outline',
-    title: 'Vivi Drop 是什么',
-    description:
-      'Vivi Drop 是一款局域网素材同步工具，帮助短视频团队将手机素材无缝传输到 PC 端。只要手机和电脑处于同一 Wi-Fi 环境，即可一键连接，自动同步。',
-  },
-  {
-    icon: 'link-outline',
-    title: '如何连接电脑',
-    description:
-      '打开 App 后扫描局域网内的 Vivi Drop PC 端，或使用 PC 端的二维码扫码直连。连接成功后即可开始上传。',
-  },
-  {
-    icon: 'cloud-upload-outline',
-    title: '如何上传素材',
-    description:
-      '支持自动上传和手动上传两种方式。自动上传在后台静默同步新增素材；手动上传可在相册中勾选照片和视频后一次性提交。',
-  },
-  {
-    icon: 'folder-outline',
-    title: '如何访问共享目录',
-    description:
-      '在首页点击「共享目录」可浏览电脑端的共享文件夹，支持预览图片和视频，订阅用户还可下载文件到手机。',
-  },
-];
-
 interface StepItem {
   step: number;
   title: string;
   description: string;
 }
-
-const STEP_ITEMS: StepItem[] = [
-  {
-    step: 1,
-    title: '连接电脑',
-    description:
-      '确保手机和电脑在同一 Wi-Fi 下，打开 Vivi Drop PC 端，在手机端点击「扫描设备」找到电脑并连接，或使用 PC 端二维码扫码。',
-  },
-  {
-    step: 2,
-    title: '开启自动上传',
-    description:
-      '进入相册页，展开「自动上传」面板，打开开关。此后新增素材将在后台自动传输到电脑，无需手动操作。',
-  },
-  {
-    step: 3,
-    title: '手动上传',
-    description:
-      '在相册页勾选想要上传的照片或视频（已传输的素材会置灰），点击底部「上传」按钮提交到传输队列。',
-  },
-  {
-    step: 4,
-    title: '查看共享目录',
-    description:
-      '在首页点击「共享目录」卡片，浏览电脑端共享文件夹中的内容，可预览图片和视频，订阅用户可下载文件。',
-  },
-];
 
 interface ExpandableItem {
   icon: string;
@@ -107,74 +54,44 @@ interface ExpandableItem {
   answer: string;
 }
 
-const UPLOAD_SHARE_ITEMS: ExpandableItem[] = [
-  {
-    icon: 'sync-outline',
-    title: '自动上传 vs 手动上传',
-    answer:
-      '自动上传：开启后会自动监控相册，新拍摄的照片和视频会自动传输到电脑端，适合日常使用。\n\n手动上传：在相册中手动勾选需要传输的文件，适合一次性批量传输历史素材。\n\n两种方式可以同时使用，手动上传的文件会优先传输。',
-  },
-  {
-    icon: 'folder-outline',
-    title: 'received 目录与 shared 目录',
-    answer:
-      'received 目录：手机传输到电脑的文件会保存在此目录，按日期自动分类。\n\nshared 目录：电脑端共享给手机浏览的文件夹，可在桌面端设置中指定。手机可预览其中的图片和视频。',
-  },
-  {
-    icon: 'share-outline',
-    title: '共享目录是只读访问',
-    answer:
-      '手机端浏览共享目录时是只读模式，不会修改或删除电脑端的文件。订阅用户可将共享文件下载到手机相册。',
-  },
-];
-
-const FAQ_ITEMS: ExpandableItem[] = [
-  {
-    icon: 'help-circle-outline',
-    title: '设备离线怎么办?',
-    answer:
-      '• 确认手机和电脑连接在同一 Wi-Fi 网络\n• 检查电脑端 Vivi Drop 是否正常运行\n• 尝试在同步动态页点击「重新连接」\n• 关闭 VPN 或代理软件后重试',
-  },
-  {
-    icon: 'help-circle-outline',
-    title: '上传失败怎么办?',
-    answer:
-      '• 检查 Wi-Fi 连接是否稳定\n• 确认手机端已授予照片访问权限\n• iCloud 照片可能需要先下载到本地\n• 导出诊断包发送给客服排查',
-  },
-  {
-    icon: 'help-circle-outline',
-    title: '共享目录为空怎么办?',
-    answer:
-      '• 确认电脑端已设置共享目录路径\n• 检查共享目录中是否有文件\n• 确认设备处于在线状态\n• 尝试下拉刷新共享目录页面',
-  },
-  {
-    icon: 'help-circle-outline',
-    title: '无法连接电脑怎么办?',
-    answer:
-      '• 确认手机和电脑在同一局域网 / Wi-Fi 下\n• 检查电脑防火墙是否阻止了 Vivi Drop\n• 重启电脑端 Vivi Drop 后重试\n• 尝试手动输入电脑 IP 和连接码',
-  },
-  {
-    icon: 'help-circle-outline',
-    title: '试用期是多久?',
-    answer:
-      '新用户可免费试用 7 天，试用期间可使用全部功能。试用到期后需订阅才能继续使用上传功能。',
-  },
-  {
-    icon: 'help-circle-outline',
-    title: '如何管理订阅?',
-    answer:
-      '订阅通过 Apple App Store 管理。如需取消或更改订阅，请前往「设置 → Apple ID → 订阅」中操作。',
-  },
-];
-
 // ---------------------------------------------------------------------------
 // HelpScreen
 // ---------------------------------------------------------------------------
 
 export function HelpScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+
+  const FEATURE_ITEMS: FeatureItem[] = [
+    { icon: 'link-outline', title: t('help.features.feature0.title'), description: t('help.features.feature0.description') },
+    { icon: 'link-outline', title: t('help.features.feature1.title'), description: t('help.features.feature1.description') },
+    { icon: 'cloud-upload-outline', title: t('help.features.feature2.title'), description: t('help.features.feature2.description') },
+    { icon: 'folder-outline', title: t('help.features.feature3.title'), description: t('help.features.feature3.description') },
+  ];
+
+  const STEP_ITEMS: StepItem[] = [
+    { step: 1, title: t('help.steps.step0.title'), description: t('help.steps.step0.description') },
+    { step: 2, title: t('help.steps.step1.title'), description: t('help.steps.step1.description') },
+    { step: 3, title: t('help.steps.step2.title'), description: t('help.steps.step2.description') },
+    { step: 4, title: t('help.steps.step3.title'), description: t('help.steps.step3.description') },
+  ];
+
+  const UPLOAD_SHARE_ITEMS: ExpandableItem[] = [
+    { icon: 'sync-outline', title: t('help.uploadShare.item0.title'), answer: t('help.uploadShare.item0.answer') },
+    { icon: 'folder-outline', title: t('help.uploadShare.item1.title'), answer: t('help.uploadShare.item1.answer') },
+    { icon: 'share-outline', title: t('help.uploadShare.item2.title'), answer: t('help.uploadShare.item2.answer') },
+  ];
+
+  const FAQ_ITEMS: ExpandableItem[] = [
+    { icon: 'help-circle-outline', title: t('help.faq.item0.title'), answer: t('help.faq.item0.answer') },
+    { icon: 'help-circle-outline', title: t('help.faq.item1.title'), answer: t('help.faq.item1.answer') },
+    { icon: 'help-circle-outline', title: t('help.faq.item2.title'), answer: t('help.faq.item2.answer') },
+    { icon: 'help-circle-outline', title: t('help.faq.item3.title'), answer: t('help.faq.item3.answer') },
+    { icon: 'help-circle-outline', title: t('help.faq.item4.title'), answer: t('help.faq.item4.answer') },
+    { icon: 'help-circle-outline', title: t('help.faq.item5.title'), answer: t('help.faq.item5.answer') },
+  ];
 
   const toggleExpand = useCallback((key: string) => {
     setExpandedKeys(prev => {
@@ -194,9 +111,9 @@ export function HelpScreen() {
       await shareDiagnosticsArchive();
     } catch (error) {
       if (isDiagnosticsExportUnavailable(error)) {
-        Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
+        Alert.alert(t('settings.dialogs.exportUnavailable.title'), t('settings.dialogs.exportUnavailable.body'));
       } else {
-        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
+        Alert.alert(t('settings.dialogs.exportFailed.title'), t('settings.dialogs.exportFailed.body'));
       }
     } finally {
       setIsExporting(false);
@@ -251,11 +168,11 @@ export function HelpScreen() {
           activeOpacity={0.6}
           hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
           onPress={() => navigation.goBack()}
-          accessibilityLabel="返回"
+          accessibilityLabel={t('common.back')}
         >
           <Icon name="chevron-back" size={20} color={DARK} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>帮助</Text>
+        <Text style={styles.headerTitle}>{t('help.title')}</Text>
       </View>
 
       <ScrollView
@@ -263,9 +180,9 @@ export function HelpScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ============================================================= */}
-        {/* Section 1: 基础功能介绍                                         */}
+        {/* Section 1: features                                            */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>基础功能介绍</Text>
+        <Text style={styles.sectionLabel}>{t('help.sections.features')}</Text>
         <View style={styles.listCard}>
           {FEATURE_ITEMS.map((item, index) => (
             <View key={index}>
@@ -287,9 +204,9 @@ export function HelpScreen() {
         </View>
 
         {/* ============================================================= */}
-        {/* Section 2: 首次使用引导                                         */}
+        {/* Section 2: gettingStarted                                      */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>首次使用引导</Text>
+        <Text style={styles.sectionLabel}>{t('help.sections.gettingStarted')}</Text>
         <View style={styles.listCard}>
           {STEP_ITEMS.map((item, index) => (
             <View key={index}>
@@ -310,9 +227,9 @@ export function HelpScreen() {
         </View>
 
         {/* ============================================================= */}
-        {/* Section 3: 上传与共享说明                                        */}
+        {/* Section 3: uploadShare                                         */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>上传与共享说明</Text>
+        <Text style={styles.sectionLabel}>{t('help.sections.uploadShare')}</Text>
         <View style={styles.listCard}>
           {UPLOAD_SHARE_ITEMS.map((item, index) =>
             renderExpandableRow(
@@ -324,9 +241,9 @@ export function HelpScreen() {
         </View>
 
         {/* ============================================================= */}
-        {/* Section 4: 常见问题                                             */}
+        {/* Section 4: faq                                                 */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>常见问题</Text>
+        <Text style={styles.sectionLabel}>{t('help.sections.faq')}</Text>
         <View style={styles.listCard}>
           {FAQ_ITEMS.map((item, index) =>
             renderExpandableRow(
@@ -338,11 +255,11 @@ export function HelpScreen() {
         </View>
 
         {/* ============================================================= */}
-        {/* Section 5: 联系我们                                             */}
+        {/* Section 5: contact                                             */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>联系我们</Text>
+        <Text style={styles.sectionLabel}>{t('help.sections.contact')}</Text>
         <View style={styles.listCard}>
-          {/* 客服邮箱 */}
+          {/* support email */}
           <TouchableOpacity
             style={styles.contactRow}
             activeOpacity={0.6}
@@ -353,13 +270,13 @@ export function HelpScreen() {
             <View style={styles.contactRowLeft}>
               <Icon name="mail-outline" size={18} color={BLUE} />
               <View>
-                <Text style={styles.contactRowTitle}>客服邮箱</Text>
+                <Text style={styles.contactRowTitle}>{t('help.contact.supportEmail')}</Text>
                 <Text style={styles.contactRowSub}>support@vividrop.cn</Text>
               </View>
             </View>
           </TouchableOpacity>
           <View style={styles.listSep} />
-          {/* 导出诊断包 */}
+          {/* export diagnostics */}
           <TouchableOpacity
             style={styles.contactRow}
             activeOpacity={0.6}
@@ -372,10 +289,10 @@ export function HelpScreen() {
               <Icon name="download-outline" size={18} color={BLUE} />
               <View>
                 <Text style={styles.contactRowTitle}>
-                  {isExporting ? '正在导出…' : '导出诊断包'}
+                  {isExporting ? t('help.contact.exportingDiagnostics') : t('help.contact.exportDiagnostics')}
                 </Text>
                 <Text style={styles.contactRowSub}>
-                  将日志发给客服以协助排查问题
+                  {t('help.contact.exportHint')}
                 </Text>
               </View>
             </View>
