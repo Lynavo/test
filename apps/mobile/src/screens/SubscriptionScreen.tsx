@@ -505,7 +505,7 @@ export function SubscriptionScreen() {
       setIsLoading(false);
       Alert.alert(t('subscription.alert.devTitle'), t('subscription.alert.devBody'), [{ text: t('subscription.alert.devConfirm') }]);
     }, 600);
-  }, []);
+  }, [t]);
 
   // ---------------------------------------------------------------------------
   // Payment success dismiss
