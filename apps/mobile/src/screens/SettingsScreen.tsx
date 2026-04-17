@@ -24,7 +24,8 @@ import {
   isFeatureAccessAllowed,
   getTrialRemainingDays,
 } from '../stores/auth-store';
-import { logout as serverLogout } from '../services/auth-service';
+import { logout as serverLogout, deleteAccount } from '../services/auth-service';
+import { ApiError } from '../services/api';
 import {
   isDiagnosticsExportUnavailable,
   shareDiagnosticsArchive,
@@ -467,6 +468,65 @@ export function SettingsScreen() {
     ]);
   }, [auth, navigation, t]);
 
+  // Belt-and-suspenders two-step confirmation for account deletion.
+  // Apple App Store Guideline 5.1.1(v) requires the action to be easy to
+  // find AND to double-check, and this is irreversible on the server:
+  // the user row is soft-deleted, every identity + refresh token is wiped,
+  // token_version bumps so any cached access token dies immediately, and
+  // an active subscription is marked cancelled. No undo.
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const handleDeleteAccount = useCallback(() => {
+    if (isDeletingAccount) return;
+    Alert.alert(
+      t('settings.dialogs.deleteAccount.title'),
+      t('settings.dialogs.deleteAccount.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.dialogs.deleteAccount.continue'),
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              t('settings.dialogs.deleteAccount.confirmAgainTitle'),
+              t('settings.dialogs.deleteAccount.confirmAgainBody'),
+              [
+                { text: t('common.cancel'), style: 'cancel' },
+                {
+                  text: t('settings.dialogs.deleteAccount.confirmAgainButton'),
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    try {
+                      await deleteAccount();
+                      // Success: server wiped us. Clear local auth +
+                      // route to Login. Do NOT call serverLogout()
+                      // after this — tokens are already revoked by the
+                      // delete transaction on the server.
+                      auth.clearAuth();
+                      navigation.dispatch(
+                        CommonActions.reset({
+                          index: 0,
+                          routes: [{ name: 'Login' }],
+                        }),
+                      );
+                    } catch (e) {
+                      setIsDeletingAccount(false);
+                      const msg =
+                        e instanceof ApiError
+                          ? e.message
+                          : t('errors.accountDeleteFailed');
+                      Alert.alert(t('errors.title'), msg);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [auth, navigation, t, isDeletingAccount]);
+
   // Subscription derived state
   const userStatus = auth.user?.status;
   const trialDays = getTrialRemainingDays(auth.user);
@@ -801,6 +861,30 @@ export function SettingsScreen() {
             <View style={styles.actionRowLeft}>
               <Icon name="log-out-outline" size={18} color={DANGER_RED} />
               <Text style={styles.dangerRowText}>{t('settings.actions.logout')}</Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ============================================================= */}
+        {/* Delete Account                                                 */}
+        {/* Required by App Store Guideline 5.1.1(v). Destructive; server  */}
+        {/* wipes identities/tokens + cancels active subscription.         */}
+        {/* ============================================================= */}
+        <View style={[styles.listCard, styles.dangerCard, styles.logoutCard]}>
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.6}
+            onPress={handleDeleteAccount}
+            disabled={isDeletingAccount}
+          >
+            <View style={styles.actionRowLeft}>
+              <Icon name="trash-outline" size={18} color={DANGER_RED} />
+              <Text style={styles.dangerRowText}>
+                {isDeletingAccount
+                  ? t('settings.actions.deletingAccount')
+                  : t('settings.actions.deleteAccount')}
+              </Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>

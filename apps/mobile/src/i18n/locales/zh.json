@@ -40,7 +40,8 @@
     "serverErrorHttp": "服务器错误 (HTTP {{status}})",
     "responseParseError": "响应解析失败",
     "profileLoadFailed": "加载用户信息失败",
-    "profileLoadTitle": "无法加载账号信息"
+    "profileLoadTitle": "无法加载账号信息",
+    "accountDeleteFailed": "刪除帳號失敗，請稍後再試"
   },
   "auth": {
     "login": {
@@ -109,7 +110,9 @@
       "help": "帮助",
       "resetSyncStatus": "重置同步状态",
       "logout": "退出登录",
-      "switch": "切换"
+      "switch": "切换",
+      "deleteAccount": "刪除帳號",
+      "deletingAccount": "刪除中…"
     },
     "status": {
       "noRecord": "暂无记录",
@@ -144,6 +147,14 @@
       "exportFailed": {
         "title": "导出失败",
         "body": "诊断包导出失败，请稍后重试"
+      },
+      "deleteAccount": {
+        "title": "刪除帳號",
+        "body": "此動作將永久刪除你的帳號、所有登入方式與使用紀錄。若你目前有訂閱，將同步取消續訂。此動作無法復原。",
+        "continue": "繼續",
+        "confirmAgainTitle": "確定刪除帳號？",
+        "confirmAgainBody": "這是最後一次確認。刪除後資料無法救回。",
+        "confirmAgainButton": "確定刪除"
       }
     }
   },
@@ -197,6 +208,25 @@
       "transferred": "已传输",
       "transferredCount": "{{count}} 个",
       "dataAmount": "数据量"
+    },
+    "completed": {
+      "speedIdle": "--",
+      "auto": {
+        "title": "自动上传已完成",
+        "subtitle": "本次同步 {{count}} 个文件",
+        "fileCountLabel": "文件数",
+        "fileCountValue": "{{count}} 个",
+        "latestSync": "最近同步：{{label}}",
+        "goToAlbum": "去相册"
+      },
+      "manual": {
+        "title": "手动上传已完成",
+        "subtitle": "已完成 {{completed}} / {{total}}",
+        "progressValue": "{{completed}} / {{total}}",
+        "hint": "本次上传已完成\n自动上传未开启，可继续手动上传或开启自动上传",
+        "goToAlbum": "去相册继续上传",
+        "enableAuto": "开启自动上传"
+      }
     },
     "actions": {
       "cancelling": "正在取消...",

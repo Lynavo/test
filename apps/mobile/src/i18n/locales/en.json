@@ -40,7 +40,8 @@
     "serverErrorHttp": "Server error (HTTP {{status}})",
     "responseParseError": "Failed to parse response.",
     "profileLoadFailed": "Failed to load user profile.",
-    "profileLoadTitle": "Unable to Load Account Info"
+    "profileLoadTitle": "Unable to Load Account Info",
+    "accountDeleteFailed": "Could not delete your account. Please try again later."
   },
   "auth": {
     "login": {
@@ -109,7 +110,9 @@
       "help": "Help",
       "resetSyncStatus": "Reset Sync Status",
       "logout": "Log Out",
-      "switch": "Switch"
+      "switch": "Switch",
+      "deleteAccount": "Delete account",
+      "deletingAccount": "Deleting…"
     },
     "status": {
       "noRecord": "No records yet",
@@ -144,6 +147,14 @@
       "exportFailed": {
         "title": "Export Failed",
         "body": "Failed to export the diagnostics bundle. Please try again later."
+      },
+      "deleteAccount": {
+        "title": "Delete account",
+        "body": "This permanently deletes your account, every sign-in method, and all usage history. Any active subscription will be marked as cancelled. This cannot be undone.",
+        "continue": "Continue",
+        "confirmAgainTitle": "Delete your account?",
+        "confirmAgainBody": "This is your final confirmation. Deleted data cannot be recovered.",
+        "confirmAgainButton": "Delete account"
       }
     }
   },
@@ -197,6 +208,25 @@
       "transferred": "Transferred",
       "transferredCount": "{{count}}",
       "dataAmount": "Data"
+    },
+    "completed": {
+      "speedIdle": "--",
+      "auto": {
+        "title": "Auto Upload Complete",
+        "subtitle": "Synced {{count}} files in this round",
+        "fileCountLabel": "Files",
+        "fileCountValue": "{{count}}",
+        "latestSync": "Latest sync: {{label}}",
+        "goToAlbum": "Go to Album"
+      },
+      "manual": {
+        "title": "Manual Upload Complete",
+        "subtitle": "Completed {{completed}} / {{total}}",
+        "progressValue": "{{completed}} / {{total}}",
+        "hint": "This upload is complete.\nAuto upload is off, so you can keep uploading manually or turn it on.",
+        "goToAlbum": "Go to Album to Upload More",
+        "enableAuto": "Enable Auto Upload"
+      }
     },
     "actions": {
       "cancelling": "Cancelling...",
