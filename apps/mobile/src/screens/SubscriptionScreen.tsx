@@ -518,9 +518,25 @@ export function SubscriptionScreen() {
   const status: AccountStatus | undefined = subscription?.status ?? user?.status;
   const trialEnd = subscription?.trialEnd ?? user?.trialEnd;
 
+  const [isRestoring, setIsRestoring] = useState(false);
+
   const handleRestore = useCallback(async () => {
-    // Filled in by Task 15.
-  }, []);
+    if (!FEATURES.IAP_ENABLED || !FEATURES.IAP_RESTORE_ENABLED) return;
+    setIsRestoring(true);
+    try {
+      const restored = await iapService.restore();
+      if (restored.length === 0) {
+        Alert.alert(t('subscription.restore.empty'));
+        return;
+      }
+      await loadSubscription();
+      Alert.alert(t('subscription.restore.success'));
+    } catch {
+      Alert.alert(t('subscription.restore.failed'));
+    } finally {
+      setIsRestoring(false);
+    }
+  }, [t, loadSubscription]);
 
   const handleSubscribe = useCallback(async () => {
     if (!FEATURES.IAP_ENABLED) {
@@ -667,6 +683,21 @@ export function SubscriptionScreen() {
           )}
         </TouchableOpacity>
 
+        {FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED ? (
+          <TouchableOpacity
+            onPress={handleRestore}
+            disabled={isRestoring}
+            accessibilityLabel={t('subscription.restore.action')}
+            style={styles.restoreButton}
+          >
+            <Text style={styles.restoreText}>
+              {isRestoring
+                ? t('subscription.restore.inProgress')
+                : t('subscription.restore.action')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         <Text style={styles.footerText}>{t('subscription.footer')}</Text>
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -774,6 +805,16 @@ const styles = StyleSheet.create({
     color: '#b2bccc',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  restoreButton: {
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  restoreText: {
+    fontSize: 13,
+    color: MUTED_TEXT,
+    textDecorationLine: 'underline',
   },
   bottomSpacer: {
     height: 20,
