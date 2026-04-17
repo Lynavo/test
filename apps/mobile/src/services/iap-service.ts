@@ -6,11 +6,12 @@ import {
   requestSubscription,
   finishTransaction as rnFinishTransaction,
   getAvailablePurchases,
+  getSubscriptions,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
 import { type EmitterSubscription } from 'react-native';
-import { type IapProductId, productIdToPlan } from '../constants/iap';
+import { type IapProductId, productIdToPlan, TRIAL_ELIGIBLE_PRODUCTS } from '../constants/iap';
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 
@@ -147,7 +148,25 @@ class IapServiceImpl implements IapService {
     });
   }
   async checkEligibility(): Promise<EligibilityResult[]> {
-    throw new Error('checkEligibility() not implemented yet');
+    if (!this.initialized) return [];
+    if (TRIAL_ELIGIBLE_PRODUCTS.length === 0) return [];
+    try {
+      const products = await getSubscriptions({
+        skus: [...TRIAL_ELIGIBLE_PRODUCTS],
+      });
+      return TRIAL_ELIGIBLE_PRODUCTS.map((productId) => {
+        const match = products.find((p) => p.productId === productId);
+        const eligible =
+          match != null &&
+          'introductoryPricePaymentModeIOS' in match &&
+          match.introductoryPricePaymentModeIOS === 'FREETRIAL';
+        return { productId, eligibleForIntroOffer: eligible };
+      });
+    } catch {
+      // Eligibility query failure must not block UI — fall back to "not eligible"
+      // so the non-trial copy is shown (never over-promise a free trial).
+      return [];
+    }
   }
   onOrphanPurchaseVerified(cb: () => void): () => void {
     this.orphanListeners.add(cb);

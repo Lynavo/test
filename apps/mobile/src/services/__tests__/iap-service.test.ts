@@ -287,7 +287,67 @@ describe('iapService — orphan recovery', () => {
   });
 });
 
-import { getAvailablePurchases } from 'react-native-iap';
+import { getAvailablePurchases, getSubscriptions } from 'react-native-iap';
+
+describe('iapService — checkEligibility', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (purchaseUpdatedListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    await iapService.initialize();
+  });
+
+  afterEach(async () => {
+    await iapService.teardown();
+  });
+
+  test('returns eligibleForIntroOffer=true when subscription has intro offer', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        introductoryPrice: '',
+        introductoryPricePaymentModeIOS: 'FREETRIAL',
+        introductoryPriceNumberOfPeriodsIOS: '1',
+      },
+    ]);
+
+    const res = await iapService.checkEligibility();
+
+    expect(res).toEqual([
+      { productId: IAP_PRODUCTS.monthly, eligibleForIntroOffer: true },
+    ]);
+  });
+
+  test('returns eligibleForIntroOffer=false when intro mode missing', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        introductoryPricePaymentModeIOS: '',
+      },
+    ]);
+
+    const res = await iapService.checkEligibility();
+    expect(res).toEqual([
+      { productId: IAP_PRODUCTS.monthly, eligibleForIntroOffer: false },
+    ]);
+  });
+
+  test('returns empty array when getSubscriptions rejects', async () => {
+    (getSubscriptions as jest.Mock).mockRejectedValueOnce(new Error('store down'));
+
+    const res = await iapService.checkEligibility();
+    expect(res).toEqual([]);
+  });
+
+  test('queries only TRIAL_ELIGIBLE_PRODUCTS', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([]);
+    await iapService.checkEligibility();
+
+    expect(getSubscriptions).toHaveBeenCalledWith({
+      skus: [IAP_PRODUCTS.monthly],
+    });
+  });
+});
 
 describe('iapService — restore', () => {
   beforeEach(async () => {
