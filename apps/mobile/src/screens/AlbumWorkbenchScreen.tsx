@@ -35,6 +35,8 @@ import { useNavigation } from '@react-navigation/native';
 import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { AlbumAssetDTO, AutoUploadConfigDTO } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import {
@@ -72,15 +74,21 @@ const BLUE = '#3b9fd8';
 const DARK = '#1a3a5c';
 const SCREEN_BG = '#d6ecf8';
 
-function formatCustomTime(iso: string): string {
+function formatCustomTime(iso: string, t: TFunction): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
   const day = d.getDate();
-  const h = String(d.getHours()).padStart(2, '0');
-  const min = String(d.getMinutes()).padStart(2, '0');
-  return `${y}年${m}月${day}日 ${h}:${min}`;
+  const hour = String(d.getHours()).padStart(2, '0');
+  const minute = String(d.getMinutes()).padStart(2, '0');
+  return t('albumWorkbench.dates.full', {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  });
 }
 
 type MediaFilter = 'all' | 'photos' | 'videos';
@@ -88,52 +96,55 @@ type TransferFilter = 'all' | 'untransferred' | 'transferred';
 type ViewMode = 'grid' | 'list';
 
 type UnifiedFilter = 'all' | 'photos' | 'videos' | 'untransferred' | 'transferred';
-const UNIFIED_FILTER_TABS: { key: UnifiedFilter; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'photos', label: '照片' },
-  { key: 'videos', label: '视频' },
-  { key: 'untransferred', label: '未传' },
-  { key: 'transferred', label: '已传' },
-];
+const UNIFIED_FILTER_TABS = [
+  { key: 'all', labelKey: 'albumWorkbench.tabs.all' },
+  { key: 'photos', labelKey: 'albumWorkbench.tabs.photos' },
+  { key: 'videos', labelKey: 'albumWorkbench.tabs.videos' },
+  { key: 'untransferred', labelKey: 'albumWorkbench.tabs.untransferred' },
+  { key: 'transferred', labelKey: 'albumWorkbench.tabs.transferred' },
+] as const;
 
-const TIME_RANGE_OPTIONS: {
+const TIME_RANGE_OPTIONS = [
+  { key: 'all', labelKey: 'albumWorkbench.timeFilters.all' },
+  { key: 'from_now', labelKey: 'albumWorkbench.timeFilters.fromNow' },
+  { key: 'custom', labelKey: 'albumWorkbench.timeFilters.custom' },
+] as const satisfies ReadonlyArray<{
   key: AutoUploadConfigDTO['timeRangeMode'];
-  label: string;
-}[] = [
-  { key: 'all', label: '全部' },
-  { key: 'from_now', label: '此时此刻' },
-  { key: 'custom', label: '自定义时间' },
-];
+  labelKey: string;
+}>;
 
-function getEmptyStateCopy(filter: UnifiedFilter): {
+function getEmptyStateCopy(
+  filter: UnifiedFilter,
+  t: TFunction,
+): {
   title: string;
   subtitle: string;
 } {
   switch (filter) {
     case 'transferred':
       return {
-        title: '暂无已传素材',
-        subtitle: '已上传完成的素材会显示在这里',
+        title: t('albumWorkbench.emptyStates.transferredEmpty.title'),
+        subtitle: t('albumWorkbench.emptyStates.transferredEmpty.subtitle'),
       };
     case 'untransferred':
       return {
-        title: '暂无待上传素材',
-        subtitle: '当前没有符合条件的未传素材',
+        title: t('albumWorkbench.emptyStates.untransferredEmpty.title'),
+        subtitle: t('albumWorkbench.emptyStates.untransferredEmpty.subtitle'),
       };
     case 'photos':
       return {
-        title: '暂无照片',
-        subtitle: '当前筛选下没有可显示的照片',
+        title: t('albumWorkbench.emptyStates.photosEmpty.title'),
+        subtitle: t('albumWorkbench.emptyStates.photosEmpty.subtitle'),
       };
     case 'videos':
       return {
-        title: '暂无视频',
-        subtitle: '当前筛选下没有可显示的视频',
+        title: t('albumWorkbench.emptyStates.videosEmpty.title'),
+        subtitle: t('albumWorkbench.emptyStates.videosEmpty.subtitle'),
       };
     default:
       return {
-        title: '暂无素材',
-        subtitle: '请确保已授予照片访问权限',
+        title: t('albumWorkbench.emptyStates.genericEmpty.title'),
+        subtitle: t('albumWorkbench.emptyStates.genericEmpty.subtitle'),
       };
   }
 }
@@ -144,6 +155,7 @@ function getEmptyStateCopy(filter: UnifiedFilter): {
 
 export function AlbumWorkbenchScreen() {
   const navigation = useNavigation();
+  const { t } = useTranslation();
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -470,7 +482,10 @@ export function AlbumWorkbenchScreen() {
     if (selectedIds.size === 0) return;
 
     if (autoUploadConfig?.state === 'active') {
-      Alert.alert('无法上传', '请先关闭自动上传');
+      Alert.alert(
+        t('albumWorkbench.dialogs.cannotUpload.title'),
+        t('albumWorkbench.dialogs.cannotUpload.autoActive'),
+      );
       return;
     }
 
@@ -482,11 +497,17 @@ export function AlbumWorkbenchScreen() {
         (binding.connectionState !== 'connected' &&
           binding.connectionState !== 'bound')
       ) {
-        Alert.alert('无法上传', '请先连接设备');
+        Alert.alert(
+          t('albumWorkbench.dialogs.cannotUpload.title'),
+          t('albumWorkbench.dialogs.cannotUpload.notConnected'),
+        );
         return;
       }
     } catch {
-      Alert.alert('无法上传', '请先连接设备');
+      Alert.alert(
+        t('albumWorkbench.dialogs.cannotUpload.title'),
+        t('albumWorkbench.dialogs.cannotUpload.notConnected'),
+      );
       return;
     }
 
@@ -495,18 +516,28 @@ export function AlbumWorkbenchScreen() {
       const result = await submitManualUpload(Array.from(selectedIds));
       if (result.skippedCount === 0) {
         // All succeeded
-        Alert.alert('已提交', `已入队 ${result.queuedCount} 个文件`);
+        Alert.alert(
+          t('albumWorkbench.dialogs.submitted.title'),
+          t('albumWorkbench.dialogs.submitted.queuedOnly', {
+            count: result.queuedCount,
+          }),
+        );
       } else if (result.queuedCount > 0) {
         // Partial duplicates
         Alert.alert(
-          '已提交',
-          `已入队 ${result.queuedCount} 个文件，${result.skippedCount} 个重复素材已自动跳过`,
+          t('albumWorkbench.dialogs.submitted.title'),
+          t('albumWorkbench.dialogs.submitted.queuedWithSkipped', {
+            queued: result.queuedCount,
+            skipped: result.skippedCount,
+          }),
         );
       } else {
         // All duplicates
         Alert.alert(
-          '全部重复',
-          `所选 ${result.skippedCount} 个素材已存在于上传队列中，无需重复提交`,
+          t('albumWorkbench.dialogs.allDuplicate.title'),
+          t('albumWorkbench.dialogs.allDuplicate.body', {
+            count: result.skippedCount,
+          }),
         );
       }
       setSelectedIds(new Set());
@@ -517,7 +548,10 @@ export function AlbumWorkbenchScreen() {
       // Kick off the sync pipeline so queued items actually upload
       NativeModules.NativeSyncEngine?.triggerSync?.();
     } catch (e) {
-      Alert.alert('提交失败', '无法提交上传任务，请稍后重试');
+      Alert.alert(
+        t('albumWorkbench.dialogs.submitFailed.title'),
+        t('albumWorkbench.dialogs.submitFailed.body'),
+      );
       console.warn('[AlbumWorkbench] submitManualUpload error:', e);
     } finally {
       setUploading(false);
@@ -528,7 +562,9 @@ export function AlbumWorkbenchScreen() {
     loadAssets,
     mediaFilter,
     transferFilter,
+    collectionId,
     loadStats,
+    t,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -541,12 +577,15 @@ export function AlbumWorkbenchScreen() {
       if (autoUploadConfig.state === 'active') {
         // active → interrupted: show confirmation dialog per PRD
         Alert.alert(
-          '关闭自动上传',
-          '确认关闭自动上传？关闭后新素材将不再自动传输到 PC 端。',
+          t('albumWorkbench.dialogs.closeAuto.title'),
+          t('albumWorkbench.dialogs.closeAuto.body'),
           [
-            { text: '继续上传', style: 'cancel' },
             {
-              text: '确认关闭',
+              text: t('albumWorkbench.dialogs.closeAuto.keepUploading'),
+              style: 'cancel',
+            },
+            {
+              text: t('albumWorkbench.dialogs.closeAuto.confirm'),
               style: 'destructive',
               onPress: async () => {
                 try {
@@ -554,7 +593,10 @@ export function AlbumWorkbenchScreen() {
                   await loadConfig();
                 } catch (e) {
                   console.warn('[AlbumWorkbench] interruptAutoUpload error:', e);
-                  Alert.alert('操作失败', '关闭自动上传失败，请重试');
+                  Alert.alert(
+                    t('albumWorkbench.dialogs.closeAutoFailed.title'),
+                    t('albumWorkbench.dialogs.closeAutoFailed.body'),
+                  );
                 }
               },
             },
@@ -573,18 +615,27 @@ export function AlbumWorkbenchScreen() {
               (binding.connectionState !== 'connected' &&
                 binding.connectionState !== 'bound')
             ) {
-              Alert.alert('无法开启', '请先连接设备');
+              Alert.alert(
+                t('albumWorkbench.dialogs.cannotEnable.title'),
+                t('albumWorkbench.dialogs.cannotEnable.notConnected'),
+              );
               return;
             }
           } catch {
-            Alert.alert('无法开启', '请先连接设备');
+            Alert.alert(
+              t('albumWorkbench.dialogs.cannotEnable.title'),
+              t('albumWorkbench.dialogs.cannotEnable.notConnected'),
+            );
             return;
           }
           if (
             autoUploadConfig.timeRangeMode === 'custom' &&
             !autoUploadConfig.customTimeFrom
           ) {
-            Alert.alert('配置不完整', '请先设置自定义时间点');
+            Alert.alert(
+              t('albumWorkbench.dialogs.configIncomplete.title'),
+              t('albumWorkbench.dialogs.configIncomplete.body'),
+            );
             return;
           }
         }
@@ -595,12 +646,12 @@ export function AlbumWorkbenchScreen() {
             await NativeModules.NativeSyncEngine?.getSyncOverview();
           if (hasPendingManualWork(syncData)) {
             Alert.alert(
-              '切换上传模式',
-              '当前正在上传，继续自动上传将中断手动上传，是否继续？',
+              t('albumWorkbench.dialogs.switchUploadMode.title'),
+              t('albumWorkbench.dialogs.switchUploadMode.body'),
               [
-                { text: '取消', style: 'cancel' },
+                { text: t('common.cancel'), style: 'cancel' },
                 {
-                  text: '确认切换',
+                  text: t('albumWorkbench.dialogs.switchUploadMode.confirm'),
                   onPress: async () => {
                     try {
                       await cancelAllManualUploads();
@@ -609,7 +660,10 @@ export function AlbumWorkbenchScreen() {
                       await loadConfig();
                     } catch (e) {
                       console.warn('[AlbumWorkbench] enableAutoUpload error:', e);
-                      Alert.alert('操作失败', '自动上传开启失败，请重试');
+                      Alert.alert(
+                        t('albumWorkbench.dialogs.enableAutoFailed.title'),
+                        t('albumWorkbench.dialogs.enableAutoFailed.body'),
+                      );
                     }
                   },
                 },
@@ -628,9 +682,12 @@ export function AlbumWorkbenchScreen() {
       await loadConfig();
     } catch (e) {
       console.warn('[AlbumWorkbench] toggleAutoUpload error:', e);
-      Alert.alert('操作失败', '自动上传状态切换失败，请重试');
+      Alert.alert(
+        t('albumWorkbench.dialogs.toggleAutoFailed.title'),
+        t('albumWorkbench.dialogs.toggleAutoFailed.body'),
+      );
     }
-  }, [autoUploadConfig, loadConfig]);
+  }, [autoUploadConfig, loadConfig, t]);
 
   const handleConfigChange = useCallback(
     async (
@@ -653,7 +710,10 @@ export function AlbumWorkbenchScreen() {
 
       // Empty customTimeFrom should not be saved
       if (key === 'customTimeFrom' && (value === '' || !value)) {
-        Alert.alert('配置不完整', '请先设置自定义时间点');
+        Alert.alert(
+          t('albumWorkbench.dialogs.configIncomplete.title'),
+          t('albumWorkbench.dialogs.configIncomplete.body'),
+        );
         return;
       }
 
@@ -663,10 +723,13 @@ export function AlbumWorkbenchScreen() {
         await loadConfig();
       } catch (e) {
         console.warn('[AlbumWorkbench] saveConfig error:', e);
-        Alert.alert('保存失败', '自动上传配置保存失败，请重试');
+        Alert.alert(
+          t('albumWorkbench.dialogs.saveConfigFailed.title'),
+          t('albumWorkbench.dialogs.saveConfigFailed.body'),
+        );
       }
     },
-    [autoUploadConfig, loadConfig],
+    [autoUploadConfig, loadConfig, t],
   );
 
   // ---------------------------------------------------------------------------
@@ -771,7 +834,9 @@ export function AlbumWorkbenchScreen() {
           {/* Queued badge */}
           {item.isQueued && !item.isTransferred && (
             <View style={styles.queuedBadge}>
-              <Text style={styles.queuedBadgeText}>排队中</Text>
+              <Text style={styles.queuedBadgeText}>
+                {t('albumWorkbench.badges.queued')}
+              </Text>
             </View>
           )}
           {/* Video indicator */}
@@ -829,16 +894,22 @@ export function AlbumWorkbenchScreen() {
                 {formatBytes(item.fileSize)}
               </Text>
               <Text style={styles.listFileType}>
-                {item.mediaType === 'video' ? '视频' : '图片'}
+                {item.mediaType === 'video'
+                  ? t('albumWorkbench.mediaTypes.video')
+                  : t('albumWorkbench.mediaTypes.photo')}
               </Text>
               {item.isTransferred && (
                 <View style={styles.listTransferredBadge}>
                   <Icon name="checkmark" size={10} color="#22c55e" />
-                  <Text style={styles.listTransferredText}>已传</Text>
+                  <Text style={styles.listTransferredText}>
+                    {t('albumWorkbench.badges.transferred')}
+                  </Text>
                 </View>
               )}
               {item.isQueued && !item.isTransferred && (
-                <Text style={styles.listQueuedText}>排队中</Text>
+                <Text style={styles.listQueuedText}>
+                  {t('albumWorkbench.badges.queued')}
+                </Text>
               )}
             </View>
           </View>
@@ -870,11 +941,15 @@ export function AlbumWorkbenchScreen() {
   const isAutoUploadActive = autoUploadConfig?.state === 'active';
 
   // Derive custom time display string for summary card
-  const timeRangeDisplayLabel = autoUploadConfig
-    ? TIME_RANGE_OPTIONS.find(o => o.key === autoUploadConfig.timeRangeMode)
-        ?.label ?? '全部'
-    : '全部';
-  const emptyStateCopy = getEmptyStateCopy(unifiedFilter);
+  const timeRangeDisplayLabel = (() => {
+    const fallback = t('albumWorkbench.timeFilters.all');
+    if (!autoUploadConfig) return fallback;
+    const match = TIME_RANGE_OPTIONS.find(
+      o => o.key === autoUploadConfig.timeRangeMode,
+    );
+    return match ? t(match.labelKey) : fallback;
+  })();
+  const emptyStateCopy = getEmptyStateCopy(unifiedFilter, t);
 
   // FlatList header: config card + stats bar + filter tabs
   const renderListHeader = () => (
@@ -890,7 +965,9 @@ export function AlbumWorkbenchScreen() {
           >
             <View style={styles.configTitleRow}>
               <Image source={IC_AUTO_UPLOAD} style={styles.configTitleIcon} />
-              <Text style={styles.configTitle}>自动上传</Text>
+              <Text style={styles.configTitle}>
+                {t('albumWorkbench.config.sectionTitle')}
+              </Text>
               <View
                 style={[
                   styles.configStateBadge,
@@ -907,7 +984,9 @@ export function AlbumWorkbenchScreen() {
                       : styles.configStateTextDisabled,
                   ]}
                 >
-                  {isAutoUploadActive ? '已开启' : '已关闭'}
+                  {isAutoUploadActive
+                    ? t('albumWorkbench.config.stateOn')
+                    : t('albumWorkbench.config.stateOff')}
                 </Text>
               </View>
             </View>
@@ -939,7 +1018,7 @@ export function AlbumWorkbenchScreen() {
                     !isAutoUploadActive && !deviceConnected && styles.configLabelDisabled,
                   ]}
                 >
-                {'自动上传'}
+                  {t('albumWorkbench.config.toggleLabel')}
                 </Text>
                 <View
                   style={[
@@ -959,7 +1038,9 @@ export function AlbumWorkbenchScreen() {
 
               {/* Time range */}
               <View style={styles.configGroup}>
-                <Text style={styles.configGroupLabel}>时间范围</Text>
+                <Text style={styles.configGroupLabel}>
+                  {t('albumWorkbench.config.timeRangeLabel')}
+                </Text>
                 <View style={styles.configChips}>
                   {TIME_RANGE_OPTIONS.map(opt => (
                     <TouchableOpacity
@@ -981,7 +1062,7 @@ export function AlbumWorkbenchScreen() {
                             styles.configChipTextActive,
                         ]}
                       >
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -1003,8 +1084,8 @@ export function AlbumWorkbenchScreen() {
                   >
                     <Text style={styles.customTimeText}>
                       {autoUploadConfig.customTimeFrom
-                        ? formatCustomTime(autoUploadConfig.customTimeFrom)
-                        : '点击设置时间'}
+                        ? formatCustomTime(autoUploadConfig.customTimeFrom, t)
+                        : t('albumWorkbench.actions.pickTime')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1041,23 +1122,29 @@ export function AlbumWorkbenchScreen() {
                   ))}
                   <View style={styles.summaryDot} />
                 </View>
-              <Text style={styles.summaryTitle}>自动上传已开启</Text>
+              <Text style={styles.summaryTitle}>
+                {t('albumWorkbench.summary.title')}
+              </Text>
               </View>
               <Text style={styles.summarySubtitle}>
-                等待新素材时会自动传输到 PC 端
+                {t('albumWorkbench.summary.subtitle')}
               </Text>
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryGridItem}>
-                  <Text style={styles.summaryGridLabel}>本次已传</Text>
+                  <Text style={styles.summaryGridLabel}>
+                    {t('albumWorkbench.summary.transferredThisRound')}
+                  </Text>
                   <Text style={styles.summaryGridValue}>
                     <Text style={styles.summaryGridNumber}>
                       {stats.transferredCount}
                     </Text>{' '}
-                    个
+                    {t('albumWorkbench.summary.unitCount')}
                   </Text>
                 </View>
                 <View style={styles.summaryGridItem}>
-                  <Text style={styles.summaryGridLabel}>待上传</Text>
+                  <Text style={styles.summaryGridLabel}>
+                    {t('albumWorkbench.summary.pending')}
+                  </Text>
                   <Text style={styles.summaryGridValue}>
                     <Text style={styles.summaryGridNumberOrange}>
                       {Math.max(
@@ -1067,20 +1154,24 @@ export function AlbumWorkbenchScreen() {
                           stats.queuedCount,
                       ) + stats.queuedCount}
                     </Text>{' '}
-                    个
+                    {t('albumWorkbench.summary.unitCount')}
                   </Text>
                 </View>
                 <View style={styles.summaryGridItem}>
-                  <Text style={styles.summaryGridLabel}>素材总数</Text>
+                  <Text style={styles.summaryGridLabel}>
+                    {t('albumWorkbench.summary.totalAssets')}
+                  </Text>
                   <Text style={styles.summaryGridValue}>
                     <Text style={styles.summaryGridNumberDark}>
                       {stats.totalCount}
                     </Text>{' '}
-                    个
+                    {t('albumWorkbench.summary.unitCount')}
                   </Text>
                 </View>
                 <View style={styles.summaryGridItem}>
-                  <Text style={styles.summaryGridLabel}>时间范围</Text>
+                  <Text style={styles.summaryGridLabel}>
+                    {t('albumWorkbench.summary.timeRange')}
+                  </Text>
                   <Text style={[styles.summaryGridValue, { color: BLUE }]}>
                     {timeRangeDisplayLabel}
                   </Text>
@@ -1096,19 +1187,25 @@ export function AlbumWorkbenchScreen() {
         <View style={styles.statsBar}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{stats.totalCount}</Text>
-            <Text style={styles.statLabel}>总数</Text>
+            <Text style={styles.statLabel}>
+              {t('albumWorkbench.stats.total')}
+            </Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{selectedIds.size}</Text>
-            <Text style={styles.statLabel}>已选</Text>
+            <Text style={styles.statLabel}>
+              {t('albumWorkbench.stats.selected')}
+            </Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: '#22c55e' }]}>
               {stats.transferredCount}
             </Text>
-            <Text style={styles.statLabel}>已传</Text>
+            <Text style={styles.statLabel}>
+              {t('albumWorkbench.stats.transferred')}
+            </Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -1120,7 +1217,9 @@ export function AlbumWorkbenchScreen() {
                   stats.queuedCount,
               )}
             </Text>
-            <Text style={styles.statLabel}>新增</Text>
+            <Text style={styles.statLabel}>
+              {t('albumWorkbench.stats.new')}
+            </Text>
           </View>
         </View>
       )}
@@ -1145,7 +1244,7 @@ export function AlbumWorkbenchScreen() {
                     unifiedFilter === tab.key && styles.filterTabTextActive,
                   ]}
                 >
-                  {tab.label}
+                  {t(tab.labelKey)}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1195,9 +1294,11 @@ export function AlbumWorkbenchScreen() {
       return (
         <View style={styles.emptyContainer}>
           <Icon name="images-outline" size={48} color="#b0c8da" />
-          <Text style={styles.emptyText}>尚未选择照片</Text>
+          <Text style={styles.emptyText}>
+            {t('albumWorkbench.emptyStates.limitedAccess.title')}
+          </Text>
           <Text style={styles.emptySubText}>
-            当前为「限制访问」模式，请选择要授权的照片
+            {t('albumWorkbench.emptyStates.limitedAccess.subtitle')}
           </Text>
           <TouchableOpacity
             style={styles.limitedPickerButton}
@@ -1205,7 +1306,9 @@ export function AlbumWorkbenchScreen() {
             onPress={() => void presentLimitedPhotoPicker()}
           >
             <Icon name="add-circle-outline" size={16} color="#fff" />
-            <Text style={styles.limitedPickerButtonText}>选择照片</Text>
+            <Text style={styles.limitedPickerButtonText}>
+              {t('albumWorkbench.emptyStates.limitedAccess.selectPhotos')}
+            </Text>
           </TouchableOpacity>
         </View>
       );
@@ -1232,7 +1335,7 @@ export function AlbumWorkbenchScreen() {
           <Icon name="chevron-back" size={22} color={DARK} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {collectionTitle ?? '相册'}
+          {collectionTitle ?? t('albumWorkbench.title')}
         </Text>
         <TouchableOpacity
           style={styles.headerFilterBtn}
@@ -1247,7 +1350,7 @@ export function AlbumWorkbenchScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BLUE} />
-          <Text style={styles.loadingText}>正在加载相册...</Text>
+          <Text style={styles.loadingText}>{t('albumWorkbench.loading')}</Text>
         </View>
       ) : viewMode === 'grid' ? (
         <FlatList
@@ -1312,10 +1415,12 @@ export function AlbumWorkbenchScreen() {
           ]}
         >
           {isAutoUploadActive
-            ? '自动上传中，手动上传不可用'
+            ? t('albumWorkbench.selectionHint.autoActiveLock')
             : selectedIds.size > 0
-              ? `已选 ${selectedIds.size} 个素材`
-              : '未选择素材'}
+              ? t('albumWorkbench.selectedCount', {
+                  count: selectedIds.size,
+                })
+              : t('albumWorkbench.selectionHint.none')}
         </Text>
         <TouchableOpacity
           style={[
@@ -1330,7 +1435,9 @@ export function AlbumWorkbenchScreen() {
           {uploading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.uploadButtonText}>开始上传</Text>
+            <Text style={styles.uploadButtonText}>
+              {t('albumWorkbench.actions.startUpload')}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -1348,14 +1455,20 @@ export function AlbumWorkbenchScreen() {
                 activeOpacity={0.7}
                 onPress={() => setShowDatePicker(false)}
               >
-                <Text style={styles.datePickerCancel}>取消</Text>
+                <Text style={styles.datePickerCancel}>
+                  {t('albumWorkbench.datePicker.cancel')}
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.datePickerTitle}>选择时间</Text>
+              <Text style={styles.datePickerTitle}>
+                {t('albumWorkbench.datePicker.title')}
+              </Text>
               <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handleDatePickerConfirm}
               >
-                <Text style={styles.datePickerConfirm}>确认</Text>
+                <Text style={styles.datePickerConfirm}>
+                  {t('albumWorkbench.datePicker.confirm')}
+                </Text>
               </TouchableOpacity>
             </View>
             <DateTimePicker
@@ -1392,7 +1505,9 @@ export function AlbumWorkbenchScreen() {
               >
                 <Icon name="chevron-back" size={20} color={DARK} />
               </TouchableOpacity>
-              <Text style={styles.collectionSheetTitle}>选择相册</Text>
+              <Text style={styles.collectionSheetTitle}>
+                {t('albumWorkbench.collectionSheet.title')}
+              </Text>
               <View style={{ width: 22 }} />
             </View>
 
@@ -1413,7 +1528,9 @@ export function AlbumWorkbenchScreen() {
                     activeOpacity={0.7}
                     onPress={() => handleSelectCollection(null, null)}
                   >
-                    <Text style={styles.collectionName}>全部照片</Text>
+                    <Text style={styles.collectionName}>
+                      {t('albumWorkbench.collectionSheet.allPhotos')}
+                    </Text>
                     <View style={styles.collectionRowRight}>
                       <Text style={styles.collectionCount}>
                         {collectionTotalCount}

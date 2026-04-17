@@ -1,6 +1,20 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { Animated, NativeModules, Text } from 'react-native';
+
+jest.mock('react-native-localize', () => ({
+  getLocales: () => [
+    {
+      languageCode: 'zh',
+      scriptCode: 'Hans',
+      countryCode: 'CN',
+      languageTag: 'zh-Hans-CN',
+      isRTL: false,
+    },
+  ],
+}));
+
+import i18n from '../../i18n';
 import { AlbumWorkbenchScreen } from '../AlbumWorkbenchScreen';
 
 const mockedBrowseAlbum = jest.fn();
@@ -44,6 +58,10 @@ jest.mock('../../components/Icon', () => ({
 }));
 
 describe('AlbumWorkbenchScreen', () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage('zh');
+  });
+
   beforeEach(() => {
     jest.restoreAllMocks();
     jest.spyOn(Animated, 'loop').mockReturnValue({
