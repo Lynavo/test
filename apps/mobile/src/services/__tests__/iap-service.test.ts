@@ -286,3 +286,129 @@ describe('iapService — orphan recovery', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 });
+
+import { getAvailablePurchases } from 'react-native-iap';
+
+describe('iapService — restore', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (purchaseUpdatedListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    await iapService.initialize();
+  });
+
+  afterEach(async () => {
+    await iapService.teardown();
+  });
+
+  test('empty availablePurchases → returns []', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([]);
+    const res = await iapService.restore();
+    expect(res).toEqual([]);
+  });
+
+  test('all verify succeed → returns N receipts and finishes each', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'R1',
+        transactionId: 'tx_1',
+      },
+      {
+        productId: IAP_PRODUCTS.yearly,
+        transactionReceipt: 'R2',
+        transactionId: 'tx_2',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock).mockResolvedValue(undefined);
+
+    const res = await iapService.restore();
+
+    expect(res).toHaveLength(2);
+    expect(finishTxMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('2002 counts as success + finishes', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'R1',
+        transactionId: 'tx_1',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.RECEIPT_ALREADY_USED, 'used'),
+    );
+
+    const res = await iapService.restore();
+
+    expect(res).toHaveLength(1);
+    expect(finishTxMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('2003 is skipped (not counted, no finish)', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'R1',
+        transactionId: 'tx_1',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+    );
+
+    const res = await iapService.restore();
+    expect(res).toHaveLength(0);
+    expect(finishTxMock).not.toHaveBeenCalled();
+  });
+
+  test('network failure for one does not finish that one', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'R1',
+        transactionId: 'tx_1',
+      },
+      {
+        productId: IAP_PRODUCTS.yearly,
+        transactionReceipt: 'R2',
+        transactionId: 'tx_2',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(new ApiError(ERROR_CODE.NETWORK_ERROR, 'net'))
+      .mockResolvedValueOnce(undefined);
+
+    const res = await iapService.restore();
+    expect(res).toHaveLength(1); // only yearly succeeded
+    expect(finishTxMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('caps at MAX_RESTORE_RECEIPTS=10', async () => {
+    const purchases = Array.from({ length: 15 }, (_, i) => ({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: `R${i}`,
+      transactionId: `tx_${i}`,
+    }));
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce(purchases);
+    (verifyIapReceipt as jest.Mock).mockResolvedValue(undefined);
+
+    await iapService.restore();
+    expect(verifyIapReceipt).toHaveBeenCalledTimes(10);
+  });
+
+  test('skips purchases with empty transactionReceipt', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: '',
+        transactionId: 'tx_def',
+      },
+    ]);
+
+    const res = await iapService.restore();
+    expect(res).toEqual([]);
+    expect(verifyIapReceipt).not.toHaveBeenCalled();
+  });
+});

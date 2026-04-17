@@ -5,6 +5,7 @@ import {
   purchaseErrorListener,
   requestSubscription,
   finishTransaction as rnFinishTransaction,
+  getAvailablePurchases,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
@@ -12,6 +13,8 @@ import { type EmitterSubscription } from 'react-native';
 import { type IapProductId, productIdToPlan } from '../constants/iap';
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
+
+const MAX_RESTORE_RECEIPTS = 10;
 
 export interface PurchaseReceipt {
   transactionReceipt: string;
@@ -94,7 +97,46 @@ class IapServiceImpl implements IapService {
   }
 
   async restore(): Promise<PurchaseReceipt[]> {
-    throw new Error('restore() not implemented yet');
+    if (!this.initialized) {
+      throw new Error('iapService.initialize() must be called before restore()');
+    }
+    const purchases = await getAvailablePurchases();
+    const slice = purchases.slice(0, MAX_RESTORE_RECEIPTS);
+    const out: PurchaseReceipt[] = [];
+
+    for (const p of slice) {
+      if (!p.transactionReceipt) continue;
+      const plan = productIdToPlan(p.productId);
+      if (!plan) continue;
+      const txId = p.transactionId ?? '';
+
+      try {
+        await verifyIapReceipt(p.transactionReceipt, plan);
+        await this.finishTransaction(txId).catch(() => {});
+        out.push({
+          productId: p.productId as IapProductId,
+          transactionReceipt: p.transactionReceipt,
+          transactionId: txId,
+        });
+      } catch (err) {
+        if (err instanceof ApiError) {
+          if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
+            await this.finishTransaction(txId).catch(() => {});
+            out.push({
+              productId: p.productId as IapProductId,
+              transactionReceipt: p.transactionReceipt,
+              transactionId: txId,
+            });
+            continue;
+          }
+          if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {
+            continue;
+          }
+        }
+        // Other errors: skip, do not finish — next launch may retry via orphan.
+      }
+    }
+    return out;
   }
   async finishTransaction(transactionId: string): Promise<void> {
     // react-native-iap v12 accepts either a Purchase object or transactionId
