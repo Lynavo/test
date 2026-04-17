@@ -1,0 +1,17 @@
+{
+  "common": {
+    "ok": "好",
+    "cancel": "取消",
+    "confirm": "确认",
+    "back": "返回",
+    "retry": "重试",
+    "loading": "加载中",
+    "unknownVersion": "未知版本"
+  },
+  "errors": {
+    "title": "错误",
+    "unknown": "发生未知错误",
+    "networkUnavailable": "网络不可用",
+    "sidecarUnreachable": "无法连接到桌面端"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "retry": "Retry",
+    "loading": "Loading",
+    "unknownVersion": "Unknown version"
+  },
+  "errors": {
+    "title": "Error",
+    "unknown": "An unknown error occurred",
+    "networkUnavailable": "Network unavailable",
+    "sidecarUnreachable": "Cannot reach the desktop app"
+  }
+}
