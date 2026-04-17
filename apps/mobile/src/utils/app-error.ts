@@ -5,6 +5,7 @@ export class AppError extends Error {
   ) {
     super(code);
     this.name = 'AppError';
+    // Restore prototype chain so `instanceof AppError` works on Hermes/JSC.
     Object.setPrototypeOf(this, AppError.prototype);
   }
 }
