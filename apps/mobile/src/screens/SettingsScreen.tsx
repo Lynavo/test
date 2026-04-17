@@ -109,13 +109,6 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
   });
 }
 
-function maskPhone(phone: string | undefined, t: TFunction): string {
-  if (!phone) return t('settings.status.notBound');
-  if (phone.length >= 7) {
-    return phone.slice(0, 3) + '****' + phone.slice(-4);
-  }
-  return phone;
-}
 
 // ---------------------------------------------------------------------------
 // SettingsScreen
@@ -724,7 +717,7 @@ export function SettingsScreen() {
               <Text style={styles.infoRowLabel}>{t('settings.rows.currentAccount')}</Text>
             </View>
             <Text style={styles.infoRowValue}>
-              {maskPhone(auth.user?.phone, t)}
+              {auth.user?.primaryIdentity?.display ?? ''}
             </Text>
           </View>
           <View style={styles.listSep} />

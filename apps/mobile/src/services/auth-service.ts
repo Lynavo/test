@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPostNoAuth } from './api';
+import { apiDelete, apiGet, apiPost, apiPostNoAuth } from './api';
 import type { UserProfile } from '../stores/auth-store';
 
 // ---------------------------------------------------------------------------
@@ -44,12 +44,13 @@ interface SmsLoginResponse {
   access_token: string;
   refresh_token: string;
   is_new_user: boolean;
+  merged: boolean;
 }
 
 export async function smsLogin(
   phone: string,
   code: string,
-): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean }> {
+): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean; merged: boolean }> {
   const data = await apiPostNoAuth<SmsLoginResponse>('/auth/sms/login', {
     phone,
     code,
@@ -58,6 +59,7 @@ export async function smsLogin(
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     isNewUser: data.is_new_user,
+    merged: data.merged,
   };
 }
 
@@ -94,9 +96,15 @@ export async function logout(refreshToken: string): Promise<void> {
 // User profile
 // ---------------------------------------------------------------------------
 
+interface IdentityDescriptorWire {
+  type: string;
+  display: string;
+}
+
 interface UserProfileResponse {
   id: number;
-  phone: string;
+  primary_identity: IdentityDescriptorWire | null;
+  identities: IdentityDescriptorWire[] | null;
   status: string;
   plan: string;
   expire_at: string | null;
@@ -107,10 +115,75 @@ export async function getUserProfile(): Promise<UserProfile> {
   const data = await apiGet<UserProfileResponse>('/user/profile');
   return {
     id: data.id,
-    phone: data.phone,
+    primaryIdentity: data.primary_identity,
+    identities: data.identities ?? [],
     status: data.status as UserProfile['status'],
     plan: (data.plan || '') as UserProfile['plan'],
     expireAt: data.expire_at,
     trialEnd: data.trial_end,
   };
+}
+
+// ---------------------------------------------------------------------------
+// New auth methods (email, Apple, Google, account deletion)
+// ---------------------------------------------------------------------------
+
+interface AuthLoginResponse {
+  access_token: string;
+  refresh_token: string;
+  is_new_user: boolean;
+  merged: boolean;
+}
+
+export async function sendEmailCode(email: string): Promise<void> {
+  await apiPostNoAuth<Record<string, never>>('/auth/email/send', { email });
+}
+
+export async function emailLogin(
+  email: string,
+  code: string,
+): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean; merged: boolean }> {
+  const data = await apiPostNoAuth<AuthLoginResponse>('/auth/email/login', { email, code });
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    isNewUser: data.is_new_user,
+    merged: data.merged,
+  };
+}
+
+export async function appleLogin(args: {
+  identityToken: string;
+  authorizationCode?: string;
+  fullName?: string;
+}): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean; merged: boolean }> {
+  const data = await apiPostNoAuth<AuthLoginResponse>('/auth/apple/login', {
+    identity_token: args.identityToken,
+    authorization_code: args.authorizationCode,
+    full_name: args.fullName,
+  });
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    isNewUser: data.is_new_user,
+    merged: data.merged,
+  };
+}
+
+export async function googleLogin(
+  identityToken: string,
+): Promise<{ accessToken: string; refreshToken: string; isNewUser: boolean; merged: boolean }> {
+  const data = await apiPostNoAuth<AuthLoginResponse>('/auth/google/login', {
+    identity_token: identityToken,
+  });
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    isNewUser: data.is_new_user,
+    merged: data.merged,
+  };
+}
+
+export async function deleteAccount(): Promise<void> {
+  await apiDelete<Record<string, never>>('/user/account', { confirm: 'DELETE' });
 }

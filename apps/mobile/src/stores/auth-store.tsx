@@ -11,9 +11,15 @@ import { ApiError, ERROR_CODE } from '../services/api';
 export type AccountStatus = 'trialing' | 'subscribed' | 'trial_expired' | 'sub_expired';
 export type SubscriptionPlan = 'monthly' | 'ten_month' | '';
 
+export interface IdentityDescriptor {
+  type: string;   // 'phone_cn' | 'email' | 'apple' | 'google'
+  display: string; // server-side masked
+}
+
 export interface UserProfile {
   id: number;
-  phone: string;
+  primaryIdentity: IdentityDescriptor | null;
+  identities: IdentityDescriptor[];
   status: AccountStatus;
   plan: SubscriptionPlan;
   expireAt: string | null;

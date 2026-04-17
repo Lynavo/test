@@ -21,6 +21,14 @@ export const ERROR_CODE = {
   TOKEN_INVALID: 1006,
   REFRESH_TOKEN_INVALID: 1007,
   TOO_MANY_CODE_ATTEMPTS: 1008,
+  EMAIL_FORMAT_INVALID: 1101,
+  APPLE_TOKEN_INVALID: 1102,
+  GOOGLE_TOKEN_INVALID: 1103,
+  EMAIL_CODE_WRONG: 1104,
+  EMAIL_CODE_EXPIRED: 1105,
+  IDENTITY_CONFLICT: 1106,
+  ACCOUNT_DELETED: 1107,
+  DELETE_CONFIRM_INVALID: 1108,
   IAP_VERIFY_FAILED: 2001,
   RECEIPT_ALREADY_USED: 2002,
   PRODUCT_ID_MISMATCH: 2003,
@@ -105,7 +113,7 @@ async function fetchWithTimeout(
 }
 
 async function request<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   path: string,
   body?: unknown,
   options: RequestOptions = {},
@@ -263,6 +271,14 @@ export async function apiPost<T>(
 
 export async function apiPostNoAuth<T>(path: string, body?: unknown): Promise<T> {
   return request<T>('POST', path, body, { skipAuth: true });
+}
+
+export async function apiDelete<T>(
+  path: string,
+  body?: unknown,
+  options?: RequestOptions,
+): Promise<T> {
+  return request<T>('DELETE', path, body, options);
 }
 
 export type { RequestOptions };
