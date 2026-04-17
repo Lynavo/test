@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
@@ -32,6 +33,7 @@ type LoginNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 export function LoginScreen() {
   const navigation = useNavigation<LoginNavProp>();
+  const { t } = useTranslation();
 
   const [phone, setPhone] = useState('');
   const [agreed, setAgreed] = useState(false);
@@ -57,7 +59,7 @@ export function LoginScreen() {
     setHasTouched(true);
 
     if (digits.length > 0 && digits.length === 11 && !isValidChinaPhone(digits)) {
-      setPhoneError('请输入正确的手机号码');
+      setPhoneError(t('auth.login.phoneInvalidSimplified'));
     } else {
       setPhoneError(null);
     }
@@ -65,7 +67,7 @@ export function LoginScreen() {
 
   const handlePhoneBlur = useCallback(() => {
     if (hasTouched && phone.length > 0 && !isValidChinaPhone(phone)) {
-      setPhoneError('请输入正确的手机号码');
+      setPhoneError(t('auth.login.phoneInvalidSimplified'));
     }
   }, [hasTouched, phone]);
 
@@ -86,22 +88,22 @@ export function LoginScreen() {
       if (err instanceof ApiError) {
         switch (err.code) {
           case ERROR_CODE.PHONE_FORMAT_INVALID:
-            setPhoneError('手機號碼格式不正確');
+            setPhoneError(t('auth.login.phoneInvalidTraditional'));
             break;
           case ERROR_CODE.SMS_TOO_FREQUENT:
-            Alert.alert('發送過於頻繁', '請稍後再試');
+            Alert.alert(t('errors.authSendTooFrequent'), t('errors.authTryLater'));
             break;
           case ERROR_CODE.SMS_SEND_FAILED:
-            Alert.alert('發送失敗', '驗證碼發送失敗，請稍後重試');
+            Alert.alert(t('errors.authSendFailed'), t('errors.authSendFailedRetry'));
             break;
           case ERROR_CODE.RATE_LIMITED:
-            Alert.alert('請求過於頻繁', '請稍後再試');
+            Alert.alert(t('errors.authRequestTooFrequent'), t('errors.authTryLater'));
             break;
           default:
-            Alert.alert('發送失敗', err.message || '未知錯誤');
+            Alert.alert(t('errors.authSendFailed'), err.message || t('errors.unknown'));
         }
       } else {
-        Alert.alert('網路錯誤', '請檢查網路連線後重試');
+        Alert.alert(t('errors.networkTitle'), t('errors.networkCheckConnection'));
       }
     }
   }, [buttonEnabled, phone, navigation]);
@@ -119,9 +121,9 @@ export function LoginScreen() {
   // -----------------------------------------------------------------------
 
   return (
-    <AuthScreenShell subtitle="手機號快捷登入">
+    <AuthScreenShell subtitle={t('auth.login.subtitle')}>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>首次登入將自動註冊帳號</Text>
+        <Text style={styles.cardTitle}>{t('auth.login.firstLoginHint')}</Text>
 
         <View style={styles.fieldWrap}>
           <View
@@ -146,7 +148,7 @@ export function LoginScreen() {
               onBlur={handlePhoneBlur}
               keyboardType="phone-pad"
               maxLength={11}
-              placeholder="請輸入手機號碼"
+              placeholder={t('auth.login.phonePlaceholder')}
               placeholderTextColor={AUTH_COLORS.textFaint}
               editable={!sending}
               returnKeyType="done"
@@ -169,13 +171,13 @@ export function LoginScreen() {
             ) : null}
           </View>
           <Text style={styles.agreementText}>
-            我已閱讀並同意
+            {t('auth.login.agreePrefix')}
             <Text style={styles.linkText} onPress={handleOpenUserAgreement}>
-              《使用者協議》
+              {t('auth.login.termsOfService')}
             </Text>
-            與
+            {t('auth.login.agreeConjunction')}
             <Text style={styles.linkText} onPress={handleOpenPrivacyPolicy}>
-              《隱私政策》
+              {t('auth.login.privacyPolicy')}
             </Text>
           </Text>
         </TouchableOpacity>
@@ -197,7 +199,7 @@ export function LoginScreen() {
               !buttonEnabled ? styles.sendButtonTextDisabled : null,
             ]}
           >
-            {sending ? '發送中...' : '獲取驗證碼'}
+            {sending ? t('auth.login.requesting') : t('auth.login.requestCode')}
           </Text>
         </TouchableOpacity>
       </View>

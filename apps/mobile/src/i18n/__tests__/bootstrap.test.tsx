@@ -58,10 +58,11 @@ describe('i18n bootstrap', () => {
 
     // Cast through unknown to bypass typed-key enforcement — the key is intentionally
     // outside the zh schema to exercise the fallbackLng path.
-    const key = 'common.onlyInEn' as unknown as Parameters<typeof i18n.t>[0];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tAny = i18n.t.bind(i18n) as (key: string) => string;
     const { getByTestId } = render(
       <I18nextProvider i18n={i18n}>
-        <Text testID="demo">{i18n.t(key)}</Text>
+        <Text testID="demo">{tAny('common.onlyInEn')}</Text>
       </I18nextProvider>,
     );
     expect(getByTestId('demo').props.children).toBe('Only in EN');

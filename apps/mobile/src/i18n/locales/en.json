@@ -12,6 +12,29 @@
     "title": "Error",
     "unknown": "An unknown error occurred",
     "networkUnavailable": "Network unavailable",
-    "sidecarUnreachable": "Cannot reach the desktop app"
+    "sidecarUnreachable": "Cannot reach the desktop app",
+    "authSendTooFrequent": "Too many requests",
+    "authSendFailed": "Send failed",
+    "authSendFailedRetry": "Failed to send verification code, please try again later",
+    "authRequestTooFrequent": "Too many requests",
+    "authTryLater": "Please try again later",
+    "networkTitle": "Network error",
+    "networkCheckConnection": "Please check your connection and try again"
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "subtitle": "Quick sign-in with phone number",
+      "firstLoginHint": "First-time sign-in will auto-register your account",
+      "phonePlaceholder": "Enter your phone number",
+      "phoneInvalidSimplified": "Please enter a valid phone number",
+      "phoneInvalidTraditional": "Phone number format is invalid",
+      "agreePrefix": "I have read and agree to the",
+      "termsOfService": "Terms of Service",
+      "agreeConjunction": "and",
+      "privacyPolicy": "Privacy Policy",
+      "requestCode": "Get code",
+      "requesting": "Sending..."
+    }
   }
 }

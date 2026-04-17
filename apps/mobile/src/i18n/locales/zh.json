@@ -12,6 +12,29 @@
     "title": "错误",
     "unknown": "发生未知错误",
     "networkUnavailable": "网络不可用",
-    "sidecarUnreachable": "无法连接到桌面端"
+    "sidecarUnreachable": "无法连接到桌面端",
+    "authSendTooFrequent": "發送過於頻繁",
+    "authSendFailed": "發送失敗",
+    "authSendFailedRetry": "驗證碼發送失敗，請稍後重試",
+    "authRequestTooFrequent": "請求過於頻繁",
+    "authTryLater": "請稍後再試",
+    "networkTitle": "網路錯誤",
+    "networkCheckConnection": "請檢查網路連線後重試"
+  },
+  "auth": {
+    "login": {
+      "title": "登录",
+      "subtitle": "手機號快捷登入",
+      "firstLoginHint": "首次登入將自動註冊帳號",
+      "phonePlaceholder": "請輸入手機號碼",
+      "phoneInvalidSimplified": "请输入正确的手机号码",
+      "phoneInvalidTraditional": "手機號碼格式不正確",
+      "agreePrefix": "我已閱讀並同意",
+      "termsOfService": "《使用者協議》",
+      "agreeConjunction": "與",
+      "privacyPolicy": "《隱私政策》",
+      "requestCode": "獲取驗證碼",
+      "requesting": "發送中..."
+    }
   }
 }
