@@ -3,10 +3,10 @@ import {
   endConnection,
   purchaseUpdatedListener,
   purchaseErrorListener,
-  type EmitterSubscription,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
+import { type EmitterSubscription } from 'react-native';
 import { type IapProductId } from '../constants/iap';
 
 export interface PurchaseReceipt {
