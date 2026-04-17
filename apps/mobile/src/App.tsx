@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './stores/auth-store';
 import { RootNavigator } from './navigation/RootNavigator';
 import { loadDebugBaseUrlOverride } from './services/config';
+import './i18n';
 
 export function App() {
   const isDarkMode = useColorScheme() === 'dark';
