@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,7 +20,7 @@ import { Icon } from '../components/Icon';
 import { useAuth } from '../stores/auth-store';
 import type { AccountStatus } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
-import { planToProductId } from '../constants/iap';
+import { IAP_PRODUCTS, planToProductId } from '../constants/iap';
 import { classifyIapError, IapErrorClass } from '../services/iap-errors';
 import { verifyIapReceipt } from '../services/subscription-service';
 import { FEATURES } from '../constants/features';
@@ -493,6 +493,28 @@ export function SubscriptionScreen() {
   const [confirmedPlan, setConfirmedPlan] = useState<PlanKey>('yearly');
   const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(null);
 
+  const [monthlyTrialEligible, setMonthlyTrialEligible] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!FEATURES.IAP_ENABLED) return;
+    let cancelled = false;
+    void iapService
+      .checkEligibility()
+      .then((results) => {
+        if (cancelled) return;
+        const monthly = results.find(
+          (r) => r.productId === IAP_PRODUCTS.monthly,
+        );
+        setMonthlyTrialEligible(monthly?.eligibleForIntroOffer ?? false);
+      })
+      .catch(() => {
+        if (!cancelled) setMonthlyTrialEligible(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const status: AccountStatus | undefined = subscription?.status ?? user?.status;
   const trialEnd = subscription?.trialEnd ?? user?.trialEnd;
 
@@ -611,9 +633,13 @@ export function SubscriptionScreen() {
         <View style={styles.planRow}>
           <PlanCard
             price="¥9.9"
-            unit={t('subscription.plans.monthly.unit')}
-            selected={false}
-            disabled
+            unit={
+              monthlyTrialEligible
+                ? t('subscription.plans.monthly.trialOffer')
+                : t('subscription.plans.monthly.subtitle')
+            }
+            selected={selectedPlan === 'monthly'}
+            disabled={false}
             onPress={() => setSelectedPlan('monthly')}
           />
           <PlanCard
