@@ -18,6 +18,12 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import {
+  useAuth,
+  isFeatureAccessAllowed,
+  getTrialRemainingDays,
+} from '../stores/auth-store';
+import { logout as serverLogout } from '../services/auth-service';
+import {
   isDiagnosticsExportUnavailable,
   shareDiagnosticsArchive,
 } from '../utils/shareDiagnosticsArchive';
@@ -47,6 +53,10 @@ const OFFLINE_SLATE = '#94a3b8';
 const OFFLINE_TEXT = '#72859a';
 const DANGER_RED = '#ef4444';
 const DANGER_BG = 'rgba(239,68,68,0.04)';
+const SUB_GREEN = '#22c55e';
+const SUB_GREEN_BG = 'rgba(34,197,94,0.12)';
+const TRIAL_PURPLE = '#8b5cf6';
+const TRIAL_PURPLE_BG = 'rgba(139,92,246,0.10)';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,12 +95,21 @@ function formatDateTimeLabel(iso?: string): string {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${time}`;
 }
 
+function maskPhone(phone?: string): string {
+  if (!phone) return '未绑定';
+  if (phone.length >= 7) {
+    return phone.slice(0, 3) + '****' + phone.slice(-4);
+  }
+  return phone;
+}
+
 // ---------------------------------------------------------------------------
 // SettingsScreen
 // ---------------------------------------------------------------------------
 
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const auth = useAuth();
   const isAndroid = Platform.OS === 'android';
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
@@ -387,6 +406,57 @@ export function SettingsScreen() {
     );
   }, [navigation]);
 
+  const handleLogout = useCallback(() => {
+    Alert.alert('退出登录', '确定要退出登录吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '确定退出',
+        style: 'destructive',
+        onPress: () => {
+          // Snapshot the refresh token before clearAuth wipes it.
+          const refresh = auth.refreshToken;
+
+          // 1) Kick off the server-side revoke FIRST so the request is
+          //    constructed while the access token is still in memory —
+          //    `request()` reads `getAccessToken()` synchronously to build
+          //    the Authorization header before its first await. We do NOT
+          //    await this; the 5s timeout inside `auth-service.logout()`
+          //    bounds how long it can run, and a slow/failed network must
+          //    never block the local logout.
+          if (refresh) {
+            void serverLogout(refresh).catch((e) => {
+              console.warn('[Settings] server logout failed (already cleared locally):', e);
+            });
+          }
+
+          // 2) Now wipe local state + navigate. After this point the in-flight
+          //    serverLogout fetch keeps the headers it captured above; the
+          //    user is logged out locally regardless of network outcome.
+          try {
+            auth.clearAuth();
+          } catch (e) {
+            console.warn('[Settings] local logout error:', e);
+          }
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            }),
+          );
+        },
+      },
+    ]);
+  }, [auth, navigation]);
+
+  // Subscription derived state
+  const userStatus = auth.user?.status;
+  const trialDays = getTrialRemainingDays(auth.user);
+  const isTrialing = userStatus === 'trialing';
+  const isSubscribed = userStatus === 'subscribed';
+  const isTrialExpired = userStatus === 'trial_expired';
+  const isSubExpired = userStatus === 'sub_expired';
+  const showSubCta = isTrialing || isTrialExpired || isSubExpired;
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -433,54 +503,111 @@ export function SettingsScreen() {
         ) : null}
 
         {/* ============================================================= */}
-        {/* Connected device card                                          */}
+        {/* Top two-card row: device + subscription                        */}
         {/* ============================================================= */}
-        <View style={styles.deviceCard}>
-          <View style={styles.deviceCardTop}>
-            <View style={styles.wifiIconCircle}>
-              <Icon name="wifi" size={22} color="#fff" />
+        <View style={styles.topCardRow}>
+          {/* Left: Connected device card (compact) */}
+          <View style={[styles.topCard, styles.topCardLeft]}>
+            <View style={styles.topCardIconRow}>
+              <View style={styles.wifiIconCircle}>
+                <Icon name="wifi" size={18} color="#fff" />
+              </View>
+              <Text style={styles.topCardSmallLabel}>已连接设备</Text>
             </View>
-            <Text style={styles.deviceCardLabel}>已连接设备</Text>
+            <Text style={styles.topCardTitle} numberOfLines={1}>
+              {deviceName || '未连接'}
+            </Text>
+            {deviceIp ? (
+              <Text style={styles.topCardSubtext}>{deviceIp}</Text>
+            ) : null}
+            <View style={styles.topCardBottomRow}>
+              <View style={styles.statusBadge}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    isConnected
+                      ? styles.statusDotOnline
+                      : isConnecting
+                        ? styles.statusDotConnecting
+                        : styles.statusDotOffline,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.statusBadgeText,
+                    isConnected
+                      ? styles.statusTextOnline
+                      : isConnecting
+                        ? styles.statusTextConnecting
+                        : styles.statusTextOffline,
+                  ]}
+                >
+                  {isConnected ? '在线' : isConnecting ? '连接中' : '离线'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.switchButton}
+                activeOpacity={0.6}
+                onPress={handleSwitchDevice}
+              >
+                <Text style={styles.switchButtonText}>切换</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <Text style={styles.deviceCardName} numberOfLines={1}>
-            {deviceName || '未连接'}
-          </Text>
-          {deviceIp ? (
-            <Text style={styles.deviceCardIp}>{deviceIp}</Text>
-          ) : null}
-          <View style={styles.deviceCardBottom}>
-            <View style={styles.statusBadge}>
+
+          {/* Right: Subscription status card */}
+          <View style={[styles.topCard, styles.topCardRight]}>
+            <View style={styles.topCardIconRow}>
               <View
                 style={[
-                  styles.statusDot,
-                  isConnected
-                    ? styles.statusDotOnline
-                    : isConnecting
-                      ? styles.statusDotConnecting
-                      : styles.statusDotOffline,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.statusBadgeText,
-                  isConnected
-                    ? styles.statusTextOnline
-                    : isConnecting
-                      ? styles.statusTextConnecting
-                      : styles.statusTextOffline,
+                  styles.subIconCircle,
+                  isSubscribed
+                    ? { backgroundColor: SUB_GREEN_BG }
+                    : { backgroundColor: TRIAL_PURPLE_BG },
                 ]}
               >
-                {isConnected ? '在线' : isConnecting ? '连接中' : '离线'}
+                <Icon
+                  name={isSubscribed ? 'shield-checkmark-outline' : 'time-outline'}
+                  size={18}
+                  color={isSubscribed ? SUB_GREEN : TRIAL_PURPLE}
+                />
+              </View>
+              <Text style={styles.topCardSmallLabel}>
+                {isSubscribed || isSubExpired ? '订阅服务' : '试用服务'}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.switchButton}
-              activeOpacity={0.6}
-              onPress={handleSwitchDevice}
-            >
-              <Icon name="swap-horizontal-outline" size={14} color={BLUE} />
-              <Text style={styles.switchButtonText}>切换</Text>
-            </TouchableOpacity>
+            {isTrialing ? (
+              <>
+                <Text style={styles.topCardTitle}>
+                  {trialDays} 天
+                </Text>
+                <Text style={styles.topCardSubtext}>免费试用</Text>
+              </>
+            ) : isTrialExpired ? (
+              <Text style={[styles.topCardTitle, { color: DANGER_RED }]}>
+                已到期
+              </Text>
+            ) : isSubscribed ? (
+              <Text style={[styles.topCardTitle, { color: SUB_GREEN }]}>
+                有效
+              </Text>
+            ) : isSubExpired ? (
+              <Text style={[styles.topCardTitle, { color: DANGER_RED }]}>
+                已到期
+              </Text>
+            ) : (
+              <Text style={styles.topCardTitle}>--</Text>
+            )}
+            {showSubCta ? (
+              <TouchableOpacity
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('Subscription')}
+                style={styles.subCtaRow}
+              >
+                <Text style={styles.subCtaText}>立即订阅</Text>
+                <Icon name="chevron-forward" size={13} color={BLUE} />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -558,6 +685,16 @@ export function SettingsScreen() {
           ) : null}
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
+              <Icon name="person-outline" size={16} color={MUTED_TEXT} />
+              <Text style={styles.infoRowLabel}>当前账号</Text>
+            </View>
+            <Text style={styles.infoRowValue}>
+              {maskPhone(auth.user?.phone)}
+            </Text>
+          </View>
+          <View style={styles.listSep} />
+          <View style={styles.infoRow}>
+            <View style={styles.infoRowLeft}>
               <Icon name="time-outline" size={16} color={MUTED_TEXT} />
               <Text style={styles.infoRowLabel}>最近同步</Text>
             </View>
@@ -617,6 +754,23 @@ export function SettingsScreen() {
             <View style={styles.actionRowLeft}>
               <Icon name="refresh-outline" size={18} color={DANGER_RED} />
               <Text style={styles.dangerRowText}>重置同步状态</Text>
+            </View>
+            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ============================================================= */}
+        {/* Logout                                                         */}
+        {/* ============================================================= */}
+        <View style={[styles.listCard, styles.dangerCard, styles.logoutCard]}>
+          <TouchableOpacity
+            style={styles.actionRow}
+            activeOpacity={0.6}
+            onPress={handleLogout}
+          >
+            <View style={styles.actionRowLeft}>
+              <Icon name="log-out-outline" size={18} color={DANGER_RED} />
+              <Text style={styles.dangerRowText}>退出登录</Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
@@ -701,54 +855,81 @@ const styles = StyleSheet.create({
   },
 
   // ---------------------------------------------------------------------------
-  // Connected device card
+  // Top two-card row (device + subscription)
   // ---------------------------------------------------------------------------
-  deviceCard: {
+  topCardRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  topCard: {
+    flex: 1,
     backgroundColor: CARD_BG,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: CARD_BORDER,
-    padding: 18,
-    marginBottom: 12,
+    padding: 14,
     shadowColor: '#4f8fbc',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 2,
   },
-  deviceCardTop: {
+  topCardLeft: {},
+  topCardRight: {},
+  topCardIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     marginBottom: 8,
   },
   wifiIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#4abe7b',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  deviceCardLabel: {
-    fontSize: 12,
-    color: MUTED_TEXT,
+  subIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  deviceCardName: {
-    fontSize: 20,
+  topCardSmallLabel: {
+    fontSize: 11,
+    color: MUTED_TEXT,
+    flexShrink: 1,
+  },
+  topCardTitle: {
+    fontSize: 18,
     fontWeight: '700',
     color: DARK,
     marginBottom: 2,
   },
-  deviceCardIp: {
-    fontSize: 12,
+  topCardSubtext: {
+    fontSize: 11,
     color: MUTED_TEXT,
-    marginBottom: 12,
+    marginBottom: 6,
   },
-  deviceCardBottom: {
+  topCardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  subCtaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 6,
+  },
+  subCtaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: BLUE,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -961,6 +1142,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: DANGER_RED,
+  },
+
+  // Logout card
+  logoutCard: {
+    marginTop: 4,
   },
 
   // Warning box (photo permission)

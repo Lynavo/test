@@ -60,6 +60,12 @@ const ionicons: Record<string, number> = {
   'book-outline': 60071,
   'mail-outline': 60725,
   'link-outline': 60602,
+  'person-outline': 60832,
+  'shield-outline': 61059,
+  'shield-checkmark-outline': 61057,
+  'lock-closed-outline': 60624,
+  'card-outline': 60162,
+  'star-outline': 61087,
 };
 
 interface IconProps {

@@ -10,6 +10,7 @@ import {
   NativeEventEmitter,
   Alert,
   AppState,
+  Modal,
   type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,6 +39,8 @@ import {
   getSyncActivityProgressPercent,
   isSyncActivityActivelyTransferring,
 } from '../utils/syncActivityTransferState';
+import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
+import { FEATURES } from '../constants/features';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +194,7 @@ function getPreparationSubtitle(overview: SyncOverview): string {
 
 export function SyncActivityScreen() {
   const navigation = useNavigation<SyncActivityNav>();
+  const auth = useAuth();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [bindingState, setBindingState] = useState<BindingState | null>(null);
   const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
@@ -924,6 +928,45 @@ export function SyncActivityScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Trial / Subscription expired overlay — gated by FEATURES until real
+          IAP is wired (otherwise the overlay sends users to a dead-end
+          subscription screen with no working purchase flow). */}
+      {FEATURES.SUBSCRIPTION_ENFORCEMENT &&
+        auth.isLoggedIn &&
+        !isFeatureAccessAllowed(auth.user?.status) && (
+          <Modal
+            visible
+            transparent
+            animationType="fade"
+            statusBarTranslucent
+          >
+            <View style={styles.expiredOverlay}>
+              <View style={styles.expiredCard}>
+                <View style={styles.expiredIconCircle}>
+                  <Icon name="shield-outline" size={36} color="#8b5cf6" />
+                </View>
+                <Text style={styles.expiredTitle}>试用已结束</Text>
+                <Text style={styles.expiredSubtitle}>
+                  订阅后可继续使用素材上传、自动上传与共享文件访问
+                </Text>
+                <TouchableOpacity
+                  style={styles.expiredPrimaryButton}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('Subscription')}
+                >
+                  <Text style={styles.expiredPrimaryButtonText}>立即订阅</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.6}
+                  onPress={() => navigation.navigate('Help')}
+                >
+                  <Text style={styles.expiredSecondaryText}>查看帮助</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
     </SafeAreaView>
   );
 }
@@ -1424,5 +1467,68 @@ const styles = StyleSheet.create({
   quickEntryDesc: {
     fontSize: 11,
     color: SOFT_TEXT,
+  },
+
+  // Trial / Subscription expired overlay
+  expiredOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  expiredCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    paddingVertical: 36,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  expiredIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(139,92,246,0.10)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  expiredTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: DARK,
+    marginBottom: 10,
+  },
+  expiredSubtitle: {
+    fontSize: 14,
+    color: MUTED_TEXT,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 24,
+  },
+  expiredPrimaryButton: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: PRIMARY_NAVY,
+    marginBottom: 16,
+  },
+  expiredPrimaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  expiredSecondaryText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: MUTED_TEXT,
   },
 });
