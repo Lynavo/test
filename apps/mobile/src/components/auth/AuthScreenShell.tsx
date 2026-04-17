@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
-const AUTH_LOGO = require('../../assets/icons/auth-logo.png');
+const APP_LOGO = require('../../assets/icons/app-logo.png');
 
 export const AUTH_COLORS = {
   background: '#e9f6ff',
@@ -85,7 +85,7 @@ export function AuthScreenShell({
         >
           <View style={styles.brandSection}>
             <View style={styles.logoWrap}>
-              <Image source={AUTH_LOGO} style={styles.logo} resizeMode="contain" />
+              <Image source={APP_LOGO} style={styles.logo} resizeMode="contain" />
             </View>
             <Text style={styles.brandTitle}>Vivi Drop</Text>
             <Text style={styles.brandSubtitle}>{subtitle}</Text>
