@@ -19,6 +19,11 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../stores/auth-store';
 import type { AccountStatus } from '../stores/auth-store';
+import { iapService } from '../services/iap-service';
+import { planToProductId } from '../constants/iap';
+import { classifyIapError, IapErrorClass } from '../services/iap-errors';
+import { verifyIapReceipt } from '../services/subscription-service';
+import { FEATURES } from '../constants/features';
 
 const DARK = '#202022';
 const SCREEN_BG = '#d6ecf8';
@@ -480,28 +485,91 @@ const modalStyles = StyleSheet.create({
 export function SubscriptionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
-  const { user, subscription } = useAuth();
+  const { user, subscription, loadSubscription } = useAuth();
 
   const [selectedPlan, setSelectedPlan] = useState<PlanKey>('yearly');
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
-  const [confirmedPlan] = useState<PlanKey>('yearly');
-  const [confirmedExpireAt] = useState<string | null>(null);
+  const [confirmedPlan, setConfirmedPlan] = useState<PlanKey>('yearly');
+  const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(null);
 
   const status: AccountStatus | undefined = subscription?.status ?? user?.status;
   const trialEnd = subscription?.trialEnd ?? user?.trialEnd;
 
+  const handleRestore = useCallback(async () => {
+    // Filled in by Task 15.
+  }, []);
+
   const handleSubscribe = useCallback(async () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    if (!FEATURES.IAP_ENABLED) {
       Alert.alert(
         t('subscription.alert.devTitle'),
         t('subscription.alert.devBody'),
         [{ text: t('subscription.alert.devConfirm') }],
       );
-    }, 600);
-  }, [t]);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const productId = planToProductId(selectedPlan);
+      const receipt = await iapService.purchase(productId);
+
+      // Retry verify twice (1s → 4s) before surfacing error — Apple already
+      // charged, so we must try hard before handing retry to the user.
+      let verified = false;
+      const delays = [0, 1_000, 4_000];
+      let lastErr: unknown = null;
+      for (const delay of delays) {
+        if (delay > 0) await new Promise<void>((r) => setTimeout(r, delay));
+        try {
+          await verifyIapReceipt(receipt.transactionReceipt, selectedPlan);
+          verified = true;
+          break;
+        } catch (err) {
+          const cls = classifyIapError(err);
+          if (cls.kind === IapErrorClass.SilentSuccess) {
+            verified = true;
+            break;
+          }
+          if (cls.kind === IapErrorClass.FatalMismatch) {
+            await iapService.finishTransaction(receipt.transactionId);
+            // cls.i18nKey is always a valid translation key for FatalMismatch
+            if (cls.i18nKey) Alert.alert(t(cls.i18nKey as never));
+            return;
+          }
+          lastErr = err;
+          // Retryable / network — loop continues.
+        }
+      }
+
+      if (!verified) {
+        const cls = classifyIapError(lastErr);
+        Alert.alert(t((cls.i18nKey ?? 'subscription.errors.verifyRetrying') as never));
+        return;
+      }
+
+      await loadSubscription();
+      await iapService.finishTransaction(receipt.transactionId);
+      setConfirmedPlan(selectedPlan);
+      setConfirmedExpireAt(null);
+      setShowPaymentSuccess(true);
+    } catch (err) {
+      const cls = classifyIapError(err);
+      if (cls.kind === IapErrorClass.Cancelled) {
+        return; // silent
+      }
+      if (cls.kind === IapErrorClass.AutoRestore) {
+        void handleRestore();
+        return;
+      }
+      if (cls.i18nKey) {
+        Alert.alert(t(cls.i18nKey as never));
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [t, selectedPlan, loadSubscription]);
 
   const handlePaymentSuccessDismiss = useCallback(() => {
     setShowPaymentSuccess(false);
