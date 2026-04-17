@@ -259,6 +259,16 @@
       "thermalThrottled": "Device is running hot — transfer throttled"
     }
   },
+  "codeVerify": {
+    "deviceLabel": "Connecting to: {{deviceName}} ({{host}})",
+    "prompt": "Enter the 6-digit pairing code shown on your computer",
+    "verifying": "Verifying pairing code...",
+    "helpText": "Make sure your phone and computer are on the same network. Open the app on your computer to see the pairing code.",
+    "errors": {
+      "wrongCode": "Incorrect pairing code — please try again",
+      "connectFailed": "Connection failed: {{msg}}"
+    }
+  },
   "qrScanner": {
     "title": "Scan pairing QR code",
     "instruction": "Place the QR code in the frame to connect automatically",

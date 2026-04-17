@@ -16,6 +16,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
+import { useTranslation } from 'react-i18next';
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -34,6 +35,7 @@ const VERIFY_DELAY_MS = 1200;
 export function CodeVerifyScreen() {
   const navigation = useNavigation<CodeVerifyNavProp>();
   const route = useRoute<CodeVerifyRouteProp>();
+  const { t } = useTranslation();
   const { deviceId, host, port, deviceName, prefilledCode } = route.params;
 
   const [code, setCode] = useState<string[]>(
@@ -81,9 +83,9 @@ export function CodeVerifyScreen() {
         // Include actual error message so the user knows if it's a network timeout vs incorrect code
         const msg = e?.message || '';
         if (msg.includes('Pairing rejected')) {
-           setErrorMsg('连接码错误，请重新输入');
+           setErrorMsg(t('codeVerify.errors.wrongCode'));
         } else {
-           setErrorMsg(`连接失败：${msg}`);
+           setErrorMsg(t('codeVerify.errors.connectFailed', { msg }));
         }
         setCode(Array(CODE_LENGTH).fill(''));
         Vibration.vibrate(300);
@@ -170,10 +172,10 @@ export function CodeVerifyScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Device name context */}
-        <Text style={styles.deviceLabel}>{'正在连接'}: {deviceName} ({host})</Text>
+        <Text style={styles.deviceLabel}>{t('codeVerify.deviceLabel', { deviceName, host })}</Text>
 
         {/* Prompt */}
-        <Text style={styles.prompt}>{'请输入电脑端显示的 6 位连接码'}</Text>
+        <Text style={styles.prompt}>{t('codeVerify.prompt')}</Text>
 
         {/* Code input boxes */}
         <View style={styles.codeRow}>
@@ -206,21 +208,21 @@ export function CodeVerifyScreen() {
         {verifying && (
           <View style={styles.statusRow}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.statusText}>{'正在验证连接码...'}</Text>
+            <Text style={styles.statusText}>{t('codeVerify.verifying')}</Text>
           </View>
         )}
 
         {/* Status: error */}
         {error && (
           <Text style={styles.errorText} numberOfLines={2}>
-            {errorMsg || '连接码错误，请重新输入'}
+            {errorMsg || t('codeVerify.errors.wrongCode')}
           </Text>
         )}
 
         {/* Help text */}
         <View style={styles.helpCard}>
           <Text style={styles.helpText}>
-            {'请确保手机与电脑处于同一局域网下，在电脑端打开应用即可看到连接码'}
+            {t('codeVerify.helpText')}
           </Text>
         </View>
       </View>
