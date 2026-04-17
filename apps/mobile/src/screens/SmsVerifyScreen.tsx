@@ -3,6 +3,7 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  Dimensions,
   Pressable,
   StyleSheet,
   Text,
@@ -42,6 +43,7 @@ export function SmsVerifyScreen() {
   const { phone } = route.params;
   const auth = useAuth();
   const { t } = useTranslation();
+  const windowWidth = Dimensions.get('window').width;
 
   // -----------------------------------------------------------------------
   // State
@@ -57,6 +59,13 @@ export function SmsVerifyScreen() {
   const codeInputRef = useRef<TextInput | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const shakeAnim = useRef(new Animated.Value(0)).current;
+  const codeBoxSize = Math.min(
+    48,
+    Math.floor((windowWidth - 24 * 2 - 22 * 2 - 10 * (CODE_LENGTH - 1)) / CODE_LENGTH),
+  );
+  const resolvedCodeBoxSize = Math.max(40, codeBoxSize);
+  const codeBoxRadius = Math.max(14, Math.floor(resolvedCodeBoxSize * 0.3));
+  const codeDigitSize = Math.max(22, Math.floor(resolvedCodeBoxSize * 0.5));
 
   // -----------------------------------------------------------------------
   // Countdown timer
@@ -287,13 +296,25 @@ export function SmsVerifyScreen() {
                   key={index}
                   style={[
                     styles.codeBox,
+                    {
+                      width: resolvedCodeBoxSize,
+                      height: resolvedCodeBoxSize,
+                      borderRadius: codeBoxRadius,
+                    },
                     digit ? styles.codeBoxFilled : styles.codeBoxEmpty,
                     isActive ? styles.codeBoxActive : null,
                     error ? styles.codeBoxError : null,
                     verifying ? styles.codeBoxDisabled : null,
                   ]}
                 >
-                  <Text style={styles.codeDigit}>{digit}</Text>
+                  <Text
+                    style={[
+                      styles.codeDigit,
+                      { fontSize: codeDigitSize },
+                    ]}
+                  >
+                    {digit}
+                  </Text>
                 </View>
               );
             })}
@@ -381,9 +402,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   codeBox: {
-    width: 48,
-    height: 96,
-    borderRadius: 22,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -411,7 +429,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   codeDigit: {
-    fontSize: 28,
     fontWeight: '700',
     color: AUTH_COLORS.text,
   },

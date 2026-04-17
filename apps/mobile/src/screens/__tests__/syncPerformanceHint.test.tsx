@@ -18,7 +18,7 @@ import {
 describe('SyncPerformanceHint', () => {
   beforeAll(async () => {
     await act(async () => {
-      await i18n.changeLanguage('zh');
+      await i18n.changeLanguage('zh-Hans');
     });
   });
 

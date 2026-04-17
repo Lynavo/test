@@ -172,15 +172,15 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logoWrap: {
-    width: 84,
-    height: 84,
+    width: 150,
+    height: 102,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
   },
   logo: {
-    width: 72,
-    height: 72,
+    width: 150,
+    height: 102,
   },
   brandTitle: {
     fontSize: 30,

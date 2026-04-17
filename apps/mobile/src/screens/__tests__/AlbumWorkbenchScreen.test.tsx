@@ -59,12 +59,12 @@ jest.mock('../../components/Icon', () => ({
 
 describe('AlbumWorkbenchScreen', () => {
   beforeAll(async () => {
-    await i18n.changeLanguage('zh');
+    await i18n.changeLanguage('zh-Hans');
   });
 
   afterAll(async () => {
     await ReactTestRenderer.act(async () => {
-      await i18n.changeLanguage('zh');
+      await i18n.changeLanguage('zh-Hans');
     });
   });
 

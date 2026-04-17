@@ -17,20 +17,24 @@ const locale = (tag: string, languageCode: string, countryCode: string, scriptCo
 });
 
 describe('resolveLocale', () => {
-  it('returns zh for simplified Chinese (mainland)', () => {
-    expect(resolveLocale([locale('zh-Hans-CN', 'zh', 'CN', 'Hans')])).toBe('zh');
+  it('returns zh-Hans for simplified Chinese (mainland)', () => {
+    expect(resolveLocale([locale('zh-Hans-CN', 'zh', 'CN', 'Hans')])).toBe('zh-Hans');
   });
 
-  it('returns zh for bare zh-CN without scriptCode', () => {
-    expect(resolveLocale([locale('zh-CN', 'zh', 'CN')])).toBe('zh');
+  it('returns zh-Hans for bare zh-CN without scriptCode', () => {
+    expect(resolveLocale([locale('zh-CN', 'zh', 'CN')])).toBe('zh-Hans');
   });
 
-  it('returns en for traditional Chinese (Taiwan)', () => {
-    expect(resolveLocale([locale('zh-Hant-TW', 'zh', 'TW', 'Hant')])).toBe('en');
+  it('returns zh-Hant for traditional Chinese (Taiwan)', () => {
+    expect(resolveLocale([locale('zh-Hant-TW', 'zh', 'TW', 'Hant')])).toBe('zh-Hant');
   });
 
-  it('returns en for traditional Chinese (Hong Kong)', () => {
-    expect(resolveLocale([locale('zh-Hant-HK', 'zh', 'HK', 'Hant')])).toBe('en');
+  it('returns zh-Hant for traditional Chinese (Hong Kong)', () => {
+    expect(resolveLocale([locale('zh-Hant-HK', 'zh', 'HK', 'Hant')])).toBe('zh-Hant');
+  });
+
+  it('uses region as a fallback when traditional Chinese has no scriptCode', () => {
+    expect(resolveLocale([locale('zh-TW', 'zh', 'TW')])).toBe('zh-Hant');
   });
 
   it('returns en for US English', () => {
@@ -50,18 +54,18 @@ describe('resolveLocale', () => {
     ])).toBe('en');
   });
 
-  it('picks zh when simplified Chinese comes before English', () => {
+  it('picks zh-Hans when simplified Chinese comes before English', () => {
     expect(resolveLocale([
       locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
       locale('en-US', 'en', 'US'),
-    ])).toBe('zh');
+    ])).toBe('zh-Hans');
   });
 
-  it('skips traditional Chinese but keeps scanning for supported locales', () => {
+  it('picks zh-Hant when traditional Chinese is the highest preference', () => {
     expect(resolveLocale([
       locale('zh-Hant-TW', 'zh', 'TW', 'Hant'),
       locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
-    ])).toBe('zh');
+    ])).toBe('zh-Hant');
   });
 
   it('returns en for empty list', () => {

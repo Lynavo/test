@@ -9,7 +9,7 @@ import { ApiError, ERROR_CODE } from '../services/api';
 // ---------------------------------------------------------------------------
 
 export type AccountStatus = 'trialing' | 'subscribed' | 'trial_expired' | 'sub_expired';
-export type SubscriptionPlan = 'monthly' | 'ten_month' | '';
+export type SubscriptionPlan = 'monthly' | 'yearly' | '';
 
 export interface IdentityDescriptor {
   type: string;   // 'phone_cn' | 'email' | 'apple' | 'google'
@@ -33,6 +33,8 @@ export interface SubscriptionInfo {
   trialEnd: string | null;
 }
 
+export type SignedOutTransition = 'account_deleted' | null;
+
 export interface AuthState {
   isLoggedIn: boolean;
   isLoading: boolean;
@@ -46,6 +48,8 @@ export interface AuthState {
   profileError: ApiError | null;
   /** True while the post-login profile auto-load is in flight. */
   profileLoading: boolean;
+  /** Short-lived exit transition shown before we land on Login. */
+  signedOutTransition: SignedOutTransition;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +160,7 @@ type AuthAction =
   | { type: 'PROFILE_LOAD_START' }
   | { type: 'PROFILE_LOAD_SUCCESS' }
   | { type: 'PROFILE_LOAD_FAILURE'; error: ApiError }
+  | { type: 'SET_SIGNED_OUT_TRANSITION'; transition: SignedOutTransition }
   | { type: 'CLEAR' };
 
 // isLoading starts as true so RootNavigator waits for the hydrate pass to
@@ -169,6 +174,7 @@ const initialState: AuthState = {
   subscription: null,
   profileError: null,
   profileLoading: false,
+  signedOutTransition: null,
 };
 
 function authReducer(state: AuthState, action: AuthAction): AuthState {
@@ -180,6 +186,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         isLoggedIn: Boolean(action.accessToken && action.refreshToken),
         accessToken: action.accessToken,
         refreshToken: action.refreshToken,
+        signedOutTransition: null,
       };
     case 'LOGIN':
       return {
@@ -187,6 +194,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         isLoggedIn: true,
         accessToken: action.accessToken,
         refreshToken: action.refreshToken,
+        signedOutTransition: null,
       };
     case 'SET_TOKENS':
       return {
@@ -206,10 +214,16 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return { ...state, profileLoading: false, profileError: null };
     case 'PROFILE_LOAD_FAILURE':
       return { ...state, profileLoading: false, profileError: action.error };
+    case 'SET_SIGNED_OUT_TRANSITION':
+      return { ...state, signedOutTransition: action.transition };
     case 'CLEAR':
       // Keep isLoading=false on logout so the navigator routes immediately to
       // Login instead of re-entering the hydrate spinner.
-      return { ...initialState, isLoading: false };
+      return {
+        ...initialState,
+        isLoading: false,
+        signedOutTransition: state.signedOutTransition,
+      };
     default:
       return state;
   }
@@ -224,6 +238,7 @@ interface AuthActions {
   setTokens: (accessToken: string, refreshToken: string) => void;
   setUser: (profile: UserProfile) => void;
   setSubscription: (info: SubscriptionInfo) => void;
+  setSignedOutTransition: (transition: SignedOutTransition) => void;
   clearAuth: () => void;
   loadProfile: () => Promise<void>;
   loadSubscription: () => Promise<void>;
@@ -278,6 +293,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setSubscription = useCallback((info: SubscriptionInfo) => {
     dispatch({ type: 'SET_SUBSCRIPTION', subscription: info });
+  }, []);
+
+  const setSignedOutTransition = useCallback((transition: SignedOutTransition) => {
+    dispatch({ type: 'SET_SIGNED_OUT_TRANSITION', transition });
   }, []);
 
   const clearAuth = useCallback(() => {
@@ -388,6 +407,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTokens,
     setUser,
     setSubscription,
+    setSignedOutTransition,
     clearAuth,
     loadProfile,
     loadSubscription,

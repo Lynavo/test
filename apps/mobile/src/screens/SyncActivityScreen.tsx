@@ -64,6 +64,7 @@ interface SyncOverview {
   currentFileConfirmedBytes: number;
   currentFileTotalBytes: number;
   currentTaskSource?: UploadTaskSource | null;
+  lastCompletedTaskSource?: UploadTaskSource | null;
   autoUploadState?: AutoUploadState;
   manualPending?: number;
   autoPending?: number;
@@ -88,6 +89,12 @@ interface BindingState {
     | 'connected'
     | 'offline'
     | 'discovering';
+}
+
+interface TodayStats {
+  fileCount: number;
+  totalBytes: number;
+  latestUpdatedAt?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +142,7 @@ const EMPTY_OVERVIEW: SyncOverview = {
   currentFileConfirmedBytes: 0,
   currentFileTotalBytes: 0,
   currentTaskSource: null,
+  lastCompletedTaskSource: null,
   autoUploadState: 'disabled',
   manualPending: 0,
   autoPending: 0,
@@ -192,6 +200,46 @@ function getPreparationSubtitle(overview: SyncOverview, t: TFunction): string {
   }
 }
 
+function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
+  if (!iso) return t('settings.status.noRecord');
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return t('settings.status.noRecord');
+
+  const now = new Date();
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  if (date.toDateString() === now.toDateString()) {
+    return t('settings.dates.todayAt', { time });
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return t('settings.dates.monthDayAt', {
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      time,
+    });
+  }
+  return t('settings.dates.fullDate', {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    time,
+  });
+}
+
+function CompletionStatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.completionStatCard}>
+      <Text style={styles.completionStatLabel}>{label}</Text>
+      <Text style={styles.completionStatValue}>{value}</Text>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // SyncActivityScreen
 // ---------------------------------------------------------------------------
@@ -202,7 +250,11 @@ export function SyncActivityScreen() {
   const auth = useAuth();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [bindingState, setBindingState] = useState<BindingState | null>(null);
-  const [todayStats, setTodayStats] = useState({ fileCount: 0, totalBytes: 0 });
+  const [todayStats, setTodayStats] = useState<TodayStats>({
+    fileCount: 0,
+    totalBytes: 0,
+    latestUpdatedAt: undefined,
+  });
   const [initialLoading, setInitialLoading] = useState(true);
   const [cancellingBatch, setCancellingBatch] = useState(false);
 
@@ -224,13 +276,28 @@ export function SyncActivityScreen() {
         const today = formatLocalDateKey(new Date());
         let totalFiles = 0;
         let totalBytesSum = 0;
+        let latestUpdatedAt: string | undefined;
         for (const item of history.items) {
           if ((item.ledgerDate || item.dateKey) === today) {
             totalFiles += item.fileCount || 0;
             totalBytesSum += item.totalBytes || 0;
+            const updatedAt =
+              typeof item.updatedAt === 'string' ? item.updatedAt : undefined;
+            if (
+              updatedAt &&
+              (!latestUpdatedAt ||
+                new Date(updatedAt).getTime() >
+                  new Date(latestUpdatedAt).getTime())
+            ) {
+              latestUpdatedAt = updatedAt;
+            }
           }
         }
-        setTodayStats({ fileCount: totalFiles, totalBytes: totalBytesSum });
+        setTodayStats({
+          fileCount: totalFiles,
+          totalBytes: totalBytesSum,
+          latestUpdatedAt,
+        });
       }
     } catch {
       /* ignore */
@@ -609,6 +676,13 @@ export function SyncActivityScreen() {
   const isManualUploading = hasManualUploadWork;
 
   const mainCardState = getSyncActivityMainCardState(overview, stableOffline);
+  const completedProgressTotal = Math.max(
+    overview.totalCount,
+    overview.completedCount,
+  );
+  const latestSyncLabel = todayStats.latestUpdatedAt
+    ? formatDateTimeLabel(todayStats.latestUpdatedAt, t)
+    : undefined;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -814,7 +888,155 @@ export function SyncActivityScreen() {
             </View>
           )}
 
-          {/* ---- State 2: Auto Upload Standby ---- */}
+          {/* ---- State 2: Auto Upload Completed ---- */}
+          {mainCardState === 'auto_completed' && (
+            <View style={styles.cardBody}>
+              <View style={styles.badgeRow}>
+                <View style={styles.autoBadge}>
+                  <Text style={styles.autoBadgeText}>{t('syncActivity.badges.auto')}</Text>
+                </View>
+                <Text style={styles.badgeLabel}>{t('syncActivity.badges.autoEnabled')}</Text>
+              </View>
+
+              <View style={styles.runningTitleRow}>
+                <Text style={styles.runningTitle}>
+                  {t('syncActivity.completed.auto.title')}
+                </Text>
+                <Text style={styles.runningPercent}>100%</Text>
+              </View>
+
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, styles.progressBarFillComplete]} />
+              </View>
+
+              <Text style={styles.completionSubtitle}>
+                {t('syncActivity.completed.auto.subtitle', {
+                  count: overview.completedCount,
+                })}
+              </Text>
+
+              <View style={styles.completionStatsRow}>
+                <CompletionStatCard
+                  label={t('syncActivity.stats.speed')}
+                  value={t('syncActivity.completed.speedIdle')}
+                />
+                <CompletionStatCard
+                  label={t('syncActivity.completed.auto.fileCountLabel')}
+                  value={t('syncActivity.completed.auto.fileCountValue', {
+                    count: overview.completedCount,
+                  })}
+                />
+                <CompletionStatCard
+                  label={t('syncActivity.stats.transferred')}
+                  value={formatBytes(overview.completedBytes)}
+                />
+              </View>
+
+              {latestSyncLabel ? (
+                <Text style={styles.completionMetaText}>
+                  {t('syncActivity.completed.auto.latestSync', {
+                    label: latestSyncLabel,
+                  })}
+                </Text>
+              ) : null}
+
+              <View style={styles.twoButtonRowCompact}>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonOutlined]}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('AlbumWorkbench')}
+                >
+                  <Text style={styles.rowButtonOutlinedText}>
+                    {t('syncActivity.completed.auto.goToAlbum')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonOutlined, styles.completionDangerButton]}
+                  activeOpacity={0.7}
+                  onPress={handleCloseAutoUpload}
+                >
+                  <Text style={styles.completionDangerButtonText}>
+                    {t('syncActivity.actions.closeAutoUpload')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ---- State 3: Manual Upload Completed ---- */}
+          {mainCardState === 'manual_completed' && (
+            <View style={styles.cardBody}>
+              <View style={styles.badgeRow}>
+                <View style={styles.manualBadge}>
+                  <Text style={styles.manualBadgeText}>{t('syncActivity.badges.manual')}</Text>
+                </View>
+                <Text style={styles.badgeLabel}>{t('syncActivity.badges.manualUploading')}</Text>
+              </View>
+
+              <View style={styles.runningTitleRow}>
+                <Text style={styles.runningTitle}>
+                  {t('syncActivity.completed.manual.title')}
+                </Text>
+                <Text style={styles.runningPercent}>100%</Text>
+              </View>
+
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, styles.progressBarFillComplete]} />
+              </View>
+
+              <Text style={styles.completionSubtitle}>
+                {t('syncActivity.completed.manual.subtitle', {
+                  completed: overview.completedCount,
+                  total: completedProgressTotal,
+                })}
+              </Text>
+
+              <View style={styles.completionStatsRow}>
+                <CompletionStatCard
+                  label={t('syncActivity.stats.speed')}
+                  value={t('syncActivity.completed.speedIdle')}
+                />
+                <CompletionStatCard
+                  label={t('syncActivity.stats.progress')}
+                  value={t('syncActivity.completed.manual.progressValue', {
+                    completed: overview.completedCount,
+                    total: completedProgressTotal,
+                  })}
+                />
+                <CompletionStatCard
+                  label={t('syncActivity.stats.transferred')}
+                  value={formatBytes(overview.completedBytes)}
+                />
+              </View>
+
+              <Text style={styles.completionHintText}>
+                {t('syncActivity.completed.manual.hint')}
+              </Text>
+
+              <View style={styles.twoButtonRowCompact}>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonOutlined]}
+                  activeOpacity={0.7}
+                  onPress={() => navigation.navigate('AlbumWorkbench')}
+                >
+                  <Text style={styles.rowButtonOutlinedText}>
+                    {t('syncActivity.completed.manual.goToAlbum')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.rowButton, styles.rowButtonPrimary]}
+                  activeOpacity={0.7}
+                  onPress={() => void handleEnableAutoUpload()}
+                >
+                  <Text style={styles.rowButtonPrimaryText}>
+                    {t('syncActivity.completed.manual.enableAuto')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ---- State 4: Auto Upload Standby ---- */}
           {mainCardState === 'standby' && (
             <View style={styles.cardBody}>
               <View style={styles.badgeRow}>
@@ -857,7 +1079,7 @@ export function SyncActivityScreen() {
             </View>
           )}
 
-          {/* ---- State 3: Auto Upload Not Started ---- */}
+          {/* ---- State 5: Auto Upload Not Started ---- */}
           {mainCardState === 'not_started' && (
             <View style={styles.cardBodyCentered}>
               <View style={styles.notStartedIconCircle}>
@@ -890,7 +1112,7 @@ export function SyncActivityScreen() {
             </View>
           )}
 
-          {/* ---- State 4: Device Offline ---- */}
+          {/* ---- State 6: Device Offline ---- */}
           {mainCardState === 'offline' && (
             <View style={styles.cardBodyCentered}>
               <View style={styles.offlineIconCircle}>
@@ -1017,6 +1239,10 @@ export function buildOverview(
 ): SyncOverview {
   if (!payload) return prev;
 
+  const hasCurrentTaskSource = Object.prototype.hasOwnProperty.call(
+    payload,
+    'currentTaskSource',
+  );
   const uploadState =
     (payload.uploadState as string | undefined) ?? prev.uploadState;
   const currentFileConfirmedBytes =
@@ -1030,6 +1256,18 @@ export function buildOverview(
     uploadState === 'completed' ||
     uploadState === 'idle' ||
     uploadState === 'paused_auto_upload';
+  const nextCurrentTaskSource =
+    hasCurrentTaskSource
+      ? ((payload.currentTaskSource as UploadTaskSource | undefined) ??
+        undefined)
+      : prev.currentTaskSource;
+  const derivedLastCompletedTaskSource =
+    uploadState === 'completed'
+      ? nextCurrentTaskSource ??
+        prev.currentTaskSource ??
+        prev.lastCompletedTaskSource ??
+        ((prev.autoUploadState === 'active' ? 'auto' : 'manual') as UploadTaskSource)
+      : prev.lastCompletedTaskSource;
 
   return {
     progressPercent:
@@ -1086,9 +1324,8 @@ export function buildOverview(
     // Native sends null (NSNull) when no task is active — respect it as
     // "clear". Only fall back to prev when the key is absent from payload.
     currentTaskSource:
-      'currentTaskSource' in payload
-        ? (payload.currentTaskSource as UploadTaskSource | undefined) ?? undefined
-        : prev.currentTaskSource,
+      nextCurrentTaskSource,
+    lastCompletedTaskSource: derivedLastCompletedTaskSource,
     autoUploadState:
       (payload.autoUploadState as AutoUploadState | undefined) ??
       prev.autoUploadState,
@@ -1309,6 +1546,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: BLUE,
   },
+  progressBarFillComplete: {
+    width: '100%',
+  },
   currentFileName: {
     fontSize: 12,
     color: MUTED_TEXT,
@@ -1347,6 +1587,57 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     textAlign: 'center',
     marginBottom: 12,
+  },
+  completionSubtitle: {
+    fontSize: 13,
+    color: MUTED_TEXT,
+    marginBottom: 12,
+  },
+  completionStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  completionStatCard: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    backgroundColor: '#f6fbff',
+    borderWidth: 1,
+    borderColor: 'rgba(182, 211, 238, 0.68)',
+  },
+  completionStatLabel: {
+    fontSize: 10,
+    color: SOFT_TEXT,
+    marginBottom: 4,
+  },
+  completionStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DARK,
+  },
+  completionMetaText: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  completionHintText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: SOFT_TEXT,
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  twoButtonRowCompact: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 2,
   },
 
   // Outlined button (close auto upload)
@@ -1436,6 +1727,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: OUTLINE_TEXT,
+  },
+  completionDangerButton: {
+    borderColor: 'rgba(248, 113, 113, 0.3)',
+    backgroundColor: 'rgba(254, 242, 242, 0.96)',
+  },
+  completionDangerButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ef4444',
   },
   rowButtonPrimary: {
     backgroundColor: PRIMARY_NAVY,

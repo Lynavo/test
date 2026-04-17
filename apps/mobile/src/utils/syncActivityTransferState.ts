@@ -8,6 +8,7 @@ export interface SyncActivityTransferSnapshot {
   currentFileConfirmedBytes?: number | null;
   currentFileTotalBytes?: number | null;
   currentTaskSource?: UploadTaskSource | null;
+  lastCompletedTaskSource?: UploadTaskSource | null;
   manualPending?: number | null;
   autoPending?: number | null;
   completedCount?: number | null;
@@ -78,7 +79,33 @@ export type SyncActivityMainCardState =
   | 'running'
   | 'standby'
   | 'not_started'
-  | 'offline';
+  | 'offline'
+  | 'auto_completed'
+  | 'manual_completed';
+
+function getCompletedTaskSource(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): UploadTaskSource | undefined {
+  if (snapshot?.lastCompletedTaskSource === 'manual') {
+    return 'manual';
+  }
+  if (snapshot?.lastCompletedTaskSource === 'auto') {
+    return 'auto';
+  }
+  if (snapshot?.currentTaskSource === 'manual') {
+    return 'manual';
+  }
+  if (snapshot?.currentTaskSource === 'auto') {
+    return 'auto';
+  }
+  if (snapshot?.autoUploadState === 'active') {
+    return 'auto';
+  }
+  if (snapshot?.autoUploadState === 'disabled') {
+    return 'manual';
+  }
+  return undefined;
+}
 
 export function getSyncActivityMainCardState(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
@@ -94,6 +121,12 @@ export function getSyncActivityMainCardState(
 
   if (isActivelyTransferring || hasManualWork) {
     return 'running';
+  }
+
+  if (snapshot?.uploadState === 'completed') {
+    return getCompletedTaskSource(snapshot) === 'manual'
+      ? 'manual_completed'
+      : 'auto_completed';
   }
 
   if (isAutoUploadActive) {

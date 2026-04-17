@@ -157,4 +157,42 @@ describe('syncActivityTransferState', () => {
     expect(isSyncActivityActivelyTransferring(snapshot)).toBe(true);
     expect(getSyncActivityMainCardState(snapshot, true)).toBe('running');
   });
+
+  it('shows auto completed state after an auto round finishes', () => {
+    const snapshot = {
+      uploadState: 'completed',
+      autoUploadState: 'active' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'auto' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('auto_completed');
+  });
+
+  it('shows manual completed state after a manual round finishes', () => {
+    const snapshot = {
+      uploadState: 'completed',
+      autoUploadState: 'disabled' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'manual_completed',
+    );
+  });
 });

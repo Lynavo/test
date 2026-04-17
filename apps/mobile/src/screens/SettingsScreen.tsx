@@ -457,12 +457,6 @@ export function SettingsScreen() {
           } catch (e) {
             console.warn('[Settings] local logout error:', e);
           }
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            }),
-          );
         },
       },
     ]);
@@ -498,17 +492,13 @@ export function SettingsScreen() {
                     setIsDeletingAccount(true);
                     try {
                       await deleteAccount();
-                      // Success: server wiped us. Clear local auth +
-                      // route to Login. Do NOT call serverLogout()
-                      // after this — tokens are already revoked by the
-                      // delete transaction on the server.
+                      // Success: server wiped us. Show a short signed-out
+                      // transition first so we don't hard-cut from Settings
+                      // straight into Login.
+                      // Do NOT call serverLogout() after this — tokens are
+                      // already revoked by the delete transaction.
+                      auth.setSignedOutTransition('account_deleted');
                       auth.clearAuth();
-                      navigation.dispatch(
-                        CommonActions.reset({
-                          index: 0,
-                          routes: [{ name: 'Login' }],
-                        }),
-                      );
                     } catch (e) {
                       setIsDeletingAccount(false);
                       const msg =
@@ -638,7 +628,12 @@ export function SettingsScreen() {
           </View>
 
           {/* Right: Subscription status card */}
-          <View style={[styles.topCard, styles.topCardRight]}>
+          <TouchableOpacity
+            style={[styles.topCard, styles.topCardRight]}
+            activeOpacity={0.82}
+            onPress={() => navigation.navigate('Subscription')}
+            accessibilityRole="button"
+          >
             <View style={styles.topCardIconRow}>
               <View
                 style={[
@@ -685,18 +680,14 @@ export function SettingsScreen() {
               <Text style={styles.topCardTitle}>--</Text>
             )}
             {showSubCta ? (
-              <TouchableOpacity
-                activeOpacity={0.6}
-                onPress={() => navigation.navigate('Subscription')}
-                style={styles.subCtaRow}
-              >
+              <View style={styles.subCtaRow}>
                 <Text style={styles.subCtaText}>
                   {t('settings.subscription.subscribeCta')}
                 </Text>
                 <Icon name="chevron-forward" size={13} color={BLUE} />
-              </TouchableOpacity>
+              </View>
             ) : null}
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* ============================================================= */}

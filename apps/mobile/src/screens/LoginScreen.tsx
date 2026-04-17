@@ -122,86 +122,104 @@ export function LoginScreen() {
 
   return (
     <AuthScreenShell subtitle={t('auth.login.subtitle')}>
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t('auth.login.firstLoginHint')}</Text>
+      <View style={styles.pageContent}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('auth.login.firstLoginHint')}</Text>
 
-        <View style={styles.fieldWrap}>
-          <View
-            style={[
-              styles.phoneField,
-              phoneError ? styles.phoneFieldError : null,
-            ]}
-          >
-            <View style={styles.phonePrefix}>
-              <Icon
-                name="phone-portrait-outline"
-                size={20}
-                color={AUTH_COLORS.textMuted}
+          <View style={styles.fieldWrap}>
+            <View
+              style={[
+                styles.phoneField,
+                phoneError ? styles.phoneFieldError : null,
+              ]}
+            >
+              <View style={styles.phonePrefix}>
+                <Icon
+                  name="phone-portrait-outline"
+                  size={20}
+                  color={AUTH_COLORS.textMuted}
+                />
+                <Text style={styles.prefixText}>+86</Text>
+              </View>
+              <View style={styles.divider} />
+              <TextInput
+                style={styles.phoneInput}
+                value={phone}
+                onChangeText={handlePhoneChange}
+                onBlur={handlePhoneBlur}
+                keyboardType="phone-pad"
+                maxLength={11}
+                placeholder={t('auth.login.phonePlaceholder')}
+                placeholderTextColor={AUTH_COLORS.textFaint}
+                editable={!sending}
+                returnKeyType="done"
+                selectionColor={AUTH_COLORS.primary}
               />
-              <Text style={styles.prefixText}>+86</Text>
             </View>
-            <View style={styles.divider} />
-            <TextInput
-              style={styles.phoneInput}
-              value={phone}
-              onChangeText={handlePhoneChange}
-              onBlur={handlePhoneBlur}
-              keyboardType="phone-pad"
-              maxLength={11}
-              placeholder={t('auth.login.phonePlaceholder')}
-              placeholderTextColor={AUTH_COLORS.textFaint}
-              editable={!sending}
-              returnKeyType="done"
-              selectionColor={AUTH_COLORS.primary}
-            />
+            {phoneError && (
+              <Text style={styles.phoneErrorText}>{phoneError}</Text>
+            )}
           </View>
-          {phoneError && (
-            <Text style={styles.phoneErrorText}>{phoneError}</Text>
-          )}
+
+          <TouchableOpacity
+            style={styles.agreementRow}
+            onPress={() => setAgreed(!agreed)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+              {agreed ? (
+                <Icon name="checkmark" size={16} color="#ffffff" />
+              ) : null}
+            </View>
+            <Text style={styles.agreementText}>
+              {t('auth.login.agreePrefix')}
+              <Text style={styles.agreementSuffixText}>
+                {t('auth.login.agreeAcknowledgement')}
+              </Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              !buttonEnabled ? styles.sendButtonDisabled : null,
+              sending ? styles.sendButtonSending : null,
+            ]}
+            onPress={handleSendCode}
+            activeOpacity={0.8}
+            disabled={!buttonEnabled}
+          >
+            {sending ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+            <Text
+              style={[
+                styles.sendButtonText,
+                !buttonEnabled ? styles.sendButtonTextDisabled : null,
+              ]}
+            >
+              {sending ? t('auth.login.requesting') : t('auth.login.requestCode')}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.agreementRow}
-          onPress={() => setAgreed(!agreed)}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
-            {agreed ? (
-              <Icon name="checkmark" size={16} color="#ffffff" />
-            ) : null}
-          </View>
-          <Text style={styles.agreementText}>
-            {t('auth.login.agreePrefix')}
-            <Text style={styles.linkText} onPress={handleOpenUserAgreement}>
-              {t('common.termsOfService')}
-            </Text>
-            {t('auth.login.agreeConjunction')}
-            <Text style={styles.linkText} onPress={handleOpenPrivacyPolicy}>
-              {t('common.privacyPolicy')}
-            </Text>
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            !buttonEnabled ? styles.sendButtonDisabled : null,
-            sending ? styles.sendButtonSending : null,
-          ]}
-          onPress={handleSendCode}
-          activeOpacity={0.8}
-          disabled={!buttonEnabled}
-        >
-          {sending ? <ActivityIndicator size="small" color="#ffffff" /> : null}
-          <Text
-            style={[
-              styles.sendButtonText,
-              !buttonEnabled ? styles.sendButtonTextDisabled : null,
-            ]}
+        <View style={styles.legalFooter}>
+          <TouchableOpacity
+            accessibilityRole="link"
+            activeOpacity={0.72}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            onPress={handleOpenUserAgreement}
           >
-            {sending ? t('auth.login.requesting') : t('auth.login.requestCode')}
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.legalLink}>{t('common.termsOfService')}</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalDivider}>·</Text>
+          <TouchableOpacity
+            accessibilityRole="link"
+            activeOpacity={0.72}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            onPress={handleOpenPrivacyPolicy}
+          >
+            <Text style={styles.legalLink}>{t('common.privacyPolicy')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </AuthScreenShell>
   );
@@ -212,6 +230,11 @@ export function LoginScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  pageContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+    gap: 24,
+  },
   card: {
     backgroundColor: AUTH_COLORS.surface,
     borderRadius: 34,
@@ -312,8 +335,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: AUTH_COLORS.textMuted,
   },
-  linkText: {
-    color: AUTH_COLORS.link,
+  agreementSuffixText: {
+    color: AUTH_COLORS.text,
+    fontWeight: '600',
   },
   sendButton: {
     minHeight: 64,
@@ -345,5 +369,24 @@ const styles = StyleSheet.create({
   },
   sendButtonTextDisabled: {
     color: AUTH_COLORS.primaryTextDisabled,
+  },
+  legalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingBottom: 6,
+  },
+  legalLink: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: AUTH_COLORS.link,
+    fontWeight: '600',
+  },
+  legalDivider: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: AUTH_COLORS.textFaint,
   },
 });

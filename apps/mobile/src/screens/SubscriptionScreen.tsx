@@ -20,35 +20,27 @@ import { Icon } from '../components/Icon';
 import { useAuth } from '../stores/auth-store';
 import type { AccountStatus } from '../stores/auth-store';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const BLUE = '#3b9fd8';
-const DARK = '#1a3a5c';
+const DARK = '#202022';
 const SCREEN_BG = '#d6ecf8';
 const CARD_BG = '#ffffff';
 const CARD_BORDER = 'rgba(187, 214, 233, 0.72)';
 const MUTED_TEXT = '#7893ab';
 const SUCCESS_GREEN = '#22c55e';
 const DESTRUCTIVE_RED = '#e53935';
-
+const LIGHT_GREEN_BG = 'rgba(83, 200, 120, 0.12)';
+const LIGHT_RED_BG = 'rgba(229, 57, 53, 0.12)';
+const PLAN_DISABLED_BG = '#edf5fb';
+const PLAN_DISABLED_TEXT = '#afb6bf';
+const PLAN_SELECTED_BORDER = '#3a3a3d';
+const CHECK_BG = 'rgba(83, 200, 120, 0.12)';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PLAN_CARD_GAP = 12;
 const PLAN_CARD_HORIZONTAL_PADDING = 16;
 const PLAN_CARD_WIDTH =
   (SCREEN_WIDTH - PLAN_CARD_HORIZONTAL_PADDING * 2 - PLAN_CARD_GAP) / 2;
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Subscription'>;
-type PlanKey = 'monthly' | 'ten_month';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type PlanKey = 'monthly' | 'yearly';
 
 function getTrialRemainingDays(trialEnd: string | null): number {
   if (!trialEnd) return 0;
@@ -71,16 +63,12 @@ function getPlanDisplayName(plan: string, t: TFunction): string {
   switch (plan) {
     case 'monthly':
       return t('subscription.plans.monthly.name');
-    case 'ten_month':
-      return t('subscription.plans.tenMonth.name');
+    case 'yearly':
+      return t('subscription.plans.yearly.name');
     default:
       return plan || t('subscription.plans.fallback');
   }
 }
-
-// ---------------------------------------------------------------------------
-// Feature list
-// ---------------------------------------------------------------------------
 
 const FEATURE_KEYS = [
   'subscription.features.autoUpload',
@@ -90,10 +78,6 @@ const FEATURE_KEYS = [
   'subscription.features.multiDevice',
   'subscription.features.unlimited',
 ] as const;
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function StatusBadge({
   status,
@@ -106,34 +90,44 @@ function StatusBadge({
 }) {
   let dotColor: string;
   let label: string;
+  let backgroundColor: string;
+  let textColor: string;
 
   switch (status) {
     case 'trialing': {
       const days = getTrialRemainingDays(trialEnd ?? null);
       dotColor = SUCCESS_GREEN;
       label = t('subscription.status.trialing', { days });
+      backgroundColor = LIGHT_GREEN_BG;
+      textColor = SUCCESS_GREEN;
       break;
     }
     case 'trial_expired':
       dotColor = DESTRUCTIVE_RED;
       label = t('subscription.status.trialExpired');
+      backgroundColor = LIGHT_RED_BG;
+      textColor = DESTRUCTIVE_RED;
       break;
     case 'subscribed':
       dotColor = SUCCESS_GREEN;
       label = t('subscription.status.subscribed');
+      backgroundColor = LIGHT_GREEN_BG;
+      textColor = SUCCESS_GREEN;
       break;
     case 'sub_expired':
       dotColor = DESTRUCTIVE_RED;
       label = t('subscription.status.subExpired');
+      backgroundColor = LIGHT_RED_BG;
+      textColor = DESTRUCTIVE_RED;
       break;
     default:
       return null;
   }
 
   return (
-    <View style={badgeStyles.container}>
+    <View style={[badgeStyles.container, { backgroundColor }]}>
       <View style={[badgeStyles.dot, { backgroundColor: dotColor }]} />
-      <Text style={badgeStyles.text}>{label}</Text>
+      <Text style={[badgeStyles.text, { color: textColor }]}>{label}</Text>
     </View>
   );
 }
@@ -142,33 +136,32 @@ const badgeStyles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    alignSelf: 'flex-start',
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    gap: 6,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   text: {
     fontSize: 13,
     fontWeight: '600',
-    color: DARK,
   },
 });
-
-// ---------------------------------------------------------------------------
 
 function FeatureList({ t }: { t: TFunction }) {
   return (
     <View style={featureStyles.container}>
+      <Text style={featureStyles.caption}>{t('subscription.divider')}</Text>
       {FEATURE_KEYS.map((key) => (
         <View key={key} style={featureStyles.row}>
-          <Icon name="checkmark-circle" size={20} color={SUCCESS_GREEN} />
+          <View style={featureStyles.iconWrap}>
+            <Icon name="checkmark" size={14} color={SUCCESS_GREEN} />
+          </View>
           <Text style={featureStyles.text}>{t(key)}</Text>
         </View>
       ))}
@@ -180,54 +173,73 @@ const featureStyles = StyleSheet.create({
   container: {
     gap: 12,
   },
+  caption: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#b1b6be',
+    marginBottom: 2,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
   },
+  iconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: CHECK_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
   text: {
     flex: 1,
     fontSize: 14,
-    lineHeight: 20,
-    color: DARK,
+    lineHeight: 22,
+    color: '#42464d',
   },
 });
 
-// ---------------------------------------------------------------------------
-
 function PlanCard({
-  title,
   price,
   unit,
-  discountBadge,
+  oldPrice,
+  savingsBadge,
   selected,
+  disabled,
   onPress,
 }: {
-  title: string;
   price: string;
   unit: string;
-  discountBadge?: string;
+  oldPrice?: string;
+  savingsBadge?: string;
   selected: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }) {
   return (
     <TouchableOpacity
       style={[
         planStyles.card,
-        selected ? planStyles.cardSelected : planStyles.cardUnselected,
+        disabled
+          ? planStyles.cardDisabled
+          : selected
+            ? planStyles.cardSelected
+            : planStyles.cardUnselected,
       ]}
-      activeOpacity={0.7}
+      activeOpacity={0.82}
       onPress={onPress}
+      disabled={disabled}
     >
-      {discountBadge ? (
-        <View style={planStyles.badgeContainer}>
-          <Text style={planStyles.badgeText}>{discountBadge}</Text>
-        </View>
-      ) : null}
       <Text
         style={[
           planStyles.price,
-          selected ? planStyles.textSelected : planStyles.textUnselected,
+          disabled
+            ? planStyles.textDisabled
+            : selected
+              ? planStyles.textSelected
+              : planStyles.textUnselected,
         ]}
       >
         {price}
@@ -235,19 +247,27 @@ function PlanCard({
       <Text
         style={[
           planStyles.unit,
-          selected ? planStyles.unitSelected : planStyles.unitUnselected,
+          disabled
+            ? planStyles.unitDisabled
+            : selected
+              ? planStyles.unitSelected
+              : planStyles.unitUnselected,
         ]}
       >
         {unit}
       </Text>
-      <Text
-        style={[
-          planStyles.title,
-          selected ? planStyles.titleSelected : planStyles.titleUnselected,
-        ]}
-      >
-        {title}
-      </Text>
+      {oldPrice ? (
+        <View style={planStyles.metaRow}>
+          <Text style={planStyles.oldPrice}>{oldPrice}</Text>
+          {savingsBadge ? (
+            <View style={planStyles.savingsBadge}>
+              <Text style={planStyles.savingsBadgeText}>{savingsBadge}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={planStyles.metaSpacer} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -255,20 +275,20 @@ function PlanCard({
 const planStyles = StyleSheet.create({
   card: {
     width: PLAN_CARD_WIDTH,
-    borderRadius: 16,
+    minHeight: 142,
+    borderRadius: 18,
     borderWidth: 1.5,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    position: 'relative',
-    overflow: 'visible',
+    justifyContent: 'center',
   },
   cardSelected: {
-    backgroundColor: DARK,
-    borderColor: DARK,
-    shadowColor: DARK,
+    backgroundColor: CARD_BG,
+    borderColor: PLAN_SELECTED_BORDER,
+    shadowColor: '#1f2937',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 4,
   },
@@ -276,54 +296,64 @@ const planStyles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderColor: CARD_BORDER,
   },
-  badgeContainer: {
-    position: 'absolute',
-    top: -10,
-    right: -4,
-    backgroundColor: DESTRUCTIVE_RED,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ffffff',
+  cardDisabled: {
+    backgroundColor: PLAN_DISABLED_BG,
+    borderColor: 'rgba(196, 214, 228, 0.72)',
   },
   price: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
   },
   textSelected: {
-    color: '#ffffff',
+    color: DARK,
   },
   textUnselected: {
     color: DARK,
   },
+  textDisabled: {
+    color: PLAN_DISABLED_TEXT,
+  },
   unit: {
-    fontSize: 13,
+    fontSize: 18,
     fontWeight: '600',
     marginTop: 2,
   },
   unitSelected: {
-    color: 'rgba(255,255,255,0.7)',
+    color: '#6f747c',
   },
   unitUnselected: {
     color: MUTED_TEXT,
   },
-  title: {
-    fontSize: 12,
-    marginTop: 6,
+  unitDisabled: {
+    color: '#c2c8cf',
   },
-  titleSelected: {
-    color: 'rgba(255,255,255,0.6)',
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
   },
-  titleUnselected: {
-    color: MUTED_TEXT,
+  metaSpacer: {
+    height: 23,
+    marginTop: 10,
+  },
+  oldPrice: {
+    fontSize: 11,
+    color: '#b9b0b0',
+    textDecorationLine: 'line-through',
+  },
+  savingsBadge: {
+    backgroundColor: DESTRUCTIVE_RED,
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  savingsBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });
-
-// ---------------------------------------------------------------------------
 
 function PaymentSuccessModal({
   visible,
@@ -358,7 +388,7 @@ function PaymentSuccessModal({
           </Text>
 
           <View style={modalStyles.planRow}>
-            <Icon name="calendar-outline" size={18} color={BLUE} />
+            <Icon name="calendar-outline" size={18} color="#3b9fd8" />
             <Text style={modalStyles.planText}>
               {getPlanDisplayName(plan, t)}
             </Text>
@@ -447,83 +477,38 @@ const modalStyles = StyleSheet.create({
   },
 });
 
-// ---------------------------------------------------------------------------
-// SubscriptionScreen
-// ---------------------------------------------------------------------------
-
 export function SubscriptionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
   const { user, subscription } = useAuth();
-  // loadSubscription() will be called after real IAP verification succeeds
 
-  const [selectedPlan, setSelectedPlan] = useState<PlanKey>('ten_month');
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>('yearly');
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
+  const [confirmedPlan] = useState<PlanKey>('yearly');
+  const [confirmedExpireAt] = useState<string | null>(null);
 
-  const status: AccountStatus | undefined =
-    subscription?.status ?? user?.status;
+  const status: AccountStatus | undefined = subscription?.status ?? user?.status;
   const trialEnd = subscription?.trialEnd ?? user?.trialEnd;
-
-  // After successful payment, we show the selected plan in the modal.
-  // In production this would come from the server response.
-  const [confirmedPlan, setConfirmedPlan] = useState<PlanKey>('ten_month');
-  const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(
-    null,
-  );
-
-  // ---------------------------------------------------------------------------
-  // Subscribe handler
-  // ---------------------------------------------------------------------------
 
   const handleSubscribe = useCallback(async () => {
     setIsLoading(true);
-
-    // -----------------------------------------------------------------
-    // TODO: Real IAP flow (enable when server is deployed)
-    // -----------------------------------------------------------------
-    // 1. Request Apple IAP product info:
-    //    const products = await RNIap.getProducts([productIdForPlan(selectedPlan)]);
-    // 2. Initiate purchase:
-    //    const purchase = await RNIap.requestPurchase(productId);
-    // 3. Get receipt from purchase:
-    //    const receipt = purchase.transactionReceipt;
-    // 4. Verify with backend:
-    //    await verifyIapReceipt(receipt, selectedPlan);
-    // 5. On success: show payment success modal, reload subscription
-    //    setConfirmedPlan(selectedPlan);
-    //    setConfirmedExpireAt(serverResponse.expireAt);
-    //    setShowPaymentSuccess(true);
-    //    await loadSubscription();
-    // -----------------------------------------------------------------
-
-    // Mock flow: show alert since server is not deployed. The "preview
-    // success" path was removed because it leaves the user in a fake
-    // post-payment state with no real subscription record on the server,
-    // and the dismiss handler had no way to navigate back to a usable view.
     setTimeout(() => {
       setIsLoading(false);
-      Alert.alert(t('subscription.alert.devTitle'), t('subscription.alert.devBody'), [{ text: t('subscription.alert.devConfirm') }]);
+      Alert.alert(
+        t('subscription.alert.devTitle'),
+        t('subscription.alert.devBody'),
+        [{ text: t('subscription.alert.devConfirm') }],
+      );
     }, 600);
   }, [t]);
 
-  // ---------------------------------------------------------------------------
-  // Payment success dismiss
-  // ---------------------------------------------------------------------------
-
   const handlePaymentSuccessDismiss = useCallback(() => {
     setShowPaymentSuccess(false);
-    // In production: navigate back or to SyncActivity
-    // navigation.navigate('SyncActivity');
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -545,53 +530,34 @@ export function SubscriptionScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero section */}
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>{t('subscription.hero.title')}</Text>
-          <Text style={styles.heroSubtitle}>
-            {t('subscription.hero.subtitle')}
-          </Text>
+          <Text style={styles.heroSubtitle}>{t('subscription.hero.subtitle')}</Text>
+          {status ? <StatusBadge status={status} trialEnd={trialEnd} t={t} /> : null}
         </View>
 
-        {/* Status badge */}
-        {status ? (
-          <View style={styles.badgeWrapper}>
-            <StatusBadge status={status} trialEnd={trialEnd} t={t} />
-          </View>
-        ) : null}
-
-        {/* Divider with label */}
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t('subscription.divider')}</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Feature list */}
         <View style={styles.featureCard}>
           <FeatureList t={t} />
         </View>
 
-        {/* Plan selection */}
         <View style={styles.planRow}>
           <PlanCard
-            title={t('subscription.plans.monthly.title')}
             price="¥9.9"
             unit={t('subscription.plans.monthly.unit')}
-            selected={selectedPlan === 'monthly'}
+            selected={false}
+            disabled
             onPress={() => setSelectedPlan('monthly')}
           />
           <PlanCard
-            title={t('subscription.plans.tenMonth.title')}
-            price="¥88"
-            unit={t('subscription.plans.tenMonth.unit')}
-            discountBadge={t('subscription.plans.tenMonth.badge')}
-            selected={selectedPlan === 'ten_month'}
-            onPress={() => setSelectedPlan('ten_month')}
+            price="¥104"
+            unit={t('subscription.plans.yearly.unit')}
+            oldPrice={t('subscription.plans.yearly.oldPrice')}
+            savingsBadge={t('subscription.plans.yearly.savings')}
+            selected={selectedPlan === 'yearly'}
+            onPress={() => setSelectedPlan('yearly')}
           />
         </View>
 
-        {/* Subscribe button */}
         <TouchableOpacity
           style={styles.subscribeButton}
           activeOpacity={0.7}
@@ -607,15 +573,10 @@ export function SubscriptionScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Footer disclaimer */}
-        <Text style={styles.footerText}>
-          {t('subscription.footer')}
-        </Text>
-
+        <Text style={styles.footerText}>{t('subscription.footer')}</Text>
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Payment success modal */}
       <PaymentSuccessModal
         visible={showPaymentSuccess}
         plan={confirmedPlan}
@@ -627,17 +588,11 @@ export function SubscriptionScreen() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: SCREEN_BG,
   },
-
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -657,67 +612,37 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: DARK,
+    color: '#32475b',
   },
-
-  // Scroll
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 40,
   },
-
-  // Hero
   heroSection: {
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingTop: 8,
+    alignItems: 'flex-start',
+    marginBottom: 18,
+    paddingTop: 4,
   },
   heroTitle: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
-    color: DARK,
-    marginBottom: 8,
+    color: '#2b2f35',
+    marginBottom: 6,
   },
   heroSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: MUTED_TEXT,
-    textAlign: 'center',
-    paddingHorizontal: 12,
+    color: '#8b98a7',
+    marginBottom: 12,
   },
-
-  // Badge wrapper
-  badgeWrapper: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-
-  // Divider
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: CARD_BORDER,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: MUTED_TEXT,
-  },
-
-  // Feature card
   featureCard: {
     backgroundColor: CARD_BG,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: CARD_BORDER,
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
     marginBottom: 20,
     shadowColor: '#4f8fbc',
     shadowOffset: { width: 0, height: 4 },
@@ -725,24 +650,20 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 2,
   },
-
-  // Plan selection
   planRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: PLAN_CARD_GAP,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-
-  // Subscribe button
   subscribeButton: {
     backgroundColor: DARK,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 14,
+    paddingVertical: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
-    marginBottom: 12,
+    minHeight: 56,
+    marginBottom: 10,
     shadowColor: DARK,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -754,15 +675,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#ffffff',
   },
-
-  // Footer
   footerText: {
     fontSize: 12,
-    color: MUTED_TEXT,
+    color: '#b2bccc',
     textAlign: 'center',
     lineHeight: 18,
   },
-
   bottomSpacer: {
     height: 20,
   },

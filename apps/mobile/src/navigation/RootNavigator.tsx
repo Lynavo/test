@@ -24,6 +24,7 @@ import { SettingsScreen } from '../screens/SettingsScreen';
 import { HelpScreen } from '../screens/HelpScreen';
 import { QRScannerScreen } from '../screens/QRScannerScreen';
 import { SubscriptionScreen } from '../screens/SubscriptionScreen';
+import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
 
 // ---------------------------------------------------------------------------
 // Param lists
@@ -71,6 +72,13 @@ export function RootNavigator() {
   }
 
   if (!auth.isLoggedIn) {
+    if (auth.signedOutTransition === 'account_deleted') {
+      return (
+        <SignedOutTransitionScreen
+          onComplete={() => auth.setSignedOutTransition(null)}
+        />
+      );
+    }
     return <UnauthStack />;
   }
 
@@ -186,6 +194,38 @@ function LoadingScreen() {
   );
 }
 
+function SignedOutTransitionScreen({
+  onComplete,
+}: {
+  onComplete: () => void;
+}) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const timer = setTimeout(onComplete, 720);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [onComplete]);
+
+  return (
+    <AuthScreenShell subtitle={t('auth.accountDeleted.subtitle')}>
+      <View style={styles.transitionCard}>
+        <View style={styles.transitionIcon}>
+          <Text style={styles.transitionIconGlyph}>✓</Text>
+        </View>
+        <Text style={styles.transitionTitle}>{t('auth.accountDeleted.title')}</Text>
+        <Text style={styles.transitionMessage}>{t('auth.accountDeleted.subtitle')}</Text>
+        <ActivityIndicator
+          size="small"
+          color={AUTH_COLORS.primary}
+          style={styles.transitionSpinner}
+        />
+      </View>
+    </AuthScreenShell>
+  );
+}
+
 // Rendered when the post-login profile load fails (transient network /
 // server error). Without this screen the user would be stranded on the
 // LoadingScreen forever because the auto-load effect won't re-fire on its
@@ -281,5 +321,52 @@ const styles = StyleSheet.create({
   errorSecondaryText: {
     fontSize: 14,
     color: '#7893ab',
+  },
+  transitionCard: {
+    marginTop: 56,
+    marginHorizontal: 4,
+    borderRadius: 28,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(194, 220, 245, 0.72)',
+    alignItems: 'center',
+    shadowColor: '#4f90ff',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.12,
+    shadowRadius: 26,
+    elevation: 8,
+  },
+  transitionIcon: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: 'rgba(94, 177, 115, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  transitionIconGlyph: {
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: '700',
+    color: '#32a852',
+  },
+  transitionTitle: {
+    marginTop: 18,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1d334d',
+    textAlign: 'center',
+  },
+  transitionMessage: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#6687a6',
+    textAlign: 'center',
+  },
+  transitionSpinner: {
+    marginTop: 22,
   },
 });

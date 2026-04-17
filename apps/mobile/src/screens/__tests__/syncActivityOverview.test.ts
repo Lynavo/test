@@ -18,6 +18,14 @@ jest.mock('../../components/Icon', () => ({
   Icon: () => null,
 }));
 
+jest.mock('../../stores/auth-store', () => ({
+  useAuth: () => ({
+    isLoggedIn: false,
+    user: null,
+  }),
+  isFeatureAccessAllowed: () => true,
+}));
+
 describe('buildOverview', () => {
   it('clears stale current file fields when scanning payload explicitly sends null', () => {
     const prev = {
@@ -88,5 +96,41 @@ describe('buildOverview', () => {
     expect(next.currentFilename).toBe('clip.mov');
     expect(next.currentFileConfirmedBytes).toBe(350);
     expect(next.currentFileTotalBytes).toBe(1000);
+  });
+
+  it('captures the last completed task source for the completion card', () => {
+    const prev = {
+      progressPercent: 92,
+      currentSpeedMbps: 8.2,
+      uploadState: 'uploading',
+      completedCount: 11,
+      totalCount: 12,
+      completedBytes: 4096,
+      totalBytes: 8192,
+      currentFile: 'file-key-2',
+      currentFilename: 'clip-2.mov',
+      currentFileConfirmedBytes: 950,
+      currentFileTotalBytes: 1000,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'disabled' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'completed',
+        completedCount: 12,
+        totalCount: 12,
+        completedBytes: 8192,
+        currentTaskSource: null,
+      },
+      prev,
+    );
+
+    expect(next.uploadState).toBe('completed');
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBe('manual');
   });
 });

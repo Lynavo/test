@@ -1,0 +1,50 @@
+{
+  "title": "會員訂閱",
+  "hero": {
+    "title": "解鎖完整版",
+    "subtitle": "7 天免費體驗，到期後訂閱繼續使用全部功能。"
+  },
+  "divider": "訂閱後可使用",
+  "features": {
+    "autoUpload": "自動上傳相簿新增素材",
+    "customTime": "自訂自動上傳起始時間，支援精確到時分秒",
+    "sharedDir": "存取並下載當前連接電腦的共享目錄內容",
+    "preview": "預覽共享目錄中的圖片與影片",
+    "multiDevice": "多設備連接與切換使用",
+    "unlimited": "無限量上傳素材"
+  },
+  "plans": {
+    "monthly": {
+      "name": "月度訂閱",
+      "unit": "/月"
+    },
+    "yearly": {
+      "name": "12 個月方案",
+      "unit": "/12個月",
+      "oldPrice": "¥118.8",
+      "savings": "立省 ¥14.8"
+    },
+    "fallback": "訂閱"
+  },
+  "status": {
+    "trialing": "試用中，還剩 {{days}} 天",
+    "trialExpired": "試用已結束",
+    "subscribed": "已訂閱",
+    "subExpired": "訂閱已到期"
+  },
+  "actions": {
+    "subscribe": "立即訂閱",
+    "start": "開始使用"
+  },
+  "footer": "訂閱即表示您同意自動續費條款，可隨時取消",
+  "modal": {
+    "paymentSuccess": "支付成功",
+    "successSubtitle": "訂閱成功，繼續使用 Vivi Drop 吧！",
+    "validUntil": "有效期至 {{date}}"
+  },
+  "alert": {
+    "devTitle": "提示",
+    "devBody": "支付功能開發中，敬請期待",
+    "devConfirm": "知道了"
+  }
+}

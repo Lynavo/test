@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Vibration,
   NativeModules,
+  Dimensions,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -36,6 +37,7 @@ export function CodeVerifyScreen() {
   const navigation = useNavigation<CodeVerifyNavProp>();
   const route = useRoute<CodeVerifyRouteProp>();
   const { t } = useTranslation();
+  const windowWidth = Dimensions.get('window').width;
   const { deviceId, host, port, deviceName, prefilledCode } = route.params;
 
   const [code, setCode] = useState<string[]>(
@@ -48,6 +50,15 @@ export function CodeVerifyScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const codeBoxSize = Math.min(
+    52,
+    Math.floor(
+      (windowWidth - 24 * 2 - 4 * 2 - 8 * (CODE_LENGTH - 1)) / CODE_LENGTH,
+    ),
+  );
+  const resolvedCodeBoxSize = Math.max(36, codeBoxSize);
+  const codeBoxFontSize = Math.max(18, Math.floor(resolvedCodeBoxSize * 0.4));
+  const codeBoxRadius = Math.max(14, Math.floor(resolvedCodeBoxSize * 0.3));
 
 
 
@@ -187,6 +198,12 @@ export function CodeVerifyScreen() {
               }}
               style={[
                 styles.codeBox,
+                {
+                  width: resolvedCodeBoxSize,
+                  height: resolvedCodeBoxSize,
+                  borderRadius: codeBoxRadius,
+                  fontSize: codeBoxFontSize,
+                },
                 digit ? styles.codeBoxFilled : styles.codeBoxEmpty,
                 error && styles.codeBoxError,
                 verifying && styles.codeBoxDisabled,
@@ -272,12 +289,8 @@ const styles = StyleSheet.create({
   },
 
   codeBox: {
-    width: 44,
-    height: 56,
-    borderRadius: 16,
     borderWidth: 2,
     textAlign: 'center',
-    fontSize: 20,
     fontWeight: 'bold',
     color: colors.foreground,
     // Shadow
