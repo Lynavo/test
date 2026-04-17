@@ -6,7 +6,11 @@
     "back": "返回",
     "retry": "重试",
     "loading": "加载中",
-    "unknownVersion": "未知版本"
+    "unknownVersion": "未知版本",
+    "deviceNames": {
+      "default": "电脑",
+      "windows": "Windows 电脑"
+    }
   },
   "errors": {
     "title": "错误",
@@ -137,8 +141,6 @@
   },
   "syncActivity": {
     "title": "同步动态",
-    "defaultDeviceName": "电脑",
-    "windowsDeviceName": "Windows 电脑",
     "phases": {
       "discoveringTitle": "正在搜索电脑…",
       "reconcilingTitle": "正在同步历史记录…",

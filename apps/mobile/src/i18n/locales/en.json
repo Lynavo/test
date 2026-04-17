@@ -6,7 +6,11 @@
     "back": "Back",
     "retry": "Retry",
     "loading": "Loading",
-    "unknownVersion": "Unknown version"
+    "unknownVersion": "Unknown version",
+    "deviceNames": {
+      "default": "Computer",
+      "windows": "Windows PC"
+    }
   },
   "errors": {
     "title": "Error",
@@ -137,8 +141,6 @@
   },
   "syncActivity": {
     "title": "Sync Activity",
-    "defaultDeviceName": "Computer",
-    "windowsDeviceName": "Windows PC",
     "phases": {
       "discoveringTitle": "Searching for your computer...",
       "reconcilingTitle": "Syncing history...",

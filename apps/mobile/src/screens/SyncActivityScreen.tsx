@@ -550,8 +550,8 @@ export function SyncActivityScreen() {
     bindingState?.deviceAlias ||
     bindingState?.deviceName ||
     (bindingState?.deviceType === 'win'
-      ? t('syncActivity.windowsDeviceName')
-      : t('syncActivity.defaultDeviceName'));
+      ? t('common.deviceNames.windows')
+      : t('common.deviceNames.default'));
 
   const connectionBadgeState = getConnectionBadgeState(
     bindingState?.connectionState,
