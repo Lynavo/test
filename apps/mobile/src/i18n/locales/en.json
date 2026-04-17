@@ -259,6 +259,44 @@
       "thermalThrottled": "Device is running hot — transfer throttled"
     }
   },
+  "deviceDiscovery": {
+    "title": "Find devices",
+    "subtitle": {
+      "ios": "Scanning for desktop apps on your local network...",
+      "android": "Scanning for desktop apps on your local network. If no device is found, enter the IPv4 address manually."
+    },
+    "scanning": {
+      "text": "Scanning, please wait..."
+    },
+    "devices": {
+      "foundCount": "{{count}} device found"
+    },
+    "emptyState": {
+      "default": "No devices found",
+      "android": "No devices found — enter the IP address manually to continue pairing"
+    },
+    "actions": {
+      "manualPair": "Manual pairing",
+      "rescan": "Scan again",
+      "manualInputIp": "Enter IP manually",
+      "qrPair": "Scan QR code",
+      "privacyPolicy": "Privacy Policy",
+      "termsOfService": "Terms of Service"
+    },
+    "dialogs": {
+      "openLinkFailed": {
+        "title": "Cannot open",
+        "body": "Could not open {{label}} right now. Please try again later."
+      },
+      "manualInput": {
+        "title": "Enter IP to pair",
+        "description": "If the scan can't find your computer — especially Windows — enter the desktop app's IPv4 address directly.",
+        "confirm": "Continue",
+        "hint": "Uses sync port 39393 by default. You'll still need to enter the 6-digit pairing code in the next step.",
+        "ipError": "Please enter a valid IPv4 address, e.g. 192.168.0.1"
+      }
+    }
+  },
   "albumWorkbench": {
     "title": "Album",
     "loading": "Loading album...",

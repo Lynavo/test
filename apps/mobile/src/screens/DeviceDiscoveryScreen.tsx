@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   Linking,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -144,6 +145,7 @@ const TERMS_OF_SERVICE_URL = 'https://www.vividrop.cn/terms';
 export function DeviceDiscoveryScreen() {
   const navigation = useNavigation<NavigationProp>();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const isAndroid = Platform.OS === 'android';
   const [scanning, setScanning] = useState(true);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
@@ -329,7 +331,7 @@ export function DeviceDiscoveryScreen() {
 
     if (!manualDevice) {
       console.log('[DiscoveryScreen] handleManualPair rejected invalid host');
-      setManualHostError('请输入有效的 IPv4 地址，例如 192.168.0.1');
+      setManualHostError(t('deviceDiscovery.dialogs.manualInput.ipError'));
       return;
     }
 
@@ -349,9 +351,9 @@ export function DeviceDiscoveryScreen() {
       await shareDiagnosticsArchive();
     } catch (error) {
       if (isDiagnosticsExportUnavailable(error)) {
-        Alert.alert('无法导出', '当前版本暂不支持导出诊断包');
+        Alert.alert(t('settings.dialogs.exportUnavailable.title'), t('settings.dialogs.exportUnavailable.body'));
       } else {
-        Alert.alert('导出失败', '诊断包导出失败，请稍后重试');
+        Alert.alert(t('settings.dialogs.exportFailed.title'), t('settings.dialogs.exportFailed.body'));
       }
     } finally {
       setIsExportingDiagnostics(false);
@@ -402,7 +404,7 @@ export function DeviceDiscoveryScreen() {
       await Linking.openURL(url);
     } catch (error) {
       console.warn(`[DiscoveryScreen] failed to open ${label}:`, error);
-      Alert.alert('打开失败', `暂时无法打开${label}，请稍后重试。`);
+      Alert.alert(t('deviceDiscovery.dialogs.openLinkFailed.title'), t('deviceDiscovery.dialogs.openLinkFailed.body', { label }));
     }
   }, []);
 
@@ -432,14 +434,14 @@ export function DeviceDiscoveryScreen() {
               }}
             >
               <Icon name="settings-outline" size={16} color="#3b9fd8" />
-              <Text style={styles.scanButtonText}>手动配对</Text>
+              <Text style={styles.scanButtonText}>{t('deviceDiscovery.actions.manualPair')}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.title}>{'搜索设备'}</Text>
+          <Text style={styles.title}>{t('deviceDiscovery.title')}</Text>
           <Text style={styles.subtitle}>
             {isAndroid
-              ? '正在扫描局域网中的电脑端应用；若未发现设备，可改用手动输入 IPv4。'
-              : '正在扫描局域网中的电脑端应用...'}
+              ? t('deviceDiscovery.subtitle.android')
+              : t('deviceDiscovery.subtitle.ios')}
           </Text>
         </View>
 
@@ -447,7 +449,7 @@ export function DeviceDiscoveryScreen() {
         {scanning && devices.length === 0 && (
           <View style={styles.scanningSection}>
             <PulseRings />
-            <Text style={styles.scanningText}>{'扫描中，请稍候...'}</Text>
+            <Text style={styles.scanningText}>{t('deviceDiscovery.scanning.text')}</Text>
           </View>
         )}
 
@@ -458,15 +460,15 @@ export function DeviceDiscoveryScreen() {
           >
             {devices.length > 0 && (
               <Text style={styles.deviceCount}>
-                {'发现'} {devices.length} {'台设备'}
+                {t('deviceDiscovery.devices.foundCount', { count: devices.length })}
               </Text>
             )}
             {devices.length === 0 ? (
               <View style={styles.emptySection}>
                 <Text style={styles.emptyText}>
                   {isAndroid
-                    ? '未发现设备，请手动输入 IP 继续配对'
-                    : '未发现设备'}
+                    ? t('deviceDiscovery.emptyState.android')
+                    : t('deviceDiscovery.emptyState.default')}
                 </Text>
               </View>
             ) : (
@@ -504,7 +506,7 @@ export function DeviceDiscoveryScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
                 >
                   <Icon name="refresh" size={16} color="#5a9abf" />
-                  <Text style={styles.rescanText}>{'重新扫描'}</Text>
+                  <Text style={styles.rescanText}>{t('deviceDiscovery.actions.rescan')}</Text>
                 </View>
               </TouchableOpacity>
               <View style={styles.legalLinksRow}>
@@ -512,20 +514,20 @@ export function DeviceDiscoveryScreen() {
                   style={styles.legalLinkButton}
                   activeOpacity={0.7}
                   onPress={() =>
-                    void openLegalLink(PRIVACY_POLICY_URL, '隐私政策')
+                    void openLegalLink(PRIVACY_POLICY_URL, t('deviceDiscovery.actions.privacyPolicy'))
                   }
                 >
-                  <Text style={styles.legalLinkText}>{'隐私政策'}</Text>
+                  <Text style={styles.legalLinkText}>{t('deviceDiscovery.actions.privacyPolicy')}</Text>
                 </TouchableOpacity>
                 <Text style={styles.legalLinkDivider}>{'/'}</Text>
                 <TouchableOpacity
                   style={styles.legalLinkButton}
                   activeOpacity={0.7}
                   onPress={() =>
-                    void openLegalLink(TERMS_OF_SERVICE_URL, '用户协议')
+                    void openLegalLink(TERMS_OF_SERVICE_URL, t('deviceDiscovery.actions.termsOfService'))
                   }
                 >
-                  <Text style={styles.legalLinkText}>{'用户协议'}</Text>
+                  <Text style={styles.legalLinkText}>{t('deviceDiscovery.actions.termsOfService')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -552,7 +554,7 @@ export function DeviceDiscoveryScreen() {
                 }}
               >
                 <Icon name="create-outline" size={20} color="#3b9fd8" />
-                <Text style={styles.popoverText}>手动输入 IP</Text>
+                <Text style={styles.popoverText}>{t('deviceDiscovery.actions.manualInputIp')}</Text>
               </TouchableOpacity>
               {isAndroid ? null : (
                 <>
@@ -565,7 +567,7 @@ export function DeviceDiscoveryScreen() {
                     }}
                   >
                     <Icon name="scan-outline" size={20} color="#3b9fd8" />
-                    <Text style={styles.popoverText}>扫码配对</Text>
+                    <Text style={styles.popoverText}>{t('deviceDiscovery.actions.qrPair')}</Text>
                   </TouchableOpacity>
                   <View style={styles.popoverDivider} />
                   <TouchableOpacity
@@ -576,8 +578,8 @@ export function DeviceDiscoveryScreen() {
                     <Icon name="download-outline" size={20} color="#3b9fd8" />
                     <Text style={styles.popoverText}>
                       {isExportingDiagnostics
-                        ? '正在导出诊断包…'
-                        : '导出诊断包'}
+                        ? t('settings.actions.exportingDiagnostics')
+                        : t('settings.actions.exportDiagnostics')}
                     </Text>
                   </TouchableOpacity>
                 </>
@@ -604,15 +606,13 @@ export function DeviceDiscoveryScreen() {
               <Pressable onPress={() => {}}>
                 <View style={styles.manualCard}>
                   <View style={styles.modalHeader}>
-                    <Text style={styles.manualTitle}>{'手动输入 IP 配对'}</Text>
+                    <Text style={styles.manualTitle}>{t('deviceDiscovery.dialogs.manualInput.title')}</Text>
                     <TouchableOpacity onPress={() => setShowManualModal(false)}>
                       <Icon name="close" size={22} color="#8aa9bc" />
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.manualDescription}>
-                    {
-                      '如果扫描不到电脑，尤其是 Windows 设备，可直接输入电脑端 IPv4 地址继续配对。'
-                    }
+                    {t('deviceDiscovery.dialogs.manualInput.description')}
                   </Text>
                   <View style={styles.manualInputRow}>
                     <TextInput
@@ -641,7 +641,7 @@ export function DeviceDiscoveryScreen() {
                       activeOpacity={0.8}
                       onPress={handleManualPair}
                     >
-                      <Text style={styles.manualButtonText}>{'继续'}</Text>
+                      <Text style={styles.manualButtonText}>{t('deviceDiscovery.dialogs.manualInput.confirm')}</Text>
                     </TouchableOpacity>
                   </View>
                   {manualHostError ? (
@@ -650,9 +650,7 @@ export function DeviceDiscoveryScreen() {
                     </Text>
                   ) : (
                     <Text style={styles.manualHint}>
-                      {
-                        '默认使用同步端口 39393，输入后仍需在下一步填写 6 位连接码。'
-                      }
+                      {t('deviceDiscovery.dialogs.manualInput.hint')}
                     </Text>
                   )}
                 </View>
