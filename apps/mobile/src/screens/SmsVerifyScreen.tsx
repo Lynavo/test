@@ -21,6 +21,7 @@ import { maskPhone } from '../utils/phone-validation';
 import { smsLogin, sendSmsCode } from '../services/auth-service';
 import { ApiError, ERROR_CODE } from '../services/api';
 import { useAuth } from '../stores/auth-store';
+import { useTranslation } from 'react-i18next';
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -40,6 +41,7 @@ export function SmsVerifyScreen() {
   const route = useRoute<SmsVerifyRouteProp>();
   const { phone } = route.params;
   const auth = useAuth();
+  const { t } = useTranslation();
 
   // -----------------------------------------------------------------------
   // State
@@ -159,7 +161,7 @@ export function SmsVerifyScreen() {
           switch (err.code) {
             case ERROR_CODE.CODE_WRONG:
               setError(true);
-              setErrorMsg('驗證碼錯誤，請重新輸入');
+              setErrorMsg(t('errors.smsCodeIncorrect'));
               triggerShake();
               setCode('');
               Vibration.vibrate(300);
@@ -167,25 +169,25 @@ export function SmsVerifyScreen() {
               break;
             case ERROR_CODE.CODE_EXPIRED:
               setError(true);
-              setErrorMsg('驗證碼已過期，請重新取得');
+              setErrorMsg(t('errors.smsCodeExpired'));
               setCode('');
               Vibration.vibrate(300);
               setTimeout(() => codeInputRef.current?.focus(), 120);
               break;
             case ERROR_CODE.TOO_MANY_CODE_ATTEMPTS:
-              Alert.alert('驗證失敗', '驗證碼嘗試次數過多，請重新取得');
+              Alert.alert(t('errors.smsVerifyFailedTitle'), t('errors.smsTooManyAttempts'));
               setCode('');
               Vibration.vibrate(300);
               setTimeout(() => codeInputRef.current?.focus(), 120);
               break;
             default:
               setError(true);
-              setErrorMsg(err.message || '驗證失敗，請稍後重試');
+              setErrorMsg(err.message || t('errors.smsVerifyFailedRetry'));
               Vibration.vibrate(300);
           }
         } else {
           setError(true);
-          setErrorMsg('網路錯誤，請檢查連線後重試');
+          setErrorMsg(t('errors.networkCheckRetry'));
           Vibration.vibrate(300);
         }
       }
@@ -229,9 +231,9 @@ export function SmsVerifyScreen() {
       setTimeout(() => codeInputRef.current?.focus(), 120);
     } catch (err) {
       if (err instanceof ApiError) {
-        Alert.alert('發送失敗', err.message || '驗證碼發送失敗');
+        Alert.alert(t('errors.authSendFailed'), err.message || t('errors.smsSendFailed'));
       } else {
-        Alert.alert('網路錯誤', '請檢查網路連線後重試');
+        Alert.alert(t('errors.networkTitle'), t('errors.networkCheckConnection'));
       }
     } finally {
       setResending(false);
@@ -244,12 +246,12 @@ export function SmsVerifyScreen() {
 
   return (
     <AuthScreenShell
-      subtitle={`驗證碼已發送至 ${maskPhone(phone)}`}
+      subtitle={t('auth.smsVerify.subtitlePattern', { phone: maskPhone(phone) })}
       onBack={() => navigation.goBack()}
       contentStyle={styles.content}
     >
       <View style={styles.card}>
-        <Text style={styles.prompt}>請輸入 6 位簡訊驗證碼</Text>
+        <Text style={styles.prompt}>{t('auth.smsVerify.prompt')}</Text>
 
         <TextInput
           ref={codeInputRef}
@@ -300,7 +302,7 @@ export function SmsVerifyScreen() {
 
         {verifying ? (
           <View style={styles.statusRow}>
-            <Text style={styles.statusText}>驗證中</Text>
+            <Text style={styles.statusText}>{t('auth.smsVerify.verifying')}</Text>
             <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
           </View>
         ) : null}
@@ -312,7 +314,7 @@ export function SmsVerifyScreen() {
         <View style={styles.resendRow}>
           {countdown > 0 ? (
             <Text style={styles.countdownText}>
-              {countdown}s 後重新發送
+              {t('auth.smsVerify.resendCountdown', { seconds: countdown })}
             </Text>
           ) : (
             <TouchableOpacity
@@ -324,7 +326,7 @@ export function SmsVerifyScreen() {
               {resending ? (
                 <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
               ) : (
-                <Text style={styles.resendText}>重新取得驗證碼</Text>
+                <Text style={styles.resendText}>{t('auth.smsVerify.resendButton')}</Text>
               )}
             </TouchableOpacity>
           )}
