@@ -134,5 +134,127 @@
         "body": "Failed to export the diagnostics bundle. Please try again later."
       }
     }
+  },
+  "syncActivity": {
+    "title": "Sync Activity",
+    "defaultDeviceName": "Computer",
+    "windowsDeviceName": "Windows PC",
+    "phases": {
+      "discoveringTitle": "Searching for your computer...",
+      "reconcilingTitle": "Syncing history...",
+      "scanningTitle": "Scanning photo library...",
+      "preparingTitle": "Establishing connection...",
+      "defaultTitle": "Preparing...",
+      "discoveringSubtitleWaited": "Waited {{seconds}}s",
+      "discoveringSubtitleSearching": "Searching on the local network",
+      "reconcilingSubtitle": "First-time setup: verifying previously uploaded files",
+      "scanningSubtitleProgress": "Scanned {{scanned}} / {{total}}",
+      "scanningSubtitleReading": "Reading photo library",
+      "preparingSubtitle": "Establishing a secure connection to your computer"
+    },
+    "badges": {
+      "manual": "Manual",
+      "auto": "Auto",
+      "manualUploading": "Manual upload in progress",
+      "autoEnabled": "Auto upload enabled"
+    },
+    "running": {
+      "manualTitle": "Manual upload in progress",
+      "autoTitle": "Auto uploading",
+      "autoRunningTitle": "Auto upload running",
+      "autoRunningSubtitle": "New photos will transfer to your PC automatically",
+      "queueInfo": "{{queued}} queued"
+    },
+    "standby": {
+      "title": "Waiting for new photos",
+      "subtitle": "New photos will transfer to your PC after you take them"
+    },
+    "notStarted": {
+      "title": "Auto upload is off",
+      "subtitle": "Turn on auto upload to sync after you shoot, or use manual upload",
+      "goToAlbum": "Go to album",
+      "enableAuto": "Enable auto upload"
+    },
+    "offline": {
+      "title": "Device is offline",
+      "subtitle": "Make sure your computer is on and on the same network. Once it's back, uploads and shared files will resume.",
+      "switchDevice": "Switch device",
+      "reconnect": "Reconnect"
+    },
+    "stats": {
+      "speed": "Speed",
+      "progress": "Progress",
+      "transferred": "Transferred",
+      "transferredCount": "{{count}}",
+      "dataAmount": "Data"
+    },
+    "actions": {
+      "cancelling": "Cancelling...",
+      "cancelManualBatch": "Cancel manual upload",
+      "closeAutoUpload": "Turn off auto upload"
+    },
+    "quickEntry": {
+      "title": "Quick actions",
+      "albumTitle": "Album",
+      "albumDesc": "Browse and upload photos manually",
+      "sharedFilesTitle": "Shared files",
+      "sharedFilesDesc": "Browse shared files on your PC"
+    },
+    "expired": {
+      "title": "Trial ended",
+      "subtitle": "Subscribe to continue using photo upload, auto upload, and shared file access",
+      "subscribeCta": "Subscribe now",
+      "viewHelp": "View help"
+    },
+    "dialogs": {
+      "syncError": {
+        "title": "Sync error"
+      },
+      "cancelManual": {
+        "title": "Cancel manual upload",
+        "body": "Cancel the current manual upload queue?",
+        "rethink": "Keep uploading",
+        "confirm": "Confirm cancel"
+      },
+      "cancelManualFailed": {
+        "title": "Cancel failed",
+        "body": "Could not cancel the manual upload. Please try again later."
+      },
+      "closeAuto": {
+        "title": "Turn off auto upload",
+        "body": "Turning it off stops the current auto upload and new photos will not upload automatically.",
+        "continue": "Keep uploading",
+        "confirm": "Confirm turn off"
+      },
+      "closeAutoFailed": {
+        "title": "Action failed",
+        "body": "Could not turn off auto upload. Please try again later."
+      },
+      "reconnectFailed": {
+        "title": "Reconnect failed",
+        "body": "Please try again later"
+      },
+      "switchDevice": {
+        "title": "Switch device",
+        "body": "This will disconnect the current device and return to the device discovery page.",
+        "confirm": "Confirm switch"
+      },
+      "enableAutoBlocked": {
+        "title": "Cannot enable",
+        "body": "Please connect to a device first"
+      },
+      "switchUploadMode": {
+        "title": "Switch upload mode",
+        "body": "An upload is in progress. Enabling auto upload will interrupt the manual upload. Continue?",
+        "confirm": "Confirm switch"
+      },
+      "enableAutoFailed": {
+        "title": "Action failed",
+        "body": "Could not enable auto upload. Please try again later."
+      }
+    },
+    "performance": {
+      "thermalThrottled": "Device is running hot — transfer throttled"
+    }
   }
 }

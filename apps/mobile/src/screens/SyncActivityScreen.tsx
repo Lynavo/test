@@ -19,6 +19,8 @@ import {
   CommonActions,
 } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { UploadTaskSource, AutoUploadState } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import {
@@ -155,34 +157,36 @@ function isPreparationPhase(uploadState: string): boolean {
   return PREPARATION_STATES.has(uploadState);
 }
 
-function getPreparationTitle(uploadState: string): string {
+function getPreparationTitle(uploadState: string, t: TFunction): string {
   switch (uploadState) {
-    case 'discovering': return '正在搜索电脑…';
-    case 'reconciling': return '正在同步历史记录…';
-    case 'scanning': return '正在扫描相册…';
-    case 'preparing': return '正在建立连接…';
-    default: return '准备中…';
+    case 'discovering': return t('syncActivity.phases.discoveringTitle');
+    case 'reconciling': return t('syncActivity.phases.reconcilingTitle');
+    case 'scanning': return t('syncActivity.phases.scanningTitle');
+    case 'preparing': return t('syncActivity.phases.preparingTitle');
+    default: return t('syncActivity.phases.defaultTitle');
   }
 }
 
-function getPreparationSubtitle(overview: SyncOverview): string {
+function getPreparationSubtitle(overview: SyncOverview, t: TFunction): string {
   switch (overview.uploadState) {
     case 'discovering': {
       const sec = Math.round(overview.discoveryElapsedSec ?? 0);
-      return sec > 0 ? `已等待 ${sec} 秒` : '正在局域网中搜索';
+      return sec > 0
+        ? t('syncActivity.phases.discoveringSubtitleWaited', { seconds: sec })
+        : t('syncActivity.phases.discoveringSubtitleSearching');
     }
     case 'reconciling':
-      return '首次使用需要核对已传文件';
+      return t('syncActivity.phases.reconcilingSubtitle');
     case 'scanning': {
       const scanned = overview.scannedCount ?? 0;
       const total = overview.libraryTotal ?? 0;
       if (total > 0) {
-        return `已扫描 ${scanned} / ${total} 张`;
+        return t('syncActivity.phases.scanningSubtitleProgress', { scanned, total });
       }
-      return '正在读取相册';
+      return t('syncActivity.phases.scanningSubtitleReading');
     }
     case 'preparing':
-      return '正在与电脑建立安全连接';
+      return t('syncActivity.phases.preparingSubtitle');
     default:
       return '';
   }
@@ -194,6 +198,7 @@ function getPreparationSubtitle(overview: SyncOverview): string {
 
 export function SyncActivityScreen() {
   const navigation = useNavigation<SyncActivityNav>();
+  const { t } = useTranslation();
   const auth = useAuth();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [bindingState, setBindingState] = useState<BindingState | null>(null);
@@ -307,8 +312,8 @@ export function SyncActivityScreen() {
         errorSub = emitter.addListener(
           'onError',
           (error: { code?: string; message?: string }) => {
-            const msg = error?.message || '发生未知错误';
-            Alert.alert('同步异常', msg);
+            const msg = error?.message || t('errors.unknown');
+            Alert.alert(t('syncActivity.dialogs.syncError.title'), msg);
           },
         );
       } catch (e) {
@@ -324,7 +329,7 @@ export function SyncActivityScreen() {
       bindingSub?.remove();
       errorSub?.remove();
     };
-  }, [loadTodayStats]);
+  }, [loadTodayStats, navigation, t]);
 
   // Foreground refresh + reset mount grace on foreground transitions
   useEffect(() => {
@@ -365,34 +370,41 @@ export function SyncActivityScreen() {
   // ---------------------------------------------------------------------------
 
   const handleCancelManualBatch = useCallback(() => {
-    Alert.alert('取消手动上传', '确定取消当前的手动上传队列吗？', [
-      { text: '再想想', style: 'cancel' },
-      {
-        text: '确认取消',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            setCancellingBatch(true);
-            await cancelAllManualUploads();
-          } catch (e) {
-            console.warn('[SyncActivity] cancelAllManualUploads error:', e);
-            Alert.alert('取消失败', '无法取消当前手动上传，请稍后重试');
-          } finally {
-            setCancellingBatch(false);
-          }
+    Alert.alert(
+      t('syncActivity.dialogs.cancelManual.title'),
+      t('syncActivity.dialogs.cancelManual.body'),
+      [
+        { text: t('syncActivity.dialogs.cancelManual.rethink'), style: 'cancel' },
+        {
+          text: t('syncActivity.dialogs.cancelManual.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancellingBatch(true);
+              await cancelAllManualUploads();
+            } catch (e) {
+              console.warn('[SyncActivity] cancelAllManualUploads error:', e);
+              Alert.alert(
+                t('syncActivity.dialogs.cancelManualFailed.title'),
+                t('syncActivity.dialogs.cancelManualFailed.body'),
+              );
+            } finally {
+              setCancellingBatch(false);
+            }
+          },
         },
-      },
-    ]);
-  }, []);
+      ],
+    );
+  }, [t]);
 
   const handleCloseAutoUpload = useCallback(() => {
     Alert.alert(
-      '关闭自动上传',
-      '关闭后，当前自动上传任务将停止，后续新素材不会继续自动上传。',
+      t('syncActivity.dialogs.closeAuto.title'),
+      t('syncActivity.dialogs.closeAuto.body'),
       [
-        { text: '继续上传', style: 'cancel' },
+        { text: t('syncActivity.dialogs.closeAuto.continue'), style: 'cancel' },
         {
-          text: '确认关闭',
+          text: t('syncActivity.dialogs.closeAuto.confirm'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -404,13 +416,16 @@ export function SyncActivityScreen() {
               }
             } catch (e) {
               console.warn('[SyncActivity] interruptAutoUpload error:', e);
-              Alert.alert('操作失败', '无法关闭自动上传，请稍后重试');
+              Alert.alert(
+                t('syncActivity.dialogs.closeAutoFailed.title'),
+                t('syncActivity.dialogs.closeAutoFailed.body'),
+              );
             }
           },
         },
       ],
     );
-  }, []);
+  }, [t]);
 
   const handleReconnect = useCallback(async () => {
     try {
@@ -422,32 +437,39 @@ export function SyncActivityScreen() {
       });
     } catch (e) {
       console.warn('[SyncActivity] reconnect error:', e);
-      Alert.alert('重连失败', '请稍后重试');
+      Alert.alert(
+        t('syncActivity.dialogs.reconnectFailed.title'),
+        t('syncActivity.dialogs.reconnectFailed.body'),
+      );
     }
-  }, []);
+  }, [t]);
 
   const handleSwitchDevice = useCallback(() => {
-    Alert.alert('切换设备', '将断开当前设备并返回设备扫描页', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '确认切换',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await NativeModules.NativeSyncEngine?.disconnectAndUnbind();
-          } catch (e) {
-            console.warn('[SyncActivity] disconnectAndUnbind error:', e);
-          }
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'DeviceDiscovery' }],
-            }),
-          );
+    Alert.alert(
+      t('syncActivity.dialogs.switchDevice.title'),
+      t('syncActivity.dialogs.switchDevice.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('syncActivity.dialogs.switchDevice.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await NativeModules.NativeSyncEngine?.disconnectAndUnbind();
+            } catch (e) {
+              console.warn('[SyncActivity] disconnectAndUnbind error:', e);
+            }
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'DeviceDiscovery' }],
+              }),
+            );
+          },
         },
-      },
-    ]);
-  }, [navigation]);
+      ],
+    );
+  }, [navigation, t]);
 
   const handleEnableAutoUpload = useCallback(async () => {
     // Check device connection first
@@ -458,23 +480,29 @@ export function SyncActivityScreen() {
         (binding.connectionState !== 'connected' &&
           binding.connectionState !== 'bound')
       ) {
-        Alert.alert('无法开启', '请先连接设备');
+        Alert.alert(
+          t('syncActivity.dialogs.enableAutoBlocked.title'),
+          t('syncActivity.dialogs.enableAutoBlocked.body'),
+        );
         return;
       }
     } catch {
-      Alert.alert('无法开启', '请先连接设备');
+      Alert.alert(
+        t('syncActivity.dialogs.enableAutoBlocked.title'),
+        t('syncActivity.dialogs.enableAutoBlocked.body'),
+      );
       return;
     }
     try {
       const syncData = await NativeModules.NativeSyncEngine?.getSyncOverview();
       if (hasPendingManualWork(syncData)) {
         Alert.alert(
-          '切换上传模式',
-          '当前正在上传，继续自动上传将中断手动上传，是否继续？',
+          t('syncActivity.dialogs.switchUploadMode.title'),
+          t('syncActivity.dialogs.switchUploadMode.body'),
           [
-            { text: '取消', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: '确认切换',
+              text: t('syncActivity.dialogs.switchUploadMode.confirm'),
               onPress: async () => {
                 try {
                   await cancelAllManualUploads();
@@ -487,7 +515,10 @@ export function SyncActivityScreen() {
                   }
                 } catch (e) {
                   console.warn('[SyncActivity] enableAutoUpload error:', e);
-                  Alert.alert('操作失败', '无法开启自动上传，请稍后重试');
+                  Alert.alert(
+                    t('syncActivity.dialogs.enableAutoFailed.title'),
+                    t('syncActivity.dialogs.enableAutoFailed.body'),
+                  );
                 }
               },
             },
@@ -504,9 +535,12 @@ export function SyncActivityScreen() {
       }
     } catch (e) {
       console.warn('[SyncActivity] enableAutoUpload error:', e);
-      Alert.alert('操作失败', '无法开启自动上传，请稍后重试');
+      Alert.alert(
+        t('syncActivity.dialogs.enableAutoFailed.title'),
+        t('syncActivity.dialogs.enableAutoFailed.body'),
+      );
     }
-  }, []);
+  }, [t]);
 
   // ---------------------------------------------------------------------------
   // Derived state
@@ -515,7 +549,9 @@ export function SyncActivityScreen() {
   const boundDeviceName =
     bindingState?.deviceAlias ||
     bindingState?.deviceName ||
-    (bindingState?.deviceType === 'win' ? 'Windows 电脑' : '电脑');
+    (bindingState?.deviceType === 'win'
+      ? t('syncActivity.windowsDeviceName')
+      : t('syncActivity.defaultDeviceName'));
 
   const connectionBadgeState = getConnectionBadgeState(
     bindingState?.connectionState,
@@ -587,7 +623,7 @@ export function SyncActivityScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>同步动态</Text>
+          <Text style={styles.headerTitle}>{t('syncActivity.title')}</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -635,10 +671,10 @@ export function SyncActivityScreen() {
                   ]}
                 >
                   {connectionBadgeState === 'offline'
-                    ? '离线'
+                    ? t('settings.connection.offline')
                     : isConnecting
-                      ? '连接中'
-                      : '在线'}
+                      ? t('settings.connection.connecting')
+                      : t('settings.connection.online')}
                 </Text>
               </View>
             </View>
@@ -651,11 +687,11 @@ export function SyncActivityScreen() {
               <View style={styles.badgeRow}>
                 <View style={isManualUploading ? styles.manualBadge : styles.autoBadge}>
                   <Text style={isManualUploading ? styles.manualBadgeText : styles.autoBadgeText}>
-                    {isManualUploading ? '手动' : '自动'}
+                    {isManualUploading ? t('syncActivity.badges.manual') : t('syncActivity.badges.auto')}
                   </Text>
                 </View>
                 <Text style={styles.badgeLabel}>
-                  {isManualUploading ? '手动上传中' : '自动上传已开启'}
+                  {isManualUploading ? t('syncActivity.badges.manualUploading') : t('syncActivity.badges.autoEnabled')}
                 </Text>
               </View>
 
@@ -663,10 +699,10 @@ export function SyncActivityScreen() {
                 <View style={styles.preparationBody}>
                   <ActivityIndicator size="small" color={BLUE} />
                   <Text style={styles.preparationTitle}>
-                    {getPreparationTitle(overview.uploadState)}
+                    {getPreparationTitle(overview.uploadState, t)}
                   </Text>
                   <Text style={styles.preparationSubtitle}>
-                    {getPreparationSubtitle(overview)}
+                    {getPreparationSubtitle(overview, t)}
                   </Text>
                 </View>
               ) : (isActivelyTransferring || isManualUploading) ? (
@@ -674,7 +710,7 @@ export function SyncActivityScreen() {
                   {/* Title row with percentage */}
                   <View style={styles.runningTitleRow}>
                     <Text style={styles.runningTitle}>
-                      {isManualUploading ? '手动上传中' : '正在自动上传'}
+                      {isManualUploading ? t('syncActivity.running.manualTitle') : t('syncActivity.running.autoTitle')}
                     </Text>
                     <Text style={styles.runningPercent}>{progressPercent}%</Text>
                   </View>
@@ -699,21 +735,21 @@ export function SyncActivityScreen() {
                   {/* Stats row */}
                   <View style={styles.statsRow}>
                     <View style={styles.statItem}>
-                      <Text style={styles.statLabel}>速度</Text>
+                      <Text style={styles.statLabel}>{t('syncActivity.stats.speed')}</Text>
                       <Text style={styles.statValue}>
                         {formatSpeedMbps(overview.currentSpeedMbps)}
                       </Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
-                      <Text style={styles.statLabel}>进度</Text>
+                      <Text style={styles.statLabel}>{t('syncActivity.stats.progress')}</Text>
                       <Text style={styles.statValue}>
                         {`${overview.completedCount} / ${overview.totalCount}`}
                       </Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
-                      <Text style={styles.statLabel}>已传输</Text>
+                      <Text style={styles.statLabel}>{t('syncActivity.stats.transferred')}</Text>
                       <Text style={styles.statValue}>
                         {formatBytes(overview.completedBytes)}
                       </Text>
@@ -723,28 +759,28 @@ export function SyncActivityScreen() {
                   {/* Queue info */}
                   {totalPending > 0 && (
                     <Text style={styles.queueInfoText}>
-                      排队中 {totalPendingDisplay}项
+                      {t('syncActivity.running.queueInfo', { queued: totalPendingDisplay })}
                     </Text>
                   )}
                 </>
               ) : (
                 <>
                   {/* Active but idle — monitoring for new photos */}
-                  <Text style={styles.runningTitle}>自动上传运行中</Text>
+                  <Text style={styles.runningTitle}>{t('syncActivity.running.autoRunningTitle')}</Text>
                   <Text style={styles.idleSubtitle}>
-                    新素材将自动传输到 PC 端
+                    {t('syncActivity.running.autoRunningSubtitle')}
                   </Text>
                   {overview.completedCount > 0 && (
                     <View style={styles.statsRow}>
                       <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>已传输</Text>
+                        <Text style={styles.statLabel}>{t('syncActivity.stats.transferred')}</Text>
                         <Text style={styles.statValue}>
-                          {overview.completedCount} 个
+                          {t('syncActivity.stats.transferredCount', { count: overview.completedCount })}
                         </Text>
                       </View>
                       <View style={styles.statDivider} />
                       <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>数据量</Text>
+                        <Text style={styles.statLabel}>{t('syncActivity.stats.dataAmount')}</Text>
                         <Text style={styles.statValue}>
                           {formatBytes(overview.completedBytes)}
                         </Text>
@@ -763,7 +799,7 @@ export function SyncActivityScreen() {
                   disabled={cancellingBatch}
                 >
                   <Text style={styles.dangerButtonText}>
-                    {cancellingBatch ? '正在取消...' : '取消本次手动上传'}
+                    {cancellingBatch ? t('syncActivity.actions.cancelling') : t('syncActivity.actions.cancelManualBatch')}
                   </Text>
                 </TouchableOpacity>
               ) : (
@@ -772,7 +808,7 @@ export function SyncActivityScreen() {
                   activeOpacity={0.7}
                   onPress={handleCloseAutoUpload}
                 >
-                  <Text style={styles.outlinedButtonText}>关闭自动上传</Text>
+                  <Text style={styles.outlinedButtonText}>{t('syncActivity.actions.closeAutoUpload')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -783,27 +819,27 @@ export function SyncActivityScreen() {
             <View style={styles.cardBody}>
               <View style={styles.badgeRow}>
                 <View style={styles.autoBadge}>
-                  <Text style={styles.autoBadgeText}>自动</Text>
+                  <Text style={styles.autoBadgeText}>{t('syncActivity.badges.auto')}</Text>
                 </View>
-                <Text style={styles.badgeLabel}>自动上传已开启</Text>
+                <Text style={styles.badgeLabel}>{t('syncActivity.badges.autoEnabled')}</Text>
               </View>
 
-              <Text style={styles.runningTitle}>等待新素材</Text>
+              <Text style={styles.runningTitle}>{t('syncActivity.standby.title')}</Text>
               <Text style={styles.idleSubtitle}>
-                拍完后会自动传输到 PC 端
+                {t('syncActivity.standby.subtitle')}
               </Text>
 
               {overview.completedCount > 0 && (
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>已传输</Text>
+                    <Text style={styles.statLabel}>{t('syncActivity.stats.transferred')}</Text>
                     <Text style={styles.statValue}>
-                      {overview.completedCount} 个
+                      {t('syncActivity.stats.transferredCount', { count: overview.completedCount })}
                     </Text>
                   </View>
                   <View style={styles.statDivider} />
                   <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>数据量</Text>
+                    <Text style={styles.statLabel}>{t('syncActivity.stats.dataAmount')}</Text>
                     <Text style={styles.statValue}>
                       {formatBytes(overview.completedBytes)}
                     </Text>
@@ -816,7 +852,7 @@ export function SyncActivityScreen() {
                 activeOpacity={0.7}
                 onPress={handleCloseAutoUpload}
               >
-                <Text style={styles.outlinedButtonText}>关闭自动上传</Text>
+                <Text style={styles.outlinedButtonText}>{t('syncActivity.actions.closeAutoUpload')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -831,9 +867,9 @@ export function SyncActivityScreen() {
                   color={EMPTY_INFO_ICON}
                 />
               </View>
-              <Text style={styles.centeredTitle}>自动上传未开启</Text>
+              <Text style={styles.centeredTitle}>{t('syncActivity.notStarted.title')}</Text>
               <Text style={styles.centeredSubtitle}>
-                开启自动上传，拍完就同步；或者也可以选手动传输
+                {t('syncActivity.notStarted.subtitle')}
               </Text>
               <View style={styles.twoButtonRow}>
                 <TouchableOpacity
@@ -841,14 +877,14 @@ export function SyncActivityScreen() {
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate('AlbumWorkbench')}
                 >
-                  <Text style={styles.rowButtonOutlinedText}>去相册</Text>
+                  <Text style={styles.rowButtonOutlinedText}>{t('syncActivity.notStarted.goToAlbum')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.rowButton, styles.rowButtonPrimary]}
                   activeOpacity={0.7}
                   onPress={() => void handleEnableAutoUpload()}
                 >
-                  <Text style={styles.rowButtonPrimaryText}>开启自动上传</Text>
+                  <Text style={styles.rowButtonPrimaryText}>{t('syncActivity.notStarted.enableAuto')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -864,9 +900,9 @@ export function SyncActivityScreen() {
                   color={EMPTY_OFFLINE_ICON}
                 />
               </View>
-              <Text style={styles.centeredTitle}>当前设备已离线</Text>
+              <Text style={styles.centeredTitle}>{t('syncActivity.offline.title')}</Text>
               <Text style={styles.centeredSubtitle}>
-                请检查电脑是否在线并连接同一局域网，恢复后可继续上传或访问共享目录
+                {t('syncActivity.offline.subtitle')}
               </Text>
               <View style={styles.twoButtonRow}>
                 <TouchableOpacity
@@ -874,14 +910,14 @@ export function SyncActivityScreen() {
                   activeOpacity={0.7}
                   onPress={handleSwitchDevice}
                 >
-                  <Text style={styles.offlineButtonOutlinedText}>切换设备</Text>
+                  <Text style={styles.offlineButtonOutlinedText}>{t('syncActivity.offline.switchDevice')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.rowButton, styles.offlineButtonPrimary]}
                   activeOpacity={0.7}
                   onPress={handleReconnect}
                 >
-                  <Text style={styles.rowButtonPrimaryText}>重新连接</Text>
+                  <Text style={styles.rowButtonPrimaryText}>{t('syncActivity.offline.reconnect')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -890,7 +926,7 @@ export function SyncActivityScreen() {
 
         {/* Quick entry cards */}
         <View style={styles.quickEntrySection}>
-          <Text style={styles.sectionLabel}>快捷入口</Text>
+          <Text style={styles.sectionLabel}>{t('syncActivity.quickEntry.title')}</Text>
           <View style={styles.quickEntryRow}>
             <TouchableOpacity
               style={styles.quickEntryCard}
@@ -905,8 +941,8 @@ export function SyncActivityScreen() {
               >
                 <Icon name="albums-outline" size={22} color={BLUE} />
               </View>
-              <Text style={styles.quickEntryTitle}>相册</Text>
-              <Text style={styles.quickEntryDesc}>浏览和手动上传素材</Text>
+              <Text style={styles.quickEntryTitle}>{t('syncActivity.quickEntry.albumTitle')}</Text>
+              <Text style={styles.quickEntryDesc}>{t('syncActivity.quickEntry.albumDesc')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -922,8 +958,8 @@ export function SyncActivityScreen() {
               >
                 <Icon name="folder-outline" size={22} color="#22c55e" />
               </View>
-              <Text style={styles.quickEntryTitle}>共享目录</Text>
-              <Text style={styles.quickEntryDesc}>浏览PC设备的共享目录</Text>
+              <Text style={styles.quickEntryTitle}>{t('syncActivity.quickEntry.sharedFilesTitle')}</Text>
+              <Text style={styles.quickEntryDesc}>{t('syncActivity.quickEntry.sharedFilesDesc')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -946,22 +982,22 @@ export function SyncActivityScreen() {
                 <View style={styles.expiredIconCircle}>
                   <Icon name="shield-outline" size={36} color="#8b5cf6" />
                 </View>
-                <Text style={styles.expiredTitle}>试用已结束</Text>
+                <Text style={styles.expiredTitle}>{t('syncActivity.expired.title')}</Text>
                 <Text style={styles.expiredSubtitle}>
-                  订阅后可继续使用素材上传、自动上传与共享文件访问
+                  {t('syncActivity.expired.subtitle')}
                 </Text>
                 <TouchableOpacity
                   style={styles.expiredPrimaryButton}
                   activeOpacity={0.7}
                   onPress={() => navigation.navigate('Subscription')}
                 >
-                  <Text style={styles.expiredPrimaryButtonText}>立即订阅</Text>
+                  <Text style={styles.expiredPrimaryButtonText}>{t('syncActivity.expired.subscribeCta')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.6}
                   onPress={() => navigation.navigate('Help')}
                 >
-                  <Text style={styles.expiredSecondaryText}>查看帮助</Text>
+                  <Text style={styles.expiredSecondaryText}>{t('syncActivity.expired.viewHelp')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
