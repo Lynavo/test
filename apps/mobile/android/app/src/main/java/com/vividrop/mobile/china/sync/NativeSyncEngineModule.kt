@@ -309,7 +309,17 @@ class NativeSyncEngineModule(
   fun setOwnerUserId(userId: String, promise: Promise) {
     // String-typed arg avoids the Double demotion that would otherwise
     // silently clip ids above 2^53.
-    prefs.edit().putString(PREF_OWNER_USER_ID, userId).apply()
+    //
+    // `commit()` not `apply()` — this write is the Phase-2 owner marker
+    // and MUST be durable before the promise resolves. A process kill
+    // between apply()'s in-memory commit and the eventual async flush
+    // would leave `storedOwnerId` null on next launch, causing the
+    // owner-mismatch guard in bootstrapAuthedSession to mis-classify
+    // user B as a fresh install and skip the wipe — defeating the
+    // entire Phase 2 defense. We already use commit() for the
+    // install_marker and wipe_in_progress sentinels for the same
+    // reason (see runInstallSentinel + performWipeSyncIdentity).
+    prefs.edit().putString(PREF_OWNER_USER_ID, userId).commit()
     promise.resolve(null)
   }
 

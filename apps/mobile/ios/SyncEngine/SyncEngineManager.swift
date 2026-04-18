@@ -4469,6 +4469,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// logging in on a device that still has user A's sync state" and trigger
     /// a wipe. Stored as `String` so backend ids above 2^53 round-trip
     /// losslessly across the RN bridge; absence means "no owner recorded yet".
+    /// Writes go through `setOwnerUserId(_:)` which flushes synchronously; see
+    /// there for rationale — this marker is the Phase-2 durability anchor and
+    /// a process kill before flush would defeat the owner-mismatch guard.
     private static let ownerUserIdKey = "lastSyncOwnerUserId"
 
     /// Prefixes of Keychain accounts that represent per-device pairing tokens.
@@ -4615,7 +4618,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// RN bridge. `UserDefaults` is thread-safe; no main-actor hop needed.
     @objc
     func setOwnerUserId(_ id: String) {
-        UserDefaults.standard.set(id, forKey: Self.ownerUserIdKey)
+        let defaults = UserDefaults.standard
+        defaults.set(id, forKey: Self.ownerUserIdKey)
+        // Durable flush — this marker is the ONLY signal the Phase-2 owner
+        // guard uses on next cold start. `UserDefaults` batches writes to
+        // disk, so a process kill between `set(...)` and the OS's eventual
+        // flush would leave the marker unobservable and bypass the guard.
+        // `synchronize()` is formally deprecated but remains the documented
+        // escape hatch for forced flush, and we are already using it for
+        // the install_marker and wipe_in_progress sentinels for the same
+        // reason (see AppDelegate.swift + wipeSyncIdentity above).
+        defaults.synchronize()
         NSLog("[SyncEngine] owner user id set to %@", id)
     }
 }
