@@ -144,6 +144,26 @@ describe('iapService — purchase', () => {
     jest.useRealTimers();
   });
 
+  test('resolves pending yearly when Apple delivers event with monthly (group-parent) productId', async () => {
+    // Repro of Blocker 1: user already on monthly upgrades to yearly. Apple
+    // delivers the SKPaymentTransaction with productId = old monthly SKU.
+    // The pending yearly Promise must resolve with the real receipt blob.
+    const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    expect(requestSubscription).toHaveBeenCalledWith({
+      sku: IAP_PRODUCTS.yearly,
+    });
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly, // group-parent delivery
+      transactionReceipt: 'YEARLY_RECEIPT_BLOB',
+      transactionId: 'tx_yearly_upgrade',
+    });
+
+    const receipt = await pending;
+    expect(receipt.transactionReceipt).toBe('YEARLY_RECEIPT_BLOB');
+    expect(receipt.transactionId).toBe('tx_yearly_upgrade');
+  });
+
   test('event for a productId without a pending Deferred is an orphan (not rejected)', async () => {
     // No purchase() called — event comes in "cold".
     expect(() =>

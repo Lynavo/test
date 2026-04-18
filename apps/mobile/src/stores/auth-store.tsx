@@ -250,7 +250,13 @@ interface AuthActions {
   setSignedOutTransition: (transition: SignedOutTransition) => void;
   clearAuth: () => void;
   loadProfile: () => Promise<void>;
-  loadSubscription: () => Promise<void>;
+  /** Fetches the latest subscription from the server and commits it to the
+   *  store. Returns the freshly-fetched value so callers that need to react
+   *  to the updated expireAt / plan inside the same async flow don't have to
+   *  wait for React to re-render with the new context value. Rejects if the
+   *  fetch fails — callers should wrap in try/catch if they can proceed
+   *  without the fresh snapshot. */
+  loadSubscription: () => Promise<SubscriptionInfo>;
   /** Manually retry the post-login profile auto-load. Surface this from the
    *  RootNavigator's profile-error screen so a transient network failure
    *  doesn't strand the user on a permanent spinner. */
@@ -345,12 +351,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const loadSubscription = useCallback(async () => {
+  const loadSubscription = useCallback(async (): Promise<SubscriptionInfo> => {
     const { getSubscriptionStatus } = await import('../services/subscription-service');
     dispatch({ type: 'SET_LOADING', isLoading: true });
     try {
       const info = await getSubscriptionStatus();
       dispatch({ type: 'SET_SUBSCRIPTION', subscription: info });
+      return info;
     } finally {
       dispatch({ type: 'SET_LOADING', isLoading: false });
     }

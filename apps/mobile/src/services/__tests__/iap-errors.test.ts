@@ -34,9 +34,10 @@ describe('classifyIapError', () => {
     expect(cls.i18nKey).toBe('subscription.errors.iapFailed');
   });
 
-  test('E_ALREADY_OWNED → autoRestore', () => {
+  test('E_ALREADY_OWNED → alreadyOwned with dedicated i18n key', () => {
     const cls = classifyIapError({ code: 'E_ALREADY_OWNED' });
-    expect(cls.kind).toBe(IapErrorClass.AutoRestore);
+    expect(cls.kind).toBe(IapErrorClass.AlreadyOwned);
+    expect(cls.i18nKey).toBe('subscription.errors.alreadyOwned');
   });
 
   test('E_ITEM_UNAVAILABLE → fatalConfig', () => {

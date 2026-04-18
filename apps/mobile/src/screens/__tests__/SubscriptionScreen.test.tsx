@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // Must mock react-native-localize before i18n import
@@ -69,12 +70,19 @@ jest.mock('../../constants/features', () => ({
   FEATURES: { IAP_ENABLED: true, IAP_RESTORE_ENABLED: true, SUBSCRIPTION_ENFORCEMENT: false },
 }));
 
-const mockLoadSubscription = jest.fn().mockResolvedValue(undefined);
+const mockLoadSubscription = jest.fn().mockResolvedValue(null);
+const mockAuthState: {
+  user: { id: number; status: string };
+  subscription: { status: string; plan: string; expireAt: string | null; trialEnd: string | null } | null;
+} = {
+  user: { id: 1, status: 'trial_expired' },
+  subscription: null,
+};
 
 jest.mock('../../stores/auth-store', () => ({
   useAuth: () => ({
-    user: { id: 1, status: 'trial_expired' },
-    subscription: null,
+    user: mockAuthState.user,
+    subscription: mockAuthState.subscription,
     loadSubscription: mockLoadSubscription,
   }),
   isFeatureAccessAllowed: () => false,
@@ -95,7 +103,12 @@ describe('SubscriptionScreen', () => {
     await i18n.changeLanguage('zh-Hans');
   });
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAuthState.user = { id: 1, status: 'trial_expired' };
+    mockAuthState.subscription = null;
+    mockLoadSubscription.mockResolvedValue(null);
+  });
 
   test('renders subscribe button', () => {
     const { getByText } = renderScreen();
@@ -149,5 +162,53 @@ describe('SubscriptionScreen', () => {
     fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
 
     expect(await findByText(/支付成功|Payment Successful/)).toBeTruthy();
+  });
+
+  test('E_ALREADY_OWNED shows dedicated alert and does NOT trigger restore', async () => {
+    (iapService.purchase as jest.Mock).mockRejectedValueOnce({
+      code: 'E_ALREADY_OWNED',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+    // Restore must not be auto-triggered — that was the Blocker #2 bug.
+    expect(iapService.restore).not.toHaveBeenCalled();
+
+    // Alert message must be the AlreadyOwned copy (any of the 3 locales).
+    const alertMessage = alertSpy.mock.calls[0]?.[0] ?? '';
+    expect(alertMessage).toMatch(
+      /已有(有效)?订阅|已有(有效)?訂閱|already have an active subscription/i,
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  test('success modal reflects expireAt from freshly-loaded subscription', async () => {
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: 'com.vividrop.mobile.china.yearly.104',
+      transactionReceipt: 'BLOB',
+      transactionId: 'tx_1',
+    });
+    (verifyIapReceipt as jest.Mock).mockResolvedValueOnce(undefined);
+
+    // loadSubscription returns the fresh snapshot; the screen reads
+    // expireAt off that return value (not off the closed-over `subscription`
+    // prop, which wouldn't have updated yet within the same async flow).
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'yearly',
+      expireAt: '2027-05-20T00:00:00Z',
+      trialEnd: null,
+    });
+
+    const { getByText, findByText } = renderScreen();
+    fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    // The modal's "valid until" line formats as YYYY/M/D (formatExpireDate).
+    expect(await findByText(/2027\/5\/20/)).toBeTruthy();
   });
 });

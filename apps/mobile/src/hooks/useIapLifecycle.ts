@@ -4,7 +4,10 @@ import { FEATURES } from '../constants/features';
 
 export interface UseIapLifecycleArgs {
   isLoggedIn: boolean;
-  loadSubscription: () => Promise<void>;
+  // Return value is intentionally ignored here — the hook just needs the side
+  // effect. Using `unknown` keeps it compatible with both the store's
+  // value-returning variant and any void mocks used in tests.
+  loadSubscription: () => Promise<unknown>;
 }
 
 export function useIapLifecycle({

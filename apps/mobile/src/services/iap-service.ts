@@ -11,7 +11,12 @@ import {
   type PurchaseError,
 } from 'react-native-iap';
 import { type EmitterSubscription } from 'react-native';
-import { type IapProductId, productIdToPlan, TRIAL_ELIGIBLE_PRODUCTS } from '../constants/iap';
+import {
+  type IapProductId,
+  productIdToPlan,
+  TRIAL_ELIGIBLE_PRODUCTS,
+  ALL_PRODUCT_IDS,
+} from '../constants/iap';
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 
@@ -174,19 +179,48 @@ class IapServiceImpl implements IapService {
   }
 
   private async handlePurchaseEvent(p: Purchase): Promise<void> {
-    const productId = p.productId as IapProductId;
-    const pending = this.pendingPurchase.get(productId);
-    if (pending) {
-      clearTimeout(pending.timeout);
-      this.pendingPurchase.delete(productId);
-      pending.resolve({
-        productId,
+    const incomingProductId = p.productId as IapProductId;
+
+    // 1. Exact match — happy path.
+    const exact = this.pendingPurchase.get(incomingProductId);
+    if (exact) {
+      clearTimeout(exact.timeout);
+      this.pendingPurchase.delete(incomingProductId);
+      exact.resolve({
+        productId: incomingProductId,
         transactionReceipt: p.transactionReceipt,
         transactionId: p.transactionId ?? '',
       });
       return;
     }
-    // Orphan — Task 6 handles this.
+
+    // 2. Group-aware fallback: Apple may deliver an upgrade's SKPaymentTransaction
+    // with the group-parent (e.g. previous monthly) SKU rather than the newly
+    // requested yearly SKU. Because `purchase()` dedupes by productId and the
+    // entire app uses a single subscription group, any in-flight pending entry
+    // must correspond to the transaction we just received. Pick the most recent
+    // pending entry (Map preserves insertion order) and resolve it with the
+    // real receipt/transactionId so the server can verify against the truth.
+    if (
+      ALL_PRODUCT_IDS.includes(incomingProductId) &&
+      this.pendingPurchase.size > 0
+    ) {
+      const keys = Array.from(this.pendingPurchase.keys());
+      const fallbackKey = keys[keys.length - 1]!;
+      const fallback = this.pendingPurchase.get(fallbackKey)!;
+      clearTimeout(fallback.timeout);
+      this.pendingPurchase.delete(fallbackKey);
+      fallback.resolve({
+        // Reflect what the receipt actually reports; server resolves truth
+        // from the receipt blob and the caller passes the user-selected plan.
+        productId: incomingProductId,
+        transactionReceipt: p.transactionReceipt,
+        transactionId: p.transactionId ?? '',
+      });
+      return;
+    }
+
+    // 3. True orphan — redelivered or out-of-band transaction.
     await this.handleOrphanPurchase(p);
   }
 

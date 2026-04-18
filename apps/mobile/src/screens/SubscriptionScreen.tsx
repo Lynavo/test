@@ -588,15 +588,35 @@ export function SubscriptionScreen() {
         return;
       }
 
-      await loadSubscription();
+      // loadSubscription returns the freshly-fetched snapshot so we can
+      // render the success modal's "valid until" line without waiting for
+      // React to re-render with the new context value. If the backend hasn't
+      // yet reflected the upgraded plan, expireAt may still be the previous
+      // period — acceptable degradation vs. hiding the date entirely.
+      let fresh: typeof subscription = null;
+      try {
+        fresh = await loadSubscription();
+      } catch {
+        // Fall through — modal will just hide the expiry line.
+      }
       await iapService.finishTransaction(receipt.transactionId);
       setConfirmedPlan(selectedPlan);
-      setConfirmedExpireAt(null);
+      setConfirmedExpireAt(fresh?.expireAt ?? null);
       setShowPaymentSuccess(true);
     } catch (err) {
       const cls = classifyIapError(err);
       if (cls.kind === IapErrorClass.Cancelled) {
         return; // silent
+      }
+      if (cls.kind === IapErrorClass.AlreadyOwned) {
+        // User tapped Subscribe while already holding an active sub (e.g.
+        // trying to switch plans). Surface an explicit alert instead of
+        // auto-triggering Restore — that made the old flow look like the
+        // plan switch silently succeeded.
+        Alert.alert(
+          t((cls.i18nKey ?? 'subscription.errors.alreadyOwned') as never),
+        );
+        return;
       }
       if (cls.kind === IapErrorClass.AutoRestore) {
         void handleRestore();

@@ -41,7 +41,8 @@
     "verifyRetrying": "Payment is being verified...",
     "productUnavailable": "This product is unavailable. Please contact support.",
     "productMismatch": "Product configuration error. Please contact support.",
-    "deferred": "Purchase pending approval."
+    "deferred": "Purchase pending approval.",
+    "alreadyOwned": "You already have an active subscription. If you want to switch plans, please retry or manage it in App Store settings."
   },
   "status": {
     "trialing": "Trial — {{days}} days left",

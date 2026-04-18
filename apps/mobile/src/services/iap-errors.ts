@@ -13,8 +13,16 @@ export enum IapErrorClass {
   FatalMismatch = 'fatalMismatch',
   /** Product not on App Store / region-limited — contact support. */
   FatalConfig = 'fatalConfig',
-  /** User already has an active sub — trigger Restore flow. */
+  /** User already has an active sub — trigger Restore flow. Reserved for
+   *  zombie-transaction recovery at app launch; never produced by
+   *  E_ALREADY_OWNED from an explicit purchase tap (that maps to AlreadyOwned
+   *  so the screen can surface a meaningful alert instead of silently
+   *  restoring). */
   AutoRestore = 'autoRestore',
+  /** User tapped purchase while an active subscription is already on file.
+   *  Caller should show an "already subscribed" alert and leave the Restore
+   *  flow to the explicit Restore button. */
+  AlreadyOwned = 'alreadyOwned',
 }
 
 export interface IapErrorClassification {
@@ -64,7 +72,10 @@ export function classifyIapError(err: unknown): IapErrorClassification {
         i18nKey: 'subscription.errors.deferred',
       };
     case 'E_ALREADY_OWNED':
-      return { kind: IapErrorClass.AutoRestore, i18nKey: null };
+      return {
+        kind: IapErrorClass.AlreadyOwned,
+        i18nKey: 'subscription.errors.alreadyOwned',
+      };
     case 'E_ITEM_UNAVAILABLE':
       return {
         kind: IapErrorClass.FatalConfig,
