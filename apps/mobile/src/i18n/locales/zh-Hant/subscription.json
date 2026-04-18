@@ -29,7 +29,7 @@
     "fallback": "訂閱"
   },
   "restore": {
-    "action": "恢復購買",
+    "action": "恢復已購買訂閱",
     "inProgress": "恢復中...",
     "success": "已恢復你的訂閱",
     "empty": "沒有可恢復的訂閱",

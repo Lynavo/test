@@ -29,7 +29,7 @@
     "fallback": "订阅"
   },
   "restore": {
-    "action": "恢复购买",
+    "action": "恢复已购买订阅",
     "inProgress": "恢复中...",
     "success": "已恢复你的订阅",
     "empty": "没有可恢复的订阅",

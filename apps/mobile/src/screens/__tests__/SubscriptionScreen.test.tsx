@@ -104,7 +104,7 @@ describe('SubscriptionScreen', () => {
 
   test('renders Restore button when flags enabled', () => {
     const { getByText } = renderScreen();
-    expect(getByText(/恢復購買|恢复购买|Restore Purchases/)).toBeTruthy();
+    expect(getByText(/恢復已購買訂閱|恢复已购买订阅|Restore Purchases/)).toBeTruthy();
   });
 
   test('monthly card shows trial copy when eligible', async () => {
@@ -131,7 +131,7 @@ describe('SubscriptionScreen', () => {
   test('restore tap invokes iapService.restore', async () => {
     (iapService.restore as jest.Mock).mockResolvedValueOnce([]);
     const { getByText } = renderScreen();
-    fireEvent.press(getByText(/恢復購買|恢复购买|Restore Purchases/));
+    fireEvent.press(getByText(/恢復已購買訂閱|恢复已购买订阅|Restore Purchases/));
     await waitFor(() => expect(iapService.restore).toHaveBeenCalled());
   });
 
