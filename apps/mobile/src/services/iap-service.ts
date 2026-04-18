@@ -34,6 +34,11 @@ const FATAL_ERROR_CODES: ReadonlySet<string> = new Set([
   'E_DEFERRED_PAYMENT',
   'E_ALREADY_OWNED',
   'E_ITEM_UNAVAILABLE',
+  // Apple reports E_DEVELOPER_ERROR when the product ID isn't registered
+  // / approved in App Store Connect. Not transient — no amount of waiting
+  // will resolve it, so reject fast with a clear alert instead of
+  // hanging the pending Promise until the 60 s timeout.
+  'E_DEVELOPER_ERROR',
 ]);
 
 export interface PurchaseReceipt {

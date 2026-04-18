@@ -87,6 +87,12 @@ export function classifyIapError(err: unknown): IapErrorClassification {
         i18nKey: 'subscription.errors.alreadyOwned',
       };
     case 'E_ITEM_UNAVAILABLE':
+    case 'E_DEVELOPER_ERROR':
+      // Product not ready in App Store Connect (unapproved, missing
+      // metadata, pricing absent for the sandbox tester's region, etc.).
+      // Same UX outcome as E_ITEM_UNAVAILABLE: user can't buy; reusing
+      // the "product unavailable, contact support" copy keeps messaging
+      // consistent without proliferating config-specific error strings.
       return {
         kind: IapErrorClass.FatalConfig,
         i18nKey: 'subscription.errors.productUnavailable',

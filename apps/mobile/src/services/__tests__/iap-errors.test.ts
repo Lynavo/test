@@ -46,6 +46,15 @@ describe('classifyIapError', () => {
     expect(cls.i18nKey).toBe('subscription.errors.productUnavailable');
   });
 
+  test('E_DEVELOPER_ERROR → fatalConfig (ASC misconfig, not retryable)', () => {
+    // Observed in sandbox when a product ID exists in code but is not
+    // yet approved / missing metadata in App Store Connect. Must fail
+    // fast with an alert — waiting won't help.
+    const cls = classifyIapError({ code: 'E_DEVELOPER_ERROR' });
+    expect(cls.kind).toBe(IapErrorClass.FatalConfig);
+    expect(cls.i18nKey).toBe('subscription.errors.productUnavailable');
+  });
+
   test('Unknown Apple code → retryable with generic key', () => {
     const cls = classifyIapError({ code: 'E_UNKNOWN' });
     expect(cls.kind).toBe(IapErrorClass.Retryable);
