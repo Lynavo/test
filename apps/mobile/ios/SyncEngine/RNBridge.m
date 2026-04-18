@@ -45,4 +45,9 @@ RCT_EXTERN_METHOD(downloadSharedFile:(NSString *)path resolve:(RCTPromiseResolve
 RCT_EXTERN_METHOD(getSharedFileStreamUrl:(NSString *)path resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(shareFile:(NSString *)localPath resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 
+// Account Identity Reset (Phase 1 / 2 / 3)
+RCT_EXTERN_METHOD(wipeSyncIdentity:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getOwnerUserId:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(setOwnerUserId:(nonnull NSString *)userId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+
 @end

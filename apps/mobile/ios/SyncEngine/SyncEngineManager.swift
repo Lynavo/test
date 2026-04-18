@@ -4457,4 +4457,165 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         binding.deviceAlias = alias
         try uploadStore?.saveBinding(binding)
     }
+
+    // MARK: - Account Identity Reset (Phase 1 / 2 / 3)
+
+    /// UserDefaults key used as a 2-phase sentinel around a wipe. While set,
+    /// the next cold start treats the wipe as interrupted and re-runs it. See
+    /// AppDelegate for the launch-time self-heal branch.
+    private static let wipeInProgressKey = "vivi_wipe_in_progress"
+    /// UserDefaults key that remembers the last auth user id bound to the
+    /// current sync identity. Used by the JS login flow to detect "user B
+    /// logging in on a device that still has user A's sync state" and trigger
+    /// a wipe. Stored as `String` so backend ids above 2^53 round-trip
+    /// losslessly across the RN bridge; absence means "no owner recorded yet".
+    private static let ownerUserIdKey = "lastSyncOwnerUserId"
+
+    /// Prefixes of Keychain accounts that represent per-device pairing tokens.
+    /// The current build writes `syncflow_pairing_token_<serverId>`; historical
+    /// builds used `pairing_token_<serverId>` — we sweep both so an upgraded
+    /// user never carries a dangling legacy entry past logout.
+    private static let pairingTokenKeyPrefixes = ["syncflow_pairing_token_", "pairing_token_"]
+
+    /// Single orchestrator for all sync-identity cleanup. Safe to call multiple
+    /// times (idempotent — each step re-checks state). Individual step failures
+    /// are logged and do not abort the rest of the wipe; the 2-phase flag
+    /// ensures the next cold start retries if we are killed mid-way.
+    ///
+    /// Clears: binding row, pairing tokens (legacy + per-device), clientId,
+    /// upload queue + sessions + daily ledger, auto-upload config, runtime
+    /// pipeline state.
+    ///
+    /// Preserves: clientDisplayName (device preference, not account data)
+    /// plus every UserDefaults key not explicitly touched below — including
+    /// language/theme/permission state and diagnostic flags outside our
+    /// scope. (Note: the `@vividrop/debug/*` namespace lives in AsyncStorage
+    /// on the JS side, not UserDefaults; Swift never touches it here, so it
+    /// is preserved by virtue of layer separation rather than by any
+    /// allowlist on this method.)
+    ///
+    /// Flush semantics: the sentinel `set(...)` at the top is followed by an
+    /// explicit `synchronize()` so it lands on disk before we start mutating
+    /// anything else — `UserDefaults` otherwise batches writes and a process
+    /// kill between the set and the eventual flush would leave the flag
+    /// unobservable on next cold start, defeating the self-heal retry in
+    /// `AppDelegate`. The `removeObject(forKey:)` at the bottom can stay
+    /// batched: if we die before it flushes, the next cold start simply sees
+    /// the flag still set and re-runs this method, which is idempotent
+    /// against already-cleared state.
+    @objc
+    func wipeSyncIdentity() {
+        let defaults = UserDefaults.standard
+        defaults.set("1", forKey: Self.wipeInProgressKey)
+        defaults.synchronize()  // Flush sentinel to disk immediately — see note above.
+        NSLog("[SyncEngine] wipeSyncIdentity: begin (sentinel set)")
+        syncDiagnosticsLog("SyncEngine", "wipeSyncIdentity: begin")
+
+        // 1. Tear down any live networking / timers so we don't race the wipe.
+        stopPresenceHeartbeatTimer()
+        protocolSession?.disconnect()
+        protocolSession = nil
+        transport.disconnect()
+        sessionService.endSession()
+        sidecarHost = nil
+        bindingConnectionState = .offline
+        SilentAudioService.shared.stop()
+        isSyncing = false
+        isAutoUploadInterrupted = false
+        shouldAbortActiveAutoUpload = false
+        clearRuntimeSyncRoundProgress(uploadState: "idle")
+        runtimeUploadState = "idle"
+        runtimeLastErrorCode = nil
+        runtimeLastErrorMessage = nil
+        endBackgroundTransitionIfNeeded(reason: "wipeSyncIdentity")
+
+        // 2. Enumerate per-device pairing tokens BEFORE clearing the binding
+        // row — some installs rely on binding.pairingTokenKeychainRef to
+        // locate the current device's token. Also fall back to a prefix
+        // sweep for any orphaned legacy entries.
+        let boundBinding = uploadStore?.getBinding()
+        var pairingKeysToClear: Set<String> = []
+        if let ref = boundBinding?.pairingTokenKeychainRef, !ref.isEmpty {
+            pairingKeysToClear.insert(ref)
+        }
+        // Always include the legacy single-key token for completeness.
+        pairingKeysToClear.insert(BindingService.legacyPairingTokenKey)
+        for key in bindingService.listStoredKeychainKeys() {
+            for prefix in Self.pairingTokenKeyPrefixes where key.hasPrefix(prefix) {
+                pairingKeysToClear.insert(key)
+            }
+        }
+
+        // 3. Clear binding row (SQLite).
+        do {
+            try uploadStore?.clearBinding()
+        } catch {
+            NSLog("[SyncEngine] wipeSyncIdentity: clearBinding failed: %@", "\(error)")
+        }
+
+        // 4. Clear every pairing token we located. `clearPairingToken(forKey:)`
+        // is already no-op safe when the entry is missing.
+        for key in pairingKeysToClear {
+            bindingService.clearPairingToken(forKey: key)
+        }
+        bindingService.clearPairingToken()  // belt-and-braces: legacy single-key API
+
+        // 5. Clear clientId so the next session generates a fresh UUID.
+        bindingService.clearClientId()
+
+        // 6. Clear upload queue + sessions + daily ledger in one shot.
+        do {
+            try uploadStore?.resetAllStatusData()
+        } catch {
+            NSLog("[SyncEngine] wipeSyncIdentity: resetAllStatusData failed: %@", "\(error)")
+        }
+
+        // 7. Reset auto upload config (persisted enabled flag, timeRangeMode,
+        // customTimeFrom, state). Falls back to schema default row on next
+        // read.
+        do {
+            try uploadStore?.resetAutoUploadConfig()
+        } catch {
+            NSLog("[SyncEngine] wipeSyncIdentity: resetAutoUploadConfig failed: %@", "\(error)")
+        }
+
+        // 8. Forget the previously-recorded owner so we don't false-trigger the
+        // owner-mismatch path on the very next login.
+        defaults.removeObject(forKey: Self.ownerUserIdKey)
+
+        // 9. Push fresh empty state to JS so any foregrounded UI does not keep
+        // rendering stale data (binding card, queue, history).
+        NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
+        NativeSyncEngineModule.shared?.emitQueueUpdated([])
+        NativeSyncEngineModule.shared?.emitHistoryUpdated()
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(
+            runtimeSyncOverviewPayload(uploadState: "idle")
+        )
+
+        // 10. Clear the sentinel last — any crash before this point causes a
+        // self-heal retry on next launch.
+        defaults.removeObject(forKey: Self.wipeInProgressKey)
+        NSLog("[SyncEngine] wipeSyncIdentity: complete (sentinel cleared)")
+        syncDiagnosticsLog("SyncEngine", "wipeSyncIdentity: complete")
+    }
+
+    /// Last auth user id bound to the current sync identity, or `nil` if no
+    /// owner has been recorded yet (fresh install / post-wipe). The value is
+    /// a `String` so backend ids above 2^53 round-trip without hitting the
+    /// `NSNumber`/`Double` precision ceiling — the JS bootstrap compares
+    /// against `String(profile.id)`. `UserDefaults` is thread-safe, so this
+    /// accessor is safe to call off the main actor.
+    @objc
+    func getOwnerUserId() -> String? {
+        let defaults = UserDefaults.standard
+        return defaults.string(forKey: Self.ownerUserIdKey)
+    }
+
+    /// Write the owner id as a string to preserve full precision across the
+    /// RN bridge. `UserDefaults` is thread-safe; no main-actor hop needed.
+    @objc
+    func setOwnerUserId(_ id: String) {
+        UserDefaults.standard.set(id, forKey: Self.ownerUserIdKey)
+        NSLog("[SyncEngine] owner user id set to %@", id)
+    }
 }

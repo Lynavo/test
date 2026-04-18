@@ -411,4 +411,43 @@ class NativeSyncEngineModule: RCTEventEmitter {
             rootVC.present(activityVC, animated: true)
         }
     }
+
+    // MARK: - Account Identity Reset (Phase 1 / 2 / 3)
+
+    @objc
+    func wipeSyncIdentity(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        // wipeSyncIdentity mutates a large set of plain instance properties
+        // on SyncEngineManager (protocolSession, isSyncing, sidecarHost,
+        // runtimeUploadState, bindingConnectionState, etc.) that are also
+        // touched from delegate callbacks, heartbeat timers, and other
+        // `Task { @MainActor in ... }` blocks inside the manager. Running
+        // the wipe on the cooperative pool races those mutators.
+        //
+        // AppDelegate already drives this synchronously from the main
+        // thread (reinstall / self-heal paths), so align the bridge entry
+        // point to the same main-actor context. `MainActor.run` hops onto
+        // the main thread, runs the wipe to completion, and then resolves
+        // the JS promise.
+        Task { @MainActor in
+            SyncEngineManager.shared.wipeSyncIdentity()
+            resolve(nil)
+        }
+    }
+
+    @objc
+    func getOwnerUserId(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        // UserDefaults is thread-safe, so no main-actor hop is needed here.
+        if let value = SyncEngineManager.shared.getOwnerUserId() {
+            resolve(value)
+        } else {
+            resolve(NSNull())
+        }
+    }
+
+    @objc
+    func setOwnerUserId(_ userId: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        // UserDefaults is thread-safe, so no main-actor hop is needed here.
+        SyncEngineManager.shared.setOwnerUserId(userId as String)
+        resolve(nil)
+    }
 }

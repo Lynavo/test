@@ -11,6 +11,7 @@ import {
   Alert,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CommonActions } from '@react-navigation/native';
@@ -25,6 +26,9 @@ import {
   getTrialRemainingDays,
 } from '../stores/auth-store';
 import { logout as serverLogout, deleteAccount } from '../services/auth-service';
+import { wipeSyncIdentity } from '../services/SyncEngineModule';
+import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
+import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { FEATURES } from '../constants/features';
 import { iapService } from '../services/iap-service';
 import { ApiError } from '../services/api';
@@ -87,6 +91,28 @@ function formatAppVersionLabel(
   return t('settings.versionLabel', { version, build });
 }
 
+/**
+ * Title shown on the blocking overlay while `handleDeleteAccount` is in
+ * flight. Hardcoded per-language because the corresponding i18n key
+ * (`settings.deleteAccount.overlayTitle`) is NOT in the strict i18next
+ * resource type — settings.json is globally gitignored in some dev
+ * environments so we can't rely on it existing locally. Kept inline so
+ * the component still renders readable copy in all three supported
+ * locales.
+ *
+ * TODO(i18n): once settings.json stabilises across environments, add
+ * `deleteAccount.overlayTitle` to apps/mobile/src/i18n/locales/{en,
+ * zh-Hans,zh-Hant}/settings.json and switch this back to `t()`.
+ */
+function resolveDeleteOverlayTitle(language: string | undefined): string {
+  const tag = (language ?? 'zh-Hant').toLowerCase();
+  if (tag.startsWith('en')) return 'Deleting account…';
+  if (tag.startsWith('zh-hans') || tag.startsWith('zh-cn')) {
+    return '删除账号中…';
+  }
+  return '刪除帳號中…';
+}
+
 function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
   if (!iso) return t('settings.status.noRecord');
   const date = new Date(iso);
@@ -119,7 +145,7 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
 
 export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const auth = useAuth();
   const isAndroid = Platform.OS === 'android';
   const [deviceName, setDeviceName] = useState('');
@@ -428,41 +454,99 @@ export function SettingsScreen() {
     );
   }, [navigation, t]);
 
+  // Guards against double-submission. A single full logout path runs roughly
+  // sidecar-timeout + native-wipe + AsyncStorage sweep — sub-second in the
+  // happy case, up to ~3s when the desktop is unreachable. We disable the
+  // button for that window so impatient double-taps don't fire duplicate
+  // wipes into the same native state.
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const handleLogout = useCallback(() => {
     Alert.alert(t('settings.dialogs.logout.title'), t('settings.dialogs.logout.body'), [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('settings.dialogs.logout.confirm'),
         style: 'destructive',
-        onPress: () => {
-          // Snapshot the refresh token before clearAuth wipes it.
-          const refresh = auth.refreshToken;
+        onPress: async () => {
+          if (isLoggingOut) return;
+          setIsLoggingOut(true);
 
-          // 1) Kick off the server-side revoke FIRST so the request is
-          //    constructed while the access token is still in memory —
-          //    `request()` reads `getAccessToken()` synchronously to build
-          //    the Authorization header before its first await. We do NOT
-          //    await this; the 5s timeout inside `auth-service.logout()`
-          //    bounds how long it can run, and a slow/failed network must
-          //    never block the local logout.
+          // Snapshot the refresh token before clearAuth wipes it, then fire
+          // the server-side revoke while the access token is still in
+          // memory. `request()` reads `getAccessToken()` synchronously to
+          // build the Authorization header before its first await, so we
+          // MUST kick this off before any of the awaited cleanup steps
+          // below. The 5s timeout inside `auth-service.logout()` bounds how
+          // long the request can run; a slow/failed network must never
+          // block the local logout.
+          const refresh = auth.refreshToken;
           if (refresh) {
             void serverLogout(refresh).catch((e) => {
               console.warn('[Settings] server logout failed (already cleared locally):', e);
             });
           }
 
-          // 2) Now wipe local state + navigate. After this point the in-flight
-          //    serverLogout fetch keeps the headers it captured above; the
-          //    user is logged out locally regardless of network outcome.
+          // The rest of the cleanup is awaited in the order documented in
+          // the account-identity-reset spec (Phase 1):
+          //
+          //   1. desktop sidecar reset — best-effort, never throws
+          //   2. native wipeSyncIdentity — MUST await AND MUST succeed,
+          //      otherwise we'd clear local auth while the device still
+          //      holds the previous account's pairing token / clientId /
+          //      queue / history. A subsequent login (same or different
+          //      user) would inherit residual state and race Phase-2's
+          //      owner-guard — which is the single point of failure we
+          //      refuse to rely on. Fail CLOSED here: surface an alert
+          //      and keep the user signed in so they can retry.
+          //   3. user-scoped AsyncStorage cleanup — best-effort; its
+          //      failure only affects reminder-shown suppression flags,
+          //      not security-critical state
+          //   4. local clearAuth — synchronous, last so RootNavigator
+          //      has a consistent blank state to render into; only
+          //      reached when the wipe succeeded
+          //
+          // Sidecar + scoped-storage failures are swallowed with a
+          // console.warn so a single flaky best-effort step cannot
+          // strand the user in Settings.
+          try {
+            await resetCurrentDesktopSidecarIfReachable();
+          } catch (e) {
+            console.warn('[Settings] desktop sidecar reset threw (ignored):', e);
+          }
+          try {
+            await wipeSyncIdentity();
+          } catch (e) {
+            console.warn('[Settings] wipeSyncIdentity failed — aborting logout to avoid residual identity:', e);
+            // TODO(i18n): promote these hardcoded zh-Hant strings to
+            // `settings.dialogs.logoutFailed.{title,body}` once
+            // settings.json is no longer gitignored in any dev env and
+            // the keys can be added to the strict i18next resource
+            // types without typecheck errors.
+            Alert.alert(
+              '登出失敗',
+              '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
+            );
+            setIsLoggingOut(false);
+            return;
+          }
+          try {
+            await clearUserScopedStorage();
+          } catch (e) {
+            console.warn('[Settings] clearUserScopedStorage failed (ignored):', e);
+          }
           try {
             auth.clearAuth();
           } catch (e) {
             console.warn('[Settings] local logout error:', e);
           }
+          // clearAuth triggers a navigator remount to Login so this
+          // component is about to unmount. setState on an unmounted
+          // component is a noop warning — safe to skip resetting the
+          // flag.
         },
       },
     ]);
-  }, [auth, navigation, t]);
+  }, [auth, isLoggingOut, t]);
 
   // Restore Purchases (Apple Review requirement — Position B in Settings)
   const [isRestoring, setIsRestoring] = useState(false);
@@ -515,21 +599,58 @@ export function SettingsScreen() {
                     setIsDeletingAccount(true);
                     try {
                       await deleteAccount();
-                      // Success: server wiped us. Show a short signed-out
-                      // transition first so we don't hard-cut from Settings
-                      // straight into Login.
-                      // Do NOT call serverLogout() after this — tokens are
-                      // already revoked by the delete transaction.
-                      auth.setSignedOutTransition('account_deleted');
-                      auth.clearAuth();
                     } catch (e) {
+                      // Server-side deletion failed — leave every local
+                      // state untouched so the user can retry. Do NOT run
+                      // the cleanup sequence below, otherwise a flaky
+                      // network would log them out with their account
+                      // still alive on the backend.
                       setIsDeletingAccount(false);
                       const msg =
                         e instanceof ApiError
                           ? e.message
                           : t('errors.accountDeleteFailed');
                       Alert.alert(t('errors.title'), msg);
+                      return;
                     }
+
+                    // Signal the short-lived "account deleted" transition
+                    // before any of the cleanup awaits, so RootNavigator
+                    // has the flag set when it eventually re-renders into
+                    // the signed-out tree. Do NOT call serverLogout()
+                    // after this — tokens are already revoked by the
+                    // delete transaction and calling it would just 401.
+                    auth.setSignedOutTransition('account_deleted');
+
+                    // Mirror handleLogout's cleanup order (see
+                    // account-identity-reset spec Phase 1). Same
+                    // best-effort semantics on each step.
+                    try {
+                      await resetCurrentDesktopSidecarIfReachable();
+                    } catch (e) {
+                      console.warn('[Settings] desktop sidecar reset threw (ignored):', e);
+                    }
+                    try {
+                      await wipeSyncIdentity();
+                    } catch (e) {
+                      // Fail OPEN here — unlike handleLogout. The account
+                      // is already gone server-side (deleteAccount just
+                      // resolved), so refusing to clearAuth would strand
+                      // the user in a logged-in shell whose tokens are
+                      // already revoked. The reinstall sentinel +
+                      // next-login owner-guard are the backstops for
+                      // any residual native state.
+                      console.warn(
+                        '[Settings] wipeSyncIdentity failed after deleteAccount — sentinel will self-heal on next launch',
+                        e,
+                      );
+                    }
+                    try {
+                      await clearUserScopedStorage();
+                    } catch (e) {
+                      console.warn('[Settings] clearUserScopedStorage failed (ignored):', e);
+                    }
+                    auth.clearAuth();
                   },
                 },
               ],
@@ -930,6 +1051,42 @@ export function SettingsScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/*
+       * Full-screen blocking overlay while `handleDeleteAccount` runs its
+       * Phase-1 cleanup (server deleteAccount → setSignedOutTransition →
+       * sidecar reset → wipeSyncIdentity → clearUserScopedStorage →
+       * clearAuth). Between `setSignedOutTransition` and `clearAuth` the
+       * store still reports `isLoggedIn === true`, so the logged-in
+       * Settings tree underneath is live and every row would hit the
+       * backend with tokens that the delete transaction has already
+       * revoked. The overlay is rendered AFTER ScrollView so it layers
+       * on top, and uses `pointerEvents="auto"` on a StyleSheet.absoluteFill
+       * View to swallow every touch underneath.
+       *
+       * Do NOT try to fix this by firing-and-forgetting the cleanup and
+       * calling `clearAuth` immediately — per account-identity-reset spec
+       * §4 Phase 1 the await chain is deliberate so the next login flow
+       * doesn't race into residual native / storage state.
+       */}
+      {isDeletingAccount ? (
+        <View
+          style={styles.deletingOverlay}
+          // `auto` (the default) is explicit here to signal intent: we
+          // want this View to catch every touch so the UI underneath is
+          // untappable.
+          pointerEvents="auto"
+          accessibilityRole="progressbar"
+          accessibilityLiveRegion="polite"
+        >
+          <View style={styles.deletingOverlayCard}>
+            <ActivityIndicator size="large" color={BLUE} />
+            <Text style={styles.deletingOverlayText}>
+              {resolveDeleteOverlayTitle(i18n.language)}
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1337,5 +1494,41 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 20,
+  },
+
+  // ---------------------------------------------------------------------------
+  // Deleting-account overlay (see handleDeleteAccount and the JSX block
+  // rendered outside ScrollView). Semi-transparent SCREEN_BG-tinted
+  // backdrop + centered white card so the message reads cleanly on both
+  // light and dark photos behind the Settings tree.
+  // ---------------------------------------------------------------------------
+  deletingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(214, 236, 248, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  deletingOverlayCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+    alignItems: 'center',
+    gap: 14,
+    minWidth: 200,
+    shadowColor: '#4f8fbc',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  deletingOverlayText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: DARK,
+    textAlign: 'center',
   },
 });

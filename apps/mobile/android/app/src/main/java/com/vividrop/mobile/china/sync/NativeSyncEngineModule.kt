@@ -275,6 +275,45 @@ class NativeSyncEngineModule(
   }
 
   // ---------------------------------------------------------------------------
+  // Account Identity Reset (Phase 1 / 2 / 3)
+  //
+  // Android shell has no upload queue / history DB, so "wipe" reduces to
+  // clearing the sync identity fields in SharedPreferences. We mirror the
+  // iOS 2-phase sentinel so a crash mid-wipe is recoverable on next launch
+  // (see MainApplication.onCreate).
+  // ---------------------------------------------------------------------------
+
+  @ReactMethod
+  fun wipeSyncIdentity(promise: Promise) {
+    try {
+      performWipeSyncIdentity(prefs)
+      emitBindingStateCleared()
+      emitQueueUpdated(Arguments.createArray())
+      emitIdleSyncState(null)
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      promise.reject("WIPE_SYNC_IDENTITY_ERROR", error.message, error)
+    }
+  }
+
+  @ReactMethod
+  fun getOwnerUserId(promise: Promise) {
+    // Stored as String so backend ids above 2^53 round-trip losslessly
+    // across the RN bridge (a Double/Long hop would truncate the low bits).
+    // The JS bootstrap compares against `String(profile.id)`.
+    val stored = prefs.getString(PREF_OWNER_USER_ID, null)
+    promise.resolve(stored)
+  }
+
+  @ReactMethod
+  fun setOwnerUserId(userId: String, promise: Promise) {
+    // String-typed arg avoids the Double demotion that would otherwise
+    // silently clip ids above 2^53.
+    prefs.edit().putString(PREF_OWNER_USER_ID, userId).apply()
+    promise.resolve(null)
+  }
+
+  // ---------------------------------------------------------------------------
   // Stub methods — Android native sync engine is not yet implemented.
   // These stubs return safe defaults so JS screens don't crash when calling
   // bridge methods that only have real implementations on iOS.
@@ -1120,10 +1159,23 @@ class NativeSyncEngineModule(
 
   companion object {
     private const val MODULE_NAME = "NativeSyncEngine"
-    private const val PREFS_NAME = "syncflow.android.native_sync_engine"
+    const val PREFS_NAME = "syncflow.android.native_sync_engine"
     private const val PREF_BINDING = "binding"
     private const val PREF_CLIENT_ID = "client_id"
     private const val PREF_CLIENT_DISPLAY_NAME = "client_display_name"
+    /** Auth-layer EncryptedSharedPreferences file (react-native-keychain service).
+     *  Mirror of the iOS Keychain service `cn.vividrop.auth`. */
+    const val AUTH_KEYCHAIN_PREFS_NAME = "cn.vividrop.auth"
+    /** UserDefaults/SharedPrefs key — seeded on first launch, survives only as
+     *  long as the app install does, so a missing marker uniquely identifies
+     *  a fresh / reinstalled app. */
+    const val PREF_INSTALL_MARKER = "vivi_install_marker"
+    /** 2-phase wipe flag. Set before clearing, removed after. If present on
+     *  cold start the wipe was killed mid-way and the sentinel retries. */
+    const val PREF_WIPE_IN_PROGRESS = "vivi_wipe_in_progress"
+    /** Numeric auth user id last bound to this sync identity. Absent means
+     *  "no owner recorded" (fresh install / post-wipe). */
+    const val PREF_OWNER_USER_ID = "lastSyncOwnerUserId"
     private const val SOCKET_TIMEOUT_MS = 5_000
     private const val HEADER_SIZE = 12
     private const val MAX_BODY_LENGTH = 64 * 1024 * 1024
@@ -1137,5 +1189,75 @@ class NativeSyncEngineModule(
     private const val TYPE_HELLO_RES = 0x0002
     private const val TYPE_PAIR_REQ = 0x0003
     private const val TYPE_PAIR_RES = 0x0004
+
+    /**
+     * Keys that survive a wipe. Everything else stored in this prefs file
+     * — current or future — is treated as sync-identity and cleared. The
+     * allowlist shape is preventive: if Android later grows a local
+     * upload queue / history / auto-upload config under a new pref key,
+     * wipe will pick it up automatically instead of silently leaving a
+     * per-account artifact behind.
+     *
+     * Preserved:
+     *  - `client_display_name` — device label (not account data)
+     *  - `vivi_install_marker` — reinstall sentinel (stays set for the
+     *    lifetime of the install; cleared only by app deletion)
+     *  - `vivi_wipe_in_progress` — 2-phase self-heal flag; managed by
+     *    wipe itself (set at top, cleared at bottom)
+     */
+    private val SYNC_IDENTITY_PRESERVED_KEYS: Set<String> = setOf(
+      PREF_CLIENT_DISPLAY_NAME,
+      PREF_INSTALL_MARKER,
+      PREF_WIPE_IN_PROGRESS,
+    )
+
+    /**
+     * Clear every sync-identity field in SharedPreferences. Uses an
+     * allowlist of keys to preserve (see `SYNC_IDENTITY_PRESERVED_KEYS`)
+     * rather than an explicit per-key removal list, so future sync-state
+     * additions are covered by default.
+     *
+     * Uses a 2-phase `PREF_WIPE_IN_PROGRESS` flag so a crash mid-wipe can
+     * be detected and retried by the reinstall sentinel.
+     *
+     * Called from both the JS-facing `wipeSyncIdentity` bridge method and
+     * from `MainApplication.onCreate` (reinstall / self-heal paths —
+     * before the React context exists).
+     */
+    fun performWipeSyncIdentity(prefs: android.content.SharedPreferences) {
+      // Synchronous write — the 2-phase self-heal contract relies on this
+      // flag being observable on disk if we are killed between here and
+      // the clear-flag at the bottom. `apply()` would only queue it in
+      // memory and defer the flush, defeating the retry mechanism.
+      prefs.edit().putString(PREF_WIPE_IN_PROGRESS, "1").commit()
+      val keysToRemove = prefs.all.keys
+        .filterNot { it in SYNC_IDENTITY_PRESERVED_KEYS }
+      val editor = prefs.edit()
+      for (key in keysToRemove) {
+        editor.remove(key)
+      }
+      editor.apply()
+      // Async flush is acceptable here — if we die between here and the
+      // disk flush, next cold start just sees the flag still set and runs
+      // wipe again, which is idempotent against already-cleared state.
+      prefs.edit().remove(PREF_WIPE_IN_PROGRESS).apply()
+    }
+
+    /**
+     * Remove the auth-layer EncryptedSharedPreferences file. Mirror of
+     * `AuthKeychainCleaner.clearPersistedTokens()` on iOS. Safe to call when
+     * the file does not exist (returns false, logged as no-op).
+     *
+     * Uses `Context.deleteSharedPreferences` (API 24+, well below the RN
+     * 0.84 minSdk floor).
+     */
+    fun clearAuthKeychainStorage(context: android.content.Context) {
+      val removed = context.deleteSharedPreferences(AUTH_KEYCHAIN_PREFS_NAME)
+      android.util.Log.i(
+        "NativeSyncEngineModule",
+        if (removed) "cleared auth keychain prefs ($AUTH_KEYCHAIN_PREFS_NAME)"
+        else "no auth keychain prefs to clear ($AUTH_KEYCHAIN_PREFS_NAME)",
+      )
+    }
   }
 }

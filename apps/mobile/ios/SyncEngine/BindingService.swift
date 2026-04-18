@@ -93,6 +93,21 @@ class BindingService {
         return newId
     }
 
+    /// Delete the persisted clientId. The next call to `getOrCreateClientId()`
+    /// will generate a fresh UUID, which is the desired behaviour when wiping
+    /// the sync identity (logout / account switch / reinstall sentinel).
+    func clearClientId() {
+        deleteKeychain(key: Self.clientIdKey)
+    }
+
+    /// Enumerate every keychain account stored under the current
+    /// (`com.vividrop.mobile.china`) service. Exposed so the wipe orchestrator
+    /// can discover per-device pairing tokens whose names are not known at
+    /// compile time (`syncflow_pairing_token_<serverId>`).
+    func listStoredKeychainKeys() -> [String] {
+        return listKeychainKeys(service: Self.keychainServiceName)
+    }
+
     // MARK: - Pairing Token
 
     /// Save the pairing token under the given Keychain key (per-device storage).
