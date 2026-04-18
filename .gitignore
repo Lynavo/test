@@ -6,6 +6,7 @@ out/
 .DS_Store
 *.exe
 *.dmg
+*.docx
 
 # Playwright
 .playwright-mcp/
@@ -28,5 +29,5 @@ AuthKey_*.p8
 .claude/
 
 # Local docs (not tracked)
-Vivi-Drop-*.md
+Vivi Drop-*.md
 UI/
