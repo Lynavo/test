@@ -153,7 +153,10 @@ jest.mock('../../constants/features', () => ({
 import i18n from '../../i18n';
 import { SettingsScreen } from '../SettingsScreen';
 import { Alert, NativeModules, NativeEventEmitter } from 'react-native';
-import { deleteAccount as mockDeleteAccount } from '../../services/auth-service';
+import {
+  deleteAccount as mockDeleteAccount,
+  logout as mockServerLogout,
+} from '../../services/auth-service';
 import type { RenderAPI } from '@testing-library/react-native';
 
 const mockNativeSyncEngine = {
@@ -244,7 +247,7 @@ describe('SettingsScreen — account-identity-reset (Phase 1)', () => {
   });
 
   describe('handleLogout', () => {
-    test('runs sidecar reset → native wipe → scoped storage → clearAuth in order', async () => {
+    test('runs sidecar reset → native wipe → scoped storage → serverLogout → clearAuth in order', async () => {
       const callOrder: string[] = [];
       mockResetSidecar.mockImplementationOnce(async () => {
         callOrder.push('sidecar');
@@ -255,6 +258,15 @@ describe('SettingsScreen — account-identity-reset (Phase 1)', () => {
       mockClearUserScopedStorage.mockImplementationOnce(async () => {
         callOrder.push('scoped');
       });
+      // Use .mockImplementationOnce to log entry, not just
+      // .mockResolvedValue — the production call is fire-and-forget
+      // (`void serverLogout(...)`), but the mock impl runs synchronously
+      // when the call is dispatched, so the push lands on the ledger
+      // before the next awaited step (clearAuth) executes.
+      (mockServerLogout as jest.Mock).mockImplementationOnce(() => {
+        callOrder.push('serverLogout');
+        return Promise.resolve();
+      });
       mockAuth.clearAuth.mockImplementationOnce(() => {
         callOrder.push('clearAuth');
       });
@@ -263,7 +275,13 @@ describe('SettingsScreen — account-identity-reset (Phase 1)', () => {
       fireEvent.press(getByText('登出'));
       await pressAlertButton('確定退出');
 
-      expect(callOrder).toEqual(['sidecar', 'wipe', 'scoped', 'clearAuth']);
+      expect(callOrder).toEqual([
+        'sidecar',
+        'wipe',
+        'scoped',
+        'serverLogout',
+        'clearAuth',
+      ]);
     });
 
     test('blocks logout when wipeSyncIdentity rejects — shows error alert and keeps user signed in', async () => {
@@ -285,6 +303,13 @@ describe('SettingsScreen — account-identity-reset (Phase 1)', () => {
       expect(mockWipeSyncIdentity).toHaveBeenCalledTimes(1);
       expect(mockClearUserScopedStorage).not.toHaveBeenCalled();
       expect(mockAuth.clearAuth).not.toHaveBeenCalled();
+      // Core behavioural guarantee of the fix: if the local wipe
+      // can't be completed, we must NOT revoke the refresh token on
+      // the server either — otherwise we'd leave client + server in
+      // an inconsistent "signed in locally, revoked server-side"
+      // state, which only resolves on the next 401 and is hostile
+      // to debug.
+      expect(mockServerLogout).not.toHaveBeenCalled();
 
       // The last Alert.alert call should be the logout-failed dialog.
       // Match either the (future) i18n title or the current hardcoded
@@ -303,6 +328,9 @@ describe('SettingsScreen — account-identity-reset (Phase 1)', () => {
 
       expect(mockWipeSyncIdentity).toHaveBeenCalledTimes(1);
       expect(mockAuth.clearAuth).toHaveBeenCalledTimes(1);
+      // Sidecar is best-effort; wipe still succeeds here, so the
+      // happy-path serverLogout revoke MUST run (fire-and-forget).
+      expect(mockServerLogout).toHaveBeenCalledTimes(1);
     });
   });
 

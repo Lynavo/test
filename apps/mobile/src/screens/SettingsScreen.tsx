@@ -467,43 +467,38 @@ export function SettingsScreen() {
           if (isLoggingOut) return;
           setIsLoggingOut(true);
 
-          // Snapshot the refresh token before clearAuth wipes it, then fire
-          // the server-side revoke while the access token is still in
-          // memory. `request()` reads `getAccessToken()` synchronously to
-          // build the Authorization header before its first await, so we
-          // MUST kick this off before any of the awaited cleanup steps
-          // below. The 5s timeout inside `auth-service.logout()` bounds how
-          // long the request can run; a slow/failed network must never
-          // block the local logout.
+          // Snapshot the refresh token up-front so the value used for
+          // server-side revocation is stable even if auth state is
+          // touched mid-flight. The revoke itself is deliberately
+          // deferred until AFTER the awaited local cleanup succeeds —
+          // see the block comment below for the why.
           const refresh = auth.refreshToken;
-          if (refresh) {
-            void serverLogout(refresh).catch((e) => {
-              console.warn('[Settings] server logout failed (already cleared locally):', e);
-            });
-          }
 
-          // The rest of the cleanup is awaited in the order documented in
-          // the account-identity-reset spec (Phase 1):
+          // Order is load-bearing and mirrors the account-identity-reset
+          // spec §4 Phase 1 with one deliberate refinement: server-side
+          // token revocation (`serverLogout`) happens LAST, not first,
+          // so the fail-closed wipe at step 2 genuinely leaves client +
+          // server in a consistent state:
           //
-          //   1. desktop sidecar reset — best-effort, never throws
-          //   2. native wipeSyncIdentity — MUST await AND MUST succeed,
-          //      otherwise we'd clear local auth while the device still
-          //      holds the previous account's pairing token / clientId /
-          //      queue / history. A subsequent login (same or different
-          //      user) would inherit residual state and race Phase-2's
-          //      owner-guard — which is the single point of failure we
-          //      refuse to rely on. Fail CLOSED here: surface an alert
-          //      and keep the user signed in so they can retry.
+          //   1. desktop sidecar reset — best-effort, swallowed.
+          //   2. native wipeSyncIdentity — MUST succeed; on reject we
+          //      show an alert, keep the user signed in, and do NOT
+          //      call serverLogout. The previous ordering (serverLogout
+          //      first) would have left the server with a revoked
+          //      refresh token while the UI claimed "still signed in" —
+          //      an eventually-consistent logout that's hostile to
+          //      debug and breaks the fail-closed contract.
           //   3. user-scoped AsyncStorage cleanup — best-effort; its
           //      failure only affects reminder-shown suppression flags,
-          //      not security-critical state
-          //   4. local clearAuth — synchronous, last so RootNavigator
-          //      has a consistent blank state to render into; only
-          //      reached when the wipe succeeded
-          //
-          // Sidecar + scoped-storage failures are swallowed with a
-          // console.warn so a single flaky best-effort step cannot
-          // strand the user in Settings.
+          //      not security-critical state.
+          //   4. fire-and-forget serverLogout — tokens still live in
+          //      `_accessToken` / `_refreshToken` module-level vars
+          //      until step 5, so `request()` can still build the
+          //      Authorization header synchronously before its first
+          //      await; a slow/failed network must never block
+          //      auth.clearAuth.
+          //   5. auth.clearAuth — clears in-memory tokens + keychain
+          //      entry, triggering RootNavigator to unmount AuthedStack.
           try {
             await resetCurrentDesktopSidecarIfReachable();
           } catch (e) {
@@ -529,6 +524,19 @@ export function SettingsScreen() {
             await clearUserScopedStorage();
           } catch (e) {
             console.warn('[Settings] clearUserScopedStorage failed (ignored):', e);
+          }
+          // Fire-and-forget server-side revoke. Must run BEFORE
+          // clearAuth so the access token used by `request()` to build
+          // the Authorization header is still in memory; the request's
+          // first await happens after that header is composed, so the
+          // network call can safely race clearAuth. The 5s timeout
+          // inside `auth-service.logout()` bounds how long this can
+          // run in the background. Server revoke failure is non-fatal
+          // but worth logging for forensics.
+          if (refresh) {
+            void serverLogout(refresh).catch((e) => {
+              console.warn('[Settings] server logout failed (already cleared locally):', e);
+            });
           }
           try {
             auth.clearAuth();
