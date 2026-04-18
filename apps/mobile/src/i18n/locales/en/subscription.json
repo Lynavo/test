@@ -45,6 +45,7 @@
   },
   "status": {
     "trialing": "Trial — {{days}} days left",
+    "introTrialing": "Monthly intro trial — {{days}} days left",
     "trialExpired": "Trial ended",
     "subscribed": "Subscribed",
     "subExpired": "Subscription expired"

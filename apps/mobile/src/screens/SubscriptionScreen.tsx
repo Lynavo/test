@@ -18,12 +18,15 @@ import type { TFunction } from 'i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../stores/auth-store';
-import type { AccountStatus } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
 import { IAP_PRODUCTS, planToProductId } from '../constants/iap';
 import { classifyIapError, IapErrorClass } from '../services/iap-errors';
 import { verifyIapReceipt } from '../services/subscription-service';
 import { FEATURES } from '../constants/features';
+import {
+  resolveSubscriptionDisplayState,
+  type SubscriptionDisplayState,
+} from '../utils/subscriptionStatusDisplay';
 
 const DARK = '#202022';
 const SCREEN_BG = '#d6ecf8';
@@ -46,16 +49,6 @@ const PLAN_CARD_WIDTH =
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Subscription'>;
 type PlanKey = 'monthly' | 'yearly';
-
-function getTrialRemainingDays(trialEnd: string | null): number {
-  if (!trialEnd) return 0;
-  const end = new Date(trialEnd);
-  if (Number.isNaN(end.getTime())) return 0;
-  const now = new Date();
-  const diffMs = end.getTime() - now.getTime();
-  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-  return Math.max(days, 0);
-}
 
 function formatExpireDate(dateStr: string | null): string {
   if (!dateStr) return '';
@@ -85,12 +78,10 @@ const FEATURE_KEYS = [
 ] as const;
 
 function StatusBadge({
-  status,
-  trialEnd,
+  displayState,
   t,
 }: {
-  status: AccountStatus | undefined;
-  trialEnd: string | null | undefined;
+  displayState: SubscriptionDisplayState;
   t: TFunction;
 }) {
   let dotColor: string;
@@ -98,11 +89,19 @@ function StatusBadge({
   let backgroundColor: string;
   let textColor: string;
 
-  switch (status) {
-    case 'trialing': {
-      const days = getTrialRemainingDays(trialEnd ?? null);
+  switch (displayState.kind) {
+    case 'account_trial': {
+      const days = displayState.daysRemaining;
       dotColor = SUCCESS_GREEN;
       label = t('subscription.status.trialing', { days });
+      backgroundColor = LIGHT_GREEN_BG;
+      textColor = SUCCESS_GREEN;
+      break;
+    }
+    case 'subscription_intro_trial': {
+      const days = displayState.daysRemaining;
+      dotColor = SUCCESS_GREEN;
+      label = t('subscription.status.introTrialing', { days });
       backgroundColor = LIGHT_GREEN_BG;
       textColor = SUCCESS_GREEN;
       break;
@@ -515,8 +514,10 @@ export function SubscriptionScreen() {
     };
   }, []);
 
-  const status: AccountStatus | undefined = subscription?.status ?? user?.status;
-  const trialEnd = subscription?.trialEnd ?? user?.trialEnd;
+  const subscriptionDisplay = resolveSubscriptionDisplayState({
+    subscription,
+    user,
+  });
 
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -639,7 +640,9 @@ export function SubscriptionScreen() {
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>{t('subscription.hero.title')}</Text>
           <Text style={styles.heroSubtitle}>{t('subscription.hero.subtitle')}</Text>
-          {status ? <StatusBadge status={status} trialEnd={trialEnd} t={t} /> : null}
+          {subscriptionDisplay.kind !== 'unknown' ? (
+            <StatusBadge displayState={subscriptionDisplay} t={t} />
+          ) : null}
         </View>
 
         <View style={styles.featureCard}>

@@ -20,11 +20,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
-import {
-  useAuth,
-  isFeatureAccessAllowed,
-  getTrialRemainingDays,
-} from '../stores/auth-store';
+import { useAuth } from '../stores/auth-store';
 import { logout as serverLogout, deleteAccount } from '../services/auth-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
@@ -41,6 +37,7 @@ import {
   getConnectionBadgeState,
   type MobileConnectionState,
 } from '../utils/effectiveConnectionState';
+import { resolveSubscriptionDisplayState } from '../utils/subscriptionStatusDisplay';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -137,7 +134,6 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
     time,
   });
 }
-
 
 // ---------------------------------------------------------------------------
 // SettingsScreen
@@ -662,13 +658,19 @@ export function SettingsScreen() {
   }, [auth, navigation, t, isDeletingAccount]);
 
   // Subscription derived state
-  const userStatus = auth.user?.status;
-  const trialDays = getTrialRemainingDays(auth.user);
-  const isTrialing = userStatus === 'trialing';
-  const isSubscribed = userStatus === 'subscribed';
-  const isTrialExpired = userStatus === 'trial_expired';
-  const isSubExpired = userStatus === 'sub_expired';
-  const showSubCta = isTrialing || isTrialExpired || isSubExpired;
+  const subscriptionDisplay = resolveSubscriptionDisplayState({
+    subscription: auth.subscription,
+    user: auth.user,
+  });
+  const trialDays = subscriptionDisplay.daysRemaining;
+  const isAccountTrial = subscriptionDisplay.kind === 'account_trial';
+  const isSubscriptionIntroTrial =
+    subscriptionDisplay.kind === 'subscription_intro_trial';
+  const isSubscribed = subscriptionDisplay.kind === 'subscribed';
+  const isTrialExpired = subscriptionDisplay.kind === 'trial_expired';
+  const isSubExpired = subscriptionDisplay.kind === 'sub_expired';
+  const hasKnownSubscriptionState = subscriptionDisplay.kind !== 'unknown';
+  const showSubCta = isAccountTrial || isTrialExpired || isSubExpired;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -782,30 +784,42 @@ export function SettingsScreen() {
               <View
                 style={[
                   styles.subIconCircle,
-                  isSubscribed
+                  isSubscribed || isSubscriptionIntroTrial
                     ? { backgroundColor: SUB_GREEN_BG }
                     : { backgroundColor: TRIAL_PURPLE_BG },
                 ]}
               >
                 <Icon
-                  name={isSubscribed ? 'shield-checkmark-outline' : 'time-outline'}
+                  name={
+                    isSubscribed || isSubscriptionIntroTrial
+                      ? 'shield-checkmark-outline'
+                      : 'time-outline'
+                  }
                   size={18}
-                  color={isSubscribed ? SUB_GREEN : TRIAL_PURPLE}
+                  color={
+                    isSubscribed || isSubscriptionIntroTrial
+                      ? SUB_GREEN
+                      : TRIAL_PURPLE
+                  }
                 />
               </View>
               <Text style={styles.topCardSmallLabel}>
-                {isSubscribed || isSubExpired
+                {isSubscribed || isSubExpired || isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
-                  : t('settings.subscription.trial')}
+                  : isAccountTrial || isTrialExpired
+                    ? t('settings.subscription.trial')
+                    : t('subscription.title')}
               </Text>
             </View>
-            {isTrialing ? (
+            {isAccountTrial || isSubscriptionIntroTrial ? (
               <>
                 <Text style={styles.topCardTitle}>
                   {t('settings.subscription.trialDays', { days: trialDays })}
                 </Text>
                 <Text style={styles.topCardSubtext}>
-                  {t('settings.subscription.freeTrial')}
+                  {isSubscriptionIntroTrial
+                    ? t('settings.subscription.introTrial')
+                    : t('settings.subscription.freeTrial')}
                 </Text>
               </>
             ) : isTrialExpired ? (
@@ -821,7 +835,9 @@ export function SettingsScreen() {
                 {t('settings.subscription.expired')}
               </Text>
             ) : (
-              <Text style={styles.topCardTitle}>--</Text>
+              <Text style={styles.topCardTitle}>
+                {hasKnownSubscriptionState ? '--' : t('settings.status.reading')}
+              </Text>
             )}
             {showSubCta ? (
               <View style={styles.subCtaRow}>

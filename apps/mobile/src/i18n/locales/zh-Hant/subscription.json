@@ -45,6 +45,7 @@
   },
   "status": {
     "trialing": "試用中，還剩 {{days}} 天",
+    "introTrialing": "月訂閱免費期，還剩 {{days}} 天",
     "trialExpired": "試用已結束",
     "subscribed": "已訂閱",
     "subExpired": "訂閱已到期"
