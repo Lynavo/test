@@ -319,8 +319,25 @@ class NativeSyncEngineModule(
     // entire Phase 2 defense. We already use commit() for the
     // install_marker and wipe_in_progress sentinels for the same
     // reason (see runInstallSentinel + performWipeSyncIdentity).
-    prefs.edit().putString(PREF_OWNER_USER_ID, userId).commit()
-    promise.resolve(null)
+    //
+    // Reject the JS promise if `commit()` returns `false` (disk full,
+    // SharedPreferences corruption, etc.). Silently resolving on a
+    // failed write would leave us one cold start away from a Phase-2
+    // bypass — the marker is the only signal the owner-mismatch guard
+    // has.
+    val flushed = prefs.edit().putString(PREF_OWNER_USER_ID, userId).commit()
+    if (flushed) {
+      promise.resolve(null)
+    } else {
+      android.util.Log.w(
+        "NativeSyncEngineModule",
+        "setOwnerUserId: SharedPreferences.commit() returned false for $PREF_OWNER_USER_ID",
+      )
+      promise.reject(
+        "SET_OWNER_USER_ID_FLUSH_FAILED",
+        "SharedPreferences.commit() returned false — owner marker not durably written",
+      )
+    }
   }
 
   // ---------------------------------------------------------------------------

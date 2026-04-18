@@ -264,4 +264,53 @@ describe('bootstrapAuthedSession (Phase 2 owner-mismatch guard)', () => {
     expect(wipeSyncIdentity).not.toHaveBeenCalled();
     expect(setOwnerUserId).toHaveBeenCalledWith('42');
   });
+
+  test('setOwnerUserId rejection: fail-closed error outcome, subscription NOT fetched', async () => {
+    // Durable marker flush failing (SharedPreferences.commit() returned
+    // false on Android, or UserDefaults.synchronize() on iOS) must
+    // propagate as an error outcome — silently resolving 'ready' would
+    // leave the next cold start with storedOwnerId=null and bypass the
+    // owner-mismatch wipe for any subsequent user.
+    const { deps, fetchSubscription } = makeDeps({
+      fetchProfile: jest.fn().mockResolvedValue(sampleProfile(42)),
+      getOwnerUserId: jest.fn().mockResolvedValue('42'),
+      setOwnerUserId: jest.fn().mockRejectedValue(
+        new Error('SharedPreferences.commit() returned false'),
+      ),
+    });
+
+    const outcome = await bootstrapAuthedSession(deps, neverStale);
+
+    expect(outcome.kind).toBe('error');
+    if (outcome.kind === 'error') {
+      expect(outcome.error).toBeInstanceOf(ApiError);
+    }
+    // Subscription fetch is step 5 — must not run once step 4 failed.
+    expect(fetchSubscription).not.toHaveBeenCalled();
+  });
+
+  test('setOwnerUserId rejection after successful wipe (mismatch path): still fail-closed', async () => {
+    // Worst case: user B logs in, owner-mismatch detected, sidecar
+    // reset + wipe + scoped-storage all run cleanly — then the final
+    // owner-marker write fails. We refuse to flip into 'ready'; the
+    // device is now clean but unmarked, so pretending B is signed in
+    // would let a hypothetical user C next session skip the guard.
+    const { deps, clearUserScopedStorage, wipeSyncIdentity } = makeDeps({
+      fetchProfile: jest.fn().mockResolvedValue(sampleProfile(2)),
+      getOwnerUserId: jest.fn().mockResolvedValue('1'),
+      setOwnerUserId: jest.fn().mockRejectedValue(
+        new Error('synchronize() returned false'),
+      ),
+    });
+
+    const outcome = await bootstrapAuthedSession(deps, neverStale);
+
+    expect(outcome.kind).toBe('error');
+    // Wipe still ran — the device IS clean, we just couldn't record
+    // the new owner. That's acceptable: next retry / cold start will
+    // either successfully mark the owner or legitimately detect
+    // "fresh install" (no owner recorded) without any leaked state.
+    expect(wipeSyncIdentity).toHaveBeenCalledTimes(1);
+    expect(clearUserScopedStorage).toHaveBeenCalledTimes(1);
+  });
 });

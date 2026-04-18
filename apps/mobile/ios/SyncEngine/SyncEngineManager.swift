@@ -4616,8 +4616,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     /// Write the owner id as a string to preserve full precision across the
     /// RN bridge. `UserDefaults` is thread-safe; no main-actor hop needed.
+    ///
+    /// Returns `true` iff the write was durably flushed to disk. The caller
+    /// (RNBridge.setOwnerUserId) rejects the JS promise on `false` so
+    /// `bootstrapAuthedSession` can fail the bootstrap rather than flipping
+    /// the navigator into `AuthedStack` with an un-marked owner that a
+    /// future cold start can't detect.
     @objc
-    func setOwnerUserId(_ id: String) {
+    func setOwnerUserId(_ id: String) -> Bool {
         let defaults = UserDefaults.standard
         defaults.set(id, forKey: Self.ownerUserIdKey)
         // Durable flush — this marker is the ONLY signal the Phase-2 owner
@@ -4628,7 +4634,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // escape hatch for forced flush, and we are already using it for
         // the install_marker and wipe_in_progress sentinels for the same
         // reason (see AppDelegate.swift + wipeSyncIdentity above).
-        defaults.synchronize()
-        NSLog("[SyncEngine] owner user id set to %@", id)
+        //
+        // `synchronize()` returns `false` if the write failed (disk full,
+        // sandbox permissions, etc.). We propagate that up so the JS layer
+        // can fail the bootstrap; silently treating it as success would
+        // leave us one process-kill away from a Phase-2 bypass.
+        let flushed = defaults.synchronize()
+        if !flushed {
+            NSLog("[SyncEngine] owner user id set FAILED to flush for %@", id)
+        } else {
+            NSLog("[SyncEngine] owner user id set to %@", id)
+        }
+        return flushed
     }
 }

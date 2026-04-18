@@ -447,7 +447,19 @@ class NativeSyncEngineModule: RCTEventEmitter {
     @objc
     func setOwnerUserId(_ userId: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         // UserDefaults is thread-safe, so no main-actor hop is needed here.
-        SyncEngineManager.shared.setOwnerUserId(userId as String)
-        resolve(nil)
+        // Reject the JS promise if the disk flush failed — the owner marker
+        // is the Phase-2 durability anchor and a silent failure here is
+        // indistinguishable from "user A never logged in" on the next cold
+        // start, which bypasses the owner-mismatch wipe.
+        let flushed = SyncEngineManager.shared.setOwnerUserId(userId as String)
+        if flushed {
+            resolve(nil)
+        } else {
+            reject(
+                "SET_OWNER_USER_ID_FLUSH_FAILED",
+                "UserDefaults.synchronize() returned false — owner marker not durably written",
+                nil
+            )
+        }
     }
 }

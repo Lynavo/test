@@ -116,12 +116,23 @@ export async function bootstrapAuthedSession(
   }
 
   // 4. Record the current owner so the next bootstrap compares against a
-  // fresh value. Non-fatal on failure — next cold start will retry.
-  // Stringified to keep the native bridge from demoting through Double.
+  // fresh value. Stringified to keep the native bridge from demoting
+  // through Double.
+  //
+  // FAIL-CLOSED: if the native layer can't durably flush this marker
+  // (SharedPreferences.commit() returns false on Android, or
+  // UserDefaults.synchronize() returns false on iOS), we MUST NOT
+  // proceed to `ready`. Next cold start would read storedOwnerId=null,
+  // the owner-mismatch guard would treat user B as "fresh install",
+  // and skip the wipe — the exact leak Phase 2 exists to prevent.
+  // Surface an error outcome instead so RootNavigator renders
+  // ProfileErrorScreen with retry / logout affordances.
   try {
     await deps.setOwnerUserId(String(profile.id));
   } catch (err) {
-    console.warn('[bootstrap] setOwnerUserId failed (continuing)', err);
+    if (isStale()) return { kind: 'cancelled' };
+    console.warn('[bootstrap] setOwnerUserId failed (fail-closed)', err);
+    return { kind: 'error', error: toApiError(err) };
   }
   if (isStale()) return { kind: 'cancelled' };
 
