@@ -51,6 +51,7 @@
     "introTrialing": "Monthly intro trial — {{days}} days left",
     "trialExpired": "Trial ended",
     "subscribed": "Subscribed",
+    "subscribedCancelled": "Cancelled — valid until {{date}}",
     "subExpired": "Subscription expired"
   },
   "actions": {

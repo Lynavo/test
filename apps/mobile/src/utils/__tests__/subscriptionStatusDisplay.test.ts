@@ -68,4 +68,47 @@ describe('resolveSubscriptionDisplayState', () => {
       daysRemaining: 0,
     });
   });
+
+  test('subscribed + autoRenewing false → subscribed_cancelled', () => {
+    // User tapped Cancel in iOS Settings. Server flipped auto_renewing
+    // to false; subscription row stays active until expireAt. UI needs
+    // to render "Cancelled, valid until X" instead of plain Subscribed.
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+          autoRenewing: false,
+        },
+      }),
+    ).toEqual({ kind: 'subscribed_cancelled', daysRemaining: 0 });
+  });
+
+  test('subscribed + autoRenewing true → plain subscribed', () => {
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+          autoRenewing: true,
+        },
+      }),
+    ).toEqual({ kind: 'subscribed', daysRemaining: 0 });
+  });
+
+  test('subscribed + autoRenewing undefined (legacy fixture) → plain subscribed', () => {
+    // Backwards-compat: pre-deploy server payloads or old test fixtures
+    // without the field must not fall into the cancelled branch.
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+        },
+      }),
+    ).toEqual({ kind: 'subscribed', daysRemaining: 0 });
+  });
 });

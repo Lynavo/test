@@ -40,6 +40,13 @@ export interface SubscriptionInfo {
   plan: SubscriptionPlan;
   expireAt: string | null;
   trialEnd: string | null;
+  /** Whether Apple will auto-renew at expireAt. Undefined / null when
+   *  server hasn't populated the field (legacy status shape, status !=
+   *  subscribed, or old test fixtures). When status === 'subscribed'
+   *  and autoRenewing === false, the user cancelled but still has
+   *  access until expireAt — UI should surface that state explicitly
+   *  instead of rendering plain "Subscribed". */
+  autoRenewing?: boolean | null;
 }
 
 export type SignedOutTransition = 'account_deleted' | null;

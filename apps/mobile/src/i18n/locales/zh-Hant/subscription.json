@@ -51,6 +51,7 @@
     "introTrialing": "月訂閱免費期，還剩 {{days}} 天",
     "trialExpired": "試用已結束",
     "subscribed": "已訂閱",
+    "subscribedCancelled": "已取消，有效至 {{date}}",
     "subExpired": "訂閱已到期"
   },
   "actions": {

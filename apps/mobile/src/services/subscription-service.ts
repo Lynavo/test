@@ -10,6 +10,10 @@ interface SubscriptionStatusResponse {
   plan: string;
   expire_at: string | null;
   trial_end: string | null;
+  /** Server emits this only when status === 'subscribed'; other states
+   *  leave it absent/null (omitempty on the Go side). Client normalises
+   *  to strict `boolean | null`. */
+  auto_renewing?: boolean | null;
 }
 
 export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
@@ -19,6 +23,8 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
     plan: (data.plan || '') as SubscriptionInfo['plan'],
     expireAt: data.expire_at,
     trialEnd: data.trial_end,
+    autoRenewing:
+      typeof data.auto_renewing === 'boolean' ? data.auto_renewing : null,
   };
 }
 

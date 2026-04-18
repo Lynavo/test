@@ -9,6 +9,10 @@ export type SubscriptionDisplayKind =
   | 'account_trial'
   | 'subscription_intro_trial'
   | 'subscribed'
+  /** status=subscribed + autoRenewing=false: user cancelled in iOS
+   *  Settings, access continues until expireAt. UI should surface
+   *  "Cancelled, valid until X" copy instead of plain "Subscribed". */
+  | 'subscribed_cancelled'
   | 'trial_expired'
   | 'sub_expired'
   | 'unknown';
@@ -21,7 +25,7 @@ export interface SubscriptionDisplayState {
 type EntitlementSnapshot = Pick<UserProfile, 'status' | 'plan' | 'trialEnd'>;
 type SubscriptionSnapshot = Pick<
   SubscriptionInfo,
-  'status' | 'plan' | 'trialEnd'
+  'status' | 'plan' | 'trialEnd' | 'autoRenewing'
 >;
 
 function getRemainingDays(trialEnd: string | null | undefined): number {
@@ -33,7 +37,12 @@ function getRemainingDays(trialEnd: string | null | undefined): number {
 }
 
 function classifySnapshot(
-  snapshot: { status: AccountStatus; plan: SubscriptionPlan; trialEnd: string | null },
+  snapshot: {
+    status: AccountStatus;
+    plan: SubscriptionPlan;
+    trialEnd: string | null;
+    autoRenewing?: boolean | null;
+  },
 ): SubscriptionDisplayState | null {
   switch (snapshot.status) {
     case 'trialing':
@@ -48,6 +57,12 @@ function classifySnapshot(
         daysRemaining: getRemainingDays(snapshot.trialEnd),
       };
     case 'subscribed':
+      // Only the subscription snapshot carries autoRenewing; user
+      // entitlement snapshots don't, so legacy code paths that only
+      // pass user still hit the plain "subscribed" branch.
+      if (snapshot.autoRenewing === false) {
+        return { kind: 'subscribed_cancelled', daysRemaining: 0 };
+      }
       return { kind: 'subscribed', daysRemaining: 0 };
     case 'trial_expired':
       return {
@@ -72,6 +87,7 @@ export function resolveSubscriptionDisplayState(input: {
         status: subscription.status,
         plan: subscription.plan,
         trialEnd: subscription.trialEnd,
+        autoRenewing: subscription.autoRenewing,
       }) ?? { kind: 'unknown', daysRemaining: 0 }
     );
   }

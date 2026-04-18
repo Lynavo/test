@@ -677,10 +677,22 @@ export function SettingsScreen() {
   const isSubscriptionIntroTrial =
     subscriptionDisplay.kind === 'subscription_intro_trial';
   const isSubscribed = subscriptionDisplay.kind === 'subscribed';
+  const isSubscribedCancelled =
+    subscriptionDisplay.kind === 'subscribed_cancelled';
   const isTrialExpired = subscriptionDisplay.kind === 'trial_expired';
   const isSubExpired = subscriptionDisplay.kind === 'sub_expired';
   const hasKnownSubscriptionState = subscriptionDisplay.kind !== 'unknown';
   const showSubCta = isAccountTrial || isTrialExpired || isSubExpired;
+
+  // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
+  // secondary line. Keep it lenient: bad ISO falls through to empty so
+  // the primary status line still shows.
+  const cancelledUntilDate = (() => {
+    if (!isSubscribedCancelled || !auth.subscription?.expireAt) return '';
+    const d = new Date(auth.subscription.expireAt);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  })();
 
   // ---------------------------------------------------------------------------
   // Render
@@ -814,7 +826,10 @@ export function SettingsScreen() {
                 />
               </View>
               <Text style={styles.topCardSmallLabel}>
-                {isSubscribed || isSubExpired || isSubscriptionIntroTrial
+                {isSubscribed ||
+                isSubscribedCancelled ||
+                isSubExpired ||
+                isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
                     ? t('settings.subscription.trial')
@@ -836,6 +851,16 @@ export function SettingsScreen() {
               <Text style={[styles.topCardTitle, { color: DANGER_RED }]}>
                 {t('settings.subscription.expired')}
               </Text>
+            ) : isSubscribedCancelled ? (
+              // Cancelled-but-active: deliberately two-line so the amber
+              // tint carries the urgency while expiry date gives certainty.
+              <>
+                <Text style={[styles.topCardTitle, { color: DANGER_RED }]}>
+                  {t('subscription.status.subscribedCancelled', {
+                    date: cancelledUntilDate,
+                  })}
+                </Text>
+              </>
             ) : isSubscribed ? (
               <Text style={[styles.topCardTitle, { color: SUB_GREEN }]}>
                 {t('settings.subscription.active')}
