@@ -89,7 +89,7 @@ jest.mock('../../stores/auth-store', () => ({
 }));
 
 import i18n from '../../i18n';
-import { SubscriptionScreen } from '../SubscriptionScreen';
+import { SubscriptionScreen, resolveCurrentPlan } from '../SubscriptionScreen';
 import { iapService } from '../../services/iap-service';
 import { verifyIapReceipt } from '../../services/subscription-service';
 import { ApiError, ERROR_CODE } from '../../services/api';
@@ -210,5 +210,81 @@ describe('SubscriptionScreen', () => {
 
     // The modal's "valid until" line formats as YYYY/M/D (formatExpireDate).
     expect(await findByText(/2027\/5\/20/)).toBeTruthy();
+  });
+
+  test('current-plan badge appears on the plan the user already holds', () => {
+    mockAuthState.subscription = {
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2027-05-20T00:00:00Z',
+      trialEnd: null,
+    };
+
+    const { getByText, queryAllByText } = renderScreen();
+
+    // Badge renders on monthly card.
+    expect(getByText(/当前方案|目前方案|Current Plan/)).toBeTruthy();
+    // Only one badge — yearly card stays actionable without the label.
+    expect(queryAllByText(/当前方案|目前方案|Current Plan/).length).toBe(1);
+  });
+
+  test('CTA reads Switch Plan when user already has a subscription and selects the other plan', () => {
+    mockAuthState.subscription = {
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2027-05-20T00:00:00Z',
+      trialEnd: null,
+    };
+
+    const { getByText, queryByText } = renderScreen();
+
+    // selectedPlan defaults to the non-current side (yearly here), so CTA
+    // immediately shows the switch-plan label instead of "Subscribe Now".
+    expect(getByText(/切换方案|切換方案|Switch Plan/)).toBeTruthy();
+    expect(queryByText(/^立即订阅$|^立即訂閱$|^Subscribe Now$/)).toBeNull();
+  });
+});
+
+describe('resolveCurrentPlan', () => {
+  test('null subscription → null', () => {
+    expect(resolveCurrentPlan(null)).toBeNull();
+  });
+
+  test('subscribed monthly → monthly', () => {
+    expect(
+      resolveCurrentPlan({ status: 'subscribed', plan: 'monthly' }),
+    ).toBe('monthly');
+  });
+
+  test('trialing monthly (intro offer) → monthly', () => {
+    // Trial-period IAP counts as the current Apple-level plan — tapping
+    // monthly again during trial would be a no-op.
+    expect(
+      resolveCurrentPlan({ status: 'trialing', plan: 'monthly' }),
+    ).toBe('monthly');
+  });
+
+  test('subscribed yearly → yearly', () => {
+    expect(
+      resolveCurrentPlan({ status: 'subscribed', plan: 'yearly' }),
+    ).toBe('yearly');
+  });
+
+  test('trial_expired → null (no Apple plan held)', () => {
+    expect(
+      resolveCurrentPlan({ status: 'trial_expired', plan: '' }),
+    ).toBeNull();
+  });
+
+  test('sub_expired → null (user needs to re-subscribe)', () => {
+    expect(
+      resolveCurrentPlan({ status: 'sub_expired', plan: 'monthly' }),
+    ).toBeNull();
+  });
+
+  test('subscribed with empty plan → null (defensive)', () => {
+    expect(
+      resolveCurrentPlan({ status: 'subscribed', plan: '' }),
+    ).toBeNull();
   });
 });

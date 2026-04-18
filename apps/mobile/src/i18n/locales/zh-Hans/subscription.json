@@ -26,7 +26,8 @@
       "oldPrice": "¥118.8",
       "savings": "立省 ¥14.8"
     },
-    "fallback": "订阅"
+    "fallback": "订阅",
+    "currentPlan": "当前方案"
   },
   "restore": {
     "action": "恢复已购买订阅",
@@ -54,6 +55,7 @@
   },
   "actions": {
     "subscribe": "立即订阅",
+    "switchPlan": "切换方案",
     "start": "开始使用"
   },
   "footer": "订阅即表示您同意自动续费条款，可随时取消",

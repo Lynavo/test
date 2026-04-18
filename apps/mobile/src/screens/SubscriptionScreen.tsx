@@ -49,6 +49,19 @@ const PLAN_CARD_WIDTH =
   (SCREEN_WIDTH - PLAN_CARD_HORIZONTAL_PADDING * 2 - PLAN_CARD_GAP) / 2;
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Subscription'>;
+
+/** Returns the Apple-level plan the user currently holds, or null for
+ *  account-level trials / expired states where no Apple IAP applies.
+ *  Drives the "current plan" badge + card disabling on SubscriptionScreen.
+ *  Exported for unit testing. */
+export function resolveCurrentPlan(
+  sub: { status: string; plan: string } | null,
+): 'monthly' | 'yearly' | null {
+  if (!sub) return null;
+  if (sub.status !== 'subscribed' && sub.status !== 'trialing') return null;
+  if (sub.plan === 'monthly' || sub.plan === 'yearly') return sub.plan;
+  return null;
+}
 type PlanKey = 'monthly' | 'yearly';
 
 function formatExpireDate(dateStr: string | null): string {
@@ -213,6 +226,7 @@ function PlanCard({
   savingsBadge,
   selected,
   disabled,
+  currentBadge,
   onPress,
 }: {
   price: string;
@@ -221,6 +235,10 @@ function PlanCard({
   savingsBadge?: string;
   selected: boolean;
   disabled?: boolean;
+  /** When set, renders a small "目前方案" / "Current Plan" label in the
+   *  top-right corner. Callers should also pass `disabled` to block the
+   *  pointless self-select tap. */
+  currentBadge?: string;
   onPress: () => void;
 }) {
   return (
@@ -237,6 +255,11 @@ function PlanCard({
       onPress={onPress}
       disabled={disabled}
     >
+      {currentBadge ? (
+        <View style={planStyles.currentBadge}>
+          <Text style={planStyles.currentBadgeText}>{currentBadge}</Text>
+        </View>
+      ) : null}
       <Text
         style={[
           planStyles.price,
@@ -357,6 +380,20 @@ const planStyles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  currentBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(83, 200, 120, 0.16)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  currentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2e7d4f',
   },
 });
 
@@ -487,7 +524,17 @@ export function SubscriptionScreen() {
   const { t } = useTranslation();
   const { user, subscription, loadSubscription } = useAuth();
 
-  const [selectedPlan, setSelectedPlan] = useState<PlanKey>('yearly');
+  // Which Apple-level plan the user is currently holding (null when on
+  // account trial, post-expiry, or no Apple IAP yet). Drives the "目前
+  // 方案" badge, card disable, and CTA copy.
+  const currentPlan = resolveCurrentPlan(subscription);
+
+  // Default-select the OTHER plan when the user is already subscribed —
+  // nudges them toward the upgrade affordance instead of landing on a
+  // disabled self-select. Fall back to yearly otherwise (typical
+  // first-purchase bias).
+  const initialSelectedPlan: PlanKey = currentPlan === 'monthly' ? 'yearly' : 'yearly';
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>(initialSelectedPlan);
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [confirmedPlan, setConfirmedPlan] = useState<PlanKey>('yearly');
@@ -680,7 +727,12 @@ export function SubscriptionScreen() {
                 : t('subscription.plans.monthly.subtitle')
             }
             selected={selectedPlan === 'monthly'}
-            disabled={false}
+            disabled={currentPlan === 'monthly'}
+            currentBadge={
+              currentPlan === 'monthly'
+                ? t('subscription.plans.currentPlan')
+                : undefined
+            }
             onPress={() => setSelectedPlan('monthly')}
           />
           <PlanCard
@@ -689,6 +741,12 @@ export function SubscriptionScreen() {
             oldPrice={t('subscription.plans.yearly.oldPrice')}
             savingsBadge={t('subscription.plans.yearly.savings')}
             selected={selectedPlan === 'yearly'}
+            disabled={currentPlan === 'yearly'}
+            currentBadge={
+              currentPlan === 'yearly'
+                ? t('subscription.plans.currentPlan')
+                : undefined
+            }
             onPress={() => setSelectedPlan('yearly')}
           />
         </View>
@@ -696,7 +754,7 @@ export function SubscriptionScreen() {
         <TouchableOpacity
           style={styles.subscribeButton}
           activeOpacity={0.7}
-          disabled={isLoading}
+          disabled={isLoading || selectedPlan === currentPlan}
           onPress={() => {
             void handleSubscribe();
           }}
@@ -704,7 +762,11 @@ export function SubscriptionScreen() {
           {isLoading ? (
             <ActivityIndicator color="#ffffff" size="small" />
           ) : (
-            <Text style={styles.subscribeButtonText}>{t('subscription.actions.subscribe')}</Text>
+            <Text style={styles.subscribeButtonText}>
+              {currentPlan && selectedPlan !== currentPlan
+                ? t('subscription.actions.switchPlan')
+                : t('subscription.actions.subscribe')}
+            </Text>
           )}
         </TouchableOpacity>
 

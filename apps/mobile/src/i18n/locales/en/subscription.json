@@ -26,7 +26,8 @@
       "oldPrice": "¥118.8",
       "savings": "Save ¥14.8"
     },
-    "fallback": "Subscription"
+    "fallback": "Subscription",
+    "currentPlan": "Current Plan"
   },
   "restore": {
     "action": "Restore Purchases",
@@ -54,6 +55,7 @@
   },
   "actions": {
     "subscribe": "Subscribe Now",
+    "switchPlan": "Switch Plan",
     "start": "Get Started"
   },
   "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",
