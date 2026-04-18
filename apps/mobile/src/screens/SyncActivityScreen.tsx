@@ -902,10 +902,12 @@ export function SyncActivityScreen() {
                 <Text style={styles.runningTitle}>
                   {t('syncActivity.completed.auto.title')}
                 </Text>
-                <Text style={styles.runningPercent}>100%</Text>
+                <Text style={[styles.runningPercent, styles.completionPercent]}>
+                  100%
+                </Text>
               </View>
 
-              <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarTrack, styles.progressBarTrackComplete]}>
                 <View style={[styles.progressBarFill, styles.progressBarFillComplete]} />
               </View>
 
@@ -977,10 +979,12 @@ export function SyncActivityScreen() {
                 <Text style={styles.runningTitle}>
                   {t('syncActivity.completed.manual.title')}
                 </Text>
-                <Text style={styles.runningPercent}>100%</Text>
+                <Text style={[styles.runningPercent, styles.completionPercent]}>
+                  100%
+                </Text>
               </View>
 
-              <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarTrack, styles.progressBarTrackComplete]}>
                 <View style={[styles.progressBarFill, styles.progressBarFillComplete]} />
               </View>
 
@@ -1261,12 +1265,34 @@ export function buildOverview(
       ? ((payload.currentTaskSource as UploadTaskSource | undefined) ??
         undefined)
       : prev.currentTaskSource;
+  const nextCompletedCount =
+    (payload.completedCount as number | undefined) ?? prev.completedCount;
+  const nextTotalCount =
+    (payload.totalCount as number | undefined) ??
+    (payload.queueTotalCount as number | undefined) ??
+    prev.totalCount;
+  const nextManualPending =
+    (payload.manualPending as number | undefined) ?? prev.manualPending;
+  const nextAutoPending =
+    (payload.autoPending as number | undefined) ?? prev.autoPending;
+  const roundSettledStates = new Set(['idle', 'paused_auto_upload']);
+  const roundFinishedWithoutCompletedPulse =
+    roundSettledStates.has(uploadState) &&
+    !roundSettledStates.has(prev.uploadState) &&
+    nextTotalCount > 0 &&
+    nextCompletedCount >= nextTotalCount &&
+    nextManualPending === 0 &&
+    nextAutoPending === 0;
   const derivedLastCompletedTaskSource =
     uploadState === 'completed'
       ? nextCurrentTaskSource ??
         prev.currentTaskSource ??
         prev.lastCompletedTaskSource ??
         ((prev.autoUploadState === 'active' ? 'auto' : 'manual') as UploadTaskSource)
+      : roundFinishedWithoutCompletedPulse
+        ? prev.currentTaskSource ??
+          prev.lastCompletedTaskSource ??
+          ((prev.autoUploadState === 'active' ? 'auto' : 'manual') as UploadTaskSource)
       : prev.lastCompletedTaskSource;
 
   return {
@@ -1281,12 +1307,8 @@ export function buildOverview(
         : ((payload.currentSpeedMbps as number | undefined) ??
           prev.currentSpeedMbps),
     uploadState,
-    completedCount:
-      (payload.completedCount as number | undefined) ?? prev.completedCount,
-    totalCount:
-      (payload.totalCount as number | undefined) ??
-      (payload.queueTotalCount as number | undefined) ??
-      prev.totalCount,
+    completedCount: nextCompletedCount,
+    totalCount: nextTotalCount,
     completedBytes:
       (payload.completedBytes as number | undefined) ?? prev.completedBytes,
     totalBytes:
@@ -1329,11 +1351,8 @@ export function buildOverview(
     autoUploadState:
       (payload.autoUploadState as AutoUploadState | undefined) ??
       prev.autoUploadState,
-    manualPending:
-      (payload.manualPending as number | undefined) ??
-      prev.manualPending,
-    autoPending:
-      (payload.autoPending as number | undefined) ?? prev.autoPending,
+    manualPending: nextManualPending,
+    autoPending: nextAutoPending,
     lastErrorCode:
       typeof payload.lastErrorCode === 'string'
         ? payload.lastErrorCode
@@ -1541,6 +1560,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 10,
   },
+  progressBarTrackComplete: {
+    backgroundColor: 'rgba(34,197,94,0.16)',
+  },
   progressBarFill: {
     height: '100%',
     borderRadius: 3,
@@ -1548,6 +1570,10 @@ const styles = StyleSheet.create({
   },
   progressBarFillComplete: {
     width: '100%',
+    backgroundColor: ONLINE_GREEN,
+  },
+  completionPercent: {
+    color: ONLINE_GREEN,
   },
   currentFileName: {
     fontSize: 12,

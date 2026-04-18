@@ -133,4 +133,81 @@ describe('buildOverview', () => {
     expect(next.currentTaskSource).toBeUndefined();
     expect(next.lastCompletedTaskSource).toBe('manual');
   });
+
+  it('derives the last completed task source when native jumps straight from uploading to idle', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'uploading',
+      completedCount: 0,
+      totalCount: 1,
+      completedBytes: 0,
+      totalBytes: 8192,
+      currentFile: 'file-key-3',
+      currentFilename: 'clip-3.mov',
+      currentFileConfirmedBytes: 8192,
+      currentFileTotalBytes: 8192,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'disabled' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        completedCount: 1,
+        totalCount: 1,
+        completedBytes: 8192,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+      },
+      prev,
+    );
+
+    expect(next.uploadState).toBe('idle');
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBe('manual');
+  });
+
+  it('derives the last completed task source when native settles into paused_auto_upload after a manual round', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'uploading',
+      completedCount: 11,
+      totalCount: 12,
+      completedBytes: 2027645956,
+      totalBytes: 2071538583,
+      currentFile: 'file-key-4',
+      currentFilename: 'clip-4.mov',
+      currentFileConfirmedBytes: 43892627,
+      currentFileTotalBytes: 43892627,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'interrupted' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'paused_auto_upload',
+        completedCount: 12,
+        totalCount: 12,
+        completedBytes: 2071538583,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      prev,
+    );
+
+    expect(next.uploadState).toBe('paused_auto_upload');
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBe('manual');
+  });
 });

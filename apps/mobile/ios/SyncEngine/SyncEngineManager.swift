@@ -519,7 +519,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     ) -> [String: Any] {
         runtimeUploadState = uploadState
         let currentBinding = uploadStore?.getBinding()
-        let transferredBytes = runtimeQueueCompletedBytes + runtimeCurrentFileConfirmedBytes
+        let pendingCounts = uploadStore?.getPendingCountsBySource() ?? (auto: 0, manual: 0)
+        let currentTaskSource: Any = uploadStore?.getCurrentUploadingSource() ?? NSNull()
+        let persistedQueueStats = uploadStore?.getQueueStats() ?? (totalCount: 0, totalBytes: 0, completedCount: 0, completedBytes: 0)
+        let hasRuntimeRoundProgress =
+            runtimeQueueTotalCount > 0 ||
+            runtimeQueueCompletedCount > 0 ||
+            runtimeQueueTotalBytes > 0 ||
+            runtimeQueueCompletedBytes > 0 ||
+            runtimeCurrentFileTotalBytes > 0
+        let shouldFallbackToPersistedQueueStats =
+            !hasRuntimeRoundProgress &&
+            pendingCounts.manual == 0 &&
+            pendingCounts.auto == 0 &&
+            currentBinding != nil &&
+            uploadState == "idle" &&
+            persistedQueueStats.totalCount > 0
+
+        let effectiveTotalCount =
+            shouldFallbackToPersistedQueueStats
+                ? persistedQueueStats.totalCount
+                : runtimeQueueTotalCount
+        let effectiveCompletedCount =
+            shouldFallbackToPersistedQueueStats
+                ? persistedQueueStats.completedCount
+                : runtimeQueueCompletedCount
+        let effectiveTotalBytes =
+            shouldFallbackToPersistedQueueStats
+                ? persistedQueueStats.totalBytes
+                : runtimeQueueTotalBytes
+        let effectiveCompletedBytes =
+            shouldFallbackToPersistedQueueStats
+                ? persistedQueueStats.completedBytes
+                : runtimeQueueCompletedBytes
+        let transferredBytes = effectiveCompletedBytes + runtimeCurrentFileConfirmedBytes
         let derivedProgressPercent: Int
         if let progressPercent {
             derivedProgressPercent = progressPercent
@@ -527,21 +560,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             derivedProgressPercent = Int(
                 (Double(runtimeCurrentFileConfirmedBytes) / Double(runtimeCurrentFileTotalBytes)) * 100
             )
+        } else if effectiveTotalCount > 0 && effectiveCompletedCount >= effectiveTotalCount {
+            derivedProgressPercent = 100
         } else {
             derivedProgressPercent = uploadState == "completed" ? 100 : 0
         }
-
-        // Compute source-split queue counts for SyncActivityScreen
-        let pendingCounts = uploadStore?.getPendingCountsBySource() ?? (auto: 0, manual: 0)
-        let currentTaskSource: Any = uploadStore?.getCurrentUploadingSource() ?? NSNull()
 
         let autoUploadState = autoUploadConfigStore?.getConfig().state ?? "disabled"
 
         return [
             "currentDeviceId": currentBinding?.deviceId ?? NSNull(),
             "currentDeviceName": currentBinding?.deviceAlias ?? currentBinding?.deviceName ?? NSNull(),
-            "completedCount": runtimeQueueCompletedCount,
-            "completedBytes": runtimeQueueCompletedBytes,
+            "completedCount": effectiveCompletedCount,
+            "completedBytes": effectiveCompletedBytes,
             "currentFile": runtimeCurrentFileKey ?? NSNull(),
             "currentFilename": runtimeCurrentFilename ?? NSNull(),
             "currentFileConfirmedBytes": runtimeCurrentFileConfirmedBytes,
@@ -553,8 +584,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "performanceHint": runtimePerformanceHint,
             "performanceMessage": runtimePerformanceMessage ?? NSNull(),
             "progressPercent": derivedProgressPercent,
-            "totalBytes": runtimeQueueTotalBytes,
-            "totalCount": runtimeQueueTotalCount,
+            "totalBytes": effectiveTotalBytes,
+            "totalCount": effectiveTotalCount,
             "thermalState": runtimeThermalState,
             "activeTuningProfile": runtimeActiveTuningProfile,
             "isThermalLimited": runtimeIsThermalLimited,

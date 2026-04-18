@@ -195,4 +195,63 @@ describe('syncActivityTransferState', () => {
       'manual_completed',
     );
   });
+
+  it('keeps manual completed state after native settles back to idle', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'disabled' as const,
+      completedCount: 1,
+      totalCount: 1,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'manual_completed',
+    );
+  });
+
+  it('shows manual completed state on a fresh idle snapshot when queue stats say the round finished', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'disabled' as const,
+      completedCount: 1,
+      totalCount: 1,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'manual_completed',
+    );
+  });
+
+  it('keeps manual completed state after a finished manual round settles into paused_auto_upload', () => {
+    const snapshot = {
+      uploadState: 'paused_auto_upload',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'manual_completed',
+    );
+  });
 });

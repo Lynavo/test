@@ -56,6 +56,14 @@ export function hasOutstandingSyncRoundWork(
   return totalCount > 0 && completedCount < totalCount;
 }
 
+function hasFinishedSyncRound(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): boolean {
+  const totalCount = snapshot?.totalCount ?? 0;
+  const completedCount = snapshot?.completedCount ?? 0;
+  return totalCount > 0 && completedCount >= totalCount;
+}
+
 export function isSyncActivityActivelyTransferring(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
@@ -123,7 +131,10 @@ export function getSyncActivityMainCardState(
     return 'running';
   }
 
-  if (snapshot?.uploadState === 'completed') {
+  if (
+    (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
+    getCompletedTaskSource(snapshot)
+  ) {
     return getCompletedTaskSource(snapshot) === 'manual'
       ? 'manual_completed'
       : 'auto_completed';
