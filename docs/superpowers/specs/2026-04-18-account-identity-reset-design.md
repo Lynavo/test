@@ -1,7 +1,7 @@
 # Account Identity Reset Design Spec
 
 **日期：** 2026-04-18
-**狀態：** Draft — pending review
+**狀態：** Implemented on `dev` — post-implementation updated
 **範圍：** Mobile（iOS + Android + JS）+ Desktop sidecar（macOS / Windows）
 **起源：** IAP sandbox 測試時發現 A logout / B login 後 RootNavigator 直接進 SyncActivity 看到 A 的 Mac + history
 
@@ -150,7 +150,7 @@ Native bridge 暴露的原子操作。任何觸發清理的時機都調用這一
 | `apps/mobile/src/services/SyncEngineModule.ts` | 暴露 `wipeSyncIdentity(): Promise<void>` bridge |
 | `apps/mobile/src/services/sidecar-reset-service.ts`（新檔） | 根據目前 binding host，best-effort 呼叫 `POST http://<host>:39394/settings/reset-state` |
 | `apps/mobile/src/utils/clearUserScopedStorage.ts`（新檔） | `getAllKeys()` + filter `@vividrop/reminder-shown/*` + `multiRemove` |
-| `apps/mobile/src/screens/SettingsScreen.tsx:429` | `handleLogout`：`serverLogout → await resetCurrentDesktopSidecarIfReachable() → await SyncEngineModule.wipeSyncIdentity() → await clearUserScopedStorage() → auth.clearAuth()` |
+| `apps/mobile/src/screens/SettingsScreen.tsx:429` | `handleLogout`：`await resetCurrentDesktopSidecarIfReachable() → await SyncEngineModule.wipeSyncIdentity() → await clearUserScopedStorage() → fire-and-forget serverLogout → auth.clearAuth()` |
 | `apps/mobile/src/screens/SettingsScreen.tsx:472` | `handleDeleteAccount`：`deleteAccount → auth.setSignedOutTransition('account_deleted') → await resetCurrentDesktopSidecarIfReachable() → await wipeSyncIdentity() → await clearUserScopedStorage() → auth.clearAuth()` |
 | `apps/desktop/src/.../Settings` | 新增「重置測試狀態」入口，直接呼叫本機 sidecar `POST /settings/reset-state`，供 mac / windows 手動清空 desktop 測試資料 |
 
@@ -160,6 +160,8 @@ Native bridge 暴露的原子操作。任何觸發清理的時機都調用這一
 - sidecar reset 採 **best-effort**：若目前綁定桌機不可達，記 warning，但不阻塞 mobile 本地 wipe
 - native wipe **不能** fire-and-forget，否則 `clearAuth` 觸發的 navigation 轉跳可能 race 到 wipe 還沒完成、下一個 login flow 撞進殘留狀態
 - `reminder-shown` 也跟著 await，讓「logout 完成後 user-scoped UI state 已清空」成為真保證，而不是 best effort
+- `serverLogout` 改為 **本地 cleanup 成功後** 才 fire-and-forget；若 wipe fail-closed，則 **不得**先撤銷 server refresh token，避免落入「UI 還留在登入態，但 server session 已半失效」的不一致狀態
+- `handleDeleteAccount` 維持現行 fail-open：`deleteAccount()` 成功代表 server 端帳號與 token 已失效，本地 wipe 若失敗仍必須 `clearAuth()`，不能把使用者卡在一個後端已刪帳、前端仍顯示登入的殼層裡
 
 ### Phase 2 — Owner-mismatch Guard
 
@@ -167,8 +169,8 @@ Native bridge 暴露的原子操作。任何觸發清理的時機都調用這一
 
 | Method | 實作 |
 | --- | --- |
-| `NativeSyncEngine.getOwnerUserId(): Promise<number \| null>` | 從 UserDefaults/SharedPrefs 讀 `lastSyncOwnerUserId`；無 → null |
-| `NativeSyncEngine.setOwnerUserId(userId: number): Promise<void>` | 寫入 UserDefaults/SharedPrefs |
+| `NativeSyncEngine.getOwnerUserId(): Promise<string \| null>` | 從 UserDefaults/SharedPrefs 讀 `lastSyncOwnerUserId`；無 → null。以字串回傳，避免 backend id > 2^53 時經過 RN bridge 被 `Double` 截斷 |
+| `NativeSyncEngine.setOwnerUserId(userId: string): Promise<void>` | 寫入 UserDefaults/SharedPrefs，且必須同步 flush 到 disk；flush 失敗要 reject |
 
 **插入位置：**
 
@@ -187,12 +189,17 @@ dispatch({ type: 'PROFILE_LOAD_START' });
 const profile = await fetchProfile();
 
 const storedOwnerId = await NativeSyncEngine.getOwnerUserId();
-if (storedOwnerId !== null && storedOwnerId !== profile.id) {
+if (storedOwnerId !== null && storedOwnerId !== String(profile.id)) {
   await resetCurrentDesktopSidecarIfReachable();
   await NativeSyncEngine.wipeSyncIdentity();
   await clearUserScopedStorage();
 }
-await NativeSyncEngine.setOwnerUserId(profile.id);
+
+try {
+  await NativeSyncEngine.setOwnerUserId(String(profile.id));
+} catch (err) {
+  return { kind: 'error', error: toApiError(err) };
+}
 
 dispatch({ type: 'SET_USER', user: profile });
 
@@ -211,6 +218,7 @@ dispatch({ type: 'PROFILE_LOAD_SUCCESS' });
 
 - `bootstrapAuthedSession` 內每一個 `await` 之後都要檢查 cancellation / auth-cleared flag。若 bootstrap 過程中 user 已觸發 logout，或 API layer 已因 token 失效而 `CLEAR` auth，就必須立刻 abort，不能再繼續 `dispatch(SET_USER)` 或 `PROFILE_LOAD_SUCCESS`。
 - wipe 失敗時 fail-closed：若 `wipeSyncIdentity()` reject，視為「清理未完成，不可進主 stack」，auth-store 把 `profileError` 設為 wipe error，讓 RootNavigator 渲染 ProfileErrorScreen 而非 AuthedStack。
+- owner marker 寫入失敗也 fail-closed：若 `setOwnerUserId(...)` 在 native 端同步 flush 失敗（Android `commit() == false` / iOS `synchronize() == false`），bridge 必須 reject，`bootstrapAuthedSession` 直接回 `error`，且 **不得**再繼續 subscription load。否則下一個 cold start 會把「無 owner marker」誤判成 fresh install，跳過 owner-mismatch wipe。
 - owner mismatch 時也對目前綁定的 desktop sidecar 做 best-effort reset，避免 token 過期 / crash 中斷後，desktop 端仍殘留 A 的 paired device / history。
 - owner-match 且同一 user 被動登出後重新登入時，不清 `reminder-shown`，避免把「同一人當天已看過的提醒」重置掉。
 
@@ -223,14 +231,19 @@ dispatch({ type: 'PROFILE_LOAD_SUCCESS' });
 ```swift
 let marker = UserDefaults.standard.string(forKey: "vivi_install_marker")
 if marker == nil {
-    try? SyncEngineManager.shared.wipeSyncIdentity()
+    UserDefaults.standard.set("1", forKey: "vivi_install_marker")
+    UserDefaults.standard.synchronize()   // 先同步寫 marker，避免 process kill 後反覆重跑 wipe
+
+    SyncEngineManager.shared.wipeSyncIdentity()
     // 同時清 auth Keychain（auth 層的 reinstall 偵測也一併做）
     AuthKeychainCleaner.clearPersistedTokens()
-    UserDefaults.standard.set("1", forKey: "vivi_install_marker")
+} else if UserDefaults.standard.string(forKey: "vivi_wipe_in_progress") == "1" {
+    // prior wipe interrupted — re-run self-heal
+    SyncEngineManager.shared.wipeSyncIdentity()
 }
 ```
 
-**Android equivalent：** `MainApplication.onCreate` 做同樣檢查 SharedPreferences 的 `vivi_install_marker`。
+**Android equivalent：** `MainApplication.onCreate` 做同樣檢查 SharedPreferences 的 `vivi_install_marker`，而且也是**先同步寫 marker，再執行 wipe**；若看到 `vivi_wipe_in_progress` 則重跑 self-heal wipe。
 
 **為什麼放這麼早：** 必須在 JS bridge 啟動前完成，否則 JS 的 `loadPersistedTokens()` 可能搶先 hydrate 到殘留 token。
 
@@ -244,10 +257,13 @@ if marker == nil {
 | --- | --- | --- |
 | `clearUserScopedStorage` unit test | `apps/mobile/src/utils/__tests__/clearUserScopedStorage.test.ts` | 掃描到 `reminder-shown` 前綴並 `multiRemove`；非相關 key 保留 |
 | sidecar reset service unit test | `apps/mobile/src/services/__tests__/sidecar-reset-service.test.ts` | 有 binding host 時 POST `/settings/reset-state`；無 binding 時跳過；失敗只記 warning |
-| Owner-mismatch triggers wipe | `apps/mobile/src/stores/__tests__/auth-store-owner-check.test.ts` | mock `getOwnerUserId`=A、`profile.id`=B → 斷言 `wipeSyncIdentity` 被呼叫 1 次、`setOwnerUserId(B)` 被呼叫 1 次 |
+| Owner-mismatch triggers wipe | `apps/mobile/src/stores/__tests__/auth-store-owner-check.test.tsx` | mock `getOwnerUserId`=A、`profile.id`=B → 斷言 `wipeSyncIdentity` 被呼叫 1 次、`setOwnerUserId(B)` 被呼叫 1 次 |
 | Owner-match no wipe | 同上 | `getOwnerUserId`=A、`profile.id`=A → `wipeSyncIdentity` 不被呼叫 |
-| Bootstrap 未完成前不可進主 stack | `apps/mobile/src/navigation/__tests__/RootNavigator.owner-guard.test.tsx` | mock profile bootstrap in-flight → 不應看到 SyncActivity / DeviceDiscovery，仍停留 LoadingScreen |
-| iOS install sentinel（Xcode unit test） | `apps/mobile/ios/SyncFlowMobileTests/InstallSentinelTests.swift` | UserDefaults 空 → 觸發 wipe；非空 → 不觸發 |
+| Owner marker flush failure（owner-match path） | 同上 | mock `setOwnerUserId` reject → outcome 為 `error`、不進 `ready`、且 **不**跑 subscription fetch |
+| Owner marker flush failure（owner-mismatch path） | 同上 | owner mismatch 下先完成 sidecar reset / wipe / clearUserScopedStorage，再於 `setOwnerUserId` reject 時 fail-closed |
+| Logout fail-closed server consistency | `apps/mobile/src/screens/__tests__/SettingsScreen.accountReset.test.tsx` | `wipeSyncIdentity` reject 時 **不得**呼叫 `serverLogout`，避免本地仍登入但 server 已 revoke |
+| Logout success ordering | 同上 | `sidecar → wipe → scoped storage → serverLogout → clearAuth` |
+| Bootstrap 未完成前不可進主 stack | `apps/mobile/src/navigation/__tests__/RootNavigator.ownerGuard.test.tsx` | mock profile bootstrap in-flight → 不應看到 SyncActivity / DeviceDiscovery，仍停留 LoadingScreen |
 | sidecar reset handler test | `services/sidecar-go/internal/api/router_test.go` | 驗證 `/settings/reset-state` 清 DB + receive dir；mac / windows 不需要分開寫邏輯測試，因為共用 Go handler |
 
 ### 5.2 Manual（實機）
