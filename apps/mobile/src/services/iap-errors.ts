@@ -44,6 +44,16 @@ export function classifyIapError(err: unknown): IapErrorClassification {
           kind: IapErrorClass.FatalMismatch,
           i18nKey: 'subscription.errors.productMismatch',
         };
+      case ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER:
+        // Sandbox-common: one Apple Sandbox Tester tries to claim the
+        // receipt for a different backend account. Reuse FatalMismatch
+        // semantics (finish the transaction to stop Apple redelivery,
+        // surface alert, no retry) with a dedicated copy so the user
+        // knows to sign into the original account or switch tester.
+        return {
+          kind: IapErrorClass.FatalMismatch,
+          i18nKey: 'subscription.errors.receiptBoundToOther',
+        };
       case ERROR_CODE.IAP_VERIFY_FAILED:
         return {
           kind: IapErrorClass.Retryable,

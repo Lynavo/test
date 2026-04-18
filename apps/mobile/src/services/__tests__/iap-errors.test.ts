@@ -75,6 +75,16 @@ describe('classifyIapError', () => {
     expect(cls.i18nKey).toBe('subscription.errors.productMismatch');
   });
 
+  test('Backend 2005 RECEIPT_BOUND_TO_OTHER_USER → fatal mismatch with dedicated copy', () => {
+    // Guard against regression to SilentSuccess — cross-account receipt
+    // reuse MUST surface an actionable alert, not silently "succeed".
+    const cls = classifyIapError(
+      new ApiError(ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER, 'bound to other'),
+    );
+    expect(cls.kind).toBe(IapErrorClass.FatalMismatch);
+    expect(cls.i18nKey).toBe('subscription.errors.receiptBoundToOther');
+  });
+
   test('Backend NETWORK_ERROR → retryable', () => {
     const cls = classifyIapError(
       new ApiError(ERROR_CODE.NETWORK_ERROR, 'network'),
