@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
+    "import:i18n": "python3 ./scripts/import_i18n_workbook.py",
     "build": "cd ios && xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -destination 'generic/platform=iOS' -configuration Debug build",
     "build:android": "cd android && ./gradlew assembleDebug",
     "archive:testflight": "bash ./ios/scripts/testflight-release.sh archive",
