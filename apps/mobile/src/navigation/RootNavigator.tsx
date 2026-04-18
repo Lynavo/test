@@ -28,6 +28,9 @@ import { HelpScreen } from '../screens/HelpScreen';
 import { QRScannerScreen } from '../screens/QRScannerScreen';
 import { SubscriptionScreen } from '../screens/SubscriptionScreen';
 import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
+import { wipeSyncIdentity } from '../services/SyncEngineModule';
+import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
+import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 
 // ---------------------------------------------------------------------------
 // Param lists
@@ -69,6 +72,39 @@ const Stack = createStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const auth = useAuth();
 
+  // User escapes the fail-closed error state. Run the full cleanup
+  // sequence as a retry, but fail-open — we must not pin them here
+  // a second time. Sentinel + owner-guard remain as backstops if the
+  // retry itself fails; either will run on next cold start / next
+  // login.
+  const handleProfileErrorLogout = useCallback(async () => {
+    try {
+      await resetCurrentDesktopSidecarIfReachable();
+    } catch (e) {
+      console.warn(
+        '[RootNavigator] profile-error logout: sidecar reset threw (ignored)',
+        e,
+      );
+    }
+    try {
+      await wipeSyncIdentity();
+    } catch (e) {
+      console.warn(
+        '[RootNavigator] profile-error logout: wipe retry failed (sentinel will self-heal)',
+        e,
+      );
+    }
+    try {
+      await clearUserScopedStorage();
+    } catch (e) {
+      console.warn(
+        '[RootNavigator] profile-error logout: scoped storage clear failed (ignored)',
+        e,
+      );
+    }
+    auth.clearAuth();
+  }, [auth]);
+
   // Cold-start hydration in flight.
   if (auth.isLoading) {
     return <LoadingScreen />;
@@ -95,7 +131,7 @@ export function RootNavigator() {
           message={auth.profileError.message}
           retrying={auth.profileLoading}
           onRetry={auth.retryProfileLoad}
-          onLogout={auth.clearAuth}
+          onLogout={handleProfileErrorLogout}
         />
       );
     }

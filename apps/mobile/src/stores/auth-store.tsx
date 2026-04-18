@@ -4,6 +4,14 @@ import * as Keychain from 'react-native-keychain';
 import i18next from 'i18next';
 import { ApiError, ERROR_CODE } from '../services/api';
 import { useIapLifecycle } from '../hooks/useIapLifecycle';
+import {
+  getOwnerUserId as nativeGetOwnerUserId,
+  setOwnerUserId as nativeSetOwnerUserId,
+  wipeSyncIdentity as nativeWipeSyncIdentity,
+} from '../services/SyncEngineModule';
+import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
+import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
+import { bootstrapAuthedSession } from './bootstrapAuthedSession';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -350,33 +358,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useIapLifecycle({ isLoggedIn: state.isLoggedIn, loadSubscription });
 
-  // Single profile-load orchestrator used both by the auto-trigger effect
-  // below and by the manual retryProfileLoad() exposed to the UI. Sets
-  // profileError on failure so the navigator can render a retry screen
-  // instead of an indefinite spinner.
+  // Single profile-load orchestrator. Delegates the Phase-2 owner-guard
+  // cleanup sequence to `bootstrapAuthedSession` (a pure function,
+  // exhaustively unit-tested) and maps its outcome to reducer dispatches.
+  //
+  // Cancellation: we capture the access token at entry and poll it
+  // between each step. Any change (external logout, refresh-token
+  // failure, racing login) makes this run stale and all further
+  // dispatches are suppressed.
   const ensureProfileLoaded = useCallback(async () => {
+    const capturedAccessToken = _accessToken;
+    const isStale = () => _accessToken !== capturedAccessToken;
+
     dispatch({ type: 'PROFILE_LOAD_START' });
-    try {
-      await loadProfile();
-      // Subscription is non-fatal — UI can render without it. A failure here
-      // does NOT trip profileError because the navigator only blocks on user.
-      try {
-        await loadSubscription();
-      } catch (err) {
-        console.warn('[auth-store] subscription load failed (non-fatal)', err);
-      }
-      dispatch({ type: 'PROFILE_LOAD_SUCCESS' });
-    } catch (err) {
-      // If the API layer already cleared auth (REFRESH_TOKEN_INVALID etc.),
-      // isLoggedIn will flip to false and the navigator routes to Login —
-      // we don't need to surface an error in that case.
-      const apiErr =
-        err instanceof ApiError
-          ? err
-          : new ApiError(ERROR_CODE.SERVER_ERROR, i18next.t('errors.profileLoadFailed'));
-      dispatch({ type: 'PROFILE_LOAD_FAILURE', error: apiErr });
+
+    const { getUserProfile } = await import('../services/auth-service');
+    const { getSubscriptionStatus } = await import(
+      '../services/subscription-service'
+    );
+
+    const outcome = await bootstrapAuthedSession(
+      {
+        fetchProfile: getUserProfile,
+        fetchSubscription: getSubscriptionStatus,
+        getOwnerUserId: nativeGetOwnerUserId,
+        setOwnerUserId: nativeSetOwnerUserId,
+        wipeSyncIdentity: nativeWipeSyncIdentity,
+        resetSidecar: resetCurrentDesktopSidecarIfReachable,
+        clearUserScopedStorage,
+      },
+      isStale,
+    );
+
+    if (isStale()) return;
+
+    switch (outcome.kind) {
+      case 'ready':
+        dispatch({ type: 'SET_USER', user: outcome.profile });
+        if (outcome.subscription) {
+          dispatch({
+            type: 'SET_SUBSCRIPTION',
+            subscription: outcome.subscription,
+          });
+        }
+        dispatch({ type: 'PROFILE_LOAD_SUCCESS' });
+        return;
+      case 'error':
+        dispatch({ type: 'PROFILE_LOAD_FAILURE', error: outcome.error });
+        return;
+      case 'cancelled':
+        // Auth was torn down mid-bootstrap (CLEAR, LOGIN race, etc.).
+        // The reducer already moved on — don't dispatch anything.
+        return;
     }
-  }, [loadProfile, loadSubscription]);
+  }, []);
 
   const retryProfileLoad = useCallback(async () => {
     await ensureProfileLoaded();
