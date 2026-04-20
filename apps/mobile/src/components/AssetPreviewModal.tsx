@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Video from 'react-native-video';
 import {
   Modal,
   View,
@@ -93,7 +94,20 @@ const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive, width }) => 
     );
   }
 
-  // TODO(Task 10): Replace with <Video source={{ uri: source.uri }} paused={!isActive} resizeMode="contain" />
+  if (source?.mediaType === 'video') {
+    return (
+      <PageShell width={width}>
+        <Video
+          source={{ uri: source.uri }}
+          style={pageStyles.media}
+          controls
+          paused={!isActive}
+          resizeMode="contain"
+        />
+      </PageShell>
+    );
+  }
+
   return <PageShell width={width} />;
 };
 

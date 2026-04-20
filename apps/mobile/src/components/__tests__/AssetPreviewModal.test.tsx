@@ -121,6 +121,37 @@ describe('AssetPreviewModal', () => {
     expect(images[0].props.source).toEqual({ uri: 'file:///tmp/full.jpg' });
   });
 
+  it('renders Video with paused=true when not active', async () => {
+    (getAssetPreviewSource as jest.Mock)
+      .mockResolvedValueOnce({
+        uri: 'file:///tmp/a1.jpg',
+        mediaType: 'image',
+      })
+      .mockResolvedValueOnce({
+        uri: 'file:///tmp/a2.mov',
+        mediaType: 'video',
+      });
+
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(
+        <AssetPreviewModal
+          visible
+          assets={assets}
+          initialIndex={0}
+          onClose={() => {}}
+        />,
+      );
+    });
+    await ReactTestRenderer.act(async () => {
+      await Promise.resolve();
+    });
+    const videos = tree!.root.findAllByType('Video' as unknown as React.ComponentType);
+    const video = videos.find(v => v.props.source?.uri === 'file:///tmp/a2.mov');
+    expect(video).toBeDefined();
+    expect(video?.props.paused).toBe(true);
+  });
+
   it('shows error text when preview source returns cloud_unavailable', async () => {
     (getAssetPreviewSource as jest.Mock).mockResolvedValueOnce({
       uri: '',
