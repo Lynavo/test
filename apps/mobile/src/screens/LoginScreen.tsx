@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Keyboard,
   Linking,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -161,23 +162,37 @@ export function LoginScreen() {
             )}
           </View>
 
-          <TouchableOpacity
-            style={styles.agreementRow}
-            onPress={() => setAgreed(!agreed)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+          <View style={styles.agreementRow}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreed }}
+              onPress={() => setAgreed(!agreed)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[styles.checkbox, agreed && styles.checkboxChecked]}
+            >
               {agreed ? (
                 <Icon name="checkmark" size={16} color="#ffffff" />
               ) : null}
-            </View>
+            </Pressable>
             <Text style={styles.agreementText}>
               {t('auth.login.agreePrefix')}
-              <Text style={styles.agreementSuffixText}>
-                {t('auth.login.agreeAcknowledgement')}
+              <Text
+                style={styles.agreementLinkText}
+                onPress={handleOpenUserAgreement}
+                suppressHighlighting
+              >
+                {t('common.termsOfService')}
+              </Text>
+              {t('auth.login.agreeConjunction')}
+              <Text
+                style={styles.agreementLinkText}
+                onPress={handleOpenPrivacyPolicy}
+                suppressHighlighting
+              >
+                {t('common.privacyPolicy')}
               </Text>
             </Text>
-          </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[
@@ -198,26 +213,6 @@ export function LoginScreen() {
             >
               {sending ? t('auth.login.requesting') : t('auth.login.requestCode')}
             </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.legalFooter}>
-          <TouchableOpacity
-            accessibilityRole="link"
-            activeOpacity={0.72}
-            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-            onPress={handleOpenUserAgreement}
-          >
-            <Text style={styles.legalLink}>{t('common.termsOfService')}</Text>
-          </TouchableOpacity>
-          <Text style={styles.legalDivider}>·</Text>
-          <TouchableOpacity
-            accessibilityRole="link"
-            activeOpacity={0.72}
-            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-            onPress={handleOpenPrivacyPolicy}
-          >
-            <Text style={styles.legalLink}>{t('common.privacyPolicy')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -335,8 +330,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: AUTH_COLORS.textMuted,
   },
-  agreementSuffixText: {
-    color: AUTH_COLORS.text,
+  agreementLinkText: {
+    color: AUTH_COLORS.link,
     fontWeight: '600',
   },
   sendButton: {
@@ -369,24 +364,5 @@ const styles = StyleSheet.create({
   },
   sendButtonTextDisabled: {
     color: AUTH_COLORS.primaryTextDisabled,
-  },
-  legalFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingBottom: 6,
-  },
-  legalLink: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: AUTH_COLORS.link,
-    fontWeight: '600',
-  },
-  legalDivider: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: AUTH_COLORS.textFaint,
   },
 });
