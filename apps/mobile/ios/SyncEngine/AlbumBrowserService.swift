@@ -340,37 +340,60 @@ class AlbumBrowserService {
     }
 
     private func fetchVideoPreview(asset: PHAsset) -> [String: Any] {
-        let options = PHVideoRequestOptions()
+        // Mirror the upload path (AssetExportService) — PHAssetResourceManager.writeData
+        // is the canonical way to materialize a PHAsset to disk. requestAVAsset was returning
+        // AVComposition (slow-motion) or nil for some iCloud formats even when the underlying
+        // resource was fully available, which caused false "cloud_unavailable" errors while
+        // the upload pipeline succeeded on the same asset.
+        let resources = PHAssetResource.assetResources(for: asset)
+        guard let resource = resources.first(where: { $0.type == .video }) ?? resources.first else {
+            return ["uri": "", "mediaType": "video", "error": "not_found"]
+        }
+
+        let ext = (resource.originalFilename as NSString).pathExtension.lowercased()
+        let safeExt = ext.isEmpty ? "mov" : ext
+        let cacheDir = Self.previewCacheDir()
+        let safeId = asset.localIdentifier
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let cacheFile = cacheDir.appendingPathComponent("\(safeId).\(safeExt)")
+
+        if FileManager.default.fileExists(atPath: cacheFile.path) {
+            return ["uri": cacheFile.absoluteString, "mediaType": "video"]
+        }
+
+        let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
-        options.deliveryMode = .highQualityFormat
-        options.version = .current
+        options.progressHandler = { progress in
+            NSLog("[AlbumBrowser] iCloud video progress: %.0f%%", progress * 100)
+        }
 
         let semaphore = DispatchSemaphore(value: 0)
-        var resultUrl: URL?
-        let requestId = PHImageManager.default().requestAVAsset(
-            forVideo: asset,
+        var writeError: Error?
+        PHAssetResourceManager.default().writeData(
+            for: resource,
+            toFile: cacheFile,
             options: options
-        ) { avAsset, _, _ in
-            // Non-AVURLAsset sources (slow-motion composition, rare iCloud formats) yield nil
-            // here and fall through to cloud_unavailable. Acceptable for MVP; revisit if diagnostics
-            // indicate frequent misclassification.
-            if let urlAsset = avAsset as? AVURLAsset {
-                resultUrl = urlAsset.url
-            }
+        ) { error in
+            writeError = error
             semaphore.signal()
         }
 
-        // 15-second timeout for iCloud fetches
-        let timeoutResult = semaphore.wait(timeout: .now() + 15)
+        // 120s covers full-resolution iCloud fetches on slow networks; writeData is not
+        // cancellable, so hitting this is a soft timeout for UX only — the download continues.
+        let timeoutResult = semaphore.wait(timeout: .now() + 120)
         if timeoutResult == .timedOut {
-            PHImageManager.default().cancelImageRequest(requestId)
+            NSLog("[AlbumBrowser] video preview timeout for asset %@", asset.localIdentifier)
             return ["uri": "", "mediaType": "video", "error": "cloud_unavailable"]
         }
 
-        guard let url = resultUrl else {
+        if let err = writeError {
+            NSLog("[AlbumBrowser] video preview write error: %@", err.localizedDescription)
+            try? FileManager.default.removeItem(at: cacheFile)
             return ["uri": "", "mediaType": "video", "error": "cloud_unavailable"]
         }
-        return ["uri": url.absoluteString, "mediaType": "video"]
+
+        return ["uri": cacheFile.absoluteString, "mediaType": "video"]
     }
 
     static func previewCacheDir() -> URL {

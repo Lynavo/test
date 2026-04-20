@@ -103,6 +103,10 @@ const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive, width }) => 
           controls
           paused={!isActive}
           resizeMode="contain"
+          playInBackground
+          playWhenInactive
+          enterPictureInPictureOnLeave
+          ignoreSilentSwitch="ignore"
         />
       </PageShell>
     );

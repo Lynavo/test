@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import React
 import React_RCTAppDelegate
@@ -59,6 +60,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     // Register background task handlers before app finishes launching
     SyncEngineManager.shared.backgroundService.registerBackgroundTasks()
+
+    // Configure audio session so video preview audio continues when backgrounded
+    // and Picture-in-Picture can engage. Setting the category does not interrupt
+    // other apps' audio — only activating the session during playback does.
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+    } catch {
+      NSLog("[AppDelegate] AVAudioSession setCategory failed: %@", error.localizedDescription)
+    }
 
     factory.startReactNative(
       withModuleName: "SyncFlow",
