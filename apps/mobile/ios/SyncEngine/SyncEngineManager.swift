@@ -902,6 +902,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             uploadStore = try UploadStore()
             historyStore = HistoryLedgerStore(store: uploadStore!)
             albumBrowserService = AlbumBrowserService(uploadStore: uploadStore)
+            cleanupPreviewCacheIfNeeded()
             autoUploadConfigStore = AutoUploadConfigStore(store: uploadStore!)
             manualUploadService = ManualUploadService(uploadStore: uploadStore, bindingService: bindingService)
             photoScanner.autoUploadConfigStore = autoUploadConfigStore
@@ -4353,6 +4354,50 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func getAlbumCollections(mediaFilter: String) -> [[String: Any]] {
         guard let service = albumBrowserService else { return [] }
         return service.getAlbumCollections(mediaFilter: mediaFilter)
+    }
+
+    // MARK: - Album Preview Cache
+
+    private func cleanupPreviewCacheIfNeeded() {
+        DispatchQueue.global(qos: .utility).async {
+            let fm = FileManager.default
+            let dir = AlbumBrowserService.previewCacheDir()
+            guard let files = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
+                options: .skipsHiddenFiles
+            ) else { return }
+
+            let now = Date()
+            let ttl: TimeInterval = 24 * 60 * 60
+            let sizeLimit: Int64 = 500 * 1024 * 1024
+
+            var survivors: [(URL, Date, Int64)] = []
+            var totalSize: Int64 = 0
+
+            for url in files {
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                let mtime = values?.contentModificationDate ?? .distantPast
+                let size = Int64(values?.fileSize ?? 0)
+
+                if now.timeIntervalSince(mtime) > ttl {
+                    try? fm.removeItem(at: url)
+                    continue
+                }
+                survivors.append((url, mtime, size))
+                totalSize += size
+            }
+
+            if totalSize > sizeLimit {
+                // LRU: sort by mtime asc (oldest first)
+                survivors.sort { $0.1 < $1.1 }
+                for (url, _, size) in survivors {
+                    if totalSize <= sizeLimit { break }
+                    try? fm.removeItem(at: url)
+                    totalSize -= size
+                }
+            }
+        }
     }
 
     // MARK: - Manual Upload
