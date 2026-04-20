@@ -93,6 +93,8 @@
     "title": "Choose Album",
     "allPhotos": "All Photos"
   },
+  "selectAll": "Select all",
+  "deselectAll": "Deselect all",
   "preview": {
     "cloudUnavailable": "iCloud video not downloaded, cannot preview",
     "notFound": "Asset not found"

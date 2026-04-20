@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -443,6 +443,22 @@ export function AlbumWorkbenchScreen() {
     },
     [assets],
   );
+
+  const selectableIds = useMemo(
+    () => assets.filter(a => !a.isTransferred).map(a => a.assetLocalId),
+    [assets],
+  );
+  const allSelectableSelected =
+    selectableIds.length > 0 &&
+    selectableIds.every(id => selectedIds.has(id));
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allSelectableSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableIds));
+    }
+  }, [allSelectableSelected, selectableIds]);
 
   // Unified filter: derives both mediaFilter and transferFilter from a single tab
   const [unifiedFilter, setUnifiedFilter] = useState<UnifiedFilter>('all');
@@ -1177,6 +1193,18 @@ export function AlbumWorkbenchScreen() {
             <Text style={styles.statLabel}>
               {t('albumWorkbench.stats.selected')}
             </Text>
+            {selectableIds.length > 0 && (
+              <TouchableOpacity
+                onPress={handleToggleSelectAll}
+                style={styles.selectAllBtn}
+              >
+                <Text style={styles.selectAllBtnText}>
+                  {allSelectableSelected
+                    ? t('albumWorkbench.deselectAll')
+                    : t('albumWorkbench.selectAll')}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -2256,5 +2284,18 @@ const styles = StyleSheet.create({
   collectionCount: {
     fontSize: 14,
     color: '#6b8da0',
+  },
+  selectAllBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginLeft: 8,
+    alignSelf: 'center',
+  },
+  selectAllBtnText: {
+    color: '#93c5fd',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });

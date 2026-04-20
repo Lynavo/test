@@ -93,6 +93,8 @@
     "title": "選擇相簿",
     "allPhotos": "全部照片"
   },
+  "selectAll": "全選",
+  "deselectAll": "取消全選",
   "preview": {
     "cloudUnavailable": "iCloud 影片未下載，無法預覽",
     "notFound": "素材找不到"
