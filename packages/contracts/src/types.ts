@@ -205,6 +205,13 @@ export interface AlbumAssetDTO {
   isQueued: boolean;
 }
 
+/** Preview source for a single album asset, fetched on demand from the album workbench */
+export interface AssetPreviewSourceDTO {
+  uri: string;
+  mediaType: 'image' | 'video';
+  error?: 'cloud_unavailable' | 'not_found';
+}
+
 /** Auto-upload configuration (single-row persisted on mobile) */
 export interface AutoUploadConfigDTO {
   enabled: boolean;
