@@ -281,6 +281,17 @@ export function shouldRenderSyncActivityProgress(
   );
 }
 
+export function getSyncActivityDisplayProgressPercent(
+  overview: SyncOverview,
+  shouldDelayCompletion: boolean,
+): number {
+  if (shouldDelayCompletion) {
+    return 100;
+  }
+
+  return getSyncActivityProgressPercent(overview);
+}
+
 function CompletionStatCard({
   label,
   value,
@@ -727,8 +738,6 @@ export function SyncActivityScreen() {
     manualPending: overview.manualPending,
     currentTaskSource,
   });
-  const progressPercent = getSyncActivityProgressPercent(overview);
-
   const totalPending =
     (overview.manualPending ?? 0) + (overview.autoPending ?? 0);
   const totalPendingDisplay = formatQueueCountDisplay(totalPending);
@@ -754,33 +763,10 @@ export function SyncActivityScreen() {
   const mainCardState = shouldDelayAutoCompletion
     ? 'running'
     : rawMainCardState;
-  // Use round-level progress (completed files + current file fraction) / total
-  // files, not single-file %, so item transitions don't flash 100% → 0%.
-  const currentItemFraction =
-    overview.currentFileTotalBytes > 0
-      ? Math.max(
-          0,
-          Math.min(
-            1,
-            overview.currentFileConfirmedBytes /
-              overview.currentFileTotalBytes,
-          ),
-        )
-      : 0;
-  const roundProgressPercent =
-    overview.totalCount > 0
-      ? Math.min(
-          100,
-          Math.round(
-            ((overview.completedCount + currentItemFraction) /
-              overview.totalCount) *
-              100,
-          ),
-        )
-      : progressPercent;
-  const displayProgressPercent = shouldDelayAutoCompletion
-    ? 100
-    : roundProgressPercent;
+  const displayProgressPercent = getSyncActivityDisplayProgressPercent(
+    overview,
+    shouldDelayAutoCompletion,
+  );
   // Inter-item transition: between items native briefly emits 'completed'
   // and/or preparation states ('preparing'/'reconciling'/'scanning'/
   // 'discovering'). These cause two visible flickers we need to suppress

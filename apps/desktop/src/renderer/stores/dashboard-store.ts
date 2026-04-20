@@ -28,15 +28,27 @@ function shouldPreserveRealtimeTransfer(
   existing: DashboardDeviceDTO,
   snapshot: DashboardDeviceDTO,
 ): boolean {
-  if (existing.status !== 'transferring' || snapshot.status === 'transferring') {
+  if (existing.status !== 'transferring') {
     return false;
   }
 
   if (!existing.currentFile) {
-    return true;
+    return snapshot.status !== 'transferring';
   }
 
-  return existing.currentFile.progress < 100;
+  if (snapshot.status !== 'transferring') {
+    return existing.currentFile.progress < 100;
+  }
+
+  if (!snapshot.currentFile) {
+    return false;
+  }
+
+  return (
+    snapshot.currentFile.filename === existing.currentFile.filename &&
+    snapshot.currentFile.progress <= 0 &&
+    existing.currentFile.progress > 0
+  );
 }
 
 function clearPendingOfflineStatus(deviceId: string): void {

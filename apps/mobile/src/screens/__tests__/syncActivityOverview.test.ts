@@ -1,5 +1,6 @@
 import {
   buildOverview,
+  getSyncActivityDisplayProgressPercent,
   shouldDelayAutoCompletionCard,
   shouldRenderSyncActivityProgress,
 } from '../SyncActivityScreen';
@@ -350,5 +351,59 @@ describe('shouldRenderSyncActivityProgress', () => {
     expect(shouldRenderSyncActivityProgress('scanning', false, true)).toBe(
       true,
     );
+  });
+});
+
+describe('getSyncActivityDisplayProgressPercent', () => {
+  it('uses the current file progress instead of round-level progress', () => {
+    expect(
+      getSyncActivityDisplayProgressPercent(
+        {
+          progressPercent: 18,
+          currentSpeedMbps: 8.2,
+          uploadState: 'uploading',
+          completedCount: 3,
+          totalCount: 5,
+          completedBytes: 3_000,
+          totalBytes: 5_000,
+          currentFile: 'file-key-4',
+          currentFilename: 'clip-4.mov',
+          currentFileConfirmedBytes: 180,
+          currentFileTotalBytes: 1_000,
+          currentTaskSource: 'manual',
+          lastCompletedTaskSource: null,
+          autoUploadState: 'disabled',
+          manualPending: 2,
+          autoPending: 0,
+        },
+        false,
+      ),
+    ).toBe(18);
+  });
+
+  it('holds completion at 100 percent only during the completion visual delay', () => {
+    expect(
+      getSyncActivityDisplayProgressPercent(
+        {
+          progressPercent: 18,
+          currentSpeedMbps: 8.2,
+          uploadState: 'uploading',
+          completedCount: 3,
+          totalCount: 5,
+          completedBytes: 3_000,
+          totalBytes: 5_000,
+          currentFile: 'file-key-4',
+          currentFilename: 'clip-4.mov',
+          currentFileConfirmedBytes: 180,
+          currentFileTotalBytes: 1_000,
+          currentTaskSource: 'auto',
+          lastCompletedTaskSource: null,
+          autoUploadState: 'active',
+          manualPending: 0,
+          autoPending: 2,
+        },
+        true,
+      ),
+    ).toBe(100);
   });
 });

@@ -596,4 +596,63 @@ describe('dashboard-store', () => {
       },
     ]);
   });
+
+  it('does not let a transferring snapshot reset realtime progress to zero', async () => {
+    useDashboardStore.getState().updateDevices([
+      {
+        deviceId: 'd1',
+        displayName: 'iPhone 15 Pro',
+        clientName: 'iPhone 15 Pro',
+        platform: 'ios',
+        ip: '192.168.1.201',
+        status: 'transferring',
+        todayFileCount: 12,
+        todayBytes: 24.5 * 1024 ** 3,
+        storageLeft: '1.2 TB',
+        storagePath: '/Users/alice/SyncFlow',
+        devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+        currentFile: {
+          filename: 'DJI_0421_4K_RAW.mp4',
+          progress: 18,
+          fileSize: 3_435_973_837,
+        },
+      },
+    ]);
+
+    const devices: DashboardDeviceDTO[] = [
+      {
+        deviceId: 'd1',
+        displayName: 'iPhone 15 Pro',
+        clientName: 'iPhone 15 Pro',
+        platform: 'ios',
+        ip: '192.168.1.201',
+        status: 'transferring',
+        todayFileCount: 12,
+        todayBytes: 24.5 * 1024 ** 3,
+        storageLeft: '1.2 TB',
+        storagePath: '/Users/alice/SyncFlow',
+        devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+        currentFile: {
+          filename: 'DJI_0421_4K_RAW.mp4',
+          progress: 0,
+          fileSize: 0,
+        },
+      },
+    ];
+
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getDashboardSummary: vi.fn().mockResolvedValue(null),
+        getDashboardDevices: vi.fn().mockResolvedValue(devices),
+      },
+    } as unknown as Window['electronAPI'];
+
+    await useDashboardStore.getState().fetchDashboard();
+
+    expect(useDashboardStore.getState().devices[0]?.currentFile).toEqual({
+      filename: 'DJI_0421_4K_RAW.mp4',
+      progress: 18,
+      fileSize: 3_435_973_837,
+    });
+  });
 });
