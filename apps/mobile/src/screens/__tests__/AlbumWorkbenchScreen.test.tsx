@@ -14,6 +14,10 @@ jest.mock('react-native-localize', () => ({
   ],
 }));
 
+jest.mock('react-native-video', () => 'Video');
+
+jest.mock('react-i18next', () => jest.requireActual('react-i18next'));
+
 import i18n from '../../i18n';
 import { AlbumWorkbenchScreen } from '../AlbumWorkbenchScreen';
 
@@ -47,6 +51,10 @@ jest.mock('../../services/SyncEngineModule', () => ({
   getPhotoAuthorizationStatus: () => mockedGetPhotoAuthorizationStatus(),
   presentLimitedPhotoPicker: () => mockedPresentLimitedPhotoPicker(),
   getAlbumCollections: jest.fn().mockResolvedValue([]),
+  getAssetPreviewSource: jest.fn().mockResolvedValue({
+    uri: 'file:///tmp/x.jpg',
+    mediaType: 'image',
+  }),
 }));
 
 jest.mock('../../components/Icon', () => ({
@@ -318,5 +326,98 @@ describe('AlbumWorkbenchScreen', () => {
 
     expect(textValues).toContain('尚未选择照片');
     expect(textValues).toContain('选择照片');
+  });
+
+  it('opens preview modal when item body is tapped', async () => {
+    mockedBrowseAlbum.mockResolvedValue([
+      {
+        assetLocalId: 'a1',
+        filename: 'IMG.JPG',
+        mediaType: 'image',
+        fileSize: 1024,
+        creationDate: '2026-04-01T00:00:00Z',
+        thumbnailUri: 'file:///tmp/a1.jpg',
+        isTransferred: false,
+        isQueued: false,
+      },
+    ]);
+    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0 });
+    mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+    await ReactTestRenderer.act(async () => {
+      await Promise.resolve();
+    });
+
+    // Find the item-body TouchableOpacity — the outer one that contains an Image
+    // with the thumbnail uri. (Inner circle touchable has no Image child.)
+    const { Image, TouchableOpacity: TO } = require('react-native');
+    const touchables = tree!.root.findAllByType(TO);
+    const itemBody = touchables.find(t => {
+      const images = t.findAllByType(Image);
+      return images.some(i => i.props.source?.uri === 'file:///tmp/a1.jpg');
+    });
+    expect(itemBody).toBeDefined();
+    await ReactTestRenderer.act(async () => {
+      itemBody!.props.onPress();
+    });
+    // After press, the modal should be visible. The modal sets Modal.visible=true;
+    // we verify indirectly by asserting the modal-root (a View with backgroundColor #000 style) appears.
+    const { View: V } = require('react-native');
+    const views = tree!.root.findAllByType(V);
+    const modalRoot = views.find(v => {
+      const s = v.props.style;
+      if (!s) return false;
+      const arr = Array.isArray(s) ? s : [s];
+      return arr.some((x: { backgroundColor?: string }) => x && x.backgroundColor === '#000');
+    });
+    expect(modalRoot).toBeDefined();
+  });
+
+  it('toggles selection when the top-right circle is tapped', async () => {
+    mockedBrowseAlbum.mockResolvedValue([
+      {
+        assetLocalId: 'a1',
+        filename: 'IMG.JPG',
+        mediaType: 'image',
+        fileSize: 1024,
+        creationDate: '2026-04-01T00:00:00Z',
+        thumbnailUri: 'file:///tmp/a1.jpg',
+        isTransferred: false,
+        isQueued: false,
+      },
+    ]);
+    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0 });
+    mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+    await ReactTestRenderer.act(async () => {
+      await Promise.resolve();
+    });
+
+    const { TouchableOpacity: TO } = require('react-native');
+    const touchables = tree!.root.findAllByType(TO);
+    // The selection circle's TouchableOpacity has a hitSlop prop and no Image child.
+    const circle = touchables.find(
+      t => t.props.hitSlop && t.props.hitSlop.top === 12,
+    );
+    expect(circle).toBeDefined();
+    await ReactTestRenderer.act(async () => {
+      circle!.props.onPress();
+    });
+
+    // After toggling, the stats card's selected count should become 1.
+    const { Text: T } = require('react-native');
+    const texts = tree!.root.findAllByType(T).map(n => n.props.children);
+    // statValue renders the raw number; with one selected it should appear as 1
+    expect(texts).toEqual(expect.arrayContaining([1]));
   });
 });
