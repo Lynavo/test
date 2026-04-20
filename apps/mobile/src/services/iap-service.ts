@@ -105,6 +105,7 @@ class IapServiceImpl implements IapService {
     if (this.pendingPurchase.has(productId)) {
       throw new Error(`purchase already in flight for ${productId}`);
     }
+    await this.ensureProductAvailable(productId);
     return new Promise<PurchaseReceipt>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingPurchase.delete(productId);
@@ -175,8 +176,12 @@ class IapServiceImpl implements IapService {
     if (!this.initialized) return [];
     if (TRIAL_ELIGIBLE_PRODUCTS.length === 0) return [];
     try {
+      // Query ALL product IDs — not just the trial-eligible ones — so iOS
+      // StoreKit warms its SKProduct cache for every SKU we'll later pass to
+      // requestSubscription. Without this, purchasing a SKU that was never
+      // fetched fails with E_ITEM_UNAVAILABLE / E_DEVELOPER_ERROR.
       const products = await getSubscriptions({
-        skus: [...TRIAL_ELIGIBLE_PRODUCTS],
+        skus: [...ALL_PRODUCT_IDS],
       });
       return TRIAL_ELIGIBLE_PRODUCTS.map((productId) => {
         const match = products.find((p) => p.productId === productId);
@@ -195,6 +200,19 @@ class IapServiceImpl implements IapService {
   onOrphanPurchaseVerified(cb: () => void): () => void {
     this.orphanListeners.add(cb);
     return () => this.orphanListeners.delete(cb);
+  }
+
+  private async ensureProductAvailable(productId: IapProductId): Promise<void> {
+    const products = await getSubscriptions({ skus: [productId] });
+    if (products.some((product) => product.productId === productId)) {
+      return;
+    }
+
+    throw {
+      code: 'E_ITEM_UNAVAILABLE',
+      productId,
+      message: 'Subscription product is not available from StoreKit.',
+    };
   }
 
   private async handlePurchaseEvent(p: Purchase): Promise<void> {

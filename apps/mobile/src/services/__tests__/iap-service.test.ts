@@ -87,8 +87,16 @@ describe('iapService — purchase', () => {
   let updatedCb: ((p: any) => void) | null = null;
   let errorCb: ((e: any) => void) | null = null;
 
+  const flushPurchasePreflight = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
+    (getSubscriptions as jest.Mock).mockImplementation(({ skus }) =>
+      Promise.resolve(skus.map((productId: string) => ({ productId }))),
+    );
     (purchaseUpdatedListener as jest.Mock).mockImplementation((cb) => {
       updatedCb = cb;
       return { remove: jest.fn() };
@@ -104,10 +112,12 @@ describe('iapService — purchase', () => {
     await iapService.teardown();
     updatedCb = null;
     errorCb = null;
+    jest.useRealTimers();
   });
 
   test('resolves with PurchaseReceipt when matching event arrives', async () => {
     const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
     expect(requestSubscription).toHaveBeenCalledWith({
       sku: IAP_PRODUCTS.monthly,
     });
@@ -129,6 +139,7 @@ describe('iapService — purchase', () => {
 
   test('rejects when error listener fires with the pending productId', async () => {
     const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
     errorCb?.({ code: 'E_USER_CANCELLED', productId: IAP_PRODUCTS.yearly });
 
     await expect(pending).rejects.toMatchObject({ code: 'E_USER_CANCELLED' });
@@ -137,6 +148,7 @@ describe('iapService — purchase', () => {
   test('times out after 60s when no event arrives', async () => {
     jest.useFakeTimers();
     const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
 
     jest.advanceTimersByTime(60_000);
 
@@ -149,6 +161,7 @@ describe('iapService — purchase', () => {
     // delivers the SKPaymentTransaction with productId = old monthly SKU.
     // The pending yearly Promise must resolve with the real receipt blob.
     const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
     expect(requestSubscription).toHaveBeenCalledWith({
       sku: IAP_PRODUCTS.yearly,
     });
@@ -182,6 +195,7 @@ describe('iapService — purchase', () => {
     // alert despite Apple having actually processed the purchase. Fix
     // treats only codes in FATAL_ERROR_CODES as terminal.
     const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
 
     // Apple's flaky early error — not in the FATAL allowlist.
     errorCb?.({ code: 'E_UNKNOWN', productId: IAP_PRODUCTS.monthly });
@@ -200,6 +214,7 @@ describe('iapService — purchase', () => {
 
   test('fatal E_ITEM_UNAVAILABLE code still rejects pending (regression guard)', async () => {
     const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
     errorCb?.({ code: 'E_ITEM_UNAVAILABLE', productId: IAP_PRODUCTS.yearly });
     await expect(pending).rejects.toMatchObject({ code: 'E_ITEM_UNAVAILABLE' });
   });
@@ -388,13 +403,80 @@ describe('iapService — checkEligibility', () => {
     expect(res).toEqual([]);
   });
 
-  test('queries only TRIAL_ELIGIBLE_PRODUCTS', async () => {
+  test('queries ALL product IDs (warms SKProduct cache for every SKU)', async () => {
+    // Regression: previously only TRIAL_ELIGIBLE_PRODUCTS was queried, which
+    // left the yearly SKU out of StoreKit's cache. requestSubscription then
+    // failed with E_ITEM_UNAVAILABLE / E_DEVELOPER_ERROR ("商品不可用").
     (getSubscriptions as jest.Mock).mockResolvedValueOnce([]);
     await iapService.checkEligibility();
 
     expect(getSubscriptions).toHaveBeenCalledWith({
-      skus: [IAP_PRODUCTS.monthly],
+      skus: [IAP_PRODUCTS.monthly, IAP_PRODUCTS.yearly],
     });
+  });
+});
+
+describe('iapService — purchase product preflight', () => {
+  let updatedCb: ((p: any) => void) | null = null;
+
+  const flushPurchasePreflight = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    (purchaseUpdatedListener as jest.Mock).mockImplementation((cb) => {
+      updatedCb = cb;
+      return { remove: jest.fn() };
+    });
+    (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    await iapService.initialize();
+  });
+
+  afterEach(async () => {
+    await iapService.teardown();
+    updatedCb = null;
+    jest.useRealTimers();
+  });
+
+  test('loads the selected subscription SKU before requesting purchase', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([
+      { productId: IAP_PRODUCTS.yearly },
+    ]);
+
+    const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
+
+    expect(getSubscriptions).toHaveBeenCalledWith({
+      skus: [IAP_PRODUCTS.yearly],
+    });
+    expect(requestSubscription).toHaveBeenCalledWith({
+      sku: IAP_PRODUCTS.yearly,
+    });
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.yearly,
+      transactionReceipt: 'YEARLY_RECEIPT',
+      transactionId: 'tx_yearly',
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      productId: IAP_PRODUCTS.yearly,
+      transactionReceipt: 'YEARLY_RECEIPT',
+    });
+  });
+
+  test('rejects before native purchase when StoreKit does not return the selected SKU', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([]);
+
+    const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'E_ITEM_UNAVAILABLE',
+      productId: IAP_PRODUCTS.yearly,
+    });
+    expect(requestSubscription).not.toHaveBeenCalled();
   });
 });
 
