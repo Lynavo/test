@@ -38,6 +38,7 @@ import DateTimePicker, {
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { AlbumAssetDTO, AutoUploadConfigDTO } from '@syncflow/contracts';
+import { AssetPreviewModal } from '../components/AssetPreviewModal';
 import { Icon } from '../components/Icon';
 import {
   browseAlbum,
@@ -1571,6 +1572,12 @@ export function AlbumWorkbenchScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+      <AssetPreviewModal
+        visible={previewVisible}
+        assets={assets}
+        initialIndex={previewIndex}
+        onClose={() => setPreviewVisible(false)}
+      />
     </SafeAreaView>
   );
 }
