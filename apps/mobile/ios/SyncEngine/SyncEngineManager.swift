@@ -597,7 +597,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         ]
     }
 
+    private func isAutoUploadActiveForDiscovery() -> Bool {
+        let config = autoUploadConfigStore?.getConfig()
+        return config?.enabled == true &&
+            config?.state == "active" &&
+            !isAutoUploadInterrupted
+    }
+
     private func emitScanningProgress(scanned: Int, total: Int) {
+        guard isAutoUploadActiveForDiscovery() else { return }
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             runtimeSyncOverviewPayload(uploadState: "scanning").merging([
                 "scannedCount": scanned,
@@ -1736,7 +1744,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard isSyncing, let store = uploadStore else { return }
 
         // Skip auto-discovery when auto upload is not active
-        let autoUploadActive = autoUploadConfigStore?.getConfig().state == "active"
+        let autoUploadActive = isAutoUploadActiveForDiscovery()
         guard autoUploadActive else {
             NSLog("[SyncEngine] skipping incremental rescan — auto upload not active (%@)", reason)
             return
@@ -2046,7 +2054,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     }
                 }
                 // Only auto-scan when auto upload is active (PRD: disabled/interrupted = no auto discovery)
-                let autoUploadActive = autoUploadConfigStore?.getConfig().state == "active"
+                let autoUploadActive = isAutoUploadActiveForDiscovery()
                 if autoUploadActive {
                     newAssets = photoScanner.scanForUntrackedAssets(
                         clientId: clientId,
@@ -2057,34 +2065,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
 
                 if !newAssets.isEmpty {
-                    let queuePersistStart = CFAbsoluteTimeGetCurrent()
-                    let queuedItems = newAssets.map { asset in
-                        UploadItemRecord(
-                            id: nil,
-                            assetLocalId: asset.asset.localIdentifier,
-                            modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
-                            mediaType: asset.mediaType,
-                            originalFilename: asset.originalFilename,
-                            fileKey: asset.fileKey,
-                            fileSize: asset.estimatedSize,
-                            status: "queued",
-                            tempFilePath: nil,
-                            ackedOffset: 0,
-                            lastErrorCode: nil,
-                            updatedAt: ISO8601DateFormatter().string(from: Date()),
-                            source: "auto",
-                            batchId: nil,
-                            priority: 0
+                    if isAutoUploadActiveForDiscovery() {
+                        let queuePersistStart = CFAbsoluteTimeGetCurrent()
+                        let queuedItems = newAssets.map { asset in
+                            UploadItemRecord(
+                                id: nil,
+                                assetLocalId: asset.asset.localIdentifier,
+                                modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                                mediaType: asset.mediaType,
+                                originalFilename: asset.originalFilename,
+                                fileKey: asset.fileKey,
+                                fileSize: asset.estimatedSize,
+                                status: "queued",
+                                tempFilePath: nil,
+                                ackedOffset: 0,
+                                lastErrorCode: nil,
+                                updatedAt: ISO8601DateFormatter().string(from: Date()),
+                                source: "auto",
+                                batchId: nil,
+                                priority: 0
+                            )
+                        }
+                        try? uploadStore?.upsertUploadItems(queuedItems)
+                        NSLog(
+                            "[SyncPipeline] persisted %d queued assets in %d ms",
+                            queuedItems.count,
+                            Int((CFAbsoluteTimeGetCurrent() - queuePersistStart) * 1000)
                         )
+                        syncDiagnosticsLog("SyncPipeline", "persisted \(queuedItems.count) queued assets")
+                        emitQueueToJS()
+                    } else {
+                        NSLog("[SyncPipeline] discarded %d scanned auto assets because auto upload was interrupted", newAssets.count)
+                        syncDiagnosticsLog("SyncPipeline", "discarded \(newAssets.count) scanned auto assets after auto upload interruption")
+                        newAssets = []
                     }
-                    try? uploadStore?.upsertUploadItems(queuedItems)
-                    NSLog(
-                        "[SyncPipeline] persisted %d queued assets in %d ms",
-                        queuedItems.count,
-                        Int((CFAbsoluteTimeGetCurrent() - queuePersistStart) * 1000)
-                    )
-                    syncDiagnosticsLog("SyncPipeline", "persisted \(queuedItems.count) queued assets")
-                    emitQueueToJS()
                 }
 
                 pendingAssets = buildPendingUploadAssets(clientId: clientId, limit: 200)
@@ -4437,6 +4451,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // If the loop is already alive, just wake it; otherwise bootstrap it.
         if result.queuedCount > 0 {
             if isSyncing {
+                photoLibraryChanged = true
                 resumeWatchLoopIfNeeded()
             } else {
                 startSync()

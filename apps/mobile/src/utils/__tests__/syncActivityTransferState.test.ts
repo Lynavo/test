@@ -273,4 +273,21 @@ describe('syncActivityTransferState', () => {
       'manual_completed',
     );
   });
+
+  it('prioritizes newly queued manual work over stale manual completion stats', () => {
+    const snapshot = {
+      uploadState: 'scanning',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 2,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('running');
+  });
 });

@@ -127,6 +127,10 @@ export function getSyncActivityMainCardState(
     (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
     completedTaskSource;
 
+  if (hasManualWork) {
+    return 'running';
+  }
+
   if (isFinishedRound && completedTaskSource === 'manual') {
     return 'manual_completed';
   }
@@ -135,7 +139,7 @@ export function getSyncActivityMainCardState(
     return 'offline';
   }
 
-  if (isActivelyTransferring || hasManualWork) {
+  if (isActivelyTransferring) {
     return 'running';
   }
 
