@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -6,12 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import type { AlbumAssetDTO } from '@syncflow/contracts';
 import { Icon } from './Icon';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export interface AssetPreviewModalProps {
   visible: boolean;
@@ -26,7 +24,13 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = ({
   initialIndex,
   onClose,
 }) => {
+  const { width } = useWindowDimensions();
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    setActiveIndex(initialIndex);
+  }, [initialIndex]);
+
   const current = assets[activeIndex];
 
   return (
@@ -42,7 +46,9 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = ({
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <Icon name="close" size={22} color="#fff" />
           </TouchableOpacity>
-          <Text style={styles.counter}>{`${activeIndex + 1} / ${assets.length}`}</Text>
+          <Text style={styles.counter}>
+            {`${activeIndex + 1} / ${assets.length}`}
+          </Text>
           <Text style={styles.filename} numberOfLines={1}>
             {current?.filename ?? ''}
           </Text>
@@ -55,17 +61,18 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = ({
           initialScrollIndex={initialIndex}
           keyExtractor={item => item.assetLocalId}
           getItemLayout={(_, index) => ({
-            length: SCREEN_WIDTH,
-            offset: SCREEN_WIDTH * index,
+            length: width,
+            offset: width * index,
             index,
           })}
           onMomentumScrollEnd={event => {
             const newIndex = Math.round(
-              event.nativeEvent.contentOffset.x / SCREEN_WIDTH,
+              event.nativeEvent.contentOffset.x / width,
             );
             setActiveIndex(newIndex);
           }}
-          renderItem={() => <View style={{ width: SCREEN_WIDTH }} />}
+          renderItem={({ item: _item }) => <View style={{ width }} />}
+          extraData={width}
         />
       </View>
     </Modal>
