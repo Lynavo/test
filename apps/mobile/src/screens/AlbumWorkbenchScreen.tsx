@@ -175,6 +175,10 @@ export function AlbumWorkbenchScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [multiSelectMode, setMultiSelectMode] = useState(false);
 
+  // Preview modal
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+
   // Auto-upload config
   const [autoUploadConfig, setAutoUploadConfig] =
     useState<AutoUploadConfigDTO | null>(null);
@@ -442,6 +446,16 @@ export function AlbumWorkbenchScreen() {
       return next;
     });
   }, []);
+
+  const handleOpenPreview = useCallback(
+    (assetLocalId: string) => {
+      const idx = assets.findIndex(a => a.assetLocalId === assetLocalId);
+      if (idx < 0) return;
+      setPreviewIndex(idx);
+      setPreviewVisible(true);
+    },
+    [assets],
+  );
 
   // Unified filter: derives both mediaFilter and transferFilter from a single tab
   const [unifiedFilter, setUnifiedFilter] = useState<UnifiedFilter>('all');
@@ -808,30 +822,19 @@ export function AlbumWorkbenchScreen() {
       return (
         <TouchableOpacity
           style={styles.gridItem}
-          activeOpacity={item.isTransferred ? 1 : 0.7}
-          onPress={() => {
-            if (!item.isTransferred) {
-              handleToggleSelect(item.assetLocalId);
-            }
-          }}
-          onLongPress={() => {
-            if (!item.isTransferred) {
-              handleLongPress(item.assetLocalId);
-            }
-          }}
+          activeOpacity={0.7}
+          onPress={() => handleOpenPreview(item.assetLocalId)}
         >
           <Image
             source={{ uri: item.thumbnailUri }}
             style={styles.gridThumbnail}
             resizeMode="cover"
           />
-          {/* Transferred overlay */}
           {item.isTransferred && (
             <View style={styles.transferredOverlay}>
               <Icon name="checkmark-circle" size={24} color="#fff" />
             </View>
           )}
-          {/* Queued badge */}
           {item.isQueued && !item.isTransferred && (
             <View style={styles.queuedBadge}>
               <Text style={styles.queuedBadgeText}>
@@ -839,27 +842,27 @@ export function AlbumWorkbenchScreen() {
               </Text>
             </View>
           )}
-          {/* Video indicator */}
           {item.mediaType === 'video' && (
             <View style={styles.videoIndicator}>
               <Icon name="play-circle-outline" size={16} color="#fff" />
             </View>
           )}
-          {/* Selection indicator — only for non-transferred items */}
-          {!item.isTransferred && (multiSelectMode || isSelected) && (
-            <View
+          {!item.isTransferred && (
+            <TouchableOpacity
               style={[
                 styles.selectionCircle,
                 isSelected && styles.selectionCircleActive,
               ]}
+              hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+              onPress={() => handleToggleSelect(item.assetLocalId)}
             >
               {isSelected && <Icon name="checkmark" size={14} color="#fff" />}
-            </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       );
     },
-    [selectedIds, multiSelectMode, handleToggleSelect, handleLongPress],
+    [selectedIds, handleToggleSelect, handleOpenPreview, t],
   );
 
   const renderListItem = useCallback(
@@ -868,17 +871,8 @@ export function AlbumWorkbenchScreen() {
       return (
         <TouchableOpacity
           style={[styles.listRow, isSelected && styles.listRowSelected]}
-          activeOpacity={item.isTransferred ? 1 : 0.7}
-          onPress={() => {
-            if (!item.isTransferred) {
-              handleToggleSelect(item.assetLocalId);
-            }
-          }}
-          onLongPress={() => {
-            if (!item.isTransferred) {
-              handleLongPress(item.assetLocalId);
-            }
-          }}
+          activeOpacity={0.7}
+          onPress={() => handleOpenPreview(item.assetLocalId)}
         >
           <Image
             source={{ uri: item.thumbnailUri }}
@@ -914,19 +908,21 @@ export function AlbumWorkbenchScreen() {
             </View>
           </View>
           {!item.isTransferred && (
-            <View
+            <TouchableOpacity
               style={[
                 styles.listCheckbox,
                 isSelected && styles.listCheckboxActive,
               ]}
+              hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+              onPress={() => handleToggleSelect(item.assetLocalId)}
             >
               {isSelected && <Icon name="checkmark" size={14} color="#fff" />}
-            </View>
+            </TouchableOpacity>
           )}
         </TouchableOpacity>
       );
     },
-    [selectedIds, handleToggleSelect, handleLongPress],
+    [selectedIds, handleToggleSelect, handleOpenPreview, t],
   );
 
   const keyExtractor = useCallback(
