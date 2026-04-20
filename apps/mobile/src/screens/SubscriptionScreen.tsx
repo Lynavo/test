@@ -11,7 +11,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -22,7 +22,10 @@ import { iapService } from '../services/iap-service';
 import { IAP_PRODUCTS, planToProductId } from '../constants/iap';
 import { classifyIapError, IapErrorClass } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
-import { verifyIapReceipt } from '../services/subscription-service';
+import {
+  getSubscriptionStatus,
+  verifyIapReceipt,
+} from '../services/subscription-service';
 import { FEATURES } from '../constants/features';
 import {
   resolveSubscriptionDisplayState,
@@ -561,6 +564,22 @@ export function SubscriptionScreen() {
   const [monthlyTrialEligible, setMonthlyTrialEligible] = useState<
     boolean | null
   >(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getSubscriptionStatus()
+        .then(info => {
+          if (!cancelled) setSubscription(info);
+        })
+        .catch(err => {
+          console.warn('[subscription] refresh on focus failed', err);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [setSubscription]),
+  );
 
   useEffect(() => {
     if (

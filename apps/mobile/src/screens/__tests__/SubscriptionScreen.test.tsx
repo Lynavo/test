@@ -20,6 +20,10 @@ jest.mock('@react-navigation/native', () => ({
     goBack: jest.fn(),
     canGoBack: jest.fn().mockReturnValue(true),
   }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const ReactInner = require('react');
+    ReactInner.useEffect(callback, [callback]);
+  },
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -65,7 +69,12 @@ jest.mock('../../services/iap-service', () => ({
 
 jest.mock('../../services/subscription-service', () => ({
   verifyIapReceipt: jest.fn().mockResolvedValue(undefined),
-  getSubscriptionStatus: jest.fn(),
+  getSubscriptionStatus: jest.fn().mockResolvedValue({
+    status: 'trial_expired',
+    plan: '',
+    expireAt: null,
+    trialEnd: null,
+  }),
 }));
 
 jest.mock('../../constants/features', () => ({
@@ -104,7 +113,10 @@ jest.mock('../../stores/auth-store', () => ({
 import i18n from '../../i18n';
 import { SubscriptionScreen, resolveCurrentPlan } from '../SubscriptionScreen';
 import { iapService } from '../../services/iap-service';
-import { verifyIapReceipt } from '../../services/subscription-service';
+import {
+  getSubscriptionStatus,
+  verifyIapReceipt,
+} from '../../services/subscription-service';
 import { ApiError, ERROR_CODE } from '../../services/api';
 
 function renderScreen() {
@@ -134,6 +146,18 @@ describe('SubscriptionScreen', () => {
     expect(
       getByText(/恢復已購買訂閱|恢复已购买订阅|Restore Purchases/),
     ).toBeTruthy();
+  });
+
+  test('refreshes subscription status when screen is focused', async () => {
+    renderScreen();
+    await waitFor(() => expect(getSubscriptionStatus).toHaveBeenCalled());
+    expect(mockSetSubscription).toHaveBeenCalledWith({
+      status: 'trial_expired',
+      plan: '',
+      expireAt: null,
+      trialEnd: null,
+    });
+    expect(mockLoadSubscription).not.toHaveBeenCalled();
   });
 
   test('monthly card shows trial copy when eligible', async () => {
