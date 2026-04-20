@@ -269,6 +269,79 @@ class AlbumBrowserService {
         return resultImage
     }
 
+    // MARK: - Full-resolution Preview (lazy)
+
+    /// Returns a dictionary describing the preview source for a single asset.
+    /// Keys: "uri" (String), "mediaType" ("image"|"video"), optional "error"
+    /// ("cloud_unavailable"|"not_found").
+    func getPreviewSource(assetLocalId: String) -> [String: Any] {
+        let fetchResult = PHAsset.fetchAssets(
+            withLocalIdentifiers: [assetLocalId],
+            options: nil
+        )
+        guard let asset = fetchResult.firstObject else {
+            return ["uri": "", "mediaType": "image", "error": "not_found"]
+        }
+
+        switch asset.mediaType {
+        case .image:
+            return fetchImagePreview(asset: asset, assetLocalId: assetLocalId)
+        case .video:
+            return fetchVideoPreview(asset: asset)
+        default:
+            return ["uri": "", "mediaType": "image", "error": "not_found"]
+        }
+    }
+
+    private func fetchImagePreview(asset: PHAsset, assetLocalId: String) -> [String: Any] {
+        let cacheDir = Self.previewCacheDir()
+        let safeId = assetLocalId
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let cacheFile = cacheDir.appendingPathComponent("\(safeId).jpg")
+
+        if FileManager.default.fileExists(atPath: cacheFile.path) {
+            return ["uri": cacheFile.absoluteString, "mediaType": "image"]
+        }
+
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = true
+        options.resizeMode = .none
+
+        var resultData: Data?
+        PHImageManager.default().requestImageDataAndOrientation(
+            for: asset,
+            options: options
+        ) { data, _, _, _ in
+            resultData = data
+        }
+
+        guard let data = resultData else {
+            return ["uri": "", "mediaType": "image", "error": "cloud_unavailable"]
+        }
+
+        do {
+            try data.write(to: cacheFile, options: .atomic)
+            return ["uri": cacheFile.absoluteString, "mediaType": "image"]
+        } catch {
+            return ["uri": "", "mediaType": "image", "error": "not_found"]
+        }
+    }
+
+    private func fetchVideoPreview(asset: PHAsset) -> [String: Any] {
+        // Implemented in Task 3 (next task).
+        return ["uri": "", "mediaType": "video", "error": "not_found"]
+    }
+
+    static func previewCacheDir() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("syncflow_album_previews", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     // MARK: - Private Helpers
 
     private func buildTransferredAssetIds() -> Set<String> {
