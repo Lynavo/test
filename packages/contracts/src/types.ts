@@ -205,7 +205,13 @@ export interface AlbumAssetDTO {
   isQueued: boolean;
 }
 
-/** Preview source for a single album asset, fetched on demand from the album workbench */
+/**
+ * Preview source for a single album asset, fetched on demand from the album
+ * workbench. Shape mirrors the iOS native bridge return value.
+ *
+ * Invariant: when `error` is set, `uri` will be `''`. Consumers should branch
+ * on `error` presence first before using `uri`.
+ */
 export interface AssetPreviewSourceDTO {
   uri: string;
   mediaType: 'image' | 'video';
