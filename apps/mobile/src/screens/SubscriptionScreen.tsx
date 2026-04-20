@@ -64,6 +64,15 @@ export function resolveCurrentPlan(
 }
 type PlanKey = 'monthly' | 'yearly';
 
+const DEFAULT_SELECTED_PLAN: PlanKey = 'yearly';
+
+function isDowngradePlan(
+  currentPlan: PlanKey | null,
+  targetPlan: PlanKey,
+): boolean {
+  return currentPlan === 'yearly' && targetPlan === 'monthly';
+}
+
 function formatExpireDate(dateStr: string | null): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
@@ -175,7 +184,7 @@ function FeatureList({ t }: { t: TFunction }) {
   return (
     <View style={featureStyles.container}>
       <Text style={featureStyles.caption}>{t('subscription.divider')}</Text>
-      {FEATURE_KEYS.map((key) => (
+      {FEATURE_KEYS.map(key => (
         <View key={key} style={featureStyles.row}>
           <View style={featureStyles.iconWrap}>
             <Icon name="checkmark" size={14} color={SUCCESS_GREEN} />
@@ -248,8 +257,8 @@ function PlanCard({
         disabled
           ? planStyles.cardDisabled
           : selected
-            ? planStyles.cardSelected
-            : planStyles.cardUnselected,
+          ? planStyles.cardSelected
+          : planStyles.cardUnselected,
       ]}
       activeOpacity={0.82}
       onPress={onPress}
@@ -266,8 +275,8 @@ function PlanCard({
           disabled
             ? planStyles.textDisabled
             : selected
-              ? planStyles.textSelected
-              : planStyles.textUnselected,
+            ? planStyles.textSelected
+            : planStyles.textUnselected,
         ]}
       >
         {price}
@@ -278,8 +287,8 @@ function PlanCard({
           disabled
             ? planStyles.unitDisabled
             : selected
-              ? planStyles.unitSelected
-              : planStyles.unitUnselected,
+            ? planStyles.unitSelected
+            : planStyles.unitUnselected,
         ]}
       >
         {unit}
@@ -424,7 +433,9 @@ function PaymentSuccessModal({
           <View style={modalStyles.iconCircle}>
             <Icon name="checkmark-circle" size={48} color={SUCCESS_GREEN} />
           </View>
-          <Text style={modalStyles.title}>{t('subscription.modal.paymentSuccess')}</Text>
+          <Text style={modalStyles.title}>
+            {t('subscription.modal.paymentSuccess')}
+          </Text>
           <Text style={modalStyles.subtitle}>
             {t('subscription.modal.successSubtitle')}
           </Text>
@@ -446,7 +457,9 @@ function PaymentSuccessModal({
             activeOpacity={0.7}
             onPress={onDismiss}
           >
-            <Text style={modalStyles.buttonText}>{t('subscription.actions.start')}</Text>
+            <Text style={modalStyles.buttonText}>
+              {t('subscription.actions.start')}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -522,36 +535,51 @@ const modalStyles = StyleSheet.create({
 export function SubscriptionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
-  const { user, subscription, loadSubscription } = useAuth();
+  const { user, subscription, loadSubscription, setSubscription } = useAuth();
 
   // Which Apple-level plan the user is currently holding (null when on
   // account trial, post-expiry, or no Apple IAP yet). Drives the "目前
   // 方案" badge, card disable, and CTA copy.
   const currentPlan = resolveCurrentPlan(subscription);
 
-  // Default-select the OTHER plan when the user is already subscribed —
-  // nudges them toward the upgrade affordance instead of landing on a
-  // disabled self-select. Fall back to yearly otherwise (typical
-  // first-purchase bias).
-  const initialSelectedPlan: PlanKey = currentPlan === 'monthly' ? 'yearly' : 'yearly';
-  const [selectedPlan, setSelectedPlan] = useState<PlanKey>(initialSelectedPlan);
+  // Default to the yearly SKU. Monthly holders can upgrade; yearly holders
+  // stay on their current plan because this screen intentionally blocks
+  // yearly -> monthly downgrade.
+  const [selectedPlan, setSelectedPlan] = useState<PlanKey>(
+    DEFAULT_SELECTED_PLAN,
+  );
+  const selectedPlanIsCurrent =
+    currentPlan != null && selectedPlan === currentPlan;
+  const selectedPlanIsDowngrade = isDowngradePlan(currentPlan, selectedPlan);
   const [isLoading, setIsLoading] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   const [confirmedPlan, setConfirmedPlan] = useState<PlanKey>('yearly');
-  const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(null);
+  const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(
+    null,
+  );
 
-  const [monthlyTrialEligible, setMonthlyTrialEligible] = useState<boolean | null>(null);
+  const [monthlyTrialEligible, setMonthlyTrialEligible] = useState<
+    boolean | null
+  >(null);
+
+  useEffect(() => {
+    if (
+      currentPlan != null &&
+      (selectedPlan === currentPlan ||
+        isDowngradePlan(currentPlan, selectedPlan))
+    ) {
+      setSelectedPlan(DEFAULT_SELECTED_PLAN);
+    }
+  }, [currentPlan, selectedPlan]);
 
   useEffect(() => {
     if (!FEATURES.IAP_ENABLED) return;
     let cancelled = false;
     void iapService
       .checkEligibility()
-      .then((results) => {
+      .then(results => {
         if (cancelled) return;
-        const monthly = results.find(
-          (r) => r.productId === IAP_PRODUCTS.monthly,
-        );
+        const monthly = results.find(r => r.productId === IAP_PRODUCTS.monthly);
         setMonthlyTrialEligible(monthly?.eligibleForIntroOffer ?? false);
       })
       .catch(() => {
@@ -580,14 +608,22 @@ export function SubscriptionScreen() {
       }
       await loadSubscription();
       Alert.alert(t('subscription.restore.success'));
-    } catch {
-      Alert.alert(t('subscription.restore.failed'));
+    } catch (err) {
+      const cls = classifyIapError(err);
+      Alert.alert(t((cls.i18nKey ?? 'subscription.restore.failed') as never));
     } finally {
       setIsRestoring(false);
     }
   }, [t, loadSubscription]);
 
   const handleSubscribe = useCallback(async () => {
+    if (
+      (currentPlan != null && selectedPlan === currentPlan) ||
+      isDowngradePlan(currentPlan, selectedPlan)
+    ) {
+      return;
+    }
+
     if (!FEATURES.IAP_ENABLED) {
       Alert.alert(
         t('subscription.alert.devTitle'),
@@ -601,6 +637,8 @@ export function SubscriptionScreen() {
     try {
       const productId = planToProductId(selectedPlan);
       const receipt = await iapService.purchase(productId);
+      let receiptData = receipt.transactionReceipt;
+      const isPlanSwitch = currentPlan != null && currentPlan !== selectedPlan;
 
       // Retry verify twice (1s → 4s) before surfacing error — Apple already
       // charged, so we must try hard before handing retry to the user.
@@ -608,9 +646,9 @@ export function SubscriptionScreen() {
       const delays = [0, 1_000, 4_000];
       let lastErr: unknown = null;
       for (const delay of delays) {
-        if (delay > 0) await new Promise<void>((r) => setTimeout(r, delay));
+        if (delay > 0) await new Promise<void>(r => setTimeout(r, delay));
         try {
-          await verifyIapReceipt(receipt.transactionReceipt, selectedPlan);
+          await verifyIapReceipt(receiptData, selectedPlan);
           verified = true;
           break;
         } catch (err) {
@@ -620,6 +658,17 @@ export function SubscriptionScreen() {
             break;
           }
           if (cls.kind === IapErrorClass.FatalMismatch) {
+            if (isPlanSwitch) {
+              // StoreKit can briefly expose the previous subscription-group
+              // receipt after a plan switch. Refresh once before treating the
+              // backend mismatch as a real product configuration error.
+              const refreshedReceipt = await iapService.refreshReceipt();
+              if (refreshedReceipt) {
+                receiptData = refreshedReceipt;
+                lastErr = err;
+                continue;
+              }
+            }
             await iapService.finishTransaction(receipt.transactionId);
             // cls.i18nKey is always a valid translation key for FatalMismatch
             if (cls.i18nKey) Alert.alert(t(cls.i18nKey as never));
@@ -632,7 +681,12 @@ export function SubscriptionScreen() {
 
       if (!verified) {
         const cls = classifyIapError(lastErr);
-        Alert.alert(t((cls.i18nKey ?? 'subscription.errors.verifyRetrying') as never));
+        if (cls.kind === IapErrorClass.FatalMismatch) {
+          await iapService.finishTransaction(receipt.transactionId);
+        }
+        Alert.alert(
+          t((cls.i18nKey ?? 'subscription.errors.verifyRetrying') as never),
+        );
         return;
       }
 
@@ -644,6 +698,15 @@ export function SubscriptionScreen() {
       let fresh: typeof subscription = null;
       try {
         fresh = await loadSubscription();
+        if (
+          fresh &&
+          isPlanSwitch &&
+          fresh.plan !== selectedPlan &&
+          (fresh.status === 'subscribed' || fresh.status === 'trialing')
+        ) {
+          fresh = { ...fresh, plan: selectedPlan };
+          setSubscription(fresh);
+        }
       } catch {
         // Fall through — modal will just hide the expiry line.
       }
@@ -677,11 +740,18 @@ export function SubscriptionScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [t, selectedPlan, loadSubscription]);
+  }, [t, selectedPlan, currentPlan, loadSubscription, setSubscription]);
 
   const handlePaymentSuccessDismiss = useCallback(() => {
     setShowPaymentSuccess(false);
   }, []);
+
+  const subscribeButtonLabel =
+    currentPlan === 'yearly'
+      ? t('subscription.actions.currentYearly')
+      : currentPlan && selectedPlan !== currentPlan
+      ? t('subscription.actions.switchPlan')
+      : t('subscription.actions.subscribe');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -708,7 +778,9 @@ export function SubscriptionScreen() {
       >
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>{t('subscription.hero.title')}</Text>
-          <Text style={styles.heroSubtitle}>{t('subscription.hero.subtitle')}</Text>
+          <Text style={styles.heroSubtitle}>
+            {t('subscription.hero.subtitle')}
+          </Text>
           {subscriptionDisplay.kind !== 'unknown' ? (
             <StatusBadge displayState={subscriptionDisplay} t={t} />
           ) : null}
@@ -727,7 +799,10 @@ export function SubscriptionScreen() {
                 : t('subscription.plans.monthly.subtitle')
             }
             selected={selectedPlan === 'monthly'}
-            disabled={currentPlan === 'monthly'}
+            disabled={
+              currentPlan === 'monthly' ||
+              isDowngradePlan(currentPlan, 'monthly')
+            }
             currentBadge={
               currentPlan === 'monthly'
                 ? t('subscription.plans.currentPlan')
@@ -754,7 +829,9 @@ export function SubscriptionScreen() {
         <TouchableOpacity
           style={styles.subscribeButton}
           activeOpacity={0.7}
-          disabled={isLoading || selectedPlan === currentPlan}
+          disabled={
+            isLoading || selectedPlanIsCurrent || selectedPlanIsDowngrade
+          }
           onPress={() => {
             void handleSubscribe();
           }}
@@ -763,9 +840,7 @@ export function SubscriptionScreen() {
             <ActivityIndicator color="#ffffff" size="small" />
           ) : (
             <Text style={styles.subscribeButtonText}>
-              {currentPlan && selectedPlan !== currentPlan
-                ? t('subscription.actions.switchPlan')
-                : t('subscription.actions.subscribe')}
+              {subscribeButtonLabel}
             </Text>
           )}
         </TouchableOpacity>

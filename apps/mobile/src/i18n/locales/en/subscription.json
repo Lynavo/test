@@ -57,6 +57,7 @@
   "actions": {
     "subscribe": "Subscribe Now",
     "switchPlan": "Switch Plan",
+    "currentYearly": "Current Yearly Plan",
     "start": "Get Started"
   },
   "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",

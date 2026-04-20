@@ -21,12 +21,16 @@ import type { TFunction } from 'i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../stores/auth-store';
-import { logout as serverLogout, deleteAccount } from '../services/auth-service';
+import {
+  logout as serverLogout,
+  deleteAccount,
+} from '../services/auth-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { FEATURES } from '../constants/features';
 import { iapService } from '../services/iap-service';
+import { classifyIapError } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
 import { ApiError } from '../services/api';
 import {
@@ -117,7 +121,9 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
   if (Number.isNaN(date.getTime())) return t('settings.status.noRecord');
 
   const now = new Date();
-  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(
+    date.getMinutes(),
+  ).padStart(2, '0')}`;
   if (date.toDateString() === now.toDateString()) {
     return t('settings.dates.todayAt', { time });
   }
@@ -297,7 +303,10 @@ export function SettingsScreen() {
           }
           if (latestItem?.updatedAt) {
             setLatestSyncLabel(
-              `${formatDateTimeLabel(String(latestItem.updatedAt), t)} · ${String(latestItem.deviceName || 'Mac')}`,
+              `${formatDateTimeLabel(
+                String(latestItem.updatedAt),
+                t,
+              )} · ${String(latestItem.deviceName || 'Mac')}`,
             );
           } else {
             setLatestSyncLabel(t('settings.status.noRecord'));
@@ -459,98 +468,114 @@ export function SettingsScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = useCallback(() => {
-    Alert.alert(t('settings.dialogs.logout.title'), t('settings.dialogs.logout.body'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('settings.dialogs.logout.confirm'),
-        style: 'destructive',
-        onPress: async () => {
-          if (isLoggingOut) return;
-          setIsLoggingOut(true);
+    Alert.alert(
+      t('settings.dialogs.logout.title'),
+      t('settings.dialogs.logout.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.dialogs.logout.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            if (isLoggingOut) return;
+            setIsLoggingOut(true);
 
-          // Snapshot the refresh token up-front so the value used for
-          // server-side revocation is stable even if auth state is
-          // touched mid-flight. The revoke itself is deliberately
-          // deferred until AFTER the awaited local cleanup succeeds —
-          // see the block comment below for the why.
-          const refresh = auth.refreshToken;
+            // Snapshot the refresh token up-front so the value used for
+            // server-side revocation is stable even if auth state is
+            // touched mid-flight. The revoke itself is deliberately
+            // deferred until AFTER the awaited local cleanup succeeds —
+            // see the block comment below for the why.
+            const refresh = auth.refreshToken;
 
-          // Order is load-bearing and mirrors the account-identity-reset
-          // spec §4 Phase 1 with one deliberate refinement: server-side
-          // token revocation (`serverLogout`) happens LAST, not first,
-          // so the fail-closed wipe at step 2 genuinely leaves client +
-          // server in a consistent state:
-          //
-          //   1. desktop sidecar reset — best-effort, swallowed.
-          //   2. native wipeSyncIdentity — MUST succeed; on reject we
-          //      show an alert, keep the user signed in, and do NOT
-          //      call serverLogout. The previous ordering (serverLogout
-          //      first) would have left the server with a revoked
-          //      refresh token while the UI claimed "still signed in" —
-          //      an eventually-consistent logout that's hostile to
-          //      debug and breaks the fail-closed contract.
-          //   3. user-scoped AsyncStorage cleanup — best-effort; its
-          //      failure only affects reminder-shown suppression flags,
-          //      not security-critical state.
-          //   4. fire-and-forget serverLogout — tokens still live in
-          //      `_accessToken` / `_refreshToken` module-level vars
-          //      until step 5, so `request()` can still build the
-          //      Authorization header synchronously before its first
-          //      await; a slow/failed network must never block
-          //      auth.clearAuth.
-          //   5. auth.clearAuth — clears in-memory tokens + keychain
-          //      entry, triggering RootNavigator to unmount AuthedStack.
-          try {
-            await resetCurrentDesktopSidecarIfReachable();
-          } catch (e) {
-            console.warn('[Settings] desktop sidecar reset threw (ignored):', e);
-          }
-          try {
-            await wipeSyncIdentity();
-          } catch (e) {
-            console.warn('[Settings] wipeSyncIdentity failed — aborting logout to avoid residual identity:', e);
-            // TODO(i18n): promote these hardcoded zh-Hant strings to
-            // `settings.dialogs.logoutFailed.{title,body}` once
-            // settings.json is no longer gitignored in any dev env and
-            // the keys can be added to the strict i18next resource
-            // types without typecheck errors.
-            Alert.alert(
-              '登出失敗',
-              '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
-            );
-            setIsLoggingOut(false);
-            return;
-          }
-          try {
-            await clearUserScopedStorage();
-          } catch (e) {
-            console.warn('[Settings] clearUserScopedStorage failed (ignored):', e);
-          }
-          // Fire-and-forget server-side revoke. Must run BEFORE
-          // clearAuth so the access token used by `request()` to build
-          // the Authorization header is still in memory; the request's
-          // first await happens after that header is composed, so the
-          // network call can safely race clearAuth. The 5s timeout
-          // inside `auth-service.logout()` bounds how long this can
-          // run in the background. Server revoke failure is non-fatal
-          // but worth logging for forensics.
-          if (refresh) {
-            void serverLogout(refresh).catch((e) => {
-              console.warn('[Settings] server logout failed (already cleared locally):', e);
-            });
-          }
-          try {
-            auth.clearAuth();
-          } catch (e) {
-            console.warn('[Settings] local logout error:', e);
-          }
-          // clearAuth triggers a navigator remount to Login so this
-          // component is about to unmount. setState on an unmounted
-          // component is a noop warning — safe to skip resetting the
-          // flag.
+            // Order is load-bearing and mirrors the account-identity-reset
+            // spec §4 Phase 1 with one deliberate refinement: server-side
+            // token revocation (`serverLogout`) happens LAST, not first,
+            // so the fail-closed wipe at step 2 genuinely leaves client +
+            // server in a consistent state:
+            //
+            //   1. desktop sidecar reset — best-effort, swallowed.
+            //   2. native wipeSyncIdentity — MUST succeed; on reject we
+            //      show an alert, keep the user signed in, and do NOT
+            //      call serverLogout. The previous ordering (serverLogout
+            //      first) would have left the server with a revoked
+            //      refresh token while the UI claimed "still signed in" —
+            //      an eventually-consistent logout that's hostile to
+            //      debug and breaks the fail-closed contract.
+            //   3. user-scoped AsyncStorage cleanup — best-effort; its
+            //      failure only affects reminder-shown suppression flags,
+            //      not security-critical state.
+            //   4. fire-and-forget serverLogout — tokens still live in
+            //      `_accessToken` / `_refreshToken` module-level vars
+            //      until step 5, so `request()` can still build the
+            //      Authorization header synchronously before its first
+            //      await; a slow/failed network must never block
+            //      auth.clearAuth.
+            //   5. auth.clearAuth — clears in-memory tokens + keychain
+            //      entry, triggering RootNavigator to unmount AuthedStack.
+            try {
+              await resetCurrentDesktopSidecarIfReachable();
+            } catch (e) {
+              console.warn(
+                '[Settings] desktop sidecar reset threw (ignored):',
+                e,
+              );
+            }
+            try {
+              await wipeSyncIdentity();
+            } catch (e) {
+              console.warn(
+                '[Settings] wipeSyncIdentity failed — aborting logout to avoid residual identity:',
+                e,
+              );
+              // TODO(i18n): promote these hardcoded zh-Hant strings to
+              // `settings.dialogs.logoutFailed.{title,body}` once
+              // settings.json is no longer gitignored in any dev env and
+              // the keys can be added to the strict i18next resource
+              // types without typecheck errors.
+              Alert.alert(
+                '登出失敗',
+                '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
+              );
+              setIsLoggingOut(false);
+              return;
+            }
+            try {
+              await clearUserScopedStorage();
+            } catch (e) {
+              console.warn(
+                '[Settings] clearUserScopedStorage failed (ignored):',
+                e,
+              );
+            }
+            // Fire-and-forget server-side revoke. Must run BEFORE
+            // clearAuth so the access token used by `request()` to build
+            // the Authorization header is still in memory; the request's
+            // first await happens after that header is composed, so the
+            // network call can safely race clearAuth. The 5s timeout
+            // inside `auth-service.logout()` bounds how long this can
+            // run in the background. Server revoke failure is non-fatal
+            // but worth logging for forensics.
+            if (refresh) {
+              void serverLogout(refresh).catch(e => {
+                console.warn(
+                  '[Settings] server logout failed (already cleared locally):',
+                  e,
+                );
+              });
+            }
+            try {
+              auth.clearAuth();
+            } catch (e) {
+              console.warn('[Settings] local logout error:', e);
+            }
+            // clearAuth triggers a navigator remount to Login so this
+            // component is about to unmount. setState on an unmounted
+            // component is a noop warning — safe to skip resetting the
+            // flag.
+          },
         },
-      },
-    ]);
+      ],
+    );
   }, [auth, isLoggingOut, t]);
 
   // Restore Purchases (Apple Review requirement — Position B in Settings)
@@ -568,8 +593,9 @@ export function SettingsScreen() {
       await auth.loadSubscription();
       markSubscriptionJustActivated();
       Alert.alert(t('subscription.restore.success'));
-    } catch {
-      Alert.alert(t('subscription.restore.failed'));
+    } catch (err) {
+      const cls = classifyIapError(err);
+      Alert.alert(t((cls.i18nKey ?? 'subscription.restore.failed') as never));
     } finally {
       setIsRestoring(false);
     }
@@ -634,7 +660,10 @@ export function SettingsScreen() {
                     try {
                       await resetCurrentDesktopSidecarIfReachable();
                     } catch (e) {
-                      console.warn('[Settings] desktop sidecar reset threw (ignored):', e);
+                      console.warn(
+                        '[Settings] desktop sidecar reset threw (ignored):',
+                        e,
+                      );
                     }
                     try {
                       await wipeSyncIdentity();
@@ -654,7 +683,10 @@ export function SettingsScreen() {
                     try {
                       await clearUserScopedStorage();
                     } catch (e) {
-                      console.warn('[Settings] clearUserScopedStorage failed (ignored):', e);
+                      console.warn(
+                        '[Settings] clearUserScopedStorage failed (ignored):',
+                        e,
+                      );
                     }
                     auth.clearAuth();
                   },
@@ -748,7 +780,9 @@ export function SettingsScreen() {
               <View style={styles.wifiIconCircle}>
                 <Icon name="wifi" size={18} color="#fff" />
               </View>
-              <Text style={styles.topCardSmallLabel}>{t('settings.sections.connectedDevice')}</Text>
+              <Text style={styles.topCardSmallLabel}>
+                {t('settings.sections.connectedDevice')}
+              </Text>
             </View>
             <Text style={styles.topCardTitle} numberOfLines={1}>
               {deviceName || t('settings.connection.notConnected')}
@@ -764,8 +798,8 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusDotOnline
                       : isConnecting
-                        ? styles.statusDotConnecting
-                        : styles.statusDotOffline,
+                      ? styles.statusDotConnecting
+                      : styles.statusDotOffline,
                   ]}
                 />
                 <Text
@@ -774,15 +808,15 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusTextOnline
                       : isConnecting
-                        ? styles.statusTextConnecting
-                        : styles.statusTextOffline,
+                      ? styles.statusTextConnecting
+                      : styles.statusTextOffline,
                   ]}
                 >
                   {isConnected
                     ? t('settings.connection.online')
                     : isConnecting
-                      ? t('settings.connection.connecting')
-                      : t('settings.connection.offline')}
+                    ? t('settings.connection.connecting')
+                    : t('settings.connection.offline')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -790,7 +824,9 @@ export function SettingsScreen() {
                 activeOpacity={0.6}
                 onPress={handleSwitchDevice}
               >
-                <Text style={styles.switchButtonText}>{t('settings.actions.switch')}</Text>
+                <Text style={styles.switchButtonText}>
+                  {t('settings.actions.switch')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -832,8 +868,8 @@ export function SettingsScreen() {
                 isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
-                    ? t('settings.subscription.trial')
-                    : t('subscription.title')}
+                  ? t('settings.subscription.trial')
+                  : t('subscription.title')}
               </Text>
             </View>
             {isAccountTrial || isSubscriptionIntroTrial ? (
@@ -871,7 +907,9 @@ export function SettingsScreen() {
               </Text>
             ) : (
               <Text style={styles.topCardTitle}>
-                {hasKnownSubscriptionState ? '--' : t('settings.status.reading')}
+                {hasKnownSubscriptionState
+                  ? '--'
+                  : t('settings.status.reading')}
               </Text>
             )}
             {showSubCta ? (
@@ -894,7 +932,9 @@ export function SettingsScreen() {
               <Icon name="phone-portrait-outline" size={20} color="#fff" />
             </View>
             <View style={styles.myDeviceInfo}>
-              <Text style={styles.myDeviceLabel}>{t('settings.myDevice.label')}</Text>
+              <Text style={styles.myDeviceLabel}>
+                {t('settings.myDevice.label')}
+              </Text>
               {editingMyName ? (
                 <View style={styles.editRow}>
                   <TextInput
@@ -940,7 +980,9 @@ export function SettingsScreen() {
           {isPhotoPermissionBlocked ? (
             <>
               <View style={styles.warningBox}>
-                <Text style={styles.warningTitle}>{t('settings.photoPermission.title')}</Text>
+                <Text style={styles.warningTitle}>
+                  {t('settings.photoPermission.title')}
+                </Text>
                 <Text style={styles.warningText}>
                   {t('settings.photoPermission.body')}
                 </Text>
@@ -951,7 +993,9 @@ export function SettingsScreen() {
                     void Linking.openSettings();
                   }}
                 >
-                  <Text style={styles.warningActionText}>{t('settings.photoPermission.openSettings')}</Text>
+                  <Text style={styles.warningActionText}>
+                    {t('settings.photoPermission.openSettings')}
+                  </Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.listSep} />
@@ -960,7 +1004,9 @@ export function SettingsScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="person-outline" size={16} color={MUTED_TEXT} />
-              <Text style={styles.infoRowLabel}>{t('settings.rows.currentAccount')}</Text>
+              <Text style={styles.infoRowLabel}>
+                {t('settings.rows.currentAccount')}
+              </Text>
             </View>
             <Text style={styles.infoRowValue}>
               {auth.user?.primaryIdentity?.display ?? ''}
@@ -970,13 +1016,17 @@ export function SettingsScreen() {
           <View style={styles.infoRow}>
             <View style={styles.infoRowLeft}>
               <Icon name="time-outline" size={16} color={MUTED_TEXT} />
-              <Text style={styles.infoRowLabel}>{t('settings.rows.latestSync')}</Text>
+              <Text style={styles.infoRowLabel}>
+                {t('settings.rows.latestSync')}
+              </Text>
             </View>
             <Text style={styles.infoRowValue}>{latestSyncLabel}</Text>
           </View>
           <View style={styles.listSep} />
           <View style={styles.infoRow}>
-            <Text style={styles.infoRowLabel}>{t('settings.rows.appVersion')}</Text>
+            <Text style={styles.infoRowLabel}>
+              {t('settings.rows.appVersion')}
+            </Text>
             <Text style={styles.infoRowValue}>{appVersionLabel}</Text>
           </View>
         </View>
@@ -984,7 +1034,9 @@ export function SettingsScreen() {
         {/* ============================================================= */}
         {/* Support & Help section                                         */}
         {/* ============================================================= */}
-        <Text style={styles.sectionLabel}>{t('settings.sections.supportHelp')}</Text>
+        <Text style={styles.sectionLabel}>
+          {t('settings.sections.supportHelp')}
+        </Text>
         <View style={styles.listCard}>
           <TouchableOpacity
             style={styles.actionRow}
@@ -1012,7 +1064,9 @@ export function SettingsScreen() {
           >
             <View style={styles.actionRowLeft}>
               <Icon name="help-circle-outline" size={18} color={BLUE} />
-              <Text style={styles.actionRowText}>{t('settings.actions.help')}</Text>
+              <Text style={styles.actionRowText}>
+                {t('settings.actions.help')}
+              </Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
@@ -1029,7 +1083,9 @@ export function SettingsScreen() {
           >
             <View style={styles.actionRowLeft}>
               <Icon name="refresh-outline" size={18} color={DANGER_RED} />
-              <Text style={styles.dangerRowText}>{t('settings.actions.resetSyncStatus')}</Text>
+              <Text style={styles.dangerRowText}>
+                {t('settings.actions.resetSyncStatus')}
+              </Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
@@ -1043,7 +1099,9 @@ export function SettingsScreen() {
             <TouchableOpacity
               style={styles.actionRow}
               activeOpacity={0.6}
-              onPress={() => { void handleRestore(); }}
+              onPress={() => {
+                void handleRestore();
+              }}
               disabled={isRestoring}
             >
               <View style={styles.actionRowLeft}>
@@ -1070,7 +1128,9 @@ export function SettingsScreen() {
           >
             <View style={styles.actionRowLeft}>
               <Icon name="log-out-outline" size={18} color={DANGER_RED} />
-              <Text style={styles.dangerRowText}>{t('settings.actions.logout')}</Text>
+              <Text style={styles.dangerRowText}>
+                {t('settings.actions.logout')}
+              </Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>

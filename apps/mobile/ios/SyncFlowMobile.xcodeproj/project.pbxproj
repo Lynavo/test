@@ -10,6 +10,7 @@
 		0C80B921A6F3F58F76C31292 /* libPods-SyncFlowMobile.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-SyncFlowMobile.a */; };
 		0DAC8ECE3480320FE184A423 /* SharedFilesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C0A4C610F1EE6DEAF9DAB0 /* SharedFilesService.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		5A2D2F6B3480DB6500C3A12F /* AuthKeychainCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		9AAE6A8410E525480D8CD473 /* AlbumBrowserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35E00EC8EDE5044F9DE0BFDA /* AlbumBrowserService.swift */; };
@@ -42,6 +43,7 @@
 		3B4392A12AC88292D35C810B /* Pods-SyncFlowMobile.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SyncFlowMobile.debug.xcconfig"; path = "Target Support Files/Pods-SyncFlowMobile/Pods-SyncFlowMobile.debug.xcconfig"; sourceTree = "<group>"; };
 		42E22EE10B6D2552C83E31BB /* ManualUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualUploadService.swift; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-SyncFlowMobile.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SyncFlowMobile.release.xcconfig"; path = "Target Support Files/Pods-SyncFlowMobile/Pods-SyncFlowMobile.release.xcconfig"; sourceTree = "<group>"; };
+		5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AuthKeychainCleaner.swift; path = SyncFlowMobile/AuthKeychainCleaner.swift; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-SyncFlowMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SyncFlowMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = SyncFlowMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = SyncFlowMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -82,6 +84,7 @@
 			children = (
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
+				5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -312,6 +315,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
+				5A2D2F6B3480DB6500C3A12F /* AuthKeychainCleaner.swift in Sources */,
 				FC3ECC2E2F6F05B5000460F8 /* RNBridge.m in Sources */,
 				FC3ECC302F6F05B5000460F8 /* RNBridge.swift in Sources */,
 				FC3ECC312F6F05B5000460F8 /* BindingService.swift in Sources */,

@@ -254,4 +254,23 @@ describe('syncActivityTransferState', () => {
       'manual_completed',
     );
   });
+
+  it('keeps manual completed state when native emits a scanning pulse after the last file', () => {
+    const snapshot = {
+      uploadState: 'scanning',
+      autoUploadState: 'disabled' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'manual_completed',
+    );
+  });
 });

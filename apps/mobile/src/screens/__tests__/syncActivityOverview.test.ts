@@ -1,4 +1,8 @@
-import { buildOverview } from '../SyncActivityScreen';
+import {
+  buildOverview,
+  shouldDelayAutoCompletionCard,
+  shouldRenderSyncActivityProgress,
+} from '../SyncActivityScreen';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -209,5 +213,142 @@ describe('buildOverview', () => {
     expect(next.uploadState).toBe('paused_auto_upload');
     expect(next.currentTaskSource).toBeUndefined();
     expect(next.lastCompletedTaskSource).toBe('manual');
+  });
+
+  it('derives the last completed task source when native scans immediately after a manual round finishes', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'uploading',
+      completedCount: 11,
+      totalCount: 12,
+      completedBytes: 4314711641,
+      totalBytes: 4314899286,
+      currentFile: 'file-key-5',
+      currentFilename: 'IMG_8971.JPG',
+      currentFileConfirmedBytes: 187645,
+      currentFileTotalBytes: 187645,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'interrupted' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'scanning',
+        completedCount: 12,
+        totalCount: 12,
+        completedBytes: 4314899286,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      prev,
+    );
+
+    expect(next.uploadState).toBe('scanning');
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBe('manual');
+  });
+});
+
+describe('shouldDelayAutoCompletionCard', () => {
+  it('holds the first auto completion frame immediately to avoid a one-frame flash', () => {
+    expect(
+      shouldDelayAutoCompletionCard(
+        'auto_completed',
+        'completed',
+        'active',
+        null,
+        Date.now(),
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps holding follow-up standby or running states only while the hold window is active', () => {
+    const now = Date.now();
+    expect(
+      shouldDelayAutoCompletionCard(
+        'standby',
+        'idle',
+        'active',
+        now + 200,
+        now,
+      ),
+    ).toBe(true);
+
+    expect(
+      shouldDelayAutoCompletionCard(
+        'running',
+        'scanning',
+        'active',
+        now + 200,
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it('stops holding once the visual hold window expires', () => {
+    const now = Date.now();
+    expect(
+      shouldDelayAutoCompletionCard(
+        'standby',
+        'idle',
+        'active',
+        now - 1,
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it('never holds when auto upload is inactive or a fresh upload already started', () => {
+    const future = Date.now() + 200;
+    expect(
+      shouldDelayAutoCompletionCard(
+        'auto_completed',
+        'completed',
+        'disabled',
+        future,
+        Date.now(),
+      ),
+    ).toBe(false);
+    expect(
+      shouldDelayAutoCompletionCard(
+        'running',
+        'uploading',
+        'active',
+        future,
+        Date.now(),
+      ),
+    ).toBe(false);
+    expect(
+      shouldDelayAutoCompletionCard(
+        'manual_completed',
+        'idle',
+        'active',
+        future,
+        Date.now(),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('shouldRenderSyncActivityProgress', () => {
+  it('does not render upload progress while a manual batch is only preparing to connect', () => {
+    expect(shouldRenderSyncActivityProgress('preparing', false, false)).toBe(
+      false,
+    );
+  });
+
+  it('renders upload progress for active upload and inter-item gaps', () => {
+    expect(shouldRenderSyncActivityProgress('uploading', false, false)).toBe(
+      true,
+    );
+    expect(shouldRenderSyncActivityProgress('scanning', false, true)).toBe(
+      true,
+    );
   });
 });

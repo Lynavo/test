@@ -26,6 +26,7 @@ jest.mock('react-native-iap', () => ({
   purchaseErrorListener: jest.fn(() => ({ remove: jest.fn() })),
   getAvailablePurchases: jest.fn().mockResolvedValue([]),
   getSubscriptions: jest.fn().mockResolvedValue([]),
+  getReceiptIOS: jest.fn().mockResolvedValue(null),
   requestSubscription: jest.fn(),
   finishTransaction: jest.fn().mockResolvedValue(undefined),
 }));
@@ -64,8 +65,12 @@ describe('iapService — lifecycle', () => {
 
   test('teardown() removes listeners and ends connection', async () => {
     const removeMock = jest.fn();
-    (purchaseUpdatedListener as jest.Mock).mockReturnValue({ remove: removeMock });
-    (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: removeMock });
+    (purchaseUpdatedListener as jest.Mock).mockReturnValue({
+      remove: removeMock,
+    });
+    (purchaseErrorListener as jest.Mock).mockReturnValue({
+      remove: removeMock,
+    });
 
     await iapService.initialize();
     await iapService.teardown();
@@ -80,7 +85,7 @@ describe('iapService — lifecycle', () => {
   });
 });
 
-import { requestSubscription } from 'react-native-iap';
+import { getReceiptIOS, requestSubscription } from 'react-native-iap';
 import { IAP_PRODUCTS } from '../../constants/iap';
 
 describe('iapService — purchase', () => {
@@ -97,11 +102,11 @@ describe('iapService — purchase', () => {
     (getSubscriptions as jest.Mock).mockImplementation(({ skus }) =>
       Promise.resolve(skus.map((productId: string) => ({ productId }))),
     );
-    (purchaseUpdatedListener as jest.Mock).mockImplementation((cb) => {
+    (purchaseUpdatedListener as jest.Mock).mockImplementation(cb => {
       updatedCb = cb;
       return { remove: jest.fn() };
     });
-    (purchaseErrorListener as jest.Mock).mockImplementation((cb) => {
+    (purchaseErrorListener as jest.Mock).mockImplementation(cb => {
       errorCb = cb;
       return { remove: jest.fn() };
     });
@@ -134,6 +139,27 @@ describe('iapService — purchase', () => {
       productId: IAP_PRODUCTS.monthly,
       transactionReceipt: 'BASE64BLOB',
       transactionId: 'tx_1',
+    });
+  });
+
+  test('uses a freshly refreshed iOS receipt when StoreKit has one', async () => {
+    (getReceiptIOS as jest.Mock).mockResolvedValueOnce('FRESH_RECEIPT_BLOB');
+
+    const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'STALE_RECEIPT_BLOB',
+      transactionId: 'tx_fresh',
+    });
+
+    const receipt = await pending;
+    expect(getReceiptIOS).toHaveBeenCalledWith({ forceRefresh: true });
+    expect(receipt).toEqual({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'FRESH_RECEIPT_BLOB',
+      transactionId: 'tx_fresh',
     });
   });
 
@@ -175,6 +201,26 @@ describe('iapService — purchase', () => {
     const receipt = await pending;
     expect(receipt.transactionReceipt).toBe('YEARLY_RECEIPT_BLOB');
     expect(receipt.transactionId).toBe('tx_yearly_upgrade');
+  });
+
+  test('refreshes receipt for monthly → yearly group-parent delivery', async () => {
+    (getReceiptIOS as jest.Mock).mockResolvedValueOnce('FRESH_YEARLY_RECEIPT');
+
+    const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'STALE_MONTHLY_RECEIPT',
+      transactionId: 'tx_yearly_upgrade_fresh',
+    });
+
+    const receipt = await pending;
+    expect(receipt).toEqual({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'FRESH_YEARLY_RECEIPT',
+      transactionId: 'tx_yearly_upgrade_fresh',
+    });
   });
 
   test('event for a productId without a pending Deferred is an orphan (not rejected)', async () => {
@@ -229,7 +275,7 @@ describe('iapService — orphan recovery', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (purchaseUpdatedListener as jest.Mock).mockImplementation((cb) => {
+    (purchaseUpdatedListener as jest.Mock).mockImplementation(cb => {
       updatedCb = cb;
       return { remove: jest.fn() };
     });
@@ -255,7 +301,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_1',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(verifyIapReceipt).toHaveBeenCalledWith('BLOB', 'monthly');
     expect(finishTxMock).toHaveBeenCalled();
@@ -275,7 +321,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_2',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(finishTxMock).toHaveBeenCalled();
     expect(listener).toHaveBeenCalledTimes(1);
@@ -294,7 +340,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_3',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(finishTxMock).toHaveBeenCalled();
     expect(listener).not.toHaveBeenCalled();
@@ -310,7 +356,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_4',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(verifyIapReceipt).not.toHaveBeenCalled();
     expect(finishTxMock).toHaveBeenCalled();
@@ -328,7 +374,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_5',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(finishTxMock).not.toHaveBeenCalled();
   });
@@ -345,7 +391,7 @@ describe('iapService — orphan recovery', () => {
       transactionId: 'tx_orphan_6',
     });
 
-    await new Promise<void>((r) => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
     expect(listener).not.toHaveBeenCalled();
   });
@@ -356,7 +402,9 @@ import { getAvailablePurchases, getSubscriptions } from 'react-native-iap';
 describe('iapService — checkEligibility', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    (purchaseUpdatedListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    (purchaseUpdatedListener as jest.Mock).mockReturnValue({
+      remove: jest.fn(),
+    });
     (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
     await iapService.initialize();
   });
@@ -397,7 +445,9 @@ describe('iapService — checkEligibility', () => {
   });
 
   test('returns empty array when getSubscriptions rejects', async () => {
-    (getSubscriptions as jest.Mock).mockRejectedValueOnce(new Error('store down'));
+    (getSubscriptions as jest.Mock).mockRejectedValueOnce(
+      new Error('store down'),
+    );
 
     const res = await iapService.checkEligibility();
     expect(res).toEqual([]);
@@ -426,7 +476,7 @@ describe('iapService — purchase product preflight', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (purchaseUpdatedListener as jest.Mock).mockImplementation((cb) => {
+    (purchaseUpdatedListener as jest.Mock).mockImplementation(cb => {
       updatedCb = cb;
       return { remove: jest.fn() };
     });
@@ -483,7 +533,9 @@ describe('iapService — purchase product preflight', () => {
 describe('iapService — restore', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    (purchaseUpdatedListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
+    (purchaseUpdatedListener as jest.Mock).mockReturnValue({
+      remove: jest.fn(),
+    });
     (purchaseErrorListener as jest.Mock).mockReturnValue({ remove: jest.fn() });
     await iapService.initialize();
   });
@@ -537,7 +589,28 @@ describe('iapService — restore', () => {
     expect(finishTxMock).toHaveBeenCalledTimes(1);
   });
 
-  test('2003 is skipped (not counted, no finish)', async () => {
+  test('2003 is skipped when every plan candidate mismatches', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'R1',
+        transactionId: 'tx_1',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      );
+
+    const res = await iapService.restore();
+    expect(res).toHaveLength(0);
+    expect(finishTxMock).not.toHaveBeenCalled();
+  });
+
+  test('2005 bound-to-other restore error is propagated', async () => {
     (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
       {
         productId: IAP_PRODUCTS.monthly,
@@ -546,11 +619,86 @@ describe('iapService — restore', () => {
       },
     ]);
     (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
-      new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      new ApiError(ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER, 'bound'),
     );
 
+    await expect(iapService.restore()).rejects.toMatchObject({
+      code: ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER,
+    });
+    expect(finishTxMock).not.toHaveBeenCalled();
+  });
+
+  test('refreshes app receipt and retries alternate plan when restore productId mismatches', async () => {
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: IAP_PRODUCTS.monthly,
+        transactionReceipt: 'STALE_MONTHLY_RECEIPT',
+        transactionId: 'tx_switch_1',
+      },
+    ]);
+    (getReceiptIOS as jest.Mock).mockResolvedValueOnce('FRESH_YEARLY_RECEIPT');
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockResolvedValueOnce(undefined);
+
     const res = await iapService.restore();
-    expect(res).toHaveLength(0);
+
+    expect(getReceiptIOS).toHaveBeenCalledWith({ forceRefresh: true });
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      1,
+      'FRESH_YEARLY_RECEIPT',
+      'monthly',
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      2,
+      'FRESH_YEARLY_RECEIPT',
+      'yearly',
+    );
+    expect(res).toEqual([
+      {
+        productId: IAP_PRODUCTS.yearly,
+        transactionReceipt: 'FRESH_YEARLY_RECEIPT',
+        transactionId: 'tx_switch_1',
+      },
+    ]);
+    expect(finishTxMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses refreshed app receipt when native restore fails before returning purchases', async () => {
+    (getReceiptIOS as jest.Mock).mockResolvedValueOnce('FRESH_YEARLY_RECEIPT');
+    (getAvailablePurchases as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('Cannot connect to iTunes Store'), {
+        code: 'E_SERVICE_ERROR',
+      }),
+    );
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const res = await iapService.restore();
+
+    expect(getReceiptIOS).toHaveBeenCalledWith({ forceRefresh: true });
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      1,
+      'FRESH_YEARLY_RECEIPT',
+      'monthly',
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      2,
+      'FRESH_YEARLY_RECEIPT',
+      'yearly',
+    );
+    expect(res).toEqual([
+      {
+        productId: IAP_PRODUCTS.yearly,
+        transactionReceipt: 'FRESH_YEARLY_RECEIPT',
+        transactionId: '',
+      },
+    ]);
     expect(finishTxMock).not.toHaveBeenCalled();
   });
 

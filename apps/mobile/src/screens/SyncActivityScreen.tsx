@@ -39,7 +39,7 @@ import { hasPendingManualWork } from '../utils/manualUploadState';
 import {
   getSyncActivityMainCardState,
   getSyncActivityProgressPercent,
-  isSyncActivityActivelyTransferring,
+  type SyncActivityMainCardState,
 } from '../utils/syncActivityTransferState';
 import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
 import { FEATURES } from '../constants/features';
@@ -130,6 +130,7 @@ const EMPTY_OFFLINE_ICON = '#df7266';
 const STARTUP_CONNECTION_GRACE_MS = 2500;
 /** Delay before transitioning to offline display (ms). */
 const OFFLINE_DISPLAY_DELAY_MS = 800;
+const AUTO_COMPLETION_VISUAL_HOLD_MS = 350;
 
 const EMPTY_OVERVIEW: SyncOverview = {
   progressPercent: 0,
@@ -159,7 +160,13 @@ function formatSpeedMbps(speedMbps: number): string {
   return `${speedMbps >= 10 ? speedMbps.toFixed(0) : speedMbps.toFixed(1)} MB/s`;
 }
 
-const PREPARATION_STATES = new Set(['discovering', 'reconciling', 'scanning', 'preparing']);
+const PREPARATION_STATES = new Set([
+  'discovering',
+  'reconciling',
+  'scanning',
+  'preparing',
+  'backoff_waiting',
+]);
 
 function isPreparationPhase(uploadState: string): boolean {
   return PREPARATION_STATES.has(uploadState);
@@ -170,7 +177,9 @@ function getPreparationTitle(uploadState: string, t: TFunction): string {
     case 'discovering': return t('syncActivity.phases.discoveringTitle');
     case 'reconciling': return t('syncActivity.phases.reconcilingTitle');
     case 'scanning': return t('syncActivity.phases.scanningTitle');
-    case 'preparing': return t('syncActivity.phases.preparingTitle');
+    case 'preparing':
+    case 'backoff_waiting':
+      return t('syncActivity.phases.preparingTitle');
     default: return t('syncActivity.phases.defaultTitle');
   }
 }
@@ -194,6 +203,7 @@ function getPreparationSubtitle(overview: SyncOverview, t: TFunction): string {
       return t('syncActivity.phases.scanningSubtitleReading');
     }
     case 'preparing':
+    case 'backoff_waiting':
       return t('syncActivity.phases.preparingSubtitle');
     default:
       return '';
@@ -223,6 +233,52 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
     day: date.getDate(),
     time,
   });
+}
+
+export function shouldDelayAutoCompletionCard(
+  rawMainCardState: SyncActivityMainCardState,
+  uploadState: string,
+  autoUploadState: AutoUploadState | undefined,
+  autoCompletionVisualHoldUntilMs: number | null,
+  now: number,
+): boolean {
+  if (autoUploadState !== 'active') {
+    return false;
+  }
+
+  if (uploadState === 'uploading') {
+    return false;
+  }
+
+  if (
+    rawMainCardState !== 'auto_completed' &&
+    rawMainCardState !== 'running' &&
+    rawMainCardState !== 'standby'
+  ) {
+    return false;
+  }
+
+  if (rawMainCardState === 'auto_completed') {
+    return true;
+  }
+
+  return (
+    autoCompletionVisualHoldUntilMs !== null &&
+    now < autoCompletionVisualHoldUntilMs
+  );
+}
+
+export function shouldRenderSyncActivityProgress(
+  uploadState: string,
+  shouldDelayCompletion: boolean,
+  isBetweenItems: boolean,
+): boolean {
+  return (
+    uploadState === 'uploading' ||
+    uploadState === 'cloud_downloading' ||
+    shouldDelayCompletion ||
+    isBetweenItems
+  );
 }
 
 function CompletionStatCard({
@@ -257,10 +313,17 @@ export function SyncActivityScreen() {
   });
   const [initialLoading, setInitialLoading] = useState(true);
   const [cancellingBatch, setCancellingBatch] = useState(false);
+  const [autoCompletionVisualHoldUntilMs, setAutoCompletionVisualHoldUntilMs] =
+    useState<number | null>(null);
 
   // Offline debounce: stabilize isOffline to avoid rapid UI flicker
   const [stableOffline, setStableOffline] = useState(false);
   const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCompletionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAutoUploadingVisualRef = useRef<{
+    currentFilename?: string;
+    currentSpeedMbps: number;
+  } | null>(null);
   const mountGraceRef = useRef(true);
 
   // ---------------------------------------------------------------------------
@@ -293,11 +356,17 @@ export function SyncActivityScreen() {
             }
           }
         }
-        setTodayStats({
-          fileCount: totalFiles,
-          totalBytes: totalBytesSum,
-          latestUpdatedAt,
-        });
+        setTodayStats(prev =>
+          prev.fileCount === totalFiles &&
+          prev.totalBytes === totalBytesSum &&
+          prev.latestUpdatedAt === latestUpdatedAt
+            ? prev
+            : {
+                fileCount: totalFiles,
+                totalBytes: totalBytesSum,
+                latestUpdatedAt,
+              },
+        );
       }
     } catch {
       /* ignore */
@@ -658,7 +727,6 @@ export function SyncActivityScreen() {
     manualPending: overview.manualPending,
     currentTaskSource,
   });
-  const isActivelyTransferring = isSyncActivityActivelyTransferring(overview);
   const progressPercent = getSyncActivityProgressPercent(overview);
 
   const totalPending =
@@ -675,7 +743,80 @@ export function SyncActivityScreen() {
 
   const isManualUploading = hasManualUploadWork;
 
-  const mainCardState = getSyncActivityMainCardState(overview, stableOffline);
+  const rawMainCardState = getSyncActivityMainCardState(overview, stableOffline);
+  const shouldDelayAutoCompletion = shouldDelayAutoCompletionCard(
+    rawMainCardState,
+    overview.uploadState,
+    overview.autoUploadState,
+    autoCompletionVisualHoldUntilMs,
+    Date.now(),
+  );
+  const mainCardState = shouldDelayAutoCompletion
+    ? 'running'
+    : rawMainCardState;
+  // Use round-level progress (completed files + current file fraction) / total
+  // files, not single-file %, so item transitions don't flash 100% → 0%.
+  const currentItemFraction =
+    overview.currentFileTotalBytes > 0
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            overview.currentFileConfirmedBytes /
+              overview.currentFileTotalBytes,
+          ),
+        )
+      : 0;
+  const roundProgressPercent =
+    overview.totalCount > 0
+      ? Math.min(
+          100,
+          Math.round(
+            ((overview.completedCount + currentItemFraction) /
+              overview.totalCount) *
+              100,
+          ),
+        )
+      : progressPercent;
+  const displayProgressPercent = shouldDelayAutoCompletion
+    ? 100
+    : roundProgressPercent;
+  // Inter-item transition: between items native briefly emits 'completed'
+  // and/or preparation states ('preparing'/'reconciling'/'scanning'/
+  // 'discovering'). These cause two visible flickers we need to suppress
+  // while the round is still in progress:
+  //   (a) buildOverview clears currentFilename/bytes on 'completed' — the
+  //       filename <Text> unmounts and speed dips to 0.
+  //   (b) shouldRenderPreparationPhase would flip the running card into the
+  //       "Establishing connection…" UI and back.
+  // Gate on completedCount > 0 so the genuine round-start preparation
+  // (first item of a round) still shows the connection UI normally.
+  const isInterItemTransitionState =
+    overview.uploadState === 'completed' ||
+    isPreparationPhase(overview.uploadState);
+  const isBetweenItems =
+    isInterItemTransitionState &&
+    overview.totalCount > 0 &&
+    overview.completedCount > 0 &&
+    overview.completedCount < overview.totalCount;
+  const shouldFreezeItemVisuals = shouldDelayAutoCompletion || isBetweenItems;
+  const displayCurrentFilename = shouldFreezeItemVisuals
+    ? lastAutoUploadingVisualRef.current?.currentFilename ??
+      overview.currentFilename
+    : overview.currentFilename;
+  const displayCurrentSpeedMbps = shouldFreezeItemVisuals
+    ? lastAutoUploadingVisualRef.current?.currentSpeedMbps ??
+      overview.currentSpeedMbps
+    : overview.currentSpeedMbps;
+  const shouldRenderPreparationPhase =
+    isPreparationPhase(overview.uploadState) &&
+    !shouldDelayAutoCompletion &&
+    !isBetweenItems;
+  const shouldRenderUploadProgress = shouldRenderSyncActivityProgress(
+    overview.uploadState,
+    shouldDelayAutoCompletion,
+    isBetweenItems,
+  );
   const completedProgressTotal = Math.max(
     overview.totalCount,
     overview.completedCount,
@@ -683,6 +824,61 @@ export function SyncActivityScreen() {
   const latestSyncLabel = todayStats.latestUpdatedAt
     ? formatDateTimeLabel(todayStats.latestUpdatedAt, t)
     : undefined;
+
+  useEffect(() => {
+    // Cache the last known uploading visual regardless of task source.
+    // Used to freeze filename/speed during:
+    //   (a) auto-completion hold window (round end)
+    //   (b) inter-item transition (uploadState briefly flips to 'completed'
+    //       which clears currentFilename/bytes in buildOverview)
+    if (overview.uploadState === 'uploading') {
+      lastAutoUploadingVisualRef.current = {
+        currentFilename: overview.currentFilename,
+        currentSpeedMbps: overview.currentSpeedMbps,
+      };
+    }
+  }, [
+    overview.currentFilename,
+    overview.currentSpeedMbps,
+    overview.uploadState,
+  ]);
+
+  useEffect(() => {
+    if (rawMainCardState === 'auto_completed') {
+      const holdUntil = Date.now() + AUTO_COMPLETION_VISUAL_HOLD_MS;
+      setAutoCompletionVisualHoldUntilMs(holdUntil);
+      if (autoCompletionTimerRef.current) {
+        clearTimeout(autoCompletionTimerRef.current);
+      }
+      autoCompletionTimerRef.current = setTimeout(() => {
+        autoCompletionTimerRef.current = null;
+        setAutoCompletionVisualHoldUntilMs(null);
+      }, AUTO_COMPLETION_VISUAL_HOLD_MS);
+      return;
+    }
+
+    if (
+      overview.uploadState === 'uploading' ||
+      rawMainCardState === 'manual_completed' ||
+      rawMainCardState === 'offline' ||
+      rawMainCardState === 'not_started'
+    ) {
+      if (autoCompletionTimerRef.current) {
+        clearTimeout(autoCompletionTimerRef.current);
+        autoCompletionTimerRef.current = null;
+      }
+      setAutoCompletionVisualHoldUntilMs(null);
+    }
+  }, [overview.uploadState, rawMainCardState]);
+
+  useEffect(() => {
+    return () => {
+      if (autoCompletionTimerRef.current) {
+        clearTimeout(autoCompletionTimerRef.current);
+        autoCompletionTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -769,7 +965,7 @@ export function SyncActivityScreen() {
                 </Text>
               </View>
 
-              {isPreparationPhase(overview.uploadState) ? (
+              {shouldRenderPreparationPhase ? (
                 <View style={styles.preparationBody}>
                   <ActivityIndicator size="small" color={BLUE} />
                   <Text style={styles.preparationTitle}>
@@ -779,14 +975,16 @@ export function SyncActivityScreen() {
                     {getPreparationSubtitle(overview, t)}
                   </Text>
                 </View>
-              ) : (isActivelyTransferring || isManualUploading) ? (
+              ) : shouldRenderUploadProgress ? (
                 <>
                   {/* Title row with percentage */}
                   <View style={styles.runningTitleRow}>
                     <Text style={styles.runningTitle}>
                       {isManualUploading ? t('syncActivity.running.manualTitle') : t('syncActivity.running.autoTitle')}
                     </Text>
-                    <Text style={styles.runningPercent}>{progressPercent}%</Text>
+                    <Text style={styles.runningPercent}>
+                      {displayProgressPercent}%
+                    </Text>
                   </View>
 
                   {/* Progress bar */}
@@ -794,15 +992,15 @@ export function SyncActivityScreen() {
                     <View
                       style={[
                         styles.progressBarFill,
-                        { width: `${Math.min(100, progressPercent)}%` },
+                        { width: `${Math.min(100, displayProgressPercent)}%` },
                       ]}
                     />
                   </View>
 
                   {/* Current file */}
-                  {overview.currentFilename ? (
+                  {displayCurrentFilename ? (
                     <Text style={styles.currentFileName} numberOfLines={1}>
-                      {overview.currentFilename}
+                      {displayCurrentFilename}
                     </Text>
                   ) : null}
 
@@ -811,7 +1009,7 @@ export function SyncActivityScreen() {
                     <View style={styles.statItem}>
                       <Text style={styles.statLabel}>{t('syncActivity.stats.speed')}</Text>
                       <Text style={styles.statValue}>
-                        {formatSpeedMbps(overview.currentSpeedMbps)}
+                        {formatSpeedMbps(displayCurrentSpeedMbps)}
                       </Text>
                     </View>
                     <View style={styles.statDivider} />
@@ -1276,9 +1474,13 @@ export function buildOverview(
   const nextAutoPending =
     (payload.autoPending as number | undefined) ?? prev.autoPending;
   const roundSettledStates = new Set(['idle', 'paused_auto_upload']);
+  const roundCompletionBridgeStates = new Set([
+    ...roundSettledStates,
+    'scanning',
+  ]);
   const roundFinishedWithoutCompletedPulse =
-    roundSettledStates.has(uploadState) &&
-    !roundSettledStates.has(prev.uploadState) &&
+    roundCompletionBridgeStates.has(uploadState) &&
+    !roundCompletionBridgeStates.has(prev.uploadState) &&
     nextTotalCount > 0 &&
     nextCompletedCount >= nextTotalCount &&
     nextManualPending === 0 &&

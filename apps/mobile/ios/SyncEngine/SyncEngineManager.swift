@@ -2228,6 +2228,30 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     discoveryService.startBrowsing()
                 }
             }
+
+            // Post-round grace: poll briefly for newly queued pending items
+            // before letting the outer loop transition to idle/completed.
+            // If a new batch arrives within the window, the next iteration's
+            // scan picks it up while `completedCount < totalCount` still
+            // holds (totalCount bumps up when new items are queued), which
+            // lets the RN-side `isBetweenItems` mask hide the preparation
+            // UI during the inter-batch handoff. TCP still reconnects —
+            // this only smooths the state transition, it does not change
+            // session lifecycle.
+            let postRoundGraceMs: UInt64 = 3_000
+            let pollIntervalMs: UInt64 = 200
+            var gracedMs: UInt64 = 0
+            while gracedMs < postRoundGraceMs {
+                if Task.isCancelled { break }
+                let nextPending = buildPendingUploadAssets(clientId: clientId, limit: 1)
+                if !nextPending.isEmpty {
+                    NSLog("[SyncPipeline] post-round grace: new pending found after %llu ms", gracedMs)
+                    syncDiagnosticsLog("SyncPipeline", "post-round grace: new pending found after \(gracedMs) ms")
+                    break
+                }
+                try? await Task.sleep(nanoseconds: pollIntervalMs * 1_000_000)
+                gracedMs += pollIntervalMs
+            }
         }
     }
 

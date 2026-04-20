@@ -57,6 +57,7 @@
   "actions": {
     "subscribe": "立即訂閱",
     "switchPlan": "切換方案",
+    "currentYearly": "已是年會員",
     "start": "開始使用"
   },
   "footer": "訂閱即表示您同意自動續費條款，可隨時取消",

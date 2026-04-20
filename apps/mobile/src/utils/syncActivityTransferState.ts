@@ -122,6 +122,14 @@ export function getSyncActivityMainCardState(
   const hasManualWork = hasPendingManualWork(snapshot);
   const isActivelyTransferring = isSyncActivityActivelyTransferring(snapshot);
   const isAutoUploadActive = snapshot?.autoUploadState === 'active';
+  const completedTaskSource = getCompletedTaskSource(snapshot);
+  const isFinishedRound =
+    (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
+    completedTaskSource;
+
+  if (isFinishedRound && completedTaskSource === 'manual') {
+    return 'manual_completed';
+  }
 
   if (isOffline && !isActivelyTransferring && !hasManualWork) {
     return 'offline';
@@ -132,10 +140,10 @@ export function getSyncActivityMainCardState(
   }
 
   if (
-    (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
-    getCompletedTaskSource(snapshot)
+    isFinishedRound &&
+    completedTaskSource
   ) {
-    return getCompletedTaskSource(snapshot) === 'manual'
+    return completedTaskSource === 'manual'
       ? 'manual_completed'
       : 'auto_completed';
   }

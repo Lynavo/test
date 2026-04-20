@@ -1,9 +1,7 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
-import type {
-  SubscriptionInfo,
-  UserProfile,
-} from '../../stores/auth-store';
+import { Alert } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { SubscriptionInfo, UserProfile } from '../../stores/auth-store';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
@@ -31,7 +29,7 @@ jest.mock('@react-navigation/native', () => ({
     dispatch: mockDispatch,
   }),
   CommonActions: {
-    reset: jest.fn((payload) => payload),
+    reset: jest.fn(payload => payload),
   },
 }));
 
@@ -127,7 +125,7 @@ function resetMockAuth() {
 jest.mock('../../stores/auth-store', () => ({
   useAuth: () => mockAuth,
   isFeatureAccessAllowed: jest.fn(),
-  getTrialRemainingDays: jest.fn((user) => {
+  getTrialRemainingDays: jest.fn(user => {
     if (!user?.trialEnd) return 0;
     return 3;
   }),
@@ -143,6 +141,8 @@ jest.mock('../../constants/features', () => ({
 import i18n from '../../i18n';
 import { SettingsScreen } from '../SettingsScreen';
 import { NativeModules, NativeEventEmitter } from 'react-native';
+import { ApiError, ERROR_CODE } from '../../services/api';
+import { iapService } from '../../services/iap-service';
 
 const mockNativeSyncEngine = {
   getBindingState: jest.fn().mockResolvedValue(null),
@@ -174,7 +174,7 @@ describe('SettingsScreen', () => {
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
-      .mockImplementation(() => ({ remove: jest.fn() }) as never);
+      .mockImplementation(() => ({ remove: jest.fn() } as never));
   });
 
   test('subscription card prefers subscription status over stale user status', async () => {
@@ -188,6 +188,9 @@ describe('SettingsScreen', () => {
   });
 
   test('monthly intro trial is displayed as subscription service, not account trial', async () => {
+    const sevenDaysFromNow = new Date(
+      Date.now() + 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     mockAuth.user = {
       id: 1,
       primaryIdentity: { type: 'email', display: 'test@example.com' },
@@ -201,7 +204,7 @@ describe('SettingsScreen', () => {
       status: 'trialing',
       plan: 'monthly',
       expireAt: null,
-      trialEnd: '2026-04-25T00:00:00.000Z',
+      trialEnd: sevenDaysFromNow,
     };
 
     const { getByText, queryByText } = render(<SettingsScreen />);
@@ -214,5 +217,19 @@ describe('SettingsScreen', () => {
     expect(getByText('月訂閱免費期')).toBeTruthy();
     expect(queryByText('免費試用')).toBeNull();
     expect(queryByText('立即訂閱')).toBeNull();
+  });
+
+  test('restore bound to another account shows dedicated alert', async () => {
+    (iapService.restore as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER, 'bound'),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText } = render(<SettingsScreen />);
+    fireEvent.press(getByText('恢復已購買訂閱'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls[0]?.[0]).toMatch(/Apple.*綁定/);
+    alertSpy.mockRestore();
   });
 });

@@ -7,12 +7,14 @@ import {
   finishTransaction as rnFinishTransaction,
   getAvailablePurchases,
   getSubscriptions,
+  getReceiptIOS,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
-import { type EmitterSubscription } from 'react-native';
+import { Platform, type EmitterSubscription } from 'react-native';
 import {
   type IapProductId,
+  planToProductId,
   productIdToPlan,
   TRIAL_ELIGIBLE_PRODUCTS,
   ALL_PRODUCT_IDS,
@@ -21,6 +23,7 @@ import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 
 const MAX_RESTORE_RECEIPTS = 10;
+type RestorablePlan = NonNullable<ReturnType<typeof productIdToPlan>>;
 
 // Apple's purchaseErrorListener may fire transient / interrupted errors
 // even when the transaction ultimately succeeds (observed in sandbox as an
@@ -59,6 +62,7 @@ export interface IapService {
   restore(): Promise<PurchaseReceipt[]>;
   finishTransaction(transactionId: string): Promise<void>;
   checkEligibility(): Promise<EligibilityResult[]>;
+  refreshReceipt(): Promise<string | null>;
   onOrphanPurchaseVerified(cb: () => void): () => void;
 }
 
@@ -79,10 +83,10 @@ class IapServiceImpl implements IapService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     await initConnection();
-    this.purchaseSub = purchaseUpdatedListener((p) => {
+    this.purchaseSub = purchaseUpdatedListener(p => {
       void this.handlePurchaseEvent(p);
     });
-    this.errorSub = purchaseErrorListener((err) => {
+    this.errorSub = purchaseErrorListener(err => {
       this.handleErrorEvent(err);
     });
     this.initialized = true;
@@ -100,7 +104,9 @@ class IapServiceImpl implements IapService {
 
   async purchase(productId: IapProductId): Promise<PurchaseReceipt> {
     if (!this.initialized) {
-      throw new Error('iapService.initialize() must be called before purchase()');
+      throw new Error(
+        'iapService.initialize() must be called before purchase()',
+      );
     }
     if (this.pendingPurchase.has(productId)) {
       throw new Error(`purchase already in flight for ${productId}`);
@@ -112,54 +118,66 @@ class IapServiceImpl implements IapService {
         reject(new Error('purchase timed out after 60s'));
       }, 60_000);
       this.pendingPurchase.set(productId, { resolve, reject, timeout });
-      void Promise.resolve(requestSubscription({ sku: productId })).catch((err) => {
-        const entry = this.pendingPurchase.get(productId);
-        if (!entry) return;
-        clearTimeout(entry.timeout);
-        this.pendingPurchase.delete(productId);
-        reject(err);
-      });
+      void Promise.resolve(requestSubscription({ sku: productId })).catch(
+        err => {
+          const entry = this.pendingPurchase.get(productId);
+          if (!entry) return;
+          clearTimeout(entry.timeout);
+          this.pendingPurchase.delete(productId);
+          reject(err);
+        },
+      );
     });
   }
 
   async restore(): Promise<PurchaseReceipt[]> {
     if (!this.initialized) {
-      throw new Error('iapService.initialize() must be called before restore()');
+      throw new Error(
+        'iapService.initialize() must be called before restore()',
+      );
     }
-    const purchases = await getAvailablePurchases();
+    const refreshedReceipt = await this.refreshReceiptForUserPurchase();
+    let purchases: Purchase[];
+    try {
+      purchases = await getAvailablePurchases({
+        automaticallyFinishRestoredTransactions: false,
+        onlyIncludeActiveItems: true,
+      });
+    } catch (err) {
+      console.warn(
+        '[iap-service] native restore failed — trying refreshed app receipt',
+        err,
+      );
+      if (!refreshedReceipt) {
+        throw err;
+      }
+      const restored = await this.verifyRestoredPurchase(
+        [refreshedReceipt],
+        'monthly',
+        '',
+      );
+      return restored ? [restored] : [];
+    }
     const slice = purchases.slice(0, MAX_RESTORE_RECEIPTS);
     const out: PurchaseReceipt[] = [];
 
     for (const p of slice) {
-      if (!p.transactionReceipt) continue;
       const plan = productIdToPlan(p.productId);
       if (!plan) continue;
       const txId = p.transactionId ?? '';
+      const receiptCandidates = this.restoreReceiptCandidates(
+        refreshedReceipt,
+        p.transactionReceipt,
+      );
+      if (receiptCandidates.length === 0) continue;
 
-      try {
-        await verifyIapReceipt(p.transactionReceipt, plan);
-        await this.finishTransaction(txId).catch(() => {});
-        out.push({
-          productId: p.productId as IapProductId,
-          transactionReceipt: p.transactionReceipt,
-          transactionId: txId,
-        });
-      } catch (err) {
-        if (err instanceof ApiError) {
-          if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
-            await this.finishTransaction(txId).catch(() => {});
-            out.push({
-              productId: p.productId as IapProductId,
-              transactionReceipt: p.transactionReceipt,
-              transactionId: txId,
-            });
-            continue;
-          }
-          if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {
-            continue;
-          }
-        }
-        // Other errors: skip, do not finish — next launch may retry via orphan.
+      const restored = await this.verifyRestoredPurchase(
+        receiptCandidates,
+        plan,
+        txId,
+      );
+      if (restored) {
+        out.push(restored);
       }
     }
     return out;
@@ -183,8 +201,8 @@ class IapServiceImpl implements IapService {
       const products = await getSubscriptions({
         skus: [...ALL_PRODUCT_IDS],
       });
-      return TRIAL_ELIGIBLE_PRODUCTS.map((productId) => {
-        const match = products.find((p) => p.productId === productId);
+      return TRIAL_ELIGIBLE_PRODUCTS.map(productId => {
+        const match = products.find(p => p.productId === productId);
         const eligible =
           match != null &&
           'introductoryPricePaymentModeIOS' in match &&
@@ -197,6 +215,11 @@ class IapServiceImpl implements IapService {
       return [];
     }
   }
+
+  async refreshReceipt(): Promise<string | null> {
+    return this.refreshReceiptForUserPurchase();
+  }
+
   onOrphanPurchaseVerified(cb: () => void): () => void {
     this.orphanListeners.add(cb);
     return () => this.orphanListeners.delete(cb);
@@ -204,7 +227,7 @@ class IapServiceImpl implements IapService {
 
   private async ensureProductAvailable(productId: IapProductId): Promise<void> {
     const products = await getSubscriptions({ skus: [productId] });
-    if (products.some((product) => product.productId === productId)) {
+    if (products.some(product => product.productId === productId)) {
       return;
     }
 
@@ -223,11 +246,7 @@ class IapServiceImpl implements IapService {
     if (exact) {
       clearTimeout(exact.timeout);
       this.pendingPurchase.delete(incomingProductId);
-      exact.resolve({
-        productId: incomingProductId,
-        transactionReceipt: p.transactionReceipt,
-        transactionId: p.transactionId ?? '',
-      });
+      await this.resolvePendingPurchase(exact, incomingProductId, p);
       return;
     }
 
@@ -247,18 +266,115 @@ class IapServiceImpl implements IapService {
       const fallback = this.pendingPurchase.get(fallbackKey)!;
       clearTimeout(fallback.timeout);
       this.pendingPurchase.delete(fallbackKey);
-      fallback.resolve({
-        // Reflect what the receipt actually reports; server resolves truth
-        // from the receipt blob and the caller passes the user-selected plan.
-        productId: incomingProductId,
-        transactionReceipt: p.transactionReceipt,
-        transactionId: p.transactionId ?? '',
-      });
+      await this.resolvePendingPurchase(fallback, incomingProductId, p);
       return;
     }
 
     // 3. True orphan — redelivered or out-of-band transaction.
     await this.handleOrphanPurchase(p);
+  }
+
+  private async resolvePendingPurchase(
+    pending: {
+      resolve: (r: PurchaseReceipt) => void;
+      reject: (err: unknown) => void;
+    },
+    productId: IapProductId,
+    purchase: Purchase,
+  ): Promise<void> {
+    try {
+      const refreshedReceipt = await this.refreshReceiptForUserPurchase();
+      const transactionReceipt =
+        refreshedReceipt ?? purchase.transactionReceipt ?? '';
+      if (!transactionReceipt) {
+        throw new Error('purchase receipt is empty');
+      }
+      pending.resolve({
+        // Reflect what the receipt actually reports; server resolves truth
+        // from the receipt blob and the caller passes the user-selected plan.
+        productId,
+        transactionReceipt,
+        transactionId: purchase.transactionId ?? '',
+      });
+    } catch (err) {
+      pending.reject(err);
+    }
+  }
+
+  private async refreshReceiptForUserPurchase(): Promise<string | null> {
+    if (Platform.OS !== 'ios') return null;
+    try {
+      return (await getReceiptIOS({ forceRefresh: true })) ?? null;
+    } catch (err) {
+      console.warn(
+        '[iap-service] receipt refresh failed — using transaction receipt',
+        err,
+      );
+      return null;
+    }
+  }
+
+  private restoreReceiptCandidates(
+    refreshedReceipt: string | null,
+    transactionReceipt: string | undefined,
+  ): string[] {
+    return Array.from(
+      new Set(
+        [refreshedReceipt, transactionReceipt].filter(
+          (receipt): receipt is string =>
+            typeof receipt === 'string' && receipt.length > 0,
+        ),
+      ),
+    );
+  }
+
+  private restorePlanCandidates(plan: RestorablePlan): RestorablePlan[] {
+    return plan === 'monthly' ? ['monthly', 'yearly'] : ['yearly', 'monthly'];
+  }
+
+  private async verifyRestoredPurchase(
+    receiptCandidates: string[],
+    initialPlan: RestorablePlan,
+    transactionId: string,
+  ): Promise<PurchaseReceipt | null> {
+    for (const receipt of receiptCandidates) {
+      for (const plan of this.restorePlanCandidates(initialPlan)) {
+        try {
+          await verifyIapReceipt(receipt, plan);
+          if (transactionId) {
+            await this.finishTransaction(transactionId).catch(() => {});
+          }
+          return {
+            productId: planToProductId(plan),
+            transactionReceipt: receipt,
+            transactionId,
+          };
+        } catch (err) {
+          if (err instanceof ApiError) {
+            if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
+              if (transactionId) {
+                await this.finishTransaction(transactionId).catch(() => {});
+              }
+              return {
+                productId: planToProductId(plan),
+                transactionReceipt: receipt,
+                transactionId,
+              };
+            }
+            if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {
+              continue;
+            }
+            if (err.code === ERROR_CODE.RECEIPT_BOUND_TO_OTHER_USER) {
+              throw err;
+            }
+          }
+          // Other errors: try the next receipt candidate if available, but do
+          // not finish this transaction unless verification definitely passed.
+          break;
+        }
+      }
+    }
+    return null;
   }
 
   private handleErrorEvent(err: PurchaseError): void {
@@ -292,12 +408,12 @@ class IapServiceImpl implements IapService {
     try {
       await verifyIapReceipt(p.transactionReceipt, plan);
       await this.finishTransaction(txId).catch(() => {});
-      this.orphanListeners.forEach((cb) => cb());
+      this.orphanListeners.forEach(cb => cb());
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
           await this.finishTransaction(txId).catch(() => {});
-          this.orphanListeners.forEach((cb) => cb());
+          this.orphanListeners.forEach(cb => cb());
           return;
         }
         if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {

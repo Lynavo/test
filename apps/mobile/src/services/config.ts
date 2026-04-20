@@ -28,8 +28,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //       so each developer's local override stays out of git automatically.
 // ============================================================================
 
+// iOS: LAN IP so real devices on the same WiFi can reach the Mac-hosted dev
+// server. iOS Simulator still works because the simulator shares the Mac's
+// network stack (LAN IP resolves to the Mac via the WiFi interface).
+// Android: 10.0.2.2 is the emulator's special loopback alias for the host.
+// Real Android device needs its own LAN-IP override (see option B above).
+// NOTE (2026-04-18, Task 22 sandbox testing): temporarily pointing iOS at the
+// Sandbox-mode CVM so physical-device IAP receipts can round-trip through the
+// same backend Apple's V2 webhook hits. Revert before committing anything else.
 const DEV_API_BASE_URL: string =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'http://localhost:8080';
+  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'https://api.vividrop.cn';
 
 // TODO: replace with the real production hostname before shipping. Wire via
 // react-native-config / a build-time constant injected by CI.
