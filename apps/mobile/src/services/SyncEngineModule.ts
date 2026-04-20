@@ -1,6 +1,7 @@
 import { NativeModules } from 'react-native';
 import type {
   AlbumAssetDTO,
+  AssetPreviewSourceDTO,
   AutoUploadConfigDTO,
   SharedDirectoryDTO,
   AutoUploadTimeRangeMode,
@@ -69,6 +70,13 @@ export async function getAlbumCollections(
 ): Promise<AlbumCollectionInfo[]> {
   const result = await NativeSyncEngine.getAlbumCollections(mediaFilter);
   return (result ?? []) as AlbumCollectionInfo[];
+}
+
+export async function getAssetPreviewSource(
+  assetLocalId: string,
+): Promise<AssetPreviewSourceDTO> {
+  const result = await NativeSyncEngine.getAssetPreviewSource(assetLocalId);
+  return result as AssetPreviewSourceDTO;
 }
 
 export async function submitManualUpload(
