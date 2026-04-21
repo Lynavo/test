@@ -1617,7 +1617,6 @@ export function buildOverview(
     (nextAutoUploadState === 'disabled' ||
       nextAutoUploadState === 'interrupted') &&
     (prev.currentTaskSource === 'manual' ||
-      prev.lastCompletedTaskSource === 'manual' ||
       (prev.autoUploadState !== 'active' &&
         prev.totalCount > 0 &&
         prev.completedCount >= prev.totalCount) ||

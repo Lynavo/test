@@ -349,6 +349,88 @@ describe('buildOverview', () => {
       'manual_completed',
     );
   });
+
+  it('does not convert a manual auto-upload interruption into auto completion', () => {
+    const prev = {
+      progressPercent: 42,
+      currentSpeedMbps: 12.4,
+      uploadState: 'uploading',
+      completedCount: 5,
+      totalCount: 6046,
+      completedBytes: 631_659_485,
+      totalBytes: 8_253_316_833,
+      currentFile: 'auto-file-key',
+      currentFilename: 'IMG_0480.MOV',
+      currentFileConfirmedBytes: 80_000_000,
+      currentFileTotalBytes: 571_265_496,
+      currentTaskSource: 'auto' as const,
+      lastCompletedTaskSource: 'manual' as const,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 198,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'paused_auto_upload',
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentTaskSource: 'auto',
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.currentTaskSource).toBe('auto');
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
+  it('keeps the not-started card after the interrupted auto pipeline clears source', () => {
+    const prev = {
+      progressPercent: 0,
+      currentSpeedMbps: 12.4,
+      uploadState: 'paused_auto_upload',
+      completedCount: 0,
+      totalCount: 0,
+      completedBytes: 0,
+      totalBytes: 0,
+      currentFile: undefined,
+      currentFilename: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      currentTaskSource: 'auto' as const,
+      lastCompletedTaskSource: 'manual' as const,
+      autoUploadState: 'interrupted' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'paused_auto_upload',
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
 });
 
 describe('shouldDelayAutoCompletionCard', () => {
