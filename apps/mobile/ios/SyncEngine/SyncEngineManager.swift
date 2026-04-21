@@ -940,6 +940,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             autoUploadConfigStore = AutoUploadConfigStore(store: uploadStore!)
             manualUploadService = ManualUploadService(uploadStore: uploadStore, bindingService: bindingService)
             photoScanner.autoUploadConfigStore = autoUploadConfigStore
+            albumBrowserService?.autoUploadConfigStore = autoUploadConfigStore
 
             // Register photo library observer early so album browser receives
             // change events even before sync starts (e.g. limited picker flow).
@@ -4414,13 +4415,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     func getAlbumStats() -> [String: Any] {
         guard let service = albumBrowserService else {
-            return ["totalCount": 0, "transferredCount": 0, "queuedCount": 0]
+            return [
+                "totalCount": 0,
+                "transferredCount": 0,
+                "queuedCount": 0,
+                "pendingCount": 0,
+            ]
         }
         let stats = service.getAlbumStats()
         return [
             "totalCount": stats.totalCount,
             "transferredCount": stats.transferredCount,
             "queuedCount": stats.queuedCount,
+            "pendingCount": stats.pendingCount,
         ]
     }
 

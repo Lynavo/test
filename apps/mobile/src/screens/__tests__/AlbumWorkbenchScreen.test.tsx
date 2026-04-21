@@ -108,6 +108,7 @@ describe('AlbumWorkbenchScreen', () => {
       totalCount: 12,
       transferredCount: 0,
       queuedCount: 0,
+      pendingCount: 12,
     });
     mockedGetAutoUploadConfig.mockResolvedValue({
       enabled: false,
@@ -215,6 +216,7 @@ describe('AlbumWorkbenchScreen', () => {
       totalCount: 0,
       transferredCount: 0,
       queuedCount: 0,
+      pendingCount: 0,
     });
 
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -243,6 +245,7 @@ describe('AlbumWorkbenchScreen', () => {
       totalCount: 0,
       transferredCount: 0,
       queuedCount: 0,
+      pendingCount: 0,
     });
 
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -276,6 +279,7 @@ describe('AlbumWorkbenchScreen', () => {
       totalCount: 0,
       transferredCount: 0,
       queuedCount: 0,
+      pendingCount: 0,
     });
 
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -303,6 +307,7 @@ describe('AlbumWorkbenchScreen', () => {
       totalCount: 0,
       transferredCount: 0,
       queuedCount: 0,
+      pendingCount: 0,
     });
     mockedGetAutoUploadConfig.mockResolvedValue({
       enabled: true,
@@ -341,7 +346,7 @@ describe('AlbumWorkbenchScreen', () => {
         isQueued: false,
       },
     ]);
-    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0 });
+    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0, pendingCount: 1 });
     mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
     mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
 
@@ -391,7 +396,7 @@ describe('AlbumWorkbenchScreen', () => {
         isQueued: false,
       },
     ]);
-    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0 });
+    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0, pendingCount: 1 });
     mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
     mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
 

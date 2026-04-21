@@ -109,7 +109,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   interruptAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
   browseAlbum: jest.fn().mockResolvedValue([]),
-  getAlbumStats: jest.fn().mockResolvedValue({ totalCount: 0, transferredCount: 0, queuedCount: 0 }),
+  getAlbumStats: jest.fn().mockResolvedValue({ totalCount: 0, transferredCount: 0, queuedCount: 0, pendingCount: 0 }),
   submitManualUpload: jest.fn(),
   getAutoUploadConfig: jest.fn().mockResolvedValue({ enabled: false, state: 'disabled', timeRangeMode: 'all', customTimeFrom: null }),
   saveAutoUploadConfig: jest.fn(),

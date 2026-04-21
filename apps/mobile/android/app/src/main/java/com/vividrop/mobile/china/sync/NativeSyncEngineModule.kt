@@ -357,6 +357,7 @@ class NativeSyncEngineModule(
       putInt("totalCount", 0)
       putInt("transferredCount", 0)
       putInt("queuedCount", 0)
+      putInt("pendingCount", 0)
     })
   }
 

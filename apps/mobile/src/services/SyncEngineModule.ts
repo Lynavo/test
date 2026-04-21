@@ -21,6 +21,12 @@ export interface AlbumStats {
   totalCount: number;
   transferredCount: number;
   queuedCount: number;
+  /**
+   * Remaining assets that still need to be uploaded. Honours the auto-upload
+   * time range filter when it is active; otherwise equals
+   * `totalCount - transferredCount`.
+   */
+  pendingCount: number;
 }
 
 // ---------------------------------------------------------------------------

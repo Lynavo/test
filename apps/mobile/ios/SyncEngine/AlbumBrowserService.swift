@@ -19,6 +19,10 @@ struct AlbumStats {
     let totalCount: Int
     let transferredCount: Int
     let queuedCount: Int
+    /// Assets that still need to be uploaded. When the auto-upload time range
+    /// filter is active, this counts only assets inside the range; otherwise
+    /// it falls back to `totalCount - transferredCount`.
+    let pendingCount: Int
 }
 
 // MARK: - AlbumBrowserService
@@ -29,6 +33,10 @@ struct AlbumStats {
 class AlbumBrowserService {
     private let cachingImageManager = PHCachingImageManager()
     private weak var uploadStore: UploadStore?
+    /// Late-bound by SyncEngineManager after both services are constructed.
+    /// When non-nil and auto-upload is enabled, album stats honour the active
+    /// time range filter for `pendingCount`.
+    var autoUploadConfigStore: AutoUploadConfigStore?
 
     init(uploadStore: UploadStore?) {
         self.uploadStore = uploadStore
@@ -157,23 +165,47 @@ class AlbumBrowserService {
 
     // MARK: - Stats
 
-    /// Get album statistics: total count, transferred count, queued count.
+    /// Get album statistics: total count, transferred count, queued count,
+    /// and pending count (honours the active auto-upload time range filter).
     func getAlbumStats() -> AlbumStats {
-        let fetchOptions = PHFetchOptions()
-        fetchOptions.predicate = NSPredicate(
+        let mediaPredicate = NSPredicate(
             format: "mediaType == %d OR mediaType == %d",
             PHAssetMediaType.image.rawValue,
             PHAssetMediaType.video.rawValue
         )
-        let totalCount = PHAsset.fetchAssets(with: fetchOptions).count
+        let totalOptions = PHFetchOptions()
+        totalOptions.predicate = mediaPredicate
+        let totalCount = PHAsset.fetchAssets(with: totalOptions).count
 
-        let transferredCount = buildTransferredAssetIds().count
-        let queuedCount = buildQueuedAssetIds().count
+        let transferredIds = buildTransferredAssetIds()
+        let queuedIds = buildQueuedAssetIds()
+        let transferredCount = transferredIds.count
+        let queuedCount = queuedIds.count
+
+        let pendingCount: Int
+        if let threshold = autoUploadConfigStore?.resolvedTimeThreshold() {
+            let rangeOptions = PHFetchOptions()
+            rangeOptions.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                mediaPredicate,
+                NSPredicate(format: "creationDate >= %@", threshold as NSDate),
+            ])
+            let rangeResult = PHAsset.fetchAssets(with: rangeOptions)
+            var inRangeTransferred = 0
+            rangeResult.enumerateObjects { asset, _, _ in
+                if transferredIds.contains(asset.localIdentifier) {
+                    inRangeTransferred += 1
+                }
+            }
+            pendingCount = max(rangeResult.count - inRangeTransferred, 0)
+        } else {
+            pendingCount = max(totalCount - transferredCount, 0)
+        }
 
         return AlbumStats(
             totalCount: totalCount,
             transferredCount: transferredCount,
-            queuedCount: queuedCount
+            queuedCount: queuedCount,
+            pendingCount: pendingCount
         )
     }
 

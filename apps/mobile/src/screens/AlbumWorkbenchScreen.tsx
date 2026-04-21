@@ -1151,12 +1151,7 @@ export function AlbumWorkbenchScreen() {
                   </Text>
                   <Text style={styles.summaryGridValue}>
                     <Text style={styles.summaryGridNumberOrange}>
-                      {Math.max(
-                        0,
-                        stats.totalCount -
-                          stats.transferredCount -
-                          stats.queuedCount,
-                      ) + stats.queuedCount}
+                      {stats.pendingCount}
                     </Text>{' '}
                     {t('albumWorkbench.summary.unitCount')}
                   </Text>
