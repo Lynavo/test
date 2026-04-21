@@ -58,6 +58,7 @@ import {
 import { formatBytes } from '../utils/format';
 import { sortAlbumAssetsForDisplay } from '../utils/sortAlbumAssets';
 import { hasPendingManualWork } from '../utils/manualUploadState';
+import { deriveDeviceConnected } from '../utils/deriveDeviceConnected';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -317,7 +318,7 @@ export function AlbumWorkbenchScreen() {
         const binding =
           await NativeModules.NativeSyncEngine?.getBindingState();
         const conn = (binding?.connectionState as string) || '';
-        setDeviceConnected(conn === 'connected' || conn === 'bound');
+        setDeviceConnected(prev => deriveDeviceConnected(conn, prev));
       } catch {
         setDeviceConnected(false);
       }
@@ -372,7 +373,7 @@ export function AlbumWorkbenchScreen() {
       'onBindingStateChanged',
       (state: Record<string, unknown> | null) => {
         const conn = (state?.connectionState as string) || '';
-        setDeviceConnected(conn === 'connected' || conn === 'bound');
+        setDeviceConnected(prev => deriveDeviceConnected(conn, prev));
       },
     );
     // Reload when photo library changes (e.g. user adds photos via
