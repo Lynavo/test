@@ -14,7 +14,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  CommonActions,
+} from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -26,6 +30,7 @@ import {
   logout as serverLogout,
   deleteAccount,
 } from '../services/auth-service';
+import { getSubscriptionStatus } from '../services/subscription-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
@@ -206,6 +211,7 @@ export function SettingsScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t, i18n } = useTranslation();
   const auth = useAuth();
+  const { setSubscription } = auth;
   const isAndroid = Platform.OS === 'android';
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
@@ -251,6 +257,27 @@ export function SettingsScreen() {
       cancelled = true;
     };
   }, []);
+
+  // Refetch subscription status every time Settings gains focus. The trial
+  // card on this screen reads `auth.subscription` from the store, and the
+  // store is otherwise only refreshed at login or when SubscriptionScreen
+  // focuses. Without this hook, trial countdown / expiry state can sit
+  // stale across screen navigations and server-side changes.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getSubscriptionStatus()
+        .then(info => {
+          if (!cancelled) setSubscription(info);
+        })
+        .catch(err => {
+          console.warn('[settings] subscription refresh on focus failed', err);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [setSubscription]),
+  );
 
   // ---------------------------------------------------------------------------
   // Load real binding state + client display name from native module
