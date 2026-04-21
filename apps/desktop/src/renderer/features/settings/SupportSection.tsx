@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivitySquare, Archive, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import { ActivitySquare, Archive, CheckCircle2, Loader2, RotateCcw, Wifi } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
+import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { formatDateTime } from '@renderer/lib/format';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
+import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 
 export function SupportSection() {
   const summary = useDashboardStore((s) => s.summary);
+  const advertisedIP = useSidecarRuntimeStore((s) => s.runtime.bonjour.advertisedIP);
   const [appInfo, setAppInfo] = useState<{
     name: string;
     version: string;
@@ -141,6 +144,22 @@ export function SupportSection() {
           </div>
 
           <div className="rounded-xl bg-secondary/60 px-4 py-3">
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Wifi className="h-4 w-4 text-sky-500" />
+              广播 IP（iPhone 连接地址）
+            </div>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-sm font-medium text-foreground">
+                {advertisedIP ?? '侦测中…'}
+              </p>
+              {advertisedIP ? <CopyButton text={advertisedIP} /> : null}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              iPhone 需与此 IP 在同一局域网段
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-secondary/60 px-4 py-3 md:col-span-2">
             <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <ActivitySquare className="h-4 w-4 text-sky-500" />
               桌面端版本
