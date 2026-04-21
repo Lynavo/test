@@ -50,6 +50,7 @@
     "none": "No items selected",
     "autoActiveLock": "Auto upload is on — manual upload unavailable"
   },
+  "deviceDisconnected": "Device offline",
   "mediaTypes": {
     "video": "Video",
     "photo": "Photo"

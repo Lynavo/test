@@ -50,6 +50,7 @@
     "none": "未選擇素材",
     "autoActiveLock": "自動上傳中，手動上傳不可用"
   },
+  "deviceDisconnected": "設備已斷開",
   "mediaTypes": {
     "video": "影片",
     "photo": "圖片"

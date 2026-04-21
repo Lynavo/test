@@ -986,6 +986,13 @@ export function AlbumWorkbenchScreen() {
                     : t('albumWorkbench.config.stateOff')}
                 </Text>
               </View>
+              {!deviceConnected && (
+                <View style={styles.deviceOfflineBadge}>
+                  <Text style={styles.deviceOfflineText}>
+                    {t('albumWorkbench.deviceDisconnected')}
+                  </Text>
+                </View>
+              )}
             </View>
             <Image
               source={IC_ARROW_DOWN}
@@ -1194,18 +1201,6 @@ export function AlbumWorkbenchScreen() {
             <Text style={styles.statLabel}>
               {t('albumWorkbench.stats.selected')}
             </Text>
-            {selectableIds.length > 0 && (
-              <TouchableOpacity
-                onPress={handleToggleSelectAll}
-                style={styles.selectAllBtn}
-              >
-                <Text style={styles.selectAllBtnText}>
-                  {allSelectableSelected
-                    ? t('albumWorkbench.deselectAll')
-                    : t('albumWorkbench.selectAll')}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
@@ -1252,6 +1247,9 @@ export function AlbumWorkbenchScreen() {
                     styles.filterTabText,
                     unifiedFilter === tab.key && styles.filterTabTextActive,
                   ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.75}
                 >
                   {t(tab.labelKey)}
                 </Text>
@@ -1431,24 +1429,33 @@ export function AlbumWorkbenchScreen() {
                 })
               : t('albumWorkbench.selectionHint.none')}
         </Text>
-        <TouchableOpacity
-          style={[
-            styles.uploadButton,
-            (uploading || selectedIds.size === 0 || !deviceConnected || isAutoUploadActive) &&
-              styles.uploadButtonDisabled,
-          ]}
-          activeOpacity={0.7}
-          onPress={() => void handleUpload()}
-          disabled={uploading || selectedIds.size === 0 || !deviceConnected || isAutoUploadActive}
-        >
-          {uploading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.uploadButtonText}>
-              {t('albumWorkbench.actions.startUpload')}
-            </Text>
+        <View style={styles.uploadBarRight}>
+          {!deviceConnected && !isAutoUploadActive && (
+            <View style={styles.deviceOfflineBadge}>
+              <Text style={styles.deviceOfflineText}>
+                {t('albumWorkbench.deviceDisconnected')}
+              </Text>
+            </View>
           )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.uploadButton,
+              (uploading || selectedIds.size === 0 || !deviceConnected || isAutoUploadActive) &&
+                styles.uploadButtonDisabled,
+            ]}
+            activeOpacity={0.7}
+            onPress={() => void handleUpload()}
+            disabled={uploading || selectedIds.size === 0 || !deviceConnected || isAutoUploadActive}
+          >
+            {uploading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.uploadButtonText}>
+                {t('albumWorkbench.actions.startUpload')}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
       {/* Date/time picker modal for custom time range */}
       <Modal
@@ -2151,6 +2158,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#8aabbd',
+    flexShrink: 1,
+  },
+  uploadBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deviceOfflineBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.3)',
+  },
+  deviceOfflineText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#dc2626',
   },
   uploadBarTextActive: {
     fontWeight: '600',
