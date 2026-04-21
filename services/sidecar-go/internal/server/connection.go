@@ -52,6 +52,15 @@ type connection struct {
 	writeMu    sync.Mutex
 	ackMu      sync.Mutex
 
+	// Diagnostic-only timestamps. Used exclusively in log messages so
+	// operators can tell "connection closed because idle timeout" apart from
+	// "closed while actively transferring" — a critical signal when the
+	// client laptop just flipped WiFi networks. Not used by any business
+	// logic; removing these fields would not change protocol behaviour.
+	connectedAt    time.Time
+	lastActivityAt time.Time
+	framesReceived int64
+
 	// Active file transfer timing, measured from FILE_INIT accepted to FILE_END.
 	activeTransferFileKey string
 	activeTransferStartAt time.Time
@@ -71,13 +80,35 @@ type connection struct {
 }
 
 func newConnection(conn net.Conn, s *store.Store, cfg *config.Config, hub *events.Hub, srv *TCPServer) *connection {
+	now := time.Now()
 	return &connection{
-		conn:   conn,
-		store:  s,
-		config: cfg,
-		hub:    hub,
-		server: srv,
-		state:  stateWaitHello,
+		conn:           conn,
+		store:          s,
+		config:         cfg,
+		hub:            hub,
+		server:         srv,
+		state:          stateWaitHello,
+		connectedAt:    now,
+		lastActivityAt: now,
+	}
+}
+
+// connStateString renders the protocol state for diagnostic logs. Kept out of
+// the state machine itself so the enum remains private to the package.
+func connStateString(s connState) string {
+	switch s {
+	case stateWaitHello:
+		return "wait_hello"
+	case stateWaitAuth:
+		return "wait_auth"
+	case stateWaitPair:
+		return "wait_pair"
+	case stateAuthenticated:
+		return "authenticated"
+	case stateSyncing:
+		return "syncing"
+	default:
+		return "unknown"
 	}
 }
 
@@ -117,7 +148,18 @@ func (c *connection) handle() {
 				}
 			}
 		}
-		slog.Info("tcp client disconnected", "remote", c.conn.RemoteAddr(), "clientID", c.clientID)
+		now := time.Now()
+		idleMs := now.Sub(c.lastActivityAt).Milliseconds()
+		slog.Info("tcp client disconnected",
+			"remote", c.conn.RemoteAddr(),
+			"clientID", c.clientID,
+			"state", connStateString(c.state),
+			"duration_ms", now.Sub(c.connectedAt).Milliseconds(),
+			"idle_ms", idleMs,
+			"frames_rx", c.framesReceived,
+			"was_transferring", c.activeTransferFileKey != "",
+			"active_file_key", c.activeTransferFileKey,
+		)
 	}()
 
 	c.resetDeadline()
@@ -126,9 +168,21 @@ func (c *connection) handle() {
 	for {
 		hdr, body, release, err := protocol.ReadFrameBorrowed(c.conn)
 		if err != nil {
-			slog.Info("connection closed", "remote", c.conn.RemoteAddr(), "err", err)
+			idleMs := time.Since(c.lastActivityAt).Milliseconds()
+			slog.Info("connection closed",
+				"remote", c.conn.RemoteAddr(),
+				"clientID", c.clientID,
+				"err", err,
+				"state", connStateString(c.state),
+				"idle_ms", idleMs,
+				"duration_ms", time.Since(c.connectedAt).Milliseconds(),
+				"frames_rx", c.framesReceived,
+				"was_transferring", c.activeTransferFileKey != "",
+			)
 			return
 		}
+		c.lastActivityAt = time.Now()
+		c.framesReceived++
 		c.resetDeadline()
 		c.resetPingTimer()
 		if err := c.dispatch(hdr, body); err != nil {

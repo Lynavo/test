@@ -89,7 +89,14 @@ class DiscoveryService {
 
         browser?.stateUpdateHandler = { [weak self] state in
             NSLog("[DiscoveryService] state: \(state)")
-            syncDiagnosticsLog("DiscoveryService", "state: \(state)")
+            // Include the current network path summary alongside the browser
+            // state: the two together explain most "why did discovery stop"
+            // scenarios (WiFi dropped, interface lost, DNS unavailable).
+            let pathSnapshot = NetworkPathObserver.shared.snapshot()
+            syncDiagnosticsLog(
+                "DiscoveryService",
+                "state: \(state) path=\(pathSnapshot)"
+            )
             self?.browserState = String(describing: state)
         }
 

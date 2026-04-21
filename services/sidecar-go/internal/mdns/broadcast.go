@@ -25,8 +25,8 @@ const (
 )
 
 var (
-	lookPath               = exec.LookPath
-	executablePath         = os.Executable
+	lookPath                = exec.LookPath
+	executablePath          = os.Executable
 	bonjourServiceAvailable = defaultBonjourServiceAvailable
 )
 
@@ -87,9 +87,13 @@ func DeviceTypeForGOOS(goos string) string {
 // Bonjour stack used by iOS. Platforms without dns-sd fall back to zeroconf.
 func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 	if cfg.DeviceIP == "" {
-		cfg.DeviceIP = getLocalIPv4()
+		cfg.DeviceIP = CurrentLocalIPv4()
 	}
-	slog.Info("bonjour broadcaster ip selected", "ip", cfg.DeviceIP, "platform", runtime.GOOS)
+	slog.Info("bonjour broadcaster ip selected",
+		"ip", cfg.DeviceIP,
+		"platform", runtime.GOOS,
+		"iface", PreferredInterfaceName(cfg.DeviceIP),
+	)
 	bonjourServiceOK := bonjourServiceAvailable()
 	txt := BuildTXTRecords(cfg)
 
@@ -111,6 +115,88 @@ func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 		)
 	}
 	return newCrossPlatformBroadcaster(cfg, txt)
+}
+
+// CurrentLocalIPv4 returns the best-candidate IPv4 address for LAN discovery
+// advertisement. It is exported so the sidecar process can detect Wi-Fi/DHCP
+// changes and rebuild the Bonjour TXT record with the new address.
+func CurrentLocalIPv4() string {
+	return getLocalIPv4()
+}
+
+// InterfaceSummary describes a network interface for diagnostic logs.
+// Kept flat (no pointers) so slog serialises it as a single JSON object
+// per interface without needing a custom LogValuer.
+type InterfaceSummary struct {
+	Name   string   `json:"name"`
+	Up     bool     `json:"up"`
+	Mcast  bool     `json:"multicast"`
+	Loop   bool     `json:"loopback"`
+	PtP    bool     `json:"point_to_point"`
+	IPv4   []string `json:"ipv4"`
+}
+
+// SnapshotInterfacesForLog returns a compact description of every network
+// interface with an IPv4 address. It is the primary signal for diagnosing
+// "why did sidecar pick the wrong IP" / "why did connection break when WiFi
+// flipped" — operators need the full interface list, not just the chosen IP.
+func SnapshotInterfacesForLog() []InterfaceSummary {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+
+	out := make([]InterfaceSummary, 0, len(ifaces))
+	for _, iface := range ifaces {
+		addrs, _ := iface.Addrs()
+		var ipv4s []string
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ip4 := ipnet.IP.To4(); ip4 != nil {
+					ipv4s = append(ipv4s, ip4.String())
+				}
+			}
+		}
+		if len(ipv4s) == 0 && iface.Flags&net.FlagLoopback == 0 {
+			// Skip interfaces without IPv4 to keep the log compact, but keep
+			// loopback entries so it's obvious the snapshot ran.
+			continue
+		}
+		out = append(out, InterfaceSummary{
+			Name:  iface.Name,
+			Up:    iface.Flags&net.FlagUp != 0,
+			Mcast: iface.Flags&net.FlagMulticast != 0,
+			Loop:  iface.Flags&net.FlagLoopback != 0,
+			PtP:   iface.Flags&net.FlagPointToPoint != 0,
+			IPv4:  ipv4s,
+		})
+	}
+	return out
+}
+
+// PreferredInterfaceName returns the name of the interface owning the given
+// IPv4 address, or empty string when no interface matches. Used in diagnostic
+// logs so operators can tell "en0 → en1" transitions apart from "same NIC
+// new DHCP lease" even when the IP itself is unchanged.
+func PreferredInterfaceName(ip string) string {
+	if ip == "" {
+		return ""
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range ifaces {
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ip4 := ipnet.IP.To4(); ip4 != nil && ip4.String() == ip {
+					return iface.Name
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func newDNSSDBroadcaster(cfg BroadcastConfig, txt []string, dnsSDPath string) (*Broadcaster, error) {

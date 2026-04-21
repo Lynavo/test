@@ -115,3 +115,59 @@ func TestEnsureRuntimeDirsCreatesSharedDirAtStartup(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldRestartBonjourForIPChange(t *testing.T) {
+	tests := []struct {
+		name         string
+		configuredIP string
+		advertisedIP string
+		currentIP    string
+		want         bool
+	}{
+		{
+			name:         "restarts when auto detected IP changes",
+			advertisedIP: "192.168.3.224",
+			currentIP:    "192.168.155.71",
+			want:         true,
+		},
+		{
+			name:         "does not restart when IP is unchanged",
+			advertisedIP: "192.168.155.71",
+			currentIP:    "192.168.155.71",
+			want:         false,
+		},
+		{
+			name:         "respects explicit configured IP",
+			configuredIP: "192.168.3.224",
+			advertisedIP: "192.168.3.224",
+			currentIP:    "192.168.155.71",
+			want:         false,
+		},
+		{
+			name:         "ignores empty current IP",
+			advertisedIP: "192.168.3.224",
+			currentIP:    "",
+			want:         false,
+		},
+		{
+			name:      "restarts when current IP appears after empty advertisement",
+			currentIP: "192.168.155.71",
+			want:      true,
+		},
+		{
+			name:         "trims whitespace",
+			advertisedIP: " 192.168.3.224 ",
+			currentIP:    " 192.168.155.71 ",
+			want:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRestartBonjourForIPChange(tt.configuredIP, tt.advertisedIP, tt.currentIP)
+			if got != tt.want {
+				t.Fatalf("shouldRestartBonjourForIPChange() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

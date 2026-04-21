@@ -996,6 +996,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             .appendingPathComponent("syncflow_export", isDirectory: true)
         try? FileManager.default.removeItem(at: exportTempDir)
         NSLog("[SyncEngine] cleared export temp dir on init")
+
+        // Start the passive network-path observer. Pure instrumentation:
+        // it only writes to SyncDiagnosticsLogStore so the diagnostic
+        // bundle can show WHY a connection dropped when the user walked
+        // between WiFi networks. It never triggers reconnect or discovery.
+        NetworkPathObserver.shared.start()
     }
 
     // MARK: - App State Transitions
@@ -1203,7 +1209,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             guard let self = self else { return }
             // Skip if sync pipeline is running — it has its own heartbeat loop
             guard !self.isSyncing else { return }
-            self.sendPresenceHeartbeat(clientId: clientId)
+            // A single HTTP timeout on the presence port can be a transient Wi-Fi
+            // hiccup; the DiscoveryService's TCP probe on the protocol port often
+            // still sees the desktop. Don't flip the UI to offline on one miss —
+            // suppress the direct state update and hand off to the retry probe,
+            // which only marks offline after presence_recovery_exhausted.
+            self.sendPresenceHeartbeat(
+                clientId: clientId,
+                updateStateOnFailure: false
+            ) { [weak self] success in
+                guard let self = self, !success else { return }
+                self.startPresenceRecoveryProbe(clientId: clientId)
+            }
         }
         timer.resume()
         presenceHeartbeatTimer = timer
@@ -3391,7 +3408,25 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         // Detect bound device disappearing / reappearing from Bonjour
         if let binding = uploadStore?.getBinding() {
-            let boundDeviceVisible = devices.contains { $0.deviceId == binding.deviceId }
+            let boundDevice = devices.first { $0.deviceId == binding.deviceId }
+            let boundDeviceVisible = boundDevice != nil
+            if let device = boundDevice {
+                let resolvedHost = preferredSidecarHost(probedHost: device.ip, device: device)
+                if let resolvedHost, !resolvedHost.isEmpty {
+                    if sidecarHost != resolvedHost {
+                        syncDiagnosticsLog(
+                            "SyncEngine",
+                            "bound device discovery host refreshed \(sidecarHost ?? "nil") -> \(resolvedHost)"
+                        )
+                    }
+                    sidecarHost = resolvedHost
+                    refreshBoundServerMetadata(
+                        serverName: nil,
+                        shareName: nil,
+                        host: resolvedHost
+                    )
+                }
+            }
             if !boundDeviceVisible && (bindingConnectionState == .connected || bindingConnectionState == .bound) {
                 // Bonjour is unreliable — the device can briefly disappear due to
                 // mDNS cache expiry or Wi-Fi transitions. Probe with a heartbeat
@@ -3406,9 +3441,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // Resolve sidecar host from the rediscovered Bonjour entry so the
                 // heartbeat has a target, then probe with short retries until the
                 // sidecar HTTP API is ready after desktop restart.
-                if let device = devices.first(where: { $0.deviceId == binding.deviceId }) {
-                    sidecarHost = preferredSidecarHost(probedHost: device.ip, device: device)
-                }
                 let clientId = bindingService.getOrCreateClientId()
                 startPresenceRecoveryProbe(clientId: clientId)
             }
@@ -3501,18 +3533,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             session.disconnect()
         }
 
-        // 1. Connect TCP — allow explicit host override for Wi-Fi-only profiling.
+        // 1. Connect TCP — prefer the already-probed IPv4 host over the Bonjour
+        // service endpoint. The endpoint's `.local` resolution can lag behind
+        // the TXT `ip=` record after a Wi-Fi/DHCP change, which was the root
+        // cause of pairing attempts still dialing stale addresses.
+        let cachedDevice = discoveredDevices[deviceId]
+        let preferredPairHost = preferredSidecarHost(
+            probedHost: host,
+            device: cachedDevice
+        )
         if let forcedTarget = resolvedForcedSidecarTarget() {
             NSLog("[SyncEngine] connecting via forced host:port")
             try await session.connect(host: forcedTarget.host, port: forcedTarget.port)
-        } else if let cachedDevice = discoveredDevices[deviceId], let endpoint = cachedDevice.endpoint {
-            NSLog("[SyncEngine] connecting via Bonjour endpoint")
+        } else if let preferredPairHost, !preferredPairHost.isEmpty {
+            NSLog("[SyncEngine] connecting via resolved host:port")
+            try await session.connect(
+                host: preferredPairHost,
+                port: cachedDevice?.port ?? UInt16(port)
+            )
+        } else if let endpoint = cachedDevice?.endpoint {
+            NSLog("[SyncEngine] connecting via Bonjour endpoint fallback")
             try await session.connect(endpoint: endpoint)
         } else if !host.isEmpty {
             NSLog("[SyncEngine] connecting via host:port")
             try await session.connect(host: host, port: UInt16(port))
         } else {
             throw SyncEngineError.networkError("No endpoint or host available for device \(deviceId)")
+        }
+        let confirmedHost = preferredSidecarHost(
+            probedHost: transport.remoteHost,
+            device: discoveredDevices[deviceId]
+        ) ?? host
+        if confirmedHost != host {
+            NSLog("[SyncEngine] pairDevice confirmed host %@ -> %@", host, confirmedHost)
+            syncDiagnosticsLog("SyncEngine", "pairDevice confirmed host \(host) -> \(confirmedHost)")
         }
 
         let clientId = bindingService.getOrCreateClientId()
@@ -3542,7 +3596,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             // Already bound on server — ensure we have a local binding record too
             NSLog("[SyncEngine] already bound on server, ensuring local binding exists")
             let serverId = helloRes["serverId"] as? String ?? deviceId
-            if let existingBinding = uploadStore?.getBinding() {
+            if var existingBinding = uploadStore?.getBinding() {
                 if existingBinding.deviceId != serverId {
                     // Switching to a different device — reset queue so it receives all photos.
                     NSLog(
@@ -3558,6 +3612,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     // not enabled" card instead of inheriting the previous active state.
                     resetAutoUploadStateForFreshPairing(reason: "same_device_repair_auth_not_required")
                 }
+                if existingBinding.deviceId == serverId && existingBinding.host != confirmedHost {
+                    existingBinding.host = confirmedHost
+                    try? uploadStore?.saveBinding(existingBinding)
+                    syncDiagnosticsLog("SyncEngine", "updated existing binding host after pairing confirmation host=\(confirmedHost)")
+                }
             } else {
                 // No local binding — recreate from HELLO_RES info
                 let serverName = helloRes["serverName"] as? String ?? ""
@@ -3567,7 +3626,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     deviceName: serverName,
                     deviceAlias: nil,
                     deviceType: inferredBindingDeviceType(for: deviceId),
-                    host: host,
+                    host: confirmedHost,
                     port: port,
                     pairingId: "",
                     pairingTokenKeychainRef: keychainKey,
@@ -3642,7 +3701,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             deviceName: serverInfo["serverName"] as? String ?? "",
             deviceAlias: nil,
             deviceType: inferredBindingDeviceType(for: deviceId),
-            host: host,
+            host: confirmedHost,
             port: port,
             pairingId: pairRes["pairingId"] as? String ?? "",
             pairingTokenKeychainRef: keychainKey,
@@ -3664,7 +3723,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // 6. Notify RN bridge — mark as connected (not just bound) because
         //    we just confirmed the host is reachable via TCP during pairing.
         //    Also cache sidecarHost so presence heartbeats can reach the desktop.
-        sidecarHost = host
+        sidecarHost = confirmedHost
         updateBindingConnectionState(.connected, reason: "pairing_confirmed_reachable")
         NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload(binding: binding))
 
@@ -3845,6 +3904,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "activeSession": activeSessionPayload,
             "recentRetry": diagnosticsIssueState.recentRetry ?? NSNull(),
             "recentError": diagnosticsIssueState.recentError ?? NSNull(),
+            // Current NWPath summary — pivotal for "why did the handset
+            // stop discovering the Mac" reports: reveals WiFi/cellular
+            // state, interface names, and constrained/expensive flags.
+            "networkPath": NetworkPathObserver.shared.snapshot(),
         ]
         let clientPayload: [String: Any] = [
             "clientId": bindingService.getOrCreateClientId(),

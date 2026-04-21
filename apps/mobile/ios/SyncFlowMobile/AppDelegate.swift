@@ -38,15 +38,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     // the wipe touches anything — `synchronize()` is formally deprecated but
     // remains safe for this one-shot fresh-install code path.
     let defaults = UserDefaults.standard
-    if defaults.string(forKey: "vivi_install_marker") == nil {
+    let installMarker = defaults.string(forKey: "vivi_install_marker")
+    let wipeInProgress = defaults.string(forKey: "vivi_wipe_in_progress")
+    NSLog(
+      "[AppDelegate] sentinel check: install_marker=%@ wipe_in_progress=%@",
+      installMarker ?? "nil",
+      wipeInProgress ?? "nil"
+    )
+    if installMarker == nil {
       defaults.set("1", forKey: "vivi_install_marker")
       defaults.synchronize()
+      NSLog("[AppDelegate] reinstall sentinel firing: running wipeSyncIdentity + clearPersistedTokens")
       SyncEngineManager.shared.wipeSyncIdentity()
       AuthKeychainCleaner.clearPersistedTokens()
       NSLog("[AppDelegate] reinstall sentinel fired: wiped residual identity + tokens")
-    } else if defaults.string(forKey: "vivi_wipe_in_progress") == "1" {
+    } else if wipeInProgress == "1" {
       NSLog("[AppDelegate] prior wipe interrupted — re-running wipeSyncIdentity")
       SyncEngineManager.shared.wipeSyncIdentity()
+    } else {
+      NSLog("[AppDelegate] sentinel check: no-op (marker present, not mid-wipe)")
     }
 
     let delegate = ReactNativeDelegate()

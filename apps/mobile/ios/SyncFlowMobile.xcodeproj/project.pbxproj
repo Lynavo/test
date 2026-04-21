@@ -32,6 +32,7 @@
 		FC3ECC3B2F6F05B5000460F8 /* SyncEngineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC282F6F05B5000460F8 /* SyncEngineError.swift */; };
 		FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */; };
 		FC3ECC512F6F0AAA000460F8 /* SilentAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC502F6F0AAA000460F8 /* SilentAudioService.swift */; };
+		FC3ECC612F6F0B00000460F8 /* NetworkPathObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +66,7 @@
 		FC3ECC2C2F6F05B5000460F8 /* UploadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadStore.swift; sourceTree = "<group>"; };
 		FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSession.swift; sourceTree = "<group>"; };
 		FC3ECC502F6F0AAA000460F8 /* SilentAudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilentAudioService.swift; sourceTree = "<group>"; };
+		FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkPathObserver.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -162,6 +164,7 @@
 				D380A808E5707AB54A6BAD29 /* AutoUploadConfigStore.swift */,
 				42E22EE10B6D2552C83E31BB /* ManualUploadService.swift */,
 				D2C0A4C610F1EE6DEAF9DAB0 /* SharedFilesService.swift */,
+				FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */,
 			);
 			path = SyncEngine;
 			sourceTree = "<group>";
@@ -335,6 +338,7 @@
 				A02C8AC4F1D2121BB74AD3E9 /* AutoUploadConfigStore.swift in Sources */,
 				BEA438F6884C0C6D0918C25E /* ManualUploadService.swift in Sources */,
 				0DAC8ECE3480320FE184A423 /* SharedFilesService.swift in Sources */,
+				FC3ECC612F6F0B00000460F8 /* NetworkPathObserver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -348,7 +352,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = GKN7JQNCMC;
 				ENABLE_BITCODE = NO;
 				HERMES_CLI_PATH = "${PODS_ROOT}/hermes-engine/destroot/bin/hermesc";
@@ -385,7 +389,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = GKN7JQNCMC;
 				HERMES_CLI_PATH = "${PODS_ROOT}/hermes-engine/destroot/bin/hermesc";
 				INFOPLIST_FILE = SyncFlowMobile/Info.plist;

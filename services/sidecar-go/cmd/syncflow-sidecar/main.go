@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,6 +23,8 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/server"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
+
+const bonjourIPPollInterval = 5 * time.Second
 
 func main() {
 	cfgPath := "syncflow-sidecar.yml"
@@ -34,13 +38,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	logging.Setup(cfg.LogLevel)
-	slog.Info("starting vivi-drop-sidecar", "http_port", cfg.HTTPPort, "tcp_port", cfg.TCPPort)
-
+	// Create the log directory before Setup so file logging works on first run.
 	if err := ensureRuntimeDirs(cfg); err != nil {
-		slog.Error("failed to create runtime directories", "err", err)
+		fmt.Fprintf(os.Stderr, "create runtime dirs: %v\n", err)
 		os.Exit(1)
 	}
+
+	logging.Setup(cfg.LogLevel, cfg.LogDir())
+	slog.Info("starting vivi-drop-sidecar",
+		"http_port", cfg.HTTPPort,
+		"tcp_port", cfg.TCPPort,
+		"platform", runtime.GOOS,
+		"arch", runtime.GOARCH,
+		"log_file", logging.LogFilePath(),
+		"data_dir", cfg.DataDir,
+	)
+	slog.Info("startup network snapshot",
+		"configured_ip", cfg.DeviceIP,
+		"auto_ip", mdns.CurrentLocalIPv4(),
+		"interfaces", mdns.SnapshotInterfacesForLog(),
+	)
 
 	// Init store
 	st, err := store.New(cfg.DBPath())
@@ -81,6 +98,10 @@ func main() {
 		Handler: handler,
 	}
 
+	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	// Start Bonjour/mDNS broadcast
 	deviceID, _ := st.GetDeviceID()
 	deviceName, _ := st.GetSetting("device_name")
@@ -88,43 +109,86 @@ func main() {
 		deviceName = cfg.DeviceName
 	}
 
+	var broadcasterMu sync.Mutex
 	var broadcaster *mdns.Broadcaster
-	startBroadcaster := func(name string) {
+	currentDeviceName := deviceName
+	currentAdvertisedIP := ""
+	startBroadcaster := func(name string, reason string) {
+		selectedIP := strings.TrimSpace(cfg.DeviceIP)
+		if selectedIP == "" {
+			selectedIP = mdns.CurrentLocalIPv4()
+		}
+
+		broadcasterMu.Lock()
+		defer broadcasterMu.Unlock()
+
 		if broadcaster != nil {
 			broadcaster.Shutdown()
+			broadcaster = nil
 		}
 		var err error
 		broadcaster, err = mdns.NewBroadcaster(mdns.BroadcastConfig{
 			DeviceID:     deviceID,
 			DeviceName:   name,
 			DeviceType:   mdns.DeviceTypeForGOOS(runtime.GOOS),
-			DeviceIP:     cfg.DeviceIP, // empty → auto-detect in NewBroadcaster
+			DeviceIP:     selectedIP,
 			TCPPort:      cfg.TCPPort,
 			Proto:        2,
 			ShareEnabled: false,
 			ShareName:    "Vivi Drop",
 		})
 		if err != nil {
-			slog.Warn("bonjour broadcast failed", "err", err)
+			slog.Warn("bonjour broadcast failed", "err", err, "reason", reason, "ip", selectedIP)
+			return
 		}
+		currentDeviceName = name
+		currentAdvertisedIP = selectedIP
 	}
-	startBroadcaster(deviceName)
+	startBroadcaster(deviceName, "startup")
 
 	// Restart Bonjour when device name changes
 	apiSrv.OnDeviceRenamed = func(newName string) {
 		slog.Info("device renamed, restarting bonjour", "name", newName)
-		startBroadcaster(newName)
+		startBroadcaster(newName, "device_renamed")
 	}
 
+	currentBonjourIP := func() string {
+		broadcasterMu.Lock()
+		defer broadcasterMu.Unlock()
+		return currentAdvertisedIP
+	}
+	currentBonjourName := func() string {
+		broadcasterMu.Lock()
+		defer broadcasterMu.Unlock()
+		return currentDeviceName
+	}
+	go watchBonjourIPChanges(
+		ctx,
+		bonjourIPPollInterval,
+		cfg.DeviceIP,
+		currentBonjourIP,
+		mdns.CurrentLocalIPv4,
+		func(oldIP, newIP string) {
+			name := currentBonjourName()
+			slog.Info("local IP changed, restarting bonjour",
+				"from", oldIP,
+				"to", newIP,
+				"name", name,
+				"from_iface", mdns.PreferredInterfaceName(oldIP),
+				"to_iface", mdns.PreferredInterfaceName(newIP),
+				"interfaces", mdns.SnapshotInterfacesForLog(),
+			)
+			startBroadcaster(name, "ip_changed")
+		},
+	)
+
 	defer func() {
+		broadcasterMu.Lock()
+		defer broadcasterMu.Unlock()
 		if broadcaster != nil {
 			broadcaster.Shutdown()
 		}
 	}()
-
-	// Graceful shutdown
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		slog.Info("http server listening", "addr", srv.Addr)
@@ -144,6 +208,44 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	srv.Shutdown(shutdownCtx)
+}
+
+func watchBonjourIPChanges(
+	ctx context.Context,
+	interval time.Duration,
+	configuredIP string,
+	currentAdvertisedIP func() string,
+	currentLocalIP func() string,
+	onChange func(oldIP, newIP string),
+) {
+	if strings.TrimSpace(configuredIP) != "" {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			advertisedIP := currentAdvertisedIP()
+			localIP := currentLocalIP()
+			if shouldRestartBonjourForIPChange(configuredIP, advertisedIP, localIP) {
+				onChange(strings.TrimSpace(advertisedIP), strings.TrimSpace(localIP))
+			}
+		}
+	}
+}
+
+func shouldRestartBonjourForIPChange(configuredIP, advertisedIP, currentIP string) bool {
+	if strings.TrimSpace(configuredIP) != "" {
+		return false
+	}
+	advertisedIP = strings.TrimSpace(advertisedIP)
+	currentIP = strings.TrimSpace(currentIP)
+	return currentIP != "" && advertisedIP != currentIP
 }
 
 // bootstrapReconciliation ensures essential config values are populated after

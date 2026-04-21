@@ -68,6 +68,17 @@ export class ApiError extends Error {
 // because of a black-holing captive portal or an unresponsive server.
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 
+// On iOS, the first fetch after a cold start can fail with
+// NSURLErrorCannotFindHost (-1003) when the DNS resolver hasn't warmed up.
+// CFNetwork then caches that "0 endpoints" result for a short TTL
+// (typically ~1s), causing every subsequent request to the same host to
+// fail in ~1ms from the negative cache. Waiting past the TTL before a
+// single silent retry converts that first-request-after-cold-start failure
+// into a success the user never sees. 1000 ms is the sweet spot: long
+// enough to outlast the common negative-TTL, short enough to stay below
+// the ~2s range where users start tapping again.
+const NETWORK_RETRY_DELAY_MS = 1_000;
+
 interface RequestOptions {
   /** Skip Authorization header injection. */
   skipAuth?: boolean;
@@ -120,6 +131,7 @@ async function request<T>(
   body?: unknown,
   options: RequestOptions = {},
   _retried = false,
+  _networkRetried = false,
 ): Promise<T> {
   const { skipAuth = false, skipRefresh = false, timeoutMs } = options;
 
@@ -141,6 +153,15 @@ async function request<T>(
     );
   } catch {
     // Covers AbortError (timeout) and genuine network failures alike.
+    // Silent retry ONCE before surfacing: rescues cold-start DNS failures
+    // on iOS where CFNetwork's negative cache would otherwise flunk the
+    // next tap in ~1ms. See NETWORK_RETRY_DELAY_MS above.
+    if (!_networkRetried) {
+      await new Promise<void>(resolve =>
+        setTimeout(() => resolve(), NETWORK_RETRY_DELAY_MS),
+      );
+      return request<T>(method, path, body, options, _retried, true);
+    }
     throw new ApiError(
       ERROR_CODE.NETWORK_ERROR,
       i18next.t('errors.networkCheckRetry'),
