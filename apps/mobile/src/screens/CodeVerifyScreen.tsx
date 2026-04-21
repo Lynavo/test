@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TextInput,
+  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Vibration,
@@ -18,6 +19,9 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
+import { Icon } from '../components/Icon';
+
+const DARK = '#1a3a5c';
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -181,6 +185,28 @@ export function CodeVerifyScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.6}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.dispatch(
+                CommonActions.reset({
+                  index: 0,
+                  routes: [{ name: 'DeviceDiscovery' }],
+                }),
+              );
+            }
+          }}
+          accessibilityLabel={t('common.back')}
+        >
+          <Icon name="chevron-back" size={20} color={DARK} />
+        </TouchableOpacity>
+      </View>
       <View style={styles.container}>
         {/* Device name context */}
         <Text style={styles.deviceLabel}>{t('codeVerify.deviceLabel', { deviceName, host })}</Text>
@@ -256,11 +282,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#c4e4f5',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   container: {
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 24,
   },
 
   // Device label
