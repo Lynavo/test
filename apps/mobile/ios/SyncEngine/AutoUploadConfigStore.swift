@@ -33,7 +33,7 @@ class AutoUploadConfigStore {
         var configToSave = config
         configToSave.updatedAt = ISO8601DateFormatter().string(from: Date())
         try store.saveAutoUploadConfig(configToSave)
-        NSLog("[AutoUploadConfigStore] config saved: enabled=%d, timeRangeMode=%@",
+        slog("[AutoUploadConfigStore] config saved: enabled=%d, timeRangeMode=%@",
               config.enabled ? 1 : 0, config.timeRangeMode)
     }
 
@@ -66,7 +66,7 @@ class AutoUploadConfigStore {
                 if let parsed = fmtFrac.date(from: customFrom) {
                     return parsed
                 }
-                NSLog("[AutoUploadConfig] failed to parse customTimeFrom: %@, falling back to no filter", customFrom)
+                slog("[AutoUploadConfig] failed to parse customTimeFrom: %@, falling back to no filter", customFrom)
             }
             return nil
         case "all":

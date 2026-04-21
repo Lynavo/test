@@ -397,7 +397,7 @@ class AlbumBrowserService {
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
         options.progressHandler = { progress in
-            NSLog("[AlbumBrowser] iCloud video progress: %.0f%%", progress * 100)
+            slog("[AlbumBrowser] iCloud video progress: %.0f%%", progress * 100)
         }
 
         let semaphore = DispatchSemaphore(value: 0)
@@ -415,12 +415,12 @@ class AlbumBrowserService {
         // cancellable, so hitting this is a soft timeout for UX only — the download continues.
         let timeoutResult = semaphore.wait(timeout: .now() + 120)
         if timeoutResult == .timedOut {
-            NSLog("[AlbumBrowser] video preview timeout for asset %@", asset.localIdentifier)
+            slog("[AlbumBrowser] video preview timeout for asset %@", asset.localIdentifier)
             return ["uri": "", "mediaType": "video", "error": "cloud_unavailable"]
         }
 
         if let err = writeError {
-            NSLog("[AlbumBrowser] video preview write error: %@", err.localizedDescription)
+            slog("[AlbumBrowser] video preview write error: %@", err.localizedDescription)
             try? FileManager.default.removeItem(at: cacheFile)
             return ["uri": "", "mediaType": "video", "error": "cloud_unavailable"]
         }

@@ -170,7 +170,7 @@ class UploadStore {
         let tableInfo = try queryInternal("SELECT sql FROM sqlite_master WHERE type='table' AND name='upload_items'", bind: [])
         if let createSQL = tableInfo.first?["sql"] as? String,
            createSQL.contains("UNIQUE(asset_local_id, modified_at)") {
-            NSLog("[UploadStore] migrating upload_items: removing modified_at from UNIQUE constraint")
+            slog("[UploadStore] migrating upload_items: removing modified_at from UNIQUE constraint")
             try executeInternal("""
                 CREATE TABLE upload_items_new (
                   id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -191,7 +191,7 @@ class UploadStore {
                 DROP TABLE upload_items;
                 ALTER TABLE upload_items_new RENAME TO upload_items;
             """)
-            NSLog("[UploadStore] migration complete")
+            slog("[UploadStore] migration complete")
         }
 
         // Migration: add source, batch_id, priority columns to upload_items (Vivi Drop)
@@ -201,11 +201,11 @@ class UploadStore {
         )
         let hasSourceColumn = (columnCheck.first?["cnt"] as? Int64 ?? 0) > 0
         if !hasSourceColumn {
-            NSLog("[UploadStore] migrating upload_items: adding source, batch_id, priority columns")
+            slog("[UploadStore] migrating upload_items: adding source, batch_id, priority columns")
             try executeInternal("ALTER TABLE upload_items ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'")
             try executeInternal("ALTER TABLE upload_items ADD COLUMN batch_id TEXT")
             try executeInternal("ALTER TABLE upload_items ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
-            NSLog("[UploadStore] Vivi Drop columns migration complete")
+            slog("[UploadStore] Vivi Drop columns migration complete")
         }
 
         // Create auto_upload_config table (single-row config)
@@ -228,11 +228,11 @@ class UploadStore {
         )
         let hasStateColumn = (stateColumnCheck.first?["cnt"] as? Int64 ?? 0) > 0
         if !hasStateColumn {
-            NSLog("[UploadStore] migrating auto_upload_config: adding state column")
+            slog("[UploadStore] migrating auto_upload_config: adding state column")
             try executeInternal("ALTER TABLE auto_upload_config ADD COLUMN state TEXT NOT NULL DEFAULT 'disabled'")
             // Backfill: if enabled=1, state should be 'active' (not 'disabled')
             try executeInternal("UPDATE auto_upload_config SET state = 'active' WHERE enabled = 1")
-            NSLog("[UploadStore] auto_upload_config state column migration complete")
+            slog("[UploadStore] auto_upload_config state column migration complete")
         }
     }
 

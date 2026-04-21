@@ -25,7 +25,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         guard !observing else { return }
         observing = true
         PHPhotoLibrary.shared().register(self)
-        NSLog("[PhotoScanner] started observing photo library changes")
+        slog("[PhotoScanner] started observing photo library changes")
     }
 
     /// Stop observing
@@ -33,13 +33,13 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         guard observing else { return }
         observing = false
         PHPhotoLibrary.shared().unregisterChangeObserver(self)
-        NSLog("[PhotoScanner] stopped observing")
+        slog("[PhotoScanner] stopped observing")
     }
 
     // MARK: - PHPhotoLibraryChangeObserver
 
     func photoLibraryDidChange(_ changeInstance: PHChange) {
-        NSLog("[PhotoScanner] photo library changed — notifying delegate")
+        slog("[PhotoScanner] photo library changed — notifying delegate")
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.photoLibraryDidChange()
         }
@@ -107,7 +107,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
             ))
         }
 
-        NSLog("[PhotoScanner] delta scan: %d candidates (%d inserted, %d changed), %d new untracked",
+        slog("[PhotoScanner] delta scan: %d candidates (%d inserted, %d changed), %d new untracked",
               candidateIndexes.count, insertedIndexes.count, changedIndexes.count, results.count)
         return results
     }
@@ -128,7 +128,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         lastFetchResult = assets
 
         let libraryTotal = assets.count
-        NSLog("[PhotoScanner] library has %d authorized assets, %d tracked keys", libraryTotal, trackedFileKeys.count)
+        slog("[PhotoScanner] library has %d authorized assets, %d tracked keys", libraryTotal, trackedFileKeys.count)
         var results: [ScannedAsset] = []
         var skippedCount = 0
         var processedCount = 0
@@ -176,7 +176,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
         // Final progress callback so UI sees 100%
         onProgress?(libraryTotal, libraryTotal)
 
-        NSLog("[PhotoScanner] scan result: %d new, %d skipped (already tracked)", results.count, skippedCount)
+        slog("[PhotoScanner] scan result: %d new, %d skipped (already tracked)", results.count, skippedCount)
         return results
     }
 

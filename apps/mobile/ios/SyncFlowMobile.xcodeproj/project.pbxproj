@@ -33,6 +33,7 @@
 		FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */; };
 		FC3ECC512F6F0AAA000460F8 /* SilentAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC502F6F0AAA000460F8 /* SilentAudioService.swift */; };
 		FC3ECC612F6F0B00000460F8 /* NetworkPathObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */; };
+		FC3ECC712F6F0C00000460F8 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC702F6F0C00000460F8 /* Log.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -67,6 +68,7 @@
 		FC3ECC3D2F6F05B5000460F8 /* ProtocolSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolSession.swift; sourceTree = "<group>"; };
 		FC3ECC502F6F0AAA000460F8 /* SilentAudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilentAudioService.swift; sourceTree = "<group>"; };
 		FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkPathObserver.swift; sourceTree = "<group>"; };
+		FC3ECC702F6F0C00000460F8 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -165,6 +167,7 @@
 				42E22EE10B6D2552C83E31BB /* ManualUploadService.swift */,
 				D2C0A4C610F1EE6DEAF9DAB0 /* SharedFilesService.swift */,
 				FC3ECC602F6F0B00000460F8 /* NetworkPathObserver.swift */,
+				FC3ECC702F6F0C00000460F8 /* Log.swift */,
 			);
 			path = SyncEngine;
 			sourceTree = "<group>";
@@ -339,6 +342,7 @@
 				BEA438F6884C0C6D0918C25E /* ManualUploadService.swift in Sources */,
 				0DAC8ECE3480320FE184A423 /* SharedFilesService.swift in Sources */,
 				FC3ECC612F6F0B00000460F8 /* NetworkPathObserver.swift in Sources */,
+				FC3ECC712F6F0C00000460F8 /* Log.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -68,7 +68,7 @@ class DiscoveryService {
     var browserState: String = "not_started"
 
     func startBrowsing() {
-        NSLog("[DiscoveryService] startBrowsing called")
+        slog("[DiscoveryService] startBrowsing called")
         syncDiagnosticsLog("DiscoveryService", "startBrowsing called")
         let descriptor = NWBrowser.Descriptor.bonjourWithTXTRecord(type: "_syncflow._tcp", domain: nil)
         let params = NWParameters()
@@ -82,13 +82,13 @@ class DiscoveryService {
         browser = NWBrowser(for: descriptor, using: params)
 
         browser?.browseResultsChangedHandler = { [weak self] results, _ in
-            NSLog("[DiscoveryService] results changed: \(results.count) results")
+            slog("[DiscoveryService] results changed: \(results.count) results")
             syncDiagnosticsLog("DiscoveryService", "results changed: \(results.count) results")
             self?.handleResults(results)
         }
 
         browser?.stateUpdateHandler = { [weak self] state in
-            NSLog("[DiscoveryService] state: \(state)")
+            slog("[DiscoveryService] state: \(state)")
             // Include the current network path summary alongside the browser
             // state: the two together explain most "why did discovery stop"
             // scenarios (WiFi dropped, interface lost, DNS unavailable).
@@ -317,7 +317,7 @@ class DiscoveryService {
                     probedHost = "\(host)"
                 }
                 let resolvedIP = preferredDiscoveryHost(advertisedIP: device.ip, probedHost: probedHost)
-                NSLog("[DiscoveryService] reachable %@ via %@", device.name, resolvedIP)
+                slog("[DiscoveryService] reachable %@ via %@", device.name, resolvedIP)
                 syncDiagnosticsLog(
                     "DiscoveryService",
                     "probe_ready id=\(device.deviceId) name=\(device.name) resolved_ip=\(resolvedIP) advertised_ip=\(device.ip) remote_endpoint=\(endpointDebugDescription(connection.currentPath?.remoteEndpoint))"
@@ -339,7 +339,7 @@ class DiscoveryService {
                 self.emitReachableDevices()
 
             case .waiting:
-                NSLog("[DiscoveryService] reachability waiting for %@: %@", device.name, "\(state)")
+                slog("[DiscoveryService] reachability waiting for %@: %@", device.name, "\(state)")
                 syncDiagnosticsLog(
                     "DiscoveryService",
                     "probe_waiting id=\(device.deviceId) name=\(device.name) state=\(state) target=\(endpointDebugDescription(endpoint))"
@@ -371,7 +371,7 @@ class DiscoveryService {
 
     private func preferredProbeEndpoint(for device: DiscoveredDevice) -> NWEndpoint? {
         if isIPv4Address(device.ip), let port = NWEndpoint.Port(rawValue: device.port) {
-            NSLog("[DiscoveryService] probing %@ via advertised IPv4 %@", device.name, device.ip)
+            slog("[DiscoveryService] probing %@ via advertised IPv4 %@", device.name, device.ip)
             return .hostPort(host: NWEndpoint.Host(device.ip), port: port)
         }
         return device.endpoint

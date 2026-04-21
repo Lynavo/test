@@ -40,7 +40,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let defaults = UserDefaults.standard
     let installMarker = defaults.string(forKey: "vivi_install_marker")
     let wipeInProgress = defaults.string(forKey: "vivi_wipe_in_progress")
-    NSLog(
+    slog(
       "[AppDelegate] sentinel check: install_marker=%@ wipe_in_progress=%@",
       installMarker ?? "nil",
       wipeInProgress ?? "nil"
@@ -48,15 +48,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     if installMarker == nil {
       defaults.set("1", forKey: "vivi_install_marker")
       defaults.synchronize()
-      NSLog("[AppDelegate] reinstall sentinel firing: running wipeSyncIdentity + clearPersistedTokens")
+      slog("[AppDelegate] reinstall sentinel firing: running wipeSyncIdentity + clearPersistedTokens")
       SyncEngineManager.shared.wipeSyncIdentity()
       AuthKeychainCleaner.clearPersistedTokens()
-      NSLog("[AppDelegate] reinstall sentinel fired: wiped residual identity + tokens")
+      slog("[AppDelegate] reinstall sentinel fired: wiped residual identity + tokens")
     } else if wipeInProgress == "1" {
-      NSLog("[AppDelegate] prior wipe interrupted — re-running wipeSyncIdentity")
+      slog("[AppDelegate] prior wipe interrupted — re-running wipeSyncIdentity")
       SyncEngineManager.shared.wipeSyncIdentity()
     } else {
-      NSLog("[AppDelegate] sentinel check: no-op (marker present, not mid-wipe)")
+      slog("[AppDelegate] sentinel check: no-op (marker present, not mid-wipe)")
     }
 
     let delegate = ReactNativeDelegate()
@@ -77,7 +77,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     do {
       try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
     } catch {
-      NSLog("[AppDelegate] AVAudioSession setCategory failed: %@", error.localizedDescription)
+      slog("[AppDelegate] AVAudioSession setCategory failed: %@", error.localizedDescription)
     }
 
     factory.startReactNative(

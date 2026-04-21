@@ -25,11 +25,11 @@ enum AuthKeychainCleaner {
         let status = SecItemDelete(query as CFDictionary)
         switch status {
         case errSecSuccess:
-            NSLog("[AuthKeychainCleaner] cleared persisted auth tokens (service=%@)", authKeychainService)
+            slog("[AuthKeychainCleaner] cleared persisted auth tokens (service=%@)", authKeychainService)
         case errSecItemNotFound:
-            NSLog("[AuthKeychainCleaner] no persisted auth tokens to clear (service=%@)", authKeychainService)
+            slog("[AuthKeychainCleaner] no persisted auth tokens to clear (service=%@)", authKeychainService)
         default:
-            NSLog(
+            slog(
                 "[AuthKeychainCleaner] SecItemDelete failed for service=%@ OSStatus=%d",
                 authKeychainService,
                 Int(status)

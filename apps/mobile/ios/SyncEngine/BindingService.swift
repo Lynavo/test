@@ -29,7 +29,7 @@ class BindingService {
                readKeychain(key: key) == nil {
                 writeKeychain(key: key, value: value)
                 migratedCount += 1
-                NSLog("[BindingService] migrated keychain key '%@' from legacy service", key)
+                slog("[BindingService] migrated keychain key '%@' from legacy service", key)
             }
         }
 
@@ -41,15 +41,15 @@ class BindingService {
                readKeychain(key: legacyKey) == nil {
                 writeKeychain(key: legacyKey, value: value)
                 migratedCount += 1
-                NSLog("[BindingService] migrated per-device token '%@' from legacy service", legacyKey)
+                slog("[BindingService] migrated per-device token '%@' from legacy service", legacyKey)
             }
         }
 
         defaults.set(true, forKey: Self.keychainMigrationDoneKey)
         if migratedCount > 0 {
-            NSLog("[BindingService] keychain migration complete: %d entries migrated", migratedCount)
+            slog("[BindingService] keychain migration complete: %d entries migrated", migratedCount)
         } else {
-            NSLog("[BindingService] keychain migration: no legacy entries found")
+            slog("[BindingService] keychain migration: no legacy entries found")
         }
     }
 
@@ -170,7 +170,7 @@ class BindingService {
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status != errSecSuccess {
-            NSLog("[BindingService] Keychain write failed for %@: OSStatus=%d", key, status)
+            slog("[BindingService] Keychain write failed for %@: OSStatus=%d", key, status)
         }
     }
 
@@ -188,11 +188,11 @@ class BindingService {
             return nil
         }
         if status != errSecSuccess {
-            NSLog("[BindingService] Keychain read failed for %@: OSStatus=%d", key, status)
+            slog("[BindingService] Keychain read failed for %@: OSStatus=%d", key, status)
             return nil
         }
         guard let data = result as? Data else {
-            NSLog("[BindingService] Keychain read for %@: status OK but data cast failed", key)
+            slog("[BindingService] Keychain read for %@: status OK but data cast failed", key)
             return nil
         }
         return String(data: data, encoding: .utf8)

@@ -167,7 +167,7 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
     // MARK: - TcpTransportDelegate
 
     func transportDidConnect() {
-        NSLog("[ProtocolSession] TCP connected")
+        slog("[ProtocolSession] TCP connected")
         lock.lock()
         disconnectedError = nil
         let cont = connectContinuation
@@ -178,7 +178,7 @@ class ProtocolSession: NSObject, TcpTransportDelegate {
 
     func transportDidDisconnect(error: Error?) {
         let err = error ?? SyncEngineError.networkError("Disconnected")
-        NSLog("[ProtocolSession] TCP disconnected: \(err)")
+        slog("[ProtocolSession] TCP disconnected: \(err)")
 
         lock.lock()
         disconnectedError = err

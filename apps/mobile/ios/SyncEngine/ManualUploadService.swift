@@ -29,7 +29,7 @@ class ManualUploadService {
     /// - Returns: ManualUploadResult with queued count, skipped count, and batch ID.
     func submitManualUpload(assets: [PHAsset]) -> ManualUploadResult {
         guard let store = uploadStore else {
-            NSLog("[ManualUploadService] uploadStore unavailable — cannot submit")
+            slog("[ManualUploadService] uploadStore unavailable — cannot submit")
             return ManualUploadResult(queuedCount: 0, skippedCount: 0, batchId: "")
         }
 
@@ -102,12 +102,12 @@ class ManualUploadService {
         if !itemsToInsert.isEmpty {
             do {
                 try store.upsertUploadItems(itemsToInsert)
-                NSLog("[ManualUploadService] queued %d items (skipped %d) in batch %@",
+                slog("[ManualUploadService] queued %d items (skipped %d) in batch %@",
                       queuedCount, skippedCount, batchId)
                 syncDiagnosticsLog("ManualUploadService",
                     "queued \(queuedCount) items (skipped \(skippedCount)) in batch \(batchId)")
             } catch {
-                NSLog("[ManualUploadService] failed to insert items: %@", "\(error)")
+                slog("[ManualUploadService] failed to insert items: %@", "\(error)")
                 syncDiagnosticsLog("ManualUploadService", "failed to insert items: \(error)")
                 return ManualUploadResult(queuedCount: 0, skippedCount: skippedCount, batchId: batchId)
             }

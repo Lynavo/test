@@ -78,14 +78,14 @@ class TcpTransport {
     }
 
     private func connectToEndpoint(_ endpoint: NWEndpoint) {
-        NSLog("[TcpTransport] connectToEndpoint: \(endpoint)")
+        slog("[TcpTransport] connectToEndpoint: \(endpoint)")
         syncDiagnosticsLog("TcpTransport", "connectToEndpoint target=\(endpoint)")
 
         // Cancel any existing connection before creating a new one.
         // This prevents stale receive-loop callbacks from delivering old data
         // into the new session's continuation (the "invalid magic" race).
         if let existing = connection {
-            NSLog("[TcpTransport] cancelling previous connection before reconnecting")
+            slog("[TcpTransport] cancelling previous connection before reconnecting")
             syncDiagnosticsLog("TcpTransport", "cancelling previous connection before reconnect")
             existing.stateUpdateHandler = nil
             existing.cancel()
@@ -112,14 +112,14 @@ class TcpTransport {
                 self?.delegate?.transportDidConnect()
                 self?.startReceiving()
             case .waiting(let error):
-                NSLog("[TcpTransport] waiting: %@", "\(error)")
+                slog("[TcpTransport] waiting: %@", "\(error)")
                 syncDiagnosticsLog(
                     "TcpTransport",
                     "state=waiting err=\(TcpTransport.describe(error: error))"
                 )
                 self?.delegate?.transportDidDisconnect(error: error)
             case .failed(let error):
-                NSLog("[TcpTransport] failed: %@", "\(error)")
+                slog("[TcpTransport] failed: %@", "\(error)")
                 syncDiagnosticsLog(
                     "TcpTransport",
                     "state=failed err=\(TcpTransport.describe(error: error))"
@@ -171,7 +171,7 @@ class TcpTransport {
         }
         let frame = header + body
         connection?.send(content: frame, completion: .contentProcessed({ error in
-            if let error { NSLog("[TcpTransport] send error: %@", "\(error)") }
+            if let error { slog("[TcpTransport] send error: %@", "\(error)") }
         }))
     }
 
@@ -283,7 +283,7 @@ class TcpTransport {
             guard String(data: data[0..<4], encoding: .utf8) == "LMUP" else {
                 let asciiStr = String(data: data, encoding: .ascii)?.replacingOccurrences(of: "\n", with: "\\n").replacingOccurrences(of: "\r", with: "\\r") ?? "invalid-ascii"
                 let hexStr = data.map { String(format: "%02x", $0) }.joined(separator: " ")
-                NSLog("[TcpTransport] invalid magic! Ascii=[%@], Hex=[%@]", asciiStr, hexStr)
+                slog("[TcpTransport] invalid magic! Ascii=[%@], Hex=[%@]", asciiStr, hexStr)
                 self.disconnect()
                 return
             }
@@ -292,7 +292,7 @@ class TcpTransport {
             let length = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self).bigEndian }
 
             guard let msgType = LMUPMessageType(rawValue: type) else {
-                NSLog("[TcpTransport] unknown type: %d", type)
+                slog("[TcpTransport] unknown type: %d", type)
                 self.receiveHeader() // skip unknown and continue
                 return
             }
