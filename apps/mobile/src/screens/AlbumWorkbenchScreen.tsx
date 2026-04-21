@@ -1371,8 +1371,8 @@ export function AlbumWorkbenchScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={isAutoUploadActive ? undefined : handleEndReached}
           onEndReachedThreshold={0.5}
-          ListHeaderComponent={renderListHeader}
-          ListEmptyComponent={renderListEmptyComponent}
+          ListHeaderComponent={renderListHeader()}
+          ListEmptyComponent={renderListEmptyComponent()}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
@@ -1394,8 +1394,8 @@ export function AlbumWorkbenchScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={isAutoUploadActive ? undefined : handleEndReached}
           onEndReachedThreshold={0.5}
-          ListHeaderComponent={renderListHeader}
-          ListEmptyComponent={renderListEmptyComponent}
+          ListHeaderComponent={renderListHeader()}
+          ListEmptyComponent={renderListEmptyComponent()}
           ListFooterComponent={
             loadingMore ? (
               <ActivityIndicator
