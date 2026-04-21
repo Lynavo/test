@@ -1249,6 +1249,29 @@ export function SettingsScreen() {
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
+          {FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED ? (
+            <>
+              <View style={styles.listSep} />
+              <TouchableOpacity
+                style={styles.actionRow}
+                activeOpacity={0.6}
+                onPress={() => {
+                  void handleRestore();
+                }}
+                disabled={isRestoring}
+              >
+                <View style={styles.actionRowLeft}>
+                  <Icon name="refresh-outline" size={18} color={BLUE} />
+                  <Text style={styles.actionRowText}>
+                    {isRestoring
+                      ? t('subscription.restore.inProgress')
+                      : t('subscription.restore.action')}
+                  </Text>
+                </View>
+                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+              </TouchableOpacity>
+            </>
+          ) : null}
         </View>
 
         {/* ============================================================= */}
@@ -1269,32 +1292,6 @@ export function SettingsScreen() {
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
         </View>
-
-        {/* ============================================================= */}
-        {/* Restore Purchases (Apple Review requirement)                   */}
-        {/* ============================================================= */}
-        {FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED ? (
-          <View style={styles.listCard}>
-            <TouchableOpacity
-              style={styles.actionRow}
-              activeOpacity={0.6}
-              onPress={() => {
-                void handleRestore();
-              }}
-              disabled={isRestoring}
-            >
-              <View style={styles.actionRowLeft}>
-                <Icon name="refresh-outline" size={18} color={BLUE} />
-                <Text style={styles.actionRowText}>
-                  {isRestoring
-                    ? t('subscription.restore.inProgress')
-                    : t('subscription.restore.action')}
-                </Text>
-              </View>
-              <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
 
         {/* ============================================================= */}
         {/* Logout                                                         */}
