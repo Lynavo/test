@@ -1,12 +1,14 @@
 import {
   buildOverview,
   getSyncActivityDisplayProgressPercent,
+  resolveSyncErrorAlertMessage,
   shouldDelayAutoCompletionCard,
   shouldRenderSyncActivityProgress,
 } from '../SyncActivityScreen';
 import {
   getSyncActivityMainCardState,
 } from '../../utils/syncActivityTransferState';
+import type { TFunction } from 'i18next';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -498,5 +500,37 @@ describe('getSyncActivityDisplayProgressPercent', () => {
         true,
       ),
     ).toBe(100);
+  });
+});
+
+describe('resolveSyncErrorAlertMessage', () => {
+  const t = ((key: string) => {
+    const values: Record<string, string> = {
+      'errors.unknown': '未知錯誤',
+      'syncActivity.dialogs.syncError.lowDiskPaused':
+        '接收磁碟剩餘空間小於 500MB，已暫停新的接收任務',
+    };
+    return values[key] ?? key;
+  }) as TFunction;
+
+  it('uses localized copy for low disk pause instead of native raw message', () => {
+    expect(
+      resolveSyncErrorAlertMessage(
+        {
+          code: 'LOW_DISK_PAUSED',
+          message: 'remaining disk bytes 523636736 below threshold',
+        },
+        t,
+      ),
+    ).toBe('接收磁碟剩餘空間小於 500MB，已暫停新的接收任務');
+  });
+
+  it('keeps the native message for other errors', () => {
+    expect(
+      resolveSyncErrorAlertMessage(
+        { code: 'SYNC_PIPELINE_ERROR', message: 'network failed' },
+        t,
+      ),
+    ).toBe('network failed');
   });
 });

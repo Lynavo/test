@@ -90,7 +90,8 @@
   },
   "dialogs": {
     "syncError": {
-      "title": "Sync Error"
+      "title": "Sync Error",
+      "lowDiskPaused": "Receiving disk space is below 500 MB. New receive tasks have been paused."
     },
     "cancelManual": {
       "title": "Cancel Manual Upload",

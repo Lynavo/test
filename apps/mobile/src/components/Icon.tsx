@@ -57,6 +57,7 @@ const ionicons: Record<string, number> = {
   'swap-horizontal-outline': 61106,
   'log-out-outline': 60626,
   'information-circle-outline': 60570,
+  'language-outline': 60587,
   'book-outline': 60071,
   'mail-outline': 60725,
   'link-outline': 60602,
@@ -66,6 +67,7 @@ const ionicons: Record<string, number> = {
   'lock-closed-outline': 60624,
   'card-outline': 60162,
   'star-outline': 61087,
+  'trash-outline': 61175,
 };
 
 interface IconProps {

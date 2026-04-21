@@ -22,6 +22,10 @@ const mockReset = jest.fn();
 const mockDispatch = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const ReactInner = require('react');
+    ReactInner.useEffect(effect, [effect]);
+  },
   useNavigation: () => ({
     navigate: mockNavigate,
     goBack: mockGoBack,
@@ -72,6 +76,15 @@ jest.mock('../../services/iap-service', () => ({
   },
 }));
 
+jest.mock('../../services/subscription-service', () => ({
+  getSubscriptionStatus: jest.fn().mockResolvedValue({
+    status: 'subscribed',
+    plan: 'yearly',
+    expireAt: '2027-04-01T00:00:00.000Z',
+    trialEnd: null,
+  }),
+}));
+
 jest.mock('../../utils/shareDiagnosticsArchive', () => ({
   isDiagnosticsExportUnavailable: jest.fn().mockReturnValue(false),
   shareDiagnosticsArchive: jest.fn().mockResolvedValue('mock.zip'),
@@ -83,6 +96,7 @@ const mockAuth: {
   refreshToken: string;
   clearAuth: jest.Mock;
   loadSubscription: jest.Mock;
+  setSubscription: jest.Mock;
   setSignedOutTransition: jest.Mock;
 } = {
   user: {
@@ -103,6 +117,7 @@ const mockAuth: {
   refreshToken: 'refresh-token',
   clearAuth: jest.fn(),
   loadSubscription: jest.fn().mockResolvedValue(undefined),
+  setSubscription: jest.fn(),
   setSignedOutTransition: jest.fn(),
 };
 

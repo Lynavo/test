@@ -90,7 +90,8 @@
   },
   "dialogs": {
     "syncError": {
-      "title": "同步異常"
+      "title": "同步異常",
+      "lowDiskPaused": "接收磁碟剩餘空間小於 500MB，已暫停新的接收任務"
     },
     "cancelManual": {
       "title": "取消手動上傳",

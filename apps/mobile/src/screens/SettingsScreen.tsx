@@ -1188,14 +1188,22 @@ export function SettingsScreen() {
           </View>
           <View style={styles.listSep} />
           <View style={styles.infoRow}>
-            <Text style={styles.infoRowLabel}>
-              {t('settings.rows.appVersion')}
-            </Text>
+            <View style={styles.infoRowLeft}>
+              <Icon
+                name="information-circle-outline"
+                size={16}
+                color={MUTED_TEXT}
+              />
+              <Text style={styles.infoRowLabel}>
+                {t('settings.rows.appVersion')}
+              </Text>
+            </View>
             <Text style={styles.infoRowValue}>{appVersionLabel}</Text>
           </View>
           <View style={styles.listSep} />
           <View style={styles.languageRow}>
             <View style={styles.languageHeaderRow}>
+              <Icon name="language-outline" size={16} color={MUTED_TEXT} />
               <Text style={styles.infoRowLabel}>
                 {t('settings.rows.language')}
               </Text>
@@ -1743,7 +1751,7 @@ const styles = StyleSheet.create({
   languageHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
   languageOptions: {
     flexDirection: 'row',

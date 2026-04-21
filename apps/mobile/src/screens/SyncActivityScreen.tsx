@@ -51,6 +51,11 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type SyncActivityNav = StackNavigationProp<RootStackParamList, 'SyncActivity'>;
 
+type SyncErrorEvent = {
+  code?: string;
+  message?: string;
+};
+
 interface SyncOverview {
   progressPercent: number;
   currentSpeedMbps: number;
@@ -212,6 +217,16 @@ function getPreparationSubtitle(overview: SyncOverview, t: TFunction): string {
     default:
       return '';
   }
+}
+
+export function resolveSyncErrorAlertMessage(
+  error: SyncErrorEvent | null | undefined,
+  t: TFunction,
+): string {
+  if (error?.code === 'LOW_DISK_PAUSED') {
+    return t('syncActivity.dialogs.syncError.lowDiskPaused');
+  }
+  return error?.message || t('errors.unknown');
 }
 
 function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
@@ -478,8 +493,8 @@ export function SyncActivityScreen() {
 
         errorSub = emitter.addListener(
           'onError',
-          (error: { code?: string; message?: string }) => {
-            const msg = error?.message || t('errors.unknown');
+          (error: SyncErrorEvent) => {
+            const msg = resolveSyncErrorAlertMessage(error, t);
             Alert.alert(t('syncActivity.dialogs.syncError.title'), msg);
           },
         );
