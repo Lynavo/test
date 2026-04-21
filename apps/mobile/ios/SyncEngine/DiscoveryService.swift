@@ -70,6 +70,15 @@ class DiscoveryService {
     func startBrowsing() {
         slog("[DiscoveryService] startBrowsing called")
         syncDiagnosticsLog("DiscoveryService", "startBrowsing called")
+        browser?.cancel()
+        browser = nil
+        for connection in probeConnections.values {
+            connection.cancel()
+        }
+        probeConnections.removeAll()
+        devices.removeAll()
+        reachableDevices.removeAll()
+
         let descriptor = NWBrowser.Descriptor.bonjourWithTXTRecord(type: "_syncflow._tcp", domain: nil)
         let params = NWParameters()
         // Prefer infrastructure Wi-Fi / USB network paths for discovery so the

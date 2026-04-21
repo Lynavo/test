@@ -177,6 +177,7 @@ export function DeviceDiscoveryScreen() {
 
       let subscription: { remove: () => void } | undefined;
       let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+      let active = true;
 
       try {
         const { NativeSyncEngine } = NativeModules;
@@ -218,8 +219,15 @@ export function DeviceDiscoveryScreen() {
               }
             },
           );
-          console.log('[DiscoveryScreen] calling startDiscovery');
-          NativeSyncEngine.startDiscovery()
+          console.log('[DiscoveryScreen] restarting discovery');
+          NativeSyncEngine.stopDiscovery()
+            .catch((e: Error) =>
+              console.warn('[DiscoveryScreen] stopDiscovery before start failed:', e),
+            )
+            .then(() => {
+              if (!active) return undefined;
+              return NativeSyncEngine.startDiscovery();
+            })
             .then(() => console.log('[DiscoveryScreen] startDiscovery resolved'))
             .catch((e: Error) =>
               console.warn('[DiscoveryScreen] startDiscovery failed:', e),
@@ -242,6 +250,7 @@ export function DeviceDiscoveryScreen() {
       }
 
       return () => {
+        active = false;
         console.log(
           '[DiscoveryScreen] blurred, cleaning up discovery listeners',
         );
@@ -297,8 +306,15 @@ export function DeviceDiscoveryScreen() {
       const { NativeSyncEngine } = NativeModules;
       if (NativeSyncEngine) {
         console.log('[DiscoveryScreen] handleRescan restarting discovery');
-        NativeSyncEngine.stopDiscovery();
-        NativeSyncEngine.startDiscovery();
+        NativeSyncEngine.stopDiscovery()
+          .catch((e: Error) =>
+            console.warn('[DiscoveryScreen] handleRescan stopDiscovery failed:', e),
+          )
+          .then(() => NativeSyncEngine.startDiscovery())
+          .catch((e: Error) => {
+            console.warn('[DiscoveryScreen] handleRescan startDiscovery failed:', e);
+            setScanning(false);
+          });
         return;
       }
     } catch {
