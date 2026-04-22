@@ -777,7 +777,18 @@ export function SubscriptionScreen() {
 
   const handlePaymentSuccessDismiss = useCallback(() => {
     setShowPaymentSuccess(false);
-  }, []);
+    // Came from Settings / elsewhere → return there. Came from login
+    // (Subscription is the stack root for trial_expired / sub_expired) →
+    // no back entry exists, so reset into the normal authed flow.
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'DeviceDiscovery' }],
+      });
+    }
+  }, [navigation]);
 
   const subscribeButtonLabel =
     currentPlan === 'yearly'
