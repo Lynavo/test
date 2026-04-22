@@ -76,11 +76,10 @@ describe('directory-store', () => {
         displayName: 'iPhone 15',
         clientName: 'iPhone 15',
         platform: 'ios',
-        status: 'online',
-        todayUploadCount: 2,
-        todayOccupiedBytes: 5000,
-        lastUploadFilename: 'photo.jpg',
-        lastUploadAt: '2026-04-10T10:00:00Z',
+        ip: '192.168.1.20',
+        status: 'connected_idle',
+        todayFileCount: 2,
+        todayBytes: 5000,
         storagePath: '/tmp/dev-1',
         devicePath: '/tmp/dev-1',
         storageLeft: '10GB',
@@ -210,7 +209,40 @@ describe('directory-store', () => {
     await useDirectoryStore.getState().fetchSharedFiles();
 
     expect(useDirectoryStore.getState().sharedFiles).toEqual([]);
-    expect(useDirectoryStore.getState().sharedError).toBe('加载共享文件列表失败');
+    expect(useDirectoryStore.getState().sharedError).toBe('載入共享檔案列表失敗');
+  });
+
+  it('fetchSharedFiles uses storage unavailable copy when the directory is missing', async () => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getSharedList: vi
+          .fn()
+          .mockRejectedValue(new Error('Sidecar GET /shared/list: 503 {"error":"storage path unavailable"}')),
+      },
+    } as unknown as Window['electronAPI'];
+
+    await useDirectoryStore.getState().fetchSharedFiles();
+
+    expect(useDirectoryStore.getState().sharedFiles).toEqual([]);
+    expect(useDirectoryStore.getState().sharedError).toBe(
+      '共享目錄不可用，請重新選擇或恢復資料夾',
+    );
+  });
+
+  it('fetchReceivedFiles uses storage unavailable copy when the receive directory is missing', async () => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getDashboardDevices: vi
+          .fn()
+          .mockRejectedValue(new Error('Sidecar GET /dashboard/devices: 503 {"error":"storage path unavailable"}')),
+      },
+    } as unknown as Window['electronAPI'];
+
+    await useDirectoryStore.getState().fetchReceivedFiles();
+
+    expect(useDirectoryStore.getState().receivedError).toBe(
+      '接收目錄不可用，請重新選擇或恢復資料夾',
+    );
   });
 
   it('fetchSharedFiles clears sharedError on success', async () => {
@@ -227,7 +259,7 @@ describe('directory-store', () => {
     } as unknown as Window['electronAPI'];
 
     // Pre-set an error to verify it gets cleared
-    useDirectoryStore.setState({ sharedError: '加载共享文件列表失败' });
+    useDirectoryStore.setState({ sharedError: '載入共享檔案列表失敗' });
 
     await useDirectoryStore.getState().fetchSharedFiles();
 

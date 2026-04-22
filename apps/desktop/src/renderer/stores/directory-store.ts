@@ -24,6 +24,11 @@ function isSidecarHealthy(): boolean {
   return useSidecarRuntimeStore.getState().runtime.status === 'healthy';
 }
 
+function isStorageUnavailableError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return message.includes('storage path unavailable');
+}
+
 export interface DirectoryState {
   activeTab: DirectoryTab;
   receivedFiles: ReceivedFileEntry[];
@@ -136,7 +141,12 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
       }
     } catch (err) {
       console.error('Failed to fetch received files:', err);
-      set({ loading: false, receivedError: '加载接收文件列表失败' });
+      set({
+        loading: false,
+        receivedError: isStorageUnavailableError(err)
+          ? '接收目錄不可用，請重新選擇或恢復資料夾'
+          : '載入接收檔案列表失敗',
+      });
     }
   },
 
@@ -167,7 +177,12 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
       }
     } catch (err) {
       console.error('Failed to fetch shared files:', err);
-      set({ sharedFiles: [], sharedError: '加载共享文件列表失败' });
+      set({
+        sharedFiles: [],
+        sharedError: isStorageUnavailableError(err)
+          ? '共享目錄不可用，請重新選擇或恢復資料夾'
+          : '載入共享檔案列表失敗',
+      });
     }
   },
 

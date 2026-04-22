@@ -24,6 +24,11 @@ function isSidecarHealthy(): boolean {
   return useSidecarRuntimeStore.getState().runtime.status === 'healthy';
 }
 
+function isStorageUnavailableError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  return message.includes('storage path unavailable');
+}
+
 function shouldPreserveRealtimeTransfer(
   existing: DashboardDeviceDTO,
   snapshot: DashboardDeviceDTO,
@@ -183,8 +188,16 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
-      set({ error: '加载设备列表失败' });
-      toast.error('加载设备列表失败', { description: '请检查网络连接后重试' });
+      const storageUnavailable = isStorageUnavailableError(err);
+      const message = storageUnavailable
+        ? '接收目錄不可用，請重新選擇或恢復資料夾'
+        : '載入設備列表失敗';
+      set({ error: message });
+      toast.error(message, {
+        description: storageUnavailable
+          ? '電腦端仍在線，但目前無法存取設定的接收位置'
+          : '請檢查網路連線後重試',
+      });
     }
   },
 

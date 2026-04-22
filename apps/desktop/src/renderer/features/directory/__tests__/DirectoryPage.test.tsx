@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DirectoryPage } from '../DirectoryPage';
 import { useDirectoryStore } from '@renderer/stores/directory-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
@@ -128,6 +128,7 @@ describe('DirectoryPage', () => {
 
 describe('DirectoryPathCard', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     Reflect.deleteProperty(window, 'electronAPI');
     useSettingsStore.setState({
       settings: mockSettings,
@@ -181,6 +182,34 @@ describe('DirectoryPathCard', () => {
     expect(screen.getByText('/Users/alice/SyncFlow')).toBeInTheDocument();
     // Shared should be /Users/alice/SyncFlow/shared
     expect(screen.getByText('/Users/alice/SyncFlow/shared')).toBeInTheDocument();
+  });
+
+  it('blocks root directory changes while a transfer is active', async () => {
+    const selectFolder = vi.fn();
+    const updateSettings = vi.fn();
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      ...(window.electronAPI ?? {}),
+      sidecar: {
+        ...(window.electronAPI?.sidecar ?? {}),
+        getTransferActive: vi.fn().mockResolvedValue({ active: true }),
+        updateSettings,
+      },
+      files: {
+        ...(window.electronAPI?.files ?? {}),
+        selectFolder,
+      },
+    } as unknown as Window['electronAPI'];
+
+    render(<DirectoryPathCard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('正在接收檔案，完成後可變更')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '更改' }));
+
+    expect(selectFolder).not.toHaveBeenCalled();
+    expect(updateSettings).not.toHaveBeenCalled();
   });
 });
 

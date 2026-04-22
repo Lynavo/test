@@ -80,8 +80,11 @@ export function SupportSection() {
         description: '配对设备、上传记录、会话已全部清除',
       });
     } catch (error) {
-      toast.error('重置失败', {
-        description: error instanceof Error ? error.message : '请稍后重试',
+      const message = error instanceof Error ? error.message : '請稍後重試';
+      toast.error('重置失敗', {
+        description: message.includes('transfer')
+          ? '正在接收檔案，完成後再重置資料'
+          : message,
       });
     } finally {
       setResetting(false);

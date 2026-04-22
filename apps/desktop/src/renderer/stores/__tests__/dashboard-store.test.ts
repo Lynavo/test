@@ -487,6 +487,26 @@ describe('dashboard-store', () => {
     expect(useDashboardStore.getState().devices).toEqual(devices);
   });
 
+  it('reports storage unavailable without treating it as a network failure', async () => {
+    useDashboardStore.setState({ devices: [] });
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      sidecar: {
+        getDashboardSummary: vi
+          .fn()
+          .mockRejectedValue(
+            new Error('Sidecar GET /dashboard/summary: 503 {"error":"storage path unavailable"}'),
+          ),
+        getDashboardDevices: vi.fn().mockResolvedValue([]),
+      },
+    } as unknown as Window['electronAPI'];
+
+    await useDashboardStore.getState().fetchDashboard();
+
+    expect(useDashboardStore.getState().error).toBe(
+      '接收目錄不可用，請重新選擇或恢復資料夾',
+    );
+  });
+
   it('does not preserve a stale 100 percent transfer over an idle snapshot', async () => {
     useDashboardStore.getState().updateDevices([
       {
