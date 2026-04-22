@@ -726,6 +726,15 @@ export function AlbumWorkbenchScreen() {
     ) => {
       if (!autoUploadConfig) return;
 
+      // Baseline is locked while auto is active — changing scope mid-flight would
+      // expand/contract an in-flight job and leave the pending queue inconsistent.
+      if (
+        autoUploadConfig.state === 'active' &&
+        (key === 'timeRangeMode' || key === 'customTimeFrom')
+      ) {
+        return;
+      }
+
       // When switching to custom mode with no time set, update UI only (don't save)
       if (
         key === 'timeRangeMode' &&
@@ -1059,7 +1068,12 @@ export function AlbumWorkbenchScreen() {
                 <Text style={styles.configGroupLabel}>
                   {t('albumWorkbench.config.timeRangeLabel')}
                 </Text>
-                <View style={styles.configChips}>
+                <View
+                  style={[
+                    styles.configChips,
+                    isAutoUploadActive && styles.configChipsDisabled,
+                  ]}
+                >
                   {TIME_RANGE_OPTIONS.map(opt => (
                     <TouchableOpacity
                       key={opt.key}
@@ -1069,6 +1083,7 @@ export function AlbumWorkbenchScreen() {
                           styles.configChipActive,
                       ]}
                       activeOpacity={0.7}
+                      disabled={isAutoUploadActive}
                       onPress={() =>
                         void handleConfigChange('timeRangeMode', opt.key)
                       }
@@ -1088,8 +1103,12 @@ export function AlbumWorkbenchScreen() {
                 {/* Custom time display — shown when timeRangeMode is 'custom' */}
                 {autoUploadConfig.timeRangeMode === 'custom' && (
                   <TouchableOpacity
-                    style={styles.customTimeCard}
+                    style={[
+                      styles.customTimeCard,
+                      isAutoUploadActive && styles.customTimeCardDisabled,
+                    ]}
                     activeOpacity={0.7}
+                    disabled={isAutoUploadActive}
                     onPress={() => {
                       const initial = autoUploadConfig.customTimeFrom
                         ? new Date(autoUploadConfig.customTimeFrom)
@@ -1786,6 +1805,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  configChipsDisabled: {
+    opacity: 0.5,
+  },
   configChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -1814,6 +1836,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.9)',
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.08)',
+  },
+  customTimeCardDisabled: {
+    opacity: 0.5,
   },
   customTimeText: {
     fontSize: 13,

@@ -26,6 +26,7 @@ const mockedGetAlbumStats = jest.fn();
 const mockedGetAutoUploadConfig = jest.fn();
 const mockedGetPhotoAuthorizationStatus = jest.fn();
 const mockedPresentLimitedPhotoPicker = jest.fn();
+const mockedSaveAutoUploadConfig = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -45,7 +46,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   submitManualUpload: jest.fn(),
   cancelAllManualUploads: jest.fn(),
   getAutoUploadConfig: () => mockedGetAutoUploadConfig(),
-  saveAutoUploadConfig: jest.fn(),
+  saveAutoUploadConfig: (...args: unknown[]) => mockedSaveAutoUploadConfig(...args),
   interruptAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
   getPhotoAuthorizationStatus: () => mockedGetPhotoAuthorizationStatus(),
@@ -493,5 +494,45 @@ describe('AlbumWorkbenchScreen', () => {
     const texts = tree!.root.findAllByType(T).map(n => n.props.children);
     // statValue renders the raw number; with one selected it should appear as 1
     expect(texts).toEqual(expect.arrayContaining([1]));
+  });
+
+  it('locks time range chips when auto upload is active', async () => {
+    mockedSaveAutoUploadConfig.mockClear();
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: true,
+      state: 'active',
+      timeRangeMode: 'all',
+      customTimeFrom: null,
+    });
+
+    let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+    });
+    // Two microtask flushes: first for getAutoUploadConfig to resolve,
+    // second for the subsequent setConfigExpanded(true) re-render to commit.
+    await ReactTestRenderer.act(async () => {
+      await Promise.resolve();
+    });
+    await ReactTestRenderer.act(async () => {
+      await Promise.resolve();
+    });
+
+    // loadConfig auto-expands the card when config.enabled is true,
+    // so chips should already be in the tree — no header tap needed.
+    const fromNowChip = tree!.root
+      .findAll(node => typeof node.props.onPress === 'function')
+      .find(node => {
+        const textNodes = node.findAllByType(Text);
+        return textNodes.some(t => t.props.children === '此时此刻');
+      });
+    expect(fromNowChip).toBeDefined();
+    expect(fromNowChip!.props.disabled).toBe(true);
+
+    await ReactTestRenderer.act(async () => {
+      await fromNowChip!.props.onPress();
+    });
+    expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
   });
 });
