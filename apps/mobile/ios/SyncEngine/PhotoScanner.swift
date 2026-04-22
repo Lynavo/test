@@ -247,6 +247,7 @@ struct ScannedAsset {
     let originalFilename: String
     let estimatedSize: Int64
     var source: String = "auto"  // "auto" | "manual"
+    var batchId: String? = nil
 }
 
 extension Date {

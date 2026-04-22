@@ -368,6 +368,49 @@ class UploadStore {
         }
     }
 
+    func getManualQueueStats(batchId: String) -> (totalCount: Int, totalBytes: Int64, completedCount: Int, completedBytes: Int64)? {
+        guard !batchId.isEmpty else { return nil }
+        return queue.sync {
+            let statsSql = """
+            SELECT
+                COUNT(*) AS total_count,
+                SUM(file_size) AS total_bytes,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+                SUM(CASE WHEN status = 'completed' THEN file_size ELSE 0 END) AS completed_bytes
+            FROM upload_items
+            WHERE source = 'manual'
+              AND batch_id = ?1
+              AND status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading', 'completed')
+            """
+            let rows = queryInternal(statsSql, bind: [.text(batchId)])
+            guard let first = rows.first else {
+                return nil
+            }
+            return (
+                totalCount: Int(first["total_count"] as? Int64 ?? 0),
+                totalBytes: first["total_bytes"] as? Int64 ?? 0,
+                completedCount: Int(first["completed_count"] as? Int64 ?? 0),
+                completedBytes: first["completed_bytes"] as? Int64 ?? 0
+            )
+        }
+    }
+
+    func getActiveManualQueueBatchId() -> String? {
+        return queue.sync {
+            let sql = """
+            SELECT batch_id FROM upload_items
+            WHERE source = 'manual'
+              AND batch_id IS NOT NULL
+              AND batch_id != ''
+              AND status IN ('queued', 'discovered', 'preparing', 'ready', 'cloud_downloading', 'uploading')
+            ORDER BY priority DESC, id ASC
+            LIMIT 1
+            """
+            let rows = queryInternal(sql, bind: [])
+            return rows.first?["batch_id"] as? String
+        }
+    }
+
     func getCompletedFileKeys() -> [String] {
         return queue.sync {
             let sql = "SELECT file_key FROM upload_items WHERE status = 'completed' AND file_key IS NOT NULL"
@@ -553,7 +596,7 @@ class UploadStore {
         }
     }
 
-    /// Cancel all pending and in-progress items in a manual batch.
+    /// Cancel all pending and in-progress items in a manual queue.
     /// Three checkpoints in the upload loop enforce this:
     ///   1. Between files (index > 0): skips cancelled items before export
     ///   2. After export, before TCP upload: skips and cleans up temp file

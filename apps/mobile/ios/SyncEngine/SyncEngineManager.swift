@@ -739,7 +739,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 creationDate: asset.creationDate,
                 originalFilename: originalFilename,
                 estimatedSize: estimatedSize,
-                source: item.source
+                source: item.source,
+                batchId: item.batchId
             ))
         }
 
@@ -803,6 +804,20 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         cloudAssetFlags[key] = isCloudAsset
         cloudAssetDetectionInFlight.remove(key)
         return previous != isCloudAsset
+    }
+
+    private func manualUploadQueueAssets(from pendingAssets: [ScannedAsset]) -> [ScannedAsset] {
+        guard let first = pendingAssets.first, first.source == "manual" else { return [] }
+        guard let batchId = first.batchId, !batchId.isEmpty else {
+            return Array(pendingAssets.prefix { $0.source == "manual" })
+        }
+        return Array(pendingAssets.prefix { $0.source == "manual" && $0.batchId == batchId })
+    }
+
+    private func estimatedTotalBytes(for assets: [ScannedAsset]) -> Int64 {
+        assets.reduce(Int64(0)) { total, asset in
+            total + max(asset.estimatedSize, 0)
+        }
     }
 
     private func detectCloudBackedAsset(assetLocalId: String, mediaType: String) async -> Bool {
@@ -2384,6 +2399,25 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             // Connect, upload, disconnect — with retry on error
+            let manualRoundAssets = manualUploadQueueAssets(from: pendingAssets)
+            let manualRoundStats = manualRoundAssets.isEmpty
+                ? nil
+                : manualRoundAssets.first?.batchId.flatMap { uploadStore?.getManualQueueStats(batchId: $0) }
+            let uploadRoundAssets = manualRoundAssets.isEmpty
+                ? pendingAssets
+                : manualRoundAssets
+            let roundTotalCount = manualRoundAssets.isEmpty
+                ? stats.totalCount
+                : (manualRoundStats?.totalCount ?? uploadRoundAssets.count)
+            let roundTotalBytes = manualRoundAssets.isEmpty
+                ? stats.totalBytes
+                : (manualRoundStats?.totalBytes ?? estimatedTotalBytes(for: uploadRoundAssets))
+            let roundCompletedCount = manualRoundAssets.isEmpty
+                ? stats.completedCount
+                : (manualRoundStats?.completedCount ?? 0)
+            let roundCompletedBytes = manualRoundAssets.isEmpty
+                ? stats.completedBytes
+                : (manualRoundStats?.completedBytes ?? Int64(0))
             var retryAttempt = 0
             let maxRetryDelay: UInt64 = 30_000_000_000
             var uploaded = false
@@ -2394,11 +2428,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         binding: binding,
                         token: token,
                         clientId: clientId,
-                        assets: pendingAssets,
-                        totalCount: stats.totalCount,
-                        totalBytes: stats.totalBytes,
-                        completedCount: stats.completedCount,
-                        completedBytes: stats.completedBytes,
+                        assets: uploadRoundAssets,
+                        totalCount: roundTotalCount,
+                        totalBytes: roundTotalBytes,
+                        completedCount: roundCompletedCount,
+                        completedBytes: roundCompletedBytes,
                         recoveryMode: retryAttempt > 0
                     )
                     uploaded = true
@@ -2694,7 +2728,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     slog("[SyncPipeline] skipping auto item %@ — auto upload interrupted", asset.fileKey)
                     continue
                 }
-                // Check if this item was cancelled in DB (e.g. manual batch cancel)
+                // Check if this item was cancelled in DB (e.g. manual queue cancel)
                 if let item = uploadStore?.getUploadItemByFileKey(asset.fileKey),
                    item.status == "cancelled" {
                     slog("[SyncPipeline] skipping cancelled item %@", asset.fileKey)
@@ -4674,11 +4708,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         enableAutoUpload()
     }
 
-    /// Cancel remaining items in a manual batch.
+    /// Cancel remaining items in a manual queue.
     func cancelManualBatch(batchId: String) throws {
         try uploadStore?.cancelManualBatch(batchId: batchId)
-        slog("[SyncEngine] cancelled manual batch %@", batchId)
-        syncDiagnosticsLog("SyncEngine", "cancelled manual batch \(batchId)")
+        slog("[SyncEngine] cancelled manual queue %@", batchId)
+        syncDiagnosticsLog("SyncEngine", "cancelled manual queue \(batchId)")
         emitQueueToJS()
     }
 
