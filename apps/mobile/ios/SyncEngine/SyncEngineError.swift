@@ -7,6 +7,7 @@ enum SyncEngineError: Error, LocalizedError {
     case permissionError(String)
     case lowDiskPaused(String)
     case storageUnavailable(String, source: String)
+    case reconnectExhausted(String)
     case autoUploadInterrupted
     case manualUploadCancelled
 
@@ -18,6 +19,7 @@ enum SyncEngineError: Error, LocalizedError {
         case .permissionError(let msg): return "Permission error: \(msg)"
         case .lowDiskPaused(let msg): return "Low disk paused: \(msg)"
         case .storageUnavailable(let msg, let source): return "Storage unavailable (\(source)): \(msg)"
+        case .reconnectExhausted(let msg): return "Reconnect exhausted: \(msg)"
         case .autoUploadInterrupted: return "Auto upload interrupted by user"
         case .manualUploadCancelled: return "Manual upload cancelled by user"
         }

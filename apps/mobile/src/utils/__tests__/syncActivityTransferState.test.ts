@@ -231,6 +231,24 @@ describe('syncActivityTransferState', () => {
     expect(getSyncActivityMainCardState(snapshot, true)).toBe('running');
   });
 
+  it('shows offline after reconnect attempts are exhausted even with auto queue work', () => {
+    const snapshot = {
+      uploadState: 'offline',
+      autoUploadState: 'active' as const,
+      completedCount: 1,
+      totalCount: 3,
+      autoPending: 2,
+      manualPending: 0,
+      currentTaskSource: 'auto' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      lastErrorCode: 'RECONNECT_EXHAUSTED',
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, true)).toBe('offline');
+  });
+
   it('shows auto completed state after an auto round finishes', () => {
     const snapshot = {
       uploadState: 'completed',

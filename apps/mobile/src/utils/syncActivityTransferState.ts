@@ -35,6 +35,15 @@ function isAutoUploadInterrupted(
   );
 }
 
+function isReconnectExhaustedOffline(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): boolean {
+  return (
+    snapshot?.uploadState === 'offline' ||
+    snapshot?.lastErrorCode === 'RECONNECT_EXHAUSTED'
+  );
+}
+
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -77,6 +86,10 @@ function hasNoPendingQueueWork(
 export function isSyncActivityActivelyTransferring(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
+  if (isReconnectExhaustedOffline(snapshot)) {
+    return false;
+  }
+
   if (
     isAutoUploadInterrupted(snapshot) &&
     !hasPendingManualWork(snapshot) &&
@@ -137,6 +150,10 @@ export function getSyncActivityMainCardState(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
   isOffline: boolean,
 ): SyncActivityMainCardState {
+  if (isOffline && isReconnectExhaustedOffline(snapshot)) {
+    return 'offline';
+  }
+
   const hasManualWork = hasPendingManualWork(snapshot);
   const isActivelyTransferring = isSyncActivityActivelyTransferring(snapshot);
   const isAutoUploadActive = snapshot?.autoUploadState === 'active';

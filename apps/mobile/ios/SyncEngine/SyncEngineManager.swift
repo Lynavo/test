@@ -1796,7 +1796,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             switch syncError {
             case .networkError:
                 return true
-            case .databaseError, .pairingError, .permissionError, .lowDiskPaused, .storageUnavailable, .autoUploadInterrupted, .manualUploadCancelled:
+            case .databaseError, .pairingError, .permissionError, .lowDiskPaused, .storageUnavailable, .reconnectExhausted, .autoUploadInterrupted, .manualUploadCancelled:
                 return false
             }
         }
@@ -1862,6 +1862,19 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let jitterMs = UInt64(Int.random(in: 0...1000))
         let jitterNs = jitterMs * 1_000_000
         return min(baseDelaySeconds * 1_000_000_000 + jitterNs, 30_000_000_000)
+    }
+
+    private func maxUploadReconnectAttempts() -> Int {
+        min(
+            max(
+                syncFlowIntSetting(
+                    envKey: "SYNCFLOW_UPLOAD_MAX_RECONNECT_ATTEMPTS",
+                    userDefaultsKey: "SyncFlowUploadMaxReconnectAttempts"
+                ) ?? 3,
+                1
+            ),
+            10
+        )
     }
 
     private func clearResolvedSidecarHost() {
@@ -2140,6 +2153,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     "code": "STORAGE_UNAVAILABLE",
                     "message": message,
                 ])
+            case .reconnectExhausted(let message):
+                slog("[SyncEngine] sync pipeline paused after reconnect limit: %@", message)
+                syncDiagnosticsLog("SyncEngine", "sync pipeline paused after reconnect limit: \(message)")
+                protocolSession?.disconnect()
+                protocolSession = nil
+                clearResolvedSidecarHost()
+                if uploadStore?.getBinding() != nil {
+                    updateBindingConnectionState(.offline, reason: "upload_reconnect_exhausted")
+                }
+                setRuntimeReconnectError(code: "RECONNECT_EXHAUSTED", message: message)
+                stopSyncLifecycle(finalState: .pausedNoTarget)
             default:
                 slog("[SyncEngine] sync pipeline failed: \(error)")
                 syncDiagnosticsLog("SyncEngine", "sync pipeline failed: \(error)")
@@ -2419,6 +2443,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 ? stats.completedBytes
                 : (manualRoundStats?.completedBytes ?? Int64(0))
             var retryAttempt = 0
+            let maxReconnectAttempts = maxUploadReconnectAttempts()
             let maxRetryDelay: UInt64 = 30_000_000_000
             var uploaded = false
 
@@ -2454,6 +2479,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         error,
                         targetDeviceType: currentUploadTargetDeviceType()
                     )
+                    let exhaustedMessage = "Desktop did not become reachable after \(retryAttempt) reconnect attempts: \(retryableError.message)"
 
                     clearResolvedSidecarHost()
                     updateBindingConnectionState(.offline, reason: "retryable_upload_failure")
@@ -2462,6 +2488,35 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         code: retryableError.code,
                         message: retryableError.message
                     )
+                    if retryAttempt >= maxReconnectAttempts {
+                        clearRuntimeCurrentFile()
+                        runtimeCurrentSpeedMbps = 0
+                        setRuntimeReconnectError(
+                            code: "RECONNECT_EXHAUSTED",
+                            message: exhaustedMessage
+                        )
+                        slog(
+                            "[SyncPipeline] upload reconnect exhausted after %d attempts: %@",
+                            retryAttempt,
+                            "\(error)"
+                        )
+                        syncDiagnosticsLog(
+                            "SyncPipeline",
+                            "upload reconnect exhausted after \(retryAttempt) attempts: \(error)"
+                        )
+                        recordRecentRetry(error: error, attempt: retryAttempt, delaySeconds: 0)
+                        recordRecentError(code: "RECONNECT_EXHAUSTED", message: exhaustedMessage)
+                        NativeSyncEngineModule.shared?.emitSyncStateChanged(([
+                            "lastErrorCode": "RECONNECT_EXHAUSTED",
+                            "lastErrorMessage": exhaustedMessage,
+                            "retryAttempt": retryAttempt,
+                            "retryLimit": maxReconnectAttempts,
+                            "reconnectExhausted": true,
+                        ] as [String: Any]).merging(
+                            runtimeSyncOverviewPayload(uploadState: "offline")
+                        ) { _, new in new })
+                        throw SyncEngineError.reconnectExhausted(exhaustedMessage)
+                    }
                     slog("[SyncPipeline] upload failed with retryable error: %@ — reconnecting in %.1fs (attempt %d)",
                           "\(error)", delaySeconds, retryAttempt)
                     syncDiagnosticsLog("SyncPipeline", "upload failed with retryable error: \(error) — reconnecting in \(String(format: "%.1f", delaySeconds))s (attempt \(retryAttempt))")
