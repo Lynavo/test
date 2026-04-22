@@ -14,7 +14,11 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, CommonActions } from '@react-navigation/native';
+import {
+  useNavigation,
+  CommonActions,
+  useIsFocused,
+} from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -321,6 +325,25 @@ export function shouldRenderSyncActivityProgress(
   );
 }
 
+export function shouldShowSubscriptionExpiredOverlay({
+  subscriptionEnforcement,
+  isFocused,
+  isLoggedIn,
+  featureAccessAllowed,
+}: {
+  subscriptionEnforcement: boolean;
+  isFocused: boolean;
+  isLoggedIn: boolean;
+  featureAccessAllowed: boolean;
+}): boolean {
+  return (
+    subscriptionEnforcement &&
+    isFocused &&
+    isLoggedIn &&
+    !featureAccessAllowed
+  );
+}
+
 export function getSyncActivityDisplayProgressPercent(
   overview: SyncOverview,
   shouldDelayCompletion: boolean,
@@ -353,6 +376,7 @@ function CompletionStatCard({
 
 export function SyncActivityScreen() {
   const navigation = useNavigation<SyncActivityNav>();
+  const isScreenFocused = useIsFocused();
   const { t } = useTranslation();
   const auth = useAuth();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
@@ -926,6 +950,14 @@ export function SyncActivityScreen() {
   const latestSyncLabel = todayStats.latestUpdatedAt
     ? formatDateTimeLabel(todayStats.latestUpdatedAt, t)
     : undefined;
+  const showSubscriptionExpiredOverlay = shouldShowSubscriptionExpiredOverlay({
+    subscriptionEnforcement: FEATURES.SUBSCRIPTION_ENFORCEMENT,
+    isFocused: isScreenFocused,
+    isLoggedIn: auth.isLoggedIn,
+    featureAccessAllowed: isFeatureAccessAllowed(
+      auth.subscription?.status ?? auth.user?.status,
+    ),
+  });
 
   useEffect(() => {
     // Cache the last known uploading visual regardless of task source.
@@ -1739,44 +1771,40 @@ export function SyncActivityScreen() {
       {/* Trial / Subscription expired overlay — gated by FEATURES until real
           IAP is wired (otherwise the overlay sends users to a dead-end
           subscription screen with no working purchase flow). */}
-      {FEATURES.SUBSCRIPTION_ENFORCEMENT &&
-        auth.isLoggedIn &&
-        !isFeatureAccessAllowed(
-          auth.subscription?.status ?? auth.user?.status,
-        ) && (
-          <Modal visible transparent animationType="fade" statusBarTranslucent>
-            <View style={styles.expiredOverlay}>
-              <View style={styles.expiredCard}>
-                <View style={styles.expiredIconCircle}>
-                  <Icon name="shield-outline" size={36} color="#8b5cf6" />
-                </View>
-                <Text style={styles.expiredTitle}>
-                  {t('syncActivity.expired.title')}
-                </Text>
-                <Text style={styles.expiredSubtitle}>
-                  {t('syncActivity.expired.subtitle')}
-                </Text>
-                <TouchableOpacity
-                  style={styles.expiredPrimaryButton}
-                  activeOpacity={0.7}
-                  onPress={() => navigation.navigate('Subscription')}
-                >
-                  <Text style={styles.expiredPrimaryButtonText}>
-                    {t('syncActivity.expired.subscribeCta')}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.6}
-                  onPress={() => navigation.navigate('Help')}
-                >
-                  <Text style={styles.expiredSecondaryText}>
-                    {t('syncActivity.expired.viewHelp')}
-                  </Text>
-                </TouchableOpacity>
+      {showSubscriptionExpiredOverlay && (
+        <Modal visible transparent animationType="fade" statusBarTranslucent>
+          <View style={styles.expiredOverlay}>
+            <View style={styles.expiredCard}>
+              <View style={styles.expiredIconCircle}>
+                <Icon name="shield-outline" size={36} color="#8b5cf6" />
               </View>
+              <Text style={styles.expiredTitle}>
+                {t('syncActivity.expired.title')}
+              </Text>
+              <Text style={styles.expiredSubtitle}>
+                {t('syncActivity.expired.subtitle')}
+              </Text>
+              <TouchableOpacity
+                style={styles.expiredPrimaryButton}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('Subscription')}
+              >
+                <Text style={styles.expiredPrimaryButtonText}>
+                  {t('syncActivity.expired.subscribeCta')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.6}
+                onPress={() => navigation.navigate('Help')}
+              >
+                <Text style={styles.expiredSecondaryText}>
+                  {t('syncActivity.expired.viewHelp')}
+                </Text>
+              </TouchableOpacity>
             </View>
-          </Modal>
-        )}
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }

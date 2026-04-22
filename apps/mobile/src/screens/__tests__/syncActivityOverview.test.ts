@@ -5,6 +5,7 @@ import {
   resolveSyncErrorAlertMessage,
   shouldDelayAutoCompletionCard,
   shouldRenderSyncActivityProgress,
+  shouldShowSubscriptionExpiredOverlay,
 } from '../SyncActivityScreen';
 import { getSyncActivityMainCardState } from '../../utils/syncActivityTransferState';
 import type { TFunction } from 'i18next';
@@ -14,6 +15,7 @@ jest.mock('@react-navigation/native', () => ({
     navigate: jest.fn(),
     dispatch: jest.fn(),
   }),
+  useIsFocused: () => true,
   CommonActions: {
     reset: jest.fn(),
   },
@@ -945,6 +947,30 @@ describe('getSyncActivityDisplayProgressPercent', () => {
         true,
       ),
     ).toBe(100);
+  });
+});
+
+describe('shouldShowSubscriptionExpiredOverlay', () => {
+  it('shows only when subscription enforcement is active on the focused screen', () => {
+    expect(
+      shouldShowSubscriptionExpiredOverlay({
+        subscriptionEnforcement: true,
+        isFocused: true,
+        isLoggedIn: true,
+        featureAccessAllowed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides after navigating away from SyncActivity', () => {
+    expect(
+      shouldShowSubscriptionExpiredOverlay({
+        subscriptionEnforcement: true,
+        isFocused: false,
+        isLoggedIn: true,
+        featureAccessAllowed: false,
+      }),
+    ).toBe(false);
   });
 });
 
