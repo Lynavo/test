@@ -258,6 +258,17 @@ describe('iapService — purchase', () => {
     expect(receipt.transactionId).toBe('tx_late');
   });
 
+  test('rejects non-fatal error after grace period when no purchase update arrives', async () => {
+    jest.useFakeTimers();
+    const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
+
+    errorCb?.({ code: 'E_UNKNOWN', productId: IAP_PRODUCTS.monthly });
+    jest.advanceTimersByTime(8_000);
+
+    await expect(pending).rejects.toMatchObject({ code: 'E_UNKNOWN' });
+  });
+
   test('fatal E_ITEM_UNAVAILABLE code still rejects pending (regression guard)', async () => {
     const pending = iapService.purchase(IAP_PRODUCTS.yearly);
     await flushPurchasePreflight();

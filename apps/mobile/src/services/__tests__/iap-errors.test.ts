@@ -55,10 +55,12 @@ describe('classifyIapError', () => {
     expect(cls.i18nKey).toBe('subscription.errors.productUnavailable');
   });
 
-  test('Unknown Apple code → retryable with generic key', () => {
+  test('Unknown Apple code → retryable with account/sign-in guidance key', () => {
     const cls = classifyIapError({ code: 'E_UNKNOWN' });
     expect(cls.kind).toBe(IapErrorClass.Retryable);
-    expect(cls.i18nKey).toBe('subscription.errors.iapFailed');
+    expect(cls.i18nKey).toBe(
+      'subscription.errors.applePurchaseIncomplete',
+    );
   });
 
   test('Backend 2001 IAP_VERIFY_FAILED → retryable', () => {

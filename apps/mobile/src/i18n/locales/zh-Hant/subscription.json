@@ -38,6 +38,7 @@
   },
   "errors": {
     "iapFailed": "付款失敗，請稍後重試",
+    "applePurchaseIncomplete": "Apple 付款未完成，請確認 App Store 帳號或 Sandbox 帳號已登入後再試",
     "verifyFailed": "驗證失敗，請稍後重試",
     "verifyRetrying": "付款驗證中...",
     "productUnavailable": "此商品不可用，請聯絡客服",

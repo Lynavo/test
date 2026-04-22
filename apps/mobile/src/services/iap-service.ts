@@ -23,15 +23,22 @@ import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 
 const MAX_RESTORE_RECEIPTS = 10;
+const PURCHASE_TIMEOUT_MS = 60_000;
+const NON_FATAL_ERROR_GRACE_MS = 8_000;
 type RestorablePlan = NonNullable<ReturnType<typeof productIdToPlan>>;
+type PendingPurchase = {
+  resolve: (r: PurchaseReceipt) => void;
+  reject: (err: unknown) => void;
+  timeout: ReturnType<typeof setTimeout>;
+  transientErrorTimeout: ReturnType<typeof setTimeout> | null;
+};
 
 // Apple's purchaseErrorListener may fire transient / interrupted errors
 // even when the transaction ultimately succeeds (observed in sandbox as an
 // early "unknown" error followed a moment later by a successful update
 // event). Only codes in this allowlist are treated as terminal for the
-// pending Promise; anything else is logged and ignored so the pending
-// can still be resolved by purchaseUpdatedListener — or fall through to
-// the 60s safety timeout if the transaction truly never arrives.
+// pending Promise; anything else gets a short grace window so a trailing
+// purchaseUpdatedListener success can still resolve the pending Promise.
 const FATAL_ERROR_CODES: ReadonlySet<string> = new Set([
   'E_USER_CANCELLED',
   'E_DEFERRED_PAYMENT',
@@ -72,11 +79,7 @@ class IapServiceImpl implements IapService {
   private errorSub: EmitterSubscription | null = null;
   private pendingPurchase = new Map<
     IapProductId,
-    {
-      resolve: (r: PurchaseReceipt) => void;
-      reject: (err: unknown) => void;
-      timeout: ReturnType<typeof setTimeout>;
-    }
+    PendingPurchase
   >();
   private orphanListeners = new Set<() => void>();
 
@@ -114,15 +117,22 @@ class IapServiceImpl implements IapService {
     await this.ensureProductAvailable(productId);
     return new Promise<PurchaseReceipt>((resolve, reject) => {
       const timeout = setTimeout(() => {
-        this.pendingPurchase.delete(productId);
+        const entry = this.pendingPurchase.get(productId);
+        if (entry) this.clearPendingTimers(entry);
         reject(new Error('purchase timed out after 60s'));
-      }, 60_000);
-      this.pendingPurchase.set(productId, { resolve, reject, timeout });
+        this.pendingPurchase.delete(productId);
+      }, PURCHASE_TIMEOUT_MS);
+      this.pendingPurchase.set(productId, {
+        resolve,
+        reject,
+        timeout,
+        transientErrorTimeout: null,
+      });
       void Promise.resolve(requestSubscription({ sku: productId })).catch(
         err => {
           const entry = this.pendingPurchase.get(productId);
           if (!entry) return;
-          clearTimeout(entry.timeout);
+          this.clearPendingTimers(entry);
           this.pendingPurchase.delete(productId);
           reject(err);
         },
@@ -244,7 +254,7 @@ class IapServiceImpl implements IapService {
     // 1. Exact match — happy path.
     const exact = this.pendingPurchase.get(incomingProductId);
     if (exact) {
-      clearTimeout(exact.timeout);
+      this.clearPendingTimers(exact);
       this.pendingPurchase.delete(incomingProductId);
       await this.resolvePendingPurchase(exact, incomingProductId, p);
       return;
@@ -264,7 +274,7 @@ class IapServiceImpl implements IapService {
       const keys = Array.from(this.pendingPurchase.keys());
       const fallbackKey = keys[keys.length - 1]!;
       const fallback = this.pendingPurchase.get(fallbackKey)!;
-      clearTimeout(fallback.timeout);
+      this.clearPendingTimers(fallback);
       this.pendingPurchase.delete(fallbackKey);
       await this.resolvePendingPurchase(fallback, incomingProductId, p);
       return;
@@ -275,10 +285,7 @@ class IapServiceImpl implements IapService {
   }
 
   private async resolvePendingPurchase(
-    pending: {
-      resolve: (r: PurchaseReceipt) => void;
-      reject: (err: unknown) => void;
-    },
+    pending: PendingPurchase,
     productId: IapProductId,
     purchase: Purchase,
   ): Promise<void> {
@@ -381,19 +388,59 @@ class IapServiceImpl implements IapService {
     const code = err.code != null ? String(err.code) : '';
     if (!FATAL_ERROR_CODES.has(code)) {
       // Transient Apple signal (e.g. sandbox often emits an unknown/
-      // interrupted error before the successful update event). Don't
-      // reject the pending Promise — let purchaseUpdatedListener resolve
-      // it, or let the 60s timeout fail-safe it.
-      console.warn('[iap-service] non-fatal error event — ignoring', err);
+      // interrupted error before the successful update event). Give
+      // purchaseUpdatedListener a short chance to resolve it, then reject
+      // with the original StoreKit error instead of making the user wait
+      // for the 60s safety timeout.
+      const pendingPair = this.pendingPurchaseForError(err.productId);
+      if (!pendingPair) {
+        console.warn('[iap-service] non-fatal error event — ignoring', err);
+        return;
+      }
+      const [productId, pending] = pendingPair;
+      if (pending.transientErrorTimeout) {
+        clearTimeout(pending.transientErrorTimeout);
+      }
+      pending.transientErrorTimeout = setTimeout(() => {
+        if (this.pendingPurchase.get(productId) !== pending) return;
+        this.clearPendingTimers(pending);
+        this.pendingPurchase.delete(productId);
+        pending.reject(err);
+      }, NON_FATAL_ERROR_GRACE_MS);
+      console.warn(
+        '[iap-service] non-fatal error event — waiting for purchase update',
+        err,
+      );
       return;
     }
-    const productId = err.productId as IapProductId | undefined;
-    if (!productId) return;
-    const pending = this.pendingPurchase.get(productId);
-    if (!pending) return;
-    clearTimeout(pending.timeout);
+    const pendingPair = this.pendingPurchaseForError(err.productId);
+    if (!pendingPair) return;
+    const [productId, pending] = pendingPair;
+    this.clearPendingTimers(pending);
     this.pendingPurchase.delete(productId);
     pending.reject(err);
+  }
+
+  private pendingPurchaseForError(
+    productId: string | undefined,
+  ): [IapProductId, PendingPurchase] | null {
+    const typedProductId = productId as IapProductId | undefined;
+    if (typedProductId) {
+      const pending = this.pendingPurchase.get(typedProductId);
+      if (pending) return [typedProductId, pending];
+    }
+    if (this.pendingPurchase.size === 1) {
+      return Array.from(this.pendingPurchase.entries())[0] ?? null;
+    }
+    return null;
+  }
+
+  private clearPendingTimers(pending: PendingPurchase): void {
+    clearTimeout(pending.timeout);
+    if (pending.transientErrorTimeout) {
+      clearTimeout(pending.transientErrorTimeout);
+      pending.transientErrorTimeout = null;
+    }
   }
 
   private async handleOrphanPurchase(p: Purchase): Promise<void> {

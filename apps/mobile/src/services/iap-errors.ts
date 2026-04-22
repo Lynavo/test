@@ -98,7 +98,15 @@ export function classifyIapError(err: unknown): IapErrorClassification {
         i18nKey: 'subscription.errors.productUnavailable',
       };
     case 'E_NETWORK_ERROR':
+      return {
+        kind: IapErrorClass.Retryable,
+        i18nKey: 'subscription.errors.iapFailed',
+      };
     case 'E_UNKNOWN':
+      return {
+        kind: IapErrorClass.Retryable,
+        i18nKey: 'subscription.errors.applePurchaseIncomplete',
+      };
     default:
       return {
         kind: IapErrorClass.Retryable,

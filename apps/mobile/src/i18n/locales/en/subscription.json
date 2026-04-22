@@ -38,6 +38,7 @@
   },
   "errors": {
     "iapFailed": "Payment failed. Please try again.",
+    "applePurchaseIncomplete": "Apple payment was not completed. Please make sure your App Store or Sandbox account is signed in, then try again.",
     "verifyFailed": "Verification failed. Please try again.",
     "verifyRetrying": "Payment is being verified...",
     "productUnavailable": "This product is unavailable. Please contact support.",
