@@ -342,6 +342,16 @@ export function shouldTreatSyncActivityAsBetweenItems(
   );
 }
 
+export function shouldBypassOfflineDisplayDelay(snapshot: {
+  uploadState?: string | null;
+  lastErrorCode?: string | null;
+}): boolean {
+  return (
+    snapshot.uploadState === 'offline' ||
+    snapshot.lastErrorCode === 'RECONNECT_EXHAUSTED'
+  );
+}
+
 export function shouldShowSubscriptionExpiredOverlay({
   subscriptionEnforcement,
   isFocused,
@@ -354,10 +364,7 @@ export function shouldShowSubscriptionExpiredOverlay({
   featureAccessAllowed: boolean;
 }): boolean {
   return (
-    subscriptionEnforcement &&
-    isFocused &&
-    isLoggedIn &&
-    !featureAccessAllowed
+    subscriptionEnforcement && isFocused && isLoggedIn && !featureAccessAllowed
   );
 }
 
@@ -410,6 +417,7 @@ export function SyncActivityScreen() {
 
   // Offline debounce: stabilize isOffline to avoid rapid UI flicker
   const [stableOffline, setStableOffline] = useState(false);
+  const [connectionGraceActive, setConnectionGraceActive] = useState(true);
   const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoCompletionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -434,7 +442,6 @@ export function SyncActivityScreen() {
     currentFilename?: string;
     currentSpeedMbps: number;
   } | null>(null);
-  const mountGraceRef = useRef(true);
 
   // ---------------------------------------------------------------------------
   // Data loading
@@ -530,6 +537,19 @@ export function SyncActivityScreen() {
             applyBindingState(state);
           },
         );
+        syncSub = emitter.addListener(
+          'onSyncStateChanged',
+          (state: Record<string, unknown>) => {
+            setOverview(prev => buildOverview(state, prev));
+            if (state.uploadState === 'completed') {
+              void loadTodayStats();
+            }
+          },
+        );
+        errorSub = emitter.addListener('onError', (error: SyncErrorEvent) => {
+          const msg = resolveSyncErrorAlertMessage(error, t);
+          Alert.alert(t('syncActivity.dialogs.syncError.title'), msg);
+        });
 
         const binding = await NativeSyncEngine.getBindingState();
         applyBindingState(binding);
@@ -547,21 +567,6 @@ export function SyncActivityScreen() {
         // Do NOT call triggerSync() here — per PRD, auto upload must be
         // explicitly enabled by the user in the album page. Unconditional
         // triggerSync on mount was the old "always auto sync" behavior.
-
-        syncSub = emitter.addListener(
-          'onSyncStateChanged',
-          (state: Record<string, unknown>) => {
-            setOverview(prev => buildOverview(state, prev));
-            if (state.uploadState === 'completed') {
-              void loadTodayStats();
-            }
-          },
-        );
-
-        errorSub = emitter.addListener('onError', (error: SyncErrorEvent) => {
-          const msg = resolveSyncErrorAlertMessage(error, t);
-          Alert.alert(t('syncActivity.dialogs.syncError.title'), msg);
-        });
       } catch (e) {
         console.warn('[SyncActivity] loadReal error:', e);
         setInitialLoading(false);
@@ -589,11 +594,11 @@ export function SyncActivityScreen() {
         if (!becameActive) return;
         void loadTodayStats();
         // Re-suppress offline display during foreground grace period
-        mountGraceRef.current = true;
+        setConnectionGraceActive(true);
         setStableOffline(false);
         if (foregroundGraceTimer) clearTimeout(foregroundGraceTimer);
         foregroundGraceTimer = setTimeout(() => {
-          mountGraceRef.current = false;
+          setConnectionGraceActive(false);
         }, STARTUP_CONNECTION_GRACE_MS);
       },
     );
@@ -606,7 +611,7 @@ export function SyncActivityScreen() {
   // Mount grace period — suppress offline display for initial connection time
   useEffect(() => {
     const t = setTimeout(() => {
-      mountGraceRef.current = false;
+      setConnectionGraceActive(false);
     }, STARTUP_CONNECTION_GRACE_MS);
     return () => clearTimeout(t);
   }, []);
@@ -862,10 +867,17 @@ export function SyncActivityScreen() {
   );
   const isConnecting = connectionBadgeState === 'connecting';
   const isOffline = connectionBadgeState === 'offline';
+  const shouldBypassOfflineDelay = shouldBypassOfflineDisplayDelay(overview);
 
   // Debounce offline transitions: delay going offline, instant recovery
   useEffect(() => {
-    if (isOffline && !mountGraceRef.current) {
+    if (isOffline && shouldBypassOfflineDelay) {
+      if (offlineTimerRef.current) {
+        clearTimeout(offlineTimerRef.current);
+        offlineTimerRef.current = null;
+      }
+      setStableOffline(true);
+    } else if (isOffline && !connectionGraceActive) {
       offlineTimerRef.current = setTimeout(() => {
         setStableOffline(true);
       }, OFFLINE_DISPLAY_DELAY_MS);
@@ -881,7 +893,7 @@ export function SyncActivityScreen() {
         clearTimeout(offlineTimerRef.current);
       }
     };
-  }, [isOffline]);
+  }, [connectionGraceActive, isOffline, shouldBypassOfflineDelay]);
 
   const isAutoUploadActive = overview.autoUploadState === 'active';
   const currentTaskSource = overview.currentTaskSource;
@@ -905,7 +917,7 @@ export function SyncActivityScreen() {
 
   const rawMainCardState = getSyncActivityMainCardState(
     overview,
-    stableOffline,
+    stableOffline || (isOffline && shouldBypassOfflineDelay),
   );
   const shouldDelayAutoCompletion = shouldDelayAutoCompletionCard(
     rawMainCardState,
@@ -1844,6 +1856,14 @@ export function buildOverview(
     payload.lastCompletedTaskSource === 'manual'
       ? payload.lastCompletedTaskSource
       : undefined;
+  const hasLastErrorCode = Object.prototype.hasOwnProperty.call(
+    payload,
+    'lastErrorCode',
+  );
+  const payloadLastErrorCode =
+    typeof payload.lastErrorCode === 'string'
+      ? payload.lastErrorCode
+      : undefined;
   const uploadState =
     (payload.uploadState as string | undefined) ?? prev.uploadState;
   const currentFileConfirmedBytes =
@@ -1951,11 +1971,11 @@ export function buildOverview(
     ? undefined
     : hasLastCompletedTaskSource
       ? payloadLastCompletedTaskSource
-    : uploadState === 'completed'
-      ? inferredCompletedTaskSource
-      : roundFinishedWithoutCompletedPulse
+      : uploadState === 'completed'
         ? inferredCompletedTaskSource
-        : prev.lastCompletedTaskSource;
+        : roundFinishedWithoutCompletedPulse
+          ? inferredCompletedTaskSource
+          : prev.lastCompletedTaskSource;
 
   return {
     progressPercent: isManualUploadCancelled
@@ -2008,10 +2028,7 @@ export function buildOverview(
     autoUploadState: nextAutoUploadState,
     manualPending: nextManualPending,
     autoPending: nextAutoPending,
-    lastErrorCode:
-      typeof payload.lastErrorCode === 'string'
-        ? payload.lastErrorCode
-        : prev.lastErrorCode,
+    lastErrorCode: hasLastErrorCode ? payloadLastErrorCode : prev.lastErrorCode,
     discoveryElapsedSec:
       (payload.discoveryElapsedSec as number | undefined) ?? undefined,
     libraryTotal: (payload.libraryTotal as number | undefined) ?? undefined,

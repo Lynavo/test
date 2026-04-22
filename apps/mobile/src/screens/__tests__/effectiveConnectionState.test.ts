@@ -15,21 +15,41 @@ describe('effectiveConnectionState', () => {
     ).toBe('connected');
   });
 
-  it('treats preparing and reconnecting as connected evidence', () => {
+  it('treats preparing as connected evidence', () => {
     expect(
       getEffectiveConnectionState('connecting', {
         progressPercent: 0,
         uploadState: 'preparing',
       }),
     ).toBe('connected');
+  });
 
+  it('keeps reconnecting and backoff badge state distinct from online', () => {
     expect(
       syncActivityImpliesConnected({
         progressPercent: 0,
         transferredBytes: 0,
         uploadState: 'reconnecting',
       }),
-    ).toBe(true);
+    ).toBe(false);
+
+    expect(
+      getConnectionBadgeState('connecting', {
+        progressPercent: 45,
+        currentFileKey: 'file-key',
+        transferredBytes: 1024,
+        uploadState: 'reconnecting',
+      }),
+    ).toBe('connecting');
+
+    expect(
+      getConnectionBadgeState('connected', {
+        progressPercent: 45,
+        currentFileKey: 'file-key',
+        transferredBytes: 1024,
+        uploadState: 'backoff_waiting',
+      }),
+    ).toBe('connecting');
   });
 
   it('treats an active current file as connected evidence even before progress moves', () => {

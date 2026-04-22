@@ -3,6 +3,7 @@ import {
   getSyncActivityDisplayProgressPercent,
   isPreparationPhase,
   resolveSyncErrorAlertMessage,
+  shouldBypassOfflineDisplayDelay,
   shouldDelayAutoCompletionCard,
   shouldRenderSyncActivityProgress,
   shouldShowSubscriptionExpiredOverlay,
@@ -800,6 +801,72 @@ describe('buildOverview', () => {
     expect(next.totalCount).toBe(0);
     expect(next.currentTaskSource).toBeUndefined();
     expect(getSyncActivityMainCardState(next, false)).toBe('auto_interrupted');
+  });
+
+  it('clears a previous reconnect error when native sends a null error code', () => {
+    const prev = {
+      progressPercent: 0,
+      currentSpeedMbps: 0,
+      uploadState: 'offline',
+      completedCount: 4,
+      totalCount: 6046,
+      completedBytes: 1024,
+      totalBytes: 8253316833,
+      currentFile: undefined,
+      currentFilename: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: undefined,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 6042,
+      lastErrorCode: 'RECONNECT_EXHAUSTED',
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        progressPercent: 0,
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentFile: null,
+        currentFilename: null,
+        currentFileConfirmedBytes: 0,
+        currentFileTotalBytes: 0,
+        currentTaskSource: null,
+        lastErrorCode: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'active',
+      },
+      prev,
+    );
+
+    expect(next.lastErrorCode).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('standby');
+  });
+});
+
+describe('shouldBypassOfflineDisplayDelay', () => {
+  it('bypasses startup and foreground grace for terminal reconnect failures', () => {
+    expect(shouldBypassOfflineDisplayDelay({ uploadState: 'offline' })).toBe(
+      true,
+    );
+    expect(
+      shouldBypassOfflineDisplayDelay({ lastErrorCode: 'RECONNECT_EXHAUSTED' }),
+    ).toBe(true);
+  });
+
+  it('keeps normal grace for non-terminal states', () => {
+    expect(shouldBypassOfflineDisplayDelay({ uploadState: 'idle' })).toBe(
+      false,
+    );
+    expect(
+      shouldBypassOfflineDisplayDelay({ uploadState: 'reconnecting' }),
+    ).toBe(false);
   });
 });
 

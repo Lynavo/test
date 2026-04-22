@@ -32,6 +32,11 @@ class BackgroundExecutionService {
         }
     }
 
+    func cancelContinuedTask() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.continuedTaskId)
+        slog("[BackgroundExec] cancelled continued task")
+    }
+
     /// Submit maintenance task — call when sync ends or continued task expires
     func submitMaintenanceTask() {
         let request = BGProcessingTaskRequest(identifier: Self.maintenanceTaskId)
@@ -63,14 +68,12 @@ class BackgroundExecutionService {
 
         task.expirationHandler = { [weak self] in
             slog("[BackgroundExec] continued task expiring — saving checkpoint")
-            SyncEngineManager.shared.sessionService.transitionTo(.idle)
+            SyncEngineManager.shared.handleContinuedBackgroundTaskExpiration()
             self?.submitMaintenanceTask()
         }
 
-        // Resume sync in background
         Task {
-            SyncEngineManager.shared.sessionService.transitionTo(.syncingBackground)
-            SyncEngineManager.shared.startSync()
+            _ = SyncEngineManager.shared.resumeSyncFromContinuedBackgroundTask()
             task.setTaskCompleted(success: true)
         }
     }
@@ -84,7 +87,7 @@ class BackgroundExecutionService {
 
         Task {
             // Run incremental scan + attempt sync if target device found
-            SyncEngineManager.shared.startSync()
+            _ = SyncEngineManager.shared.resumeSyncFromMaintenanceBackgroundTask()
             task.setTaskCompleted(success: true)
         }
     }

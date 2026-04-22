@@ -47,13 +47,15 @@ export function syncActivityImpliesConnected(
     evidence.uploadState === 'uploading' ||
     evidence.uploadState === 'completed' ||
     evidence.uploadState === 'preparing' ||
-    evidence.uploadState === 'cloud_downloading' ||
-    evidence.uploadState === 'reconnecting'
+    evidence.uploadState === 'cloud_downloading'
   ) {
     return true;
   }
 
-  if ((evidence.progressPercent ?? 0) > 0 || (evidence.transferredBytes ?? 0) > 0) {
+  if (
+    (evidence.progressPercent ?? 0) > 0 ||
+    (evidence.transferredBytes ?? 0) > 0
+  ) {
     return true;
   }
 
@@ -61,22 +63,32 @@ export function syncActivityImpliesConnected(
     return true;
   }
 
-  return evidence.queueHasUploadingItem === true || evidence.queueHasActiveItem === true;
+  return (
+    evidence.queueHasUploadingItem === true ||
+    evidence.queueHasActiveItem === true
+  );
 }
 
 export function getEffectiveConnectionState(
   connectionState: MobileConnectionState | null | undefined,
   evidence: SyncConnectionEvidence,
 ): MobileConnectionState | null | undefined {
-  if (connectionState === 'connected' || connectionState === 'bound') {
-    return 'connected';
-  }
-
   // When the native layer explicitly says offline, only override if the queue
   // proves a transfer is truly in-flight right now — stale progress values
   // (e.g. 100% from a previous completed upload) must not keep the badge green.
   if (connectionState === 'offline') {
     return 'offline';
+  }
+
+  if (
+    evidence.uploadState === 'reconnecting' ||
+    evidence.uploadState === 'backoff_waiting'
+  ) {
+    return 'connecting';
+  }
+
+  if (connectionState === 'connected' || connectionState === 'bound') {
+    return 'connected';
   }
 
   if (syncActivityImpliesConnected(evidence)) {

@@ -1401,13 +1401,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             updateStateOnFailure: false
         ) { [weak self] success in
             guard let self = self else { return }
-            guard token == self.currentPresenceRecoveryToken() else { return }
 
             if success {
+                // A successful heartbeat transitions binding state to connected,
+                // and that transition cancels the recovery probe/token. Treat
+                // the success callback as authoritative so recovery can resume
+                // pending uploads after desktop relaunch.
                 self.cancelPresenceRecoveryProbe(reason: "heartbeat_succeeded")
                 self.resumeSyncAfterConnectionRecovery(reason: "presence_recovery_succeeded")
                 return
             }
+
+            guard token == self.currentPresenceRecoveryToken() else { return }
 
             guard attempt < maxAttempts else {
                 self.cancelPresenceRecoveryProbe(reason: "exhausted")
@@ -1636,6 +1641,44 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         endBackgroundTransitionIfNeeded(reason: "syncStopped")
         SilentAudioService.shared.stop()
         sessionService.endSession(transitionTo: finalState)
+    }
+
+    private func shouldSuppressAutomaticBackgroundResume(reason: String) -> Bool {
+        let reconnectExhausted =
+            runtimeLastErrorCode == "RECONNECT_EXHAUSTED" ||
+            sessionService.state == .pausedNoTarget
+        guard reconnectExhausted && bindingConnectionState == .offline else {
+            return false
+        }
+        syncDiagnosticsLog(
+            "BackgroundExec",
+            "skipping automatic background resume (\(reason)) state=\(sessionService.state.rawValue) connection=\(bindingConnectionState.rawValue) lastError=\(runtimeLastErrorCode ?? "nil")"
+        )
+        return true
+    }
+
+    func resumeSyncFromContinuedBackgroundTask() -> Bool {
+        guard !shouldSuppressAutomaticBackgroundResume(reason: "continued_task") else {
+            return false
+        }
+        sessionService.transitionTo(.syncingBackground)
+        startSync()
+        return true
+    }
+
+    func handleContinuedBackgroundTaskExpiration() {
+        guard !shouldSuppressAutomaticBackgroundResume(reason: "continued_task_expiration") else {
+            return
+        }
+        sessionService.transitionTo(.idle)
+    }
+
+    func resumeSyncFromMaintenanceBackgroundTask() -> Bool {
+        guard !shouldSuppressAutomaticBackgroundResume(reason: "maintenance_task") else {
+            return false
+        }
+        startSync()
+        return true
     }
 
     private struct UploadTuning {
@@ -2194,6 +2237,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     updateBindingConnectionState(.offline, reason: "upload_reconnect_exhausted")
                 }
                 setRuntimeReconnectError(code: "RECONNECT_EXHAUSTED", message: message)
+                backgroundService.cancelContinuedTask()
                 stopSyncLifecycle(finalState: .pausedNoTarget)
             default:
                 slog("[SyncEngine] sync pipeline failed: \(error)")
@@ -2635,8 +2679,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             !hasForcedSidecarTarget
         if !recoveryMode {
             updateBindingConnectionState(.connecting, reason: "connect_and_upload_started")
+            sessionService.transitionTo(.preparing)
         }
-        sessionService.transitionTo(.preparing)
         beginRuntimeSyncOverview(
             totalCount: totalCount,
             totalBytes: totalBytes,
@@ -2644,9 +2688,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             completedBytes: completedBytes,
             source: assets.first?.source
         )
-        NativeSyncEngineModule.shared?.emitSyncStateChanged(
-            runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
-        )
+        if !recoveryMode {
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
+            )
+        }
         var activeSessionId: String?
         var uploadRoundCompleted = false
         var uploadRoundPausedForLowDisk = false
