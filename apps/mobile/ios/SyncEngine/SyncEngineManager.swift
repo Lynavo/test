@@ -302,6 +302,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeUploadState = "idle"
     private var runtimeManualUploadCancelled = false
     private var runtimeLastCompletedTaskSource: String?
+    private var runtimeRoundSource: String?
     private var lastBackgroundPhotoLibraryChangeAt: CFAbsoluteTime = 0
     private let backgroundCaptureCooldown: CFTimeInterval = 90
     private var pendingRescanAfterThermalRecovery = false
@@ -484,6 +485,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeLastSpeedCheckTime = 0
         runtimeLastBytesTransferred = 0
         runtimeLastCompletedTaskSource = nil
+        runtimeRoundSource = nil
         if let uploadState {
             runtimeUploadState = uploadState
         }
@@ -503,12 +505,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         totalCount: Int,
         totalBytes: Int64,
         completedCount: Int = 0,
-        completedBytes: Int64 = 0
+        completedBytes: Int64 = 0,
+        source: String? = nil
     ) {
         runtimeQueueTotalCount = totalCount
         runtimeQueueCompletedCount = completedCount
         runtimeQueueTotalBytes = totalBytes
         runtimeQueueCompletedBytes = completedBytes
+        runtimeRoundSource = source
         runtimeLastSpeedCheckTime = CFAbsoluteTimeGetCurrent()
         runtimeLastBytesTransferred = completedBytes
         runtimeCurrentSpeedMbps = 0
@@ -2075,6 +2079,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         shouldAbortActiveManualUpload = false
         runtimeManualUploadCancelled = false
         runtimeLastCompletedTaskSource = nil
+        runtimeRoundSource = nil
 
         // 3. Emit fresh states to JS
         emitQueueToJS()
@@ -2410,20 +2415,35 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     syncDiagnosticsLog("SyncPipeline", "idle — auto upload disabled")
                     sessionService.transitionTo(.idle)
                 } else {
-                    // Active + empty queue: truly completed
                     clearRuntimeCurrentFile()
                     runtimeCurrentSpeedMbps = 0
-                    let payload = ([
-                        "uploadState": "completed",
-                        "progressPercent": 100,
-                    ] as [String: Any]).merging(
-                        runtimeSyncOverviewPayload(uploadState: "completed", progressPercent: 100)
-                    ) { _, new in new }
-                    logSyncOverviewEmission("empty_queue_completed", payload: payload)
-                    NativeSyncEngineModule.shared?.emitSyncStateChanged(payload)
+                    let completedRuntimeRound =
+                        runtimeQueueTotalCount > 0 &&
+                        runtimeQueueCompletedCount >= runtimeQueueTotalCount &&
+                        runtimeRoundSource != nil
+                    if completedRuntimeRound {
+                        let payload = ([
+                            "uploadState": "completed",
+                            "progressPercent": 100,
+                        ] as [String: Any]).merging(
+                            runtimeSyncOverviewPayload(uploadState: "completed", progressPercent: 100)
+                        ) { _, new in new }
+                        logSyncOverviewEmission("empty_queue_completed", payload: payload)
+                        NativeSyncEngineModule.shared?.emitSyncStateChanged(payload)
 
-                    slog("[SyncPipeline] idle — all items completed, waiting for new photos...")
-                    syncDiagnosticsLog("SyncPipeline", "idle — all completed, waiting for new photos")
+                        slog("[SyncPipeline] idle — upload round completed, waiting for new photos...")
+                        syncDiagnosticsLog("SyncPipeline", "idle — upload round completed")
+                    } else {
+                        let payload = runtimeSyncOverviewPayload(
+                            uploadState: "idle",
+                            includePersistedIdleStats: false
+                        )
+                        logSyncOverviewEmission("empty_queue_active_idle", payload: payload)
+                        NativeSyncEngineModule.shared?.emitSyncStateChanged(payload)
+
+                        slog("[SyncPipeline] idle — no new auto items, waiting for new photos...")
+                        syncDiagnosticsLog("SyncPipeline", "idle — no new auto items")
+                    }
                     sessionService.transitionTo(.idle)
                 }
                 photoLibraryChanged = false
@@ -2508,13 +2528,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     let exhaustedMessage = "Desktop did not become reachable after \(retryAttempt) reconnect attempts: \(retryableError.message)"
 
                     clearResolvedSidecarHost()
-                    updateBindingConnectionState(.offline, reason: "retryable_upload_failure")
                     sessionService.transitionTo(.backoffWaiting)
                     setRuntimeReconnectError(
                         code: retryableError.code,
                         message: retryableError.message
                     )
                     if retryAttempt >= maxReconnectAttempts {
+                        updateBindingConnectionState(.offline, reason: "upload_reconnect_exhausted")
                         clearRuntimeCurrentFile()
                         runtimeCurrentSpeedMbps = 0
                         setRuntimeReconnectError(
@@ -2543,6 +2563,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         ) { _, new in new })
                         throw SyncEngineError.reconnectExhausted(exhaustedMessage)
                     }
+                    updateBindingConnectionState(.connecting, reason: "retryable_upload_failure")
                     slog("[SyncPipeline] upload failed with retryable error: %@ — reconnecting in %.1fs (attempt %d)",
                           "\(error)", delaySeconds, retryAttempt)
                     syncDiagnosticsLog("SyncPipeline", "upload failed with retryable error: \(error) — reconnecting in \(String(format: "%.1f", delaySeconds))s (attempt \(retryAttempt))")
@@ -2620,7 +2641,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             totalCount: totalCount,
             totalBytes: totalBytes,
             completedCount: completedCount,
-            completedBytes: completedBytes
+            completedBytes: completedBytes,
+            source: assets.first?.source
         )
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             runtimeSyncOverviewPayload(uploadState: "preparing", progressPercent: 0)
@@ -2658,14 +2680,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         maintainConnectedBindingState(reason: "upload_round_storage_unavailable")
                     } else {
                         clearResolvedSidecarHost()
-                        if uploadStore?.getBinding() != nil {
-                            let clientId = bindingService.getOrCreateClientId()
-                            verifyPresenceWithRecovery(
-                                clientId: clientId,
-                                successReason: "upload_round_incomplete_presence_restored",
-                                failureReason: "upload_round_incomplete_presence_failed"
-                            )
-                        }
+                        syncDiagnosticsLog(
+                            "SyncEngine",
+                            "upload round ended incomplete; caller will classify retry/offline state"
+                        )
                     }
                 }
             }
@@ -4765,6 +4783,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         slog("[SyncEngine] auto upload re-enabled")
         syncDiagnosticsLog("SyncEngine", "auto upload re-enabled")
+        let currentTaskSource = uploadStore?.getCurrentUploadingSource()
+        if currentTaskSource == nil &&
+            runtimeQueueTotalCount > 0 &&
+            runtimeQueueCompletedCount >= runtimeQueueTotalCount {
+            clearRuntimeSyncRoundProgress(uploadState: "idle")
+        }
         if isSyncing {
             sessionService.transitionTo(.scanning)
             // Signal the watch loop that a re-scan is needed. Without this,

@@ -83,6 +83,29 @@ function hasNoPendingQueueWork(
   );
 }
 
+function hasExplicitCompletedTaskSource(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): boolean {
+  return (
+    snapshot?.lastCompletedTaskSource === 'manual' ||
+    snapshot?.lastCompletedTaskSource === 'auto' ||
+    snapshot?.currentTaskSource === 'manual' ||
+    snapshot?.currentTaskSource === 'auto'
+  );
+}
+
+function isFinalUploadPulse(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): boolean {
+  return (
+    snapshot?.uploadState === 'uploading' &&
+    hasFinishedSyncRound(snapshot) &&
+    (snapshot.currentFileTotalBytes ?? 0) > 0 &&
+    (snapshot.currentFileConfirmedBytes ?? 0) >=
+      (snapshot.currentFileTotalBytes ?? 0)
+  );
+}
+
 export function isSyncActivityActivelyTransferring(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
@@ -117,6 +140,7 @@ export type SyncActivityMainCardState =
 
 function getCompletedTaskSource(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
+  allowStateFallback = false,
 ): UploadTaskSource | undefined {
   if (snapshot?.lastCompletedTaskSource === 'manual') {
     return 'manual';
@@ -129,6 +153,9 @@ function getCompletedTaskSource(
   }
   if (snapshot?.currentTaskSource === 'auto') {
     return 'auto';
+  }
+  if (!allowStateFallback) {
+    return undefined;
   }
   if (snapshot?.autoUploadState === 'active') {
     return 'auto';
@@ -157,9 +184,19 @@ export function getSyncActivityMainCardState(
   const hasManualWork = hasPendingManualWork(snapshot);
   const isActivelyTransferring = isSyncActivityActivelyTransferring(snapshot);
   const isAutoUploadActive = snapshot?.autoUploadState === 'active';
-  const completedTaskSource = getCompletedTaskSource(snapshot);
+  const hasNonEmptyFinishedRound = hasFinishedSyncRound(snapshot);
+  const hasCompletionPulse =
+    snapshot?.uploadState === 'completed' && hasNonEmptyFinishedRound;
+  const hasFinalUploadPulse = isFinalUploadPulse(snapshot);
+  const hasCompletionContext = hasExplicitCompletedTaskSource(snapshot);
+  const completedTaskSource = getCompletedTaskSource(
+    snapshot,
+    hasCompletionPulse || hasFinalUploadPulse,
+  );
   const isFinishedRound =
-    (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
+    (hasCompletionPulse ||
+      (hasNonEmptyFinishedRound &&
+        (hasCompletionContext || hasFinalUploadPulse))) &&
     completedTaskSource;
   const isClosedAutoUploadIdle =
     snapshot?.uploadState === 'paused_auto_upload' &&

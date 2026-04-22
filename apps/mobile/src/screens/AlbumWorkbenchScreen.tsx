@@ -686,7 +686,6 @@ export function AlbumWorkbenchScreen() {
                     try {
                       await cancelAllManualUploads();
                       await enableAutoUpload();
-                      await NativeModules.NativeSyncEngine?.triggerSync();
                       await loadConfig();
                     } catch (e) {
                       console.warn('[AlbumWorkbench] enableAutoUpload error:', e);
@@ -706,8 +705,6 @@ export function AlbumWorkbenchScreen() {
         }
 
         await enableAutoUpload();
-        // Ensure sync loop is running after enabling auto upload
-        await NativeModules.NativeSyncEngine?.triggerSync();
       }
       await loadConfig();
     } catch (e) {

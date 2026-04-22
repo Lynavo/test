@@ -289,6 +289,24 @@ describe('syncActivityTransferState', () => {
     );
   });
 
+  it('treats an empty completed auto pulse as standby instead of completion', () => {
+    const snapshot = {
+      uploadState: 'completed',
+      autoUploadState: 'active' as const,
+      completedCount: 0,
+      totalCount: 0,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('standby');
+  });
+
   it('keeps manual completed state after native settles back to idle', () => {
     const snapshot = {
       uploadState: 'idle',
@@ -309,7 +327,7 @@ describe('syncActivityTransferState', () => {
     );
   });
 
-  it('shows manual completed state on a fresh idle snapshot when queue stats say the round finished', () => {
+  it('does not show manual completed state on a fresh idle snapshot from persisted queue stats', () => {
     const snapshot = {
       uploadState: 'idle',
       autoUploadState: 'disabled' as const,
@@ -323,9 +341,24 @@ describe('syncActivityTransferState', () => {
     };
 
     expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
-    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
-      'manual_completed',
-    );
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
+  });
+
+  it('does not show auto completed state on a fresh idle snapshot from persisted queue stats', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'active' as const,
+      completedCount: 12,
+      totalCount: 12,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('standby');
   });
 
   it('keeps manual completed state after a finished manual round settles into paused_auto_upload', () => {

@@ -6,6 +6,7 @@ import {
   shouldDelayAutoCompletionCard,
   shouldRenderSyncActivityProgress,
   shouldShowSubscriptionExpiredOverlay,
+  shouldTreatSyncActivityAsBetweenItems,
 } from '../SyncActivityScreen';
 import { getSyncActivityMainCardState } from '../../utils/syncActivityTransferState';
 import type { TFunction } from 'i18next';
@@ -200,9 +201,7 @@ describe('buildOverview', () => {
 
     expect(fileCompleted.lastCompletedTaskSource).toBe('auto');
     expect(settled.lastCompletedTaskSource).toBe('auto');
-    expect(getSyncActivityMainCardState(settled, false)).toBe(
-      'auto_completed',
-    );
+    expect(getSyncActivityMainCardState(settled, false)).toBe('auto_completed');
   });
 
   it('infers active auto completion ahead of stale manual context when native omits last source', () => {
@@ -283,6 +282,49 @@ describe('buildOverview', () => {
 
     expect(next.lastCompletedTaskSource).toBe('auto');
     expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
+  it('clears stale manual completion when enabling auto upload finds no new work', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'idle',
+      completedCount: 1,
+      totalCount: 1,
+      completedBytes: 8192,
+      totalBytes: 8192,
+      currentFile: undefined,
+      currentFilename: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      autoUploadState: 'disabled' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        progressPercent: 0,
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentTaskSource: null,
+        lastCompletedTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'active',
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.lastCompletedTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('standby');
   });
 
   it('derives the last completed task source when native jumps straight from uploading to idle', () => {
@@ -867,6 +909,23 @@ describe('shouldRenderSyncActivityProgress', () => {
     );
     expect(shouldRenderSyncActivityProgress('scanning', false, true)).toBe(
       true,
+    );
+  });
+});
+
+describe('shouldTreatSyncActivityAsBetweenItems', () => {
+  it('keeps regular preparation gaps frozen between files', () => {
+    expect(shouldTreatSyncActivityAsBetweenItems('scanning', 6, 3)).toBe(true);
+    expect(shouldTreatSyncActivityAsBetweenItems('preparing', 6, 3)).toBe(true);
+    expect(shouldTreatSyncActivityAsBetweenItems('completed', 6, 3)).toBe(true);
+  });
+
+  it('lets reconnect phases render the reconnect card mid-batch', () => {
+    expect(shouldTreatSyncActivityAsBetweenItems('reconnecting', 6, 3)).toBe(
+      false,
+    );
+    expect(shouldTreatSyncActivityAsBetweenItems('backoff_waiting', 6, 3)).toBe(
+      false,
     );
   });
 });

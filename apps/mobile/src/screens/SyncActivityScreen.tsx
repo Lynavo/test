@@ -325,6 +325,23 @@ export function shouldRenderSyncActivityProgress(
   );
 }
 
+export function shouldTreatSyncActivityAsBetweenItems(
+  uploadState: string,
+  totalCount: number,
+  completedCount: number,
+): boolean {
+  if (uploadState === 'reconnecting' || uploadState === 'backoff_waiting') {
+    return false;
+  }
+
+  return (
+    (uploadState === 'completed' || isPreparationPhase(uploadState)) &&
+    totalCount > 0 &&
+    completedCount > 0 &&
+    completedCount < totalCount
+  );
+}
+
 export function shouldShowSubscriptionExpiredOverlay({
   subscriptionEnforcement,
   isFocused,
@@ -786,7 +803,6 @@ export function SyncActivityScreen() {
                 try {
                   await cancelAllManualUploads();
                   await enableAutoUpload();
-                  await NativeModules.NativeSyncEngine?.triggerSync();
                   const nextSyncData =
                     await NativeModules.NativeSyncEngine?.getSyncOverview();
                   if (nextSyncData) {
@@ -809,7 +825,6 @@ export function SyncActivityScreen() {
 
       startAutoUploadPreparing();
       await enableAutoUpload();
-      await NativeModules.NativeSyncEngine?.triggerSync();
       const nextSyncData =
         await NativeModules.NativeSyncEngine?.getSyncOverview();
       if (nextSyncData) {
@@ -917,14 +932,11 @@ export function SyncActivityScreen() {
   //       "Establishing connection…" UI and back.
   // Gate on completedCount > 0 so the genuine round-start preparation
   // (first item of a round) still shows the connection UI normally.
-  const isInterItemTransitionState =
-    overview.uploadState === 'completed' ||
-    isPreparationPhase(overview.uploadState);
-  const isBetweenItems =
-    isInterItemTransitionState &&
-    overview.totalCount > 0 &&
-    overview.completedCount > 0 &&
-    overview.completedCount < overview.totalCount;
+  const isBetweenItems = shouldTreatSyncActivityAsBetweenItems(
+    overview.uploadState,
+    overview.totalCount,
+    overview.completedCount,
+  );
   const shouldFreezeItemVisuals = shouldDelayAutoCompletion || isBetweenItems;
   const displayCurrentFilename = shouldFreezeItemVisuals
     ? (lastAutoUploadingVisualRef.current?.currentFilename ??
