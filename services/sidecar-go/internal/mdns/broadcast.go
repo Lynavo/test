@@ -128,12 +128,12 @@ func CurrentLocalIPv4() string {
 // Kept flat (no pointers) so slog serialises it as a single JSON object
 // per interface without needing a custom LogValuer.
 type InterfaceSummary struct {
-	Name   string   `json:"name"`
-	Up     bool     `json:"up"`
-	Mcast  bool     `json:"multicast"`
-	Loop   bool     `json:"loopback"`
-	PtP    bool     `json:"point_to_point"`
-	IPv4   []string `json:"ipv4"`
+	Name  string   `json:"name"`
+	Up    bool     `json:"up"`
+	Mcast bool     `json:"multicast"`
+	Loop  bool     `json:"loopback"`
+	PtP   bool     `json:"point_to_point"`
+	IPv4  []string `json:"ipv4"`
 }
 
 // SnapshotInterfacesForLog returns a compact description of every network
@@ -516,6 +516,14 @@ func getLocalIPv4() string {
 		}
 	}
 
+	if bestIP == "" {
+		return ""
+	}
+	if ip := net.ParseIP(bestIP).To4(); ip == nil || !isRFC1918(ip) {
+		slog.Debug("getLocalIPv4: rejected non-RFC1918 address", "ip", bestIP)
+		return ""
+	}
+
 	return bestIP
 }
 
@@ -525,8 +533,8 @@ func getLocalIPv4() string {
 // interface.  This correctly ignores virtual adapters (WSL, Docker, VMware,
 // VPN tunnels) because those are not on the default route.
 //
-// Results in the following special-use ranges are rejected and cause a
-// fallback to the scored interface walk:
+// Results outside RFC-1918 LAN ranges are rejected and cause a fallback to the
+// scored interface walk:
 //   - 198.18.0.0/15: Apple iCloud Private Relay virtual interface (macOS)
 //   - 100.64.0.0/10: CGNAT shared space used by Tailscale, carrier NAT, etc.
 func routedLocalIPv4() (string, bool) {
@@ -545,6 +553,10 @@ func routedLocalIPv4() (string, bool) {
 	}
 	if isSpecialUseIP(ip4) {
 		slog.Debug("routedLocalIPv4: rejected special-use address, falling back to interface walk", "ip", ip4.String())
+		return "", false
+	}
+	if !isRFC1918(ip4) {
+		slog.Debug("routedLocalIPv4: rejected non-RFC1918 address, falling back to interface walk", "ip", ip4.String())
 		return "", false
 	}
 	return ip4.String(), true
@@ -598,7 +610,8 @@ func ifaceScore(iface net.Interface) int {
 	return score
 }
 
-// ipAddrScore prefers RFC-1918 addresses over special-use and APIPA ranges.
+// ipAddrScore prefers RFC-1918 addresses and penalises addresses that iOS ATS
+// will not treat as local networking targets for plain HTTP presence checks.
 func ipAddrScore(ip net.IP) int {
 	if ip.IsLinkLocalUnicast() {
 		// 169.254.x.x — APIPA: adapter has no DHCP lease, unreliable for LAN
@@ -611,7 +624,7 @@ func ipAddrScore(ip net.IP) int {
 	if isRFC1918(ip) {
 		return 5
 	}
-	return 1
+	return -20
 }
 
 func addrToIPv4(addr net.Addr) (net.IP, bool) {
@@ -653,7 +666,7 @@ func legacyGetLocalIPv4() string {
 		if !ok || ipnet.IP.IsLoopback() {
 			continue
 		}
-		if ip4 := ipnet.IP.To4(); ip4 != nil {
+		if ip4 := ipnet.IP.To4(); ip4 != nil && isRFC1918(ip4) {
 			return ip4.String()
 		}
 	}

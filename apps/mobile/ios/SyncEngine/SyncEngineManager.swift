@@ -153,6 +153,23 @@ private func syncFlowPreferredClientIPv4() -> String? {
     return fallback
 }
 
+private func syncFlowIPv4Octets(_ host: String) -> [Int]? {
+    let parts = host.split(separator: ".")
+    guard parts.count == 4 else { return nil }
+    let octets = parts.compactMap { Int($0) }
+    guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else {
+        return nil
+    }
+    return octets
+}
+
+private func syncFlowIsPrivateLANIPv4(_ host: String) -> Bool {
+    guard let octets = syncFlowIPv4Octets(host) else { return false }
+    return octets[0] == 10 ||
+        (octets[0] == 172 && (16...31).contains(octets[1])) ||
+        (octets[0] == 192 && octets[1] == 168)
+}
+
 final class SyncDiagnosticsLogStore {
     static let shared = SyncDiagnosticsLogStore()
 
@@ -1298,13 +1315,28 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return presenceRecoveryToken
     }
 
+    private func currentPresenceHeartbeatHost() -> String? {
+        if let resolved = sidecarHost, !resolved.isEmpty {
+            return resolved
+        }
+        if let fallback = uploadStore?.getBinding()?.host, !fallback.isEmpty {
+            return fallback
+        }
+        return nil
+    }
+
     private func startPresenceRecoveryProbe(
         clientId: String,
         maxAttempts: Int = 8,
-        retryInterval: TimeInterval = 1
+        retryInterval: TimeInterval = 1,
+        promoteOfflineToConnecting: Bool = false
     ) {
         cancelPresenceRecoveryProbe(reason: "start_new_probe")
-        updateBindingConnectionState(.connecting, reason: "presence_recovery_started")
+        if bindingConnectionState != .offline || promoteOfflineToConnecting {
+            updateBindingConnectionState(.connecting, reason: "presence_recovery_started")
+        } else {
+            syncDiagnosticsLog("SyncEngine", "presence recovery started while already offline; keeping offline state")
+        }
 
         let token = UUID()
         presenceRecoveryLock.lock()
@@ -1380,6 +1412,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         successReason: String = "presence_heartbeat_succeeded",
         failureReason: String = "presence_heartbeat_failed"
     ) {
+        let expectedHost = currentPresenceHeartbeatHost()
         sendPresenceHeartbeat(
             clientId: clientId,
             successReason: successReason,
@@ -1387,6 +1420,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             updateStateOnFailure: false
         ) { [weak self] success in
             guard let self = self, !success else { return }
+            let currentHost = self.currentPresenceHeartbeatHost()
+            if currentHost != expectedHost {
+                syncDiagnosticsLog(
+                    "SyncEngine",
+                    "presence heartbeat result ignored because host changed \(expectedHost ?? "nil") -> \(currentHost ?? "nil")"
+                )
+                return
+            }
             self.startPresenceRecoveryProbe(clientId: clientId)
         }
     }
@@ -3614,21 +3655,30 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         if let binding = uploadStore?.getBinding() {
             let boundDevice = devices.first { $0.deviceId == binding.deviceId }
             let boundDeviceVisible = boundDevice != nil
+            var boundDeviceHasUsablePresenceHost = false
             if let device = boundDevice {
                 let resolvedHost = preferredSidecarHost(probedHost: device.ip, device: device)
                 if let resolvedHost, !resolvedHost.isEmpty {
-                    if sidecarHost != resolvedHost {
+                    if syncFlowIsPrivateLANIPv4(resolvedHost) {
+                        boundDeviceHasUsablePresenceHost = true
+                        if sidecarHost != resolvedHost {
+                            syncDiagnosticsLog(
+                                "SyncEngine",
+                                "bound device discovery host refreshed \(sidecarHost ?? "nil") -> \(resolvedHost)"
+                            )
+                        }
+                        sidecarHost = resolvedHost
+                        refreshBoundServerMetadata(
+                            serverName: nil,
+                            shareName: nil,
+                            host: resolvedHost
+                        )
+                    } else {
                         syncDiagnosticsLog(
                             "SyncEngine",
-                            "bound device discovery host refreshed \(sidecarHost ?? "nil") -> \(resolvedHost)"
+                            "ignored bound device discovery host \(resolvedHost) because it is not a private LAN IPv4"
                         )
                     }
-                    sidecarHost = resolvedHost
-                    refreshBoundServerMetadata(
-                        serverName: nil,
-                        shareName: nil,
-                        host: resolvedHost
-                    )
                 }
             }
             if !boundDeviceVisible && (bindingConnectionState == .connected || bindingConnectionState == .bound) {
@@ -3645,8 +3695,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // Resolve sidecar host from the rediscovered Bonjour entry so the
                 // heartbeat has a target, then probe with short retries until the
                 // sidecar HTTP API is ready after desktop restart.
-                let clientId = bindingService.getOrCreateClientId()
-                startPresenceRecoveryProbe(clientId: clientId)
+                if boundDeviceHasUsablePresenceHost {
+                    let clientId = bindingService.getOrCreateClientId()
+                    startPresenceRecoveryProbe(clientId: clientId, promoteOfflineToConnecting: true)
+                } else {
+                    syncDiagnosticsLog(
+                        "SyncEngine",
+                        "bound device reappeared without a usable private LAN host; keeping \(bindingConnectionState.rawValue)"
+                    )
+                }
             }
         }
     }
@@ -4416,12 +4473,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         updateStateOnFailure: Bool = true,
         completion: ((Bool) -> Void)? = nil
     ) {
-        let host: String
-        if let resolved = sidecarHost, !resolved.isEmpty {
-            host = resolved
-        } else if let fallback = uploadStore?.getBinding()?.host, !fallback.isEmpty {
-            host = fallback
-        } else {
+        guard let host = currentPresenceHeartbeatHost() else {
             return
         }
         let port = 39394
@@ -4433,6 +4485,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         request.httpMethod = "POST"
         request.timeoutInterval = 5
         heartbeatSession.dataTask(with: request) { data, response, error in
+            let currentHost = self.currentPresenceHeartbeatHost()
+            if currentHost != host {
+                syncDiagnosticsLog(
+                    "Presence",
+                    "heartbeat ignored stale host=\(host) current=\(currentHost ?? "nil") reason=\(failureReason)"
+                )
+                completion?(false)
+                return
+            }
             if let error {
                 slog("[Presence] heartbeat failed: %@", "\(error)")
                 syncDiagnosticsLog("Presence", "heartbeat failed host=\(host) reason=\(failureReason) error=\(error)")
