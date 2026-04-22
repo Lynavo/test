@@ -14,6 +14,7 @@ export interface SyncActivityTransferSnapshot {
   autoPending?: number | null;
   completedCount?: number | null;
   totalCount?: number | null;
+  lastErrorCode?: string | null;
 }
 
 const ACTIVE_TRANSFER_STATES = new Set([
@@ -143,6 +144,12 @@ export function getSyncActivityMainCardState(
   const isFinishedRound =
     (snapshot?.uploadState === 'completed' || hasFinishedSyncRound(snapshot)) &&
     completedTaskSource;
+  const isClosedAutoUploadIdle =
+    snapshot?.uploadState === 'paused_auto_upload' &&
+    snapshot?.autoUploadState === 'interrupted' &&
+    hasNoPendingQueueWork(snapshot) &&
+    completedTaskSource !== 'manual' &&
+    !snapshot?.lastErrorCode;
 
   if (hasManualWork) {
     return 'running';
@@ -166,6 +173,10 @@ export function getSyncActivityMainCardState(
 
   if (isActivelyTransferring) {
     return 'running';
+  }
+
+  if (isClosedAutoUploadIdle) {
+    return 'not_started';
   }
 
   if (isFinishedRound && completedTaskSource) {

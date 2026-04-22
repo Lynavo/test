@@ -295,7 +295,11 @@ export function shouldDelayAutoCompletionCard(
   }
 
   if (rawMainCardState === 'auto_completed') {
-    return true;
+    return (
+      autoCompletionVisualHoldUntilMs === null ||
+      (autoCompletionVisualHoldUntilMs > 0 &&
+        now < autoCompletionVisualHoldUntilMs)
+    );
   }
 
   return (
@@ -950,7 +954,7 @@ export function SyncActivityScreen() {
       }
       autoCompletionTimerRef.current = setTimeout(() => {
         autoCompletionTimerRef.current = null;
-        setAutoCompletionVisualHoldUntilMs(null);
+        setAutoCompletionVisualHoldUntilMs(0);
       }, AUTO_COMPLETION_VISUAL_HOLD_MS);
       return;
     }

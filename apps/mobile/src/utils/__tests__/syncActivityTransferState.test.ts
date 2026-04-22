@@ -109,6 +109,61 @@ describe('syncActivityTransferState', () => {
     );
   });
 
+  it('returns to not-started after closing auto upload from standby', () => {
+    const snapshot = {
+      uploadState: 'paused_auto_upload',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 0,
+      totalCount: 0,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
+  });
+
+  it('returns to not-started when closing auto upload after an auto round completed', () => {
+    const snapshot = {
+      uploadState: 'paused_auto_upload',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 2,
+      totalCount: 2,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'auto' as const,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
+  });
+
+  it('keeps interrupted state when auto upload is paused by a storage error', () => {
+    const snapshot = {
+      uploadState: 'paused_auto_upload',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 0,
+      totalCount: 0,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      lastErrorCode: 'STORAGE_UNAVAILABLE',
+    };
+
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe(
+      'auto_interrupted',
+    );
+  });
+
   it('keeps disabled auto upload on the not-started card', () => {
     const snapshot = {
       uploadState: 'idle',

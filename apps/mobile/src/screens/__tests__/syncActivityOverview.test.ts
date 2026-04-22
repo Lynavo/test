@@ -243,6 +243,46 @@ describe('buildOverview', () => {
     expect(getSyncActivityMainCardState(next, false)).toBe('auto_completed');
   });
 
+  it('returns to the default card when auto upload is closed after completion', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'completed',
+      completedCount: 2,
+      totalCount: 2,
+      completedBytes: 1293262,
+      totalBytes: 1293262,
+      currentFile: undefined,
+      currentFilename: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'auto' as const,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'paused_auto_upload',
+        progressPercent: 100,
+        completedCount: 2,
+        totalCount: 2,
+        completedBytes: 1293262,
+        totalBytes: 1293262,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      prev,
+    );
+
+    expect(next.lastCompletedTaskSource).toBe('auto');
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
   it('derives the last completed task source when native jumps straight from uploading to idle', () => {
     const prev = {
       progressPercent: 100,
@@ -759,6 +799,24 @@ describe('shouldDelayAutoCompletionCard', () => {
     const now = Date.now();
     expect(
       shouldDelayAutoCompletionCard('standby', 'idle', 'active', now - 1, now),
+    ).toBe(false);
+    expect(
+      shouldDelayAutoCompletionCard(
+        'auto_completed',
+        'completed',
+        'active',
+        0,
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      shouldDelayAutoCompletionCard(
+        'auto_completed',
+        'completed',
+        'active',
+        now - 1,
+        now,
+      ),
     ).toBe(false);
   });
 

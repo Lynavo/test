@@ -646,11 +646,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func logSyncOverviewEmission(_ context: String, payload: [String: Any]) {
         let message = String(
-            format: "emit %@ state=%@ auto=%@ source=%@ completed=%@/%@ bytes=%@/%@ pending(manual=%@ auto=%@) currentFile=%@ currentBytes=%@/%@ progress=%@",
+            format: "emit %@ state=%@ auto=%@ source=%@ lastSource=%@ completed=%@/%@ bytes=%@/%@ pending(manual=%@ auto=%@) currentFile=%@ currentBytes=%@/%@ progress=%@",
             context,
             overviewLogValue(payload["uploadState"]),
             overviewLogValue(payload["autoUploadState"]),
             overviewLogValue(payload["currentTaskSource"]),
+            overviewLogValue(payload["lastCompletedTaskSource"]),
             overviewLogValue(payload["completedCount"]),
             overviewLogValue(payload["totalCount"]),
             overviewLogValue(payload["completedBytes"]),
@@ -2112,6 +2113,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 let finalSessionState: SessionService.SyncEngineState = source == "auto" ? .interruptedAutoUpload : .idle
                 if source == "auto" {
                     persistAutoUploadInterruptedState(reason: "storage_unavailable")
+                    setRuntimeReconnectError(code: "STORAGE_UNAVAILABLE", message: message)
                 }
                 clearRuntimeSyncRoundProgress(uploadState: finalUploadState)
                 let payload = runtimeSyncOverviewPayload(uploadState: finalUploadState)
@@ -4589,6 +4591,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     func interruptAutoUpload() {
         guard !isAutoUploadInterrupted else { return }
         persistAutoUploadInterruptedState(reason: "user_interrupt")
+        clearRuntimeReconnectError()
 
         // Clear pending auto items so they don't block manual uploads
         // (dedup check) and re-enabling auto upload starts a fresh scan.
@@ -4605,6 +4608,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             maintainConnectedBindingState(reason: "interrupt_auto_upload_requested")
             syncDiagnosticsLog("SyncEngine", "interrupting in-flight auto upload")
             protocolSession?.interruptPendingResponse(error: SyncEngineError.autoUploadInterrupted)
+        } else if currentTaskSource != "manual" &&
+                    runtimeLastCompletedTaskSource == "auto" &&
+                    runtimeQueueTotalCount > 0 &&
+                    runtimeQueueCompletedCount >= runtimeQueueTotalCount {
+            clearRuntimeSyncRoundProgress(uploadState: "paused_auto_upload")
         }
         emitQueueToJS()
 
