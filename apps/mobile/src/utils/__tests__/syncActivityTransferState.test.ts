@@ -275,6 +275,42 @@ describe('syncActivityTransferState', () => {
     );
   });
 
+  it('does not show manual completion when a cancelled payload carries stale finished counts', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'interrupted' as const,
+      completedCount: 7,
+      totalCount: 7,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      manualUploadCancelled: true,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
+  });
+
+  it('keeps offline state ahead of a cancelled manual upload snapshot', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'disabled' as const,
+      completedCount: 7,
+      totalCount: 7,
+      autoPending: 0,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      manualUploadCancelled: true,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(getSyncActivityMainCardState(snapshot, true)).toBe('offline');
+  });
+
   it('shows manual completed state when the final upload pulse has cleared current source', () => {
     const snapshot = {
       uploadState: 'uploading',

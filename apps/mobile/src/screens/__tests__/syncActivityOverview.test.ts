@@ -302,6 +302,197 @@ describe('buildOverview', () => {
     expect(getSyncActivityMainCardState(next, false)).toBe('manual_completed');
   });
 
+  it('does not turn a cancelled manual upload into manual completion', () => {
+    const prev = {
+      progressPercent: 31,
+      currentSpeedMbps: 8.5,
+      uploadState: 'uploading',
+      completedCount: 7,
+      totalCount: 8,
+      completedBytes: 632_240_107,
+      totalBytes: 1_006_267_682,
+      currentFile: 'file-key-cancelled',
+      currentFilename: 'clip-cancelled.mov',
+      currentFileConfirmedBytes: 117_440_512,
+      currentFileTotalBytes: 374_027_575,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'disabled' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'disabled',
+        manualUploadCancelled: true,
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.completedBytes).toBe(0);
+    expect(next.totalBytes).toBe(0);
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
+  it('clears stale completed counts from a cancelled manual upload payload', () => {
+    const prev = {
+      progressPercent: 45,
+      currentSpeedMbps: 6.5,
+      uploadState: 'uploading',
+      completedCount: 6,
+      totalCount: 7,
+      completedBytes: 3_194_059,
+      totalBytes: 4_912_657,
+      currentFile: 'file-key-cancelled',
+      currentFilename: 'clip-cancelled.mov',
+      currentFileConfirmedBytes: 512_000,
+      currentFileTotalBytes: 1_024_000,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'interrupted' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        progressPercent: 100,
+        completedCount: 7,
+        totalCount: 7,
+        completedBytes: 4_912_657,
+        totalBytes: 4_912_657,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+        manualUploadCancelled: true,
+      },
+      prev,
+    );
+
+    expect(next.progressPercent).toBe(0);
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.completedBytes).toBe(0);
+    expect(next.totalBytes).toBe(0);
+    expect(next.lastCompletedTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
+  it('keeps cancellation across a stale idle overview refresh', () => {
+    const cancelled = buildOverview(
+      {
+        uploadState: 'idle',
+        completedCount: 7,
+        totalCount: 7,
+        completedBytes: 4_912_657,
+        totalBytes: 4_912_657,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+        manualUploadCancelled: true,
+      },
+      {
+        progressPercent: 45,
+        currentSpeedMbps: 6.5,
+        uploadState: 'uploading',
+        completedCount: 6,
+        totalCount: 7,
+        completedBytes: 3_194_059,
+        totalBytes: 4_912_657,
+        currentFile: 'file-key-cancelled',
+        currentFilename: 'clip-cancelled.mov',
+        currentFileConfirmedBytes: 512_000,
+        currentFileTotalBytes: 1_024_000,
+        currentTaskSource: 'manual' as const,
+        lastCompletedTaskSource: null,
+        autoUploadState: 'interrupted' as const,
+        manualPending: 0,
+        autoPending: 0,
+      },
+    );
+
+    const refreshed = buildOverview(
+      {
+        uploadState: 'idle',
+        progressPercent: 100,
+        completedCount: 7,
+        totalCount: 7,
+        completedBytes: 4_912_657,
+        totalBytes: 4_912_657,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+      },
+      cancelled,
+    );
+
+    expect(refreshed.progressPercent).toBe(0);
+    expect(refreshed.completedCount).toBe(0);
+    expect(refreshed.totalCount).toBe(0);
+    expect(refreshed.manualUploadCancelled).toBe(true);
+    expect(getSyncActivityMainCardState(refreshed, false)).toBe('not_started');
+  });
+
+  it('does not show the auto interrupted card for a cancelled manual upload snapshot', () => {
+    const prev = {
+      progressPercent: 31,
+      currentSpeedMbps: 8.5,
+      uploadState: 'uploading',
+      completedCount: 7,
+      totalCount: 8,
+      completedBytes: 632_240_107,
+      totalBytes: 1_006_267_682,
+      currentFile: 'file-key-cancelled',
+      currentFilename: 'clip-cancelled.mov',
+      currentFileConfirmedBytes: 117_440_512,
+      currentFileTotalBytes: 374_027_575,
+      currentTaskSource: 'manual' as const,
+      lastCompletedTaskSource: null,
+      autoUploadState: 'interrupted' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'paused_auto_upload',
+        completedCount: 0,
+        totalCount: 0,
+        completedBytes: 0,
+        totalBytes: 0,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'interrupted',
+        manualUploadCancelled: true,
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(0);
+    expect(next.totalCount).toBe(0);
+    expect(next.currentTaskSource).toBeUndefined();
+    expect(next.lastCompletedTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
   it('keeps manual completion after the final upload pulse clears current source', () => {
     const prev = {
       progressPercent: 100,

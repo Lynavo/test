@@ -9,6 +9,7 @@ export interface SyncActivityTransferSnapshot {
   currentFileTotalBytes?: number | null;
   currentTaskSource?: UploadTaskSource | null;
   lastCompletedTaskSource?: UploadTaskSource | null;
+  manualUploadCancelled?: boolean | null;
   manualPending?: number | null;
   autoPending?: number | null;
   completedCount?: number | null;
@@ -68,8 +69,7 @@ function hasNoPendingQueueWork(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
   return (
-    (snapshot?.manualPending ?? 0) === 0 &&
-    (snapshot?.autoPending ?? 0) === 0
+    (snapshot?.manualPending ?? 0) === 0 && (snapshot?.autoPending ?? 0) === 0
   );
 }
 
@@ -148,6 +148,14 @@ export function getSyncActivityMainCardState(
     return 'running';
   }
 
+  if (snapshot?.manualUploadCancelled && isOffline && !isActivelyTransferring) {
+    return 'offline';
+  }
+
+  if (snapshot?.manualUploadCancelled) {
+    return isAutoUploadActive ? 'standby' : 'not_started';
+  }
+
   if (isFinishedRound && completedTaskSource === 'manual') {
     return 'manual_completed';
   }
@@ -160,10 +168,7 @@ export function getSyncActivityMainCardState(
     return 'running';
   }
 
-  if (
-    isFinishedRound &&
-    completedTaskSource
-  ) {
+  if (isFinishedRound && completedTaskSource) {
     return completedTaskSource === 'manual'
       ? 'manual_completed'
       : 'auto_completed';

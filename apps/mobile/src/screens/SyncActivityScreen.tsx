@@ -67,6 +67,7 @@ interface SyncOverview {
   currentFileTotalBytes: number;
   currentTaskSource?: UploadTaskSource | null;
   lastCompletedTaskSource?: UploadTaskSource | null;
+  manualUploadCancelled?: boolean | null;
   autoUploadState?: AutoUploadState;
   manualPending?: number;
   autoPending?: number;
@@ -898,12 +899,12 @@ export function SyncActivityScreen() {
     overview.completedCount < overview.totalCount;
   const shouldFreezeItemVisuals = shouldDelayAutoCompletion || isBetweenItems;
   const displayCurrentFilename = shouldFreezeItemVisuals
-    ? lastAutoUploadingVisualRef.current?.currentFilename ??
-      overview.currentFilename
+    ? (lastAutoUploadingVisualRef.current?.currentFilename ??
+      overview.currentFilename)
     : overview.currentFilename;
   const displayCurrentSpeedMbps = shouldFreezeItemVisuals
-    ? lastAutoUploadingVisualRef.current?.currentSpeedMbps ??
-      overview.currentSpeedMbps
+    ? (lastAutoUploadingVisualRef.current?.currentSpeedMbps ??
+      overview.currentSpeedMbps)
     : overview.currentSpeedMbps;
   const shouldRenderPreparationPhase =
     (autoUploadPreparing || isPreparationPhase(overview.uploadState)) &&
@@ -1082,8 +1083,8 @@ export function SyncActivityScreen() {
                     connectionBadgeState === 'offline'
                       ? styles.statusDotOffline
                       : connectionBadgeState === 'connecting'
-                      ? styles.statusDotConnecting
-                      : styles.statusDotOnline,
+                        ? styles.statusDotConnecting
+                        : styles.statusDotOnline,
                   ]}
                 />
                 <Text
@@ -1092,15 +1093,15 @@ export function SyncActivityScreen() {
                     connectionBadgeState === 'offline'
                       ? styles.statusTextOffline
                       : connectionBadgeState === 'connecting'
-                      ? styles.statusTextConnecting
-                      : styles.statusTextOnline,
+                        ? styles.statusTextConnecting
+                        : styles.statusTextOnline,
                   ]}
                 >
                   {connectionBadgeState === 'offline'
                     ? t('settings.connection.offline')
                     : isConnecting
-                    ? t('settings.connection.connecting')
-                    : t('settings.connection.online')}
+                      ? t('settings.connection.connecting')
+                      : t('settings.connection.online')}
                 </Text>
               </View>
             </View>
@@ -1804,7 +1805,7 @@ export function buildOverview(
     uploadState === 'idle' ||
     uploadState === 'paused_auto_upload';
   const nextCurrentTaskSource = hasCurrentTaskSource
-    ? (payload.currentTaskSource as UploadTaskSource | undefined) ?? undefined
+    ? ((payload.currentTaskSource as UploadTaskSource | undefined) ?? undefined)
     : prev.currentTaskSource;
   const nextCompletedCount =
     (payload.completedCount as number | undefined) ?? prev.completedCount;
@@ -1819,8 +1820,16 @@ export function buildOverview(
   const nextAutoUploadState =
     (payload.autoUploadState as AutoUploadState | undefined) ??
     prev.autoUploadState;
+  const isSettledUploadState =
+    uploadState === 'idle' || uploadState === 'paused_auto_upload';
+  const isManualUploadCancelled =
+    payload.manualUploadCancelled === true ||
+    (prev.manualUploadCancelled === true &&
+      isSettledUploadState &&
+      nextManualPending === 0);
   const isManualFinalFileSettlingToIdle =
-    (uploadState === 'idle' || uploadState === 'paused_auto_upload') &&
+    !isManualUploadCancelled &&
+    isSettledUploadState &&
     (nextAutoUploadState === 'disabled' ||
       nextAutoUploadState === 'interrupted') &&
     (prev.currentTaskSource === 'manual' ||
@@ -1836,10 +1845,14 @@ export function buildOverview(
     nextTotalCount === 0;
   const effectiveCompletedCount = isManualFinalFileSettlingToIdle
     ? prev.totalCount
-    : nextCompletedCount;
+    : isManualUploadCancelled
+      ? 0
+      : nextCompletedCount;
   const effectiveTotalCount = isManualFinalFileSettlingToIdle
     ? prev.totalCount
-    : nextTotalCount;
+    : isManualUploadCancelled
+      ? 0
+      : nextTotalCount;
   const effectiveCompletedBytes = isManualFinalFileSettlingToIdle
     ? prev.completedCount >= prev.totalCount
       ? Math.max(prev.totalBytes, prev.completedBytes)
@@ -1847,12 +1860,16 @@ export function buildOverview(
           prev.totalBytes,
           prev.completedBytes + prev.currentFileConfirmedBytes,
         )
-    : (payload.completedBytes as number | undefined) ?? prev.completedBytes;
+    : isManualUploadCancelled
+      ? 0
+      : ((payload.completedBytes as number | undefined) ?? prev.completedBytes);
   const effectiveTotalBytes = isManualFinalFileSettlingToIdle
     ? Math.max(prev.totalBytes, effectiveCompletedBytes)
-    : (payload.totalBytes as number | undefined) ??
-      (payload.queueTotalBytes as number | undefined) ??
-      prev.totalBytes;
+    : isManualUploadCancelled
+      ? 0
+      : ((payload.totalBytes as number | undefined) ??
+        (payload.queueTotalBytes as number | undefined) ??
+        prev.totalBytes);
   const roundSettledStates = new Set(['idle', 'paused_auto_upload']);
   const roundCompletionBridgeStates = new Set([
     ...roundSettledStates,
@@ -1866,33 +1883,37 @@ export function buildOverview(
       effectiveCompletedCount >= effectiveTotalCount &&
       nextManualPending === 0 &&
       nextAutoPending === 0);
-  const derivedLastCompletedTaskSource =
-    uploadState === 'completed'
-      ? nextCurrentTaskSource ??
+  const derivedLastCompletedTaskSource = isManualUploadCancelled
+    ? undefined
+    : uploadState === 'completed'
+      ? (nextCurrentTaskSource ??
         prev.currentTaskSource ??
         prev.lastCompletedTaskSource ??
         ((prev.autoUploadState === 'active'
           ? 'auto'
-          : 'manual') as UploadTaskSource)
+          : 'manual') as UploadTaskSource))
       : roundFinishedWithoutCompletedPulse
-      ? prev.currentTaskSource ??
-        prev.lastCompletedTaskSource ??
-        ((prev.autoUploadState === 'active'
-          ? 'auto'
-          : 'manual') as UploadTaskSource)
-      : prev.lastCompletedTaskSource;
+        ? (prev.currentTaskSource ??
+          prev.lastCompletedTaskSource ??
+          ((prev.autoUploadState === 'active'
+            ? 'auto'
+            : 'manual') as UploadTaskSource))
+        : prev.lastCompletedTaskSource;
 
   return {
-    progressPercent:
-      (payload.progressPercent as number | undefined) ??
-      (currentFileTotalBytes > 0
-        ? Math.round((currentFileConfirmedBytes / currentFileTotalBytes) * 100)
-        : prev.progressPercent),
+    progressPercent: isManualUploadCancelled
+      ? 0
+      : ((payload.progressPercent as number | undefined) ??
+        (currentFileTotalBytes > 0
+          ? Math.round(
+              (currentFileConfirmedBytes / currentFileTotalBytes) * 100,
+            )
+          : prev.progressPercent)),
     currentSpeedMbps:
       uploadState === 'reconnecting'
         ? 0
-        : (payload.currentSpeedMbps as number | undefined) ??
-          prev.currentSpeedMbps,
+        : ((payload.currentSpeedMbps as number | undefined) ??
+          prev.currentSpeedMbps),
     uploadState,
     completedCount: effectiveCompletedCount,
     totalCount: effectiveTotalCount,
@@ -1901,31 +1922,32 @@ export function buildOverview(
     currentFile: shouldClearActiveFile
       ? undefined
       : 'currentFile' in payload
-      ? typeof payload.currentFile === 'string'
-        ? payload.currentFile
-        : undefined
-      : prev.currentFile,
+        ? typeof payload.currentFile === 'string'
+          ? payload.currentFile
+          : undefined
+        : prev.currentFile,
     currentFilename: shouldClearActiveFile
       ? undefined
       : 'currentFilename' in payload
-      ? typeof payload.currentFilename === 'string'
-        ? payload.currentFilename
-        : undefined
-      : prev.currentFilename,
+        ? typeof payload.currentFilename === 'string'
+          ? payload.currentFilename
+          : undefined
+        : prev.currentFilename,
     currentFileConfirmedBytes: shouldClearActiveFile
       ? 0
       : 'currentFileConfirmedBytes' in payload || 'confirmedBytes' in payload
-      ? currentFileConfirmedBytes
-      : prev.currentFileConfirmedBytes,
+        ? currentFileConfirmedBytes
+        : prev.currentFileConfirmedBytes,
     currentFileTotalBytes: shouldClearActiveFile
       ? 0
       : 'currentFileTotalBytes' in payload
-      ? currentFileTotalBytes
-      : prev.currentFileTotalBytes,
+        ? currentFileTotalBytes
+        : prev.currentFileTotalBytes,
     // Native sends null (NSNull) when no task is active — respect it as
     // "clear". Only fall back to prev when the key is absent from payload.
     currentTaskSource: nextCurrentTaskSource,
     lastCompletedTaskSource: derivedLastCompletedTaskSource,
+    manualUploadCancelled: isManualUploadCancelled ? true : undefined,
     autoUploadState: nextAutoUploadState,
     manualPending: nextManualPending,
     autoPending: nextAutoPending,

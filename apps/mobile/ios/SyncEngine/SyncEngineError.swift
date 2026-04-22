@@ -8,6 +8,7 @@ enum SyncEngineError: Error, LocalizedError {
     case lowDiskPaused(String)
     case storageUnavailable(String, source: String)
     case autoUploadInterrupted
+    case manualUploadCancelled
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,7 @@ enum SyncEngineError: Error, LocalizedError {
         case .lowDiskPaused(let msg): return "Low disk paused: \(msg)"
         case .storageUnavailable(let msg, let source): return "Storage unavailable (\(source)): \(msg)"
         case .autoUploadInterrupted: return "Auto upload interrupted by user"
+        case .manualUploadCancelled: return "Manual upload cancelled by user"
         }
     }
 }
