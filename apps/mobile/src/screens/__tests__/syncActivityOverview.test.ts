@@ -143,6 +143,106 @@ describe('buildOverview', () => {
     expect(next.lastCompletedTaskSource).toBe('manual');
   });
 
+  it('uses native last completed source when an auto round completes after stale manual state', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'uploading',
+      completedCount: 5,
+      totalCount: 5,
+      completedBytes: 1629535908,
+      totalBytes: 1629535908,
+      currentFile: 'auto-file-key',
+      currentFilename: 'IMG_0005.MOV',
+      currentFileConfirmedBytes: 621067508,
+      currentFileTotalBytes: 621067508,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const fileCompleted = buildOverview(
+      {
+        uploadState: 'uploading',
+        progressPercent: 100,
+        completedCount: 5,
+        totalCount: 5,
+        completedBytes: 1629535908,
+        totalBytes: 1629535908,
+        currentTaskSource: null,
+        lastCompletedTaskSource: 'auto',
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'active',
+      },
+      prev,
+    );
+    const settled = buildOverview(
+      {
+        uploadState: 'completed',
+        progressPercent: 100,
+        completedCount: 5,
+        totalCount: 5,
+        completedBytes: 1629535908,
+        totalBytes: 1629535908,
+        currentTaskSource: null,
+        lastCompletedTaskSource: 'auto',
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'active',
+      },
+      fileCompleted,
+    );
+
+    expect(fileCompleted.lastCompletedTaskSource).toBe('auto');
+    expect(settled.lastCompletedTaskSource).toBe('auto');
+    expect(getSyncActivityMainCardState(settled, false)).toBe(
+      'auto_completed',
+    );
+  });
+
+  it('infers active auto completion ahead of stale manual context when native omits last source', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'uploading',
+      completedCount: 5,
+      totalCount: 5,
+      completedBytes: 1629535908,
+      totalBytes: 1629535908,
+      currentFile: 'auto-file-key',
+      currentFilename: 'IMG_0005.MOV',
+      currentFileConfirmedBytes: 621067508,
+      currentFileTotalBytes: 621067508,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'manual' as const,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'completed',
+        progressPercent: 100,
+        completedCount: 5,
+        totalCount: 5,
+        completedBytes: 1629535908,
+        totalBytes: 1629535908,
+        currentTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'active',
+      },
+      prev,
+    );
+
+    expect(next.lastCompletedTaskSource).toBe('auto');
+    expect(getSyncActivityMainCardState(next, false)).toBe('auto_completed');
+  });
+
   it('derives the last completed task source when native jumps straight from uploading to idle', () => {
     const prev = {
       progressPercent: 100,

@@ -1791,6 +1791,15 @@ export function buildOverview(
     payload,
     'currentTaskSource',
   );
+  const hasLastCompletedTaskSource = Object.prototype.hasOwnProperty.call(
+    payload,
+    'lastCompletedTaskSource',
+  );
+  const payloadLastCompletedTaskSource =
+    payload.lastCompletedTaskSource === 'auto' ||
+    payload.lastCompletedTaskSource === 'manual'
+      ? payload.lastCompletedTaskSource
+      : undefined;
   const uploadState =
     (payload.uploadState as string | undefined) ?? prev.uploadState;
   const currentFileConfirmedBytes =
@@ -1883,21 +1892,25 @@ export function buildOverview(
       effectiveCompletedCount >= effectiveTotalCount &&
       nextManualPending === 0 &&
       nextAutoPending === 0);
+  const inferredCompletedTaskSource =
+    nextCurrentTaskSource ??
+    payloadLastCompletedTaskSource ??
+    prev.currentTaskSource ??
+    (nextAutoUploadState === 'active'
+      ? ('auto' as UploadTaskSource)
+      : undefined) ??
+    prev.lastCompletedTaskSource ??
+    ((prev.autoUploadState === 'active'
+      ? 'auto'
+      : 'manual') as UploadTaskSource);
   const derivedLastCompletedTaskSource = isManualUploadCancelled
     ? undefined
+    : hasLastCompletedTaskSource
+      ? payloadLastCompletedTaskSource
     : uploadState === 'completed'
-      ? (nextCurrentTaskSource ??
-        prev.currentTaskSource ??
-        prev.lastCompletedTaskSource ??
-        ((prev.autoUploadState === 'active'
-          ? 'auto'
-          : 'manual') as UploadTaskSource))
+      ? inferredCompletedTaskSource
       : roundFinishedWithoutCompletedPulse
-        ? (prev.currentTaskSource ??
-          prev.lastCompletedTaskSource ??
-          ((prev.autoUploadState === 'active'
-            ? 'auto'
-            : 'manual') as UploadTaskSource))
+        ? inferredCompletedTaskSource
         : prev.lastCompletedTaskSource;
 
   return {

@@ -136,6 +136,8 @@ export interface SyncSummaryDTO {
   isThermalLimited?: boolean;
   /** Source of the currently uploading task (auto or manual) */
   currentTaskSource?: UploadTaskSource | null;
+  /** Source of the most recently completed upload task */
+  lastCompletedTaskSource?: UploadTaskSource | null;
   /** Current state of the auto-upload feature */
   autoUploadState?: AutoUploadState;
   /** Number of pending items in the manual upload queue */

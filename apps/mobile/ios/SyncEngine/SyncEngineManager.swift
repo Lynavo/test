@@ -301,6 +301,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeLastBytesTransferred: Int64 = 0
     private var runtimeUploadState = "idle"
     private var runtimeManualUploadCancelled = false
+    private var runtimeLastCompletedTaskSource: String?
     private var lastBackgroundPhotoLibraryChangeAt: CFAbsoluteTime = 0
     private let backgroundCaptureCooldown: CFTimeInterval = 90
     private var pendingRescanAfterThermalRecovery = false
@@ -482,6 +483,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeCurrentSpeedMbps = 0
         runtimeLastSpeedCheckTime = 0
         runtimeLastBytesTransferred = 0
+        runtimeLastCompletedTaskSource = nil
         if let uploadState {
             runtimeUploadState = uploadState
         }
@@ -510,6 +512,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeLastSpeedCheckTime = CFAbsoluteTimeGetCurrent()
         runtimeLastBytesTransferred = completedBytes
         runtimeCurrentSpeedMbps = 0
+        runtimeLastCompletedTaskSource = nil
         clearRuntimeCurrentFile()
         clearRuntimeReconnectError()
         applyRuntimeThermalState(
@@ -625,6 +628,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "isThermalLimited": runtimeIsThermalLimited,
             "uploadState": runtimeUploadState,
             "currentTaskSource": currentTaskSource,
+            "lastCompletedTaskSource": runtimeLastCompletedTaskSource ?? NSNull(),
             "autoUploadState": autoUploadState,
             "manualPending": pendingCounts.manual,
             "autoPending": pendingCounts.auto,
@@ -2015,6 +2019,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeUploadState = "idle"
         shouldAbortActiveManualUpload = false
         runtimeManualUploadCancelled = false
+        runtimeLastCompletedTaskSource = nil
 
         // 3. Emit fresh states to JS
         emitQueueToJS()
@@ -2964,6 +2969,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
                 slog("[SyncEngine] SKIP \(exported.originalFilename) (already exists)")
                 try uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "completed")
+                runtimeLastCompletedTaskSource = asset.source
                 runtimeQueueCompletedCount = max(runtimeQueueCompletedCount, index + 1)
                 runtimeQueueCompletedBytes += exported.fileSize
                 runtimeCurrentFileConfirmedBytes = exported.fileSize
@@ -3070,6 +3076,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             emitQueueToJS()
 
             if isOk {
+                runtimeLastCompletedTaskSource = asset.source
                 runtimeQueueCompletedCount = max(runtimeQueueCompletedCount, index + 1)
                 runtimeQueueCompletedBytes += exported.fileSize
                 runtimeCurrentFileConfirmedBytes = exported.fileSize
@@ -5120,6 +5127,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         shouldAbortActiveAutoUpload = false
         shouldAbortActiveManualUpload = false
         runtimeManualUploadCancelled = false
+        runtimeLastCompletedTaskSource = nil
         clearRuntimeSyncRoundProgress(uploadState: "idle")
         runtimeUploadState = "idle"
         runtimeLastErrorCode = nil
