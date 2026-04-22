@@ -9,6 +9,9 @@ import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 
 export function SupportSection() {
   const summary = useDashboardStore((s) => s.summary);
+  const isTransferActive = useDashboardStore((s) =>
+    s.devices.some((device) => device.status === 'transferring'),
+  );
   const advertisedIP = useSidecarRuntimeStore((s) => s.runtime.bonjour.advertisedIP);
   const [appInfo, setAppInfo] = useState<{
     name: string;
@@ -56,7 +59,7 @@ export function SupportSection() {
   };
 
   const handleResetClick = useCallback(() => {
-    if (resetting) return;
+    if (resetting || isTransferActive) return;
 
     if (!confirmReset) {
       setConfirmReset(true);
@@ -67,11 +70,11 @@ export function SupportSection() {
     clearTimeout(confirmTimerRef.current);
     setConfirmReset(false);
     void handleReset();
-  }, [confirmReset, resetting]);
+  }, [confirmReset, isTransferActive, resetting]);
 
   const handleReset = async () => {
     const api = window.electronAPI;
-    if (!api || resetting) return;
+    if (!api || resetting || isTransferActive) return;
 
     try {
       setResetting(true);
@@ -94,6 +97,12 @@ export function SupportSection() {
   useEffect(() => {
     return () => clearTimeout(confirmTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    if (!isTransferActive || !confirmReset) return;
+    clearTimeout(confirmTimerRef.current);
+    setConfirmReset(false);
+  }, [confirmReset, isTransferActive]);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -124,7 +133,7 @@ export function SupportSection() {
               type="button"
               variant={confirmReset ? 'destructive' : 'outline'}
               size="sm"
-              disabled={resetting}
+              disabled={resetting || isTransferActive}
               onClick={handleResetClick}
             >
               {resetting ? (

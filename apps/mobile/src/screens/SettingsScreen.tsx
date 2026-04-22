@@ -233,6 +233,7 @@ export function SettingsScreen() {
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>('system');
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
+  const isResetSyncDisabled = syncOverviewState.uploadState === 'uploading';
 
   // My iPhone display name
   const [myName, setMyName] = useState('iPhone');
@@ -536,6 +537,8 @@ export function SettingsScreen() {
   }, [t]);
 
   const handleResetSyncStatus = useCallback(() => {
+    if (isResetSyncDisabled) return;
+
     Alert.alert(
       t('settings.dialogs.resetSync.title'),
       t('settings.dialogs.resetSync.body'),
@@ -564,7 +567,7 @@ export function SettingsScreen() {
         },
       ],
     );
-  }, [navigation, t]);
+  }, [isResetSyncDisabled, navigation, t]);
 
   const handleLanguagePreferenceChange = useCallback(
     async (preference: LanguagePreference) => {
@@ -1314,13 +1317,27 @@ export function SettingsScreen() {
         {/* ============================================================= */}
         <View style={[styles.listCard, styles.dangerCard]}>
           <TouchableOpacity
-            style={styles.actionRow}
+            style={[
+              styles.actionRow,
+              isResetSyncDisabled && styles.actionRowDisabled,
+            ]}
             activeOpacity={0.6}
             onPress={handleResetSyncStatus}
+            disabled={isResetSyncDisabled}
+            accessibilityState={{ disabled: isResetSyncDisabled }}
           >
             <View style={styles.actionRowLeft}>
-              <Icon name="refresh-outline" size={18} color={DANGER_RED} />
-              <Text style={styles.dangerRowText}>
+              <Icon
+                name="refresh-outline"
+                size={18}
+                color={isResetSyncDisabled ? MUTED_TEXT : DANGER_RED}
+              />
+              <Text
+                style={[
+                  styles.dangerRowText,
+                  isResetSyncDisabled && styles.dangerRowTextDisabled,
+                ]}
+              >
                 {t('settings.actions.resetSyncStatus')}
               </Text>
             </View>
@@ -1789,6 +1806,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
+  actionRowDisabled: {
+    opacity: 0.45,
+  },
   actionRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1810,6 +1830,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
     color: DANGER_RED,
+  },
+  dangerRowTextDisabled: {
+    color: MUTED_TEXT,
   },
 
   // Logout card

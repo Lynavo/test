@@ -254,6 +254,29 @@ describe('SettingsScreen', () => {
     alertSpy.mockRestore();
   });
 
+  test('disables reset sync status while uploading', async () => {
+    mockNativeSyncEngine.getSyncOverview.mockResolvedValueOnce({
+      progressPercent: 42,
+      transferredBytes: 1024,
+      currentFile: 'file-key',
+      currentFileConfirmedBytes: 1024,
+      uploadState: 'uploading',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('重置同步狀態')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('重置同步狀態'));
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockNativeSyncEngine.resetAllStatus).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
   test('language selector persists the selected language and updates the screen immediately', async () => {
     const { getByText } = render(<SettingsScreen />);
 
