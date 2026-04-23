@@ -12,6 +12,7 @@
 
 - **Spec says toast for "tap current device", plan implements Alert.alert.** React Native does not ship a cross-platform toast primitive on iOS. Using `Alert.alert(title)` keeps the implementation a single line, matches the existing project pattern (no third-party toast lib in use), and surfaces the message reliably. If a non-modal toast becomes a hard requirement later, swap the call site without touching the surrounding logic.
 - **`settings.dialogs.switchDevice.{title,body,confirm}` is removed** (Task 3, Step 8). The previous flow showed a "disconnect first?" confirmation; the new flow only confirms when an upload is in progress and uses the new `switchDeviceWhileUploading` keys instead.
+- **Task 5 reads native via `NativeModules.NativeSyncEngine?.getKnownDeviceIds?.()` instead of the `SyncEngineModule` wrapper.** The wrapper destructures `NativeSyncEngine` at module load (`SyncEngineModule.ts:14`), which jest cannot mock retroactively. The screen uses the same direct-bypass pattern as the adjacent `getBindingState` call. The `?? []` defense is preserved at the call site via `.catch(() => [])` and `new Set(ids ?? [])`. The wrapper from Task 2 remains a valid typed API for future consumers.
 
 ---
 
@@ -583,9 +584,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback({
-      devices: [{ deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' }],
-    });
+    // The real subscription receives a bare DiscoveredDevice[] (see
+    // DeviceDiscoveryScreen.tsx:186-189) — pass the array directly, not
+    // wrapped in `{ devices: [...] }`.
+    onDiscoveredDevicesChangedCallback([
+      { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+    ]);
 
     await waitFor(() => {
       expect(getByText('Studio Mac')).toBeTruthy();
@@ -629,9 +633,9 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback({
-      devices: [{ deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' }],
-    });
+    onDiscoveredDevicesChangedCallback([
+      { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+    ]);
 
     await waitFor(() => getByText('Studio Mac'));
     fireEvent.press(getByText('Studio Mac'));
@@ -661,9 +665,9 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback({
-      devices: [{ deviceId: 'server-new', name: 'New PC', ip: '192.168.1.9', port: 39393, type: 'win' }],
-    });
+    onDiscoveredDevicesChangedCallback([
+      { deviceId: 'server-new', name: 'New PC', ip: '192.168.1.9', port: 39393, type: 'win' },
+    ]);
 
     await waitFor(() => getByText('New PC'));
     fireEvent.press(getByText('New PC'));
@@ -693,9 +697,9 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback({
-      devices: [{ deviceId: 'server-current', name: 'My Mac', ip: '192.168.1.5', port: 39393, type: 'mac' }],
-    });
+    onDiscoveredDevicesChangedCallback([
+      { deviceId: 'server-current', name: 'My Mac', ip: '192.168.1.5', port: 39393, type: 'mac' },
+    ]);
 
     await waitFor(() => getByText('My Mac'));
     fireEvent.press(getByText('My Mac'));
