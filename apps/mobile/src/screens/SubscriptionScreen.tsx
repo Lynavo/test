@@ -20,7 +20,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { isFeatureAccessAllowed, useAuth } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
-import { IAP_PRODUCTS, planToProductId } from '../constants/iap';
+import { planToProductId } from '../constants/iap';
 import { classifyIapError, IapErrorClass } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
 import {
@@ -581,10 +581,6 @@ export function SubscriptionScreen() {
     null,
   );
 
-  const [monthlyTrialEligible, setMonthlyTrialEligible] = useState<
-    boolean | null
-  >(null);
-
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -610,24 +606,6 @@ export function SubscriptionScreen() {
       setSelectedPlan(DEFAULT_SELECTED_PLAN);
     }
   }, [currentPlan, selectedPlan]);
-
-  useEffect(() => {
-    if (!FEATURES.IAP_ENABLED) return;
-    let cancelled = false;
-    void iapService
-      .checkEligibility()
-      .then(results => {
-        if (cancelled) return;
-        const monthly = results.find(r => r.productId === IAP_PRODUCTS.monthly);
-        setMonthlyTrialEligible(monthly?.eligibleForIntroOffer ?? false);
-      })
-      .catch(() => {
-        if (!cancelled) setMonthlyTrialEligible(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const subscriptionDisplay = resolveSubscriptionDisplayState({
     subscription,
@@ -874,11 +852,7 @@ export function SubscriptionScreen() {
         <View style={styles.planRow}>
           <PlanCard
             price="¥9.9"
-            unit={
-              monthlyTrialEligible
-                ? t('subscription.plans.monthly.trialOffer')
-                : t('subscription.plans.monthly.subtitle')
-            }
+            unit={t('subscription.plans.monthly.unit')}
             selected={selectedPlan === 'monthly'}
             disabled={
               currentPlan === 'monthly' ||

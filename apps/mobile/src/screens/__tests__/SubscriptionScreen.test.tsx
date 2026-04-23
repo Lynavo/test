@@ -188,9 +188,11 @@ describe('SubscriptionScreen', () => {
     expect(mockLoadSubscription).not.toHaveBeenCalled();
   });
 
-  test('monthly card shows trial copy when eligible', async () => {
-    const { findByText } = renderScreen();
-    expect(await findByText(/免費試用|免费试用|free trial/i)).toBeTruthy();
+  test('monthly card matches design without trial copy', () => {
+    const { getByText, queryByText } = renderScreen();
+    expect(getByText('¥9.9')).toBeTruthy();
+    expect(getByText('/月')).toBeTruthy();
+    expect(queryByText('7 天免费试用，之后 ¥9.9/月')).toBeNull();
   });
 
   test('subscribe tap invokes iapService.purchase then verify', async () => {
