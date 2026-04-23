@@ -258,15 +258,35 @@ describe('iapService — purchase', () => {
     expect(receipt.transactionId).toBe('tx_late');
   });
 
-  test('rejects non-fatal error after grace period when no purchase update arrives', async () => {
+  test('keeps waiting after non-fatal error until the purchase timeout', async () => {
     jest.useFakeTimers();
     const pending = iapService.purchase(IAP_PRODUCTS.monthly);
     await flushPurchasePreflight();
 
     errorCb?.({ code: 'E_UNKNOWN', productId: IAP_PRODUCTS.monthly });
-    jest.advanceTimersByTime(8_000);
+    jest.advanceTimersByTime(59_000);
 
-    await expect(pending).rejects.toMatchObject({ code: 'E_UNKNOWN' });
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'BLOB_AFTER_LONG_STOREKIT_DELAY',
+      transactionId: 'tx_after_long_storekit_delay',
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      transactionReceipt: 'BLOB_AFTER_LONG_STOREKIT_DELAY',
+      transactionId: 'tx_after_long_storekit_delay',
+    });
+  });
+
+  test('times out after non-fatal error when no purchase update arrives', async () => {
+    jest.useFakeTimers();
+    const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
+
+    errorCb?.({ code: 'E_UNKNOWN', productId: IAP_PRODUCTS.monthly });
+    jest.advanceTimersByTime(60_000);
+
+    await expect(pending).rejects.toThrow(/timed out/i);
   });
 
   test('fatal E_ITEM_UNAVAILABLE code still rejects pending (regression guard)', async () => {

@@ -24,7 +24,7 @@ import { ApiError, ERROR_CODE } from './api';
 
 const MAX_RESTORE_RECEIPTS = 10;
 const PURCHASE_TIMEOUT_MS = 60_000;
-const NON_FATAL_ERROR_GRACE_MS = 8_000;
+const NON_FATAL_ERROR_GRACE_MS = PURCHASE_TIMEOUT_MS;
 type RestorablePlan = NonNullable<ReturnType<typeof productIdToPlan>>;
 type PendingPurchase = {
   resolve: (r: PurchaseReceipt) => void;
@@ -35,9 +35,9 @@ type PendingPurchase = {
 
 // Apple's purchaseErrorListener may fire transient / interrupted errors
 // even when the transaction ultimately succeeds (observed in sandbox as an
-// early "unknown" error followed a moment later by a successful update
-// event). Only codes in this allowlist are treated as terminal for the
-// pending Promise; anything else gets a short grace window so a trailing
+// early "unknown" error followed later by a successful update event). Only
+// codes in this allowlist are treated as terminal for the pending Promise;
+// anything else waits for the normal purchase timeout so a trailing
 // purchaseUpdatedListener success can still resolve the pending Promise.
 const FATAL_ERROR_CODES: ReadonlySet<string> = new Set([
   'E_USER_CANCELLED',
