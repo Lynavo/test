@@ -42,7 +42,7 @@ import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 export type RootStackParamList = {
   Login: undefined;
   SmsVerify: { phone: string };
-  DeviceDiscovery: undefined;
+  DeviceDiscovery: { mode?: 'switch' } | undefined;
   CodeVerify: {
     deviceId?: string;
     host: string;

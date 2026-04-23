@@ -67,10 +67,10 @@
     "fullDate": "{{year}}/{{month}}/{{day}} {{time}}"
   },
   "dialogs": {
-    "switchDevice": {
-      "title": "切换设备",
-      "body": "确定要断开当前电脑并切换到其他设备吗？断开后需要重新输入连接码配对。",
-      "confirm": "确定切换"
+    "switchDeviceWhileUploading": {
+      "title": "正在上传中",
+      "body": "当前有上传任务正在进行，切换设备将中断上传，是否继续？",
+      "confirm": "继续切换"
     },
     "resetSync": {
       "title": "重置所有同步状态",

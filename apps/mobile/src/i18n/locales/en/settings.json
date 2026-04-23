@@ -67,10 +67,10 @@
     "fullDate": "{{year}}/{{month}}/{{day}} {{time}}"
   },
   "dialogs": {
-    "switchDevice": {
-      "title": "Switch Device",
-      "body": "Disconnect from the current computer and switch to another device? You will need to enter a new pairing code.",
-      "confirm": "Confirm Switch"
+    "switchDeviceWhileUploading": {
+      "title": "Upload in Progress",
+      "body": "An upload is currently running. Switching devices will interrupt it. Continue?",
+      "confirm": "Switch Anyway"
     },
     "resetSync": {
       "title": "Reset All Sync State",
