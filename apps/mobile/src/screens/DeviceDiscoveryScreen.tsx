@@ -24,7 +24,8 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, CommonActions } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { DiscoveredDeviceDTO } from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -144,6 +145,10 @@ export function DeviceDiscoveryScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const isAndroid = Platform.OS === 'android';
+  const route = useRoute<RouteProp<RootStackParamList, 'DeviceDiscovery'>>();
+  const mode = route.params?.mode ?? 'initial';
+  const [knownDeviceIds, setKnownDeviceIds] = useState<Set<string>>(new Set());
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(true);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [manualHost, setManualHost] = useState('');
@@ -157,6 +162,23 @@ export function DeviceDiscoveryScreen() {
   const [showManualModal, setShowManualModal] = useState(false);
   const devicesRef = useRef<DiscoveredDevice[]>([]);
   const preserveCachedDevicesRef = useRef(false);
+
+  useEffect(() => {
+    if (mode !== 'switch') return;
+    let cancelled = false;
+    const { NativeSyncEngine: NSE } = NativeModules;
+    Promise.all([
+      (NSE?.getKnownDeviceIds?.() ?? Promise.resolve([])).catch(() => [] as string[]),
+      (NSE?.getBindingState?.() ?? Promise.resolve(null)).catch(() => null),
+    ]).then(([ids, binding]) => {
+      if (cancelled) return;
+      setKnownDeviceIds(new Set(ids as string[]));
+      setCurrentDeviceId((binding as { deviceId?: string } | null)?.deviceId ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   useEffect(() => {
     devicesRef.current = devices;
@@ -321,13 +343,56 @@ export function DeviceDiscoveryScreen() {
   }, []);
 
   const handleDevicePress = useCallback(
-    (device: DiscoveredDevice) => {
+    async (device: DiscoveredDevice) => {
       console.log(
         '[DiscoveryScreen] handleDevicePress',
-        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${
-          device.type
-        }`,
+        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${device.type}`,
       );
+
+      if (mode !== 'switch') {
+        navigation.navigate('CodeVerify', {
+          deviceId: device.deviceId,
+          host: device.ip,
+          port: device.port,
+          deviceName: device.name,
+        });
+        return;
+      }
+
+      if (device.deviceId === currentDeviceId) {
+        Alert.alert(t('deviceDiscovery.switch.toast.alreadyCurrent'));
+        return;
+      }
+
+      if (knownDeviceIds.has(device.deviceId)) {
+        try {
+          const { NativeSyncEngine: NSE } = NativeModules;
+          if (NSE) {
+            await NSE.pairDevice({
+              deviceId: device.deviceId,
+              host: device.ip,
+              port: device.port,
+              connectionCode: '',
+            });
+            navigation.dispatch(
+              CommonActions.reset({ index: 0, routes: [{ name: 'SyncActivity' }] }),
+            );
+          }
+        } catch (err) {
+          console.warn(
+            '[DiscoveryScreen] pairDevice direct connect failed, fallback to CodeVerify',
+            err,
+          );
+          navigation.navigate('CodeVerify', {
+            deviceId: device.deviceId,
+            host: device.ip,
+            port: device.port,
+            deviceName: device.name,
+          });
+        }
+        return;
+      }
+
       navigation.navigate('CodeVerify', {
         deviceId: device.deviceId,
         host: device.ip,
@@ -335,7 +400,7 @@ export function DeviceDiscoveryScreen() {
         deviceName: device.name,
       });
     },
-    [navigation],
+    [mode, navigation, currentDeviceId, knownDeviceIds, t],
   );
 
   const handleManualPair = useCallback(() => {
@@ -374,30 +439,47 @@ export function DeviceDiscoveryScreen() {
   }, []);
 
   const renderDevice = useCallback(
-    ({ item }: ListRenderItemInfo<DiscoveredDevice>) => (
-      <TouchableOpacity
-        style={styles.deviceCard}
-        activeOpacity={0.7}
-        onPress={() => handleDevicePress(item)}
-      >
-        {/* Monitor icon with gradient bg */}
-        <View style={styles.deviceIconWrapper}>
-          <Icon name="desktop-outline" size={20} color="#fff" />
-        </View>
+    ({ item }: ListRenderItemInfo<DiscoveredDevice>) => {
+      const isCurrentDevice = mode === 'switch' && item.deviceId === currentDeviceId;
+      const isKnownDevice =
+        mode === 'switch' && !isCurrentDevice && knownDeviceIds.has(item.deviceId);
 
-        {/* Device info */}
-        <View style={styles.deviceInfo}>
-          <Text style={styles.deviceName}>{item.name}</Text>
-          <Text style={styles.deviceMeta}>
-            {item.type === 'win' ? 'Windows' : 'macOS'} {'·'} {item.ip}
-          </Text>
-        </View>
-
-        {/* Chevron */}
-        <Icon name="chevron-forward" size={20} color="#b0c8da" />
-      </TouchableOpacity>
-    ),
-    [handleDevicePress],
+      return (
+        <TouchableOpacity
+          style={styles.deviceCard}
+          activeOpacity={0.7}
+          onPress={() => handleDevicePress(item)}
+        >
+          <View style={styles.deviceIconWrapper}>
+            <Icon name="desktop-outline" size={20} color="#fff" />
+          </View>
+          <View style={styles.deviceInfo}>
+            <Text style={styles.deviceName}>{item.name}</Text>
+            <Text style={styles.deviceMeta}>
+              {item.type === 'win' ? 'Windows' : 'macOS'} {'·'} {item.ip}
+            </Text>
+          </View>
+          {isCurrentDevice && (
+            <View style={styles.badgeCurrent}>
+              <Text style={styles.badgeCurrentText}>
+                {t('deviceDiscovery.switch.badge.current')}
+              </Text>
+            </View>
+          )}
+          {isKnownDevice && (
+            <View style={styles.badgeKnown}>
+              <Text style={styles.badgeKnownText}>
+                {t('deviceDiscovery.switch.badge.known')}
+              </Text>
+            </View>
+          )}
+          {!isCurrentDevice && !isKnownDevice && (
+            <Icon name="chevron-forward" size={20} color="#b0c8da" />
+          )}
+        </TouchableOpacity>
+      );
+    },
+    [handleDevicePress, mode, currentDeviceId, knownDeviceIds, t],
   );
 
   const keyExtractor = useCallback(
@@ -424,25 +506,39 @@ export function DeviceDiscoveryScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTopRow}>
-            <View style={styles.wifiIconBox}>
-              <Icon name="wifi" size={24} color="#3b9fd8" />
-            </View>
-            <TouchableOpacity
-              style={styles.scanButton}
-              activeOpacity={0.8}
-              onPress={() => {
-                if (isAndroid) {
-                  setShowManualModal(true);
-                  return;
-                }
-                setShowPairingMenu(true);
-              }}
-            >
-              <Icon name="settings-outline" size={16} color="#3b9fd8" />
-              <Text style={styles.scanButtonText}>{t('deviceDiscovery.actions.manualPair')}</Text>
-            </TouchableOpacity>
+            {mode === 'switch' ? (
+              <TouchableOpacity
+                style={styles.backButton}
+                activeOpacity={0.7}
+                onPress={() => navigation.goBack()}
+              >
+                <Icon name="chevron-back" size={20} color="#3b9fd8" />
+              </TouchableOpacity>
+            ) : (
+              <>
+                <View style={styles.wifiIconBox}>
+                  <Icon name="wifi" size={24} color="#3b9fd8" />
+                </View>
+                <TouchableOpacity
+                  style={styles.scanButton}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (isAndroid) {
+                      setShowManualModal(true);
+                      return;
+                    }
+                    setShowPairingMenu(true);
+                  }}
+                >
+                  <Icon name="settings-outline" size={16} color="#3b9fd8" />
+                  <Text style={styles.scanButtonText}>{t('deviceDiscovery.actions.manualPair')}</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
-          <Text style={styles.title}>{t('deviceDiscovery.title')}</Text>
+          <Text style={styles.title}>
+            {mode === 'switch' ? t('deviceDiscovery.switch.title') : t('deviceDiscovery.title')}
+          </Text>
           <Text style={styles.subtitle}>
             {isAndroid
               ? t('deviceDiscovery.subtitle.android')
@@ -801,6 +897,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8aabbd',
     marginTop: 2,
+  },
+  badgeCurrent: {
+    backgroundColor: 'rgba(59,159,216,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,159,216,0.4)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeCurrentText: {
+    color: '#3b9fd8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  badgeKnown: {
+    backgroundColor: 'rgba(63,207,127,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(63,207,127,0.4)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeKnownText: {
+    color: '#3fcf7f',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59,159,216,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // Empty state
