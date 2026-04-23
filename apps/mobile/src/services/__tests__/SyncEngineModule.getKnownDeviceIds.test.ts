@@ -27,4 +27,10 @@ describe('getKnownDeviceIds', () => {
     const result = await getKnownDeviceIds();
     expect(result).toEqual([]);
   });
+
+  it('returns empty array when native returns null', async () => {
+    mockGetKnownDeviceIds.mockResolvedValueOnce(null);
+    const result = await getKnownDeviceIds();
+    expect(result).toEqual([]);
+  });
 });

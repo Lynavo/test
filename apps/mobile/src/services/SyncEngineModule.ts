@@ -221,5 +221,5 @@ export async function setOwnerUserId(userId: number | string): Promise<void> {
 
 export async function getKnownDeviceIds(): Promise<string[]> {
   const result = await NativeSyncEngine.getKnownDeviceIds();
-  return result as string[];
+  return (result ?? []) as string[];
 }
