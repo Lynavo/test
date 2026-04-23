@@ -90,6 +90,9 @@
     "sharedFilesTitle": "Shared Files",
     "sharedFilesDesc": "Browse shared files on your PC"
   },
+  "trialUpgrade": {
+    "entry": "{{days}} days left in your free trial. Upgrade to Pro to unlock everything."
+  },
   "expired": {
     "title": "Trial Ended",
     "subtitle": "Subscribe to continue using photo upload, auto upload, and shared file access.",

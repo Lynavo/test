@@ -90,6 +90,9 @@
     "sharedFilesTitle": "共享目录",
     "sharedFilesDesc": "浏览PC设备的共享目录"
   },
+  "trialUpgrade": {
+    "entry": "免费试用剩余 {{days}} 天，点击升级 Pro 解锁全部功能"
+  },
   "expired": {
     "title": "试用已结束",
     "subtitle": "订阅后可继续使用素材上传、自动上传与共享文件访问",

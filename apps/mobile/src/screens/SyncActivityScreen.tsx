@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { UploadTaskSource, AutoUploadState } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
+import { SubscriptionStatusIcon } from '../components/SubscriptionStatusIcon';
 import {
   cancelAllManualUploads,
   interruptAutoUpload,
@@ -42,7 +43,13 @@ import {
   getSyncActivityProgressPercent,
   type SyncActivityMainCardState,
 } from '../utils/syncActivityTransferState';
-import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
+import {
+  useAuth,
+  isFeatureAccessAllowed,
+  type SubscriptionInfo,
+  type UserProfile,
+} from '../stores/auth-store';
+import { resolveSubscriptionDisplayState } from '../utils/subscriptionStatusDisplay';
 import { FEATURES } from '../constants/features';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -142,6 +149,16 @@ const AUTO_COMPLETION_VISUAL_HOLD_MS = 350;
 const AUTO_UPLOAD_PREPARING_MIN_MS = 400;
 /** Safety timeout — force-clear optimistic preparing state if native never confirms. */
 const AUTO_UPLOAD_PREPARING_SAFETY_MS = 35000;
+const NATIVE_SYNC_LOOP_ACTIVE_STATES = new Set([
+  'scanning',
+  'preparing',
+  'uploading',
+  'cloud_downloading',
+  'reconnecting',
+  'backoff_waiting',
+  'discovering',
+  'reconciling',
+]);
 
 const EMPTY_OVERVIEW: SyncOverview = {
   progressPercent: 0,
@@ -368,6 +385,41 @@ export function shouldShowSubscriptionExpiredOverlay({
   );
 }
 
+export function shouldKickAutoUploadSyncAfterGateRelease(snapshot: {
+  autoUploadState?: AutoUploadState | null;
+  uploadState?: string | null;
+  currentTaskSource?: UploadTaskSource | null;
+  lastErrorCode?: string | null;
+}): boolean {
+  if (snapshot.autoUploadState !== 'active') {
+    return false;
+  }
+
+  if (snapshot.currentTaskSource === 'auto') {
+    return false;
+  }
+
+  if (NATIVE_SYNC_LOOP_ACTIVE_STATES.has(snapshot.uploadState ?? '')) {
+    return false;
+  }
+
+  return snapshot.lastErrorCode !== 'RECONNECT_EXHAUSTED';
+}
+
+export function getTrialUpgradeEntryDays(input: {
+  subscription?: SubscriptionInfo | null;
+  user?: UserProfile | null;
+}): number {
+  const state = resolveSubscriptionDisplayState(input);
+  if (
+    state.kind !== 'account_trial' &&
+    state.kind !== 'subscription_intro_trial'
+  ) {
+    return 0;
+  }
+  return Math.max(0, state.daysRemaining);
+}
+
 export function getSyncActivityDisplayProgressPercent(
   overview: SyncOverview,
   shouldDelayCompletion: boolean,
@@ -438,10 +490,18 @@ export function SyncActivityScreen() {
   // Used to detect "scan finished with zero new items" so we can exit
   // optimistic without waiting for the 35 s safety timeout.
   const autoUploadObservedWakeRef = useRef(false);
+  const autoUploadGateKickAttemptedRef = useRef(false);
   const lastAutoUploadingVisualRef = useRef<{
     currentFilename?: string;
     currentSpeedMbps: number;
   } | null>(null);
+  const featureAccessAllowed = isFeatureAccessAllowed(
+    auth.subscription?.status ?? auth.user?.status,
+  );
+  const trialUpgradeEntryDays = getTrialUpgradeEntryDays({
+    subscription: auth.subscription,
+    user: auth.user,
+  });
 
   // ---------------------------------------------------------------------------
   // Data loading
@@ -564,9 +624,9 @@ export function SyncActivityScreen() {
         setInitialLoading(false);
 
         await NativeSyncEngine.startDiscovery();
-        // Do NOT call triggerSync() here — per PRD, auto upload must be
-        // explicitly enabled by the user in the album page. Unconditional
-        // triggerSync on mount was the old "always auto sync" behavior.
+        // Do not unconditionally call triggerSync() here. Auto upload still
+        // needs an explicit active config; a focused effect below resumes only
+        // that already-enabled state after subscription/paywall navigation.
       } catch (e) {
         console.warn('[SyncActivity] loadReal error:', e);
         setInitialLoading(false);
@@ -581,6 +641,59 @@ export function SyncActivityScreen() {
       errorSub?.remove();
     };
   }, [loadTodayStats, navigation, t]);
+
+  useEffect(() => {
+    if (
+      !isScreenFocused ||
+      !featureAccessAllowed ||
+      !bindingState?.deviceId ||
+      overview.autoUploadState !== 'active'
+    ) {
+      if (
+        !isScreenFocused ||
+        !featureAccessAllowed ||
+        overview.autoUploadState !== 'active'
+      ) {
+        autoUploadGateKickAttemptedRef.current = false;
+      }
+      return;
+    }
+
+    if (
+      autoUploadGateKickAttemptedRef.current ||
+      !shouldKickAutoUploadSyncAfterGateRelease(overview)
+    ) {
+      return;
+    }
+
+    const { NativeSyncEngine } = NativeModules;
+    if (!NativeSyncEngine) return;
+
+    autoUploadGateKickAttemptedRef.current = true;
+    void Promise.resolve(NativeSyncEngine.startDiscovery?.())
+      .catch((e: Error) => {
+        console.warn(
+          '[SyncActivity] auto-upload gate release discovery failed:',
+          e,
+        );
+      })
+      .finally(() => {
+        NativeSyncEngine.triggerSync?.().catch((e: Error) => {
+          console.warn(
+            '[SyncActivity] auto-upload gate release trigger failed:',
+            e,
+          );
+        });
+      });
+  }, [
+    isScreenFocused,
+    featureAccessAllowed,
+    bindingState?.deviceId,
+    overview.autoUploadState,
+    overview.uploadState,
+    overview.currentTaskSource,
+    overview.lastErrorCode,
+  ]);
 
   // Foreground refresh + reset mount grace on foreground transitions
   useEffect(() => {
@@ -978,9 +1091,7 @@ export function SyncActivityScreen() {
     subscriptionEnforcement: FEATURES.SUBSCRIPTION_ENFORCEMENT,
     isFocused: isScreenFocused,
     isLoggedIn: auth.isLoggedIn,
-    featureAccessAllowed: isFeatureAccessAllowed(
-      auth.subscription?.status ?? auth.user?.status,
-    ),
+    featureAccessAllowed,
   });
 
   useEffect(() => {
@@ -1790,6 +1901,24 @@ export function SyncActivityScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {trialUpgradeEntryDays > 0 && (
+          <TouchableOpacity
+            style={styles.trialUpgradeEntry}
+            activeOpacity={0.75}
+            onPress={() => navigation.navigate('Subscription')}
+          >
+            <View style={styles.trialUpgradeIcon}>
+              <SubscriptionStatusIcon tone="trial" size={22} />
+            </View>
+            <Text style={styles.trialUpgradeText}>
+              {t('syncActivity.trialUpgrade.entry', {
+                days: trialUpgradeEntryDays,
+              })}
+            </Text>
+            <Icon name="chevron-forward" size={18} color="#d97706" />
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Trial / Subscription expired overlay — gated by FEATURES until real
@@ -1800,7 +1929,7 @@ export function SyncActivityScreen() {
           <View style={styles.expiredOverlay}>
             <View style={styles.expiredCard}>
               <View style={styles.expiredIconCircle}>
-                <Icon name="shield-outline" size={36} color="#8b5cf6" />
+                <SubscriptionStatusIcon tone="expired" size={34} />
               </View>
               <Text style={styles.expiredTitle}>
                 {t('syncActivity.expired.title')}
@@ -2500,6 +2629,35 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: SOFT_TEXT,
   },
+  trialUpgradeEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 18,
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    backgroundColor: 'rgba(255, 251, 235, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.28)',
+  },
+  trialUpgradeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(217, 119, 6, 0.1)',
+  },
+  trialUpgradeText: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+    color: '#92400e',
+  },
 
   // Trial / Subscription expired overlay
   expiredOverlay: {
@@ -2526,7 +2684,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: 'rgba(139,92,246,0.10)',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,

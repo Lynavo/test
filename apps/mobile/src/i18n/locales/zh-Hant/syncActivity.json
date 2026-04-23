@@ -90,6 +90,9 @@
     "sharedFilesTitle": "共享目錄",
     "sharedFilesDesc": "瀏覽 PC 設備的共享目錄"
   },
+  "trialUpgrade": {
+    "entry": "免費試用剩餘 {{days}} 天，點擊升級 Pro 解鎖全部功能"
+  },
   "expired": {
     "title": "試用已結束",
     "subtitle": "訂閱後可繼續使用素材上傳、自動上傳與共享檔案存取",

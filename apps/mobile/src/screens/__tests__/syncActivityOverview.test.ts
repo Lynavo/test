@@ -1,10 +1,12 @@
 import {
   buildOverview,
+  getTrialUpgradeEntryDays,
   getSyncActivityDisplayProgressPercent,
   isPreparationPhase,
   resolveSyncErrorAlertMessage,
   shouldBypassOfflineDisplayDelay,
   shouldDelayAutoCompletionCard,
+  shouldKickAutoUploadSyncAfterGateRelease,
   shouldRenderSyncActivityProgress,
   shouldShowSubscriptionExpiredOverlay,
   shouldTreatSyncActivityAsBetweenItems,
@@ -1097,6 +1099,112 @@ describe('shouldShowSubscriptionExpiredOverlay', () => {
         featureAccessAllowed: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe('shouldKickAutoUploadSyncAfterGateRelease', () => {
+  it('starts the native loop when auto upload is active but idle', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'idle',
+      }),
+    ).toBe(true);
+  });
+
+  it('does not start when auto upload is disabled', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'disabled',
+        uploadState: 'idle',
+      }),
+    ).toBe(false);
+  });
+
+  it('does not duplicate an active native scan or transfer', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'scanning',
+      }),
+    ).toBe(false);
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'uploading',
+        currentTaskSource: 'auto',
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves reconnect-exhausted recovery to the reconnect flow', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'offline',
+        lastErrorCode: 'RECONNECT_EXHAUSTED',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('getTrialUpgradeEntryDays', () => {
+  it('returns remaining days for account trial users', () => {
+    const trialEnd = new Date(
+      Date.now() + 3 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    expect(
+      getTrialUpgradeEntryDays({
+        user: {
+          id: 1,
+          primaryIdentity: null,
+          identities: [],
+          status: 'trialing',
+          plan: '',
+          expireAt: null,
+          trialEnd,
+        },
+      }),
+    ).toBeGreaterThanOrEqual(2);
+  });
+
+  it('prefers subscription snapshot and hides the entry for subscribed users', () => {
+    expect(
+      getTrialUpgradeEntryDays({
+        subscription: {
+          status: 'subscribed',
+          plan: 'yearly',
+          expireAt: '2027-04-23T00:00:00.000Z',
+          trialEnd: null,
+        },
+        user: {
+          id: 1,
+          primaryIdentity: null,
+          identities: [],
+          status: 'trialing',
+          plan: '',
+          expireAt: null,
+          trialEnd: '2026-04-26T00:00:00.000Z',
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it('hides the entry when the trial has expired', () => {
+    expect(
+      getTrialUpgradeEntryDays({
+        user: {
+          id: 1,
+          primaryIdentity: null,
+          identities: [],
+          status: 'trial_expired',
+          plan: '',
+          expireAt: null,
+          trialEnd: '2026-04-17T00:00:00.000Z',
+        },
+      }),
+    ).toBe(0);
   });
 });
 

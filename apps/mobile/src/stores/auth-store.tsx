@@ -294,7 +294,9 @@ interface AuthActions {
    *  wait for React to re-render with the new context value. Rejects if the
    *  fetch fails — callers should wrap in try/catch if they can proceed
    *  without the fresh snapshot. */
-  loadSubscription: () => Promise<SubscriptionInfo>;
+  loadSubscription: (
+    options?: { showGlobalLoading?: boolean },
+  ) => Promise<SubscriptionInfo>;
   /** Manually retry the post-login profile auto-load. Surface this from the
    *  RootNavigator's profile-error screen so a transient network failure
    *  doesn't strand the user on a permanent spinner. */
@@ -399,15 +401,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const loadSubscription = useCallback(async (): Promise<SubscriptionInfo> => {
+  const loadSubscription = useCallback(async (
+    options?: { showGlobalLoading?: boolean },
+  ): Promise<SubscriptionInfo> => {
     const { getSubscriptionStatus } = await loadSubscriptionService();
-    dispatch({ type: 'SET_LOADING', isLoading: true });
+    const showGlobalLoading = options?.showGlobalLoading === true;
+    if (showGlobalLoading) {
+      dispatch({ type: 'SET_LOADING', isLoading: true });
+    }
     try {
       const info = await getSubscriptionStatus();
       dispatch({ type: 'SET_SUBSCRIPTION', subscription: info });
       return info;
     } finally {
-      dispatch({ type: 'SET_LOADING', isLoading: false });
+      if (showGlobalLoading) {
+        dispatch({ type: 'SET_LOADING', isLoading: false });
+      }
     }
   }, []);
 

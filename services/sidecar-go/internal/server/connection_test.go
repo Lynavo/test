@@ -531,6 +531,44 @@ func TestReturningHelloRefreshesClientNameAndIPv4(t *testing.T) {
 	}
 }
 
+func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	pairingToken := doPairing(t, client)
+	client.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	revokedCount, err := st.SetConnectionCodeAndRevokePairedDevices("654321")
+	if err != nil {
+		t.Fatalf("SetConnectionCodeAndRevokePairedDevices: %v", err)
+	}
+	if revokedCount != 1 {
+		t.Fatalf("expected 1 revoked device, got %d", revokedCount)
+	}
+
+	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanup2()
+
+	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:       testClientID,
+		ClientName:     testClientName,
+		ClientPlatform: "ios",
+		AppVersion:     "0.1.0",
+		PairingToken:   pairingToken,
+		AppState:       "foreground",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
+	if !helloRes.AuthRequired {
+		t.Fatal("expected authRequired=true after connection code rotation revoked old token")
+	}
+	if helloRes.Bound {
+		t.Fatal("expected bound=false after connection code rotation revoked old token")
+	}
+}
+
 func TestDisconnectBroadcastStatus_UsesPresenceState(t *testing.T) {
 	tcpSrv := NewTCPServer(nil, nil, events.NewHub())
 

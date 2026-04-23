@@ -66,10 +66,20 @@ class DiscoveryService {
     private var probeGeneration: UInt64 = 0
     weak var delegate: DiscoveryServiceDelegate?
     var browserState: String = "not_started"
+    var isBrowsing: Bool {
+        browser != nil
+    }
 
     func startBrowsing() {
         slog("[DiscoveryService] startBrowsing called")
         syncDiagnosticsLog("DiscoveryService", "startBrowsing called")
+        guard browser == nil else {
+            syncDiagnosticsLog(
+                "DiscoveryService",
+                "startBrowsing no-op: browser already active state=\(browserState)"
+            )
+            return
+        }
         browser?.cancel()
         browser = nil
         for connection in probeConnections.values {
@@ -125,7 +135,7 @@ class DiscoveryService {
         probeConnections.removeAll()
         devices.removeAll()
         reachableDevices.removeAll()
-        delegate?.discoveryDidUpdate(devices: [])
+        syncDiagnosticsLog("DiscoveryService", "stopBrowsing cleared local discovery cache without emitting empty result")
     }
 
     private func handleResults(_ results: Set<NWBrowser.Result>) {

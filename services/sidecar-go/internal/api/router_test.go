@@ -86,6 +86,13 @@ func TestHealthEndpoint(t *testing.T) {
 	if body["version"] != "0.1.0" {
 		t.Errorf("expected version=0.1.0, got %v", body["version"])
 	}
+	capabilities, ok := body["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected capabilities object, got %T", body["capabilities"])
+	}
+	if capabilities["revokesPairingsOnCodeRotation"] != true {
+		t.Errorf("expected revokesPairingsOnCodeRotation=true, got %v", capabilities["revokesPairingsOnCodeRotation"])
+	}
 }
 
 func TestDashboardSummary(t *testing.T) {
@@ -1077,6 +1084,18 @@ func TestResetStateRejectsActiveTransfer(t *testing.T) {
 
 func TestRegenerateCode(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         "known-client",
+		ClientName:       "Known iPhone",
+		Platform:         "ios",
+		PairingID:        "pair-known-client",
+		PairingTokenHash: "hash-known-client",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+	}); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
@@ -1108,6 +1127,14 @@ func TestRegenerateCode(t *testing.T) {
 	// Verify the code is >= 100000
 	if code < "100000" {
 		t.Errorf("expected code >= 100000, got %s", code)
+	}
+
+	device, err := st.GetPairedDevice("known-client")
+	if err != nil {
+		t.Fatalf("GetPairedDevice after regenerate: %v", err)
+	}
+	if device.RevokedAt == nil {
+		t.Fatal("expected existing paired device to be revoked after connection code regeneration")
 	}
 }
 

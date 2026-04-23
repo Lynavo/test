@@ -24,7 +24,12 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation, useRoute, CommonActions } from '@react-navigation/native';
+import {
+  CommonActions,
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { DiscoveredDeviceDTO } from '@syncflow/contracts';
@@ -372,31 +377,29 @@ export function DeviceDiscoveryScreen() {
 
       if (knownDeviceIds.has(device.deviceId)) {
         try {
-          const { NativeSyncEngine: NSE } = NativeModules;
-          if (NSE) {
-            await NSE.pairDevice({
-              deviceId: device.deviceId,
-              host: device.ip,
-              port: device.port,
-              connectionCode: '',
-            });
-            navigation.dispatch(
-              CommonActions.reset({ index: 0, routes: [{ name: 'SyncActivity' }] }),
-            );
+          const { NativeSyncEngine } = NativeModules;
+          if (!NativeSyncEngine) {
+            throw new Error('NativeSyncEngine unavailable');
           }
-        } catch (err) {
-          console.warn(
-            '[DiscoveryScreen] pairDevice direct connect failed, fallback to CodeVerify',
-            err,
-          );
-          navigation.navigate('CodeVerify', {
+          await NativeSyncEngine.pairDevice({
             deviceId: device.deviceId,
             host: device.ip,
             port: device.port,
-            deviceName: device.name,
+            connectionCode: '',
           });
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'SyncActivity' }],
+            }),
+          );
+          return;
+        } catch (error) {
+          console.warn(
+            '[DiscoveryScreen] known device direct switch failed, requiring code verification',
+            error,
+          );
         }
-        return;
       }
 
       navigation.navigate('CodeVerify', {

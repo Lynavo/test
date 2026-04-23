@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, NativeModules, NativeEventEmitter } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // IMPORTANT: must be hoisted above the i18n import below — i18n.init reads
 // RNLocalize.getLocales() synchronously to pick the initial language.
@@ -107,10 +107,9 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     });
   });
 
-  it('calls pairDevice with empty code for known device and resets to SyncActivity on success', async () => {
+  it('direct-pairs known device with empty code and resets to SyncActivity', async () => {
     mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
     mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
-    mockNativeSyncEngine.pairDevice.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(<DeviceDiscoveryScreen />);
 
@@ -126,9 +125,11 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback([
-      { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
-    ]);
+    act(() => {
+      onDiscoveredDevicesChangedCallback([
+        { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+      ]);
+    });
 
     await waitFor(() => {
       expect(getByText('Studio Mac')).toBeTruthy();
@@ -143,22 +144,21 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
         port: 39393,
         connectionCode: '',
       });
-      expect(mockDispatch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'RESET',
-          payload: expect.objectContaining({
-            index: 0,
-            routes: [{ name: 'SyncActivity' }],
-          }),
-        }),
-      );
     });
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'RESET',
+      payload: {
+        index: 0,
+        routes: [{ name: 'SyncActivity' }],
+      },
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('navigates to CodeVerify when pairDevice fails for known device', async () => {
+  it('falls back to CodeVerify when known-device direct pair fails', async () => {
     mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
     mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
-    mockNativeSyncEngine.pairDevice.mockRejectedValueOnce(new Error('PAIR_FAILED: auth required'));
+    mockNativeSyncEngine.pairDevice.mockRejectedValueOnce(new Error('PAIR_CODE_REQUIRED'));
 
     const { getByText } = render(<DeviceDiscoveryScreen />);
 
@@ -172,11 +172,14 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback([
-      { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
-    ]);
+    act(() => {
+      onDiscoveredDevicesChangedCallback([
+        { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+      ]);
+    });
 
     await waitFor(() => getByText('Studio Mac'));
+    expect(getByText('直接切換')).toBeTruthy();
     fireEvent.press(getByText('Studio Mac'));
 
     await waitFor(() => {
@@ -187,6 +190,13 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
         deviceName: 'Studio Mac',
       });
     });
+    expect(mockNativeSyncEngine.pairDevice).toHaveBeenCalledWith({
+      deviceId: 'server-known',
+      host: '192.168.1.8',
+      port: 39393,
+      connectionCode: '',
+    });
+    expect(mockDispatch).not.toHaveBeenCalled();
   });
 
   it('navigates to CodeVerify for unknown device', async () => {
@@ -204,9 +214,11 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback([
-      { deviceId: 'server-new', name: 'New PC', ip: '192.168.1.9', port: 39393, type: 'win' },
-    ]);
+    act(() => {
+      onDiscoveredDevicesChangedCallback([
+        { deviceId: 'server-new', name: 'New PC', ip: '192.168.1.9', port: 39393, type: 'win' },
+      ]);
+    });
 
     await waitFor(() => getByText('New PC'));
     fireEvent.press(getByText('New PC'));
@@ -236,9 +248,11 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
-    onDiscoveredDevicesChangedCallback([
-      { deviceId: 'server-current', name: 'My Mac', ip: '192.168.1.5', port: 39393, type: 'mac' },
-    ]);
+    act(() => {
+      onDiscoveredDevicesChangedCallback([
+        { deviceId: 'server-current', name: 'My Mac', ip: '192.168.1.5', port: 39393, type: 'mac' },
+      ]);
+    });
 
     await waitFor(() => getByText('My Mac'));
     fireEvent.press(getByText('My Mac'));
