@@ -4054,7 +4054,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             let serverId = helloRes["serverId"] as? String ?? deviceId
             if var existingBinding = uploadStore?.getBinding() {
                 if existingBinding.deviceId != serverId {
-                    // Switching to a different device — reset queue so it receives all photos.
+                    // Switching to a different device — reset queue so it receives all photos,
+                    // and overwrite the local binding to point at the new server. The previous
+                    // server's pairing token is left in Keychain so the user can switch back
+                    // without re-entering its code.
                     slog(
                         "[SyncEngine] device switch detected (authRequired=false): %@ → %@, resetting upload queue",
                         existingBinding.deviceId, serverId
@@ -4062,6 +4065,26 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     try? uploadStore?.resetUploadQueue()
                     resetAutoUploadStateForFreshPairing(reason: "device_switch_auth_not_required")
                     didAttemptRemoteHistoryReconciliation = false
+
+                    let serverName = helloRes["serverName"] as? String ?? ""
+                    let keychainKey = pairingTokenKeychainKey(for: serverId)
+                    let newBinding = BindingRecord(
+                        deviceId: serverId,
+                        deviceName: serverName,
+                        deviceAlias: nil,
+                        deviceType: inferredBindingDeviceType(for: deviceId),
+                        host: confirmedHost,
+                        port: port,
+                        pairingId: "",
+                        pairingTokenKeychainRef: keychainKey,
+                        shareName: helloRes["serverCapabilities"].flatMap { ($0 as? [String: Any])?["shareName"] as? String },
+                        lastBoundAt: ISO8601DateFormatter().string(from: Date())
+                    )
+                    try? uploadStore?.saveBinding(newBinding)
+                    if let bonjourDevice = discoveredDevices[deviceId] {
+                        discoveredDevices[serverId] = bonjourDevice
+                    }
+                    slog("[SyncEngine] saved new binding after device switch: \(serverId)")
                 } else {
                     // Explicitly entering a connection code is treated as a fresh pairing
                     // session. The sync screen should start from the default "auto upload
