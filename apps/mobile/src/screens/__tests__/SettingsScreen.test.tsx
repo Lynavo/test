@@ -177,6 +177,7 @@ const mockNativeSyncEngine = {
   setClientDisplayName: jest.fn().mockResolvedValue(undefined),
   disconnectAndUnbind: jest.fn().mockResolvedValue(undefined),
   resetAllStatus: jest.fn().mockResolvedValue(undefined),
+  getKnownDeviceIds: jest.fn().mockResolvedValue([]),
   addListener: jest.fn(),
   removeListeners: jest.fn(),
 };
@@ -296,5 +297,49 @@ describe('SettingsScreen', () => {
     );
     expect(getByText('Settings')).toBeTruthy();
     expect(getByText('Language')).toBeTruthy();
+  });
+
+  describe('Switch Device button', () => {
+    beforeEach(async () => {
+      await i18n.changeLanguage('zh-Hant');
+    });
+
+    it('navigates to DeviceDiscovery switch mode when not uploading', async () => {
+      mockNativeSyncEngine.getSyncOverview.mockResolvedValueOnce({
+        progressPercent: 0,
+        transferredBytes: 0,
+        currentFile: null,
+        currentFileConfirmedBytes: 0,
+        uploadState: 'idle',
+      });
+      const { getByText } = render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(getByText('切換')).toBeTruthy();
+      });
+      fireEvent.press(getByText('切換'));
+      expect(mockNavigate).toHaveBeenCalledWith('DeviceDiscovery', { mode: 'switch' });
+    });
+
+    it('shows upload confirmation dialog when upload is active', async () => {
+      mockNativeSyncEngine.getSyncOverview.mockResolvedValueOnce({
+        progressPercent: 50,
+        transferredBytes: 1024,
+        currentFile: 'photo.jpg',
+        currentFileConfirmedBytes: 512,
+        uploadState: 'uploading',
+      });
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      const { getByText } = render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(getByText('切換')).toBeTruthy();
+      });
+      fireEvent.press(getByText('切換'));
+      expect(alertSpy).toHaveBeenCalledWith(
+        expect.stringContaining('上傳'),
+        expect.any(String),
+        expect.any(Array),
+      );
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
   });
 });

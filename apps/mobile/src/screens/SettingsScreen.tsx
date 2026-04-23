@@ -48,6 +48,7 @@ import {
   getConnectionBadgeState,
   type MobileConnectionState,
 } from '../utils/effectiveConnectionState';
+import { isSyncActivityActivelyTransferring } from '../utils/syncActivityTransferState';
 import { resolveSubscriptionDisplayState } from '../utils/subscriptionStatusDisplay';
 import {
   loadStoredLanguagePreference,
@@ -488,32 +489,23 @@ export function SettingsScreen() {
   }, [myName]);
 
   const handleSwitchDevice = useCallback(() => {
-    Alert.alert(
-      t('settings.dialogs.switchDevice.title'),
-      t('settings.dialogs.switchDevice.body'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('settings.dialogs.switchDevice.confirm'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { NativeSyncEngine } = NativeModules;
-              if (NativeSyncEngine) {
-                await NativeSyncEngine.disconnectAndUnbind();
-              }
-            } catch (e) {
-              console.warn('Failed to disconnect');
-            }
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'DeviceDiscovery' }],
-            });
+    if (isSyncActivityActivelyTransferring(syncOverviewState)) {
+      Alert.alert(
+        t('settings.dialogs.switchDeviceWhileUploading.title'),
+        t('settings.dialogs.switchDeviceWhileUploading.body'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('settings.dialogs.switchDeviceWhileUploading.confirm'),
+            style: 'destructive',
+            onPress: () => navigation.navigate('DeviceDiscovery', { mode: 'switch' }),
           },
-        },
-      ],
-    );
-  }, [navigation, t]);
+        ],
+      );
+    } else {
+      navigation.navigate('DeviceDiscovery', { mode: 'switch' });
+    }
+  }, [navigation, syncOverviewState, t]);
 
   const handleExportDiagnostics = useCallback(async () => {
     try {
