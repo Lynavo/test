@@ -218,3 +218,8 @@ export async function getOwnerUserId(): Promise<string | null> {
 export async function setOwnerUserId(userId: number | string): Promise<void> {
   await NativeSyncEngine.setOwnerUserId(String(userId));
 }
+
+export async function getKnownDeviceIds(): Promise<string[]> {
+  const result = await NativeSyncEngine.getKnownDeviceIds();
+  return result as string[];
+}
