@@ -472,4 +472,10 @@ class NativeSyncEngineModule: RCTEventEmitter {
             )
         }
     }
+
+    @objc
+    func getKnownDeviceIds(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        let ids = SyncEngineManager.shared.getKnownDeviceIds()
+        resolve(ids)
+    }
 }

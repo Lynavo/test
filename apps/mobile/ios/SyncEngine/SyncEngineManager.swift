@@ -5442,4 +5442,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         return flushed
     }
+
+    func getKnownDeviceIds() -> [String] {
+        let keys = bindingService.listStoredKeychainKeys()
+        let prefixes = ["syncflow_pairing_token_", "pairing_token_"]
+        return keys.compactMap { key -> String? in
+            for prefix in prefixes {
+                if key.hasPrefix(prefix) { return String(key.dropFirst(prefix.count)) }
+            }
+            return nil
+        }
+    }
 }
