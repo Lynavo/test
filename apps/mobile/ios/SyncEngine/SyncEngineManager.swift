@@ -4063,6 +4063,27 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         existingBinding.deviceId, serverId
                     )
                     try? uploadStore?.resetUploadQueue()
+
+                    // Reset in-memory runtime counter cache from the previous device's
+                    // session so the new device's SyncActivity starts from zero.
+                    // runtimeSyncOverviewPayload reads these directly and caches over
+                    // the DB; without resetting them the next emit re-reports the
+                    // previous device's completed=1/1 progress.
+                    // (We don't call resetAllStatus() because it also wipes upload
+                    // history, which should be preserved across device switches.)
+                    runtimeQueueTotalCount = 0
+                    runtimeQueueCompletedCount = 0
+                    runtimeQueueTotalBytes = 0
+                    runtimeQueueCompletedBytes = 0
+                    runtimeCurrentFileKey = nil
+                    runtimeCurrentFilename = nil
+                    runtimeCurrentFileConfirmedBytes = 0
+                    runtimeCurrentFileTotalBytes = 0
+                    runtimeCurrentSpeedMbps = 0
+                    runtimeUploadState = "idle"
+                    runtimeLastCompletedTaskSource = nil
+                    runtimeRoundSource = nil
+
                     resetAutoUploadStateForFreshPairing(reason: "device_switch_auth_not_required")
                     didAttemptRemoteHistoryReconciliation = false
 
@@ -4131,6 +4152,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             if let updatedBinding = uploadStore?.getBinding() {
                 NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload(binding: updatedBinding))
             }
+            // Emit a fresh idle SyncOverview so SyncActivity drops the previous
+            // device's progress/completed counters from its UI cache.
+            NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                runtimeSyncOverviewPayload(uploadState: "idle")
+            )
             sendPresenceHeartbeat(clientId: clientId)
 
             // Sync is no longer triggered automatically after pairing.
