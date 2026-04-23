@@ -25,6 +25,11 @@ import type { TFunction } from 'i18next';
 import * as RNLocalize from 'react-native-localize';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
+import {
+  SUBSCRIPTION_STATUS_ICON_COLORS,
+  SubscriptionStatusIcon,
+  getSubscriptionStatusIconTone,
+} from '../components/SubscriptionStatusIcon';
 import { useAuth } from '../stores/auth-store';
 import {
   logout as serverLogout,
@@ -77,10 +82,6 @@ const OFFLINE_SLATE = '#94a3b8';
 const OFFLINE_TEXT = '#72859a';
 const DANGER_RED = '#ef4444';
 const DANGER_BG = 'rgba(239,68,68,0.04)';
-const SUB_GREEN = '#22c55e';
-const SUB_GREEN_BG = 'rgba(34,197,94,0.12)';
-const TRIAL_PURPLE = '#8b5cf6';
-const TRIAL_PURPLE_BG = 'rgba(139,92,246,0.10)';
 const APPLE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 
 // ---------------------------------------------------------------------------
@@ -498,7 +499,8 @@ export function SettingsScreen() {
           {
             text: t('settings.dialogs.switchDeviceWhileUploading.confirm'),
             style: 'destructive',
-            onPress: () => navigation.navigate('DeviceDiscovery', { mode: 'switch' }),
+            onPress: () =>
+              navigation.navigate('DeviceDiscovery', { mode: 'switch' }),
           },
         ],
       );
@@ -874,6 +876,12 @@ export function SettingsScreen() {
   const isSubExpired = subscriptionDisplay.kind === 'sub_expired';
   const hasKnownSubscriptionState = subscriptionDisplay.kind !== 'unknown';
   const showSubCta = isAccountTrial || isTrialExpired || isSubExpired;
+  const subscriptionIconTone = getSubscriptionStatusIconTone(
+    subscriptionDisplay.kind,
+  );
+  const subscriptionStatusColor = subscriptionIconTone
+    ? SUBSCRIPTION_STATUS_ICON_COLORS[subscriptionIconTone]
+    : DARK;
 
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
@@ -998,28 +1006,18 @@ export function SettingsScreen() {
             accessibilityRole="button"
           >
             <View style={styles.topCardIconRow}>
-              <View
-                style={[
-                  styles.subIconCircle,
-                  isSubscribed || isSubscriptionIntroTrial
-                    ? { backgroundColor: SUB_GREEN_BG }
-                    : { backgroundColor: TRIAL_PURPLE_BG },
-                ]}
-              >
-                <Icon
-                  name={
-                    isSubscribed || isSubscriptionIntroTrial
-                      ? 'shield-checkmark-outline'
-                      : 'time-outline'
-                  }
-                  size={18}
-                  color={
-                    isSubscribed || isSubscriptionIntroTrial
-                      ? SUB_GREEN
-                      : TRIAL_PURPLE
-                  }
+              {subscriptionIconTone ? (
+                <SubscriptionStatusIcon
+                  tone={subscriptionIconTone}
+                  size={20}
+                  framed
+                  frameSize={32}
                 />
-              </View>
+              ) : (
+                <View style={styles.subIconCircle}>
+                  <Icon name="time-outline" size={18} color={MUTED_TEXT} />
+                </View>
+              )}
               <Text style={styles.topCardSmallLabel}>
                 {isSubscribed ||
                 isSubscribedCancelled ||
@@ -1057,7 +1055,12 @@ export function SettingsScreen() {
                 </Text>
               </>
             ) : isSubscribed ? (
-              <Text style={[styles.topCardTitle, { color: SUB_GREEN }]}>
+              <Text
+                style={[
+                  styles.topCardTitle,
+                  { color: subscriptionStatusColor },
+                ]}
+              >
                 {t('settings.subscription.active')}
               </Text>
             ) : isSubExpired ? (
@@ -1537,6 +1540,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(120, 147, 171, 0.1)',
   },
   topCardSmallLabel: {
     fontSize: 11,

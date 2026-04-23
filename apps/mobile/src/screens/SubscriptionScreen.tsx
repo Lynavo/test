@@ -18,6 +18,12 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
+import {
+  SUBSCRIPTION_STATUS_ICON_BACKGROUNDS,
+  SUBSCRIPTION_STATUS_ICON_COLORS,
+  SubscriptionStatusIcon,
+  getSubscriptionStatusIconTone,
+} from '../components/SubscriptionStatusIcon';
 import { isFeatureAccessAllowed, useAuth } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
 import { planToProductId } from '../constants/iap';
@@ -40,8 +46,6 @@ const CARD_BORDER = 'rgba(187, 214, 233, 0.72)';
 const MUTED_TEXT = '#7893ab';
 const SUCCESS_GREEN = '#22c55e';
 const DESTRUCTIVE_RED = '#e53935';
-const LIGHT_GREEN_BG = 'rgba(83, 200, 120, 0.12)';
-const LIGHT_RED_BG = 'rgba(229, 57, 53, 0.12)';
 const PLAN_DISABLED_BG = '#edf5fb';
 const PLAN_DISABLED_TEXT = '#afb6bf';
 const PLAN_SELECTED_BORDER = '#3a3a3d';
@@ -134,41 +138,48 @@ function StatusBadge({
   let label: string;
   let backgroundColor: string;
   let textColor: string;
+  const iconTone = getSubscriptionStatusIconTone(displayState.kind);
 
   switch (displayState.kind) {
     case 'account_trial': {
       const days = displayState.daysRemaining;
-      dotColor = SUCCESS_GREEN;
       label = t('subscription.status.trialing', { days });
-      backgroundColor = LIGHT_GREEN_BG;
-      textColor = SUCCESS_GREEN;
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.trial;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.trial;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.trial;
       break;
     }
     case 'subscription_intro_trial': {
       const days = displayState.daysRemaining;
-      dotColor = SUCCESS_GREEN;
       label = t('subscription.status.introTrialing', { days });
-      backgroundColor = LIGHT_GREEN_BG;
-      textColor = SUCCESS_GREEN;
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.trial;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.trial;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.trial;
       break;
     }
     case 'trial_expired':
-      dotColor = DESTRUCTIVE_RED;
       label = t('subscription.status.trialExpired');
-      backgroundColor = LIGHT_RED_BG;
-      textColor = DESTRUCTIVE_RED;
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.expired;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.expired;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.expired;
       break;
     case 'subscribed':
-      dotColor = SUCCESS_GREEN;
       label = t('subscription.status.subscribed');
-      backgroundColor = LIGHT_GREEN_BG;
-      textColor = SUCCESS_GREEN;
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      break;
+    case 'subscribed_cancelled':
+      label = t('subscription.status.subscribed');
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
       break;
     case 'sub_expired':
-      dotColor = DESTRUCTIVE_RED;
       label = t('subscription.status.subExpired');
-      backgroundColor = LIGHT_RED_BG;
-      textColor = DESTRUCTIVE_RED;
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.expired;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.expired;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.expired;
       break;
     default:
       return null;
@@ -176,7 +187,11 @@ function StatusBadge({
 
   return (
     <View style={[badgeStyles.container, { backgroundColor }]}>
-      <View style={[badgeStyles.dot, { backgroundColor: dotColor }]} />
+      {iconTone ? (
+        <SubscriptionStatusIcon tone={iconTone} size={14} />
+      ) : (
+        <View style={[badgeStyles.dot, { backgroundColor: dotColor }]} />
+      )}
       <Text style={[badgeStyles.text, { color: textColor }]}>{label}</Text>
     </View>
   );
