@@ -1,6 +1,12 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { Animated, NativeModules, Text } from 'react-native';
+import {
+  Animated,
+  FlatList,
+  NativeModules,
+  PanResponder,
+  Text,
+} from 'react-native';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
@@ -20,6 +26,78 @@ jest.mock('react-i18next', () => jest.requireActual('react-i18next'));
 
 import i18n from '../../i18n';
 import { AlbumWorkbenchScreen } from '../AlbumWorkbenchScreen';
+
+const mountedTrees: ReactTestRenderer.ReactTestRenderer[] = [];
+
+function createAlbumWorkbenchScreen(
+  options?: Parameters<typeof ReactTestRenderer.create>[1],
+) {
+  const tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />, options);
+  mountedTrees.push(tree);
+  return tree;
+}
+
+function getActiveGridSelectionCircleCount(
+  tree: ReactTestRenderer.ReactTestRenderer,
+) {
+  const { View: V } = require('react-native');
+  return tree.root.findAllByType(V).filter(node => {
+    const styles = Array.isArray(node.props.style)
+      ? node.props.style
+      : [node.props.style];
+    return (
+      styles.some(
+        (style: { height?: number; width?: number } | null | undefined) =>
+          style?.width === 22 && style?.height === 22,
+      ) &&
+      styles.some(
+        (
+          style:
+            | { backgroundColor?: string; borderColor?: string }
+            | null
+            | undefined,
+        ) =>
+          style?.backgroundColor === '#3b9fd8' &&
+          style?.borderColor === '#3b9fd8',
+      )
+    );
+  }).length;
+}
+
+function mockGridItemMeasure(
+  tree: ReactTestRenderer.ReactTestRenderer,
+  testID: string,
+  rect: [number, number, number, number],
+) {
+  const instance = tree.root.findByProps({ testID }).instance as {
+    measureInWindow?: jest.Mock;
+  };
+  instance.measureInWindow?.mockImplementation(
+    (callback: (x: number, y: number, width: number, height: number) => void) =>
+      callback(rect[0], rect[1], rect[2], rect[3]),
+  );
+}
+
+function mockPanResponderHandlers() {
+  return jest.spyOn(PanResponder, 'create').mockImplementation(config => {
+    return {
+      panHandlers: {
+        onStartShouldSetResponder: config.onStartShouldSetPanResponder,
+        onStartShouldSetResponderCapture:
+          config.onStartShouldSetPanResponderCapture,
+        onMoveShouldSetResponder: config.onMoveShouldSetPanResponder,
+        onMoveShouldSetResponderCapture:
+          config.onMoveShouldSetPanResponderCapture,
+        onResponderGrant: config.onPanResponderGrant,
+        onResponderMove: config.onPanResponderMove,
+        onResponderRelease: config.onPanResponderRelease,
+        onResponderTerminate: config.onPanResponderTerminate,
+        onResponderTerminationRequest: config.onPanResponderTerminationRequest,
+        onShouldBlockNativeResponder: config.onShouldBlockNativeResponder,
+      },
+    } as unknown as ReturnType<typeof PanResponder.create>;
+  });
+}
 
 const mockedBrowseAlbum = jest.fn();
 const mockedGetAlbumStats = jest.fn();
@@ -46,7 +124,8 @@ jest.mock('../../services/SyncEngineModule', () => ({
   submitManualUpload: jest.fn(),
   cancelAllManualUploads: jest.fn(),
   getAutoUploadConfig: () => mockedGetAutoUploadConfig(),
-  saveAutoUploadConfig: (...args: unknown[]) => mockedSaveAutoUploadConfig(...args),
+  saveAutoUploadConfig: (...args: unknown[]) =>
+    mockedSaveAutoUploadConfig(...args),
   interruptAutoUpload: jest.fn(),
   disableAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
@@ -122,11 +201,17 @@ describe('AlbumWorkbenchScreen', () => {
     mockedPresentLimitedPhotoPicker.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    ReactTestRenderer.act(() => {
+      mountedTrees.splice(0).forEach(tree => tree.unmount());
+    });
+  });
+
   it('keeps filter tabs visible when transferred filter has no assets', async () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
     const pressables = tree!.root.findAll(
@@ -143,14 +228,18 @@ describe('AlbumWorkbenchScreen', () => {
       transferredTab!.props.onPress();
     });
 
-    expect(mockedBrowseAlbum).toHaveBeenLastCalledWith('all', 'transferred', 0, 60, undefined);
+    expect(mockedBrowseAlbum).toHaveBeenLastCalledWith(
+      'all',
+      'transferred',
+      0,
+      60,
+      undefined,
+    );
 
-    const textValues = tree!.root
-      .findAllByType(Text)
-      .flatMap(node => {
-        const value = node.props.children;
-        return typeof value === 'string' ? [value] : [];
-      });
+    const textValues = tree!.root.findAllByType(Text).flatMap(node => {
+      const value = node.props.children;
+      return typeof value === 'string' ? [value] : [];
+    });
 
     expect(textValues).toContain('暂无已传素材');
     expect(textValues).toContain('全部');
@@ -172,14 +261,16 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
     const findTab = (label: string) =>
-      tree!.root.findAll(node => typeof node.props.onPress === 'function').find(node => {
-        const textNodes = node.findAllByType(Text);
-        return textNodes.some(textNode => textNode.props.children === label);
-      });
+      tree!.root
+        .findAll(node => typeof node.props.onPress === 'function')
+        .find(node => {
+          const textNodes = node.findAllByType(Text);
+          return textNodes.some(textNode => textNode.props.children === label);
+        });
 
     const transferredTab = findTab('已传');
     expect(transferredTab).toBeDefined();
@@ -246,7 +337,7 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
     const findTab = (label: string) =>
@@ -293,15 +384,13 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
-    const textValues = tree!.root
-      .findAllByType(Text)
-      .flatMap(node => {
-        const value = node.props.children;
-        return typeof value === 'string' ? [value] : [];
-      });
+    const textValues = tree!.root.findAllByType(Text).flatMap(node => {
+      const value = node.props.children;
+      return typeof value === 'string' ? [value] : [];
+    });
 
     // Should show the limited-access guidance, NOT the generic empty state
     expect(textValues).toContain('尚未选择照片');
@@ -322,7 +411,7 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
     // Find the "选择照片" button
@@ -356,15 +445,13 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
-    const textValues = tree!.root
-      .findAllByType(Text)
-      .flatMap(node => {
-        const value = node.props.children;
-        return typeof value === 'string' ? [value] : [];
-      });
+    const textValues = tree!.root.findAllByType(Text).flatMap(node => {
+      const value = node.props.children;
+      return typeof value === 'string' ? [value] : [];
+    });
 
     // Should show the generic empty state, not the limited CTA
     expect(textValues).not.toContain('尚未选择照片');
@@ -390,15 +477,13 @@ describe('AlbumWorkbenchScreen', () => {
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
 
-    const textValues = tree!.root
-      .findAllByType(Text)
-      .flatMap(node => {
-        const value = node.props.children;
-        return typeof value === 'string' ? [value] : [];
-      });
+    const textValues = tree!.root.findAllByType(Text).flatMap(node => {
+      const value = node.props.children;
+      return typeof value === 'string' ? [value] : [];
+    });
 
     expect(textValues).toContain('尚未选择照片');
     expect(textValues).toContain('选择照片');
@@ -417,13 +502,22 @@ describe('AlbumWorkbenchScreen', () => {
         isQueued: false,
       },
     ]);
-    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0, pendingCount: 1 });
-    mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 1,
+      transferredCount: 0,
+      queuedCount: 0,
+      pendingCount: 1,
+    });
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'idle',
+    });
     mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
 
     let tree: ReactTestRenderer.ReactTestRenderer;
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
     await ReactTestRenderer.act(async () => {
       await Promise.resolve();
@@ -449,12 +543,15 @@ describe('AlbumWorkbenchScreen', () => {
       const s = v.props.style;
       if (!s) return false;
       const arr = Array.isArray(s) ? s : [s];
-      return arr.some((x: { backgroundColor?: string }) => x && x.backgroundColor === '#000');
+      return arr.some(
+        (x: { backgroundColor?: string }) => x && x.backgroundColor === '#000',
+      );
     });
     expect(modalRoot).toBeDefined();
   });
 
   it('toggles selection when the top-right circle is tapped', async () => {
+    const panResponderCreateSpy = mockPanResponderHandlers();
     mockedBrowseAlbum.mockResolvedValue([
       {
         assetLocalId: 'a1',
@@ -467,27 +564,46 @@ describe('AlbumWorkbenchScreen', () => {
         isQueued: false,
       },
     ]);
-    mockedGetAlbumStats.mockResolvedValue({ totalCount: 1, transferredCount: 0, queuedCount: 0, pendingCount: 1 });
-    mockedGetAutoUploadConfig.mockResolvedValue({ enabled: false, timeRangeMode: 'all', state: 'idle' });
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 1,
+      transferredCount: 0,
+      queuedCount: 0,
+      pendingCount: 1,
+    });
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'idle',
+    });
     mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
 
     let tree: ReactTestRenderer.ReactTestRenderer;
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
     await ReactTestRenderer.act(async () => {
       await Promise.resolve();
     });
 
-    const { TouchableOpacity: TO } = require('react-native');
-    const touchables = tree!.root.findAllByType(TO);
-    // The selection circle's TouchableOpacity has a hitSlop prop and no Image child.
-    const circle = touchables.find(
-      t => t.props.hitSlop && t.props.hitSlop.top === 12,
-    );
-    expect(circle).toBeDefined();
-    await ReactTestRenderer.act(async () => {
-      circle!.props.onPress();
+    const firstGridItem = tree!.root.findByProps({
+      testID: 'album-grid-item-a1',
+    });
+    const startEvent = {
+      nativeEvent: {
+        pageX: 90,
+        pageY: 110,
+        locationX: 999,
+        locationY: 10,
+      },
+    };
+
+    expect(
+      firstGridItem.props.onStartShouldSetResponderCapture(startEvent),
+    ).toBe(true);
+
+    ReactTestRenderer.act(() => {
+      firstGridItem.props.onResponderGrant(startEvent);
+      firstGridItem.props.onResponderRelease(startEvent);
     });
 
     // After toggling, the stats card's selected count should become 1.
@@ -495,6 +611,293 @@ describe('AlbumWorkbenchScreen', () => {
     const texts = tree!.root.findAllByType(T).map(n => n.props.children);
     // statValue renders the raw number; with one selected it should appear as 1
     expect(texts).toEqual(expect.arrayContaining([1]));
+    panResponderCreateSpy.mockRestore();
+  });
+
+  it('selects multiple grid items by dragging from the selection control', async () => {
+    jest.useFakeTimers();
+    const panResponderCreateSpy = mockPanResponderHandlers();
+    const firstAsset = {
+      assetLocalId: 'a1',
+      filename: 'IMG_1.JPG',
+      mediaType: 'image',
+      fileSize: 1024,
+      creationDate: '2026-04-01T00:00:00Z',
+      thumbnailUri: 'file:///tmp/a1.jpg',
+      isTransferred: false,
+      isQueued: false,
+    };
+    const secondAsset = {
+      assetLocalId: 'a2',
+      filename: 'IMG_2.JPG',
+      mediaType: 'image',
+      fileSize: 1024,
+      creationDate: '2026-04-02T00:00:00Z',
+      thumbnailUri: 'file:///tmp/a2.jpg',
+      isTransferred: false,
+      isQueued: false,
+    };
+    const transferredAsset = {
+      assetLocalId: 'a3',
+      filename: 'DONE.JPG',
+      mediaType: 'image',
+      fileSize: 1024,
+      creationDate: '2026-04-03T00:00:00Z',
+      thumbnailUri: 'file:///tmp/a3.jpg',
+      isTransferred: true,
+      isQueued: false,
+    };
+    const measuredRects: Record<string, [number, number, number, number]> = {
+      'album-grid-item-a1': [10, 100, 100, 100],
+      'album-grid-item-a2': [112, 100, 100, 100],
+      'album-grid-item-a3': [214, 100, 100, 100],
+    };
+
+    mockedBrowseAlbum.mockResolvedValue([
+      firstAsset,
+      secondAsset,
+      transferredAsset,
+    ]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 3,
+      transferredCount: 1,
+      queuedCount: 0,
+      pendingCount: 2,
+    });
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'idle',
+    });
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    try {
+      await ReactTestRenderer.act(async () => {
+        tree = createAlbumWorkbenchScreen({
+          createNodeMock: element => {
+            const props = element.props as { testID?: string };
+            const rect = props.testID ? measuredRects[props.testID] : undefined;
+            if (!rect) return {};
+            return {
+              measureInWindow: (
+                callback: (
+                  x: number,
+                  y: number,
+                  width: number,
+                  height: number,
+                ) => void,
+              ) => callback(rect[0], rect[1], rect[2], rect[3]),
+            };
+          },
+        });
+      });
+      await ReactTestRenderer.act(async () => {
+        await Promise.resolve();
+      });
+      Object.entries(measuredRects).forEach(([testID, rect]) => {
+        mockGridItemMeasure(tree!, testID, rect);
+      });
+
+      const firstGridItem = tree!.root.findByProps({
+        testID: 'album-grid-item-a1',
+      });
+      const startEvent = {
+        nativeEvent: {
+          pageX: 20,
+          pageY: 120,
+          locationX: 999,
+          locationY: 10,
+        },
+      };
+
+      expect(
+        firstGridItem.props.onStartShouldSetResponderCapture(startEvent),
+      ).toBe(true);
+
+      ReactTestRenderer.act(() => {
+        firstGridItem.props.onResponderGrant(startEvent);
+      });
+      expect(tree!.root.findByType(FlatList).props.scrollEnabled).toBe(false);
+      ReactTestRenderer.act(() => {
+        firstGridItem.props.onResponderMove({
+          nativeEvent: {
+            pageX: 130,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+        firstGridItem.props.onResponderMove({
+          nativeEvent: {
+            pageX: 230,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+        firstGridItem.props.onResponderRelease({
+          nativeEvent: {
+            pageX: 230,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+      });
+      expect(tree!.root.findByType(FlatList).props.scrollEnabled).toBe(true);
+
+      const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(2);
+      expect(texts).toEqual(expect.arrayContaining([2]));
+    } finally {
+      panResponderCreateSpy.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('deselects multiple grid items by dragging from a selected item', async () => {
+    jest.useFakeTimers();
+    const panResponderCreateSpy = mockPanResponderHandlers();
+    const firstAsset = {
+      assetLocalId: 'a1',
+      filename: 'IMG_1.JPG',
+      mediaType: 'image',
+      fileSize: 1024,
+      creationDate: '2026-04-01T00:00:00Z',
+      thumbnailUri: 'file:///tmp/a1.jpg',
+      isTransferred: false,
+      isQueued: false,
+    };
+    const secondAsset = {
+      assetLocalId: 'a2',
+      filename: 'IMG_2.JPG',
+      mediaType: 'image',
+      fileSize: 1024,
+      creationDate: '2026-04-02T00:00:00Z',
+      thumbnailUri: 'file:///tmp/a2.jpg',
+      isTransferred: false,
+      isQueued: false,
+    };
+    const measuredRects: Record<string, [number, number, number, number]> = {
+      'album-grid-item-a1': [10, 100, 100, 100],
+      'album-grid-item-a2': [112, 100, 100, 100],
+    };
+
+    mockedBrowseAlbum.mockResolvedValue([firstAsset, secondAsset]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 2,
+      transferredCount: 0,
+      queuedCount: 0,
+      pendingCount: 2,
+    });
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'idle',
+    });
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    try {
+      await ReactTestRenderer.act(async () => {
+        tree = createAlbumWorkbenchScreen({
+          createNodeMock: element => {
+            const props = element.props as { testID?: string };
+            const rect = props.testID ? measuredRects[props.testID] : undefined;
+            if (!rect) return {};
+            return {
+              measureInWindow: (
+                callback: (
+                  x: number,
+                  y: number,
+                  width: number,
+                  height: number,
+                ) => void,
+              ) => callback(rect[0], rect[1], rect[2], rect[3]),
+            };
+          },
+        });
+      });
+      await ReactTestRenderer.act(async () => {
+        await Promise.resolve();
+      });
+      Object.entries(measuredRects).forEach(([testID, rect]) => {
+        mockGridItemMeasure(tree!, testID, rect);
+      });
+
+      const selectByCircleTap = (assetLocalId: string, pageX: number) => {
+        const gridItem = tree!.root.findByProps({
+          testID: `album-grid-item-${assetLocalId}`,
+        });
+        const event = {
+          nativeEvent: {
+            pageX,
+            pageY: 120,
+            locationX: 999,
+            locationY: 10,
+          },
+        };
+        expect(gridItem.props.onStartShouldSetResponderCapture(event)).toBe(
+          true,
+        );
+        ReactTestRenderer.act(() => {
+          gridItem.props.onResponderGrant(event);
+          gridItem.props.onResponderRelease(event);
+        });
+      };
+
+      selectByCircleTap('a1', 90);
+      selectByCircleTap('a2', 190);
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(2);
+      expect(
+        tree!.root.findAllByType(Text).map(n => n.props.children),
+      ).toContain('已选 2 个素材');
+
+      const firstGridItem = tree!.root.findByProps({
+        testID: 'album-grid-item-a1',
+      });
+      const startEvent = {
+        nativeEvent: {
+          pageX: 90,
+          pageY: 120,
+          locationX: 999,
+          locationY: 10,
+        },
+      };
+
+      ReactTestRenderer.act(() => {
+        firstGridItem.props.onResponderGrant(startEvent);
+      });
+      expect(tree!.root.findByType(FlatList).props.scrollEnabled).toBe(false);
+
+      ReactTestRenderer.act(() => {
+        firstGridItem.props.onResponderMove({
+          nativeEvent: {
+            pageX: 130,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+        firstGridItem.props.onResponderRelease({
+          nativeEvent: {
+            pageX: 130,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+      });
+
+      const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
+      expect(tree!.root.findByType(FlatList).props.scrollEnabled).toBe(true);
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(0);
+      expect(texts).not.toContain('已选 2 个素材');
+    } finally {
+      panResponderCreateSpy.mockRestore();
+      jest.useRealTimers();
+    }
   });
 
   it('locks time range chips when auto upload is active', async () => {
@@ -509,7 +912,7 @@ describe('AlbumWorkbenchScreen', () => {
 
     let tree: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      tree = ReactTestRenderer.create(<AlbumWorkbenchScreen />);
+      tree = createAlbumWorkbenchScreen();
     });
     // Two microtask flushes: first for getAutoUploadConfig to resolve,
     // second for the subsequent setConfigExpanded(true) re-render to commit.
