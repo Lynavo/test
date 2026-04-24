@@ -25,6 +25,7 @@ import type { TFunction } from 'i18next';
 import * as RNLocalize from 'react-native-localize';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
+import { AUTH_COLORS } from '../components/auth/AuthScreenShell';
 import {
   SUBSCRIPTION_STATUS_ICON_COLORS,
   SubscriptionStatusIcon,
@@ -83,6 +84,12 @@ const OFFLINE_TEXT = '#72859a';
 const DANGER_RED = '#ef4444';
 const DANGER_BG = 'rgba(239,68,68,0.04)';
 const APPLE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
+
+function waitForLogoutOverlayFrame(): Promise<void> {
+  return new Promise(resolve => {
+    requestAnimationFrame(() => resolve());
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -611,6 +618,7 @@ export function SettingsScreen() {
           onPress: async () => {
             if (isLoggingOut) return;
             setIsLoggingOut(true);
+            await waitForLogoutOverlayFrame();
 
             // Snapshot the refresh token up-front so the value used for
             // server-side revocation is stable even if auth state is
@@ -1387,6 +1395,17 @@ export function SettingsScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      {isLoggingOut ? (
+        <View
+          style={styles.logoutTransitionOverlay}
+          pointerEvents="auto"
+          accessibilityRole="progressbar"
+          accessibilityLiveRegion="polite"
+        >
+          <ActivityIndicator size="large" color={AUTH_COLORS.primary} />
+        </View>
+      ) : null}
+
       {/*
        * Full-screen blocking overlay while `handleDeleteAccount` runs its
        * Phase-1 cleanup (server deleteAccount → setSignedOutTransition →
@@ -1835,6 +1854,12 @@ const styles = StyleSheet.create({
   // Logout card
   logoutCard: {
     marginTop: 4,
+  },
+  logoutTransitionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: AUTH_COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // Warning box (photo permission)
