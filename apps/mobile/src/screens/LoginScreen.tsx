@@ -94,7 +94,7 @@ export function LoginScreen() {
             setPhoneError(t('auth.login.phoneInvalidTraditional'));
             break;
           case ERROR_CODE.SMS_TOO_FREQUENT:
-            Alert.alert(t('errors.authSendTooFrequent'), t('errors.authTryLater'));
+            Alert.alert(t('errors.authRequestTooFrequent'), t('errors.authTryLater'));
             break;
           case ERROR_CODE.SMS_SEND_FAILED:
             Alert.alert(t('errors.authSendFailed'), t('errors.authSendFailedRetry'));

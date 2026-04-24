@@ -68,6 +68,7 @@ export class ApiError extends Error {
 // Default request timeout. No fetch should ever hang the UI indefinitely
 // because of a black-holing captive portal or an unresponsive server.
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+const AUTH_DEVICE_ID_HEADER = 'X-Auth-Device-Id';
 
 // On iOS, the first fetch after a cold start can fail with
 // NSURLErrorCannotFindHost (-1003) when the DNS resolver hasn't warmed up.
@@ -112,6 +113,17 @@ function authHeaders(): Record<string, string> {
   return {};
 }
 
+async function buildRequestHeaders(
+  skipAuth: boolean,
+): Promise<Record<string, string>> {
+  const { getOrCreateAuthDeviceId } = await import('./auth-device-id');
+  return {
+    'Content-Type': 'application/json',
+    [AUTH_DEVICE_ID_HEADER]: await getOrCreateAuthDeviceId(),
+    ...(skipAuth ? {} : authHeaders()),
+  };
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -136,10 +148,7 @@ async function request<T>(
 ): Promise<T> {
   const { skipAuth = false, skipRefresh = false, timeoutMs } = options;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(skipAuth ? {} : authHeaders()),
-  };
+  const headers = await buildRequestHeaders(skipAuth);
 
   let res: Response;
   try {
@@ -246,7 +255,7 @@ async function doRefreshToken(): Promise<boolean> {
       buildUrl('/auth/refresh'),
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await buildRequestHeaders(true),
         body: JSON.stringify({ refresh_token: refresh }),
       },
       DEFAULT_REQUEST_TIMEOUT_MS,
