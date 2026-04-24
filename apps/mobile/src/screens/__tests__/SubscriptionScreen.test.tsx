@@ -110,7 +110,10 @@ jest.mock('../../stores/auth-store', () => ({
     loadSubscription: mockLoadSubscription,
     setSubscription: mockSetSubscription,
   }),
-  isFeatureAccessAllowed: () => false,
+  // Mirror the real predicate so tests covering the post-verify guard (fresh
+  // subscription must actually grant access) exercise the same logic as prod.
+  isFeatureAccessAllowed: (status: string | undefined | null) =>
+    status === 'trialing' || status === 'subscribed',
 }));
 
 import i18n from '../../i18n';
@@ -264,7 +267,10 @@ describe('SubscriptionScreen', () => {
     alertSpy.mockRestore();
   });
 
-  test('2002 from verify is treated as success (success modal shown)', async () => {
+  test('2002 without a fresh subscription snapshot degrades to success modal', async () => {
+    // loadSubscription returns null (legacy mock default) ⇒ no fresh evidence
+    // to block on. Fall through to success modal rather than false-alarming a
+    // legitimate retry-after-network-flap that server already accepted.
     (iapService.purchase as jest.Mock).mockResolvedValueOnce({
       productId: 'com.vividrop.mobile.china.yearly.10400',
       transactionReceipt: 'BLOB',
@@ -273,6 +279,115 @@ describe('SubscriptionScreen', () => {
     (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
       new ApiError(ERROR_CODE.RECEIPT_ALREADY_USED, 'used'),
     );
+
+    const { getByText, findByText } = renderScreen();
+    fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    expect(await findByText(/支付成功|Payment Successful/)).toBeTruthy();
+  });
+
+  test('2002 + fresh loadSubscription returns expired ⇒ error alert, no success modal', async () => {
+    // Sandbox replay scenario: StoreKit delivers a stale transaction whose tx
+    // the server already consumed (2002), but the server's canonical state
+    // shows no active subscription. We must NOT mislead the user with
+    // "支付成功" — they still need to purchase fresh.
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: 'com.vividrop.mobile.china.yearly.10400',
+      transactionReceipt: 'STALE_BLOB',
+      transactionId: 'tx_stale',
+    });
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.RECEIPT_ALREADY_USED, 'used'),
+    );
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'sub_expired',
+      plan: 'monthly',
+      expireAt: '2026-04-23T10:50:00Z',
+      trialEnd: null,
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText, queryByText } = renderScreen();
+    fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+    // Stale receipt, so the retained transaction must be finished to unjam
+    // StoreKit's queue on the next launch.
+    expect(iapService.finishTransaction).toHaveBeenCalledWith('tx_stale');
+
+    // Success modal must NOT appear — otherwise the user taps "Start Using"
+    // and gets bounced to the paywall because fresh status is still expired.
+    expect(queryByText(/支付成功|Payment Successful/)).toBeNull();
+
+    // Alert message must be the receipt-stale copy (any of the 3 locales).
+    const alertMessage = alertSpy.mock.calls[0]?.[0] ?? '';
+    expect(alertMessage).toMatch(
+      /收據已使用.*無有效訂閱|收据已使用.*无有效订阅|receipt.*no active subscription/i,
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  test('stale-receipt alert still shown when finishTransaction throws', async () => {
+    // finishTransaction rarely fails (StoreKit internal), but if it does the
+    // user-facing copy must still be the accurate "receipt stale" alert, not
+    // a generic error from the outer catch. Alert fires before the best-effort
+    // finish, so the throw is silently swallowed and the alert survives.
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: 'com.vividrop.mobile.china.yearly.10400',
+      transactionReceipt: 'STALE_BLOB',
+      transactionId: 'tx_flaky_finish',
+    });
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.RECEIPT_ALREADY_USED, 'used'),
+    );
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'sub_expired',
+      plan: 'monthly',
+      expireAt: '2026-04-23T10:50:00Z',
+      trialEnd: null,
+    });
+    (iapService.finishTransaction as jest.Mock).mockRejectedValueOnce(
+      new Error('StoreKit finishTransaction failed'),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+    // Exactly one alert — the receipt-stale copy. The outer catch must NOT
+    // have fired a generic "verifying payment..." alert on top.
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    const alertMessage = alertSpy.mock.calls[0]?.[0] ?? '';
+    expect(alertMessage).toMatch(
+      /收據已使用.*無有效訂閱|收据已使用.*无有效订阅|receipt.*no active subscription/i,
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  test('2002 + fresh loadSubscription returns active subscription ⇒ success modal still shown', async () => {
+    // Legitimate retry: user's original purchase succeeded + wrote a sub row,
+    // client retried verify due to network flap, server returns 2002 the
+    // second time. Fresh status confirms they're genuinely subscribed, so we
+    // must complete the success flow, not false-alarm on 2002.
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: 'com.vividrop.mobile.china.yearly.10400',
+      transactionReceipt: 'BLOB',
+      transactionId: 'tx_legit',
+    });
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.RECEIPT_ALREADY_USED, 'used'),
+    );
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'yearly',
+      expireAt: '2027-05-20T00:00:00Z',
+      trialEnd: null,
+    });
 
     const { getByText, findByText } = renderScreen();
     fireEvent.press(getByText(/立即订阅|立即訂閱|Subscribe Now/));

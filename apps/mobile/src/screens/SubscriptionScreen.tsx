@@ -295,8 +295,8 @@ function PlanCard({
         disabled
           ? planStyles.cardDisabled
           : selected
-            ? planStyles.cardSelected
-            : planStyles.cardUnselected,
+          ? planStyles.cardSelected
+          : planStyles.cardUnselected,
       ]}
       activeOpacity={0.82}
       onPress={onPress}
@@ -313,8 +313,8 @@ function PlanCard({
           disabled
             ? planStyles.textDisabled
             : selected
-              ? planStyles.textSelected
-              : planStyles.textUnselected,
+            ? planStyles.textSelected
+            : planStyles.textUnselected,
         ]}
       >
         {price}
@@ -325,8 +325,8 @@ function PlanCard({
           disabled
             ? planStyles.unitDisabled
             : selected
-              ? planStyles.unitSelected
-              : planStyles.unitUnselected,
+            ? planStyles.unitSelected
+            : planStyles.unitUnselected,
         ]}
       >
         {unit}
@@ -693,6 +693,13 @@ export function SubscriptionScreen() {
       // Retry verify twice (1s → 4s) before surfacing error — Apple already
       // charged, so we must try hard before handing retry to the user.
       let verified = false;
+      // Set when `verified` was reached via server code 2002 (receipt already
+      // used). Server recognised the transaction but wrote nothing new — it's
+      // only a real success when the canonical subscription state still grants
+      // access. Drives the post-verify guard below that blocks a misleading
+      // "支付成功" modal for stale StoreKit replays (sandbox 12-renew cap,
+      // orphan redeliveries after a previous sub expired).
+      let verifiedViaSilentSuccess = false;
       const delays = [0, 1_000, 4_000];
       let lastErr: unknown = null;
       for (const delay of delays) {
@@ -705,6 +712,7 @@ export function SubscriptionScreen() {
           const cls = classifyIapError(err);
           if (cls.kind === IapErrorClass.SilentSuccess) {
             verified = true;
+            verifiedViaSilentSuccess = true;
             break;
           }
           if (cls.kind === IapErrorClass.FatalMismatch) {
@@ -760,6 +768,30 @@ export function SubscriptionScreen() {
       } catch {
         // Fall through — modal will just hide the expiry line.
       }
+
+      // When `verified` came from a 2002 silent-success AND the server's
+      // canonical view still doesn't grant access, the StoreKit transaction
+      // we just consumed was stale (sandbox replay / expired prior sub).
+      // Surface the truth instead of misleading the user with a success
+      // modal that the RootNavigator will immediately bounce away from.
+      // `fresh == null` = loadSubscription threw; no evidence to block on,
+      // degrade to the legacy lenient behaviour.
+      if (
+        verifiedViaSilentSuccess &&
+        fresh != null &&
+        !isFeatureAccessAllowed(fresh.status)
+      ) {
+        // Show the user-facing truth FIRST — if finishTransaction throws,
+        // StoreKit will redeliver the same stale tx on next launch and the
+        // orphan path will re-finish it, so the queue self-heals. Losing
+        // the accurate alert copy would be the actual user-visible regression.
+        Alert.alert(t('subscription.errors.receiptStaleNoActive'));
+        await iapService
+          .finishTransaction(receipt.transactionId)
+          .catch(() => {});
+        return;
+      }
+
       await iapService.finishTransaction(receipt.transactionId);
       markSubscriptionJustActivated();
       setConfirmedPlan(selectedPlan);
@@ -826,8 +858,8 @@ export function SubscriptionScreen() {
     currentPlan === 'yearly'
       ? t('subscription.actions.currentYearly')
       : currentPlan && selectedPlan !== currentPlan
-        ? t('subscription.actions.switchPlan')
-        : t('subscription.actions.subscribe');
+      ? t('subscription.actions.switchPlan')
+      : t('subscription.actions.subscribe');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
