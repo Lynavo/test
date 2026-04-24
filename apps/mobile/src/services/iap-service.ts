@@ -21,6 +21,7 @@ import {
 } from '../constants/iap';
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
+import { looksLikeUserDismiss } from './iap-errors';
 
 const MAX_RESTORE_RECEIPTS = 10;
 const PURCHASE_TIMEOUT_MS = 60_000;
@@ -77,10 +78,7 @@ class IapServiceImpl implements IapService {
   private initialized = false;
   private purchaseSub: EmitterSubscription | null = null;
   private errorSub: EmitterSubscription | null = null;
-  private pendingPurchase = new Map<
-    IapProductId,
-    PendingPurchase
-  >();
+  private pendingPurchase = new Map<IapProductId, PendingPurchase>();
   private orphanListeners = new Set<() => void>();
 
   async initialize(): Promise<void> {
@@ -386,7 +384,8 @@ class IapServiceImpl implements IapService {
 
   private handleErrorEvent(err: PurchaseError): void {
     const code = err.code != null ? String(err.code) : '';
-    if (!FATAL_ERROR_CODES.has(code)) {
+    const dismissLike = looksLikeUserDismiss(err);
+    if (!FATAL_ERROR_CODES.has(code) && !dismissLike) {
       // Transient Apple signal (e.g. sandbox often emits an unknown/
       // interrupted error before the successful update event). Give
       // purchaseUpdatedListener a short chance to resolve it, then reject
@@ -413,6 +412,13 @@ class IapServiceImpl implements IapService {
       );
       return;
     }
+    // Dismiss-like fall-through: Apple sandbox reports payment-sheet
+    // dismissals as ASDErrorDomain 907 → RN-IAP code `E_UNKNOWN`. Those are
+    // terminal (no success event will follow), so we must fast-reject here
+    // — otherwise the UI button sits in loading state for the full 60s
+    // grace window. FATAL_ERROR_CODES still drives the primary path; this
+    // branch only catches the dismissal variants the numeric code alone
+    // cannot identify.
     const pendingPair = this.pendingPurchaseForError(err.productId);
     if (!pendingPair) return;
     const [productId, pending] = pendingPair;

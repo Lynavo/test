@@ -32,6 +32,32 @@ export interface IapErrorClassification {
 
 interface WithCode {
   code?: string | number;
+  message?: string;
+  debugMessage?: string;
+}
+
+// Sandbox (and some production) dismissals of the Apple payment sheet are
+// reported by StoreKit as `ASDErrorDomain 907 / AMSErrorDomain 6` instead of
+// `SKErrorPaymentCancelled`. react-native-iap's iOS layer only maps
+// `SKErrorDomain code 2` to `E_USER_CANCELLED`; the above path falls through
+// to `E_UNKNOWN`, and the underlying localized description contains strings
+// like "Payment Sheet Failed" / "dismissed with neither an error nor a
+// result" / "cancel". Matching on these substrings lets us recover the
+// cancellation intent even when the numeric code was lost by RN-IAP.
+const DISMISS_HINTS = [
+  'payment sheet',
+  'dismiss',
+  'cancel',
+  'user cancelled',
+  'user canceled',
+] as const;
+
+export function looksLikeUserDismiss(err: unknown): boolean {
+  if (err == null || typeof err !== 'object') return false;
+  const { message, debugMessage } = err as WithCode;
+  const haystack = `${message ?? ''} ${debugMessage ?? ''}`.toLowerCase();
+  if (!haystack.trim()) return false;
+  return DISMISS_HINTS.some(hint => haystack.includes(hint));
 }
 
 export function classifyIapError(err: unknown): IapErrorClassification {
@@ -73,6 +99,15 @@ export function classifyIapError(err: unknown): IapErrorClassification {
   }
 
   const code = (err as WithCode)?.code;
+  // Some sandbox dismissals surface as E_UNKNOWN (ASDErrorDomain 907) — treat
+  // them as Cancelled so we don't show the misleading "购买未完成" alert after
+  // the user intentionally backed out of the payment sheet. Restricted to
+  // non-fatal codes: a genuine E_ITEM_UNAVAILABLE / E_DEVELOPER_ERROR still
+  // carries its dedicated classification even if the message happens to
+  // mention "cancel".
+  if ((code === 'E_UNKNOWN' || code == null) && looksLikeUserDismiss(err)) {
+    return { kind: IapErrorClass.Cancelled, i18nKey: null };
+  }
   switch (code) {
     case 'E_USER_CANCELLED':
       return { kind: IapErrorClass.Cancelled, i18nKey: null };

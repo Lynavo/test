@@ -295,6 +295,30 @@ describe('iapService — purchase', () => {
     errorCb?.({ code: 'E_ITEM_UNAVAILABLE', productId: IAP_PRODUCTS.yearly });
     await expect(pending).rejects.toMatchObject({ code: 'E_ITEM_UNAVAILABLE' });
   });
+
+  test('dismissal-like E_UNKNOWN (sandbox 907) rejects immediately, not after 60s', async () => {
+    // Repro of the "订阅按钮永远 loading" bug: Apple sandbox reports
+    // payment-sheet dismissals as ASDErrorDomain 907, which RN-IAP
+    // surfaces as `E_UNKNOWN` with message "Payment Sheet Failed".
+    // Before the fix this fell into the 60s transient-grace window →
+    // SubscriptionScreen's `isLoading` sat spinning for a full minute
+    // before the promise rejected. The fix must reject right away.
+    jest.useFakeTimers();
+    const pending = iapService.purchase(IAP_PRODUCTS.yearly);
+    await flushPurchasePreflight();
+
+    errorCb?.({
+      code: 'E_UNKNOWN',
+      productId: IAP_PRODUCTS.yearly,
+      message: 'Payment Sheet Failed',
+      debugMessage:
+        'Payment sheet dismissed with neither an error nor a result',
+    });
+
+    // No timer advance — rejection must come on the current microtask.
+    await expect(pending).rejects.toMatchObject({ code: 'E_UNKNOWN' });
+    jest.useRealTimers();
+  });
 });
 
 import { finishTransaction as finishTxMock } from 'react-native-iap';

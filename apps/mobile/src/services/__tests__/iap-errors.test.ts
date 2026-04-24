@@ -13,7 +13,11 @@ jest.mock('../../stores/auth-store', () => ({
 }));
 
 import { ERROR_CODE, ApiError } from '../api';
-import { classifyIapError, IapErrorClass } from '../iap-errors';
+import {
+  classifyIapError,
+  IapErrorClass,
+  looksLikeUserDismiss,
+} from '../iap-errors';
 
 describe('classifyIapError', () => {
   test('E_USER_CANCELLED → cancelled (silent)', () => {
@@ -58,9 +62,7 @@ describe('classifyIapError', () => {
   test('Unknown Apple code → retryable with account/sign-in guidance key', () => {
     const cls = classifyIapError({ code: 'E_UNKNOWN' });
     expect(cls.kind).toBe(IapErrorClass.Retryable);
-    expect(cls.i18nKey).toBe(
-      'subscription.errors.applePurchaseIncomplete',
-    );
+    expect(cls.i18nKey).toBe('subscription.errors.applePurchaseIncomplete');
   });
 
   test('Backend 2001 IAP_VERIFY_FAILED → retryable', () => {
@@ -102,5 +104,87 @@ describe('classifyIapError', () => {
     );
     expect(cls.kind).toBe(IapErrorClass.Retryable);
     expect(cls.i18nKey).toBe('subscription.errors.verifyRetrying');
+  });
+
+  test('E_UNKNOWN with "Payment Sheet" message → Cancelled (sandbox 907 dismissal)', () => {
+    // Repro: user taps subscribe then dismisses Apple's sandbox
+    // "使用 Apple 账户登录" confirmation. RN-IAP forwards this as
+    // `E_UNKNOWN` with message "Payment Sheet Failed" — should be treated
+    // as Cancelled so SubscriptionScreen returns silently instead of
+    // alerting "购买未完成".
+    const cls = classifyIapError({
+      code: 'E_UNKNOWN',
+      message: 'Payment Sheet Failed',
+      debugMessage:
+        'Payment sheet dismissed with neither an error nor a result',
+    });
+    expect(cls.kind).toBe(IapErrorClass.Cancelled);
+    expect(cls.i18nKey).toBeNull();
+  });
+
+  test('E_UNKNOWN with generic message stays Retryable (transient non-dismissal)', () => {
+    // Regression guard: non-dismissal E_UNKNOWN must keep the existing
+    // retryable classification — otherwise real StoreKit glitches would
+    // be silently swallowed.
+    const cls = classifyIapError({
+      code: 'E_UNKNOWN',
+      message: 'Something unexpected happened',
+    });
+    expect(cls.kind).toBe(IapErrorClass.Retryable);
+    expect(cls.i18nKey).toBe('subscription.errors.applePurchaseIncomplete');
+  });
+
+  test('E_ITEM_UNAVAILABLE with "cancel" in message still returns FatalConfig', () => {
+    // Dismissal heuristic must not hijack genuine fatal codes.
+    const cls = classifyIapError({
+      code: 'E_ITEM_UNAVAILABLE',
+      message: 'Cannot cancel — product unavailable',
+    });
+    expect(cls.kind).toBe(IapErrorClass.FatalConfig);
+    expect(cls.i18nKey).toBe('subscription.errors.productUnavailable');
+  });
+});
+
+describe('looksLikeUserDismiss', () => {
+  test('true for "Payment Sheet Failed" message', () => {
+    expect(
+      looksLikeUserDismiss({
+        code: 'E_UNKNOWN',
+        message: 'Payment Sheet Failed',
+      }),
+    ).toBe(true);
+  });
+
+  test('true when the signal is only in debugMessage', () => {
+    expect(
+      looksLikeUserDismiss({
+        code: 'E_UNKNOWN',
+        debugMessage:
+          'Payment sheet dismissed with neither an error nor a result',
+      }),
+    ).toBe(true);
+  });
+
+  test('true for plain "cancelled" wording', () => {
+    expect(
+      looksLikeUserDismiss({ message: 'User cancelled the request' }),
+    ).toBe(true);
+  });
+
+  test('false for non-dismissal message', () => {
+    expect(
+      looksLikeUserDismiss({ code: 'E_UNKNOWN', message: 'Network is down' }),
+    ).toBe(false);
+  });
+
+  test('false for null / undefined / string', () => {
+    expect(looksLikeUserDismiss(null)).toBe(false);
+    expect(looksLikeUserDismiss(undefined)).toBe(false);
+    expect(looksLikeUserDismiss('payment sheet')).toBe(false);
+  });
+
+  test('false when both message and debugMessage are empty', () => {
+    expect(looksLikeUserDismiss({ code: 'E_UNKNOWN' })).toBe(false);
+    expect(looksLikeUserDismiss({ message: '', debugMessage: '' })).toBe(false);
   });
 });
