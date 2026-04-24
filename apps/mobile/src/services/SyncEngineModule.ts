@@ -105,6 +105,11 @@ export async function interruptAutoUpload(): Promise<void> {
   await NativeSyncEngine.pauseAutoUpload();
 }
 
+/** Disable auto upload: turns the feature off, persists 'disabled' state. */
+export async function disableAutoUpload(): Promise<void> {
+  await NativeSyncEngine.disableAutoUpload();
+}
+
 /** Re-enable auto upload from interrupted/disabled state, persists 'active' state. */
 export async function enableAutoUpload(): Promise<void> {
   await NativeSyncEngine.resumeAutoUpload();

@@ -48,7 +48,7 @@ import {
   cancelAllManualUploads,
   getAutoUploadConfig,
   saveAutoUploadConfig,
-  interruptAutoUpload,
+  disableAutoUpload,
   enableAutoUpload,
   getPhotoAuthorizationStatus,
   presentLimitedPhotoPicker,
@@ -605,7 +605,7 @@ export function AlbumWorkbenchScreen() {
     if (!autoUploadConfig) return;
     try {
       if (autoUploadConfig.state === 'active') {
-        // active → interrupted: show confirmation dialog per PRD
+        // active → disabled: show confirmation dialog per PRD
         Alert.alert(
           t('albumWorkbench.dialogs.closeAuto.title'),
           t('albumWorkbench.dialogs.closeAuto.body'),
@@ -619,10 +619,10 @@ export function AlbumWorkbenchScreen() {
               style: 'destructive',
               onPress: async () => {
                 try {
-                  await interruptAutoUpload();
+                  await disableAutoUpload();
                   await loadConfig();
                 } catch (e) {
-                  console.warn('[AlbumWorkbench] interruptAutoUpload error:', e);
+                  console.warn('[AlbumWorkbench] disableAutoUpload error:', e);
                   Alert.alert(
                     t('albumWorkbench.dialogs.closeAutoFailed.title'),
                     t('albumWorkbench.dialogs.closeAutoFailed.body'),

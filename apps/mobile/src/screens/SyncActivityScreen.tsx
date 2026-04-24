@@ -27,7 +27,7 @@ import { Icon } from '../components/Icon';
 import { SubscriptionStatusIcon } from '../components/SubscriptionStatusIcon';
 import {
   cancelAllManualUploads,
-  interruptAutoUpload,
+  disableAutoUpload,
   enableAutoUpload,
 } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
@@ -820,7 +820,7 @@ export function SyncActivityScreen() {
           onPress: async () => {
             try {
               clearAutoUploadPreparing();
-              await interruptAutoUpload();
+              await disableAutoUpload();
               // Reload overview to reflect the new state
               const syncData =
                 await NativeModules.NativeSyncEngine?.getSyncOverview();
@@ -828,7 +828,7 @@ export function SyncActivityScreen() {
                 setOverview(prev => buildOverview(syncData, prev));
               }
             } catch (e) {
-              console.warn('[SyncActivity] interruptAutoUpload error:', e);
+              console.warn('[SyncActivity] disableAutoUpload error:', e);
               Alert.alert(
                 t('syncActivity.dialogs.closeAutoFailed.title'),
                 t('syncActivity.dialogs.closeAutoFailed.body'),

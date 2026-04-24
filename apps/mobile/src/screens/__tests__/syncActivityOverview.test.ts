@@ -287,6 +287,50 @@ describe('buildOverview', () => {
     expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
   });
 
+  it('keeps completed counters when auto upload is disabled after completion', () => {
+    const prev = {
+      progressPercent: 100,
+      currentSpeedMbps: 0,
+      uploadState: 'completed',
+      completedCount: 2,
+      totalCount: 2,
+      completedBytes: 1293262,
+      totalBytes: 1293262,
+      currentFile: undefined,
+      currentFilename: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      currentTaskSource: undefined,
+      lastCompletedTaskSource: 'auto' as const,
+      autoUploadState: 'active' as const,
+      manualPending: 0,
+      autoPending: 0,
+    };
+
+    const next = buildOverview(
+      {
+        uploadState: 'idle',
+        progressPercent: 100,
+        completedCount: 2,
+        totalCount: 2,
+        completedBytes: 1293262,
+        totalBytes: 1293262,
+        currentTaskSource: null,
+        lastCompletedTaskSource: null,
+        manualPending: 0,
+        autoPending: 0,
+        autoUploadState: 'disabled',
+      },
+      prev,
+    );
+
+    expect(next.completedCount).toBe(2);
+    expect(next.totalCount).toBe(2);
+    expect(next.progressPercent).toBe(100);
+    expect(next.lastCompletedTaskSource).toBeUndefined();
+    expect(getSyncActivityMainCardState(next, false)).toBe('not_started');
+  });
+
   it('clears stale manual completion when enabling auto upload finds no new work', () => {
     const prev = {
       progressPercent: 100,

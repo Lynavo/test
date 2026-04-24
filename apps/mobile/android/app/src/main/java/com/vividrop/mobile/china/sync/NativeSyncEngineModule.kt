@@ -382,6 +382,11 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun disableAutoUpload(promise: Promise) {
+    promise.resolve(null)
+  }
+
+  @ReactMethod
   fun resumeAutoUpload(promise: Promise) {
     promise.resolve(null)
   }

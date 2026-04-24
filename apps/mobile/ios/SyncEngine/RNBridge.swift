@@ -336,6 +336,12 @@ class NativeSyncEngineModule: RCTEventEmitter {
         resolve(nil)
     }
 
+    @objc
+    func disableAutoUpload(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        SyncEngineManager.shared.disableAutoUpload()
+        resolve(nil)
+    }
+
     // DEPRECATED: RN side uses saveAutoUploadConfig() instead. To be removed next release cycle.
     @objc
     func resumeAutoUpload(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {

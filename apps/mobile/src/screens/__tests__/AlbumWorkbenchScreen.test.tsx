@@ -48,6 +48,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   getAutoUploadConfig: () => mockedGetAutoUploadConfig(),
   saveAutoUploadConfig: (...args: unknown[]) => mockedSaveAutoUploadConfig(...args),
   interruptAutoUpload: jest.fn(),
+  disableAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
   getPhotoAuthorizationStatus: () => mockedGetPhotoAuthorizationStatus(),
   presentLimitedPhotoPicker: () => mockedPresentLimitedPhotoPicker(),

@@ -2212,8 +2212,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         } catch let error as SyncEngineError {
             switch error {
             case .autoUploadInterrupted:
-                slog("[SyncEngine] sync pipeline interrupted by user")
-                syncDiagnosticsLog("SyncEngine", "sync pipeline interrupted by user")
                 maintainConnectedBindingState(reason: "auto_upload_interrupted")
                 let clientId = bindingService.getOrCreateClientId()
                 sendPresenceHeartbeat(
@@ -2222,13 +2220,28 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     failureReason: "auto_upload_interrupted_presence_failed",
                     updateStateOnFailure: false
                 )
-                clearRuntimeSyncRoundProgress(uploadState: "paused_auto_upload")
-                let payload = runtimeSyncOverviewPayload(uploadState: "paused_auto_upload")
-                logSyncOverviewEmission("pipeline_auto_interrupted", payload: payload)
-                NativeSyncEngineModule.shared?.emitSyncStateChanged(
-                    payload
-                )
-                stopSyncLifecycle(finalState: .interruptedAutoUpload)
+                let configState = autoUploadConfigStore?.getConfig().state ?? "disabled"
+                if configState == "disabled" {
+                    slog("[SyncEngine] sync pipeline stopped because auto upload was disabled")
+                    syncDiagnosticsLog("SyncEngine", "sync pipeline stopped because auto upload was disabled")
+                    clearRuntimeSyncRoundProgress(uploadState: "idle")
+                    let payload = runtimeSyncOverviewPayload(uploadState: "idle")
+                    logSyncOverviewEmission("pipeline_auto_disabled", payload: payload)
+                    NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                        payload
+                    )
+                    stopSyncLifecycle(finalState: .idle)
+                } else {
+                    slog("[SyncEngine] sync pipeline interrupted by user")
+                    syncDiagnosticsLog("SyncEngine", "sync pipeline interrupted by user")
+                    clearRuntimeSyncRoundProgress(uploadState: "paused_auto_upload")
+                    let payload = runtimeSyncOverviewPayload(uploadState: "paused_auto_upload")
+                    logSyncOverviewEmission("pipeline_auto_interrupted", payload: payload)
+                    NativeSyncEngineModule.shared?.emitSyncStateChanged(
+                        payload
+                    )
+                    stopSyncLifecycle(finalState: .interruptedAutoUpload)
+                }
             case .manualUploadCancelled:
                 slog("[SyncEngine] manual upload cancelled by user")
                 syncDiagnosticsLog("SyncEngine", "manual upload cancelled by user")
@@ -5118,6 +5131,21 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
     }
 
+    private func persistAutoUploadDisabledState(reason: String) {
+        isAutoUploadInterrupted = false
+
+        if var config = autoUploadConfigStore?.getConfig() {
+            config.enabled = false
+            config.state = "disabled"
+            config.updatedAt = ISO8601DateFormatter().string(from: Date())
+            do {
+                try autoUploadConfigStore?.saveConfig(config)
+            } catch {
+                slog("[SyncEngine] WARN: failed to persist disabled state (%@): %@", reason, "\(error)")
+            }
+        }
+    }
+
     /// Interrupt auto upload: skips auto items in queue, only processes manual items.
     /// Once interrupted, user must explicitly re-enable.
     func interruptAutoUpload() {
@@ -5156,6 +5184,46 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         sessionService.transitionTo(.interruptedAutoUpload)
         let payload = runtimeSyncOverviewPayload(uploadState: "paused_auto_upload")
         logSyncOverviewEmission("interrupt_auto_upload", payload: payload)
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(
+            payload
+        )
+    }
+
+    /// Disable auto upload: persists the feature as disabled and stops auto work.
+    /// Unlike interruptAutoUpload(), this represents the user turning the feature off.
+    func disableAutoUpload() {
+        persistAutoUploadDisabledState(reason: "user_disable")
+        clearRuntimeReconnectError()
+
+        do {
+            try uploadStore?.cancelPendingAutoItems()
+        } catch {
+            slog("[SyncEngine] WARN: failed to cancel pending auto items while disabling auto upload: %@", "\(error)")
+        }
+
+        let currentTaskSource = uploadStore?.getCurrentUploadingSource()
+        if isSyncing && currentTaskSource == "auto" {
+            shouldAbortActiveAutoUpload = true
+            clearRuntimeSyncRoundProgress(uploadState: "idle")
+            maintainConnectedBindingState(reason: "disable_auto_upload_requested")
+            syncDiagnosticsLog("SyncEngine", "disabling in-flight auto upload")
+            interruptActiveUploadResponse(
+                error: SyncEngineError.autoUploadInterrupted,
+                reason: "disable_auto_upload_requested"
+            )
+        } else {
+            shouldAbortActiveAutoUpload = false
+            runtimeLastCompletedTaskSource = nil
+            runtimeRoundSource = nil
+        }
+
+        emitQueueToJS()
+
+        slog("[SyncEngine] auto upload disabled")
+        syncDiagnosticsLog("SyncEngine", "auto upload disabled")
+        sessionService.transitionTo(.idle)
+        let payload = runtimeSyncOverviewPayload(uploadState: "idle")
+        logSyncOverviewEmission("disable_auto_upload", payload: payload)
         NativeSyncEngineModule.shared?.emitSyncStateChanged(
             payload
         )

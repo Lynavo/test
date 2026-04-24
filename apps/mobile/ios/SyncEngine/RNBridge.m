@@ -36,6 +36,7 @@ RCT_EXTERN_METHOD(cancelAllManualUploads:(RCTPromiseResolveBlock)resolve reject:
 // Vivi Drop: Auto Upload Control
 // DEPRECATED: pauseAutoUpload/resumeAutoUpload to be removed, use enableAutoUpload/interruptAutoUpload instead
 RCT_EXTERN_METHOD(pauseAutoUpload:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(disableAutoUpload:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(resumeAutoUpload:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getAutoUploadConfig:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(saveAutoUploadConfig:(NSDictionary *)params resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
