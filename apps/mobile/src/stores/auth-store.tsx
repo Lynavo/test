@@ -59,7 +59,7 @@ export interface SubscriptionInfo {
   autoRenewing?: boolean | null;
 }
 
-export type SignedOutTransition = 'account_deleted' | null;
+export type SignedOutTransition = 'account_deleted' | 'logout' | null;
 
 export interface AuthState {
   isLoggedIn: boolean;

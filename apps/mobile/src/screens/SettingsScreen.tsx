@@ -695,6 +695,7 @@ export function SettingsScreen() {
                 );
               });
             }
+            auth.setSignedOutTransition('logout');
             try {
               auth.clearAuth();
             } catch (e) {

@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   NativeModules,
   ActivityIndicator,
+  Animated,
+  Easing,
   View,
   StyleSheet,
   Text,
@@ -71,6 +73,7 @@ export type RootStackParamList = {
 // to Login — no imperative `dispatch(reset(...))` race against stale screens.
 
 const Stack = createStackNavigator<RootStackParamList>();
+const LOGOUT_FADE_DURATION_MS = 220;
 
 export function RootNavigator() {
   const auth = useAuth();
@@ -105,6 +108,7 @@ export function RootNavigator() {
         e,
       );
     }
+    auth.setSignedOutTransition('logout');
     auth.clearAuth();
   }, [auth]);
 
@@ -121,7 +125,12 @@ export function RootNavigator() {
         />
       );
     }
-    return <UnauthStack />;
+    return (
+      <UnauthStack
+        animateIn={auth.signedOutTransition === 'logout'}
+        onTransitionComplete={() => auth.setSignedOutTransition(null)}
+      />
+    );
   }
 
   // Logged in but the user profile hasn't returned yet. Wait for it before
@@ -153,15 +162,96 @@ export function RootNavigator() {
 // Unauthenticated stack
 // ---------------------------------------------------------------------------
 
-function UnauthStack() {
+function UnauthStack({
+  animateIn = false,
+  onTransitionComplete,
+}: {
+  animateIn?: boolean;
+  onTransitionComplete?: () => void;
+}) {
   return (
-    <Stack.Navigator
-      initialRouteName="Login"
-      screenOptions={{ headerShown: false }}
+    <AuthRouteTransition
+      animateIn={animateIn}
+      onComplete={onTransitionComplete}
     >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="SmsVerify" component={SmsVerifyScreen} />
-    </Stack.Navigator>
+      <Stack.Navigator
+        initialRouteName="Login"
+        screenOptions={{ headerShown: false }}
+      >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="SmsVerify" component={SmsVerifyScreen} />
+      </Stack.Navigator>
+    </AuthRouteTransition>
+  );
+}
+
+function AuthRouteTransition({
+  animateIn,
+  onComplete,
+  children,
+}: {
+  animateIn: boolean;
+  onComplete?: () => void;
+  children: React.ReactNode;
+}) {
+  const opacity = useRef(new Animated.Value(animateIn ? 0 : 1)).current;
+  const translateY = useRef(new Animated.Value(animateIn ? 8 : 0)).current;
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (!animateIn) {
+      opacity.setValue(1);
+      translateY.setValue(0);
+      return;
+    }
+
+    opacity.setValue(0);
+    translateY.setValue(8);
+
+    const animation = Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: LOGOUT_FADE_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: LOGOUT_FADE_DURATION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+
+    animation.start(({ finished }) => {
+      if (finished) {
+        onCompleteRef.current?.();
+      }
+    });
+
+    return () => {
+      animation.stop();
+    };
+  }, [animateIn, opacity, translateY]);
+
+  return (
+    <View style={styles.authRouteStage}>
+      <Animated.View
+        style={[
+          styles.authRouteContent,
+          {
+            opacity,
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </View>
   );
 }
 
@@ -406,6 +496,13 @@ function ProfileErrorScreen({
 }
 
 const styles = StyleSheet.create({
+  authRouteStage: {
+    flex: 1,
+    backgroundColor: AUTH_COLORS.background,
+  },
+  authRouteContent: {
+    flex: 1,
+  },
   loading: {
     flex: 1,
     justifyContent: 'center',
