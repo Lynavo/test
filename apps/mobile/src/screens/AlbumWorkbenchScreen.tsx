@@ -80,6 +80,7 @@ const GRID_ITEM_SIZE =
   (SCREEN_WIDTH - CONTENT_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) /
   GRID_COLUMNS;
 const PAGE_SIZE = 60;
+const GRID_DRAG_SELECT_MOVE_DELAY_MS = 180;
 const GRID_DRAG_SELECT_LONG_PRESS_MS = 300;
 const GRID_DRAG_SELECT_MOVE_TOLERANCE = 8;
 const GRID_SELECTION_CONTROL_HIT_SIZE = 44;
@@ -219,8 +220,12 @@ export function AlbumWorkbenchScreen() {
     startedOnSelectionControl: boolean;
     selectionMode: GridDragSelectionMode;
     hasMoved: boolean;
+    canActivateByMove: boolean;
+    lastPageX: number;
+    lastPageY: number;
     lastSelectedId: string | null;
     measuredItems: MeasuredGridItem[];
+    moveActivationTimer: ReturnType<typeof setTimeout> | null;
     longPressTimer: ReturnType<typeof setTimeout> | null;
   }>({
     active: false,
@@ -230,8 +235,12 @@ export function AlbumWorkbenchScreen() {
     startedOnSelectionControl: false,
     selectionMode: 'select',
     hasMoved: false,
+    canActivateByMove: false,
+    lastPageX: 0,
+    lastPageY: 0,
     lastSelectedId: null,
     measuredItems: [],
+    moveActivationTimer: null,
     longPressTimer: null,
   });
   const suppressNextGridPressRef = useRef(false);
@@ -302,6 +311,9 @@ export function AlbumWorkbenchScreen() {
 
   useEffect(() => {
     return () => {
+      if (dragSelectionRef.current.moveActivationTimer) {
+        clearTimeout(dragSelectionRef.current.moveActivationTimer);
+      }
       if (dragSelectionRef.current.longPressTimer) {
         clearTimeout(dragSelectionRef.current.longPressTimer);
       }
@@ -786,6 +798,9 @@ export function AlbumWorkbenchScreen() {
   const resetGridDragSelection = useCallback(() => {
     const state = dragSelectionRef.current;
     const wasActive = state.active;
+    if (state.moveActivationTimer) {
+      clearTimeout(state.moveActivationTimer);
+    }
     if (state.longPressTimer) {
       clearTimeout(state.longPressTimer);
     }
@@ -798,8 +813,12 @@ export function AlbumWorkbenchScreen() {
       startedOnSelectionControl: false,
       selectionMode: 'select',
       hasMoved: false,
+      canActivateByMove: false,
+      lastPageX: 0,
+      lastPageY: 0,
       lastSelectedId: null,
       measuredItems: [],
+      moveActivationTimer: null,
       longPressTimer: null,
     };
     setGridDragScrollLocked(false);
@@ -848,6 +867,9 @@ export function AlbumWorkbenchScreen() {
       )
         ? 'deselect'
         : 'select';
+      if (dragSelectionRef.current.moveActivationTimer) {
+        clearTimeout(dragSelectionRef.current.moveActivationTimer);
+      }
       if (dragSelectionRef.current.longPressTimer) {
         clearTimeout(dragSelectionRef.current.longPressTimer);
       }
@@ -861,8 +883,28 @@ export function AlbumWorkbenchScreen() {
         startedOnSelectionControl,
         selectionMode,
         hasMoved: false,
+        canActivateByMove: false,
+        lastPageX: pageX,
+        lastPageY: pageY,
         lastSelectedId: null,
         measuredItems: [],
+        moveActivationTimer: setTimeout(() => {
+          const currentState = dragSelectionRef.current;
+          if (currentState.startAssetLocalId !== assetLocalId) return;
+          currentState.canActivateByMove = true;
+          currentState.moveActivationTimer = null;
+          if (
+            currentState.startedOnSelectionControl &&
+            currentState.hasMoved &&
+            !currentState.active
+          ) {
+            activateGridDragSelection(
+              currentState.lastPageX,
+              currentState.lastPageY,
+              currentState.startAssetLocalId,
+            );
+          }
+        }, GRID_DRAG_SELECT_MOVE_DELAY_MS),
         longPressTimer: setTimeout(() => {
           activateGridDragSelection(pageX, pageY, assetLocalId);
         }, GRID_DRAG_SELECT_LONG_PRESS_MS),
@@ -880,6 +922,8 @@ export function AlbumWorkbenchScreen() {
     (event: GestureResponderEvent) => {
       const state = dragSelectionRef.current;
       const { pageX, pageY } = event.nativeEvent;
+      state.lastPageX = pageX;
+      state.lastPageY = pageY;
       const dx = Math.abs(pageX - state.startPageX);
       const dy = Math.abs(pageY - state.startPageY);
       if (
@@ -891,7 +935,8 @@ export function AlbumWorkbenchScreen() {
       if (
         !state.active &&
         state.hasMoved &&
-        (state.startedOnSelectionControl || selectedIds.size > 0)
+        state.startedOnSelectionControl &&
+        state.canActivateByMove
       ) {
         activateGridDragSelection(pageX, pageY, state.startAssetLocalId);
         return;
@@ -900,19 +945,15 @@ export function AlbumWorkbenchScreen() {
       if (!state.active) return;
       updateGridDragSelectionAtPoint(pageX, pageY);
     },
-    [
-      activateGridDragSelection,
-      updateGridDragSelectionAtPoint,
-      selectedIds.size,
-    ],
+    [activateGridDragSelection, updateGridDragSelectionAtPoint],
   );
 
   const shouldCaptureGridSelectionGesture = useCallback(
     (asset: AlbumAssetDTO, event: GestureResponderEvent) => {
       if (isAutoUploadActive || asset.isTransferred) return false;
-      return selectedIds.size > 0 || isGridSelectionControlPoint(event);
+      return isGridSelectionControlPoint(event);
     },
-    [isAutoUploadActive, isGridSelectionControlPoint, selectedIds.size],
+    [isAutoUploadActive, isGridSelectionControlPoint],
   );
 
   const selectableIds = useMemo(
@@ -1076,10 +1117,7 @@ export function AlbumWorkbenchScreen() {
                   await disableAutoUpload();
                   await loadConfig();
                 } catch (e) {
-                  console.warn(
-                    '[AlbumWorkbench] disableAutoUpload error:',
-                    e,
-                  );
+                  console.warn('[AlbumWorkbench] disableAutoUpload error:', e);
                   Alert.alert(
                     t('albumWorkbench.dialogs.closeAutoFailed.title'),
                     t('albumWorkbench.dialogs.closeAutoFailed.body'),

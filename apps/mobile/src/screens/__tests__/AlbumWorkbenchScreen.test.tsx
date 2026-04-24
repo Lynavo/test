@@ -742,6 +742,28 @@ describe('AlbumWorkbenchScreen', () => {
             locationY: 10,
           },
         });
+      });
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(0);
+
+      await ReactTestRenderer.act(async () => {
+        jest.advanceTimersByTime(200);
+        await Promise.resolve();
+      });
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(1);
+
+      await ReactTestRenderer.act(async () => {
+        firstGridItem.props.onResponderMove({
+          nativeEvent: {
+            pageX: 130,
+            pageY: 120,
+            locationX: 18,
+            locationY: 10,
+          },
+        });
+        await Promise.resolve();
+      });
+
+      ReactTestRenderer.act(() => {
         firstGridItem.props.onResponderMove({
           nativeEvent: {
             pageX: 230,
@@ -764,6 +786,20 @@ describe('AlbumWorkbenchScreen', () => {
       const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
       expect(getActiveGridSelectionCircleCount(tree!)).toBe(2);
       expect(texts).toEqual(expect.arrayContaining([2]));
+
+      const secondGridItem = tree!.root.findByProps({
+        testID: 'album-grid-item-a2',
+      });
+      expect(
+        secondGridItem.props.onStartShouldSetResponderCapture({
+          nativeEvent: {
+            pageX: 130,
+            pageY: 150,
+            locationX: 18,
+            locationY: 50,
+          },
+        }),
+      ).toBe(false);
     } finally {
       panResponderCreateSpy.mockRestore();
       jest.useRealTimers();
@@ -894,6 +930,14 @@ describe('AlbumWorkbenchScreen', () => {
             locationY: 10,
           },
         });
+      });
+      expect(getActiveGridSelectionCircleCount(tree!)).toBe(2);
+
+      ReactTestRenderer.act(() => {
+        jest.advanceTimersByTime(200);
+      });
+
+      ReactTestRenderer.act(() => {
         firstGridItem.props.onResponderRelease({
           nativeEvent: {
             pageX: 130,
