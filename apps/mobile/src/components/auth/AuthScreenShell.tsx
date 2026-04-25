@@ -54,7 +54,10 @@ export function AuthScreenShell({
   const { t } = useTranslation();
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={AUTH_COLORS.background}
+      />
       <KeyboardAvoidingView
         style={styles.keyboardRoot}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -85,7 +88,11 @@ export function AuthScreenShell({
         >
           <View style={styles.brandSection}>
             <View style={styles.logoWrap}>
-              <Image source={APP_LOGO} style={styles.logo} resizeMode="contain" />
+              <Image
+                source={APP_LOGO}
+                style={styles.logo}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.brandTitle}>Vivi Drop</Text>
             <Text style={styles.brandSubtitle}>{subtitle}</Text>
@@ -168,7 +175,7 @@ const styles = StyleSheet.create({
   },
   brandSection: {
     alignItems: 'center',
-    marginTop: 56,
+    marginTop: 16,
     marginBottom: 30,
   },
   logoWrap: {
