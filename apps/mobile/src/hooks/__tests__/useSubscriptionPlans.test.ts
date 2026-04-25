@@ -8,11 +8,13 @@ jest.mock('../../services/subscription-plans-service', () => ({
   subscriptionPlansService: {
     fetchPlans: jest.fn(),
   },
-  // The hook imports `buildBootstrapPlans` to seed initial `plans` state and
-  // avoid the blank-row flash before the network response arrives. Tests
-  // overwrite the seed via `setPlans` once `fetchPlans` resolves, so an
-  // empty seed is enough — assertions all fire after `loading: false`.
+  // The hook imports `buildBootstrapPlans` and `buildBootstrapProducts` to
+  // seed initial `plans` and `products` state and avoid the blank-row /
+  // "—" price flash before the network response arrives. Tests overwrite
+  // the seeds via `setPlans` / `setProducts` once `fetchPlans` resolves,
+  // so empty seeds are enough — assertions all fire after `loading: false`.
   buildBootstrapPlans: jest.fn(() => []),
+  buildBootstrapProducts: jest.fn(() => []),
 }));
 
 jest.mock('../../services/iap-service', () => ({

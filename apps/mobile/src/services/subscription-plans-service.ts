@@ -5,6 +5,7 @@ import type {
   SubscriptionPlansResponse,
 } from '@syncflow/contracts';
 import { apiGet, ApiError } from './api';
+import type { IapProductSummary } from './iap-service';
 import { ALL_PRODUCT_IDS, IAP_PRODUCTS } from '../constants/iap';
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,49 @@ export function buildBootstrapPlans(
     },
   ];
   return candidates.filter(plan => allowedSkus.has(plan.product_id));
+}
+
+/**
+ * Bootstrap counterpart for `buildBootstrapPlans` — provides StoreKit-shaped
+ * `IapProductSummary` rows so the paywall can render real-looking prices on
+ * first paint instead of the "—" placeholder. Consumed only by the hook
+ * seed; the live StoreKit lookup replaces these once `iapService
+ * .getProductSummaries(...)` resolves (typically <500ms).
+ *
+ * Numbers reflect the CN App Store storefront, which is the only locale
+ * the SKU namespace (`com.vividrop.mobile.china.*`) is published to. Users
+ * outside CN will briefly see ¥ then a localized currency swap; this is
+ * still better UX than a blank "—".
+ *
+ * Safety: the bootstrap values are NOT trusted for purchase — the
+ * SubscriptionScreen blocks the Subscribe button while `plansLoading` is
+ * true so the user can never tap Subscribe against an unverified seed
+ * price. Once StoreKit returns the real localizedPrice, the button
+ * unblocks and the displayed amount is whatever Apple billed.
+ */
+export function buildBootstrapProducts(): IapProductSummary[] {
+  const allowedSkus: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
+  const candidates: IapProductSummary[] = [
+    {
+      productId: IAP_PRODUCTS.monthly,
+      displayPrice: '¥9.99',
+      priceAmount: 9.99,
+      currency: 'CNY',
+      periodUnit: 'MONTH',
+      periodCount: 1,
+      eligibleForIntroOffer: false,
+    },
+    {
+      productId: IAP_PRODUCTS.yearlyPromo,
+      displayPrice: '¥99.00',
+      priceAmount: 99,
+      currency: 'CNY',
+      periodUnit: 'YEAR',
+      periodCount: 1,
+      eligibleForIntroOffer: false,
+    },
+  ];
+  return candidates.filter(p => allowedSkus.has(p.productId));
 }
 
 // ---------------------------------------------------------------------------

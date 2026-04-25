@@ -1094,11 +1094,15 @@ export function SubscriptionScreen() {
           disabled={
             isLoading ||
             selectedEntry == null ||
-            // StoreKit hasn't returned the SKU yet — bootstrap-seeded entries
-            // have `product == null` during the loading window. Letting the
-            // user tap Subscribe here would call iapService.purchase against
-            // a SKU StoreKit doesn't know about and surface a confusing
-            // Apple-side error. Block until the product resolves.
+            // While `plansLoading` is true the hook is showing seeded
+            // bootstrap prices that StoreKit has NOT yet confirmed. Letting
+            // the user tap Subscribe against an unverified amount risks an
+            // Apple-side rejection (real localizedPrice differs from seed).
+            // Once loading flips false we trust whatever StoreKit returned.
+            plansLoading ||
+            // Post-loading safety net: if loading completed but the selected
+            // plan still has no product (genuine ASC mis-config / sandbox
+            // not signed in), we cannot price the purchase — block it.
             selectedEntry?.product == null ||
             selectedPlanIsCurrent ||
             selectedPlanIsDowngrade ||

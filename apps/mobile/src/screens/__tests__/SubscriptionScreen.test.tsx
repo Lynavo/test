@@ -76,10 +76,13 @@ jest.mock('../../services/subscription-plans-service', () => ({
   subscriptionPlansService: {
     fetchPlans: jest.fn(),
   },
-  // Hook imports `buildBootstrapPlans` to seed initial render. An empty seed
-  // is fine here because all assertions wait for `loading: false` before
-  // checking — by then `fetchPlans` mock has populated `plans` directly.
+  // Hook imports `buildBootstrapPlans` and `buildBootstrapProducts` to seed
+  // initial render. Empty seeds are fine here because all assertions wait
+  // for `loading: false` before checking — by then `fetchPlans` mock has
+  // populated `plans` directly and `iapService.getProductSummaries` mock
+  // has populated `products` directly.
   buildBootstrapPlans: jest.fn(() => []),
+  buildBootstrapProducts: jest.fn(() => []),
 }));
 
 jest.mock('../../services/subscription-service', () => ({

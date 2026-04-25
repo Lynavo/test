@@ -4,6 +4,7 @@ import { iapService, type IapProductSummary } from '../services/iap-service';
 import {
   subscriptionPlansService,
   buildBootstrapPlans,
+  buildBootstrapProducts,
   type SubscriptionPlansSource,
 } from '../services/subscription-plans-service';
 import type { IapProductId } from '../constants/iap';
@@ -144,7 +145,15 @@ export function useSubscriptionPlans({
   const [plans, setPlans] = useState<SubscriptionPlanDto[]>(() =>
     enabled ? buildBootstrapPlans('ios') : [],
   );
-  const [products, setProducts] = useState<IapProductSummary[]>([]);
+  // Seed `products` alongside `plans` so the paywall renders real-looking
+  // prices on first paint instead of the "—" placeholder. The seed is
+  // synced 1:1 with `buildBootstrapPlans` SKUs and replaced once StoreKit
+  // returns localized prices. Subscribe button is blocked while `loading`
+  // is true (see SubscriptionScreen) so users cannot tap against the
+  // unverified seed amount.
+  const [products, setProducts] = useState<IapProductSummary[]>(() =>
+    enabled ? buildBootstrapProducts() : [],
+  );
   const [source, setSource] = useState<SubscriptionPlansSource>('bootstrap');
   const [loading, setLoading] = useState<boolean>(enabled);
   const [error, setError] = useState<string | null>(null);
