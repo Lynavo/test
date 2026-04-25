@@ -124,55 +124,50 @@ async function writeCache(
 
 /**
  * Build a minimal `SubscriptionPlanDto[]` from the hardcoded SKU constants.
- * Used only when both the server and the AsyncStorage cache are unavailable
- * (cold install, offline, server outage). Without this the paywall would be
- * empty and users could not subscribe at all — a worse failure mode than
- * showing slightly out-of-date marketing copy.
  *
- * Bootstrap copy is intentionally bare (no badges) so the degraded mode is
- * visually obvious and the accompanying console.warn flags it for diagnostics.
+ * Two roles:
+ *   1. Service-level final fallback when both the server and the
+ *      AsyncStorage cache are unavailable (cold install, offline, server
+ *      outage). Without this the paywall would be empty and users could
+ *      not subscribe at all.
+ *   2. Hook-level initial render seed (consumed by `useSubscriptionPlans`)
+ *      so the paywall shows two cards immediately while the network
+ *      request is in flight, instead of flashing a blank `planRow`.
+ *
+ * The two SKUs and their copy mirror the production server response
+ * (`/subscription/plans` → id=1 monthly, id=3 yearlyPromo) so the
+ * seed→network swap is visually a no-op when the server is reachable.
+ * `recommended` is intentionally `false` on both rows to match server
+ * intent; the screen falls back to "first plan" auto-selection.
  */
-function buildBootstrapPlans(
+export function buildBootstrapPlans(
   platform: SubscriptionPlanPlatform,
 ): SubscriptionPlanDto[] {
   const epoch = new Date(0).toISOString();
   const allowedSkus: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
   const candidates: SubscriptionPlanDto[] = [
     {
-      id: -1,
+      id: 1,
       product_id: IAP_PRODUCTS.monthly,
       platform,
-      name: '月度方案',
-      description: '按月訂閱，隨時取消',
+      name: '月付试水',
+      description: '按月计费，随时取消',
       badges: [],
       recommended: false,
-      sort_order: 10,
+      sort_order: 1,
       active: true,
       created_at: epoch,
       updated_at: epoch,
     },
     {
-      id: -2,
-      product_id: IAP_PRODUCTS.yearly,
-      platform,
-      name: '年度方案',
-      description: '一次付費，全年使用',
-      badges: [],
-      recommended: true,
-      sort_order: 20,
-      active: true,
-      created_at: epoch,
-      updated_at: epoch,
-    },
-    {
-      id: -3,
+      id: 3,
       product_id: IAP_PRODUCTS.yearlyPromo,
       platform,
-      name: '年度限時',
-      description: '限時優惠價格',
-      badges: [],
+      name: '限时年费',
+      description: '新用户限时优惠价',
+      badges: ['限时优惠'],
       recommended: false,
-      sort_order: 30,
+      sort_order: 3,
       active: true,
       created_at: epoch,
       updated_at: epoch,

@@ -137,17 +137,15 @@ describe('subscriptionPlansService.fetchPlans', () => {
     // Act
     const result = await subscriptionPlansService.fetchPlans('ios');
 
-    // Assert: bootstrap delivers the three hardcoded SKUs from IAP_PRODUCTS
-    // so the paywall is never empty even on cold-install + offline.
+    // Assert: bootstrap delivers the two production SKUs (monthly +
+    // yearlyPromo) so the paywall is never empty even on cold-install +
+    // offline. Mirrors the live server catalog (id=1, id=3) so a successful
+    // refresh later is visually a no-op.
     expect(result.source).toBe('bootstrap');
-    expect(result.plans).toHaveLength(3);
+    expect(result.plans).toHaveLength(2);
     const ids = result.plans.map(p => p.product_id).sort();
     expect(ids).toEqual(
-      [
-        IAP_PRODUCTS.monthly,
-        IAP_PRODUCTS.yearly,
-        IAP_PRODUCTS.yearlyPromo,
-      ].sort(),
+      [IAP_PRODUCTS.monthly, IAP_PRODUCTS.yearlyPromo].sort(),
     );
     // Bootstrap mode must announce itself loudly so QA notices the
     // degraded-state render rather than blaming "stale data".

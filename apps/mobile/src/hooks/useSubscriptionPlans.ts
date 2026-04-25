@@ -3,6 +3,7 @@ import type { SubscriptionPlanDto } from '@syncflow/contracts';
 import { iapService, type IapProductSummary } from '../services/iap-service';
 import {
   subscriptionPlansService,
+  buildBootstrapPlans,
   type SubscriptionPlansSource,
 } from '../services/subscription-plans-service';
 import type { IapProductId } from '../constants/iap';
@@ -131,7 +132,18 @@ export function useSubscriptionPlans({
   formatSavings,
   enabled = FEATURES.IAP_ENABLED,
 }: UseSubscriptionPlansArgs): UseSubscriptionPlansResult {
-  const [plans, setPlans] = useState<SubscriptionPlanDto[]>([]);
+  // Seed `plans` with the same hardcoded bootstrap rows the service uses on
+  // its final fallback. Goal is purely UX: the paywall renders two cards
+  // immediately on first paint instead of flashing an empty `planRow` while
+  // the network request and StoreKit lookup are in flight. Once the network
+  // catalog (or AsyncStorage cache) returns, `setPlans` replaces this seed
+  // with the authoritative list — product_ids match the production server
+  // response so a successful refresh is visually a no-op for the user.
+  // When `enabled` is false (IAP feature flag off) we deliberately stay
+  // empty so the screen renders nothing IAP-related.
+  const [plans, setPlans] = useState<SubscriptionPlanDto[]>(() =>
+    enabled ? buildBootstrapPlans('ios') : [],
+  );
   const [products, setProducts] = useState<IapProductSummary[]>([]);
   const [source, setSource] = useState<SubscriptionPlansSource>('bootstrap');
   const [loading, setLoading] = useState<boolean>(enabled);

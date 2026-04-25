@@ -550,8 +550,16 @@ export function SubscriptionScreen() {
     // Filter out catalog rows whose Apple SKU didn't resolve via StoreKit —
     // ASC mis-config most commonly. We log the dropped product_id so QA
     // notices instead of silently rendering a placeholder card with "—".
+    //
+    // Exception: while the hook is still loading, `product` is legitimately
+    // null for the bootstrap-seeded entries because StoreKit hasn't
+    // responded yet. Keeping them rendered (with "—" price) is the entire
+    // point of the seed — it prevents the blank-row flash on cold open.
+    // Once `plansLoading` flips to false, genuinely-misconfigured SKUs are
+    // dropped as before.
     const filtered = rawPlans.filter(entry => {
       if (entry.product != null) return true;
+      if (plansLoading) return true;
       console.warn(
         '[SubscriptionScreen] dropping plan with no StoreKit product:',
         entry.plan.product_id,
@@ -568,7 +576,7 @@ export function SubscriptionScreen() {
       return filtered.slice(0, PLAN_LAYOUT_CAP);
     }
     return filtered;
-  }, [rawPlans]);
+  }, [rawPlans, plansLoading]);
 
   // Auto-select the first valid plan once the catalog resolves. Prefer the
   // recommended row when present (server intent), otherwise the first
@@ -980,6 +988,12 @@ export function SubscriptionScreen() {
           disabled={
             isLoading ||
             selectedEntry == null ||
+            // StoreKit hasn't returned the SKU yet — bootstrap-seeded entries
+            // have `product == null` during the loading window. Letting the
+            // user tap Subscribe here would call iapService.purchase against
+            // a SKU StoreKit doesn't know about and surface a confusing
+            // Apple-side error. Block until the product resolves.
+            selectedEntry?.product == null ||
             selectedPlanIsCurrent ||
             selectedPlanIsDowngrade ||
             (plansError != null && FEATURES.IAP_ENABLED)
