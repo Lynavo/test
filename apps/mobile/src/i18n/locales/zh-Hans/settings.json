@@ -50,6 +50,31 @@
     "simplifiedChinese": "简中",
     "english": "English"
   },
+  "uploadDiagnostic": {
+    "button": "上传诊断包",
+    "confirm": {
+      "title": "上传诊断包",
+      "message": "将打包当前运行状态并上传到 Vivi Drop 支持团队，是否继续？",
+      "ok": "继续",
+      "cancel": "取消"
+    },
+    "progress": {
+      "title": "上传中…",
+      "cancel": "取消"
+    },
+    "success": {
+      "toast": "上传成功，编号 {{refId}}（已复制到剪贴板）"
+    },
+    "failure": {
+      "toast": "上传失败，请稍后再试"
+    },
+    "tooLarge": {
+      "toast": "诊断包过大，请联系支持"
+    },
+    "aborted": {
+      "toast": "已取消上传"
+    }
+  },
   "actions": {
     "exportDiagnostics": "导出诊断包",
     "exportingDiagnostics": "正在导出诊断包…",

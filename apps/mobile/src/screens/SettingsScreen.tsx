@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Linking,
   Platform,
   ActivityIndicator,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -46,9 +47,9 @@ import { classifyIapError } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
 import { ApiError, ERROR_CODE } from '../services/api';
 import {
-  isDiagnosticsExportUnavailable,
-  shareDiagnosticsArchive,
-} from '../utils/shareDiagnosticsArchive';
+  diagnosticUploadService,
+  DiagnosticUploadError,
+} from '../services/diagnostic-upload-service';
 import {
   buildSyncConnectionEvidence,
   getConnectionBadgeState,
@@ -238,7 +239,9 @@ export function SettingsScreen() {
   const [appVersionLabel, setAppVersionLabel] = useState('');
   const [isPhotoPermissionBlocked, setIsPhotoPermissionBlocked] =
     useState(false);
-  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
+  const [diagnosticUploadProgress, setDiagnosticUploadProgress] = useState(0);
+  const diagnosticAbortRef = useRef<AbortController | null>(null);
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>('system');
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
@@ -516,26 +519,87 @@ export function SettingsScreen() {
     }
   }, [navigation, syncOverviewState, t]);
 
-  const handleExportDiagnostics = useCallback(async () => {
-    try {
-      setIsExportingDiagnostics(true);
-      await shareDiagnosticsArchive();
-    } catch (error) {
-      if (isDiagnosticsExportUnavailable(error)) {
-        Alert.alert(
-          t('settings.dialogs.exportUnavailable.title'),
-          t('settings.dialogs.exportUnavailable.body'),
-        );
-      } else {
-        Alert.alert(
-          t('settings.dialogs.exportFailed.title'),
-          t('settings.dialogs.exportFailed.body'),
-        );
-      }
-    } finally {
-      setIsExportingDiagnostics(false);
-    }
-  }, [t]);
+  const handleUploadDiagnostics = useCallback(() => {
+    Alert.alert(
+      t('settings.uploadDiagnostic.confirm.title'),
+      t('settings.uploadDiagnostic.confirm.message'),
+      [
+        {
+          text: t('settings.uploadDiagnostic.confirm.cancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('settings.uploadDiagnostic.confirm.ok'),
+          onPress: () => {
+            void (async () => {
+              const { NativeSyncEngine } = NativeModules;
+              if (!NativeSyncEngine?.exportDiagnostics) {
+                Alert.alert(
+                  t('settings.dialogs.exportUnavailable.title'),
+                  t('settings.dialogs.exportUnavailable.body'),
+                );
+                return;
+              }
+
+              const abortController = new AbortController();
+              diagnosticAbortRef.current = abortController;
+              setDiagnosticUploadProgress(0);
+              setIsUploadingDiagnostics(true);
+
+              try {
+                const archivePath: string =
+                  await NativeSyncEngine.exportDiagnostics();
+                const archiveUrl = archivePath.startsWith('file://')
+                  ? archivePath
+                  : `file://${archivePath}`;
+                const zipBlob = await fetch(archiveUrl).then(r => r.blob());
+
+                const clientId = String(auth.user?.id ?? 'unknown');
+
+                const result = await diagnosticUploadService.upload(
+                  zipBlob,
+                  clientId,
+                  abortController.signal,
+                  (loaded, total) => {
+                    if (total > 0) {
+                      setDiagnosticUploadProgress(
+                        Math.round((loaded / total) * 100),
+                      );
+                    }
+                  },
+                );
+
+                Clipboard.setString(result.refId);
+                Alert.alert(
+                  t('settings.uploadDiagnostic.success.toast', {
+                    refId: result.refId,
+                  }),
+                );
+              } catch (error) {
+                if (
+                  error instanceof DiagnosticUploadError &&
+                  error.detail.kind === 'BUNDLE_TOO_LARGE'
+                ) {
+                  Alert.alert(t('settings.uploadDiagnostic.tooLarge.toast'));
+                } else if (
+                  error instanceof DiagnosticUploadError &&
+                  error.detail.kind === 'ABORTED'
+                ) {
+                  Alert.alert(t('settings.uploadDiagnostic.aborted.toast'));
+                } else {
+                  Alert.alert(t('settings.uploadDiagnostic.failure.toast'));
+                }
+              } finally {
+                diagnosticAbortRef.current = null;
+                setIsUploadingDiagnostics(false);
+                setDiagnosticUploadProgress(0);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [auth.user?.id, t]);
 
   const handleResetSyncStatus = useCallback(() => {
     if (isResetSyncDisabled) return;
@@ -1300,17 +1364,13 @@ export function SettingsScreen() {
           <TouchableOpacity
             style={styles.actionRow}
             activeOpacity={0.6}
-            disabled={isExportingDiagnostics}
-            onPress={() => {
-              void handleExportDiagnostics();
-            }}
+            disabled={isUploadingDiagnostics}
+            onPress={handleUploadDiagnostics}
           >
             <View style={styles.actionRowLeft}>
-              <Icon name="download-outline" size={18} color={BLUE} />
+              <Icon name="cloud-upload-outline" size={18} color={BLUE} />
               <Text style={styles.actionRowText}>
-                {isExportingDiagnostics
-                  ? t('settings.actions.exportingDiagnostics')
-                  : t('settings.actions.exportDiagnostics')}
+                {t('settings.uploadDiagnostic.button')}
               </Text>
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
@@ -1461,6 +1521,36 @@ export function SettingsScreen() {
        * §4 Phase 1 the await chain is deliberate so the next login flow
        * doesn't race into residual native / storage state.
        */}
+      {isUploadingDiagnostics ? (
+        <View
+          style={styles.deletingOverlay}
+          pointerEvents="auto"
+          accessibilityRole="progressbar"
+          accessibilityLiveRegion="polite"
+        >
+          <View style={styles.deletingOverlayCard}>
+            <ActivityIndicator size="large" color={BLUE} />
+            <Text style={styles.deletingOverlayText}>
+              {t('settings.uploadDiagnostic.progress.title')}{' '}
+              {diagnosticUploadProgress > 0
+                ? `${String(diagnosticUploadProgress)}%`
+                : ''}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                diagnosticAbortRef.current?.abort();
+              }}
+              style={styles.uploadCancelButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.uploadCancelText}>
+                {t('settings.uploadDiagnostic.progress.cancel')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
       {isDeletingAccount ? (
         <View
           style={styles.deletingOverlay}
@@ -1983,6 +2073,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: DARK,
+    textAlign: 'center',
+  },
+  uploadCancelButton: {
+    marginTop: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59,159,216,0.1)',
+  },
+  uploadCancelText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: BLUE,
     textAlign: 'center',
   },
 });
