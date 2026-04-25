@@ -6,7 +6,6 @@ import {
   isPreparationPhase,
   resolveSyncErrorAlertMessage,
   shouldBypassOfflineDisplayDelay,
-  shouldDelayAutoCompletionCard,
   shouldKickAutoUploadSyncAfterGateRelease,
   shouldRenderSyncActivityProgress,
   shouldShowSubscriptionExpiredOverlay,
@@ -917,99 +916,6 @@ describe('shouldBypassOfflineDisplayDelay', () => {
   });
 });
 
-describe('shouldDelayAutoCompletionCard', () => {
-  it('holds the first auto completion frame immediately to avoid a one-frame flash', () => {
-    expect(
-      shouldDelayAutoCompletionCard(
-        'auto_completed',
-        'completed',
-        'active',
-        null,
-        Date.now(),
-      ),
-    ).toBe(true);
-  });
-
-  it('keeps holding follow-up standby or running states only while the hold window is active', () => {
-    const now = Date.now();
-    expect(
-      shouldDelayAutoCompletionCard(
-        'standby',
-        'idle',
-        'active',
-        now + 200,
-        now,
-      ),
-    ).toBe(true);
-
-    expect(
-      shouldDelayAutoCompletionCard(
-        'running',
-        'scanning',
-        'active',
-        now + 200,
-        now,
-      ),
-    ).toBe(true);
-  });
-
-  it('stops holding once the visual hold window expires', () => {
-    const now = Date.now();
-    expect(
-      shouldDelayAutoCompletionCard('standby', 'idle', 'active', now - 1, now),
-    ).toBe(false);
-    expect(
-      shouldDelayAutoCompletionCard(
-        'auto_completed',
-        'completed',
-        'active',
-        0,
-        now,
-      ),
-    ).toBe(false);
-    expect(
-      shouldDelayAutoCompletionCard(
-        'auto_completed',
-        'completed',
-        'active',
-        now - 1,
-        now,
-      ),
-    ).toBe(false);
-  });
-
-  it('never holds when auto upload is inactive or a fresh upload already started', () => {
-    const future = Date.now() + 200;
-    expect(
-      shouldDelayAutoCompletionCard(
-        'auto_completed',
-        'completed',
-        'disabled',
-        future,
-        Date.now(),
-      ),
-    ).toBe(false);
-    expect(
-      shouldDelayAutoCompletionCard(
-        'running',
-        'uploading',
-        'active',
-        future,
-        Date.now(),
-      ),
-    ).toBe(false);
-    expect(
-      shouldDelayAutoCompletionCard(
-        'manual_completed',
-        'idle',
-        'active',
-        future,
-        Date.now(),
-      ),
-    ).toBe(false);
-  });
-});
-
 describe('shouldRenderSyncActivityProgress', () => {
   it('does not render upload progress while a manual batch is only preparing to connect', () => {
     expect(shouldRenderSyncActivityProgress('preparing', false, false)).toBe(
@@ -1096,7 +1002,7 @@ describe('getSyncActivityDisplayProgressPercent', () => {
     ).toBe(18);
   });
 
-  it('holds completion at 100 percent only during the completion visual delay', () => {
+  it('uses 100 percent while the caller explicitly delays completion display', () => {
     expect(
       getSyncActivityDisplayProgressPercent(
         {

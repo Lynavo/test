@@ -121,6 +121,10 @@ export function isSyncActivityActivelyTransferring(
     return false;
   }
 
+  if (isFinalUploadPulse(snapshot) && hasNoPendingQueueWork(snapshot)) {
+    return false;
+  }
+
   return (
     ACTIVE_TRANSFER_STATES.has(snapshot?.uploadState ?? '') ||
     hasPendingManualWork(snapshot) ||

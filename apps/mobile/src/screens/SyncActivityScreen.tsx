@@ -151,7 +151,6 @@ const EMPTY_OFFLINE_ICON = '#df7266';
 const STARTUP_CONNECTION_GRACE_MS = 2500;
 /** Delay before transitioning to offline display (ms). */
 const OFFLINE_DISPLAY_DELAY_MS = 800;
-const AUTO_COMPLETION_VISUAL_HOLD_MS = 350;
 /** Minimum time the optimistic "enabling auto-upload" card stays visible. */
 const AUTO_UPLOAD_PREPARING_MIN_MS = 400;
 /** Safety timeout — force-clear optimistic preparing state if native never confirms. */
@@ -299,43 +298,6 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
     day: date.getDate(),
     time,
   });
-}
-
-export function shouldDelayAutoCompletionCard(
-  rawMainCardState: SyncActivityMainCardState,
-  uploadState: string,
-  autoUploadState: AutoUploadState | undefined,
-  autoCompletionVisualHoldUntilMs: number | null,
-  now: number,
-): boolean {
-  if (autoUploadState !== 'active') {
-    return false;
-  }
-
-  if (uploadState === 'uploading') {
-    return false;
-  }
-
-  if (
-    rawMainCardState !== 'auto_completed' &&
-    rawMainCardState !== 'running' &&
-    rawMainCardState !== 'standby'
-  ) {
-    return false;
-  }
-
-  if (rawMainCardState === 'auto_completed') {
-    return (
-      autoCompletionVisualHoldUntilMs === null ||
-      (autoCompletionVisualHoldUntilMs > 0 &&
-        now < autoCompletionVisualHoldUntilMs)
-    );
-  }
-
-  return (
-    autoCompletionVisualHoldUntilMs !== null &&
-    now < autoCompletionVisualHoldUntilMs
-  );
 }
 
 export function shouldRenderSyncActivityProgress(
@@ -569,8 +531,6 @@ export function SyncActivityScreen() {
   });
   const [initialLoading, setInitialLoading] = useState(true);
   const [cancellingBatch, setCancellingBatch] = useState(false);
-  const [autoCompletionVisualHoldUntilMs, setAutoCompletionVisualHoldUntilMs] =
-    useState<number | null>(null);
   const [autoRoundDisplayBaseline, setAutoRoundDisplayBaseline] =
     useState<AutoRoundDisplayBaseline | null>(null);
 
@@ -578,9 +538,6 @@ export function SyncActivityScreen() {
   const [stableOffline, setStableOffline] = useState(false);
   const [connectionGraceActive, setConnectionGraceActive] = useState(true);
   const offlineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoCompletionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   // Optimistic UI: show "preparing auto-upload" immediately after the toggle,
   // since the native pipeline can sit in a ~30 s heartbeat wait after the
   // manual batch drains before it re-enters the scan loop.
@@ -1139,13 +1096,7 @@ export function SyncActivityScreen() {
     overview,
     stableOffline || (isOffline && shouldBypassOfflineDelay),
   );
-  const shouldDelayAutoCompletion = shouldDelayAutoCompletionCard(
-    rawMainCardState,
-    overview.uploadState,
-    overview.autoUploadState,
-    autoCompletionVisualHoldUntilMs,
-    Date.now(),
-  );
+  const shouldDelayAutoCompletion = false;
   const mainCardState =
     shouldDelayAutoCompletion || autoUploadPreparing
       ? 'running'
@@ -1232,10 +1183,8 @@ export function SyncActivityScreen() {
 
   useEffect(() => {
     // Cache the last known uploading visual regardless of task source.
-    // Used to freeze filename/speed during:
-    //   (a) auto-completion hold window (round end)
-    //   (b) inter-item transition (uploadState briefly flips to 'completed'
-    //       which clears currentFilename/bytes in buildOverview)
+    // Used to freeze filename/speed during inter-item transitions, where
+    // uploadState briefly flips to 'completed' and clears current file fields.
     if (overview.uploadState === 'uploading') {
       lastAutoUploadingVisualRef.current = {
         currentFilename: overview.currentFilename,
@@ -1247,43 +1196,6 @@ export function SyncActivityScreen() {
     overview.currentSpeedMbps,
     overview.uploadState,
   ]);
-
-  useEffect(() => {
-    if (rawMainCardState === 'auto_completed') {
-      const holdUntil = Date.now() + AUTO_COMPLETION_VISUAL_HOLD_MS;
-      setAutoCompletionVisualHoldUntilMs(holdUntil);
-      if (autoCompletionTimerRef.current) {
-        clearTimeout(autoCompletionTimerRef.current);
-      }
-      autoCompletionTimerRef.current = setTimeout(() => {
-        autoCompletionTimerRef.current = null;
-        setAutoCompletionVisualHoldUntilMs(0);
-      }, AUTO_COMPLETION_VISUAL_HOLD_MS);
-      return;
-    }
-
-    if (
-      overview.uploadState === 'uploading' ||
-      rawMainCardState === 'manual_completed' ||
-      rawMainCardState === 'offline' ||
-      rawMainCardState === 'not_started'
-    ) {
-      if (autoCompletionTimerRef.current) {
-        clearTimeout(autoCompletionTimerRef.current);
-        autoCompletionTimerRef.current = null;
-      }
-      setAutoCompletionVisualHoldUntilMs(null);
-    }
-  }, [overview.uploadState, rawMainCardState]);
-
-  useEffect(() => {
-    return () => {
-      if (autoCompletionTimerRef.current) {
-        clearTimeout(autoCompletionTimerRef.current);
-        autoCompletionTimerRef.current = null;
-      }
-    };
-  }, []);
 
   // Clear the optimistic "preparing auto-upload" state only once there is
   // concrete evidence that auto-upload has taken over. We intentionally do
