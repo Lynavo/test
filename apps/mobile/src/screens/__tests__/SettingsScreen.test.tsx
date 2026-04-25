@@ -299,6 +299,86 @@ describe('SettingsScreen', () => {
     expect(getByText('Language')).toBeTruthy();
   });
 
+  describe('Device name editing — transfer lock', () => {
+    beforeEach(async () => {
+      await i18n.changeLanguage('zh-Hant');
+    });
+
+    it('idle: pencil button enables entering edit mode', async () => {
+      mockNativeSyncEngine.getSyncOverview.mockResolvedValueOnce({
+        progressPercent: 0,
+        transferredBytes: 0,
+        currentFile: null,
+        currentFileConfirmedBytes: 0,
+        uploadState: 'idle',
+      });
+
+      const { getByText, queryAllByText, UNSAFE_getAllByType } = render(
+        <SettingsScreen />,
+      );
+
+      await waitFor(() => {
+        expect(getByText('我的設備名稱')).toBeTruthy();
+      });
+
+      // The locked hint should NOT be present in idle state.
+      expect(queryAllByText('傳輸進行中，暫不可修改設備名稱').length).toBe(0);
+
+      // Find the pencil edit button by its icon name and press it.
+      const TextRN = require('react-native').Text;
+      const pencilNode = UNSAFE_getAllByType(TextRN).find(
+        (n: { props: { children: unknown } }) =>
+          n.props.children === 'pencil-outline',
+      );
+      expect(pencilNode).toBeTruthy();
+      fireEvent.press(pencilNode!);
+
+      // After entering edit mode, the checkmark icon (confirm button) appears.
+      await waitFor(() => {
+        const checkmark = UNSAFE_getAllByType(TextRN).find(
+          (n: { props: { children: unknown } }) =>
+            n.props.children === 'checkmark',
+        );
+        expect(checkmark).toBeTruthy();
+      });
+    });
+
+    it('uploading: locked hint shown and pencil press does not open edit mode', async () => {
+      mockNativeSyncEngine.getSyncOverview.mockResolvedValueOnce({
+        progressPercent: 30,
+        transferredBytes: 1024,
+        currentFile: 'photo.jpg',
+        currentFileConfirmedBytes: 512,
+        uploadState: 'uploading',
+      });
+
+      const { getByText, UNSAFE_getAllByType } = render(<SettingsScreen />);
+
+      // Locked hint is the strongest signal that the lock UI engaged.
+      await waitFor(() => {
+        expect(getByText('傳輸進行中，暫不可修改設備名稱')).toBeTruthy();
+      });
+
+      const TextRN = require('react-native').Text;
+      const pencilNode = UNSAFE_getAllByType(TextRN).find(
+        (n: { props: { children: unknown } }) =>
+          n.props.children === 'pencil-outline',
+      );
+      expect(pencilNode).toBeTruthy();
+      fireEvent.press(pencilNode!);
+
+      // No checkmark (confirm) → edit mode never opened.
+      const checkmark = UNSAFE_getAllByType(TextRN).find(
+        (n: { props: { children: unknown } }) =>
+          n.props.children === 'checkmark',
+      );
+      expect(checkmark).toBeFalsy();
+
+      // setClientDisplayName must NOT have been invoked.
+      expect(mockNativeSyncEngine.setClientDisplayName).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Switch Device button', () => {
     beforeEach(async () => {
       await i18n.changeLanguage('zh-Hant');

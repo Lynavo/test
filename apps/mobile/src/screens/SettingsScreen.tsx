@@ -250,6 +250,16 @@ export function SettingsScreen() {
   // My iPhone display name
   const [myName, setMyName] = useState('iPhone');
   const [editingMyName, setEditingMyName] = useState(false);
+  const isMyNameEditDisabled =
+    isSyncActivityActivelyTransferring(syncOverviewState);
+
+  // Race guard: if a transfer kicks off while the user is mid-edit, exit
+  // editing immediately so the locked input cannot be submitted.
+  useEffect(() => {
+    if (isMyNameEditDisabled && editingMyName) {
+      setEditingMyName(false);
+    }
+  }, [isMyNameEditDisabled, editingMyName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1196,11 +1206,16 @@ export function SettingsScreen() {
                     selectTextOnFocus
                     returnKeyType="done"
                     onSubmitEditing={handleConfirmMyName}
+                    editable={!isMyNameEditDisabled}
                   />
                   <TouchableOpacity
-                    style={styles.confirmButton}
+                    style={[
+                      styles.confirmButton,
+                      isMyNameEditDisabled && styles.disabledIconButton,
+                    ]}
                     activeOpacity={0.7}
                     onPress={handleConfirmMyName}
+                    disabled={isMyNameEditDisabled}
                   >
                     <Icon name="checkmark" size={16} color={BLUE} />
                   </TouchableOpacity>
@@ -1211,9 +1226,17 @@ export function SettingsScreen() {
                     {myName}
                   </Text>
                   <TouchableOpacity
-                    style={styles.editButton}
+                    style={[
+                      styles.editButton,
+                      isMyNameEditDisabled && styles.disabledIconButton,
+                    ]}
                     activeOpacity={0.7}
-                    onPress={() => setEditingMyName(true)}
+                    onPress={() => {
+                      if (isMyNameEditDisabled) return;
+                      setEditingMyName(true);
+                    }}
+                    disabled={isMyNameEditDisabled}
+                    accessibilityState={{ disabled: isMyNameEditDisabled }}
                   >
                     <Icon name="pencil-outline" size={14} color={MUTED_TEXT} />
                   </TouchableOpacity>
@@ -1221,7 +1244,11 @@ export function SettingsScreen() {
               )}
             </View>
           </View>
-          <Text style={styles.myDeviceHint}>{t('settings.myDevice.hint')}</Text>
+          <Text style={styles.myDeviceHint}>
+            {isMyNameEditDisabled
+              ? t('settings.myDevice.lockedHint')
+              : t('settings.myDevice.hint')}
+          </Text>
         </View>
 
         {/* ============================================================= */}
@@ -1855,6 +1882,9 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     marginTop: 10,
     marginLeft: 62,
+  },
+  disabledIconButton: {
+    opacity: 0.4,
   },
 
   // ---------------------------------------------------------------------------
