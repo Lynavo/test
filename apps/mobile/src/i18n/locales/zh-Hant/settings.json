@@ -50,6 +50,31 @@
     "simplifiedChinese": "簡中",
     "english": "English"
   },
+  "uploadDiagnostic": {
+    "button": "上傳診斷包",
+    "confirm": {
+      "title": "上傳診斷包",
+      "message": "將打包當前運行狀態並上傳到 Vivi Drop 支援團隊，是否繼續？",
+      "ok": "繼續",
+      "cancel": "取消"
+    },
+    "progress": {
+      "title": "上傳中…",
+      "cancel": "取消"
+    },
+    "success": {
+      "toast": "上傳成功，編號 {{refId}}（已複製到剪貼板）"
+    },
+    "failure": {
+      "toast": "上傳失敗，請稍後再試"
+    },
+    "tooLarge": {
+      "toast": "診斷包過大，請聯繫支援"
+    },
+    "aborted": {
+      "toast": "已取消上傳"
+    }
+  },
   "actions": {
     "exportDiagnostics": "匯出診斷包",
     "exportingDiagnostics": "正在匯出診斷包…",

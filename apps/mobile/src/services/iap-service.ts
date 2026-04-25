@@ -63,6 +63,22 @@ export interface EligibilityResult {
   eligibleForIntroOffer: boolean;
 }
 
+export type SubscriptionPeriodUnit = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+
+/** Storefront-localized snapshot of one IAP product, sourced from StoreKit
+ *  via react-native-iap. `displayPrice` is Apple-formatted for the user's
+ *  current storefront — never persist it across launches, the storefront
+ *  can change. Use `priceAmount` + `currency` for math (discount %, etc.). */
+export interface IapProductSummary {
+  productId: IapProductId;
+  displayPrice: string;
+  priceAmount: number;
+  currency: string;
+  periodUnit?: SubscriptionPeriodUnit;
+  periodCount?: number;
+  eligibleForIntroOffer: boolean;
+}
+
 export interface IapService {
   initialize(): Promise<void>;
   teardown(): Promise<void>;
@@ -70,6 +86,18 @@ export interface IapService {
   restore(): Promise<PurchaseReceipt[]>;
   finishTransaction(transactionId: string): Promise<void>;
   checkEligibility(): Promise<EligibilityResult[]>;
+  /** Fetches the storefront-localized product catalog. Returns `[]` on any
+   *  failure (network, StoreKit unavailable, sandbox not configured) — UI
+   *  must render loading/error/empty rather than depend on hardcoded prices.
+   *
+   *  When `skus` is omitted the bootstrap `ALL_PRODUCT_IDS` list is used (kept
+   *  for backward compatibility with the legacy `useStoreProducts` hook). The
+   *  server-driven catalog flow passes the SKU list resolved from
+   *  `/subscription/plans` so paywall content reflects ASC + the server's
+   *  business decisions, not a frozen client constant. */
+  getProductSummaries(
+    skus?: readonly IapProductId[],
+  ): Promise<IapProductSummary[]>;
   refreshReceipt(): Promise<string | null>;
   onOrphanPurchaseVerified(cb: () => void): () => void;
 }
@@ -220,6 +248,64 @@ class IapServiceImpl implements IapService {
     } catch {
       // Eligibility query failure must not block UI — fall back to "not eligible"
       // so the non-trial copy is shown (never over-promise a free trial).
+      return [];
+    }
+  }
+
+  async getProductSummaries(
+    skus?: readonly IapProductId[],
+  ): Promise<IapProductSummary[]> {
+    // Default to the bootstrap list so existing callers (and offline first
+    // launch before the server catalog hydrates) still get *something*.
+    const requestedSkus: readonly IapProductId[] = skus ?? ALL_PRODUCT_IDS;
+    if (requestedSkus.length === 0) return [];
+    try {
+      const products = await getSubscriptions({ skus: [...requestedSkus] });
+      const summaries: IapProductSummary[] = [];
+      for (const productId of requestedSkus) {
+        const match = products.find(p => p.productId === productId);
+        if (!match) continue;
+        // The react-native-iap `Subscription` union spans iOS / Android /
+        // Amazon, but only the iOS variant exposes localizedPrice / currency.
+        // This app ships iOS only, so cast through a structural shape that
+        // covers the fields we need without depending on the platform-tagged
+        // discriminator (which isn't always present in older SK1 builds).
+        const ios = match as Partial<{
+          price: string;
+          localizedPrice: string;
+          currency: string;
+          subscriptionPeriodUnitIOS: SubscriptionPeriodUnit;
+          subscriptionPeriodNumberIOS: string;
+          introductoryPricePaymentModeIOS: string;
+        }>;
+        const priceRaw = ios.price ?? '';
+        const priceAmount = Number.parseFloat(priceRaw);
+        if (!Number.isFinite(priceAmount)) continue;
+        const displayPrice = ios.localizedPrice ?? priceRaw;
+        const currency = ios.currency ?? '';
+        const periodUnit = ios.subscriptionPeriodUnitIOS;
+        const periodCountRaw = ios.subscriptionPeriodNumberIOS;
+        const periodCount = periodCountRaw
+          ? Number.parseInt(periodCountRaw, 10)
+          : undefined;
+        const eligibleForIntroOffer =
+          ios.introductoryPricePaymentModeIOS === 'FREETRIAL';
+        summaries.push({
+          productId,
+          displayPrice,
+          priceAmount,
+          currency,
+          periodUnit,
+          periodCount:
+            periodCount && Number.isFinite(periodCount)
+              ? periodCount
+              : undefined,
+          eligibleForIntroOffer,
+        });
+      }
+      return summaries;
+    } catch (err) {
+      console.warn('[iap-service] getProductSummaries failed', err);
       return [];
     }
   }

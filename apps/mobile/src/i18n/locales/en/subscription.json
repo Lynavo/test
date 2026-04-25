@@ -14,20 +14,21 @@
     "unlimited": "Unlimited media uploads"
   },
   "plans": {
-    "monthly": {
-      "name": "Monthly Plan",
-      "unit": "/mo",
-      "subtitle": "¥9.9/month",
-      "trialOffer": "7-day free trial, then ¥9.9/month"
-    },
-    "yearly": {
-      "name": "12-Month Plan",
-      "unit": "/12 months",
-      "oldPrice": "¥118.8",
-      "savings": "Save ¥14.8"
+    "priceTemplate": "{{currency}} {{amount}}",
+    "savingsTemplate": "Save {{amount}}",
+    "unit": {
+      "day_one": "/day",
+      "day_other": "/{{count}} days",
+      "week_one": "/week",
+      "week_other": "/{{count}} weeks",
+      "month_one": "/month",
+      "month_other": "/{{count}} months",
+      "year_one": "/year",
+      "year_other": "/{{count}} years"
     },
     "fallback": "Subscription",
-    "currentPlan": "Current Plan"
+    "currentPlan": "Current Plan",
+    "offlineMode": "Offline mode — some details may be out of date"
   },
   "restore": {
     "action": "Restore Purchases",
@@ -46,7 +47,8 @@
     "deferred": "Purchase pending approval.",
     "alreadyOwned": "You already have an active subscription. If you want to switch plans, please retry or manage it in App Store settings.",
     "receiptBoundToOther": "This Apple subscription is linked to another account. Please sign in with the original account to continue.",
-    "receiptStaleNoActive": "This receipt was already used but there is no active subscription. Please purchase again."
+    "receiptStaleNoActive": "This receipt was already used but there is no active subscription. Please purchase again.",
+    "productsUnavailable": "Plans are temporarily unavailable. Please check your connection and retry."
   },
   "status": {
     "trialing": "Trial — {{days}} days left",

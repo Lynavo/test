@@ -50,6 +50,31 @@
     "simplifiedChinese": "简中",
     "english": "English"
   },
+  "uploadDiagnostic": {
+    "button": "Upload diagnostics",
+    "confirm": {
+      "title": "Upload diagnostics",
+      "message": "This will bundle current runtime state and upload to the Vivi Drop support team. Continue?",
+      "ok": "Continue",
+      "cancel": "Cancel"
+    },
+    "progress": {
+      "title": "Uploading…",
+      "cancel": "Cancel"
+    },
+    "success": {
+      "toast": "Uploaded — reference {{refId}} (copied to clipboard)"
+    },
+    "failure": {
+      "toast": "Upload failed, please try again later"
+    },
+    "tooLarge": {
+      "toast": "Diagnostic bundle too large, please contact support"
+    },
+    "aborted": {
+      "toast": "Upload cancelled"
+    }
+  },
   "actions": {
     "exportDiagnostics": "Export Diagnostics",
     "exportingDiagnostics": "Exporting diagnostics...",

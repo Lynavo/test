@@ -94,7 +94,7 @@ interface RequestOptions {
   timeoutMs?: number;
 }
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   // Resolve and validate per-request: a misconfigured release build raises
   // a typed ApiError instead of crashing the bundle at module-load time.
   const baseUrl = getBaseUrl();
@@ -105,7 +105,7 @@ function buildUrl(path: string): string {
   return `${baseUrl}${API_PREFIX}${path}`;
 }
 
-function authHeaders(): Record<string, string> {
+export function authHeaders(): Record<string, string> {
   const token = getAccessToken();
   if (token) {
     return { Authorization: `Bearer ${token}` };
@@ -296,9 +296,7 @@ async function doRefreshToken(): Promise<boolean> {
   return false;
 }
 
-async function clearAuthFromModule(
-  transition?: 'session_replaced',
-) {
+async function clearAuthFromModule(transition?: 'session_replaced') {
   // Lazy import to break circular dependency
   const { _clearAuthFromApi } = await import('./auth-service');
   _clearAuthFromApi(transition);
