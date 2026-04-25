@@ -41,8 +41,7 @@ export interface UseSubscriptionPlansResult {
    *  plan names/descriptions even before Apple returns localized prices. */
   loading: boolean;
   /** True while StoreKit `getProductSummaries` is in flight. Independent
-   *  from `loading` because the IAP service is initialized lazily (post
-   *  cold-start, see `useIapLifecycle`) and may resolve later than the
+   *  from `loading` because product metadata can resolve later than the
    *  server catalog. The paywall uses this to keep the Subscribe button
    *  blocked until Apple-side prices are confirmed, even if `loading` has
    *  already flipped false. */

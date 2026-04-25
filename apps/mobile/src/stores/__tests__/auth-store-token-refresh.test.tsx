@@ -97,6 +97,7 @@ jest.mock('../../utils/clearUserScopedStorage', () => ({
 }));
 
 import { AuthProvider, useAuth } from '../auth-store';
+import { useIapLifecycle } from '../../hooks/useIapLifecycle';
 
 function AuthProbe() {
   const auth = useAuth();
@@ -115,6 +116,7 @@ describe('AuthProvider bootstrap after token refresh', () => {
   beforeEach(() => {
     mockRegisteredSetTokens = null;
     mockGetUserProfile.mockClear();
+    (useIapLifecycle as jest.Mock).mockClear();
   });
 
   test('does not cancel profile bootstrap when API silently rotates tokens', async () => {
@@ -140,5 +142,13 @@ describe('AuthProvider bootstrap after token refresh', () => {
       });
     });
     expect(mockGetUserProfile).toHaveBeenCalledTimes(1);
+    expect(useIapLifecycle).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isLoggedIn: true }),
+    );
+    expect(
+      (useIapLifecycle as jest.Mock).mock.calls.some(
+        ([args]) => args?.isLoggedIn === false,
+      ),
+    ).toBe(true);
   });
 });

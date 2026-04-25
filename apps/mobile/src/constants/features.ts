@@ -20,7 +20,7 @@ export const FEATURES = {
 
   /**
    * Master switch for the entire Apple IAP integration. When false:
-   *  - `useIapLifecycle` is a no-op (no initConnection, no listeners)
+   *  - `useIapLifecycle` is a no-op (no orphan callback subscription)
    *  - `SubscriptionScreen` falls back to its mock "coming soon" alert
    *  - Restore Purchases button is hidden regardless of IAP_RESTORE_ENABLED
    */

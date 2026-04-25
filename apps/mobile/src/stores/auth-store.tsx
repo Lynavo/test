@@ -440,7 +440,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  useIapLifecycle({ isLoggedIn: state.isLoggedIn, loadSubscription });
+  const iapLifecycleReady =
+    state.isLoggedIn &&
+    state.user != null &&
+    !state.isLoading &&
+    !state.profileLoading &&
+    state.profileError == null;
+  useIapLifecycle({ isLoggedIn: iapLifecycleReady, loadSubscription });
 
   // Single profile-load orchestrator. Delegates the Phase-2 owner-guard
   // cleanup sequence to `bootstrapAuthedSession` (a pure function,

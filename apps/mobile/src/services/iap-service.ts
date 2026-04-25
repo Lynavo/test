@@ -8,6 +8,7 @@ import {
   getAvailablePurchases,
   getSubscriptions,
   getReceiptIOS,
+  clearTransactionIOS,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
@@ -104,12 +105,12 @@ export interface IapService {
   /** DEV-ONLY escape hatch: finish every transaction currently in
    *  `SKPaymentQueue` without server-side verification. Used by an
    *  in-app debug button to clear stale sandbox transactions that
-   *  cause the cold-start flush storm. Returns the count of finished
-   *  transactions. Throws on production builds — callers must gate
-   *  with `__DEV__`. NEVER expose in production: silently finishing
-   *  unverified purchases means a real user's renewal could be
-   *  acknowledged to Apple but never recorded server-side. */
-  _devFlushAllPending(): Promise<number>;
+   *  cause the cold-start flush storm. Throws on production builds —
+   *  callers must gate with `__DEV__`. NEVER expose in production:
+   *  silently finishing unverified purchases means a real user's
+   *  renewal could be acknowledged to Apple but never recorded
+   *  server-side. */
+  _devFlushAllPending(): Promise<void>;
 }
 
 class IapServiceImpl implements IapService {
@@ -203,14 +204,12 @@ class IapServiceImpl implements IapService {
   }
 
   async purchase(productId: IapProductId): Promise<PurchaseReceipt> {
-    // Lazy init: under the deferred-init lifecycle model
-    // (`useIapLifecycle` parks initialize() on InteractionManager) the
-    // user can tap Subscribe before the idle handle fires. Throwing
-    // here would surface a confusing "must be called before purchase"
-    // error in production. Await initialize() instead — it dedupes
-    // concurrent calls internally so this is cheap when a previous
-    // initialize is already in flight.
+    // Lazy init: app startup deliberately does not attach StoreKit listeners
+    // because doing so replays the pending SKPaymentQueue. Subscribe is an
+    // explicit user action, so initialize here and let initialize() dedupe
+    // concurrent calls.
     if (!this.initialized) {
+      await this.clearDevSandboxQueueBeforeListenerAttach();
       await this.initialize();
     }
     if (this.pendingPurchase.has(productId)) {
@@ -243,12 +242,20 @@ class IapServiceImpl implements IapService {
   }
 
   async restore(): Promise<PurchaseReceipt[]> {
-    // Lazy init for the same reason as `purchase`: a user can tap the
-    // Restore link in SubscriptionScreen before the deferred init fires.
+    const refreshedReceipt = await this.refreshReceiptForUserPurchase();
+    if (refreshedReceipt) {
+      const restored = await this.verifyAppReceiptRestore(refreshedReceipt);
+      if (restored) return [restored];
+    }
+
+    // Lazy init only after the app-receipt restore path fails. Attaching the
+    // listener can replay every stale StoreKit transaction; avoid that unless
+    // we genuinely need the native transaction list fallback.
     if (!this.initialized) {
+      await this.clearDevSandboxQueueBeforeListenerAttach();
       await this.initialize();
     }
-    const refreshedReceipt = await this.refreshReceiptForUserPurchase();
+
     let purchases: Purchase[];
     try {
       purchases = await getAvailablePurchases({
@@ -263,11 +270,7 @@ class IapServiceImpl implements IapService {
       if (!refreshedReceipt) {
         throw err;
       }
-      const restored = await this.verifyRestoredPurchase(
-        [refreshedReceipt],
-        'monthly',
-        '',
-      );
+      const restored = await this.verifyAppReceiptRestore(refreshedReceipt);
       return restored ? [restored] : [];
     }
     const slice = purchases.slice(0, MAX_RESTORE_RECEIPTS);
@@ -499,6 +502,12 @@ class IapServiceImpl implements IapService {
     return plan === 'monthly' ? ['monthly', 'yearly'] : ['yearly', 'monthly'];
   }
 
+  private async verifyAppReceiptRestore(
+    receipt: string,
+  ): Promise<PurchaseReceipt | null> {
+    return this.verifyRestoredPurchase([receipt], 'monthly', '');
+  }
+
   private async verifyRestoredPurchase(
     receiptCandidates: string[],
     initialPlan: RestorablePlan,
@@ -668,29 +677,28 @@ class IapServiceImpl implements IapService {
     return `receipt:${p.productId}:${receipt.slice(0, 64)}`;
   }
 
-  async _devFlushAllPending(): Promise<number> {
+  private async clearDevSandboxQueueBeforeListenerAttach(): Promise<void> {
+    if (!__DEV__ || Platform.OS !== 'ios') return;
+    try {
+      await clearTransactionIOS();
+    } catch (err) {
+      console.warn('[iap-service] dev sandbox preflight cleanup failed', err);
+    }
+  }
+
+  async _devFlushAllPending(): Promise<void> {
     if (!__DEV__) {
       throw new Error('_devFlushAllPending is only allowed in DEV builds');
     }
-    if (!this.initialized) {
-      await this.initialize();
-    }
-    // `automaticallyFinishRestoredTransactions: true` tells react-native-iap
-    // to call finishTransaction on every entry as it walks the queue, which
-    // is exactly the cleanup we want for stale sandbox transactions. We
-    // pass `onlyIncludeActiveItems: false` so expired / cancelled tx are
-    // also drained — those are the ones most likely stuck in queue.
-    let finished = 0;
+    // Do not call initialize() here: attaching purchaseUpdatedListener is what
+    // triggers RN-IAP's native "Purchase Successful" replay storm. The iOS
+    // clearTransaction bridge finishes SKPaymentQueue entries directly.
     try {
-      const purchases = await getAvailablePurchases({
-        automaticallyFinishRestoredTransactions: true,
-        onlyIncludeActiveItems: false,
-      });
-      finished = purchases.length;
+      await clearTransactionIOS();
     } catch (err) {
       console.warn('[iap-service] _devFlushAllPending threw', err);
+      throw err;
     }
-    return finished;
   }
 }
 

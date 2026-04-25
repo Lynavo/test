@@ -628,8 +628,8 @@ export function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const finished = await iapService._devFlushAllPending();
-              Alert.alert(`DEV: Flushed ${finished} transaction(s)`);
+              await iapService._devFlushAllPending();
+              Alert.alert('DEV: IAP queue flush requested');
             } catch (err) {
               Alert.alert(
                 'DEV: Flush failed',
@@ -1011,7 +1011,7 @@ export function SettingsScreen() {
   const accountDisplayValue =
     isPhoneRevealed && rawPhoneIdentifier
       ? rawPhoneIdentifier
-      : primaryIdentity?.display ?? '';
+      : (primaryIdentity?.display ?? '');
 
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
@@ -1095,8 +1095,8 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusDotOnline
                       : isConnecting
-                      ? styles.statusDotConnecting
-                      : styles.statusDotOffline,
+                        ? styles.statusDotConnecting
+                        : styles.statusDotOffline,
                   ]}
                 />
                 <Text
@@ -1105,15 +1105,15 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusTextOnline
                       : isConnecting
-                      ? styles.statusTextConnecting
-                      : styles.statusTextOffline,
+                        ? styles.statusTextConnecting
+                        : styles.statusTextOffline,
                   ]}
                 >
                   {isConnected
                     ? t('settings.connection.online')
                     : isConnecting
-                    ? t('settings.connection.connecting')
-                    : t('settings.connection.offline')}
+                      ? t('settings.connection.connecting')
+                      : t('settings.connection.offline')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1155,8 +1155,8 @@ export function SettingsScreen() {
                 isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
-                  ? t('settings.subscription.trial')
-                  : t('subscription.title')}
+                    ? t('settings.subscription.trial')
+                    : t('subscription.title')}
               </Text>
             </View>
             {isAccountTrial || isSubscriptionIntroTrial ? (
@@ -1480,9 +1480,7 @@ export function SettingsScreen() {
               >
                 <View style={styles.actionRowLeft}>
                   <Icon name="trash-outline" size={18} color={BLUE} />
-                  <Text style={styles.actionRowText}>
-                    DEV: Flush IAP Queue
-                  </Text>
+                  <Text style={styles.actionRowText}>DEV: Flush IAP Queue</Text>
                 </View>
                 <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
               </TouchableOpacity>
