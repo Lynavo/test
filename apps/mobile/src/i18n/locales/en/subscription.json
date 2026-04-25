@@ -75,6 +75,11 @@
     "devBody": "Payment is under development. Stay tuned!",
     "devConfirm": "Got It"
   },
+  "backToLogin": {
+    "title": "Return to Login",
+    "body": "Returning to login will sign you out. Continue?",
+    "confirm": "Return to Login"
+  },
   "gate": {
     "downloadTitle": "Subscription required",
     "downloadBody": "Downloads from the shared folder need an active subscription.",

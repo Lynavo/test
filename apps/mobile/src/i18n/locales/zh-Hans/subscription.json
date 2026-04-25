@@ -75,6 +75,11 @@
     "devBody": "支付功能开发中，敬请期待",
     "devConfirm": "知道了"
   },
+  "backToLogin": {
+    "title": "返回登录页",
+    "body": "返回登录页将会登出当前账号，是否继续？",
+    "confirm": "返回登录"
+  },
   "gate": {
     "downloadTitle": "需要订阅",
     "downloadBody": "下载共享目录的内容需要有效的订阅。",

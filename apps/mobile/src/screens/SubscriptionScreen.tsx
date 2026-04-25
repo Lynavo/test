@@ -42,6 +42,10 @@ import {
   getSubscriptionStatus,
   verifyIapReceipt,
 } from '../services/subscription-service';
+import { logout as serverLogout } from '../services/auth-service';
+import { wipeSyncIdentity } from '../services/SyncEngineModule';
+import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
+import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { FEATURES } from '../constants/features';
 import {
   resolveSubscriptionDisplayState,
@@ -443,7 +447,16 @@ const modalStyles = StyleSheet.create({
 export function SubscriptionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t, i18n } = useTranslation();
-  const { user, subscription, loadSubscription, setSubscription } = useAuth();
+  const {
+    user,
+    subscription,
+    loadSubscription,
+    setSubscription,
+    refreshToken,
+    clearAuth,
+    setSignedOutTransition,
+  } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Which Apple-level plan the user is currently holding (null when on
   // account trial, post-expiry, or no Apple IAP yet). Drives the "目前
@@ -494,7 +507,13 @@ export function SubscriptionScreen() {
   const canExitRootPaywall = isFeatureAccessAllowed(
     subscription?.status ?? user?.status,
   );
-  const showBackButton = navigation.canGoBack() || canExitRootPaywall;
+  // Always render a back affordance. The third branch (Subscription is the
+  // stack root AND status forbids access — i.e. trial_expired / sub_expired
+  // landed straight here from RootNavigator) used to be uncovered, leaving
+  // the user with no way out short of force-killing the app. handleBackPress
+  // resolves that case by logging out and letting RootNavigator remount
+  // UnauthStack onto Login.
+  const showBackButton = true;
 
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -869,6 +888,77 @@ export function SubscriptionScreen() {
     }
   }, [navigation, resetToPostSubscriptionRoute]);
 
+  // Mirrors SettingsScreen.handleLogout ordering — see that file for the
+  // load-bearing rationale: wipeSyncIdentity must run before clearAuth so
+  // the keychain identity is gone before the navigator unmounts AuthedStack;
+  // serverLogout must run before clearAuth so the in-memory access token is
+  // still available to compose the Authorization header.
+  const handleLogoutAndReturnToLogin = useCallback(() => {
+    if (isLoggingOut) return;
+    Alert.alert(
+      t('subscription.backToLogin.title'),
+      t('subscription.backToLogin.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('subscription.backToLogin.confirm'),
+          style: 'destructive',
+          onPress: async () => {
+            if (isLoggingOut) return;
+            setIsLoggingOut(true);
+            const refresh = refreshToken;
+            try {
+              await resetCurrentDesktopSidecarIfReachable();
+            } catch (e) {
+              console.warn(
+                '[Subscription] desktop sidecar reset threw (ignored):',
+                e,
+              );
+            }
+            try {
+              await wipeSyncIdentity();
+            } catch (e) {
+              console.warn(
+                '[Subscription] wipeSyncIdentity failed — aborting logout to avoid residual identity:',
+                e,
+              );
+              Alert.alert(
+                '登出失敗',
+                '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
+              );
+              setIsLoggingOut(false);
+              return;
+            }
+            try {
+              await clearUserScopedStorage();
+            } catch (e) {
+              console.warn(
+                '[Subscription] clearUserScopedStorage failed (ignored):',
+                e,
+              );
+            }
+            if (refresh) {
+              void serverLogout(refresh).catch(e => {
+                console.warn(
+                  '[Subscription] server logout failed (already cleared locally):',
+                  e,
+                );
+              });
+            }
+            setSignedOutTransition('logout');
+            try {
+              clearAuth();
+            } catch (e) {
+              console.warn('[Subscription] local logout error:', e);
+            }
+            // clearAuth triggers RootNavigator to swap to UnauthStack and
+            // unmount this screen, so resetting isLoggingOut is unnecessary.
+          },
+        },
+      ],
+    );
+  }, [clearAuth, isLoggingOut, refreshToken, setSignedOutTransition, t]);
+
   const handleBackPress = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -876,8 +966,19 @@ export function SubscriptionScreen() {
     }
     if (canExitRootPaywall) {
       void resetToPostSubscriptionRoute();
+      return;
     }
-  }, [canExitRootPaywall, navigation, resetToPostSubscriptionRoute]);
+    // Stuck on the expired-subscription paywall (Subscription is the stack
+    // root + status forbids feature access). The only escape that keeps
+    // navigation state coherent is to log out, which triggers RootNavigator
+    // to remount UnauthStack and land the user on Login.
+    handleLogoutAndReturnToLogin();
+  }, [
+    canExitRootPaywall,
+    handleLogoutAndReturnToLogin,
+    navigation,
+    resetToPostSubscriptionRoute,
+  ]);
 
   const subscribeButtonLabel =
     currentPlan === 'yearly'
@@ -895,9 +996,14 @@ export function SubscriptionScreen() {
             activeOpacity={0.6}
             hitSlop={{ top: 15, bottom: 15, left: 15, right: 30 }}
             onPress={handleBackPress}
+            disabled={isLoggingOut}
             accessibilityLabel={t('common.back')}
           >
-            <Icon name="chevron-back" size={20} color={DARK} />
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color={DARK} />
+            ) : (
+              <Icon name="chevron-back" size={20} color={DARK} />
+            )}
           </TouchableOpacity>
         ) : null}
         <Text style={styles.headerTitle}>{t('subscription.title')}</Text>
