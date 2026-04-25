@@ -51,13 +51,19 @@ export function SubscriptionPlanCard({
       style={[
         planStyles.card,
         { width },
-        disabled
-          ? planStyles.cardDisabled
-          : recommended
+        // Layer order matters: recommended decoration first (so it surfaces
+        // when the card is *not* the active selection), selection overlay
+        // wins on top, disabled overrides everything because tapping a
+        // current/downgrade plan is a no-op.
+        !disabled && !selected && recommended
           ? planStyles.cardRecommended
-          : selected
+          : null,
+        !disabled && selected
           ? planStyles.cardSelected
-          : planStyles.cardUnselected,
+          : !disabled && !recommended
+          ? planStyles.cardUnselected
+          : null,
+        disabled ? planStyles.cardDisabled : null,
       ]}
       activeOpacity={0.82}
       onPress={onPress}
@@ -182,7 +188,11 @@ const planStyles = StyleSheet.create({
   },
   cardRecommended: {
     backgroundColor: CARD_BG,
-    borderColor: '#3a3a3d',
+    // Muted accent so the recommended card reads as "elevated default" without
+    // visually shouting over an actually-selected card. PLAN_SELECTED_BORDER
+    // (dark) stays exclusive to the selection state — see render-time priority
+    // above.
+    borderColor: MUTED_TEXT,
     shadowColor: '#1f2937',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
