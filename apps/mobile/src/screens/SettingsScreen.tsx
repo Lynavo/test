@@ -530,84 +530,107 @@ export function SettingsScreen() {
   }, [navigation, syncOverviewState, t]);
 
   const handleUploadDiagnostics = useCallback(() => {
-    Alert.alert(
-      t('settings.uploadDiagnostic.confirm.title'),
-      t('settings.uploadDiagnostic.confirm.message'),
-      [
-        {
-          text: t('settings.uploadDiagnostic.confirm.cancel'),
-          style: 'cancel',
-        },
-        {
-          text: t('settings.uploadDiagnostic.confirm.ok'),
-          onPress: () => {
-            void (async () => {
-              const { NativeSyncEngine } = NativeModules;
-              if (!NativeSyncEngine?.exportDiagnostics) {
-                Alert.alert(
-                  t('settings.dialogs.exportUnavailable.title'),
-                  t('settings.dialogs.exportUnavailable.body'),
-                );
-                return;
+    const startUpload = (rawNote?: string): void => {
+      void (async () => {
+        const { NativeSyncEngine } = NativeModules;
+        if (!NativeSyncEngine?.exportDiagnostics) {
+          Alert.alert(
+            t('settings.dialogs.exportUnavailable.title'),
+            t('settings.dialogs.exportUnavailable.body'),
+          );
+          return;
+        }
+
+        const abortController = new AbortController();
+        diagnosticAbortRef.current = abortController;
+        setDiagnosticUploadProgress(0);
+        setIsUploadingDiagnostics(true);
+
+        try {
+          const archivePath: string =
+            await NativeSyncEngine.exportDiagnostics();
+          const archiveUrl = archivePath.startsWith('file://')
+            ? archivePath
+            : `file://${archivePath}`;
+
+          const clientId = String(await NativeSyncEngine.getClientId());
+          const note = (rawNote ?? '').trim();
+
+          const result = await diagnosticUploadService.upload(
+            archiveUrl,
+            clientId,
+            abortController.signal,
+            (loaded, total) => {
+              if (total > 0) {
+                setDiagnosticUploadProgress(Math.round((loaded / total) * 100));
               }
+            },
+            note || undefined,
+          );
 
-              const abortController = new AbortController();
-              diagnosticAbortRef.current = abortController;
-              setDiagnosticUploadProgress(0);
-              setIsUploadingDiagnostics(true);
+          Clipboard.setString(result.refId);
+          Alert.alert(
+            t('settings.uploadDiagnostic.success.toast', {
+              refId: result.refId,
+            }),
+          );
+        } catch (error) {
+          if (
+            error instanceof DiagnosticUploadError &&
+            error.detail.kind === 'BUNDLE_TOO_LARGE'
+          ) {
+            Alert.alert(t('settings.uploadDiagnostic.tooLarge.toast'));
+          } else if (
+            error instanceof DiagnosticUploadError &&
+            error.detail.kind === 'ABORTED'
+          ) {
+            Alert.alert(t('settings.uploadDiagnostic.aborted.toast'));
+          } else {
+            Alert.alert(t('settings.uploadDiagnostic.failure.toast'));
+          }
+        } finally {
+          diagnosticAbortRef.current = null;
+          setIsUploadingDiagnostics(false);
+          setDiagnosticUploadProgress(0);
+        }
+      })();
+    };
 
-              try {
-                const archivePath: string =
-                  await NativeSyncEngine.exportDiagnostics();
-                const archiveUrl = archivePath.startsWith('file://')
-                  ? archivePath
-                  : `file://${archivePath}`;
-
-                const clientId = String(await NativeSyncEngine.getClientId());
-
-                const result = await diagnosticUploadService.upload(
-                  archiveUrl,
-                  clientId,
-                  abortController.signal,
-                  (loaded, total) => {
-                    if (total > 0) {
-                      setDiagnosticUploadProgress(
-                        Math.round((loaded / total) * 100),
-                      );
-                    }
-                  },
-                );
-
-                Clipboard.setString(result.refId);
-                Alert.alert(
-                  t('settings.uploadDiagnostic.success.toast', {
-                    refId: result.refId,
-                  }),
-                );
-              } catch (error) {
-                if (
-                  error instanceof DiagnosticUploadError &&
-                  error.detail.kind === 'BUNDLE_TOO_LARGE'
-                ) {
-                  Alert.alert(t('settings.uploadDiagnostic.tooLarge.toast'));
-                } else if (
-                  error instanceof DiagnosticUploadError &&
-                  error.detail.kind === 'ABORTED'
-                ) {
-                  Alert.alert(t('settings.uploadDiagnostic.aborted.toast'));
-                } else {
-                  Alert.alert(t('settings.uploadDiagnostic.failure.toast'));
-                }
-              } finally {
-                diagnosticAbortRef.current = null;
-                setIsUploadingDiagnostics(false);
-                setDiagnosticUploadProgress(0);
-              }
-            })();
+    // Alert.prompt is iOS-only; fall back to Alert.alert (without the input
+    // field) on platforms where it isn't available so the upload still works.
+    if (Platform.OS === 'ios' && typeof Alert.prompt === 'function') {
+      Alert.prompt(
+        t('settings.uploadDiagnostic.confirm.title'),
+        t('settings.uploadDiagnostic.confirm.message'),
+        [
+          {
+            text: t('settings.uploadDiagnostic.confirm.cancel'),
+            style: 'cancel',
           },
-        },
-      ],
-    );
+          {
+            text: t('settings.uploadDiagnostic.confirm.ok'),
+            onPress: (note?: string) => startUpload(note),
+          },
+        ],
+        'plain-text',
+        '',
+      );
+    } else {
+      Alert.alert(
+        t('settings.uploadDiagnostic.confirm.title'),
+        t('settings.uploadDiagnostic.confirm.message'),
+        [
+          {
+            text: t('settings.uploadDiagnostic.confirm.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('settings.uploadDiagnostic.confirm.ok'),
+            onPress: () => startUpload(),
+          },
+        ],
+      );
+    }
   }, [auth.user?.id, t]);
 
   // DEV-only: drain stale sandbox transactions from SKPaymentQueue.
@@ -1011,7 +1034,7 @@ export function SettingsScreen() {
   const accountDisplayValue =
     isPhoneRevealed && rawPhoneIdentifier
       ? rawPhoneIdentifier
-      : (primaryIdentity?.display ?? '');
+      : primaryIdentity?.display ?? '';
 
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
@@ -1095,8 +1118,8 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusDotOnline
                       : isConnecting
-                        ? styles.statusDotConnecting
-                        : styles.statusDotOffline,
+                      ? styles.statusDotConnecting
+                      : styles.statusDotOffline,
                   ]}
                 />
                 <Text
@@ -1105,15 +1128,15 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusTextOnline
                       : isConnecting
-                        ? styles.statusTextConnecting
-                        : styles.statusTextOffline,
+                      ? styles.statusTextConnecting
+                      : styles.statusTextOffline,
                   ]}
                 >
                   {isConnected
                     ? t('settings.connection.online')
                     : isConnecting
-                      ? t('settings.connection.connecting')
-                      : t('settings.connection.offline')}
+                    ? t('settings.connection.connecting')
+                    : t('settings.connection.offline')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1155,8 +1178,8 @@ export function SettingsScreen() {
                 isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
-                    ? t('settings.subscription.trial')
-                    : t('subscription.title')}
+                  ? t('settings.subscription.trial')
+                  : t('subscription.title')}
               </Text>
             </View>
             {isAccountTrial || isSubscriptionIntroTrial ? (
