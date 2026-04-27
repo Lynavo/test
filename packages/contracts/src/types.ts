@@ -47,6 +47,12 @@ export interface DashboardDeviceDTO {
   status: DeviceDashboardStatus;
   todayFileCount: number;
   todayBytes: number;
+  /** Most recent local ledger date that still has visible files, YYYY-MM-DD */
+  latestDate?: string;
+  /** File count for latestDate, used when today's count is zero */
+  latestFileCount?: number;
+  /** Byte count for latestDate, used when today's count is zero */
+  latestBytes?: number;
   /** Pre-formatted display value such as "1.2 TB" */
   storageLeft: string;
   /** Receive root used to resolve per-file relative paths */
@@ -77,12 +83,7 @@ export interface DeviceFileLedgerDTO {
   finalPath?: string;
 }
 
-export type DeviceFileSortField =
-  | 'name'
-  | 'size'
-  | 'completedAt'
-  | 'createdAt'
-  | 'duration';
+export type DeviceFileSortField = 'name' | 'size' | 'completedAt' | 'createdAt' | 'duration';
 
 export type SortDirection = 'asc' | 'desc';
 
