@@ -38,6 +38,15 @@ jest.mock('../subscription-service', () => ({
   getSubscriptionStatus: jest.fn(),
 }));
 
+const mockGetSubscriptionProductPlans = jest.fn();
+const mockResolveSubscriptionProductPlan = jest.fn();
+jest.mock('../subscription-plans-service', () => ({
+  getSubscriptionProductPlans: (...args: unknown[]) =>
+    mockGetSubscriptionProductPlans(...args),
+  resolveSubscriptionProductPlan: (...args: unknown[]) =>
+    mockResolveSubscriptionProductPlan(...args),
+}));
+
 import { iapService } from '../iap-service';
 
 function deferred<T>() {
@@ -164,6 +173,23 @@ describe('iapService — lifecycle', () => {
 import { getReceiptIOS, requestSubscription } from 'react-native-iap';
 import { ALL_PRODUCT_IDS, IAP_PRODUCTS } from '../../constants/iap';
 
+const bootstrapProductPlans = [
+  { productId: IAP_PRODUCTS.monthly, plan: 'monthly' as const },
+  { productId: IAP_PRODUCTS.yearlyPromo, plan: 'yearly' as const },
+  { productId: IAP_PRODUCTS.yearly, plan: 'yearly' as const },
+];
+const adminMonthlySku = 'admin.catalog.alpha';
+
+function mockDefaultCatalogPlanResolvers(): void {
+  mockGetSubscriptionProductPlans.mockResolvedValue(bootstrapProductPlans);
+  mockResolveSubscriptionProductPlan.mockImplementation((productId: string) =>
+    Promise.resolve(
+      bootstrapProductPlans.find(entry => entry.productId === productId)
+        ?.plan ?? null,
+    ),
+  );
+}
+
 describe('iapService — purchase', () => {
   let updatedCb: ((p: any) => void) | null = null;
   let errorCb: ((e: any) => void) | null = null;
@@ -175,6 +201,7 @@ describe('iapService — purchase', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (getSubscriptions as jest.Mock).mockImplementation(({ skus }) =>
       Promise.resolve(skus.map((productId: string) => ({ productId }))),
     );
@@ -406,6 +433,7 @@ describe('iapService — orphan recovery', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (purchaseUpdatedListener as jest.Mock).mockImplementation(cb => {
       updatedCb = cb;
       return { remove: jest.fn() };
@@ -434,7 +462,39 @@ describe('iapService — orphan recovery', () => {
 
     await new Promise<void>(r => setImmediate(r));
 
-    expect(verifyIapReceipt).toHaveBeenCalledWith('BLOB', 'monthly');
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'BLOB',
+      'monthly',
+      IAP_PRODUCTS.monthly,
+      'tx_orphan_1',
+    );
+    expect(finishTxMock).toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  test('orphan verifies an admin catalog SKU without monthly/yearly in product id', async () => {
+    mockResolveSubscriptionProductPlan.mockImplementation((productId: string) =>
+      Promise.resolve(productId === adminMonthlySku ? 'monthly' : null),
+    );
+    (verifyIapReceipt as jest.Mock).mockResolvedValueOnce(undefined);
+    const listener = jest.fn();
+    iapService.onOrphanPurchaseVerified(listener);
+
+    updatedCb?.({
+      productId: adminMonthlySku,
+      transactionReceipt: 'ADMIN_ORPHAN_RECEIPT',
+      transactionId: 'tx_admin_orphan',
+    });
+
+    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
+
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'ADMIN_ORPHAN_RECEIPT',
+      'monthly',
+      adminMonthlySku,
+      'tx_admin_orphan',
+    );
     expect(finishTxMock).toHaveBeenCalled();
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -477,7 +537,10 @@ describe('iapService — orphan recovery', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  test('orphan with unknown productId → finish immediately, no verify call', async () => {
+  test('orphan with unknown productId → tries server mapping and defers finish on mismatch', async () => {
+    (verifyIapReceipt as jest.Mock).mockRejectedValue(
+      new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+    );
     const listener = jest.fn();
     iapService.onOrphanPurchaseVerified(listener);
 
@@ -488,9 +551,21 @@ describe('iapService — orphan recovery', () => {
     });
 
     await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
 
-    expect(verifyIapReceipt).not.toHaveBeenCalled();
-    expect(finishTxMock).toHaveBeenCalled();
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'BLOB',
+      'monthly',
+      'com.other.garbage',
+      'tx_orphan_4',
+    );
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'BLOB',
+      'yearly',
+      'com.other.garbage',
+      'tx_orphan_4',
+    );
+    expect(finishTxMock).not.toHaveBeenCalled();
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -572,6 +647,7 @@ describe('iapService — dev queue flush', () => {
 describe('iapService — dev preflight cleanup', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (getSubscriptions as jest.Mock).mockImplementation(({ skus }) =>
       Promise.resolve(skus.map((productId: string) => ({ productId }))),
     );
@@ -613,6 +689,7 @@ describe('iapService — dev preflight cleanup', () => {
 describe('iapService — checkEligibility', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (purchaseUpdatedListener as jest.Mock).mockReturnValue({
       remove: jest.fn(),
     });
@@ -687,6 +764,7 @@ describe('iapService — purchase product preflight', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (purchaseUpdatedListener as jest.Mock).mockImplementation(cb => {
       updatedCb = cb;
       return { remove: jest.fn() };
@@ -728,6 +806,33 @@ describe('iapService — purchase product preflight', () => {
     });
   });
 
+  test('allows purchasing an admin catalog SKU that is not in bootstrap constants', async () => {
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([
+      { productId: adminMonthlySku },
+    ]);
+
+    const pending = iapService.purchase(adminMonthlySku);
+    await flushPurchasePreflight();
+
+    expect(getSubscriptions).toHaveBeenCalledWith({
+      skus: [adminMonthlySku],
+    });
+    expect(requestSubscription).toHaveBeenCalledWith({
+      sku: adminMonthlySku,
+    });
+
+    updatedCb?.({
+      productId: adminMonthlySku,
+      transactionReceipt: 'ADMIN_RECEIPT',
+      transactionId: 'tx_admin_purchase',
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      productId: adminMonthlySku,
+      transactionReceipt: 'ADMIN_RECEIPT',
+    });
+  });
+
   test('rejects before native purchase when StoreKit does not return the selected SKU', async () => {
     (getSubscriptions as jest.Mock).mockResolvedValueOnce([]);
 
@@ -744,6 +849,7 @@ describe('iapService — purchase product preflight', () => {
 describe('iapService — restore', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDefaultCatalogPlanResolvers();
     (getReceiptIOS as jest.Mock).mockReset().mockResolvedValue(null);
     (getAvailablePurchases as jest.Mock).mockReset().mockResolvedValue([]);
     (verifyIapReceipt as jest.Mock).mockReset().mockResolvedValue(undefined);
@@ -772,7 +878,7 @@ describe('iapService — restore', () => {
         transactionId: 'tx_1',
       },
       {
-        productId: IAP_PRODUCTS.yearly,
+        productId: IAP_PRODUCTS.yearlyPromo,
         transactionReceipt: 'R2',
         transactionId: 'tx_2',
       },
@@ -817,11 +923,59 @@ describe('iapService — restore', () => {
       )
       .mockRejectedValueOnce(
         new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
       );
 
     const res = await iapService.restore();
     expect(res).toHaveLength(0);
     expect(finishTxMock).not.toHaveBeenCalled();
+  });
+
+  test('native restore verifies inactive catalog SKU instead of skipping it', async () => {
+    const inactiveSku = 'admin.inactive.legacy';
+    mockResolveSubscriptionProductPlan.mockResolvedValueOnce(null);
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: inactiveSku,
+        transactionReceipt: 'R_LEGACY',
+        transactionId: 'tx_legacy',
+      },
+    ]);
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockResolvedValueOnce(undefined);
+
+    const res = await iapService.restore();
+
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      1,
+      'R_LEGACY',
+      'monthly',
+      inactiveSku,
+      'tx_legacy',
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      2,
+      'R_LEGACY',
+      'yearly',
+      inactiveSku,
+      'tx_legacy',
+    );
+    expect(res).toEqual([
+      {
+        productId: inactiveSku,
+        transactionReceipt: 'R_LEGACY',
+        transactionId: 'tx_legacy',
+      },
+    ]);
+    expect(finishTxMock).toHaveBeenCalledWith({
+      purchase: { transactionId: 'tx_legacy' },
+      isConsumable: false,
+    });
   });
 
   test('2005 bound-to-other restore error is propagated', async () => {
@@ -857,15 +1011,19 @@ describe('iapService — restore', () => {
       1,
       'FRESH_YEARLY_RECEIPT',
       'monthly',
+      IAP_PRODUCTS.monthly,
+      '',
     );
     expect(verifyIapReceipt).toHaveBeenNthCalledWith(
       2,
       'FRESH_YEARLY_RECEIPT',
       'yearly',
+      IAP_PRODUCTS.yearlyPromo,
+      '',
     );
     expect(res).toEqual([
       {
-        productId: IAP_PRODUCTS.yearly,
+        productId: IAP_PRODUCTS.yearlyPromo,
         transactionReceipt: 'FRESH_YEARLY_RECEIPT',
         transactionId: '',
       },
@@ -889,15 +1047,19 @@ describe('iapService — restore', () => {
       1,
       'FRESH_YEARLY_RECEIPT',
       'monthly',
+      IAP_PRODUCTS.monthly,
+      '',
     );
     expect(verifyIapReceipt).toHaveBeenNthCalledWith(
       2,
       'FRESH_YEARLY_RECEIPT',
       'yearly',
+      IAP_PRODUCTS.yearlyPromo,
+      '',
     );
     expect(res).toEqual([
       {
-        productId: IAP_PRODUCTS.yearly,
+        productId: IAP_PRODUCTS.yearlyPromo,
         transactionReceipt: 'FRESH_YEARLY_RECEIPT',
         transactionId: '',
       },
@@ -926,6 +1088,37 @@ describe('iapService — restore', () => {
     const res = await iapService.restore();
     expect(res).toHaveLength(1); // only yearly succeeded
     expect(finishTxMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('restore verifies an admin catalog SKU without monthly/yearly in product id', async () => {
+    mockGetSubscriptionProductPlans.mockResolvedValueOnce([
+      { productId: adminMonthlySku, plan: 'monthly' },
+    ]);
+    mockResolveSubscriptionProductPlan.mockResolvedValueOnce('monthly');
+    (getAvailablePurchases as jest.Mock).mockResolvedValueOnce([
+      {
+        productId: adminMonthlySku,
+        transactionReceipt: 'ADMIN_RESTORE_RECEIPT',
+        transactionId: 'tx_admin_restore',
+      },
+    ]);
+
+    const res = await iapService.restore();
+
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'ADMIN_RESTORE_RECEIPT',
+      'monthly',
+      adminMonthlySku,
+      'tx_admin_restore',
+    );
+    expect(res).toEqual([
+      {
+        productId: adminMonthlySku,
+        transactionReceipt: 'ADMIN_RESTORE_RECEIPT',
+        transactionId: 'tx_admin_restore',
+      },
+    ]);
+    expect(finishTxMock).toHaveBeenCalled();
   });
 
   test('caps at MAX_RESTORE_RECEIPTS=10', async () => {

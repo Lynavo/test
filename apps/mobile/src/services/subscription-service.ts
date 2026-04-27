@@ -51,15 +51,21 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
 export async function verifyIapReceipt(
   receiptData: string,
   plan: string,
+  productId: string,
+  transactionId = '',
 ): Promise<void> {
   recordDiagnosticsLog('SubscriptionAPI', 'verify request', {
     plan,
     hasReceipt: receiptData.length > 0,
+    hasTransactionId: transactionId.length > 0,
+    productId,
   });
   try {
     await apiPost<Record<string, never>>('/subscription/verify', {
       receipt_data: receiptData,
       plan,
+      transaction_id: transactionId || undefined,
+      product_id: productId,
     });
     recordDiagnosticsLog('SubscriptionAPI', 'verify success', { plan });
   } catch (error) {

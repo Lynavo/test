@@ -34,11 +34,7 @@ import {
 } from '../components/SubscriptionStatusIcon';
 import { isFeatureAccessAllowed, useAuth } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
-import {
-  ALL_PRODUCT_IDS,
-  productIdToPlan,
-  type IapProductId,
-} from '../constants/iap';
+import { resolveSubscriptionPlanTier } from '../services/subscription-plans-service';
 import {
   useSubscriptionPlans,
   type PlanWithProduct,
@@ -63,6 +59,7 @@ import {
   resolveSubscriptionDisplayState,
   type SubscriptionDisplayState,
 } from '../utils/subscriptionStatusDisplay';
+import { ERROR_CODE } from '../services/api';
 
 const DARK = '#202022';
 const SCREEN_BG = '#d6ecf8';
@@ -104,12 +101,6 @@ export function resolveCurrentPlan(
   return null;
 }
 type PlanKey = 'monthly' | 'yearly';
-
-const KNOWN_IAP_SKUS: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
-
-function isKnownIapProductId(productId: string): productId is IapProductId {
-  return KNOWN_IAP_SKUS.has(productId);
-}
 
 function isDowngradePlan(
   currentPlan: PlanKey | null,
@@ -482,7 +473,8 @@ export function SubscriptionScreen() {
   // first plan once the catalog resolves. Keying by product_id (instead of
   // the legacy 'monthly' | 'yearly' enum) lets us render N plans driven by
   // the server catalog while still mapping back to backend tier semantics
-  // via productIdToPlan() for downgrade checks and verify-receipt calls.
+  // via the catalog `plan` / `tier` field for downgrade checks and
+  // verify-receipt calls.
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null,
   );
@@ -655,7 +647,7 @@ export function SubscriptionScreen() {
   );
   const selectedPlanTier = useMemo<PlanKey | null>(() => {
     if (!selectedEntry) return null;
-    return productIdToPlan(selectedEntry.plan.product_id);
+    return resolveSubscriptionPlanTier(selectedEntry.plan);
   }, [selectedEntry]);
   const selectedPlanIsCurrent =
     currentPlan != null &&
@@ -669,7 +661,7 @@ export function SubscriptionScreen() {
     if (!selectedPlanIsCurrent && !selectedPlanIsDowngrade) return;
     // Find an alternative — preferring recommended, otherwise first non-self.
     const alternative = plans.find(entry => {
-      const tier = productIdToPlan(entry.plan.product_id);
+      const tier = resolveSubscriptionPlanTier(entry.plan);
       if (tier == null) return false;
       if (currentPlan != null && tier === currentPlan) return false;
       if (isDowngradePlan(currentPlan, tier)) return false;
@@ -870,24 +862,6 @@ export function SubscriptionScreen() {
         console.warn('[subscription] preflight refresh failed', err);
       }
 
-      if (!isKnownIapProductId(targetProductId)) {
-        // Defensive: server returned a SKU we don't know how to verify.
-        // Hook already filters unknown SKUs from StoreKit lookup, but
-        // re-narrow here so iapService.purchase gets a typed productId.
-        console.warn(
-          '[subscription] cannot purchase unknown product_id',
-          targetProductId,
-        );
-        recordDiagnosticsLog(
-          'SubscriptionScreen',
-          'subscribe unknown product',
-          {
-            productId: targetProductId,
-          },
-        );
-        Alert.alert(t('subscription.errors.productMismatch'));
-        return;
-      }
       const receipt = await iapService.purchase(targetProductId);
       recordDiagnosticsLog('SubscriptionScreen', 'purchase resolved', {
         productId: receipt.productId,
@@ -917,7 +891,12 @@ export function SubscriptionScreen() {
       for (const delay of delays) {
         if (delay > 0) await new Promise<void>(r => setTimeout(r, delay));
         try {
-          await verifyIapReceipt(receiptData, targetTier);
+          await verifyIapReceipt(
+            receiptData,
+            targetTier,
+            targetProductId,
+            receipt.transactionId,
+          );
           verified = true;
           recordDiagnosticsLog('SubscriptionScreen', 'verify success', {
             targetTier,
@@ -944,6 +923,12 @@ export function SubscriptionScreen() {
             break;
           }
           if (cls.kind === IapErrorClass.FatalMismatch) {
+            const isProductIdMismatch =
+              typeof err === 'object' &&
+              err !== null &&
+              'code' in err &&
+              (err as { code?: unknown }).code ===
+                ERROR_CODE.PRODUCT_ID_MISMATCH;
             if (shouldRefreshReceiptOnMismatch && !refreshedAfterMismatch) {
               // StoreKit can briefly expose the previous subscription-group
               // receipt after a plan switch or return the old SKU in the
@@ -968,6 +953,21 @@ export function SubscriptionScreen() {
                 lastErr = err;
                 continue;
               }
+            }
+            if (shouldRefreshReceiptOnMismatch && isProductIdMismatch) {
+              recordDiagnosticsLog(
+                'SubscriptionScreen',
+                'verify product mismatch deferred finish',
+                {
+                  targetTier,
+                  targetProductId,
+                  receiptProductId: receipt.productId,
+                  isPlanSwitch,
+                  receiptProductMatchesSelection,
+                },
+              );
+              Alert.alert(t('subscription.errors.verifyRetrying'));
+              return;
             }
             await iapService.finishTransaction(receipt.transactionId);
             recordDiagnosticsLog(
@@ -1220,8 +1220,8 @@ export function SubscriptionScreen() {
     currentPlan === 'yearly'
       ? t('subscription.actions.currentYearly')
       : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
-      ? t('subscription.actions.switchPlan')
-      : t('subscription.actions.subscribe');
+        ? t('subscription.actions.switchPlan')
+        : t('subscription.actions.subscribe');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -1291,7 +1291,7 @@ export function SubscriptionScreen() {
             const product = entry.product;
             // entry.product is non-null here — `plans` filtered out null
             // products above. Cast keeps TS happy without an extra guard.
-            const tier = productIdToPlan(entry.plan.product_id);
+            const tier = resolveSubscriptionPlanTier(entry.plan);
             const cardIsCurrent = tier != null && currentPlan === tier;
             const cardIsDowngrade =
               tier != null && isDowngradePlan(currentPlan, tier);

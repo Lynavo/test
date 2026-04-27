@@ -76,6 +76,11 @@ jest.mock('../../services/subscription-plans-service', () => ({
   subscriptionPlansService: {
     fetchPlans: jest.fn(),
   },
+  resolveSubscriptionPlanTier: (plan: { plan?: string; tier?: string }) => {
+    if (plan.plan === 'monthly' || plan.plan === 'yearly') return plan.plan;
+    if (plan.tier === 'monthly' || plan.tier === 'yearly') return plan.tier;
+    return null;
+  },
   // Hook imports `buildBootstrapPlans` and `buildBootstrapProducts` to seed
   // initial render. Empty seeds are fine here because all assertions wait
   // for `loading: false` before checking — by then `fetchPlans` mock has
@@ -172,6 +177,7 @@ function makePlan(
   const platform: SubscriptionPlanPlatform = 'ios';
   return {
     name: 'Plan',
+    plan: 'monthly',
     description: '',
     badges: [],
     recommended: false,
@@ -187,6 +193,7 @@ function makePlan(
 const monthlyPlan: SubscriptionPlanDto = makePlan({
   id: 1,
   product_id: IAP_PRODUCTS.monthly,
+  plan: 'monthly',
   name: '月度方案',
   description: '按月訂閱',
   sort_order: 10,
@@ -195,6 +202,7 @@ const monthlyPlan: SubscriptionPlanDto = makePlan({
 const yearlyPlan: SubscriptionPlanDto = makePlan({
   id: 2,
   product_id: IAP_PRODUCTS.yearly,
+  plan: 'yearly',
   name: '年度方案',
   description: '一年無限同步',
   badges: ['8.8 折'],
@@ -218,6 +226,27 @@ const yearlyProduct: IapProductSummary = {
   priceAmount: 104,
   currency: 'CNY',
   periodUnit: 'YEAR',
+  periodCount: 1,
+  eligibleForIntroOffer: false,
+};
+
+const adminMonthlySku = 'admin.catalog.alpha';
+const adminMonthlyPlan: SubscriptionPlanDto = makePlan({
+  id: 10,
+  product_id: adminMonthlySku,
+  plan: 'monthly',
+  name: 'Admin 月費',
+  description: '後台設定 SKU',
+  recommended: true,
+  sort_order: 5,
+});
+
+const adminMonthlyProduct: IapProductSummary = {
+  productId: adminMonthlySku,
+  displayPrice: '¥12.00',
+  priceAmount: 12,
+  currency: 'CNY',
+  periodUnit: 'MONTH',
   periodCount: 1,
   eligibleForIntroOffer: false,
 };
@@ -345,6 +374,39 @@ describe('SubscriptionScreen', () => {
     );
   });
 
+  test('renders and purchases an admin catalog SKU without monthly/yearly in the product id', async () => {
+    mockCatalog([adminMonthlyPlan], [adminMonthlyProduct]);
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: adminMonthlySku,
+      transactionReceipt: 'ADMIN_RECEIPT',
+      transactionId: 'tx_admin',
+    });
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-04-28T00:00:00Z',
+      trialEnd: null,
+    });
+
+    const { findByText } = renderScreen();
+    expect(await findByText('Admin 月費')).toBeTruthy();
+    expect(await findByText('¥12.00')).toBeTruthy();
+
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() =>
+      expect(iapService.purchase).toHaveBeenCalledWith(adminMonthlySku),
+    );
+    await waitFor(() =>
+      expect(verifyIapReceipt).toHaveBeenCalledWith(
+        'ADMIN_RECEIPT',
+        'monthly',
+        adminMonthlySku,
+        'tx_admin',
+      ),
+    );
+  });
+
   test('refreshes receipt before surfacing mismatch when StoreKit returns the previous SKU', async () => {
     // Arrange: user selects yearly, but StoreKit resolves the purchase event
     // with the previous monthly SKU. This happens in sandbox during
@@ -372,6 +434,7 @@ describe('SubscriptionScreen', () => {
 
     // Act
     const { findByText } = renderScreen();
+    await findByText('年度方案');
     fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
 
     // Assert: first verify uses the stale receipt, then we refresh and retry
@@ -391,14 +454,65 @@ describe('SubscriptionScreen', () => {
       1,
       'OLD_MONTHLY_RECEIPT',
       'yearly',
+      IAP_PRODUCTS.yearly,
+      'tx_1',
     );
     expect(verifyIapReceipt).toHaveBeenNthCalledWith(
       2,
       'FRESH_YEARLY_RECEIPT',
       'yearly',
+      IAP_PRODUCTS.yearly,
+      'tx_1',
     );
     expect(Alert.alert).not.toHaveBeenCalledWith(
-      expect.stringMatching(/产品设置有误|產品設定有誤|Product configuration error/),
+      expect.stringMatching(
+        /产品设置有误|產品設定有誤|Product configuration error/,
+      ),
+    );
+  });
+
+  test('does not finish transaction when product mismatch still looks like a stale StoreKit receipt', async () => {
+    // Arrange: StoreKit returns the old monthly SKU after the user selected
+    // yearly. Even after one app-receipt refresh, backend still sees 2003.
+    // This should remain retryable/redeliverable instead of finishing the paid
+    // transaction and losing Apple's chance to redeliver it.
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'OLD_MONTHLY_RECEIPT',
+      transactionId: 'tx_1',
+    });
+    (iapService.refreshReceipt as jest.Mock).mockResolvedValueOnce(
+      'FRESH_APP_RECEIPT',
+    );
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      );
+
+    // Act
+    const { findByText } = renderScreen();
+    await findByText('年度方案');
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    // Assert: refresh once, surface "still verifying", and leave the
+    // transaction unfinished so StoreKit can redeliver / user can retry.
+    await waitFor(
+      () => expect(iapService.refreshReceipt).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () => expect(Alert.alert).toHaveBeenCalledWith('正在验证付款...'),
+      { timeout: 5000 },
+    );
+    expect(iapService.finishTransaction).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      expect.stringMatching(
+        /产品设置有误|產品設定有誤|Product configuration error/,
+      ),
     );
   });
 

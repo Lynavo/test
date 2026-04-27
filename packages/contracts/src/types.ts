@@ -256,6 +256,7 @@ export interface SharedDirectoryDTO {
  * parse error.
  */
 export type SubscriptionPlanPlatform = 'ios' | 'android';
+export type SubscriptionPlanTier = 'monthly' | 'yearly';
 
 /**
  * Server-controlled paywall entry. Returned by GET /api/v1/subscription/plans.
@@ -271,6 +272,8 @@ export interface SubscriptionPlanDto {
   id: number;
   /** Apple IAP product identifier, e.g. "com.vividrop.mobile.china.monthly.999". */
   product_id: string;
+  /** Backend entitlement tier this SKU grants. Configured by admin, not inferred from SKU text. */
+  plan: SubscriptionPlanTier;
   platform: SubscriptionPlanPlatform;
   /** Display name for the card header (Chinese by default). */
   name: string;
