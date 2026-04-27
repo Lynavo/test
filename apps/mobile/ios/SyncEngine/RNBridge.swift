@@ -366,6 +366,11 @@ class NativeSyncEngineModule: RCTEventEmitter {
     }
 
     @objc
+    func recordDiagnosticsLog(_ category: NSString, message: NSString) {
+        syncDiagnosticsLog(String(category), String(message))
+    }
+
+    @objc
     func uploadDiagnosticsArchive(_ params: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         guard let urlString = params["url"] as? String,
               let uploadURL = URL(string: urlString),

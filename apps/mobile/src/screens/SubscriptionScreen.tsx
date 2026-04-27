@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -10,6 +16,7 @@ import {
   ActivityIndicator,
   Dimensions,
   NativeModules,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -46,6 +53,11 @@ import { logout as serverLogout } from '../services/auth-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
+import {
+  DiagnosticUploadError,
+  diagnosticUploadService,
+} from '../services/diagnostic-upload-service';
+import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
 import { FEATURES } from '../constants/features';
 import {
   resolveSubscriptionDisplayState,
@@ -457,6 +469,8 @@ export function SubscriptionScreen() {
     setSignedOutTransition,
   } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
+  const diagnosticAbortRef = useRef<AbortController | null>(null);
 
   // Which Apple-level plan the user is currently holding (null when on
   // account trial, post-expiry, or no Apple IAP yet). Drives the "目前
@@ -484,14 +498,29 @@ export function SubscriptionScreen() {
     null,
   );
 
+  useEffect(
+    () => () => {
+      diagnosticAbortRef.current?.abort();
+    },
+    [],
+  );
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      recordDiagnosticsLog('SubscriptionScreen', 'focus refresh start');
       void getSubscriptionStatus()
         .then(info => {
+          recordDiagnosticsLog('SubscriptionScreen', 'focus refresh success', {
+            status: info.status,
+            plan: info.plan,
+          });
           if (!cancelled) setSubscription(info);
         })
         .catch(err => {
+          recordDiagnosticsLog('SubscriptionScreen', 'focus refresh failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
           console.warn('[subscription] refresh on focus failed', err);
         });
       return () => {
@@ -653,22 +682,113 @@ export function SubscriptionScreen() {
 
   const handleRestore = useCallback(async () => {
     if (!FEATURES.IAP_ENABLED || !FEATURES.IAP_RESTORE_ENABLED) return;
+    recordDiagnosticsLog('SubscriptionScreen', 'restore start');
     setIsRestoring(true);
     try {
       const restored = await iapService.restore();
+      recordDiagnosticsLog('SubscriptionScreen', 'restore result', {
+        count: restored.length,
+      });
       if (restored.length === 0) {
         Alert.alert(t('subscription.restore.empty'));
         return;
       }
       await loadSubscription();
+      recordDiagnosticsLog('SubscriptionScreen', 'restore success');
       Alert.alert(t('subscription.restore.success'));
     } catch (err) {
       const cls = classifyIapError(err);
+      recordDiagnosticsLog('SubscriptionScreen', 'restore failed', {
+        kind: cls.kind,
+        i18nKey: cls.i18nKey,
+      });
       Alert.alert(t((cls.i18nKey ?? 'subscription.restore.failed') as never));
     } finally {
       setIsRestoring(false);
     }
   }, [t, loadSubscription]);
+
+  const handleUploadDiagnostics = useCallback(() => {
+    if (isUploadingDiagnostics) return;
+    recordDiagnosticsLog('SubscriptionScreen', 'diagnostics upload start');
+
+    void (async () => {
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine?.exportDiagnostics) {
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics export unavailable',
+        );
+        Alert.alert(
+          t('subscription.diagnostics.unavailableTitle'),
+          t('subscription.diagnostics.unavailableBody'),
+        );
+        return;
+      }
+
+      const abortController = new AbortController();
+      diagnosticAbortRef.current = abortController;
+      setIsUploadingDiagnostics(true);
+
+      try {
+        const archivePath: string = await NativeSyncEngine.exportDiagnostics();
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics export success',
+        );
+        const archiveUrl = archivePath.startsWith('file://')
+          ? archivePath
+          : `file://${archivePath}`;
+        const clientId = String(await NativeSyncEngine.getClientId());
+        const result = await diagnosticUploadService.upload(
+          archiveUrl,
+          clientId,
+          abortController.signal,
+          undefined,
+          'subscription-screen',
+        );
+
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics upload success',
+          {
+            refId: result.refId,
+          },
+        );
+        Clipboard.setString(result.refId);
+        Alert.alert(
+          t('subscription.diagnostics.successTitle'),
+          t('subscription.diagnostics.successBody', {
+            refId: result.refId,
+          }),
+        );
+      } catch (error) {
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics upload failed',
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        if (
+          error instanceof DiagnosticUploadError &&
+          error.detail.kind === 'BUNDLE_TOO_LARGE'
+        ) {
+          Alert.alert(t('subscription.diagnostics.tooLarge'));
+        } else if (
+          error instanceof DiagnosticUploadError &&
+          error.detail.kind === 'ABORTED'
+        ) {
+          Alert.alert(t('subscription.diagnostics.aborted'));
+        } else {
+          Alert.alert(t('subscription.diagnostics.failure'));
+        }
+      } finally {
+        diagnosticAbortRef.current = null;
+        setIsUploadingDiagnostics(false);
+      }
+    })();
+  }, [isUploadingDiagnostics, t]);
 
   const handleSubscribe = useCallback(async () => {
     if (!selectedEntry || selectedPlanTier == null) {
@@ -679,15 +799,29 @@ export function SubscriptionScreen() {
     }
     const targetProductId = selectedEntry.plan.product_id;
     const targetTier = selectedPlanTier;
+    recordDiagnosticsLog('SubscriptionScreen', 'subscribe start', {
+      productId: targetProductId,
+      targetTier,
+      currentPlan,
+    });
 
     if (
       (currentPlan != null && targetTier === currentPlan) ||
       isDowngradePlan(currentPlan, targetTier)
     ) {
+      recordDiagnosticsLog('SubscriptionScreen', 'subscribe blocked current', {
+        productId: targetProductId,
+        targetTier,
+        currentPlan,
+      });
       return;
     }
 
     if (!FEATURES.IAP_ENABLED) {
+      recordDiagnosticsLog(
+        'SubscriptionScreen',
+        'subscribe blocked iap disabled',
+      );
       Alert.alert(
         t('subscription.alert.devTitle'),
         t('subscription.alert.devBody'),
@@ -702,13 +836,37 @@ export function SubscriptionScreen() {
         const fresh = await getSubscriptionStatus();
         setSubscription(fresh);
         const freshPlan = resolveCurrentPlan(fresh);
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'subscribe preflight status',
+          {
+            status: fresh.status,
+            plan: fresh.plan,
+            freshPlan,
+          },
+        );
         if (
           (freshPlan != null && targetTier === freshPlan) ||
           isDowngradePlan(freshPlan, targetTier)
         ) {
+          recordDiagnosticsLog(
+            'SubscriptionScreen',
+            'subscribe blocked by preflight',
+            {
+              targetTier,
+              freshPlan,
+            },
+          );
           return;
         }
       } catch (err) {
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'subscribe preflight failed',
+          {
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
         console.warn('[subscription] preflight refresh failed', err);
       }
 
@@ -720,12 +878,29 @@ export function SubscriptionScreen() {
           '[subscription] cannot purchase unknown product_id',
           targetProductId,
         );
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'subscribe unknown product',
+          {
+            productId: targetProductId,
+          },
+        );
         Alert.alert(t('subscription.errors.productMismatch'));
         return;
       }
       const receipt = await iapService.purchase(targetProductId);
+      recordDiagnosticsLog('SubscriptionScreen', 'purchase resolved', {
+        productId: receipt.productId,
+        hasReceipt: receipt.transactionReceipt.length > 0,
+        hasTransactionId: receipt.transactionId.length > 0,
+      });
       let receiptData = receipt.transactionReceipt;
       const isPlanSwitch = currentPlan != null && currentPlan !== targetTier;
+      const receiptProductMatchesSelection =
+        receipt.productId === targetProductId;
+      const shouldRefreshReceiptOnMismatch =
+        isPlanSwitch || !receiptProductMatchesSelection;
+      let refreshedAfterMismatch = false;
 
       // Retry verify twice (1s → 4s) before surfacing error — Apple already
       // charged, so we must try hard before handing retry to the user.
@@ -744,27 +919,66 @@ export function SubscriptionScreen() {
         try {
           await verifyIapReceipt(receiptData, targetTier);
           verified = true;
+          recordDiagnosticsLog('SubscriptionScreen', 'verify success', {
+            targetTier,
+            attempt: delay === 0 ? 1 : delay === 1_000 ? 2 : 3,
+          });
           break;
         } catch (err) {
           const cls = classifyIapError(err);
+          recordDiagnosticsLog('SubscriptionScreen', 'verify attempt failed', {
+            targetTier,
+            kind: cls.kind,
+            i18nKey: cls.i18nKey,
+          });
           if (cls.kind === IapErrorClass.SilentSuccess) {
             verified = true;
             verifiedViaSilentSuccess = true;
+            recordDiagnosticsLog(
+              'SubscriptionScreen',
+              'verify silent success',
+              {
+                targetTier,
+              },
+            );
             break;
           }
           if (cls.kind === IapErrorClass.FatalMismatch) {
-            if (isPlanSwitch) {
+            if (shouldRefreshReceiptOnMismatch && !refreshedAfterMismatch) {
               // StoreKit can briefly expose the previous subscription-group
-              // receipt after a plan switch. Refresh once before treating the
-              // backend mismatch as a real product configuration error.
+              // receipt after a plan switch or return the old SKU in the
+              // purchase event even after the user selected a new SKU. Refresh
+              // once before treating the backend mismatch as a real product
+              // configuration error.
+              refreshedAfterMismatch = true;
               const refreshedReceipt = await iapService.refreshReceipt();
               if (refreshedReceipt) {
+                recordDiagnosticsLog(
+                  'SubscriptionScreen',
+                  'verify mismatch refreshed receipt',
+                  {
+                    targetTier,
+                    targetProductId,
+                    receiptProductId: receipt.productId,
+                    isPlanSwitch,
+                    receiptProductMatchesSelection,
+                  },
+                );
                 receiptData = refreshedReceipt;
                 lastErr = err;
                 continue;
               }
             }
             await iapService.finishTransaction(receipt.transactionId);
+            recordDiagnosticsLog(
+              'SubscriptionScreen',
+              'verify fatal mismatch',
+              {
+                targetTier,
+                isPlanSwitch,
+                receiptProductMatchesSelection,
+              },
+            );
             // cls.i18nKey is always a valid translation key for FatalMismatch
             if (cls.i18nKey) Alert.alert(t(cls.i18nKey as never));
             return;
@@ -776,6 +990,11 @@ export function SubscriptionScreen() {
 
       if (!verified) {
         const cls = classifyIapError(lastErr);
+        recordDiagnosticsLog('SubscriptionScreen', 'verify exhausted', {
+          targetTier,
+          kind: cls.kind,
+          i18nKey: cls.i18nKey,
+        });
         if (cls.kind === IapErrorClass.FatalMismatch) {
           await iapService.finishTransaction(receipt.transactionId);
         }
@@ -793,6 +1012,10 @@ export function SubscriptionScreen() {
       let fresh: typeof subscription = null;
       try {
         fresh = await loadSubscription();
+        recordDiagnosticsLog('SubscriptionScreen', 'post-verify load success', {
+          status: fresh?.status,
+          plan: fresh?.plan,
+        });
         if (
           fresh &&
           isPlanSwitch &&
@@ -803,6 +1026,7 @@ export function SubscriptionScreen() {
           setSubscription(fresh);
         }
       } catch {
+        recordDiagnosticsLog('SubscriptionScreen', 'post-verify load failed');
         // Fall through — modal will just hide the expiry line.
       }
 
@@ -826,6 +1050,9 @@ export function SubscriptionScreen() {
         await iapService
           .finishTransaction(receipt.transactionId)
           .catch(() => {});
+        recordDiagnosticsLog('SubscriptionScreen', 'silent success rejected', {
+          targetTier,
+        });
         return;
       }
 
@@ -834,8 +1061,16 @@ export function SubscriptionScreen() {
       setConfirmedProductId(targetProductId);
       setConfirmedExpireAt(fresh?.expireAt ?? null);
       setShowPaymentSuccess(true);
+      recordDiagnosticsLog('SubscriptionScreen', 'subscribe success', {
+        productId: targetProductId,
+        targetTier,
+      });
     } catch (err) {
       const cls = classifyIapError(err);
+      recordDiagnosticsLog('SubscriptionScreen', 'subscribe failed', {
+        kind: cls.kind,
+        i18nKey: cls.i18nKey,
+      });
       if (cls.kind === IapErrorClass.Cancelled) {
         return; // silent
       }
@@ -1008,6 +1243,20 @@ export function SubscriptionScreen() {
           </TouchableOpacity>
         ) : null}
         <Text style={styles.headerTitle}>{t('subscription.title')}</Text>
+        <TouchableOpacity
+          style={styles.diagnosticsButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={handleUploadDiagnostics}
+          disabled={isUploadingDiagnostics || isLoggingOut}
+          accessibilityLabel={t('subscription.diagnostics.button')}
+        >
+          {isUploadingDiagnostics ? (
+            <ActivityIndicator size="small" color={DARK} />
+          ) : (
+            <Icon name="cloud-upload-outline" size={20} color={DARK} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -1184,9 +1433,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: 'bold',
     color: '#32475b',
+  },
+  diagnosticsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingHorizontal: 16,

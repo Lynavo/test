@@ -23,6 +23,7 @@ import {
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 import { looksLikeUserDismiss } from './iap-errors';
+import { recordDiagnosticsLog } from './diagnostics-log-service';
 
 const MAX_RESTORE_RECEIPTS = 10;
 const PURCHASE_TIMEOUT_MS = 60_000;
@@ -175,16 +176,28 @@ class IapServiceImpl implements IapService {
 
   private async initializeConnection(): Promise<void> {
     try {
+      recordDiagnosticsLog('IAP', 'initialize connection start');
       await initConnection();
       if (this.teardownRequested) {
         await endConnection().catch(() => {});
+        recordDiagnosticsLog('IAP', 'initialize cancelled by teardown');
         return;
       }
 
       const purchaseSub = purchaseUpdatedListener(p => {
+        recordDiagnosticsLog('IAP', 'purchaseUpdated event', {
+          productId: p.productId,
+          hasTransactionId: !!p.transactionId,
+          hasReceipt: !!p.transactionReceipt,
+        });
         void this.handlePurchaseEvent(p);
       });
       const errorSub = purchaseErrorListener(err => {
+        recordDiagnosticsLog('IAP', 'purchaseError event', {
+          code: err.code,
+          productId: err.productId,
+          message: err.message,
+        });
         this.handleErrorEvent(err);
       });
 
@@ -198,12 +211,14 @@ class IapServiceImpl implements IapService {
       this.purchaseSub = purchaseSub;
       this.errorSub = errorSub;
       this.initialized = true;
+      recordDiagnosticsLog('IAP', 'initialize connection success');
     } finally {
       this.initializePromise = null;
     }
   }
 
   async purchase(productId: IapProductId): Promise<PurchaseReceipt> {
+    recordDiagnosticsLog('IAP', 'purchase requested', { productId });
     // Lazy init: app startup deliberately does not attach StoreKit listeners
     // because doing so replays the pending SKPaymentQueue. Subscribe is an
     // explicit user action, so initialize here and let initialize() dedupe
@@ -213,13 +228,18 @@ class IapServiceImpl implements IapService {
       await this.initialize();
     }
     if (this.pendingPurchase.has(productId)) {
+      recordDiagnosticsLog('IAP', 'purchase rejected duplicate pending', {
+        productId,
+      });
       throw new Error(`purchase already in flight for ${productId}`);
     }
     await this.ensureProductAvailable(productId);
+    recordDiagnosticsLog('IAP', 'product available', { productId });
     return new Promise<PurchaseReceipt>((resolve, reject) => {
       const timeout = setTimeout(() => {
         const entry = this.pendingPurchase.get(productId);
         if (entry) this.clearPendingTimers(entry);
+        recordDiagnosticsLog('IAP', 'purchase timeout', { productId });
         reject(new Error('purchase timed out after 60s'));
         this.pendingPurchase.delete(productId);
       }, PURCHASE_TIMEOUT_MS);
@@ -235,6 +255,10 @@ class IapServiceImpl implements IapService {
           if (!entry) return;
           this.clearPendingTimers(entry);
           this.pendingPurchase.delete(productId);
+          recordDiagnosticsLog('IAP', 'requestSubscription failed', {
+            productId,
+            error: err instanceof Error ? err.message : String(err),
+          });
           reject(err);
         },
       );
@@ -453,6 +477,10 @@ class IapServiceImpl implements IapService {
     purchase: Purchase,
   ): Promise<void> {
     try {
+      recordDiagnosticsLog('IAP', 'resolve pending purchase', {
+        productId,
+        hasTransactionId: !!purchase.transactionId,
+      });
       const refreshedReceipt = await this.refreshReceiptForUserPurchase();
       const transactionReceipt =
         refreshedReceipt ?? purchase.transactionReceipt ?? '';
@@ -467,6 +495,10 @@ class IapServiceImpl implements IapService {
         transactionId: purchase.transactionId ?? '',
       });
     } catch (err) {
+      recordDiagnosticsLog('IAP', 'resolve pending purchase failed', {
+        productId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       pending.reject(err);
     }
   }
@@ -564,6 +596,10 @@ class IapServiceImpl implements IapService {
       // for the 60s safety timeout.
       const pendingPair = this.pendingPurchaseForError(err.productId);
       if (!pendingPair) {
+        recordDiagnosticsLog('IAP', 'non-fatal error ignored without pending', {
+          code,
+          productId: err.productId,
+        });
         console.warn('[iap-service] non-fatal error event — ignoring', err);
         return;
       }
@@ -581,6 +617,10 @@ class IapServiceImpl implements IapService {
         '[iap-service] non-fatal error event — waiting for purchase update',
         err,
       );
+      recordDiagnosticsLog('IAP', 'non-fatal error waiting for update', {
+        code,
+        productId,
+      });
       return;
     }
     // Dismiss-like fall-through: Apple sandbox reports payment-sheet
@@ -595,6 +635,11 @@ class IapServiceImpl implements IapService {
     const [productId, pending] = pendingPair;
     this.clearPendingTimers(pending);
     this.pendingPurchase.delete(productId);
+    recordDiagnosticsLog('IAP', 'purchase error rejected pending', {
+      code,
+      productId,
+      dismissLike,
+    });
     pending.reject(err);
   }
 
@@ -626,6 +671,9 @@ class IapServiceImpl implements IapService {
     const plan = productIdToPlan(productId);
     if (!plan) {
       // Unknown product — finish to unjam the queue but do not notify.
+      recordDiagnosticsLog('IAP', 'orphan purchase unknown product', {
+        productId,
+      });
       await this.finishTransaction(txId).catch(() => {});
       return;
     }
@@ -639,22 +687,39 @@ class IapServiceImpl implements IapService {
     }
 
     this.orphanVerificationInFlight.add(orphanKey);
+    recordDiagnosticsLog('IAP', 'orphan purchase verify start', {
+      productId,
+      plan,
+      hasTransactionId: !!txId,
+    });
     try {
       await verifyIapReceipt(p.transactionReceipt, plan);
       await this.finishTransaction(txId).catch(() => {});
       this.orphanRetryAfter.delete(orphanKey);
       this.orphanListeners.forEach(cb => cb());
+      recordDiagnosticsLog('IAP', 'orphan purchase verified', {
+        productId,
+        plan,
+      });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
           await this.finishTransaction(txId).catch(() => {});
           this.orphanRetryAfter.delete(orphanKey);
           this.orphanListeners.forEach(cb => cb());
+          recordDiagnosticsLog('IAP', 'orphan purchase already used', {
+            productId,
+            plan,
+          });
           return;
         }
         if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {
           await this.finishTransaction(txId).catch(() => {});
           this.orphanRetryAfter.delete(orphanKey);
+          recordDiagnosticsLog('IAP', 'orphan purchase product mismatch', {
+            productId,
+            plan,
+          });
           return;
         }
       }
@@ -665,6 +730,11 @@ class IapServiceImpl implements IapService {
         orphanKey,
         Date.now() + ORPHAN_PURCHASE_RETRY_BACKOFF_MS,
       );
+      recordDiagnosticsLog('IAP', 'orphan purchase verify failed retry later', {
+        productId,
+        plan,
+        error: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.orphanVerificationInFlight.delete(orphanKey);
     }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { NativeModules } from 'react-native';
+import { Alert, Clipboard, NativeModules } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import type {
   SubscriptionPlanDto,
@@ -95,6 +95,26 @@ jest.mock('../../services/subscription-service', () => ({
   }),
 }));
 
+const mockDiagnosticUpload = jest.fn();
+jest.mock('../../services/diagnostic-upload-service', () => {
+  class DiagnosticUploadError extends Error {
+    readonly detail: { kind: string };
+
+    constructor(detail: { kind: string }) {
+      super(detail.kind);
+      this.detail = detail;
+      this.name = 'DiagnosticUploadError';
+    }
+  }
+
+  return {
+    DiagnosticUploadError,
+    diagnosticUploadService: {
+      upload: (...args: unknown[]) => mockDiagnosticUpload(...args),
+    },
+  };
+});
+
 jest.mock('../../constants/features', () => ({
   FEATURES: {
     IAP_ENABLED: true,
@@ -136,6 +156,8 @@ import { SubscriptionScreen, resolveCurrentPlan } from '../SubscriptionScreen';
 import { iapService, type IapProductSummary } from '../../services/iap-service';
 import { subscriptionPlansService } from '../../services/subscription-plans-service';
 import { IAP_PRODUCTS } from '../../constants/iap';
+import { verifyIapReceipt } from '../../services/subscription-service';
+import { ApiError, ERROR_CODE } from '../../services/api';
 
 // ---------------------------------------------------------------------------
 // Fixture builders — CN storefront data, mirrors what the server + StoreKit
@@ -235,6 +257,10 @@ describe('SubscriptionScreen', () => {
     mockCatalog([monthlyPlan, yearlyPlan], [monthlyProduct, yearlyProduct]);
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('renders one card per server plan with server-provided names', async () => {
     // Arrange: 2-plan catalog set in beforeEach.
 
@@ -319,6 +345,63 @@ describe('SubscriptionScreen', () => {
     );
   });
 
+  test('refreshes receipt before surfacing mismatch when StoreKit returns the previous SKU', async () => {
+    // Arrange: user selects yearly, but StoreKit resolves the purchase event
+    // with the previous monthly SKU. This happens in sandbox during
+    // subscription-group switches even when the user tapped the yearly card.
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'OLD_MONTHLY_RECEIPT',
+      transactionId: 'tx_1',
+    });
+    (iapService.refreshReceipt as jest.Mock).mockResolvedValueOnce(
+      'FRESH_YEARLY_RECEIPT',
+    );
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockResolvedValueOnce(undefined);
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'yearly',
+      expireAt: '2026-04-28T00:00:00Z',
+      trialEnd: null,
+    });
+
+    // Act
+    const { findByText } = renderScreen();
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    // Assert: first verify uses the stale receipt, then we refresh and retry
+    // with the fresh app receipt instead of showing PRODUCT_ID_MISMATCH.
+    await waitFor(() =>
+      expect(iapService.purchase).toHaveBeenCalledWith(IAP_PRODUCTS.yearly),
+    );
+    await waitFor(
+      () => expect(iapService.refreshReceipt).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () => expect(iapService.finishTransaction).toHaveBeenCalledWith('tx_1'),
+      { timeout: 5000 },
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      1,
+      'OLD_MONTHLY_RECEIPT',
+      'yearly',
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      2,
+      'FRESH_YEARLY_RECEIPT',
+      'yearly',
+    );
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      expect.stringMatching(/产品设置有误|產品設定有誤|Product configuration error/),
+    );
+  });
+
   test('subscribe CTA is disabled when there is no selectable plan', async () => {
     // Arrange: empty catalog → nothing to auto-select → CTA must stay
     // un-tappable so we never fire purchase against an undefined SKU.
@@ -345,6 +428,44 @@ describe('SubscriptionScreen', () => {
 
     // Assert
     await waitFor(() => expect(iapService.restore).toHaveBeenCalled());
+  });
+
+  test('header upload logs button uploads diagnostics and copies reference id', async () => {
+    // Arrange
+    const exportDiagnostics = jest.fn().mockResolvedValue('/tmp/sub-log.zip');
+    const getClientId = jest.fn().mockResolvedValue('client-1');
+    (NativeModules as Record<string, unknown>).NativeSyncEngine = {
+      getBindingState: jest.fn().mockResolvedValue(null),
+      exportDiagnostics,
+      getClientId,
+    };
+    mockDiagnosticUpload.mockResolvedValueOnce({
+      refId: 'diag-123',
+      uploadedAt: '2026-04-27T00:00:00Z',
+    });
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    jest.spyOn(Clipboard, 'setString').mockImplementation(jest.fn());
+
+    // Act
+    const { findByLabelText } = renderScreen();
+    fireEvent.press(await findByLabelText(/上传日志|上傳日誌|Upload logs/));
+
+    // Assert
+    await waitFor(() => expect(mockDiagnosticUpload).toHaveBeenCalled());
+    expect(exportDiagnostics).toHaveBeenCalled();
+    expect(getClientId).toHaveBeenCalled();
+    expect(mockDiagnosticUpload).toHaveBeenCalledWith(
+      'file:///tmp/sub-log.zip',
+      'client-1',
+      expect.any(AbortSignal),
+      undefined,
+      'subscription-screen',
+    );
+    expect(Clipboard.setString).toHaveBeenCalledWith('diag-123');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '日志已上传',
+      '追踪编号 diag-123 已复制，可提供给客服排查订阅问题。',
+    );
   });
 });
 
