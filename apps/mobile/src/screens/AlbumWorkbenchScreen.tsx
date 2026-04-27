@@ -45,12 +45,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type {
-  AlbumAssetDTO,
-  AutoUploadConfigDTO,
-  AutoUploadState,
-  UploadTaskSource,
-} from '@syncflow/contracts';
+import type { AlbumAssetDTO, AutoUploadConfigDTO } from '@syncflow/contracts';
 import { AssetPreviewModal } from '../components/AssetPreviewModal';
 import { Icon } from '../components/Icon';
 import {
@@ -72,6 +67,14 @@ import { formatBytes } from '../utils/format';
 import { sortAlbumAssetsForDisplay } from '../utils/sortAlbumAssets';
 import { hasPendingManualWork } from '../utils/manualUploadState';
 import { deriveDeviceConnected } from '../utils/deriveDeviceConnected';
+import {
+  buildAutoUploadRoundOverview,
+  getAutoUploadRoundCompletedCount,
+  getAutoUploadSessionTransferredCount,
+  getRememberedAutoUploadRoundProgress,
+  rememberAutoUploadRoundProgress,
+  type AutoUploadRoundOverview,
+} from '../utils/autoUploadRoundProgress';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -111,21 +114,23 @@ function formatCustomTime(iso: string, t: TFunction): string {
   });
 }
 
+function rememberAndBuildAutoUploadRoundOverview(
+  payload: unknown,
+  previous: AutoUploadRoundOverview | null,
+): AutoUploadRoundOverview | null {
+  const overview = buildAutoUploadRoundOverview(
+    (payload as Record<string, unknown> | null | undefined) ?? null,
+    previous,
+  );
+  rememberAutoUploadRoundProgress(overview);
+  return overview;
+}
+
 type MediaFilter = 'all' | 'photos' | 'videos';
 type TransferFilter = 'all' | 'untransferred' | 'transferred';
 type ViewMode = 'grid' | 'list';
 type GridItemRef = React.ComponentRef<typeof View>;
 type GridDragSelectionMode = 'select' | 'deselect';
-
-interface AutoUploadRoundOverview {
-  uploadState: string;
-  completedCount: number;
-  totalCount: number;
-  roundBaselineCompletedCount?: number;
-  currentTaskSource?: UploadTaskSource | null;
-  autoPending?: number;
-  autoUploadState?: AutoUploadState | null;
-}
 
 interface MeasuredGridItem {
   assetLocalId: string;
@@ -158,100 +163,6 @@ const TIME_RANGE_OPTIONS = [
   key: AutoUploadConfigDTO['timeRangeMode'];
   labelKey: string;
 }>;
-
-const AUTO_UPLOAD_ROUND_STATES = new Set([
-  'discovering',
-  'reconciling',
-  'scanning',
-  'preparing',
-  'uploading',
-  'cloud_downloading',
-  'reconnecting',
-  'backoff_waiting',
-  'completed',
-]);
-
-function readNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function buildAutoUploadRoundOverview(
-  payload: Record<string, unknown> | null | undefined,
-  previous: AutoUploadRoundOverview | null,
-): AutoUploadRoundOverview | null {
-  if (!payload) return previous;
-
-  const hasRoundBaseline = Object.prototype.hasOwnProperty.call(
-    payload,
-    'roundBaselineCompletedCount',
-  );
-  const hasCurrentTaskSource = Object.prototype.hasOwnProperty.call(
-    payload,
-    'currentTaskSource',
-  );
-  const hasAutoUploadState = Object.prototype.hasOwnProperty.call(
-    payload,
-    'autoUploadState',
-  );
-
-  const currentTaskSource =
-    payload.currentTaskSource === 'auto' ||
-    payload.currentTaskSource === 'manual'
-      ? payload.currentTaskSource
-      : hasCurrentTaskSource
-        ? null
-        : previous?.currentTaskSource;
-  const autoUploadState =
-    payload.autoUploadState === 'active' ||
-    payload.autoUploadState === 'disabled' ||
-    payload.autoUploadState === 'interrupted'
-      ? payload.autoUploadState
-      : hasAutoUploadState
-        ? null
-        : previous?.autoUploadState;
-
-  return {
-    uploadState:
-      typeof payload.uploadState === 'string'
-        ? payload.uploadState
-        : (previous?.uploadState ?? 'idle'),
-    completedCount:
-      readNumber(payload.completedCount) ?? previous?.completedCount ?? 0,
-    totalCount:
-      readNumber(payload.totalCount) ??
-      readNumber(payload.queueTotalCount) ??
-      previous?.totalCount ??
-      0,
-    roundBaselineCompletedCount: hasRoundBaseline
-      ? readNumber(payload.roundBaselineCompletedCount)
-      : previous?.roundBaselineCompletedCount,
-    currentTaskSource,
-    autoPending: readNumber(payload.autoPending) ?? previous?.autoPending,
-    autoUploadState,
-  };
-}
-
-function getAutoUploadRoundCompletedCount(
-  overview: AutoUploadRoundOverview | null,
-  isAutoUploadActive: boolean,
-): number | null {
-  if (!overview || !isAutoUploadActive) return null;
-  if (
-    overview.autoUploadState !== undefined &&
-    overview.autoUploadState !== null &&
-    overview.autoUploadState !== 'active'
-  ) {
-    return null;
-  }
-  if (overview.currentTaskSource === 'manual') return null;
-  if (!AUTO_UPLOAD_ROUND_STATES.has(overview.uploadState)) return null;
-  if (overview.totalCount <= 0 && overview.completedCount <= 0) return null;
-
-  const baseline = overview.roundBaselineCompletedCount ?? 0;
-  return Math.max(0, overview.completedCount - baseline);
-}
 
 function getEmptyStateCopy(
   filter: UnifiedFilter,
@@ -366,7 +277,13 @@ export function AlbumWorkbenchScreen() {
     useState<AutoUploadConfigDTO | null>(null);
   const [configExpanded, setConfigExpanded] = useState(false);
   const [autoUploadRoundOverview, setAutoUploadRoundOverview] =
-    useState<AutoUploadRoundOverview | null>(null);
+    useState<AutoUploadRoundOverview | null>(
+      getRememberedAutoUploadRoundProgress,
+    );
+  const [
+    autoUploadSessionTransferredCount,
+    setAutoUploadSessionTransferredCount,
+  ] = useState<number | null>(null);
 
   // Custom time picker
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -499,14 +416,36 @@ export function AlbumWorkbenchScreen() {
     [],
   );
 
-  const loadStats = useCallback(async () => {
-    try {
-      const result = await getAlbumStats();
-      setStats(result);
-    } catch (e) {
-      console.warn('[AlbumWorkbench] loadStats error:', e);
-    }
-  }, []);
+  const loadAutoUploadSessionProgress = useCallback(
+    async (active = isAutoUploadActive, transferredCount?: number) => {
+      try {
+        const count = await getAutoUploadSessionTransferredCount(
+          active,
+          transferredCount,
+        );
+        setAutoUploadSessionTransferredCount(count);
+      } catch (e) {
+        console.warn(
+          '[AlbumWorkbench] loadAutoUploadSessionProgress error:',
+          e,
+        );
+      }
+    },
+    [isAutoUploadActive],
+  );
+
+  const loadStats = useCallback(
+    async (active = isAutoUploadActive) => {
+      try {
+        const result = await getAlbumStats();
+        setStats(result);
+        void loadAutoUploadSessionProgress(active, result.transferredCount);
+      } catch (e) {
+        console.warn('[AlbumWorkbench] loadStats error:', e);
+      }
+    },
+    [isAutoUploadActive, loadAutoUploadSessionProgress],
+  );
 
   const primeAutoUploadRoundBaseline = useCallback(async () => {
     let baseline = stats?.transferredCount ?? 0;
@@ -524,6 +463,7 @@ export function AlbumWorkbenchScreen() {
     try {
       const config = await getAutoUploadConfig();
       setAutoUploadConfig(config);
+      void loadAutoUploadSessionProgress(config.state === 'active');
       // Auto-expand config panel when auto-upload is enabled/paused
       if (config.enabled) {
         setConfigExpanded(true);
@@ -531,16 +471,13 @@ export function AlbumWorkbenchScreen() {
     } catch (e) {
       console.warn('[AlbumWorkbench] loadConfig error:', e);
     }
-  }, []);
+  }, [loadAutoUploadSessionProgress]);
 
   const loadSyncOverview = useCallback(async () => {
     try {
       const payload = await NativeModules.NativeSyncEngine?.getSyncOverview?.();
       setAutoUploadRoundOverview(prev =>
-        buildAutoUploadRoundOverview(
-          (payload as Record<string, unknown> | null | undefined) ?? null,
-          prev,
-        ),
+        rememberAndBuildAutoUploadRoundOverview(payload, prev),
       );
     } catch (e) {
       console.warn('[AlbumWorkbench] loadSyncOverview error:', e);
@@ -635,10 +572,7 @@ export function AlbumWorkbenchScreen() {
     });
     const stateSub = emitter.addListener('onSyncStateChanged', payload => {
       setAutoUploadRoundOverview(prev =>
-        buildAutoUploadRoundOverview(
-          (payload as Record<string, unknown> | null | undefined) ?? null,
-          prev,
-        ),
+        rememberAndBuildAutoUploadRoundOverview(payload, prev),
       );
       void loadStats();
     });
@@ -1648,8 +1582,16 @@ export function AlbumWorkbenchScreen() {
     autoUploadRoundOverview,
     isAutoUploadActive,
   );
+  const resolvedAutoUploadTransferredCount =
+    autoUploadSessionTransferredCount !== null &&
+    autoUploadRoundCompletedCount !== null
+      ? Math.max(
+          autoUploadSessionTransferredCount,
+          autoUploadRoundCompletedCount,
+        )
+      : (autoUploadSessionTransferredCount ?? autoUploadRoundCompletedCount);
   const autoUploadTransferredThisRound =
-    autoUploadRoundCompletedCount ??
+    resolvedAutoUploadTransferredCount ??
     (isAutoUploadActive && stats
       ? Math.max(
           0,

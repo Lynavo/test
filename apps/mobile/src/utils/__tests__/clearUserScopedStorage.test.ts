@@ -22,10 +22,14 @@ describe('clearUserScopedStorage', () => {
     jest.clearAllMocks();
   });
 
-  test('removes every @vividrop/reminder-shown/* key', async () => {
+  test('removes user-scoped reminder and auto-upload session keys', async () => {
     mockStore.set('@vividrop/reminder-shown/2026-04-17/warn7', '1');
     mockStore.set('@vividrop/reminder-shown/2026-04-18/warnToday', '1');
     mockStore.set('@vividrop/reminder-shown/2026-04-18/expired', '1');
+    mockStore.set(
+      '@vividrop/auto-upload-session/v1',
+      '{"baselineTransferredCount":3}',
+    );
 
     await clearUserScopedStorage();
 
@@ -35,14 +39,26 @@ describe('clearUserScopedStorage', () => {
 
   test('leaves unrelated keys intact', async () => {
     mockStore.set('@vividrop/reminder-shown/2026-04-17/warn7', '1');
-    mockStore.set('@vividrop/debug/api_base_url', 'https://staging.example.com');
+    mockStore.set(
+      '@vividrop/auto-upload-session/v1',
+      '{"baselineTransferredCount":3}',
+    );
+    mockStore.set(
+      '@vividrop/debug/api_base_url',
+      'https://staging.example.com',
+    );
     mockStore.set('@vividrop/auth/access_token', 'legacy');
     mockStore.set('random-unrelated', 'keep-me');
 
     await clearUserScopedStorage();
 
-    expect(mockStore.has('@vividrop/reminder-shown/2026-04-17/warn7')).toBe(false);
-    expect(mockStore.get('@vividrop/debug/api_base_url')).toBe('https://staging.example.com');
+    expect(mockStore.has('@vividrop/reminder-shown/2026-04-17/warn7')).toBe(
+      false,
+    );
+    expect(mockStore.has('@vividrop/auto-upload-session/v1')).toBe(false);
+    expect(mockStore.get('@vividrop/debug/api_base_url')).toBe(
+      'https://staging.example.com',
+    );
     expect(mockStore.get('@vividrop/auth/access_token')).toBe('legacy');
     expect(mockStore.get('random-unrelated')).toBe('keep-me');
   });
@@ -59,7 +75,9 @@ describe('clearUserScopedStorage', () => {
   });
 
   test('propagates getAllKeys errors as a rejection (so callers can await)', async () => {
-    (AsyncStorage.getAllKeys as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+    (AsyncStorage.getAllKeys as jest.Mock).mockRejectedValueOnce(
+      new Error('boom'),
+    );
     await expect(clearUserScopedStorage()).rejects.toThrow('boom');
   });
 });

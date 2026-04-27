@@ -8,6 +8,7 @@ import {
   shouldBypassOfflineDisplayDelay,
   shouldKickAutoUploadSyncAfterGateRelease,
   shouldRenderSyncActivityProgress,
+  shouldResetAutoUploadGateKickAttempt,
   shouldShowSubscriptionExpiredOverlay,
   shouldTreatSyncActivityAsBetweenItems,
 } from '../SyncActivityScreen';
@@ -39,6 +40,14 @@ jest.mock('../../stores/auth-store', () => ({
     user: null,
   }),
   isFeatureAccessAllowed: () => true,
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  multiRemove: jest.fn(),
+  getAllKeys: jest.fn(),
 }));
 
 describe('buildOverview', () => {
@@ -1258,11 +1267,31 @@ describe('shouldShowSubscriptionExpiredOverlay', () => {
 });
 
 describe('shouldKickAutoUploadSyncAfterGateRelease', () => {
-  it('starts the native loop when auto upload is active but idle', () => {
+  it('does not start the native loop for active idle auto upload with no pending work', () => {
     expect(
       shouldKickAutoUploadSyncAfterGateRelease({
         autoUploadState: 'active',
         uploadState: 'idle',
+      }),
+    ).toBe(false);
+  });
+
+  it('starts the native loop when auto upload has pending work after gate release', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'idle',
+        autoPending: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it('starts the native loop for recoverable auto upload errors after gate release', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'offline',
+        lastErrorCode: 'NETWORK_TIMEOUT',
       }),
     ).toBe(true);
   });
@@ -1300,6 +1329,42 @@ describe('shouldKickAutoUploadSyncAfterGateRelease', () => {
         lastErrorCode: 'RECONNECT_EXHAUSTED',
       }),
     ).toBe(false);
+  });
+});
+
+describe('shouldResetAutoUploadGateKickAttempt', () => {
+  it('keeps the gate-release kick marked as attempted across screen blur', () => {
+    expect(
+      shouldResetAutoUploadGateKickAttempt({
+        autoUploadState: 'active',
+        featureAccessAllowed: true,
+        bindingDeviceId: 'device-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('resets when auto upload can no longer run', () => {
+    expect(
+      shouldResetAutoUploadGateKickAttempt({
+        autoUploadState: 'disabled',
+        featureAccessAllowed: true,
+        bindingDeviceId: 'device-1',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResetAutoUploadGateKickAttempt({
+        autoUploadState: 'active',
+        featureAccessAllowed: false,
+        bindingDeviceId: 'device-1',
+      }),
+    ).toBe(true);
+    expect(
+      shouldResetAutoUploadGateKickAttempt({
+        autoUploadState: 'active',
+        featureAccessAllowed: true,
+        bindingDeviceId: null,
+      }),
+    ).toBe(true);
   });
 });
 

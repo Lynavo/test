@@ -38,6 +38,7 @@ import {
 } from '../utils/effectiveConnectionState';
 import { formatQueueCountDisplay } from '../utils/queueCountDisplay';
 import { hasPendingManualWork } from '../utils/manualUploadState';
+import { rememberAutoUploadRoundProgress } from '../utils/autoUploadRoundProgress';
 import {
   getSyncActivityMainCardState,
   getSyncActivityProgressPercent,
@@ -360,6 +361,7 @@ export function shouldKickAutoUploadSyncAfterGateRelease(snapshot: {
   autoUploadState?: AutoUploadState | null;
   uploadState?: string | null;
   currentTaskSource?: UploadTaskSource | null;
+  autoPending?: number | null;
   lastErrorCode?: string | null;
 }): boolean {
   if (snapshot.autoUploadState !== 'active') {
@@ -374,7 +376,27 @@ export function shouldKickAutoUploadSyncAfterGateRelease(snapshot: {
     return false;
   }
 
-  return snapshot.lastErrorCode !== 'RECONNECT_EXHAUSTED';
+  if (snapshot.lastErrorCode === 'RECONNECT_EXHAUSTED') {
+    return false;
+  }
+
+  return (
+    (snapshot.autoPending ?? 0) > 0 ||
+    (typeof snapshot.lastErrorCode === 'string' &&
+      snapshot.lastErrorCode.length > 0)
+  );
+}
+
+export function shouldResetAutoUploadGateKickAttempt(snapshot: {
+  autoUploadState?: AutoUploadState | null;
+  featureAccessAllowed: boolean;
+  bindingDeviceId?: string | null;
+}): boolean {
+  return (
+    snapshot.autoUploadState !== 'active' ||
+    !snapshot.featureAccessAllowed ||
+    !snapshot.bindingDeviceId
+  );
 }
 
 export function getTrialUpgradeEntryDays(input: {
@@ -664,7 +686,11 @@ export function SyncActivityScreen() {
         syncSub = emitter.addListener(
           'onSyncStateChanged',
           (state: Record<string, unknown>) => {
-            setOverview(prev => buildOverview(state, prev));
+            setOverview(prev => {
+              const next = buildOverview(state, prev);
+              rememberAutoUploadRoundProgress(next);
+              return next;
+            });
             if (state.uploadState === 'completed') {
               void loadTodayStats();
             }
@@ -682,7 +708,11 @@ export function SyncActivityScreen() {
 
         const syncData = await NativeSyncEngine.getSyncOverview();
         if (syncData) {
-          setOverview(prev => buildOverview(syncData, prev));
+          setOverview(prev => {
+            const next = buildOverview(syncData, prev);
+            rememberAutoUploadRoundProgress(next);
+            return next;
+          });
         }
 
         setInitialLoading(false);
@@ -714,9 +744,11 @@ export function SyncActivityScreen() {
       overview.autoUploadState !== 'active'
     ) {
       if (
-        !isScreenFocused ||
-        !featureAccessAllowed ||
-        overview.autoUploadState !== 'active'
+        shouldResetAutoUploadGateKickAttempt({
+          autoUploadState: overview.autoUploadState,
+          featureAccessAllowed,
+          bindingDeviceId: bindingState?.deviceId,
+        })
       ) {
         autoUploadGateKickAttemptedRef.current = false;
       }
