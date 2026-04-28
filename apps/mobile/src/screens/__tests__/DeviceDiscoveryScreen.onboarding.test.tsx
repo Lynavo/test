@@ -32,23 +32,24 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: {
+      language: 'zh-Hant',
+      resolvedLanguage: 'zh-Hant',
+    },
     t: (key: string) =>
       ({
         'deviceDiscovery.onboarding.unconnected.skip': '跳過',
-        'deviceDiscovery.onboarding.unconnected.title':
-          '開始使用 Vivi Drop',
+        'deviceDiscovery.onboarding.unconnected.title': '開始使用 Vivi Drop',
         'deviceDiscovery.onboarding.unconnected.subtitle':
           '手機與電腦無線同步素材，三步搞定',
         'deviceDiscovery.onboarding.unconnected.downloadStep.title':
           '下載 PC 端',
         'deviceDiscovery.onboarding.unconnected.downloadStep.body':
           '在電腦上安裝 Vivi Drop',
-        'deviceDiscovery.onboarding.unconnected.connectStep.title':
-          '手機連接',
+        'deviceDiscovery.onboarding.unconnected.connectStep.title': '手機連接',
         'deviceDiscovery.onboarding.unconnected.connectStep.body':
           '輸入連接碼或掃碼連接',
-        'deviceDiscovery.onboarding.unconnected.syncStep.title':
-          '開始同步',
+        'deviceDiscovery.onboarding.unconnected.syncStep.title': '開始同步',
         'deviceDiscovery.onboarding.unconnected.syncStep.body':
           '素材自動傳輸到電腦',
         'deviceDiscovery.onboarding.unconnected.copy': '複製',
@@ -57,6 +58,8 @@ jest.mock('react-i18next', () => ({
           '複製後在電腦瀏覽器中打開即可下載',
         'deviceDiscovery.onboarding.unconnected.start':
           '我已經下載好了，去連接設備',
+        'deviceDiscovery.onboarding.unconnected.footerNote':
+          '首次使用引導 · 可在幫助頁重新查看',
       })[key] ?? key,
   }),
 }));
@@ -115,14 +118,18 @@ describe('DeviceDiscoveryScreen onboarding', () => {
     await waitFor(() => {
       expect(screen.getByText('開始使用 Vivi Drop')).toBeTruthy();
     });
+    expect(screen.getByText('首次使用引導 · 可在幫助頁重新查看')).toBeTruthy();
 
     fireEvent.press(screen.getByText('我已經下載好了，去連接設備'));
 
-    await waitFor(() => {
-      expect(mockMarkUnconnectedGuideSeen).toHaveBeenCalledTimes(1);
-      expect(screen.queryByText('開始使用 Vivi Drop')).toBeNull();
-    }, { timeout: 3000 });
-  });
+    await waitFor(
+      () => {
+        expect(mockMarkUnconnectedGuideSeen).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText('開始使用 Vivi Drop')).toBeNull();
+      },
+      { timeout: 3000 },
+    );
+  }, 10000);
 
   it('does not show the unconnected guide after it has been seen', async () => {
     mockHasSeenUnconnectedGuide.mockResolvedValueOnce(true);

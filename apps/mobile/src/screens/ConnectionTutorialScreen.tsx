@@ -22,14 +22,96 @@ interface TutorialTab {
 }
 
 interface TutorialCard {
-  title: string;
-  description: string;
-  icon: string;
+  visual: React.ReactNode;
   steps: string[];
   warning?: string;
 }
 
 const TAB_IDS: TutorialTabId[] = ['lan', 'qr', 'code', 'ip'];
+
+function LanVisual() {
+  return (
+    <View style={styles.visualScene} testID="connection-tutorial-visual-lan">
+      <View style={styles.wifiBeacon}>
+        <View style={styles.wifiRingLarge} />
+        <View style={styles.wifiRingSmall} />
+        <View style={styles.wifiCenter}>
+          <Icon name="wifi" size={30} color="#2563eb" />
+        </View>
+      </View>
+      <View style={styles.devicePairRow}>
+        <View style={styles.phoneMock}>
+          <View style={styles.phoneDot} />
+        </View>
+        <View style={styles.connectionDots}>
+          <View style={styles.connectionDotMuted} />
+          <View style={styles.connectionDotActive} />
+          <View style={styles.connectionDotMuted} />
+        </View>
+        <View style={styles.monitorMock}>
+          <Icon name="desktop-outline" size={18} color="#3b82f6" />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function QrVisual() {
+  return (
+    <View style={styles.visualScene} testID="connection-tutorial-visual-qr">
+      <View style={styles.qrFrame}>
+        <Icon name="scan-outline" size={64} color="rgba(37,99,235,0.62)" />
+        <View style={styles.qrScanLine} />
+        <View style={[styles.qrCorner, styles.qrCornerTopLeft]} />
+        <View style={[styles.qrCorner, styles.qrCornerTopRight]} />
+        <View style={[styles.qrCorner, styles.qrCornerBottomLeft]} />
+        <View style={[styles.qrCorner, styles.qrCornerBottomRight]} />
+      </View>
+    </View>
+  );
+}
+
+function CodeVisual() {
+  const digits = ['3', '8', '5', '2', '1', '7'];
+
+  return (
+    <View style={styles.visualScene} testID="connection-tutorial-visual-code">
+      <View style={styles.codePanel}>
+        <View style={styles.codeHeader} />
+        <View style={styles.codeDigits}>
+          {digits.map((digit, index) => (
+            <View key={`${digit}-${index}`} style={styles.codeDigitBox}>
+              <Text style={styles.codeDigitText}>{digit}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.codeActionPill}>
+          <Icon name="lock-closed-outline" size={13} color="#3b82f6" />
+          <View style={styles.codeActionLine} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function IpVisual() {
+  return (
+    <View style={styles.visualScene} testID="connection-tutorial-visual-ip">
+      <View style={styles.ipMonitorWrap}>
+        <View style={styles.ipMonitor}>
+          <Icon name="desktop-outline" size={42} color="rgba(37,99,235,0.72)" />
+        </View>
+        <View style={styles.ipBadge}>
+          <Icon name="scan-outline" size={15} color="#2563eb" />
+        </View>
+      </View>
+      <View style={styles.ipPill}>
+        <View style={styles.ipStatusDot} />
+        <Text style={styles.ipText}>192.168.1.x</Text>
+      </View>
+    </View>
+  );
+}
 
 export function ConnectionTutorialScreen() {
   const navigation = useNavigation();
@@ -40,9 +122,21 @@ export function ConnectionTutorialScreen() {
   const tabs = useMemo<TutorialTab[]>(
     () => [
       { id: 'lan', icon: 'wifi', label: t('connectionTutorial.tabs.lan') },
-      { id: 'qr', icon: 'scan-outline', label: t('connectionTutorial.tabs.qr') },
-      { id: 'code', icon: 'lock-closed-outline', label: t('connectionTutorial.tabs.code') },
-      { id: 'ip', icon: 'desktop-outline', label: t('connectionTutorial.tabs.ip') },
+      {
+        id: 'qr',
+        icon: 'scan-outline',
+        label: t('connectionTutorial.tabs.qr'),
+      },
+      {
+        id: 'code',
+        icon: 'lock-closed-outline',
+        label: t('connectionTutorial.tabs.code'),
+      },
+      {
+        id: 'ip',
+        icon: 'desktop-outline',
+        label: t('connectionTutorial.tabs.ip'),
+      },
     ],
     [t],
   );
@@ -50,9 +144,7 @@ export function ConnectionTutorialScreen() {
   const cards = useMemo<Record<TutorialTabId, TutorialCard>>(
     () => ({
       lan: {
-        title: t('connectionTutorial.cards.lan.title'),
-        description: t('connectionTutorial.cards.lan.description'),
-        icon: 'wifi',
+        visual: <LanVisual />,
         steps: [
           t('connectionTutorial.cards.lan.steps.0'),
           t('connectionTutorial.cards.lan.steps.1'),
@@ -61,9 +153,7 @@ export function ConnectionTutorialScreen() {
         warning: t('connectionTutorial.cards.lan.warning'),
       },
       qr: {
-        title: t('connectionTutorial.cards.qr.title'),
-        description: t('connectionTutorial.cards.qr.description'),
-        icon: 'scan-outline',
+        visual: <QrVisual />,
         steps: [
           t('connectionTutorial.cards.qr.steps.0'),
           t('connectionTutorial.cards.qr.steps.1'),
@@ -71,9 +161,7 @@ export function ConnectionTutorialScreen() {
         ],
       },
       code: {
-        title: t('connectionTutorial.cards.code.title'),
-        description: t('connectionTutorial.cards.code.description'),
-        icon: 'lock-closed-outline',
+        visual: <CodeVisual />,
         steps: [
           t('connectionTutorial.cards.code.steps.0'),
           t('connectionTutorial.cards.code.steps.1'),
@@ -81,9 +169,7 @@ export function ConnectionTutorialScreen() {
         ],
       },
       ip: {
-        title: t('connectionTutorial.cards.ip.title'),
-        description: t('connectionTutorial.cards.ip.description'),
-        icon: 'desktop-outline',
+        visual: <IpVisual />,
         steps: [
           t('connectionTutorial.cards.ip.steps.0'),
           t('connectionTutorial.cards.ip.steps.1'),
@@ -96,7 +182,8 @@ export function ConnectionTutorialScreen() {
 
   const activeCard = cards[activeTab];
   const activeIndex = TAB_IDS.indexOf(activeTab);
-  const showTroubleshootCta = activeTab === 'lan' || activeTab === 'qr' || activeTab === 'ip';
+  const showTroubleshootCta =
+    activeTab === 'lan' || activeTab === 'qr' || activeTab === 'ip';
   const troubleshootItems = [
     t('connectionTutorial.troubleshoot.items.0'),
     t('connectionTutorial.troubleshoot.items.1'),
@@ -124,7 +211,9 @@ export function ConnectionTutorialScreen() {
       >
         <View style={styles.prereqBanner}>
           <Icon name="checkmark-circle" size={18} color="#2563eb" />
-          <Text style={styles.prereqText}>{t('connectionTutorial.prerequisite')}</Text>
+          <Text style={styles.prereqText}>
+            {t('connectionTutorial.prerequisite')}
+          </Text>
         </View>
 
         <View style={styles.tabBar}>
@@ -137,7 +226,11 @@ export function ConnectionTutorialScreen() {
                 activeOpacity={0.78}
                 onPress={() => setActiveTab(tab.id)}
               >
-                <Icon name={tab.icon} size={15} color={active ? '#ffffff' : '#7893ab'} />
+                <Icon
+                  name={tab.icon}
+                  size={15}
+                  color={active ? '#ffffff' : '#7893ab'}
+                />
                 <Text style={[styles.tabText, active && styles.tabTextActive]}>
                   {tab.label}
                 </Text>
@@ -147,15 +240,7 @@ export function ConnectionTutorialScreen() {
         </View>
 
         <View style={styles.card}>
-          <View style={styles.visual}>
-            <View style={styles.visualIconOuter}>
-              <View style={styles.visualIconInner}>
-                <Icon name={activeCard.icon} size={38} color="#2563eb" />
-              </View>
-            </View>
-            <Text style={styles.cardTitle}>{activeCard.title}</Text>
-            <Text style={styles.cardDescription}>{activeCard.description}</Text>
-          </View>
+          <View style={styles.visual}>{activeCard.visual}</View>
 
           <View style={styles.steps}>
             {activeCard.steps.map((step, index) => (
@@ -178,8 +263,12 @@ export function ConnectionTutorialScreen() {
                 onPress={() => setShowTroubleshoot(true)}
               >
                 <Icon name="alert-circle-outline" size={17} color="#d97706" />
-                <Text style={styles.troubleText}>{t('connectionTutorial.troubleshoot.entry')}</Text>
-                <Text style={styles.troubleLink}>{t('connectionTutorial.troubleshoot.cta')}</Text>
+                <Text style={styles.troubleText}>
+                  {t('connectionTutorial.troubleshoot.entry')}
+                </Text>
+                <Text style={styles.troubleLink}>
+                  {t('connectionTutorial.troubleshoot.cta')}
+                </Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -203,12 +292,17 @@ export function ConnectionTutorialScreen() {
         animationType="slide"
         onRequestClose={() => setShowTroubleshoot(false)}
       >
-        <Pressable style={styles.sheetOverlay} onPress={() => setShowTroubleshoot(false)}>
+        <Pressable
+          style={styles.sheetOverlay}
+          onPress={() => setShowTroubleshoot(false)}
+        >
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Icon name="alert-circle-outline" size={20} color="#d97706" />
-              <Text style={styles.sheetTitle}>{t('connectionTutorial.troubleshoot.title')}</Text>
+              <Text style={styles.sheetTitle}>
+                {t('connectionTutorial.troubleshoot.title')}
+              </Text>
             </View>
             {troubleshootItems.map((item, index) => (
               <View key={item} style={styles.sheetItem}>
@@ -219,9 +313,15 @@ export function ConnectionTutorialScreen() {
               </View>
             ))}
             <View style={styles.sheetDivider} />
-            <Text style={styles.supportTitle}>{t('connectionTutorial.troubleshoot.supportTitle')}</Text>
-            <Text style={styles.supportBody}>{t('connectionTutorial.troubleshoot.supportBody')}</Text>
-            <Text style={styles.supportEmail}>{t('connectionTutorial.troubleshoot.supportEmail')}</Text>
+            <Text style={styles.supportTitle}>
+              {t('connectionTutorial.troubleshoot.supportTitle')}
+            </Text>
+            <Text style={styles.supportBody}>
+              {t('connectionTutorial.troubleshoot.supportBody')}
+            </Text>
+            <Text style={styles.supportEmail}>
+              {t('connectionTutorial.troubleshoot.supportEmail')}
+            </Text>
           </Pressable>
         </Pressable>
       </Modal>
@@ -232,7 +332,7 @@ export function ConnectionTutorialScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#eef6ff',
+    backgroundColor: '#e8f0fb',
   },
   header: {
     flexDirection: 'row',
@@ -287,7 +387,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     padding: 5,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.58)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
   tabButton: {
     flex: 1,
@@ -311,7 +411,7 @@ const styles = StyleSheet.create({
   card: {
     overflow: 'hidden',
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.72)',
     shadowColor: 'rgba(59,130,210,0.4)',
@@ -321,41 +421,251 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   visual: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 24,
+    height: 252,
     backgroundColor: '#dbeafe',
   },
-  visualIconOuter: {
+  visualScene: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dbeafe',
+  },
+  wifiBeacon: {
     width: 118,
     height: 118,
-    borderRadius: 59,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  wifiRingLarge: {
+    position: 'absolute',
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     borderWidth: 2,
-    borderColor: 'rgba(37,99,235,0.14)',
+    borderColor: 'rgba(59,130,246,0.1)',
+  },
+  wifiRingSmall: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.2)',
+  },
+  wifiCenter: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.25)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  visualIconInner: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+  devicePairRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 22,
+  },
+  phoneMock: {
+    width: 26,
+    height: 42,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#93c5fd',
+    backgroundColor: 'rgba(219,234,254,0.52)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardTitle: {
-    marginTop: 18,
-    color: '#1a3a5c',
-    fontSize: 18,
+  phoneDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3b82f6',
+  },
+  connectionDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  connectionDotMuted: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(59,130,246,0.3)',
+  },
+  connectionDotActive: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#3b82f6',
+  },
+  monitorMock: {
+    width: 50,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#93c5fd',
+    backgroundColor: 'rgba(219,234,254,0.52)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrFrame: {
+    width: 132,
+    height: 132,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.2)',
+    backgroundColor: 'rgba(219,234,254,0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrScanLine: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 42,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#3b82f6',
+  },
+  qrCorner: {
+    position: 'absolute',
+    width: 22,
+    height: 22,
+    borderColor: '#2563eb',
+  },
+  qrCornerTopLeft: {
+    top: -2,
+    left: -2,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopLeftRadius: 9,
+  },
+  qrCornerTopRight: {
+    top: -2,
+    right: -2,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderTopRightRadius: 9,
+  },
+  qrCornerBottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomLeftRadius: 9,
+  },
+  qrCornerBottomRight: {
+    right: -2,
+    bottom: -2,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
+    borderBottomRightRadius: 9,
+  },
+  codePanel: {
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 12,
+    backgroundColor: 'rgba(219,234,254,0.38)',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.18)',
+    alignItems: 'center',
+  },
+  codeHeader: {
+    width: 124,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: 'rgba(100,116,139,0.22)',
+  },
+  codeDigits: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  codeDigitBox: {
+    width: 32,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    shadowColor: '#3b82d2',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  codeDigitText: {
+    color: '#1e40af',
+    fontSize: 16,
     fontWeight: '800',
   },
-  cardDescription: {
-    marginTop: 8,
-    color: '#64748b',
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'center',
+  codeActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(59,130,246,0.1)',
+  },
+  codeActionLine: {
+    width: 66,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(37,99,235,0.22)',
+  },
+  ipMonitorWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ipMonitor: {
+    width: 112,
+    height: 80,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.22)',
+    backgroundColor: 'rgba(219,234,254,0.46)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ipBadge: {
+    position: 'absolute',
+    right: -8,
+    top: -8,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.25)',
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ipPill: {
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  ipStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  ipText: {
+    color: '#1e40af',
+    fontSize: 13,
+    fontWeight: '700',
   },
   steps: {
     paddingHorizontal: 20,

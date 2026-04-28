@@ -31,6 +31,8 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
 
   return (
     <View style={styles.overlay} testID="unconnected-guide">
+      <View style={styles.backgroundWashTop} pointerEvents="none" />
+      <View style={styles.backgroundWashBottom} pointerEvents="none" />
       <TouchableOpacity
         style={styles.skipButton}
         activeOpacity={0.75}
@@ -43,8 +45,8 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
 
       <View style={styles.card}>
         <View style={styles.heroIcon}>
-          <Icon name="desktop-outline" size={30} color="#3478f6" />
-          <Icon name="phone-portrait-outline" size={24} color="#3478f6" />
+          <Icon name="desktop-outline" size={28} color="#3b82f6" />
+          <Icon name="phone-portrait-outline" size={22} color="#3b82f6" />
         </View>
 
         <Text style={styles.title}>
@@ -55,6 +57,7 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
         </Text>
 
         <View style={styles.stepsRow}>
+          <View style={styles.stepsConnector} pointerEvents="none" />
           <GuideStep
             icon="desktop-outline"
             title={t(
@@ -64,7 +67,9 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
           />
           <GuideStep
             icon="scan-outline"
-            title={t('deviceDiscovery.onboarding.unconnected.connectStep.title')}
+            title={t(
+              'deviceDiscovery.onboarding.unconnected.connectStep.title',
+            )}
             body={t('deviceDiscovery.onboarding.unconnected.connectStep.body')}
           />
           <GuideStep
@@ -81,7 +86,9 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
           activeOpacity={0.75}
           onPress={handleCopyDownloadUrl}
         >
-          <Text style={styles.urlText}>{DOWNLOAD_URL.replace('https://', '')}</Text>
+          <Text style={styles.urlText}>
+            {DOWNLOAD_URL.replace('https://', '')}
+          </Text>
           <View style={styles.copyButton}>
             <Icon name="link-outline" size={18} color="#3478f6" />
             <Text style={styles.copyText}>
@@ -104,6 +111,9 @@ export function UnconnectedGuide({ onSkip, onStart }: UnconnectedGuideProps) {
           <Icon name="chevron-forward" size={18} color="#7893ab" />
         </TouchableOpacity>
       </View>
+      <Text style={styles.footerNote}>
+        {t('deviceDiscovery.onboarding.unconnected.footerNote')}
+      </Text>
     </View>
   );
 }
@@ -132,102 +142,129 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 20,
-    backgroundColor: '#d6ecf8',
-    paddingHorizontal: 24,
+    backgroundColor: '#dceefa',
+    paddingHorizontal: 20,
     paddingTop: 24,
     justifyContent: 'center',
   },
+  backgroundWashTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '54%',
+    backgroundColor: '#eaf4fb',
+  },
+  backgroundWashBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '34%',
+    backgroundColor: '#f5faff',
+  },
   skipButton: {
     position: 'absolute',
-    right: 24,
-    top: 24,
+    right: 20,
+    top: 56,
     zIndex: 1,
     borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(118,147,171,0.16)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(26,58,92,0.08)',
   },
   skipText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#7893ab',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#5a7a96',
   },
   card: {
     borderRadius: 28,
-    paddingHorizontal: 22,
-    paddingVertical: 34,
-    backgroundColor: '#ffffff',
-    shadowColor: '#4f8fbc',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.16,
-    shadowRadius: 34,
+    paddingHorizontal: 20,
+    paddingTop: 28,
+    paddingBottom: 24,
+    backgroundColor: 'rgba(255,255,255,0.93)',
+    shadowColor: '#0a1e37',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.15,
+    shadowRadius: 48,
     elevation: 6,
   },
   heroIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 22,
-    backgroundColor: '#e8f1fb',
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    backgroundColor: 'rgba(59,130,246,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#173a5e',
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a3a5c',
     textAlign: 'center',
   },
   subtitle: {
-    marginTop: 12,
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#7893ab',
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#7a90a4',
     textAlign: 'center',
   },
   stepsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 28,
+    gap: 0,
+    marginTop: 20,
+    marginBottom: 24,
+  },
+  stepsConnector: {
+    position: 'absolute',
+    top: 16,
+    left: '16.7%',
+    right: '16.7%',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(59,130,246,0.18)',
   },
   step: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 2,
   },
   stepIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#edf6ff',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#eef6ff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   stepTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#173a5e',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1a3a5c',
     textAlign: 'center',
   },
   stepBody: {
-    marginTop: 6,
-    fontSize: 11,
-    lineHeight: 16,
-    color: '#8eaac0',
+    marginTop: 4,
+    fontSize: 10,
+    lineHeight: 13,
+    color: '#94a3b8',
     textAlign: 'center',
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#e5edf5',
-    marginVertical: 28,
+    backgroundColor: 'rgba(26,58,92,0.07)',
+    marginBottom: 20,
   },
   urlBox: {
-    minHeight: 62,
-    borderRadius: 18,
+    minHeight: 52,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#d3deea',
-    backgroundColor: '#f3f7fc',
+    borderColor: 'rgba(203,213,225,0.7)',
+    backgroundColor: 'rgba(241,245,249,0.85)',
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -236,32 +273,32 @@ const styles = StyleSheet.create({
   urlText: {
     flex: 1,
     minWidth: 0,
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#475569',
   },
   copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 16,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 9,
-    backgroundColor: '#e6efff',
+    paddingVertical: 7,
+    backgroundColor: 'rgba(59,130,246,0.1)',
   },
   copyText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#3478f6',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563eb',
   },
   copyHint: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#8eaac0',
+    marginTop: 8,
+    fontSize: 11,
+    color: '#94a3b8',
     textAlign: 'center',
   },
   startButton: {
-    marginTop: 28,
+    marginTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -269,8 +306,14 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   startText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#7893ab',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#7a90a4',
+  },
+  footerNote: {
+    marginTop: 14,
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
   },
 });

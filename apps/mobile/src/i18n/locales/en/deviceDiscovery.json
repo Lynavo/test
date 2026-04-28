@@ -49,7 +49,8 @@
       "copyDone": "Download address copied",
       "copyFailed": "Could not copy the download address. Please try again later.",
       "copyHint": "Open this address in your computer browser to download",
-      "start": "I installed it. Connect device"
+      "start": "I installed it. Connect device",
+      "footerNote": "First-time guide · Available again from Help"
     }
   },
   "dialogs": {
