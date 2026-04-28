@@ -49,10 +49,18 @@ interface TargetRatioRect {
 }
 
 const DIM_COLOR = 'rgba(13,22,30,0.72)';
-const SIDE_PADDING = 28;
-const COACH_CARD_ESTIMATED_HEIGHT = 220;
+const SIDE_PADDING = 16;
+const COACH_CARD_ESTIMATED_HEIGHT = 168;
 const HIGHLIGHT_STROKE_WIDTH = 1;
 const HIGHLIGHT_STROKE_GAP = 1;
+
+const TARGET_PADDING: Record<TourTarget, number> = {
+  album: 12,
+  panel: 12,
+  history: 10,
+  settings: 10,
+  help: 10,
+};
 
 const TARGET_RATIO_RECTS: Record<TourTarget, TargetRatioRect> = {
   album: {
@@ -87,6 +95,26 @@ const TARGET_RATIO_RECTS: Record<TourTarget, TargetRatioRect> = {
   },
 };
 
+function applyTargetPadding(
+  rect: TourTargetLayout,
+  target: TourTarget,
+  screenWidth: number,
+  screenHeight: number,
+): TourTargetLayout {
+  const padding = TARGET_PADDING[target];
+  const left = Math.max(0, rect.left - padding);
+  const top = Math.max(0, rect.top - padding);
+  const right = Math.min(screenWidth, rect.left + rect.width + padding);
+  const bottom = Math.min(screenHeight, rect.top + rect.height + padding);
+
+  return {
+    left,
+    top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
 function getTargetRect(
   target: TourTarget,
   screenWidth: number,
@@ -95,16 +123,16 @@ function getTargetRect(
 ): TourLayout['target'] {
   const measured = measuredLayouts?.[target];
   if (measured) {
-    return measured;
+    return applyTargetPadding(measured, target, screenWidth, screenHeight);
   }
 
   const ratio = TARGET_RATIO_RECTS[target];
-  return {
+  return applyTargetPadding({
     left: screenWidth * ratio.left,
     top: screenHeight * ratio.top,
     width: screenWidth * ratio.width,
     height: screenHeight * ratio.height,
-  };
+  }, target, screenWidth, screenHeight);
 }
 
 function getTourLayout(
@@ -246,7 +274,8 @@ export function SyncActivityTour({
   const isLast = stepIndex === steps.length - 1;
   const layout = getTourLayout(current.target, width, height, targetLayouts);
   const highlightRadius = getHighlightRadius(current.target);
-  const highlightStrokeOffset = HIGHLIGHT_STROKE_GAP + HIGHLIGHT_STROKE_WIDTH / 2;
+  const highlightStrokeOffset =
+    HIGHLIGHT_STROKE_GAP + HIGHLIGHT_STROKE_WIDTH / 2;
 
   return (
     <Modal
@@ -263,7 +292,7 @@ export function SyncActivityTour({
           height={height}
         >
           <Defs>
-            <Mask id="syncActivityTourCutout">
+            <Mask id="syncActivityTourCutout" maskType="luminance">
               <Rect x={0} y={0} width={width} height={height} fill="#ffffff" />
               <Rect
                 x={layout.target.left}
@@ -305,7 +334,7 @@ export function SyncActivityTour({
         <View style={[styles.card, layout.card]}>
           <View style={styles.headingRow}>
             <View style={styles.iconCircle}>
-              <Icon name={current.icon} size={28} color="#ffffff" />
+              <Icon name={current.icon} size={20} color="#ffffff" />
             </View>
             <View style={styles.headingCopy}>
               <Text style={styles.title}>{current.title}</Text>
@@ -390,27 +419,27 @@ const styles = StyleSheet.create({
   card: {
     position: 'absolute',
     borderRadius: 28,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.28)',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.28,
-    shadowRadius: 28,
+    shadowRadius: 32,
     elevation: 10,
   },
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 12,
   },
   iconCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -420,46 +449,46 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   title: {
-    fontSize: 23,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#ffffff',
   },
   stepDots: {
     flexDirection: 'row',
-    gap: 6,
-    marginTop: 9,
+    gap: 4,
+    marginTop: 6,
   },
   stepDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.34)',
   },
   stepDotActive: {
-    width: 32,
+    width: 20,
     backgroundColor: '#ffffff',
   },
   body: {
-    minHeight: 66,
-    fontSize: 16,
-    lineHeight: 27,
-    color: 'rgba(255,255,255,0.86)',
+    minHeight: 58,
+    fontSize: 13,
+    lineHeight: 20,
+    color: 'rgba(255,255,255,0.82)',
   },
   actions: {
-    marginTop: 18,
+    marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 14,
   },
   textButton: {
-    minHeight: 46,
+    minHeight: 40,
     justifyContent: 'center',
   },
   skipText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.58)',
+    fontSize: 13,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.5)',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -468,9 +497,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   secondaryButton: {
-    minHeight: 46,
-    borderRadius: 23,
-    paddingHorizontal: 18,
+    minHeight: 38,
+    borderRadius: 19,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -478,21 +507,21 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   secondaryText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: 'rgba(255,255,255,0.78)',
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.75)',
   },
   primaryButton: {
-    minHeight: 46,
-    borderRadius: 23,
+    minHeight: 38,
+    borderRadius: 19,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
   },
   primaryText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#173a5e',
+    color: '#1a3a5c',
   },
 });

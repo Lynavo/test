@@ -617,7 +617,6 @@ export function SyncActivityScreen() {
     (
       target: TourTarget,
       ref: React.RefObject<MeasurableTourRef | null>,
-      padding = 0,
     ) => {
       const node = ref.current;
       if (!node) return;
@@ -627,10 +626,10 @@ export function SyncActivityScreen() {
           if (measuredWidth <= 0 || measuredHeight <= 0) return;
 
           const next: TourTargetLayout = {
-            left: x - padding,
-            top: y - padding,
-            width: measuredWidth + padding * 2,
-            height: measuredHeight + padding * 2,
+            left: x,
+            top: y,
+            width: measuredWidth,
+            height: measuredHeight,
           };
 
           setSyncActivityTourTargetLayouts(prev => {
@@ -659,11 +658,11 @@ export function SyncActivityScreen() {
   useEffect(() => {
     if (!showSyncActivityTour) return;
 
-    measureSyncActivityTourTarget('help', helpHeaderActionRef, 16);
-    measureSyncActivityTourTarget('history', historyHeaderActionRef, 16);
-    measureSyncActivityTourTarget('settings', settingsHeaderActionRef, 16);
-    measureSyncActivityTourTarget('panel', mainCardRef, 0);
-    measureSyncActivityTourTarget('album', albumQuickEntryRef, 0);
+    measureSyncActivityTourTarget('help', helpHeaderActionRef);
+    measureSyncActivityTourTarget('history', historyHeaderActionRef);
+    measureSyncActivityTourTarget('settings', settingsHeaderActionRef);
+    measureSyncActivityTourTarget('panel', mainCardRef);
+    measureSyncActivityTourTarget('album', albumQuickEntryRef);
   }, [measureSyncActivityTourTarget, showSyncActivityTour]);
 
   // ---------------------------------------------------------------------------
@@ -1409,7 +1408,7 @@ export function SyncActivityScreen() {
               accessibilityLabel={t('syncActivity.header.help')}
               activeOpacity={0.7}
               onLayout={() =>
-                measureSyncActivityTourTarget('help', helpHeaderActionRef, 16)
+                measureSyncActivityTourTarget('help', helpHeaderActionRef)
               }
               onPress={() => navigation.navigate('Help')}
             >
@@ -1425,7 +1424,6 @@ export function SyncActivityScreen() {
                 measureSyncActivityTourTarget(
                   'history',
                   historyHeaderActionRef,
-                  16,
                 )
               }
               onPress={() => navigation.navigate('History')}
@@ -1442,7 +1440,6 @@ export function SyncActivityScreen() {
                 measureSyncActivityTourTarget(
                   'settings',
                   settingsHeaderActionRef,
-                  16,
                 )
               }
               onPress={() => navigation.navigate('Settings')}
@@ -1457,7 +1454,7 @@ export function SyncActivityScreen() {
           ref={mainCardRef}
           style={styles.mainCard}
           onLayout={() =>
-            measureSyncActivityTourTarget('panel', mainCardRef, 0)
+            measureSyncActivityTourTarget('panel', mainCardRef)
           }
         >
           {/* Device info row — always shown at top of card */}
@@ -2083,7 +2080,7 @@ export function SyncActivityScreen() {
               style={styles.quickEntryCard}
               activeOpacity={0.7}
               onLayout={() =>
-                measureSyncActivityTourTarget('album', albumQuickEntryRef, 0)
+                measureSyncActivityTourTarget('album', albumQuickEntryRef)
               }
               onPress={() => navigation.navigate('AlbumWorkbench')}
             >
