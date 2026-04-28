@@ -13,7 +13,11 @@ import {
   type PurchaseError,
 } from 'react-native-iap';
 import { Platform, type EmitterSubscription } from 'react-native';
-import { TRIAL_ELIGIBLE_PRODUCTS, ALL_PRODUCT_IDS } from '../constants/iap';
+import {
+  TRIAL_ELIGIBLE_PRODUCTS,
+  ALL_PRODUCT_IDS,
+  productIdToPlan,
+} from '../constants/iap';
 import { verifyIapReceipt } from './subscription-service';
 import { ApiError, ERROR_CODE } from './api';
 import { looksLikeUserDismiss } from './iap-errors';
@@ -22,6 +26,7 @@ import {
   getSubscriptionProductPlans,
   resolveSubscriptionProductPlan,
 } from './subscription-plans-service';
+import { FEATURES } from '../constants/features';
 import type { SubscriptionPlanTier } from '@syncflow/contracts';
 
 const MAX_RESTORE_RECEIPTS = 10;
@@ -34,6 +39,7 @@ type PendingPurchase = {
   reject: (err: unknown) => void;
   timeout: ReturnType<typeof setTimeout>;
   transientErrorTimeout: ReturnType<typeof setTimeout> | null;
+  requestedAtMs: number;
 };
 
 // Apple's purchaseErrorListener may fire transient / interrupted errors
@@ -100,11 +106,11 @@ export interface IapService {
   getProductSummaries(skus?: readonly string[]): Promise<IapProductSummary[]>;
   refreshReceipt(): Promise<string | null>;
   onOrphanPurchaseVerified(cb: () => void): () => void;
-  /** DEV-ONLY escape hatch: finish every transaction currently in
+  /** Sandbox/TestFlight escape hatch: finish every transaction currently in
    *  `SKPaymentQueue` without server-side verification. Used by an
-   *  in-app debug button to clear stale sandbox transactions that
-   *  cause the cold-start flush storm. Throws on production builds —
-   *  callers must gate with `__DEV__`. NEVER expose in production:
+   *  in-app testing button to clear stale sandbox transactions that
+   *  cause the cold-start flush storm. Guarded by
+   *  FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED. NEVER expose in production:
    *  silently finishing unverified purchases means a real user's
    *  renewal could be acknowledged to Apple but never recorded
    *  server-side. */
@@ -245,6 +251,7 @@ class IapServiceImpl implements IapService {
         reject,
         timeout,
         transientErrorTimeout: null,
+        requestedAtMs: Date.now(),
       });
       void Promise.resolve(requestSubscription({ sku: productId })).catch(
         err => {
@@ -438,6 +445,10 @@ class IapServiceImpl implements IapService {
     // 1. Exact match — happy path.
     const exact = this.pendingPurchase.get(incomingProductId);
     if (exact) {
+      if (!this.shouldResolvePendingPurchase(exact, p)) {
+        await this.handleOrphanPurchase(p);
+        return;
+      }
       this.clearPendingTimers(exact);
       this.pendingPurchase.delete(incomingProductId);
       await this.resolvePendingPurchase(exact, incomingProductId, p);
@@ -461,6 +472,10 @@ class IapServiceImpl implements IapService {
         return;
       }
       const fallback = this.pendingPurchase.get(fallbackKey)!;
+      if (!this.shouldResolvePendingPurchase(fallback, p)) {
+        await this.handleOrphanPurchase(p);
+        return;
+      }
       this.clearPendingTimers(fallback);
       this.pendingPurchase.delete(fallbackKey);
       await this.resolvePendingPurchase(fallback, incomingProductId, p);
@@ -480,6 +495,25 @@ class IapServiceImpl implements IapService {
       resolveSubscriptionProductPlan(incomingProductId),
     ]);
     return requestedPlan === 'yearly' && incomingPlan === 'monthly';
+  }
+
+  private shouldResolvePendingPurchase(
+    pending: PendingPurchase,
+    purchase: Purchase,
+  ): boolean {
+    const transactionDate =
+      typeof purchase.transactionDate === 'number'
+        ? purchase.transactionDate
+        : Number.NaN;
+    if (!Number.isFinite(transactionDate) || transactionDate <= 0) {
+      return true;
+    }
+
+    // StoreKit replays unfinished transactions as soon as the listener is
+    // attached. A replay can share the same productId as the user's new tap,
+    // so productId alone is not enough to resolve the pending purchase.
+    // Allow a small clock/timing cushion, but reject clearly old events.
+    return transactionDate >= pending.requestedAtMs - 5_000;
   }
 
   private async resolvePendingPurchase(
@@ -562,6 +596,13 @@ class IapServiceImpl implements IapService {
           ];
     if (!productId) return candidates;
     if (!plan) {
+      const fallbackPlan = productIdToPlan(productId);
+      if (fallbackPlan) {
+        return [
+          { plan: fallbackPlan, productId },
+          ...candidates.filter(candidate => candidate.productId !== productId),
+        ];
+      }
       return [
         { plan: 'monthly', productId },
         { plan: 'yearly', productId },
@@ -835,8 +876,10 @@ class IapServiceImpl implements IapService {
   }
 
   async _devFlushAllPending(): Promise<void> {
-    if (!__DEV__) {
-      throw new Error('_devFlushAllPending is only allowed in DEV builds');
+    if (!__DEV__ && !FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED) {
+      throw new Error(
+        '_devFlushAllPending is only allowed in dev/TestFlight builds',
+      );
     }
     // Do not call initialize() here: attaching purchaseUpdatedListener is what
     // triggers RN-IAP's native "Purchase Successful" replay storm. The iOS

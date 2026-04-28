@@ -13,6 +13,7 @@ CONFIGURATION="Release"
 EXPORT_OPTIONS="${IOS_DIR}/ExportOptions-TestFlight.plist"
 ARCHIVES_DIR="${IOS_DIR}/build/archives"
 EXPORT_DIR="/tmp/syncflow-export"
+FEATURE_FLAGS_FILE="${REPO_ROOT}/apps/mobile/src/constants/features.ts"
 
 # App Store Connect API key for Shenzhen Kaiyun (GKN7JQNCMC) — altool upload path.
 APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-HY8CAHGPW9}"
@@ -38,6 +39,8 @@ Modes:
   archive-upload  Increment, archive, and upload to TestFlight
 
 Note: If archive or upload fails, the build number will be rolled back automatically.
+TestFlight builds require FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED=true so
+testers can clear stale StoreKit sandbox transactions from Settings.
 
 Defaults:
   BUILD_NUMBER=${BUILD_NUMBER}
@@ -60,6 +63,34 @@ ensure_prereqs() {
     echo "Missing export options: ${EXPORT_OPTIONS}" >&2
     exit 1
   fi
+}
+
+ensure_testflight_iap_flags() {
+  if [[ "${SKIP_IAP_SANDBOX_FLAG_CHECK:-}" == "1" ]]; then
+    echo "Skipping TestFlight IAP sandbox flag check"
+    return 0
+  fi
+
+  if [[ ! -f "${FEATURE_FLAGS_FILE}" ]]; then
+    echo "Missing feature flags file: ${FEATURE_FLAGS_FILE}" >&2
+    exit 1
+  fi
+
+  if ! grep -Eq "IAP_SANDBOX_QUEUE_FLUSH_ENABLED:[[:space:]]*true" "${FEATURE_FLAGS_FILE}"; then
+    cat >&2 <<EOF
+ERROR: TestFlight IAP sandbox queue flush is disabled.
+
+Set FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED=true in:
+  ${FEATURE_FLAGS_FILE}
+
+TestFlight testers need Settings -> TEST: Flush IAP Queue to clear stale
+StoreKit sandbox transactions before purchase verification tests.
+Use SKIP_IAP_SANDBOX_FLAG_CHECK=1 only for an intentional exception.
+EOF
+    exit 1
+  fi
+
+  echo "OK: TestFlight IAP sandbox queue flush is enabled"
 }
 
 increment_build_number() {
@@ -95,6 +126,7 @@ cleanup() {
 trap cleanup EXIT
 
 archive_build() {
+  ensure_testflight_iap_flags
   increment_build_number
   
   mkdir -p "${ARCHIVES_DIR}"

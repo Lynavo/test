@@ -31,4 +31,12 @@ export const FEATURES = {
    * ship "purchase only" first and enable Restore once sandbox-verified.
    */
   IAP_RESTORE_ENABLED: true,
+
+  /**
+   * TestFlight / sandbox-only escape hatch for clearing stale StoreKit
+   * transactions during IAP QA. Turn this off before submitting a production
+   * App Store build: it finishes pending StoreKit transactions without server
+   * verification and is intended only for tester-controlled sandbox cleanup.
+   */
+  IAP_SANDBOX_QUEUE_FLUSH_ENABLED: true,
 } as const;

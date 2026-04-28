@@ -246,6 +246,45 @@ describe('iapService — purchase', () => {
     });
   });
 
+  test('does not resolve pending purchase with an old same-SKU replay event', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+
+    try {
+      const pending = iapService.purchase(IAP_PRODUCTS.yearlyPromo);
+      await flushPurchasePreflight();
+
+      updatedCb?.({
+        productId: IAP_PRODUCTS.yearlyPromo,
+        transactionReceipt: 'OLD_REPLAY_RECEIPT',
+        transactionId: 'tx_old_replay',
+        transactionDate: 900_000,
+      });
+
+      await new Promise<void>(r => setImmediate(r));
+      expect(verifyIapReceipt).toHaveBeenCalledWith(
+        'OLD_REPLAY_RECEIPT',
+        'yearly',
+        IAP_PRODUCTS.yearlyPromo,
+        'tx_old_replay',
+      );
+
+      updatedCb?.({
+        productId: IAP_PRODUCTS.yearlyPromo,
+        transactionReceipt: 'CURRENT_PURCHASE_RECEIPT',
+        transactionId: 'tx_current_purchase',
+        transactionDate: 1_001_000,
+      });
+
+      await expect(pending).resolves.toEqual({
+        productId: IAP_PRODUCTS.yearlyPromo,
+        transactionReceipt: 'CURRENT_PURCHASE_RECEIPT',
+        transactionId: 'tx_current_purchase',
+      });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   test('does not force-refresh the iOS receipt when the purchase event has one', async () => {
     (getReceiptIOS as jest.Mock).mockResolvedValueOnce('FRESH_RECEIPT_BLOB');
 
@@ -653,6 +692,36 @@ describe('iapService — orphan recovery', () => {
     );
     expect(finishTxMock).not.toHaveBeenCalled();
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  test('orphan with inactive bootstrap yearly SKU verifies yearly before catalog fallback', async () => {
+    mockResolveSubscriptionProductPlan.mockResolvedValueOnce(null);
+    (verifyIapReceipt as jest.Mock).mockRejectedValue(
+      new ApiError(ERROR_CODE.NETWORK_ERROR, 'net'),
+    );
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.yearly,
+      transactionReceipt: 'INACTIVE_YEARLY_RECEIPT',
+      transactionId: 'tx_inactive_yearly',
+    });
+
+    await new Promise<void>(r => setImmediate(r));
+    await new Promise<void>(r => setImmediate(r));
+
+    expect(verifyIapReceipt).toHaveBeenCalledWith(
+      'INACTIVE_YEARLY_RECEIPT',
+      'yearly',
+      IAP_PRODUCTS.yearly,
+      'tx_inactive_yearly',
+    );
+    expect(verifyIapReceipt).not.toHaveBeenCalledWith(
+      'INACTIVE_YEARLY_RECEIPT',
+      'monthly',
+      IAP_PRODUCTS.yearly,
+      'tx_inactive_yearly',
+    );
+    expect(finishTxMock).not.toHaveBeenCalled();
   });
 
   test('orphan with unknown productId is throttled for the same transaction', async () => {
