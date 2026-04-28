@@ -1569,12 +1569,7 @@ export function SettingsScreen() {
             </View>
             <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
           </TouchableOpacity>
-        </View>
-
-        {/* ============================================================= */}
-        {/* Logout                                                         */}
-        {/* ============================================================= */}
-        <View style={[styles.listCard, styles.dangerCard, styles.logoutCard]}>
+          <View style={styles.listSep} />
           <TouchableOpacity
             style={styles.actionRow}
             activeOpacity={0.6}
