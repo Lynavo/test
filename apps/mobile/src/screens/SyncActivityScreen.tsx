@@ -1304,12 +1304,27 @@ export function SyncActivityScreen() {
           <Text style={styles.headerTitle}>{t('syncActivity.title')}</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              style={styles.headerActionButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('syncActivity.header.help')}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate('Help')}
+            >
+              <Icon name="help-circle-outline" size={22} color={HEADER_ICON} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerActionButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('syncActivity.header.history')}
               activeOpacity={0.7}
               onPress={() => navigation.navigate('History')}
             >
               <Icon name="time-outline" size={22} color={HEADER_ICON} />
             </TouchableOpacity>
             <TouchableOpacity
+              style={styles.headerActionButton}
+              accessibilityRole="button"
+              accessibilityLabel={t('syncActivity.header.settings')}
               activeOpacity={0.7}
               onPress={() => navigation.navigate('Settings')}
             >
@@ -2279,7 +2294,13 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 10,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,

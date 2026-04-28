@@ -1,5 +1,10 @@
 {
   "title": "同步動態",
+  "header": {
+    "help": "幫助",
+    "history": "同步歷史",
+    "settings": "設定"
+  },
   "phases": {
     "discoveringTitle": "正在搜尋電腦…",
     "reconcilingTitle": "正在同步歷史記錄…",

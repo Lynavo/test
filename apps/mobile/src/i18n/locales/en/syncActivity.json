@@ -1,5 +1,10 @@
 {
   "title": "Sync Activity",
+  "header": {
+    "help": "Help",
+    "history": "Sync History",
+    "settings": "Settings"
+  },
   "phases": {
     "discoveringTitle": "Searching for your computer...",
     "reconcilingTitle": "Syncing history...",

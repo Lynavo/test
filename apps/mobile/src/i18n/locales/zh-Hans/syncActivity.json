@@ -1,5 +1,10 @@
 {
   "title": "同步动态",
+  "header": {
+    "help": "帮助",
+    "history": "同步历史",
+    "settings": "设置"
+  },
   "phases": {
     "discoveringTitle": "正在搜索电脑…",
     "reconcilingTitle": "正在同步历史记录…",
