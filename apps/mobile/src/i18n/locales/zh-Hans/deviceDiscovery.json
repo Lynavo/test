@@ -22,6 +22,30 @@
     "manualInputIp": "手动输入 IP",
     "qrPair": "扫码配对"
   },
+  "onboarding": {
+    "unconnected": {
+      "skip": "跳过",
+      "title": "开始使用 Vivi Drop",
+      "subtitle": "手机与电脑无线同步素材，三步搞定",
+      "downloadStep": {
+        "title": "下载 PC 端",
+        "body": "在电脑上安装 Vivi Drop"
+      },
+      "connectStep": {
+        "title": "手机连接",
+        "body": "输入连接码或扫码连接"
+      },
+      "syncStep": {
+        "title": "开始同步",
+        "body": "素材自动传输到电脑"
+      },
+      "copy": "复制",
+      "copyDone": "下载地址已复制",
+      "copyFailed": "暂时无法复制下载地址，请稍后重试。",
+      "copyHint": "复制后在电脑浏览器中打开即可下载",
+      "start": "我已经下载好了，去连接设备"
+    }
+  },
   "dialogs": {
     "openLinkFailed": {
       "title": "打开失败",

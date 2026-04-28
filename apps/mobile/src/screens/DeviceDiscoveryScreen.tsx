@@ -40,6 +40,11 @@ import {
   isDiagnosticsExportUnavailable,
   shareDiagnosticsArchive,
 } from '../utils/shareDiagnosticsArchive';
+import { UnconnectedGuide } from '../components/onboarding/UnconnectedGuide';
+import {
+  hasSeenUnconnectedGuide,
+  markUnconnectedGuideSeen,
+} from '../utils/onboardingStorage';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
 
@@ -161,6 +166,7 @@ export function DeviceDiscoveryScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [manualSectionHeight, setManualSectionHeight] = useState(0);
   const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [showUnconnectedGuide, setShowUnconnectedGuide] = useState(false);
 
   // Popover & Modal state
   const [showPairingMenu, setShowPairingMenu] = useState(false);
@@ -185,6 +191,23 @@ export function DeviceDiscoveryScreen() {
       if (cancelled) return;
       setKnownDeviceIds(new Set(ids as string[]));
       setCurrentDeviceId((binding as { deviceId?: string } | null)?.deviceId ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'switch') {
+      setShowUnconnectedGuide(false);
+      return;
+    }
+
+    let cancelled = false;
+    void hasSeenUnconnectedGuide().then(seen => {
+      if (!cancelled) {
+        setShowUnconnectedGuide(!seen);
+      }
     });
     return () => {
       cancelled = true;
@@ -447,6 +470,11 @@ export function DeviceDiscoveryScreen() {
     }
   }, []);
 
+  const handleDismissUnconnectedGuide = useCallback(async () => {
+    await markUnconnectedGuideSeen();
+    setShowUnconnectedGuide(false);
+  }, []);
+
   const renderDevice = useCallback(
     ({ item }: ListRenderItemInfo<DiscoveredDevice>) => {
       const isCurrentDevice = mode === 'switch' && item.deviceId === currentDeviceId;
@@ -622,6 +650,13 @@ export function DeviceDiscoveryScreen() {
             </View>
           )}
         </View>
+
+        {showUnconnectedGuide && (
+          <UnconnectedGuide
+            onSkip={() => void handleDismissUnconnectedGuide()}
+            onStart={() => void handleDismissUnconnectedGuide()}
+          />
+        )}
 
         {/* Pairing Menu Popover */}
         <Modal

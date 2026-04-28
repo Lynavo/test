@@ -36,7 +36,7 @@ const ionicons: Record<string, number> = {
   'sync-outline': 61121,
   'alert-circle-outline': 59925,
   'home-outline': 60514,
-  'flash-outline': 60418,
+  'flash-outline': 60443,
   ellipse: 60370,
   'camera-outline': 60142,
   'film-outline': 60404,

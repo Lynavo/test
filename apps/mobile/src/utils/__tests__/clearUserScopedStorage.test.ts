@@ -15,6 +15,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearUserScopedStorage } from '../clearUserScopedStorage';
+import {
+  ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY,
+  ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY,
+} from '../onboardingStorage';
 
 describe('clearUserScopedStorage', () => {
   beforeEach(() => {
@@ -61,6 +65,20 @@ describe('clearUserScopedStorage', () => {
     );
     expect(mockStore.get('@vividrop/auth/access_token')).toBe('legacy');
     expect(mockStore.get('random-unrelated')).toBe('keep-me');
+  });
+
+  test('preserves install-lifetime onboarding flags across account cleanup', async () => {
+    mockStore.set('@vividrop/reminder-shown/2026-04-17/warn7', '1');
+    mockStore.set(ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY, '1');
+    mockStore.set(ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY, '1');
+
+    await clearUserScopedStorage();
+
+    expect(mockStore.has('@vividrop/reminder-shown/2026-04-17/warn7')).toBe(
+      false,
+    );
+    expect(mockStore.get(ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY)).toBe('1');
+    expect(mockStore.get(ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY)).toBe('1');
   });
 
   test('no-op when no reminder keys exist', async () => {

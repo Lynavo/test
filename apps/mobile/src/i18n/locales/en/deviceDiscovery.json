@@ -22,6 +22,30 @@
     "manualInputIp": "Enter IP Manually",
     "qrPair": "Scan QR Code"
   },
+  "onboarding": {
+    "unconnected": {
+      "skip": "Skip",
+      "title": "Start using Vivi Drop",
+      "subtitle": "Sync media wirelessly from phone to computer in three steps.",
+      "downloadStep": {
+        "title": "Install PC App",
+        "body": "Install Vivi Drop on your computer"
+      },
+      "connectStep": {
+        "title": "Connect Phone",
+        "body": "Enter a pairing code or scan QR"
+      },
+      "syncStep": {
+        "title": "Start Syncing",
+        "body": "Media transfers to your computer"
+      },
+      "copy": "Copy",
+      "copyDone": "Download address copied",
+      "copyFailed": "Could not copy the download address. Please try again later.",
+      "copyHint": "Open this address in your computer browser to download",
+      "start": "I installed it. Connect device"
+    }
+  },
   "dialogs": {
     "openLinkFailed": {
       "title": "Cannot Open",

@@ -26,10 +26,19 @@ import type { UploadTaskSource, AutoUploadState } from '@syncflow/contracts';
 import { Icon } from '../components/Icon';
 import { SubscriptionStatusIcon } from '../components/SubscriptionStatusIcon';
 import {
+  SyncActivityTour,
+  type TourTarget,
+  type TourTargetLayout,
+} from '../components/onboarding/SyncActivityTour';
+import {
   cancelAllManualUploads,
   disableAutoUpload,
   enableAutoUpload,
 } from '../services/SyncEngineModule';
+import {
+  hasSeenSyncActivityTour,
+  markSyncActivityTourSeen,
+} from '../utils/onboardingStorage';
 import { formatBytes } from '../utils/format';
 import { formatLocalDateKey } from '../utils/localDateKey';
 import {
@@ -166,6 +175,8 @@ const NATIVE_SYNC_LOOP_ACTIVE_STATES = new Set([
   'discovering',
   'reconciling',
 ]);
+
+type MeasurableTourRef = React.ElementRef<typeof TouchableOpacity> | View;
 
 const EMPTY_OVERVIEW: SyncOverview = {
   progressPercent: 0,
@@ -553,8 +564,21 @@ export function SyncActivityScreen() {
   });
   const [initialLoading, setInitialLoading] = useState(true);
   const [cancellingBatch, setCancellingBatch] = useState(false);
+  const [showSyncActivityTour, setShowSyncActivityTour] = useState(false);
+  const [syncActivityTourChecked, setSyncActivityTourChecked] = useState(false);
+  const [syncActivityTourTargetLayouts, setSyncActivityTourTargetLayouts] =
+    useState<Partial<Record<TourTarget, TourTargetLayout>>>({});
   const [autoRoundDisplayBaseline, setAutoRoundDisplayBaseline] =
     useState<AutoRoundDisplayBaseline | null>(null);
+  const mainCardRef = useRef<View>(null);
+  const albumQuickEntryRef =
+    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const helpHeaderActionRef =
+    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const historyHeaderActionRef =
+    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const settingsHeaderActionRef =
+    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
 
   // Offline debounce: stabilize isOffline to avoid rapid UI flicker
   const [stableOffline, setStableOffline] = useState(false);
@@ -588,6 +612,59 @@ export function SyncActivityScreen() {
     subscription: auth.subscription,
     user: auth.user,
   });
+
+  const measureSyncActivityTourTarget = useCallback(
+    (
+      target: TourTarget,
+      ref: React.RefObject<MeasurableTourRef | null>,
+      padding = 0,
+    ) => {
+      const node = ref.current;
+      if (!node) return;
+
+      requestAnimationFrame(() => {
+        node.measureInWindow((x, y, measuredWidth, measuredHeight) => {
+          if (measuredWidth <= 0 || measuredHeight <= 0) return;
+
+          const next: TourTargetLayout = {
+            left: x - padding,
+            top: y - padding,
+            width: measuredWidth + padding * 2,
+            height: measuredHeight + padding * 2,
+          };
+
+          setSyncActivityTourTargetLayouts(prev => {
+            const current = prev[target];
+            if (
+              current &&
+              Math.abs(current.left - next.left) < 0.5 &&
+              Math.abs(current.top - next.top) < 0.5 &&
+              Math.abs(current.width - next.width) < 0.5 &&
+              Math.abs(current.height - next.height) < 0.5
+            ) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              [target]: next,
+            };
+          });
+        });
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!showSyncActivityTour) return;
+
+    measureSyncActivityTourTarget('help', helpHeaderActionRef, 16);
+    measureSyncActivityTourTarget('history', historyHeaderActionRef, 16);
+    measureSyncActivityTourTarget('settings', settingsHeaderActionRef, 16);
+    measureSyncActivityTourTarget('panel', mainCardRef, 0);
+    measureSyncActivityTourTarget('album', albumQuickEntryRef, 0);
+  }, [measureSyncActivityTourTarget, showSyncActivityTour]);
 
   // ---------------------------------------------------------------------------
   // Data loading
@@ -735,6 +812,23 @@ export function SyncActivityScreen() {
       errorSub?.remove();
     };
   }, [loadTodayStats, navigation, t]);
+
+  useEffect(() => {
+    if (initialLoading || !bindingState?.deviceId || syncActivityTourChecked) {
+      return;
+    }
+
+    let cancelled = false;
+    setSyncActivityTourChecked(true);
+    void hasSeenSyncActivityTour().then(seen => {
+      if (!cancelled && !seen) {
+        setShowSyncActivityTour(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [bindingState?.deviceId, initialLoading, syncActivityTourChecked]);
 
   useEffect(() => {
     if (
@@ -1054,6 +1148,11 @@ export function SyncActivityScreen() {
     }
   }, [t, startAutoUploadPreparing, clearAutoUploadPreparing]);
 
+  const handleDismissSyncActivityTour = useCallback(async () => {
+    await markSyncActivityTourSeen();
+    setShowSyncActivityTour(false);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Derived state
   // ---------------------------------------------------------------------------
@@ -1304,28 +1403,48 @@ export function SyncActivityScreen() {
           <Text style={styles.headerTitle}>{t('syncActivity.title')}</Text>
           <View style={styles.headerActions}>
             <TouchableOpacity
+              ref={helpHeaderActionRef}
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.help')}
               activeOpacity={0.7}
+              onLayout={() =>
+                measureSyncActivityTourTarget('help', helpHeaderActionRef, 16)
+              }
               onPress={() => navigation.navigate('Help')}
             >
               <Icon name="help-circle-outline" size={22} color={HEADER_ICON} />
             </TouchableOpacity>
             <TouchableOpacity
+              ref={historyHeaderActionRef}
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.history')}
               activeOpacity={0.7}
+              onLayout={() =>
+                measureSyncActivityTourTarget(
+                  'history',
+                  historyHeaderActionRef,
+                  16,
+                )
+              }
               onPress={() => navigation.navigate('History')}
             >
               <Icon name="time-outline" size={22} color={HEADER_ICON} />
             </TouchableOpacity>
             <TouchableOpacity
+              ref={settingsHeaderActionRef}
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.settings')}
               activeOpacity={0.7}
+              onLayout={() =>
+                measureSyncActivityTourTarget(
+                  'settings',
+                  settingsHeaderActionRef,
+                  16,
+                )
+              }
               onPress={() => navigation.navigate('Settings')}
             >
               <Icon name="settings-outline" size={22} color={HEADER_ICON} />
@@ -1334,7 +1453,13 @@ export function SyncActivityScreen() {
         </View>
 
         {/* Unified main card */}
-        <View style={styles.mainCard}>
+        <View
+          ref={mainCardRef}
+          style={styles.mainCard}
+          onLayout={() =>
+            measureSyncActivityTourTarget('panel', mainCardRef, 0)
+          }
+        >
           {/* Device info row — always shown at top of card */}
           <View style={styles.deviceRow}>
             <View style={styles.deviceIconBox}>
@@ -1954,8 +2079,12 @@ export function SyncActivityScreen() {
           </Text>
           <View style={styles.quickEntryRow}>
             <TouchableOpacity
+              ref={albumQuickEntryRef}
               style={styles.quickEntryCard}
               activeOpacity={0.7}
+              onLayout={() =>
+                measureSyncActivityTourTarget('album', albumQuickEntryRef, 0)
+              }
               onPress={() => navigation.navigate('AlbumWorkbench')}
             >
               <View
@@ -2053,6 +2182,12 @@ export function SyncActivityScreen() {
           </View>
         </Modal>
       )}
+      <SyncActivityTour
+        visible={showSyncActivityTour}
+        onSkip={() => void handleDismissSyncActivityTour()}
+        onFinish={() => void handleDismissSyncActivityTour()}
+        targetLayouts={syncActivityTourTargetLayouts}
+      />
     </SafeAreaView>
   );
 }
