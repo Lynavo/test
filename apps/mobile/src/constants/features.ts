@@ -6,9 +6,6 @@
 // Flip to `true` only when the corresponding backend / IAP plumbing is wired,
 // QA'd and ready to ship to real users.
 
-// NOTE (2026-04-21, TestFlight IAP testing): enabled for release/TestFlight
-// builds so Apple sandbox purchases can be exercised outside dev builds.
-
 export const FEATURES = {
   /**
    * Gate routing on subscription status (trial_expired / sub_expired ⇒
@@ -31,12 +28,4 @@ export const FEATURES = {
    * ship "purchase only" first and enable Restore once sandbox-verified.
    */
   IAP_RESTORE_ENABLED: true,
-
-  /**
-   * TestFlight / sandbox-only escape hatch for clearing stale StoreKit
-   * transactions during IAP QA. Turn this off before submitting a production
-   * App Store build: it finishes pending StoreKit transactions without server
-   * verification and is intended only for tester-controlled sandbox cleanup.
-   */
-  IAP_SANDBOX_QUEUE_FLUSH_ENABLED: true,
 } as const;

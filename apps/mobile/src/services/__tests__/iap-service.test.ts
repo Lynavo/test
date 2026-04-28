@@ -804,26 +804,6 @@ describe('iapService — orphan recovery', () => {
 
 import { getAvailablePurchases, getSubscriptions } from 'react-native-iap';
 
-describe('iapService — dev queue flush', () => {
-  beforeEach(async () => {
-    jest.clearAllMocks();
-    await iapService.teardown();
-  });
-
-  afterEach(async () => {
-    await iapService.teardown();
-  });
-
-  test('finishes the iOS transaction queue without initializing IAP listeners', async () => {
-    await iapService._devFlushAllPending();
-
-    expect(clearTransactionIOS).toHaveBeenCalledTimes(1);
-    expect(initConnection).not.toHaveBeenCalled();
-    expect(purchaseUpdatedListener).not.toHaveBeenCalled();
-    expect(purchaseErrorListener).not.toHaveBeenCalled();
-  });
-});
-
 describe('iapService — dev preflight cleanup', () => {
   beforeEach(async () => {
     jest.clearAllMocks();

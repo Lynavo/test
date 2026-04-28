@@ -634,42 +634,6 @@ export function SettingsScreen() {
     }
   }, [auth.user?.id, t]);
 
-  const canFlushIapQueue =
-    Platform.OS === 'ios' &&
-    (__DEV__ || FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED);
-
-  // TestFlight/dev-only: drain stale sandbox transactions from SKPaymentQueue.
-  // The cold-start "Purchase Successful" storm comes from unfinished
-  // sandbox txs that react-native-iap re-emits the moment a listener
-  // attaches. Calling this once finishes them all so subsequent cold starts
-  // are quiet. Disable FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED before
-  // shipping a production App Store build.
-  const handleDevFlushIap = useCallback(() => {
-    if (!canFlushIapQueue) return;
-    Alert.alert(
-      'TEST: Flush IAP Queue',
-      'Finish ALL pending StoreKit transactions without server verify. Use only for sandbox/TestFlight cleanup.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Flush',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await iapService._devFlushAllPending();
-              Alert.alert('TEST: IAP queue flush requested');
-            } catch (err) {
-              Alert.alert(
-                'TEST: Flush failed',
-                err instanceof Error ? err.message : String(err),
-              );
-            }
-          },
-        },
-      ],
-    );
-  }, [canFlushIapQueue]);
-
   const handleResetSyncStatus = useCallback(() => {
     if (isResetSyncDisabled) return;
 
@@ -1512,24 +1476,6 @@ export function SettingsScreen() {
                     {isRestoring
                       ? t('subscription.restore.inProgress')
                       : t('subscription.restore.action')}
-                  </Text>
-                </View>
-                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
-              </TouchableOpacity>
-            </>
-          ) : null}
-          {canFlushIapQueue ? (
-            <>
-              <View style={styles.listSep} />
-              <TouchableOpacity
-                style={styles.actionRow}
-                activeOpacity={0.6}
-                onPress={handleDevFlushIap}
-              >
-                <View style={styles.actionRowLeft}>
-                  <Icon name="trash-outline" size={18} color={BLUE} />
-                  <Text style={styles.actionRowText}>
-                    TEST: Flush IAP Queue
                   </Text>
                 </View>
                 <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />

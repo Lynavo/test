@@ -26,7 +26,6 @@ import {
   getSubscriptionProductPlans,
   resolveSubscriptionProductPlan,
 } from './subscription-plans-service';
-import { FEATURES } from '../constants/features';
 import type { SubscriptionPlanTier } from '@syncflow/contracts';
 
 const MAX_RESTORE_RECEIPTS = 10;
@@ -106,15 +105,6 @@ export interface IapService {
   getProductSummaries(skus?: readonly string[]): Promise<IapProductSummary[]>;
   refreshReceipt(): Promise<string | null>;
   onOrphanPurchaseVerified(cb: () => void): () => void;
-  /** Sandbox/TestFlight escape hatch: finish every transaction currently in
-   *  `SKPaymentQueue` without server-side verification. Used by an
-   *  in-app testing button to clear stale sandbox transactions that
-   *  cause the cold-start flush storm. Guarded by
-   *  FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED. NEVER expose in production:
-   *  silently finishing unverified purchases means a real user's
-   *  renewal could be acknowledged to Apple but never recorded
-   *  server-side. */
-  _devFlushAllPending(): Promise<void>;
 }
 
 class IapServiceImpl implements IapService {
@@ -872,23 +862,6 @@ class IapServiceImpl implements IapService {
       await clearTransactionIOS();
     } catch (err) {
       console.warn('[iap-service] dev sandbox preflight cleanup failed', err);
-    }
-  }
-
-  async _devFlushAllPending(): Promise<void> {
-    if (!__DEV__ && !FEATURES.IAP_SANDBOX_QUEUE_FLUSH_ENABLED) {
-      throw new Error(
-        '_devFlushAllPending is only allowed in dev/TestFlight builds',
-      );
-    }
-    // Do not call initialize() here: attaching purchaseUpdatedListener is what
-    // triggers RN-IAP's native "Purchase Successful" replay storm. The iOS
-    // clearTransaction bridge finishes SKPaymentQueue entries directly.
-    try {
-      await clearTransactionIOS();
-    } catch (err) {
-      console.warn('[iap-service] _devFlushAllPending threw', err);
-      throw err;
     }
   }
 }
