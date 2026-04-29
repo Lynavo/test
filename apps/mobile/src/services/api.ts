@@ -92,12 +92,14 @@ interface RequestOptions {
   skipRefresh?: boolean;
   /** Override the default request timeout (ms). */
   timeoutMs?: number;
+  /** Route this request to a specific API base URL. */
+  baseUrlOverride?: string;
 }
 
-export function buildUrl(path: string): string {
+export function buildUrl(path: string, baseUrlOverride?: string): string {
   // Resolve and validate per-request: a misconfigured release build raises
   // a typed ApiError instead of crashing the bundle at module-load time.
-  const baseUrl = getBaseUrl();
+  const baseUrl = baseUrlOverride ?? getBaseUrl();
   const insecure = describeInsecureBaseUrl(baseUrl);
   if (insecure) {
     throw new ApiError(ERROR_CODE.NETWORK_ERROR, insecure);
@@ -153,7 +155,7 @@ async function request<T>(
   let res: Response;
   try {
     res = await fetchWithTimeout(
-      buildUrl(path),
+      buildUrl(path, options.baseUrlOverride),
       {
         method,
         headers,
@@ -324,8 +326,9 @@ export async function apiPost<T>(
 export async function apiPostNoAuth<T>(
   path: string,
   body?: unknown,
+  options?: RequestOptions,
 ): Promise<T> {
-  return request<T>('POST', path, body, { skipAuth: true });
+  return request<T>('POST', path, body, { ...options, skipAuth: true });
 }
 
 export async function apiDelete<T>(

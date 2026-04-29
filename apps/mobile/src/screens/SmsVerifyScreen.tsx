@@ -17,7 +17,10 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
+import {
+  AUTH_COLORS,
+  AuthScreenShell,
+} from '../components/auth/AuthScreenShell';
 import { maskPhone } from '../utils/phone-validation';
 import { smsLogin, sendSmsCode } from '../services/auth-service';
 import { ApiError, ERROR_CODE } from '../services/api';
@@ -40,7 +43,7 @@ const COUNTDOWN_SECONDS = 60;
 export function SmsVerifyScreen() {
   const navigation = useNavigation<SmsVerifyNavProp>();
   const route = useRoute<SmsVerifyRouteProp>();
-  const { phone } = route.params;
+  const { phone, authBaseUrl } = route.params;
   const auth = useAuth();
   const { t } = useTranslation();
   const windowWidth = Dimensions.get('window').width;
@@ -61,7 +64,9 @@ export function SmsVerifyScreen() {
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const codeBoxSize = Math.min(
     48,
-    Math.floor((windowWidth - 24 * 2 - 24 * 2 - 8 * (CODE_LENGTH - 1)) / CODE_LENGTH),
+    Math.floor(
+      (windowWidth - 24 * 2 - 24 * 2 - 8 * (CODE_LENGTH - 1)) / CODE_LENGTH,
+    ),
   );
   const resolvedCodeBoxSize = Math.max(40, codeBoxSize);
   const codeBoxRadius = Math.max(14, Math.floor(resolvedCodeBoxSize * 0.3));
@@ -77,7 +82,7 @@ export function SmsVerifyScreen() {
       clearInterval(countdownRef.current);
     }
     countdownRef.current = setInterval(() => {
-      setCountdown((prev) => {
+      setCountdown(prev => {
         if (prev <= 1) {
           if (countdownRef.current) {
             clearInterval(countdownRef.current);
@@ -156,7 +161,7 @@ export function SmsVerifyScreen() {
       setErrorMsg(null);
 
       try {
-        const result = await smsLogin(phone, fullCode);
+        const result = await smsLogin(phone, fullCode, authBaseUrl);
         // auth.login flips isLoggedIn=true → RootNavigator unmounts the
         // UnauthStack and mounts AuthedStack, which picks the right initial
         // route (DeviceDiscovery / SyncActivity / Subscription) once the
@@ -184,7 +189,10 @@ export function SmsVerifyScreen() {
               setTimeout(() => codeInputRef.current?.focus(), 120);
               break;
             case ERROR_CODE.TOO_MANY_CODE_ATTEMPTS:
-              Alert.alert(t('errors.smsVerifyFailedTitle'), t('errors.smsTooManyAttempts'));
+              Alert.alert(
+                t('errors.smsVerifyFailedTitle'),
+                t('errors.smsTooManyAttempts'),
+              );
               setCode('');
               Vibration.vibrate(300);
               setTimeout(() => codeInputRef.current?.focus(), 120);
@@ -201,7 +209,7 @@ export function SmsVerifyScreen() {
         }
       }
     },
-    [phone, auth, triggerShake],
+    [phone, authBaseUrl, auth, triggerShake],
   );
 
   // -----------------------------------------------------------------------
@@ -234,20 +242,26 @@ export function SmsVerifyScreen() {
     setErrorMsg(null);
 
     try {
-      await sendSmsCode(phone);
+      await sendSmsCode(phone, authBaseUrl);
       startCountdown();
       setCode('');
       setTimeout(() => codeInputRef.current?.focus(), 120);
     } catch (err) {
       if (err instanceof ApiError) {
-        Alert.alert(t('errors.authSendFailed'), err.message || t('errors.smsSendFailed'));
+        Alert.alert(
+          t('errors.authSendFailed'),
+          err.message || t('errors.smsSendFailed'),
+        );
       } else {
-        Alert.alert(t('errors.networkTitle'), t('errors.networkCheckConnection'));
+        Alert.alert(
+          t('errors.networkTitle'),
+          t('errors.networkCheckConnection'),
+        );
       }
     } finally {
       setResending(false);
     }
-  }, [countdown, resending, phone, startCountdown]);
+  }, [countdown, resending, phone, authBaseUrl, startCountdown]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -255,7 +269,9 @@ export function SmsVerifyScreen() {
 
   return (
     <AuthScreenShell
-      subtitle={t('auth.smsVerify.subtitlePattern', { phone: maskPhone(phone) })}
+      subtitle={t('auth.smsVerify.subtitlePattern', {
+        phone: maskPhone(phone),
+      })}
       onBack={() => navigation.goBack()}
       contentStyle={styles.content}
     >
@@ -276,10 +292,7 @@ export function SmsVerifyScreen() {
         />
 
         <Animated.View
-          style={[
-            styles.codeRow,
-            { transform: [{ translateX: shakeAnim }] },
-          ]}
+          style={[styles.codeRow, { transform: [{ translateX: shakeAnim }] }]}
         >
           <Pressable
             onPress={() => codeInputRef.current?.focus()}
@@ -290,7 +303,8 @@ export function SmsVerifyScreen() {
               const isActive =
                 !verifying &&
                 !error &&
-                (index === code.length || (code.length === CODE_LENGTH && index === CODE_LENGTH - 1));
+                (index === code.length ||
+                  (code.length === CODE_LENGTH && index === CODE_LENGTH - 1));
               return (
                 <View
                   key={index}
@@ -307,12 +321,7 @@ export function SmsVerifyScreen() {
                     verifying ? styles.codeBoxDisabled : null,
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.codeDigit,
-                      { fontSize: codeDigitSize },
-                    ]}
-                  >
+                  <Text style={[styles.codeDigit, { fontSize: codeDigitSize }]}>
                     {digit}
                   </Text>
                 </View>
@@ -323,7 +332,9 @@ export function SmsVerifyScreen() {
 
         {verifying ? (
           <View style={styles.statusRow}>
-            <Text style={styles.statusText}>{t('auth.smsVerify.verifying')}</Text>
+            <Text style={styles.statusText}>
+              {t('auth.smsVerify.verifying')}
+            </Text>
             <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
           </View>
         ) : null}
@@ -347,7 +358,9 @@ export function SmsVerifyScreen() {
               {resending ? (
                 <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
               ) : (
-                <Text style={styles.resendText}>{t('auth.smsVerify.resendButton')}</Text>
+                <Text style={styles.resendText}>
+                  {t('auth.smsVerify.resendButton')}
+                </Text>
               )}
             </TouchableOpacity>
           )}

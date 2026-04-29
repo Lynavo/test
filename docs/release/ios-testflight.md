@@ -58,9 +58,9 @@
 
 ```bash
 cd /Volumes/workspace/work/sync-flow
-pnpm package:mobile:testflight:archive
-pnpm package:mobile:testflight:upload
-pnpm package:mobile:testflight
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:archive
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:upload
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight
 ```
 
 分别对应：
@@ -68,6 +68,18 @@ pnpm package:mobile:testflight
 1. `archive`：只生成 `xcarchive`
 2. `upload`：把现有 `xcarchive` 上传到 TestFlight
 3. `archive-upload`：先归档，再上传
+
+TestFlight 腳本會先比對 mobile 內建的 `APP_REVIEW_PHONE` 與
+`SERVER_ENV_FILE` 內的 `APP_REVIEW_PHONE`。兩邊不一致時會在 archive 前
+直接失敗，避免審核員手機號碼被打到錯誤 server。log 只會輸出遮罩後的
+手機號碼。
+
+可單獨執行檢查：
+
+```bash
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod \
+  bash apps/mobile/ios/scripts/testflight-release.sh check-review-phone
+```
 
 脚本位置：
 
@@ -79,7 +91,7 @@ pnpm package:mobile:testflight
 
 ```bash
 cd /Volumes/workspace/work/sync-flow
-pnpm package:mobile:testflight:archive
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:archive
 ```
 
 验收口径：
@@ -96,14 +108,14 @@ pnpm package:mobile:testflight:archive
 
 ```bash
 cd /Volumes/workspace/work/sync-flow
-pnpm package:mobile:testflight
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight
 ```
 
 如果只想上传已经存在的 archive：
 
 ```bash
 cd /Volumes/workspace/work/sync-flow
-pnpm package:mobile:testflight:upload
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:upload
 ```
 
 当前脚本使用：

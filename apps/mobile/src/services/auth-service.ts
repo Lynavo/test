@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPostNoAuth } from './api';
+import { resolveAuthBaseUrlForPhone, setSessionBaseUrl } from './config';
 import type { SignedOutTransition, UserProfile } from '../stores/auth-store';
 
 // ---------------------------------------------------------------------------
@@ -36,8 +37,16 @@ export function _clearAuthFromApi(transition?: SignedOutTransition) {
 // Auth API calls
 // ---------------------------------------------------------------------------
 
-export async function sendSmsCode(phone: string): Promise<void> {
-  await apiPostNoAuth<Record<string, never>>('/auth/sms/send', { phone });
+export async function sendSmsCode(
+  phone: string,
+  authBaseUrl = resolveAuthBaseUrlForPhone(phone),
+): Promise<{ authBaseUrl: string }> {
+  await apiPostNoAuth<Record<string, never>>(
+    '/auth/sms/send',
+    { phone },
+    { baseUrlOverride: authBaseUrl },
+  );
+  return { authBaseUrl };
 }
 
 interface SmsLoginResponse {
@@ -50,16 +59,22 @@ interface SmsLoginResponse {
 export async function smsLogin(
   phone: string,
   code: string,
+  authBaseUrl = resolveAuthBaseUrlForPhone(phone),
 ): Promise<{
   accessToken: string;
   refreshToken: string;
   isNewUser: boolean;
   merged: boolean;
 }> {
-  const data = await apiPostNoAuth<SmsLoginResponse>('/auth/sms/login', {
-    phone,
-    code,
-  });
+  const data = await apiPostNoAuth<SmsLoginResponse>(
+    '/auth/sms/login',
+    {
+      phone,
+      code,
+    },
+    { baseUrlOverride: authBaseUrl },
+  );
+  await setSessionBaseUrl(authBaseUrl);
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
