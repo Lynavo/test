@@ -1,0 +1,65 @@
+{
+  "common": {
+    "loadFailed": "Failed to load. Please try again later.",
+    "pageRenderFailed": "The page failed to render. Please retry.",
+    "retryLater": "Please try again later."
+  },
+  "dashboard": {
+    "loadDevicesFailed": "Failed to load devices",
+    "receiveDirectoryUnavailable": "The receive folder is unavailable. Choose another folder or restore it.",
+    "receiveDirectoryUnavailableDescription": "The desktop app is still online, but it cannot access the configured receive location.",
+    "checkNetworkAndRetry": "Check your network connection and retry."
+  },
+  "deviceDetail": {
+    "loadFileLedgerFailed": "Failed to load file records",
+    "openFolderFailed": "Failed to open folder",
+    "fileMissing": "The file does not exist or has been removed",
+    "invalidDateRange": "Invalid date range",
+    "startAfterEndAdjusted": "The start date cannot be later than the end date. It has been adjusted automatically.",
+    "endBeforeStart": "The end date cannot be earlier than the start date."
+  },
+  "directory": {
+    "receiveDirectoryUnavailable": "The receive folder is unavailable. Choose another folder or restore it.",
+    "sharedDirectoryUnavailable": "The shared folder is unavailable. Choose another folder or restore it.",
+    "loadReceivedFailed": "Failed to load received files",
+    "loadSharedFailed": "Failed to load shared files",
+    "transferActiveChangeRoot": "Files are being received. Change the root folder after transfer finishes.",
+    "transferActiveReceivePath": "Files are being received. The receive folder cannot be changed right now.",
+    "locationNotWritable": "The selected location is not writable. Choose another folder.",
+    "selectValidDirectory": "Choose a valid folder.",
+    "directoryUnavailable": "Folder unavailable",
+    "pathMissing": "Path does not exist",
+    "openFolderFailed": "Failed to open folder"
+  },
+  "settings": {
+    "saveDeviceNameFailed": "Failed to save device name",
+    "regenerateCodeFailed": "Failed to regenerate pairing code",
+    "transferActiveCannotChangeReceivePath": "Transfer is in progress. The receive path cannot be changed.",
+    "saveReceivePathFailed": "Failed to save receive path",
+    "noReceivePathToOpen": "There is no receive path to open yet",
+    "noSharedPathToOpen": "There is no shared path to open yet",
+    "openFolderFailed": "Failed to open folder",
+    "openSharedFolderFailed": "Failed to open shared folder",
+    "shareStatusCheckFailed": "Failed to check sharing status",
+    "bonjourRetrySuccess": "The background service rechecked the Bonjour runtime",
+    "bonjourRetryFailed": "Failed to recheck the Bonjour runtime",
+    "bonjourInstallFailed": "Bonjour installation failed",
+    "bonjourInstallSuccess": "Bonjour has been installed",
+    "bonjourAlreadyInstalled": "Bonjour is already installed",
+    "bonjourUnsupportedPlatform": "Bonjour can only be installed automatically on Windows.",
+    "bonjourPostInstallNotDetected": "The installer completed, but Bonjour was not detected. Restart the app and try again.",
+    "bonjourTooManyRedirects": "The Bonjour download redirected too many times. Use Apple's official download page instead.",
+    "bonjourInstallCanceled": "Bonjour installation was canceled.",
+    "bonjourDownloadHttpFailed": "Bonjour download failed with HTTP {{status}}.",
+    "bonjourInstallExitFailed": "The Bonjour installer exited with code {{code}}.",
+    "bonjourInstallFallback": "Please try again later or use Apple's official download page.",
+    "diagnosticsExported": "Diagnostics bundle exported",
+    "diagnosticsExportFailed": "Failed to export diagnostics bundle",
+    "resetSuccess": "All data has been reset",
+    "resetSuccessDescription": "Paired devices, upload records, and sessions have all been cleared",
+    "resetFailed": "Reset failed",
+    "resetTransferActiveDescription": "Files are being received. Reset data after transfer finishes.",
+    "sidecarRetryFailed": "Failed to retry background service startup",
+    "sidecarBonjourInstallHint": "Go to Settings for installation instructions."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "nav": {
+    "dashboard": "首頁看板",
+    "directory": "目錄管理",
+    "settings": "全域設定",
+    "help": "說明"
+  },
+  "errorBoundary": {
+    "helpLoadFailed": "說明中心載入失敗，請重試"
+  },
+  "sidecar": {
+    "bonjourWarningTitle": "Bonjour 廣播未啟用",
+    "retryingTitle": "背景服務正在重試",
+    "startingTitle": "背景服務啟動中",
+    "failedTitle": "背景服務啟動失敗",
+    "bonjourFallbackDetail": "Windows 目前未偵測到 Bonjour for Windows。",
+    "startingDetail": "桌面應用程式正在等待本機 sidecar 服務就緒。",
+    "failedDetail": "本機 sidecar 未能成功啟動。",
+    "runtimeMessages": {
+      "bonjourNativeDetected": "已偵測到 Bonjour for Windows，將用於裝置探索。",
+      "bonjourFallbackDetected": "未偵測到 Bonjour for Windows，目前使用相容廣播模式。",
+      "starting": "本機 sidecar 服務正在啟動。",
+      "retrying": "本機 sidecar 服務正在重試啟動。",
+      "startFailed": "本機 sidecar 服務啟動失敗。",
+      "exited": "本機 sidecar 服務意外結束。",
+      "healthCheckFailed": "本機 sidecar 服務健康檢查未通過。",
+      "retryingAfterFailure": "正在重試啟動背景服務（{{restart}}/{{max}}）。",
+      "failedCheckExecutable": "背景服務啟動失敗，請檢查打包後的可執行檔或診斷包。"
+    },
+    "bonjourPath": "Bonjour 路徑：{{path}}",
+    "lastExitCode": "最近退出碼：{{code}}",
+    "installBonjour": "一鍵安裝 Bonjour",
+    "viewSettings": "查看設定",
+    "retrySidecar": "重試背景服務"
+  }
+}

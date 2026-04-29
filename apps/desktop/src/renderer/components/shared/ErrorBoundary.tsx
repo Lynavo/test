@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import i18n from '@renderer/i18n';
 import { ErrorState } from './ErrorState';
 
 interface Props {
@@ -33,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-1 items-center justify-center p-8">
           <ErrorState
-            message={this.props.fallbackMessage ?? '页面渲染出错，请重试'}
+            message={this.props.fallbackMessage ?? i18n.t('errors.common.pageRenderFailed')}
             onRetry={this.handleRetry}
           />
         </div>

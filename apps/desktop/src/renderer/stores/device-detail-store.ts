@@ -5,6 +5,7 @@ import type {
   DeviceFileSortField,
   SortDirection,
 } from '@syncflow/contracts';
+import i18n from '@renderer/i18n';
 
 export type SortField = DeviceFileSortField;
 
@@ -111,8 +112,10 @@ export const useDeviceDetailStore = create<DeviceDetailState>((set, get) => ({
     } catch (err) {
       console.error('Failed to fetch device files:', err);
       if (silent) return;
-      set({ loading: false, error: '加载文件记录失败' });
-      toast.error('加载文件记录失败', { description: '请稍后重试' });
+      set({ loading: false, error: i18n.t('errors.deviceDetail.loadFileLedgerFailed') });
+      toast.error(i18n.t('errors.deviceDetail.loadFileLedgerFailed'), {
+        description: i18n.t('errors.common.retryLater'),
+      });
     }
   },
 

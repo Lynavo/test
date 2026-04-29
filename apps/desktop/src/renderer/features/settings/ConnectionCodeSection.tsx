@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
@@ -8,6 +9,7 @@ import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { QRCodeSVG } from 'qrcode.react';
 
 export function ConnectionCodeSection() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const code = settings.connectionCode;
@@ -30,9 +32,9 @@ export function ConnectionCodeSection() {
       const result = await window.electronAPI.sidecar.regenerateConnectionCode();
       updateSettings({ ...settings, connectionCode: result.code });
     } catch {
-      toast.error('重新生成连接码失败');
+      toast.error(t('errors.settings.regenerateCodeFailed'));
     }
-  }, [settings, updateSettings]);
+  }, [settings, t, updateSettings]);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm flex flex-row items-center justify-between gap-6">
@@ -53,12 +55,12 @@ export function ConnectionCodeSection() {
         <div className="flex items-center justify-center gap-3">
           <CopyButton
             text={code}
-            label="复制"
+            label={t('common.actions.copy')}
             className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-secondary"
           />
           <Button onClick={handleRegenerate} size="default">
             <RefreshCw className="h-4 w-4" />
-            重新生成
+            {t('settings.connectionCode.regenerate')}
           </Button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@renderer/components/ui/skeleton';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
@@ -40,6 +41,7 @@ function PageFallback() {
 }
 
 export function AppShell() {
+  const { t } = useTranslation();
   const currentView = useAppStore((s) => s.currentView);
   const sidecarStatus = useSidecarRuntimeStore((s) => s.runtime.status);
 
@@ -145,7 +147,7 @@ export function AppShell() {
           {currentView === 'directory' && <DirectoryPage />}
           {currentView === 'settings' && <SettingsPage />}
           {currentView === 'help' && (
-            <ErrorBoundary fallbackMessage="帮助中心加载失败，请重试">
+            <ErrorBoundary fallbackMessage={t('layout.errorBoundary.helpLoadFailed')}>
               <HelpPage />
             </ErrorBoundary>
           )}

@@ -91,7 +91,9 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   ipcMain.handle(IPC.SIDECAR_SHARED_LIST, (_e, path?: string) =>
     sidecarClient.getSharedList(path),
   );
-  ipcMain.handle(IPC.SUPPORT_EXPORT_DIAGNOSTICS, () => exportDiagnostics(sidecarManager));
+  ipcMain.handle(IPC.SUPPORT_EXPORT_DIAGNOSTICS, (_e, locale?: string) =>
+    exportDiagnostics(sidecarManager, locale),
+  );
   ipcMain.handle(IPC.SUPPORT_APP_INFO, () => getAppInfo());
 
   // File operations — real Electron APIs

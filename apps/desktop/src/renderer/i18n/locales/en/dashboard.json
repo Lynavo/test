@@ -1,0 +1,18 @@
+{
+  "title": "All Devices",
+  "lastSuccess": {
+    "withDevice": "Last successful sync: {{time}} · {{device}}",
+    "none": "Last successful sync: No records"
+  },
+  "stats": {
+    "todayMediaCount": "Media received today",
+    "todayOccupied": "Space used today",
+    "remainingSpace": "Remaining device space"
+  },
+  "diskWarning": "The receive disk has less than 500 MB remaining. New receive tasks are paused.",
+  "deviceCard": {
+    "recent": "Recent {{date}}",
+    "today": "Today",
+    "preparing": "Preparing transfer..."
+  }
+}

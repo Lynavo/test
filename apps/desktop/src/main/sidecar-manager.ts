@@ -11,6 +11,8 @@ import type { SidecarHealth } from './sidecar-client';
 import type {
   BonjourRuntimeSource,
   BonjourRuntimeState,
+  RuntimeMessageArgs,
+  SidecarRuntimeMessageCode,
   SidecarRuntimeState,
 } from '../shared/sidecar-runtime';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../shared/sidecar-runtime';
@@ -62,6 +64,8 @@ export class SidecarManager extends EventEmitter {
         status: 'not_applicable',
         source: 'not_applicable',
         message: null,
+        messageCode: null,
+        messageArgs: null,
         path: null,
         advertisedIP: null,
       };
@@ -109,7 +113,9 @@ export class SidecarManager extends EventEmitter {
       return {
         status: 'native',
         source: runtime.source,
-        message: '已检测到 Bonjour for Windows，手机扫描会优先使用 Apple Bonjour 广播。',
+        message: null,
+        messageCode: 'bonjourNativeDetected',
+        messageArgs: null,
         path: runtime.path,
         advertisedIP: null,
       };
@@ -121,8 +127,9 @@ export class SidecarManager extends EventEmitter {
     return {
       status: 'fallback',
       source: 'fallback',
-      message:
-        '未检测到 Bonjour for Windows，当前将使用兼容模式广播；iPhone 重新扫描可能不稳定。安装 Bonjour 后点击“重试后台服务”即可重新检测。',
+      message: null,
+      messageCode: 'bonjourFallbackDetected',
+      messageArgs: null,
       path: null,
       advertisedIP: null,
     };
@@ -145,6 +152,8 @@ export class SidecarManager extends EventEmitter {
       this.setState({
         status: 'healthy',
         message: null,
+        messageCode: null,
+        messageArgs: null,
         lastExitCode: null,
         // Keep advertisedIP if it was already populated (e.g. from a previous
         // session where the sidecar stdout was captured).
@@ -179,10 +188,12 @@ export class SidecarManager extends EventEmitter {
     const cwd = isDev ? join(app.getAppPath(), '..', '..', 'services', 'sidecar-go') : undefined;
     this.setState({
       status: 'starting',
-      message:
+      message: null,
+      messageCode: this.restartCount > 0 ? 'retrying' : 'starting',
+      messageArgs:
         this.restartCount > 0
-          ? `后台服务不可用，正在重试（${this.restartCount}/${this.maxRestarts}）`
-          : '后台服务启动中…',
+          ? { restart: this.restartCount, max: this.maxRestarts }
+          : null,
       bonjour,
     });
     log.info(`[SidecarManager] starting: ${command} ${args.join(' ')}`);
@@ -235,14 +246,14 @@ export class SidecarManager extends EventEmitter {
       if (this.process !== child) return;
       this.process = null;
       log.error(`[SidecarManager] process error: ${err.message}`);
-      this.handleFailure(`后台服务启动失败：${err.message}`, null);
+      this.handleFailure('startFailed', null);
     });
 
     child.on('exit', (code) => {
       if (this.process !== child) return;
       this.process = null;
       log.warn(`[SidecarManager] process exited with code ${code}`);
-      this.handleFailure('后台服务已退出', code);
+      this.handleFailure('exited', code);
     });
 
     try {
@@ -255,6 +266,8 @@ export class SidecarManager extends EventEmitter {
       this.setState({
         status: 'healthy',
         message: null,
+        messageCode: null,
+        messageArgs: null,
         lastExitCode: null,
         // Preserve advertisedIP that may have been parsed from stdout during
         // waitForHealth — the `bonjour` snapshot captured before spawn still
@@ -326,6 +339,8 @@ export class SidecarManager extends EventEmitter {
     this.setState({
       status: 'stopped',
       message: null,
+      messageCode: null,
+      messageArgs: null,
       bonjour: this.detectBonjourRuntime(),
     });
   }
@@ -458,10 +473,10 @@ export class SidecarManager extends EventEmitter {
     }
 
     this.process = null;
-    this.handleFailure('后台服务健康检查失败', null);
+    this.handleFailure('healthCheckFailed', null);
   }
 
-  private handleFailure(message: string, code: number | null): void {
+  private handleFailure(messageCode: SidecarRuntimeMessageCode, code: number | null): void {
     this.stopHealthCheck();
     this.healthFailureRecoveryScheduled = false;
 
@@ -469,6 +484,8 @@ export class SidecarManager extends EventEmitter {
       this.setState({
         status: 'stopped',
         message: null,
+        messageCode: null,
+        messageArgs: null,
         lastExitCode: code,
       });
       return;
@@ -478,7 +495,9 @@ export class SidecarManager extends EventEmitter {
       this.restartCount += 1;
       this.setState({
         status: 'starting',
-        message: `${message}，正在重试（${this.restartCount}/${this.maxRestarts}）`,
+        message: null,
+        messageCode: 'retryingAfterFailure',
+        messageArgs: this.runtimeMessageArgs(),
         lastExitCode: code,
       });
       log.info(`[SidecarManager] restarting (attempt ${this.restartCount}/${this.maxRestarts})`);
@@ -495,9 +514,15 @@ export class SidecarManager extends EventEmitter {
     log.error('[SidecarManager] max restarts exceeded');
     this.setState({
       status: 'failed',
-      message: `${message}。请检查 sidecar 可执行文件或点击重试。`,
+      message: null,
+      messageCode: 'failedCheckExecutable',
+      messageArgs: null,
       lastExitCode: code,
     });
+  }
+
+  private runtimeMessageArgs(): RuntimeMessageArgs {
+    return { restart: this.restartCount, max: this.maxRestarts };
   }
 
   private setState(patch: Partial<SidecarRuntimeState>): void {

@@ -1,12 +1,14 @@
 import { app, dialog, shell } from 'electron';
 import log from 'electron-log';
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { copyFile, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { networkInterfaces, release, tmpdir, type } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { sidecarClient } from './sidecar-client';
 import type { SidecarManager } from './sidecar-manager';
+import { getMainStrings } from '../shared/main-i18n';
 
 const execFileAsync = promisify(execFile);
 
@@ -217,14 +219,16 @@ function resolveBuildNumber(): string {
   );
 
   try {
-    const packaged = require(packagedPackageJson) as { syncflowBuildNumber?: string };
+    const packaged = JSON.parse(readFileSync(packagedPackageJson, 'utf8')) as {
+      syncflowBuildNumber?: string;
+    };
     if (packaged.syncflowBuildNumber) return packaged.syncflowBuildNumber;
   } catch {
     // Fall through to repo build settings in development.
   }
 
   try {
-    const project = require('node:fs').readFileSync(repoProject, 'utf8') as string;
+    const project = readFileSync(repoProject, 'utf8');
     const match = project.match(/CURRENT_PROJECT_VERSION = (\d+);/);
     return match?.[1] ?? fallback;
   } catch {
@@ -232,11 +236,18 @@ function resolveBuildNumber(): string {
   }
 }
 
-export async function exportDiagnostics(sidecarManager: SidecarManager): Promise<string | null> {
+export async function exportDiagnostics(
+  sidecarManager: SidecarManager,
+  locale?: string,
+): Promise<string | null> {
+  const strings = getMainStrings(locale);
   const timestamp = diagnosticsTimestamp();
-  const defaultPath = join(app.getPath('desktop'), `Vivi Drop-诊断包-${timestamp}.zip`);
+  const defaultPath = join(
+    app.getPath('desktop'),
+    `${strings.diagnostics.filenamePrefix}-${timestamp}.zip`,
+  );
   const dialogResult = await dialog.showSaveDialog({
-    title: '导出诊断包',
+    title: strings.diagnostics.title,
     defaultPath,
     filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
   });
@@ -245,7 +256,7 @@ export async function exportDiagnostics(sidecarManager: SidecarManager): Promise
   }
 
   const tempRoot = join(tmpdir(), `syncflow-diagnostics-${timestamp}`);
-  const bundleDir = join(tempRoot, `Vivi Drop-诊断包-${timestamp}`);
+  const bundleDir = join(tempRoot, `${strings.diagnostics.filenamePrefix}-${timestamp}`);
   const filesDir = join(bundleDir, 'files');
   const sidecarDataDir = app.getPath('userData');
   const sidecarDbPath = join(sidecarDataDir, 'sidecar.db');
@@ -283,23 +294,7 @@ export async function exportDiagnostics(sidecarManager: SidecarManager): Promise
   await writeFile(join(bundleDir, 'diagnostics.json'), JSON.stringify(snapshot, null, 2), 'utf8');
   await writeFile(
     join(bundleDir, 'README.txt'),
-    [
-      'Vivi Drop 诊断包',
-      '',
-      '包含内容：',
-      '- diagnostics.json：版本、运行时状态、dashboard、设置、共享状态、网络环境（WiFi SSID、网卡列表）',
-      '- files/desktop-main.log：桌面端主进程日志（含 sidecar stdout/stderr）',
-      '- files/sidecar.log(.N)：sidecar 进程日志（含 mDNS、连线、断线、IP 切换事件）',
-      '- files/sidecar.db：sidecar 数据库快照（如存在）',
-      '',
-      '排障顺序建议：',
-      '1. 先看 diagnostics.json 的 environment.wifi 确认当时连的是哪个 WiFi',
-      '2. 再看 sidecar.log 中 "local IP changed" / "tcp client disconnected" 事件',
-      '3. 若涉及 UI / 状态问题，最后看 desktop-main.log',
-      '',
-      '请将整个 ZIP 提供给开发团队进行排查。',
-      '',
-    ].join('\n'),
+    strings.diagnostics.readme.join('\n'),
     'utf8',
   );
 

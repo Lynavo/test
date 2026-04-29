@@ -1,3 +1,5 @@
+import i18n from '@renderer/i18n';
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -22,10 +24,11 @@ export function formatDuration(ms: number): string {
 }
 
 export function formatDate(iso: string): string {
-  return iso.slice(5).replace('-', '\u6708') + '\u65e5';
+  const [month, day] = iso.slice(5).split('-').map(Number);
+  if (!month || !day) return iso;
+  return i18n.t('common.date.monthDay', { month, day });
 }
 
-/** Smart relative date: 今天/昨天/周X/月日, with HH:MM time */
 export function formatSmartDate(iso?: string): string {
   if (!iso) return '\u2014';
   const d = new Date(iso);
@@ -37,33 +40,48 @@ export function formatSmartDate(iso?: string): string {
   const targetStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const diffDays = Math.floor((todayStart.getTime() - targetStart.getTime()) / 86400000);
 
-  if (diffDays === 0) return `今天 ${time}`;
-  if (diffDays === 1) return `昨天 ${time}`;
+  if (diffDays === 0) return i18n.t('common.date.todayWithTime', { time });
+  if (diffDays === 1) return i18n.t('common.date.yesterdayWithTime', { time });
   if (diffDays > 1 && diffDays < 7) {
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return `${weekdays[d.getDay()]} ${time}`;
+    const weekdays = i18n.t('common.date.weekdays', { returnObjects: true });
+    const weekday = Array.isArray(weekdays) ? weekdays[d.getDay()] : '';
+    return i18n.t('common.date.weekdayWithTime', { weekday, time });
   }
   const month = d.getMonth() + 1;
   const day = d.getDate();
   if (d.getFullYear() !== now.getFullYear()) {
-    return `${d.getFullYear()}/${month}/${day} ${time}`;
+    return i18n.t('common.date.yearMonthDayWithTime', {
+      year: d.getFullYear(),
+      month,
+      day,
+      time,
+    });
   }
-  return `${month}月${day}日 ${time}`;
+  return i18n.t('common.date.monthDayWithTime', { month, day, time });
 }
 
 export function formatDateTime(iso?: string): string {
-  if (!iso) return '暂无记录';
+  if (!iso) return i18n.t('common.fallback.noRecord');
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '暂无记录';
+  if (Number.isNaN(date.getTime())) return i18n.t('common.fallback.noRecord');
 
   const now = new Date();
   const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
   if (date.toDateString() === now.toDateString()) {
-    return `今天 ${time}`;
+    return i18n.t('common.date.todayWithTime', { time });
   }
   if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getMonth() + 1}月${date.getDate()}日 ${time}`;
+    return i18n.t('common.date.monthDayWithTime', {
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      time,
+    });
   }
-  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${time}`;
+  return i18n.t('common.date.yearMonthDayWithTime', {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    time,
+  });
 }

@@ -1,4 +1,5 @@
 import { FileVideo, HardDrive, Smartphone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { DashboardDeviceDTO } from '@syncflow/contracts';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { StatusBadge } from '@renderer/components/shared/StatusBadge';
@@ -11,7 +12,7 @@ const colors = {
   iconOfflineBg: 'rgba(0,0,0,0.06)',
 } as const;
 
-function formatDateKeyLabel(dateKey: string): string {
+function formatDateKeyLabel(dateKey: string, t: ReturnType<typeof useTranslation>['t']): string {
   const parts = dateKey.split('-').map(Number);
   if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
     return dateKey;
@@ -24,9 +25,9 @@ function formatDateKeyLabel(dateKey: string): string {
   const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.floor((todayStart.getTime() - targetStart.getTime()) / 86_400_000);
 
-  if (diffDays === 0) return '今天';
-  if (diffDays === 1) return '昨天';
-  return `${month}月${day}日`;
+  if (diffDays === 0) return t('common.date.today');
+  if (diffDays === 1) return t('common.date.yesterday');
+  return t('common.date.monthDay', { month, day });
 }
 
 interface DeviceCardProps {
@@ -35,12 +36,15 @@ interface DeviceCardProps {
 }
 
 export function DeviceCard({ device, onClick }: DeviceCardProps) {
+  const { t } = useTranslation();
   const isOffline = device.status === 'offline';
   const isTransferring = device.status === 'transferring';
   const latestDate = device.latestDate ?? '';
   const shouldShowLatestStats =
     device.todayFileCount === 0 && latestDate !== '' && (device.latestFileCount ?? 0) > 0;
-  const statsLabel = shouldShowLatestStats ? `最近 ${formatDateKeyLabel(latestDate)}` : '今日';
+  const statsLabel = shouldShowLatestStats
+    ? t('dashboard.deviceCard.recent', { date: formatDateKeyLabel(latestDate, t) })
+    : t('dashboard.deviceCard.today');
   const displayedFileCount = shouldShowLatestStats
     ? (device.latestFileCount ?? 0)
     : device.todayFileCount;
@@ -109,7 +113,7 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
           >
             <div className="flex items-center gap-2 text-xs text-blue-500">
               <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-              <span className="font-medium">准备传输中…</span>
+              <span className="font-medium">{t('dashboard.deviceCard.preparing')}</span>
             </div>
           </div>
         )}
@@ -123,7 +127,7 @@ export function DeviceCard({ device, onClick }: DeviceCardProps) {
             <FileVideo className="h-3.5 w-3.5" />
             <span>{statsLabel}</span>
             <span className="font-semibold text-foreground">{displayedFileCount}</span>
-            个文件
+            {t('common.units.files')}
           </div>
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <HardDrive className="h-3.5 w-3.5" />

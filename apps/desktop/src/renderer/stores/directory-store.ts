@@ -5,6 +5,7 @@ import type {
   SharedFileDTO,
   SortDirection,
 } from '@syncflow/contracts';
+import i18n from '@renderer/i18n';
 import { useSidecarRuntimeStore } from './sidecar-runtime-store';
 
 export type DirectoryTab = 'received' | 'shared';
@@ -144,8 +145,8 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
       set({
         loading: false,
         receivedError: isStorageUnavailableError(err)
-          ? '接收目录不可用，请重新选择或恢复文件夹'
-          : '加载接收文件列表失败',
+          ? i18n.t('errors.directory.receiveDirectoryUnavailable')
+          : i18n.t('errors.directory.loadReceivedFailed'),
       });
     }
   },
@@ -180,8 +181,8 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
       set({
         sharedFiles: [],
         sharedError: isStorageUnavailableError(err)
-          ? '共享目录不可用，请重新选择或恢复文件夹'
-          : '加载共享文件列表失败',
+          ? i18n.t('errors.directory.sharedDirectoryUnavailable')
+          : i18n.t('errors.directory.loadSharedFailed'),
       });
     }
   },

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { ArrowLeft, Smartphone, Monitor, FolderOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
@@ -20,6 +21,7 @@ const colors = {
 const DETAIL_REFRESH_INTERVAL_MS = 10_000;
 
 export function DeviceDetailPage() {
+  const { t } = useTranslation();
   const selectedDevice = useAppStore((s) => s.selectedDevice);
   const closeDeviceDetail = useAppStore((s) => s.closeDeviceDetail);
 
@@ -92,7 +94,7 @@ export function DeviceDetailPage() {
           // Fall through to toast below.
         }
       }
-      toast.error('打开文件夹失败');
+      toast.error(t('errors.deviceDetail.openFolderFailed'));
     }
   };
 
@@ -106,7 +108,7 @@ export function DeviceDetailPage() {
           style={{ color: colors.backText }}
         >
           <ArrowLeft className="h-4 w-4" />
-          返回设备列表
+          {t('common.actions.backToDeviceList')}
         </button>
 
         {/* Device header */}
@@ -147,7 +149,7 @@ export function DeviceDetailPage() {
               }}
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              打开文件夹
+              {t('deviceDetail.openFolder')}
             </button>
           </div>
         </GlassCard>
@@ -195,7 +197,7 @@ export function DeviceDetailPage() {
           <div className="min-h-0 flex-1 px-4 pb-2">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-                加载中...
+                {t('common.fallback.loading')}
               </div>
             ) : error ? (
               <ErrorState
@@ -215,12 +217,19 @@ export function DeviceDetailPage() {
           <div className="flex items-center justify-between border-t border-black/5 px-6 py-4">
             <div className="text-xs text-slate-500">
               {totalItems === 0
-                ? '该日期暂无传输记录'
-                : `显示第 ${pageStart}-${pageEnd} 条，共 ${totalItems} 条`}
+                ? t('common.pagination.empty')
+                : t('common.pagination.range', {
+                    start: pageStart,
+                    end: pageEnd,
+                    total: totalItems,
+                  })}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">
-                第 {Math.min(page, totalPages)} / {totalPages} 页
+                {t('common.pagination.page', {
+                  page: Math.min(page, totalPages),
+                  totalPages,
+                })}
               </span>
               <Button
                 variant="outline"
@@ -232,7 +241,7 @@ export function DeviceDetailPage() {
                   })
                 }
               >
-                上一页
+                {t('common.pagination.previous')}
               </Button>
               <Button
                 variant="outline"
@@ -244,7 +253,7 @@ export function DeviceDetailPage() {
                   })
                 }
               >
-                下一页
+                {t('common.pagination.next')}
               </Button>
             </div>
           </div>

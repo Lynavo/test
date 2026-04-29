@@ -103,7 +103,8 @@ const electronAPI: ElectronAPI = {
     },
   },
   support: {
-    exportDiagnostics: () => ipcRenderer.invoke(IPC.SUPPORT_EXPORT_DIAGNOSTICS),
+    exportDiagnostics: (locale?: string) =>
+      ipcRenderer.invoke(IPC.SUPPORT_EXPORT_DIAGNOSTICS, locale),
     getAppInfo: () => ipcRenderer.invoke(IPC.SUPPORT_APP_INFO),
   },
 };

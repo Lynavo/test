@@ -5,6 +5,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@renderer/components/ui/select';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { formatDate } from '@renderer/lib/format';
 
@@ -16,10 +17,10 @@ interface DateFilterProps {
   onEndDateChange: (date: string) => void;
 }
 
-function getDateLabel(iso: string): string {
+function getDateLabel(iso: string, t: ReturnType<typeof useTranslation>['t']): string {
   const today = new Date().toLocaleDateString('sv-SE');
   const formatted = formatDate(iso);
-  return iso === today ? `今天 (${formatted})` : formatted;
+  return iso === today ? t('deviceDetail.filter.todayWithDate', { date: formatted }) : formatted;
 }
 
 interface DateSelectProps {
@@ -28,23 +29,31 @@ interface DateSelectProps {
   dates: string[];
   disabled: boolean;
   onChange: (date: string) => void;
+  todayLabelFormatter: (date: string) => string;
 }
 
-function DateSelect({ label, value, dates, disabled, onChange }: DateSelectProps) {
+function DateSelect({
+  label,
+  value,
+  dates,
+  disabled,
+  onChange,
+  todayLabelFormatter,
+}: DateSelectProps) {
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
         aria-label={label}
         className="w-[140px] rounded-xl"
         disabled={disabled}
-        title={disabled ? '只有一个完成日期' : undefined}
+        title={disabled ? label : undefined}
       >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {dates.map((date) => (
           <SelectItem key={date} value={date}>
-            {getDateLabel(date)}
+            {todayLabelFormatter(date)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -59,6 +68,7 @@ export function DateFilter({
   onStartDateChange,
   onEndDateChange,
 }: DateFilterProps) {
+  const { t } = useTranslation();
   // Ensure today is always in the list and at the top
   const today = new Date().toLocaleDateString('sv-SE');
   const allDates = Array.from(new Set([today, ...dates])).sort((a, b) => b.localeCompare(a));
@@ -70,40 +80,48 @@ export function DateFilter({
 
   const handleStartChange = (date: string) => {
     if (date > endDate) {
-      toast.error('时间范围无效', { description: '起始时间不能晚于结束时间，已自动调整' });
+      toast.error(t('errors.deviceDetail.invalidDateRange'), {
+        description: t('errors.deviceDetail.startAfterEndAdjusted'),
+      });
     }
     onStartDateChange(date);
   };
 
   const handleEndChange = (date: string) => {
     if (date < startDate) {
-      toast.error('时间范围无效', { description: '结束时间不能早于起始时间' });
+      toast.error(t('errors.deviceDetail.invalidDateRange'), {
+        description: t('errors.deviceDetail.endBeforeStart'),
+      });
       return;
     }
     onEndDateChange(date);
   };
 
+  const formatDateLabel = (date: string) => getDateLabel(date, t);
+
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">完成日期</span>
+      <span className="text-xs text-muted-foreground">{t('deviceDetail.filter.completedDate')}</span>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">从</span>
+        <span className="text-xs text-muted-foreground">{t('deviceDetail.filter.from')}</span>
         <DateSelect
-          label="开始完成日期"
+          label={t('deviceDetail.filter.startLabel')}
           value={startValue}
           dates={allDates}
           disabled={allDates.length <= 1}
           onChange={handleStartChange}
+          todayLabelFormatter={formatDateLabel}
         />
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">至</span>
+        <span className="text-xs text-muted-foreground">{t('deviceDetail.filter.to')}</span>
         <DateSelect
-          label="结束完成日期"
+          label={t('deviceDetail.filter.endLabel')}
           value={endValue}
           dates={endDates}
           disabled={endDates.length <= 1}
           onChange={handleEndChange}
+          todayLabelFormatter={formatDateLabel}
         />
       </div>
     </div>

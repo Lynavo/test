@@ -1,4 +1,5 @@
 import { AlertTriangle, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 
 const colors = {
@@ -6,6 +7,7 @@ const colors = {
 } as const;
 
 export function DiskWarningBanner() {
+  const { t } = useTranslation();
   const { summary, diskWarningDismissed, dismissDiskWarning } =
     useDashboardStore();
 
@@ -23,7 +25,7 @@ export function DiskWarningBanner() {
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
       <span className="flex-1 text-sm font-medium">
-        接收磁盘剩余空间小于 500MB，已暂停新的接收任务
+        {t('dashboard.diskWarning')}
       </span>
       <button
         onClick={dismissDiskWarning}

@@ -1,11 +1,21 @@
 import { useState } from 'react';
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
+import {
+  getBonjourInstallErrorMessage,
+  getBonjourInstallSuccessMessage,
+} from '@renderer/lib/bonjour-install';
+import {
+  getBonjourRuntimeMessage,
+  getSidecarRuntimeMessage,
+} from '@renderer/lib/runtime-messages';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 
 export function SidecarStatusBanner() {
+  const { t } = useTranslation();
   const runtime = useSidecarRuntimeStore((s) => s.runtime);
   const setView = useAppStore((s) => s.setView);
   const [retrying, setRetrying] = useState(false);
@@ -19,25 +29,26 @@ export function SidecarStatusBanner() {
   const isStarting = runtime.status === 'starting';
   const isBonjourWarning = runtime.status === 'healthy' && showBonjourFallback;
   const title = isBonjourWarning
-    ? 'Bonjour 广播未启用'
+    ? t('layout.sidecar.bonjourWarningTitle')
     : isStarting
       ? runtime.restartCount > 0
-        ? '后台服务正在重试'
-        : '后台服务启动中'
-      : '后台服务启动失败';
+        ? t('layout.sidecar.retryingTitle')
+        : t('layout.sidecar.startingTitle')
+      : t('layout.sidecar.failedTitle');
   const detail = isBonjourWarning
-    ? runtime.bonjour.message ?? 'Windows 当前未检测到 Bonjour for Windows。'
-    : runtime.message ??
-      (isStarting
-        ? '桌面应用正在等待本地 sidecar 服务就绪。'
-        : '本地 sidecar 未能成功启动。');
+    ? getBonjourRuntimeMessage(runtime.bonjour, t)
+    : getSidecarRuntimeMessage(
+        runtime,
+        t,
+        isStarting ? 'layout.sidecar.startingDetail' : 'layout.sidecar.failedDetail',
+      );
 
   const handleRetry = async () => {
     setRetrying(true);
     try {
       await window.electronAPI.sidecar.retryStart();
     } catch {
-      toast.error('重试启动后台服务失败');
+      toast.error(t('errors.settings.sidecarRetryFailed'));
     } finally {
       setRetrying(false);
     }
@@ -47,10 +58,10 @@ export function SidecarStatusBanner() {
     setInstalling(true);
     try {
       const result = await window.electronAPI.sidecar.installBonjour();
-      toast.success(result.message);
+      toast.success(getBonjourInstallSuccessMessage(result.messageCode, t));
     } catch (error) {
-      toast.error('Bonjour 安装失败', {
-        description: error instanceof Error ? error.message : '请改到设置页查看安装说明。',
+      toast.error(t('errors.settings.bonjourInstallFailed'), {
+        description: getBonjourInstallErrorMessage(error, t),
       });
     } finally {
       setInstalling(false);
@@ -82,12 +93,12 @@ export function SidecarStatusBanner() {
         <div className="mt-1 text-sm opacity-90">{detail}</div>
         {isBonjourWarning && runtime.bonjour.path && (
           <div className="mt-1 text-xs opacity-80">
-            Bonjour 路径：{runtime.bonjour.path}
+            {t('layout.sidecar.bonjourPath', { path: runtime.bonjour.path })}
           </div>
         )}
         {runtime.lastExitCode !== null && (
           <div className="mt-1 text-xs opacity-80">
-            最近退出码：{runtime.lastExitCode}
+            {t('layout.sidecar.lastExitCode', { code: runtime.lastExitCode })}
           </div>
         )}
       </div>
@@ -102,7 +113,7 @@ export function SidecarStatusBanner() {
             className="shrink-0"
           >
             {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            一键安装 Bonjour
+            {t('layout.sidecar.installBonjour')}
           </Button>
         )}
         {isBonjourWarning && (
@@ -113,7 +124,7 @@ export function SidecarStatusBanner() {
             onClick={() => setView('settings')}
             className="shrink-0"
           >
-            查看设置
+            {t('layout.sidecar.viewSettings')}
           </Button>
         )}
         <Button
@@ -125,7 +136,7 @@ export function SidecarStatusBanner() {
           className="shrink-0"
         >
           <RotateCcw className="h-4 w-4" />
-          {isBonjourWarning ? '重试后台服务' : '重试'}
+          {isBonjourWarning ? t('layout.sidecar.retrySidecar') : t('common.actions.retry')}
         </Button>
       </div>
     </div>

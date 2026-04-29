@@ -1,0 +1,144 @@
+{
+  "title": "Help Center",
+  "subtitle": "Guidance for understanding and using Vivi Drop",
+  "quickStart": {
+    "title": "🚀 Quick Start",
+    "steps": [
+      {
+        "title": "Choose a sync folder",
+        "description": "Open Vivi Drop and choose a local folder as the sync root (for example ~/ViviDrop on macOS or D:\\ViviDrop on Windows)"
+      },
+      {
+        "title": "Get the pairing code and connect",
+        "description": "Find the 6-digit pairing code in Settings, then enter it on the phone to complete pairing"
+      },
+      {
+        "title": "Check the network",
+        "description": "Make sure the computer and phone are on the same Wi-Fi network. Use 5GHz Wi-Fi for the best transfer speed."
+      },
+      {
+        "title": "Upload media",
+        "description": "Enable automatic upload in the phone album, or manually choose media to upload to the computer"
+      },
+      {
+        "title": "View files on the computer",
+        "description": "Use the received folder on the Folder Management page to view received media, or open it directly in the file manager"
+      },
+      {
+        "title": "View shared files on the phone",
+        "description": "Place finished files in the shared folder so the phone can view, preview, and download them"
+      }
+    ]
+  },
+  "directory": {
+    "title": "📁 Folder Guide",
+    "cards": [
+      {
+        "title": "Received folder (received)",
+        "points": ["Receives original photos, videos, and other media uploaded from phones", "Automatically organized by device name and date", "For desktop-side processing only; not visible on the phone"]
+      },
+      {
+        "title": "Shared folder (shared)",
+        "points": ["Stores finished content processed on the computer", "Phones can view, preview, stream, and download these files", "Phones have read-only access and cannot modify or delete files"]
+      }
+    ],
+    "tree": "ViviDrop/\n├── received/  (media uploaded from phones)\n└── shared/    (finished files shared to phones)"
+  },
+  "permissions": {
+    "title": "🔐 System Permissions",
+    "mac": [
+      {
+        "title": "Firewall",
+        "steps": ["System Settings → Network → Firewall", "If Firewall is enabled, click “Options…” and make sure Vivi Drop is set to “Allow incoming connections”", "When macOS prompts on first launch, click “Allow”"]
+      },
+      {
+        "title": "Local Network",
+        "steps": ["System Settings → Privacy & Security → Local Network", "Make sure Vivi Drop is enabled. Phone discovery depends on this permission.", "If the phone cannot find the computer, check this item first"]
+      },
+      {
+        "title": "Files and folders",
+        "steps": ["System Settings → Privacy & Security → Files and Folders", "Make sure Vivi Drop can access the selected sync root folder", "If the sync folder is on an external drive, also grant Full Disk Access"]
+      },
+      {
+        "title": "Gatekeeper and first launch",
+        "steps": ["If first launch says the developer cannot be verified, right-click the app and choose “Open”", "Or go to System Settings → Privacy & Security and click “Open Anyway”", "After one approval, future launches should not show this prompt"]
+      }
+    ],
+    "windows": [
+      {
+        "title": "Firewall",
+        "steps": ["Windows may show a firewall prompt on first launch. Choose “Allow access”.", "If blocked: Settings → Privacy & security → Windows Security → Firewall & network protection", "Click “Allow an app through firewall” and make sure Vivi Drop is checked for both private and public networks"]
+      },
+      {
+        "title": "Network discovery",
+        "steps": ["Settings → Network & Internet → Advanced network settings → Advanced sharing settings", "Make sure “Network discovery” is enabled for the current network profile", "If the phone cannot find the computer, confirm the network type is Private, not Public"]
+      },
+      {
+        "title": "Folder access",
+        "steps": ["Make sure the disk containing the sync root has sufficient read/write permissions", "Avoid protected system folders such as C:\\Program Files", "If using an external drive, keep it connected during transfers"]
+      },
+      {
+        "title": "SmartScreen and first launch",
+        "steps": ["If Windows says it protected your PC on first launch, click “More info” → “Run anyway”", "Or check “Unblock” in file properties before running", "After one approval, future launches should not show this prompt"]
+      }
+    ]
+  },
+  "uploadRules": {
+    "title": "📤 Upload Rules",
+    "items": ["Automatic and manual uploads can coexist. Manual uploads take priority.", "After each file completes, the queue head is selected again so manual media stays prioritized.", "Manual uploads form an append-only batch; new media is deduplicated before appending.", "Only one file may transfer at a time. The queue uploads in order.", "Pause/resume automatic upload and cancel manual batches are supported. Per-item deletion or reordering is not supported."]
+  },
+  "faq": {
+    "title": "❓ FAQ",
+    "items": [
+      {
+        "question": "What if my phone cannot find the computer?",
+        "answer": "Check these in order: 1) computer and phone are on the same Wi-Fi; 2) macOS users have granted Local Network permission to Vivi Drop; 3) Windows users have a Private network with Network discovery enabled; 4) firewall is not blocking incoming connections; 5) close and reopen Vivi Drop."
+      },
+      {
+        "question": "Why do I need to manually resume sync after reconnecting?",
+        "answer": "When automatic upload is turned off, it does not resume automatically. Re-enable it on the phone album page. This avoids using the transfer channel without your knowledge."
+      },
+      {
+        "question": "Why is upload speed unstable?",
+        "answer": "Transfer speed depends on the local network, including Wi-Fi signal strength, router load, and frequency band. Use 5GHz Wi-Fi and keep the computer and phone close to the router."
+      },
+      {
+        "question": "Why do some media files fail to upload?",
+        "answer": "Common causes: 1) the media is stored in iCloud and has not been downloaded locally yet; export will trigger download; 2) the network was interrupted during transfer. Completed files are kept, and incomplete files can retry after recovery."
+      },
+      {
+        "question": "Why is the filename on the computer different from the phone?",
+        "answer": "iOS generates album filenames automatically, such as IMG_xxxx. Export may rename files during format conversion. The received file content still matches the original media."
+      },
+      {
+        "question": "Can the sync folder be on an external drive?",
+        "answer": "Yes. Choose a folder on the external drive as the root folder. Keep the drive connected during transfer. macOS users may also need to grant Vivi Drop Full Disk Access."
+      },
+      {
+        "question": "Will transfer stop if the computer sleeps?",
+        "answer": "Yes. When the computer sleeps, network connections are interrupted and transfer pauses. After wake, the phone reconnects automatically. Completed files are unaffected, and incomplete queued files continue."
+      }
+    ]
+  },
+  "errors": {
+    "title": "⚠️ Error Handling",
+    "cards": [
+      {
+        "title": "Connection issue",
+        "description": "Check that the computer and phone are on the same local network, system network permissions are enabled, and then reconnect"
+      },
+      {
+        "title": "Low disk space",
+        "description": "When remaining space is below 500MB, receiving pauses. Free disk space or change the storage path."
+      },
+      {
+        "title": "Device interrupted",
+        "description": "Tasks pause when the device goes offline, the computer sleeps, or the network is interrupted. They can continue after reconnection."
+      },
+      {
+        "title": "Upload interrupted",
+        "description": "Completed files are kept when transfer fails. Incomplete tasks retry automatically after recovery."
+      }
+    ]
+  }
+}

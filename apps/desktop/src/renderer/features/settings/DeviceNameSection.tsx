@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
 import { Button } from '@renderer/components/ui/button';
@@ -7,6 +8,7 @@ import { useSettingsStore } from '@renderer/stores/settings-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 
 export function DeviceNameSection() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const isAnyDeviceTransferring = useDashboardStore((s) =>
@@ -38,16 +40,16 @@ export function DeviceNameSection() {
       updateSettings({ ...settings, ...updated });
       setDraft(null);
     } catch {
-      toast.error('保存设备名称失败');
+      toast.error(t('errors.settings.saveDeviceNameFailed'));
     } finally {
       setSaving(false);
     }
-  }, [draft, isDirty, settings, updateSettings]);
+  }, [draft, isDirty, settings, t, updateSettings]);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <label className="mb-2 block text-xs font-medium text-muted-foreground">
-        设备名称
+        {t('settings.sections.deviceName')}
       </label>
       <div className="flex items-center gap-2">
         <Input
@@ -65,7 +67,7 @@ export function DeviceNameSection() {
           data-testid="device-name-save"
         >
           <Save className="h-4 w-4" />
-          保存
+          {t('common.actions.save')}
         </Button>
       </div>
       {isLocked ? (
@@ -73,7 +75,7 @@ export function DeviceNameSection() {
           className="mt-2 text-xs text-muted-foreground"
           data-testid="device-name-locked-hint"
         >
-          传输进行中，暂不可修改设备名称
+          {t('settings.deviceName.lockedHint')}
         </p>
       ) : null}
     </div>

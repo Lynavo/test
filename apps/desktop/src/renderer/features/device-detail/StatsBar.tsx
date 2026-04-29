@@ -1,4 +1,5 @@
 import { FileVideo2, HardDrive, Clock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { formatBytes, formatDuration } from '@renderer/lib/format';
 
 const colors = {
@@ -20,6 +21,7 @@ export function StatsBar({
   totalBytes,
   activeTransmissionMs,
 }: StatsBarProps) {
+  const { t } = useTranslation();
   if (fileCount === 0) return null;
 
   return (
@@ -35,7 +37,7 @@ export function StatsBar({
         <span className="text-xs font-semibold" style={{ color: colors.titleText }}>
           {fileCount}
           <span className="ml-1 font-normal" style={{ color: colors.labelText }}>
-            个文件
+            {t('common.units.files')}
           </span>
         </span>
       </div>
@@ -60,7 +62,7 @@ export function StatsBar({
       <div className="flex items-center gap-2">
         <Clock className="h-3.5 w-3.5" style={{ color: colors.clockIcon }} />
         <span className="text-xs font-semibold" style={{ color: colors.titleText }}>
-          耗时{' '}
+          {t('deviceDetail.stats.duration')}{' '}
           <span className="font-normal" style={{ color: colors.labelText }}>
             {formatDuration(activeTransmissionMs)}
           </span>

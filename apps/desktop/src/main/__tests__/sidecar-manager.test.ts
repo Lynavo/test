@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SidecarManager } from '../sidecar-manager';
 import { sidecarClient } from '../sidecar-client';
 
@@ -79,11 +79,23 @@ describe('SidecarManager', () => {
     vi.clearAllMocks();
     spawnMock.mockReturnValue(createChildProcessStub());
     execFileMock.mockImplementation(
-      (_file: string, _args: string[], callback?: (...args: any[]) => void) => {
+      (
+        _file: string,
+        _args: string[],
+        callback?: (
+          error: Error | null,
+          result: { stdout: string; stderr: string },
+        ) => void,
+      ) => {
         callback?.(null, { stdout: '', stderr: '' });
         return {} as never;
       },
     );
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('restarts with a managed sidecar when a reused external sidecar becomes unhealthy', async () => {
@@ -108,7 +120,8 @@ describe('SidecarManager', () => {
 
     await vi.advanceTimersByTimeAsync(3000);
     expect(manager.getState().status).toBe('starting');
-    expect(manager.getState().message).toContain('正在重试');
+    expect(manager.getState().messageCode).toBe('retryingAfterFailure');
+    expect(manager.getState().messageArgs).toEqual({ restart: 1, max: 3 });
 
     await vi.advanceTimersByTimeAsync(1500);
     expect(spawnMock).toHaveBeenCalledTimes(1);

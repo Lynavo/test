@@ -1,4 +1,5 @@
 import { Smartphone, Monitor, FolderOpen, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { DashboardDeviceDTO } from '@syncflow/contracts';
 import { Button } from '@renderer/components/ui/button';
@@ -23,6 +24,7 @@ export function DeviceHeader({
   availableDates,
   onClose,
 }: DeviceHeaderProps) {
+  const { t } = useTranslation();
   const isPhone =
     device.platform === 'ios' || /android|mobile/i.test(device.platform);
   const DeviceIcon = isPhone ? Smartphone : Monitor;
@@ -46,7 +48,7 @@ export function DeviceHeader({
           // Fall through to toast below.
         }
       }
-      toast.error('打开文件夹失败');
+      toast.error(t('errors.deviceDetail.openFolderFailed'));
     }
   };
 
@@ -90,7 +92,7 @@ export function DeviceHeader({
         }}
       >
         <FolderOpen className="h-3.5 w-3.5" />
-        打开文件夹
+        {t('deviceDetail.openFolder')}
       </button>
 
       <Button

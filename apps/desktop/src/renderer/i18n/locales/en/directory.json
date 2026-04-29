@@ -1,0 +1,28 @@
+{
+  "title": "Folder Management",
+  "subtitle": "Configure the root folder and manage received and shared folder contents",
+  "tabs": {
+    "received": "Received",
+    "shared": "Shared",
+    "receivedDescription": "Media files uploaded from mobile devices, kept locally on this PC",
+    "sharedDescription": "Files in the shared folder can be accessed by other devices on the local network"
+  },
+  "pathCard": {
+    "rootPath": "Root folder path",
+    "changeLocked": "Files are being received. You can change this after transfer finishes.",
+    "receivedDirectory": "Received folder",
+    "sharedDirectory": "Shared folder"
+  },
+  "list": {
+    "stats": "{{count}} files  Total size: {{size}}",
+    "fileName": "File name",
+    "size": "Size",
+    "receivedAt": "Received at",
+    "modifiedAt": "Modified at",
+    "sourceDevice": "Source device",
+    "actions": "Actions",
+    "loading": "Loading file list...",
+    "emptyReceived": "No received files",
+    "emptyShared": "No files in the shared folder"
+  }
+}

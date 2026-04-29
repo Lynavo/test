@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FolderOpen, Lock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
 import { Button } from '@renderer/components/ui/button';
@@ -7,6 +8,7 @@ import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 
 export function FilePathSection() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const refreshShareStatus = useSettingsStore((s) => s.refreshShareStatus);
@@ -43,7 +45,7 @@ export function FilePathSection() {
 
   const handleSelectFolder = useCallback(async () => {
     if (transferActive) {
-      toast.error('传输进行中，无法更改接收路径');
+      toast.error(t('errors.settings.transferActiveCannotChangeReceivePath'));
       return;
     }
     try {
@@ -57,35 +59,35 @@ export function FilePathSection() {
         void refreshShareStatus(true);
       }
     } catch {
-      toast.error('保存接收路径失败');
+      toast.error(t('errors.settings.saveReceivePathFailed'));
     } finally {
       setSaving(false);
     }
-  }, [settings.rootPath, refreshShareStatus, transferActive, updateSettings]);
+  }, [settings.rootPath, refreshShareStatus, t, transferActive, updateSettings]);
 
   const handleOpenReceivedFolder = useCallback(async () => {
     if (!receivePath) {
-      toast.error('当前还没有可打开的接收路径');
+      toast.error(t('errors.settings.noReceivePathToOpen'));
       return;
     }
     try {
       await window.electronAPI.files.openFolder(receivePath);
     } catch {
-      toast.error('打开文件夹失败');
+      toast.error(t('errors.settings.openFolderFailed'));
     }
-  }, [receivePath]);
+  }, [receivePath, t]);
 
   const handleOpenSharedFolder = useCallback(async () => {
     if (!sharedPath) {
-      toast.error('当前还没有可打开的共享路径');
+      toast.error(t('errors.settings.noSharedPathToOpen'));
       return;
     }
     try {
       await window.electronAPI.files.openFolder(sharedPath);
     } catch {
-      toast.error('打开共享文件夹失败');
+      toast.error(t('errors.settings.openSharedFolderFailed'));
     }
-  }, [sharedPath]);
+  }, [sharedPath, t]);
 
   const isLocked = transferActive;
 
@@ -95,12 +97,12 @@ export function FilePathSection() {
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-2 flex items-center gap-2">
           <label className="block text-xs font-medium text-muted-foreground">
-            接收地址
+            {t('settings.filePath.receiveAddress')}
           </label>
           {isLocked && (
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
               <Lock className="h-3 w-3" />
-              传输中
+              {t('common.status.transferring')}
             </span>
           )}
         </div>
@@ -116,7 +118,7 @@ export function FilePathSection() {
             size="icon"
             onClick={handleSelectFolder}
             disabled={saving || isLocked}
-            aria-label="选择文件夹"
+            aria-label={t('settings.filePath.chooseFolder')}
           >
             <FolderOpen className="h-4 w-4" />
           </Button>
@@ -132,14 +134,14 @@ export function FilePathSection() {
           disabled={!receivePath}
         >
           <FolderOpen className="h-4 w-4" />
-          打开接收目录
+          {t('settings.filePath.openReceived')}
         </Button>
       </div>
 
       {/* Shared directory */}
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <label className="mb-2 block text-xs font-medium text-muted-foreground">
-          共享地址
+          {t('settings.filePath.sharedAddress')}
         </label>
         <div className="mb-3 flex items-center gap-2">
           <Input
@@ -160,7 +162,7 @@ export function FilePathSection() {
           disabled={!sharedPath}
         >
           <FolderOpen className="h-4 w-4" />
-          打开共享目录
+          {t('settings.filePath.openShared')}
         </Button>
       </div>
     </div>

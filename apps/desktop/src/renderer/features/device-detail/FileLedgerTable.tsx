@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   Table,
@@ -10,7 +11,7 @@ import {
   TableCell,
 } from '@renderer/components/ui/table';
 import { FileIcon } from '@renderer/components/shared/FileIcon';
-import { formatBytes, formatDuration } from '@renderer/lib/format';
+import { formatBytes, formatDuration, formatSmartDate } from '@renderer/lib/format';
 import {
   useDeviceDetailStore,
   type SortField,
@@ -45,31 +46,8 @@ function formatTime(iso?: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function formatSmartDate(iso?: string): string {
-  if (!iso) return '\u2014';
-  const d = new Date(iso);
-  const now = new Date();
-  const time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const diffDays = Math.floor((todayStart.getTime() - targetStart.getTime()) / 86400000);
-
-  if (diffDays === 0) return time;
-  if (diffDays === 1) return `昨天 ${time}`;
-  if (diffDays > 1 && diffDays < 7) {
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    return `${weekdays[d.getDay()]} ${time}`;
-  }
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  if (d.getFullYear() !== now.getFullYear()) {
-    return `${d.getFullYear()}/${month}/${day} ${time}`;
-  }
-  return `${month}月${day}日 ${time}`;
-}
-
 export function FileLedgerTable({ storagePath }: { storagePath: string }) {
+  const { t } = useTranslation();
   const files = useDeviceDetailStore((s) => s.files);
   const sortField = useDeviceDetailStore((s) => s.sortField);
   const sortDirection = useDeviceDetailStore((s) => s.sortDirection);
@@ -110,16 +88,16 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
     try {
       await window.electronAPI?.files.openFile(fullPath);
     } catch {
-      toast.error('文件不存在或已被移除', { description: fullPath });
+      toast.error(t('errors.deviceDetail.fileMissing'), { description: fullPath });
     }
   };
 
   const columns: { label: string; field: SortField }[] = [
-    { label: '文件名称', field: 'name' },
-    { label: '文件大小', field: 'size' },
-    { label: '完成时间', field: 'completedAt' },
-    { label: '创建时间', field: 'createdAt' },
-    { label: '传输耗时', field: 'duration' },
+    { label: t('deviceDetail.table.fileName'), field: 'name' },
+    { label: t('deviceDetail.table.fileSize'), field: 'size' },
+    { label: t('deviceDetail.table.completedAt'), field: 'completedAt' },
+    { label: t('deviceDetail.table.createdAt'), field: 'createdAt' },
+    { label: t('deviceDetail.table.duration'), field: 'duration' },
   ];
 
   return (
@@ -147,7 +125,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
           ))}
           <TableHead className="text-right w-20 pr-2">
             <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-              操作
+              {t('deviceDetail.table.actions')}
             </span>
           </TableHead>
         </TableRow>
@@ -160,7 +138,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
               className="py-16 text-center text-sm"
               style={{ color: colors.emptyText }}
             >
-              该日期暂无传输记录
+              {t('common.pagination.empty')}
             </TableCell>
           </TableRow>
         ) : (
@@ -213,10 +191,10 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
                     color: '#fff',
                     background: colors.actionButton,
                   }}
-                  title="打开文件"
+                  title={t('common.actions.openFile')}
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
-                  打开
+                  {t('common.actions.open')}
                 </button>
               </TableCell>
             </TableRow>

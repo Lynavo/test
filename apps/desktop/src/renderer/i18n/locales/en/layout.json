@@ -1,0 +1,36 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "directory": "Folders",
+    "settings": "Settings",
+    "help": "Help"
+  },
+  "errorBoundary": {
+    "helpLoadFailed": "Help failed to load. Please retry."
+  },
+  "sidecar": {
+    "bonjourWarningTitle": "Bonjour broadcasting is not enabled",
+    "retryingTitle": "Background service is retrying",
+    "startingTitle": "Background service is starting",
+    "failedTitle": "Background service failed to start",
+    "bonjourFallbackDetail": "Bonjour for Windows was not detected on this Windows device.",
+    "startingDetail": "The desktop app is waiting for the local sidecar service to become ready.",
+    "failedDetail": "The local sidecar service could not start.",
+    "runtimeMessages": {
+      "bonjourNativeDetected": "Bonjour for Windows was detected and will be used for discovery.",
+      "bonjourFallbackDetected": "Bonjour for Windows was not detected. The app is using the compatibility broadcaster.",
+      "starting": "The local sidecar service is starting.",
+      "retrying": "The local sidecar service is retrying startup.",
+      "startFailed": "The local sidecar service failed to start.",
+      "exited": "The local sidecar service exited unexpectedly.",
+      "healthCheckFailed": "The local sidecar service did not pass its health check.",
+      "retryingAfterFailure": "Retrying background service startup ({{restart}}/{{max}}).",
+      "failedCheckExecutable": "The background service failed to start. Check the packaged executable or diagnostics bundle."
+    },
+    "bonjourPath": "Bonjour path: {{path}}",
+    "lastExitCode": "Last exit code: {{code}}",
+    "installBonjour": "Install Bonjour",
+    "viewSettings": "View settings",
+    "retrySidecar": "Retry background service"
+  }
+}

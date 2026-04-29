@@ -1,0 +1,18 @@
+{
+  "title": "所有裝置",
+  "lastSuccess": {
+    "withDevice": "最近一次成功同步：{{time}} · {{device}}",
+    "none": "最近一次成功同步：暫無紀錄"
+  },
+  "stats": {
+    "todayMediaCount": "今日接收媒體總數",
+    "todayOccupied": "今日占用總空間",
+    "remainingSpace": "裝置剩餘空間"
+  },
+  "diskWarning": "接收磁碟剩餘空間小於 500MB，已暫停新的接收任務",
+  "deviceCard": {
+    "recent": "最近 {{date}}",
+    "today": "今日",
+    "preparing": "準備傳輸中…"
+  }
+}

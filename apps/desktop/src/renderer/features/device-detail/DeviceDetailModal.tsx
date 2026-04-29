@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogPortal,
@@ -18,6 +19,7 @@ import { FileLedgerTable } from './FileLedgerTable';
 const DETAIL_REFRESH_INTERVAL_MS = 10_000;
 
 export function DeviceDetailModal() {
+  const { t } = useTranslation();
   const isModalOpen = useAppStore((s) => s.isModalOpen);
   const selectedDevice = useAppStore((s) => s.selectedDevice);
   const closeDeviceDetail = useAppStore((s) => s.closeDeviceDetail);
@@ -94,7 +96,7 @@ export function DeviceDetailModal() {
         >
           {/* Visually hidden but accessible title */}
           <DialogTitle className="sr-only">
-            {selectedDevice.displayName} 设备详情
+            {selectedDevice.displayName} {t('deviceDetail.title')}
           </DialogTitle>
 
           <DeviceHeader
@@ -144,7 +146,7 @@ export function DeviceDetailModal() {
           <div className="min-h-0 flex-1 overflow-y-auto px-4">
             {loading ? (
               <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-                加载中...
+                {t('common.fallback.loading')}
               </div>
             ) : error ? (
               <ErrorState
@@ -161,12 +163,19 @@ export function DeviceDetailModal() {
           <div className="flex items-center justify-between border-t border-black/5 px-6 py-4">
             <div className="text-xs text-slate-500">
               {totalItems === 0
-                ? '该日期暂无传输记录'
-                : `显示第 ${pageStart}-${pageEnd} 条，共 ${totalItems} 条`}
+                ? t('common.pagination.empty')
+                : t('common.pagination.range', {
+                    start: pageStart,
+                    end: pageEnd,
+                    total: totalItems,
+                  })}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">
-                第 {Math.min(page, totalPages)} / {totalPages} 页
+                {t('common.pagination.page', {
+                  page: Math.min(page, totalPages),
+                  totalPages,
+                })}
               </span>
               <Button
                 variant="outline"
@@ -178,7 +187,7 @@ export function DeviceDetailModal() {
                   })
                 }
               >
-                上一页
+                {t('common.pagination.previous')}
               </Button>
               <Button
                 variant="outline"
@@ -190,7 +199,7 @@ export function DeviceDetailModal() {
                   })
                 }
               >
-                下一页
+                {t('common.pagination.next')}
               </Button>
             </div>
           </div>

@@ -41,7 +41,8 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   retryStart: async () => {},
   installBonjour: async () => ({
     status: 'already_installed' as const,
-    message: '已检测到 Bonjour for Windows，无需重复安装。',
+    message: null,
+    messageCode: 'alreadyInstalled',
     supportUrl: BONJOUR_WINDOWS_SUPPORT_URL,
     installerPath: null,
     bonjourPath: 'C:\\Program Files\\Bonjour\\dns-sd.exe',

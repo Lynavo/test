@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FolderOpen, FolderInput, FolderSymlink, Lock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
@@ -17,6 +18,7 @@ const colors = {
 } as const;
 
 export function DirectoryPathCard() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [saving, setSaving] = useState(false);
@@ -45,14 +47,14 @@ export function DirectoryPathCard() {
     const api = window.electronAPI;
     if (!api) return;
     if (transferActive) {
-      toast.error('正在接收文件，完成后再变更根目录');
+      toast.error(t('errors.directory.transferActiveChangeRoot'));
       return;
     }
     try {
       const latestTransferState = await api.sidecar.getTransferActive();
       if (latestTransferState.active) {
         setTransferActive(true);
-        toast.error('正在接收文件，完成后再变更根目录');
+        toast.error(t('errors.directory.transferActiveChangeRoot'));
         return;
       }
 
@@ -67,35 +69,35 @@ export function DirectoryPathCard() {
     } catch (err: unknown) {
       const body = err instanceof Error ? err.message : '';
       if (body.includes('transfer')) {
-        toast.error('目前正在接收文件，暂时无法修改接收目录');
+        toast.error(t('errors.directory.transferActiveReceivePath'));
       } else if (
         body.includes('cannot create') ||
         body.includes('not writable') ||
         body.includes('read-only')
       ) {
-        toast.error('所选位置不可写入，请选择其他文件夹');
+        toast.error(t('errors.directory.locationNotWritable'));
       } else if (body.includes('must not be empty') || body.includes('absolute')) {
-        toast.error('请选择有效目录');
+        toast.error(t('errors.directory.selectValidDirectory'));
       } else {
-        toast.error('目录不可用');
+        toast.error(t('errors.directory.directoryUnavailable'));
       }
     } finally {
       setSaving(false);
     }
-  }, [rootPath, transferActive, updateSettings]);
+  }, [rootPath, t, transferActive, updateSettings]);
 
   const handleOpenFolder = useCallback(async (path: string) => {
     const api = window.electronAPI;
     if (!api || !path) {
-      toast.error('路径不存在');
+      toast.error(t('errors.directory.pathMissing'));
       return;
     }
     try {
       await api.files.openFolder(path);
     } catch {
-      toast.error('打开文件夹失败');
+      toast.error(t('errors.directory.openFolderFailed'));
     }
-  }, []);
+  }, [t]);
 
   return (
     <div className="space-y-4">
@@ -104,12 +106,12 @@ export function DirectoryPathCard() {
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-semibold" style={{ color: colors.title }}>
-              根目录路径
+              {t('directory.pathCard.rootPath')}
             </h3>
             {transferActive && (
               <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
                 <Lock className="h-3 w-3" />
-                正在接收文件，完成后可变更
+                {t('directory.pathCard.changeLocked')}
               </div>
             )}
             <code
@@ -117,7 +119,7 @@ export function DirectoryPathCard() {
               style={{ color: colors.pathText, background: colors.pathBg }}
               title={rootPath}
             >
-              {rootPath || '未设置'}
+              {rootPath || t('common.fallback.notSet')}
             </code>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -131,7 +133,7 @@ export function DirectoryPathCard() {
               disabled={saving || transferActive}
               className="bg-blue-500 text-white hover:bg-blue-600"
             >
-              更改
+              {t('common.actions.change')}
             </Button>
           </div>
         </div>
@@ -150,7 +152,7 @@ export function DirectoryPathCard() {
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
-                接收目录
+                {t('directory.pathCard.receivedDirectory')}
               </h4>
               <code
                 className="mt-0.5 block truncate text-xs font-mono text-muted-foreground"
@@ -167,7 +169,7 @@ export function DirectoryPathCard() {
               className="shrink-0"
             >
               <FolderOpen className="mr-1 h-3.5 w-3.5" />
-              打开
+              {t('common.actions.open')}
             </Button>
           </div>
         </GlassCard>
@@ -183,7 +185,7 @@ export function DirectoryPathCard() {
             </div>
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
-                共享目录
+                {t('directory.pathCard.sharedDirectory')}
               </h4>
               <code
                 className="mt-0.5 block truncate text-xs font-mono text-muted-foreground"
@@ -200,7 +202,7 @@ export function DirectoryPathCard() {
               className="shrink-0"
             >
               <FolderOpen className="mr-1 h-3.5 w-3.5" />
-              打开
+              {t('common.actions.open')}
             </Button>
           </div>
         </GlassCard>

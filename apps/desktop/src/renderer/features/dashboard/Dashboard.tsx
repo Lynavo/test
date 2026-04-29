@@ -1,4 +1,5 @@
 import { FileVideo, HardDrive, Database } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useAppStore } from '@renderer/stores/app-store';
 import { formatBytes, formatDateTime } from '@renderer/lib/format';
@@ -8,6 +9,7 @@ import { StatCard } from './StatCard';
 import { DeviceCard } from './DeviceCard';
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const { summary, devices, error, fetchDashboard } = useDashboardStore();
   const openDeviceDetail = useAppStore((s) => s.openDeviceDetail);
 
@@ -16,11 +18,14 @@ export function Dashboard() {
       <DiskWarningBanner />
 
       <div className="px-6 pt-5 pb-1">
-        <h1 className="text-xl font-bold">所有设备</h1>
+        <h1 className="text-xl font-bold">{t('dashboard.title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {summary.lastSuccessfulSyncAt
-            ? `最近一次成功同步：${formatDateTime(summary.lastSuccessfulSyncAt)} · ${summary.lastSuccessfulDeviceName ?? '未知设备'}`
-            : '最近一次成功同步：暂无记录'}
+            ? t('dashboard.lastSuccess.withDevice', {
+                time: formatDateTime(summary.lastSuccessfulSyncAt),
+                device: summary.lastSuccessfulDeviceName ?? t('common.fallback.unknownDevice'),
+              })
+            : t('dashboard.lastSuccess.none')}
         </p>
       </div>
 
@@ -29,19 +34,19 @@ export function Dashboard() {
         <StatCard
           icon={FileVideo}
           iconGradient="linear-gradient(135deg, #3b82f6 0%, #60c4f0 100%)"
-          label="今日接收媒体总数"
+          label={t('dashboard.stats.todayMediaCount')}
           value={summary.todayUploadCount.toLocaleString()}
         />
         <StatCard
           icon={HardDrive}
           iconGradient="linear-gradient(135deg, #a855f7 0%, #c084fc 100%)"
-          label="今日占用总空间"
+          label={t('dashboard.stats.todayOccupied')}
           value={formatBytes(summary.todayOccupiedBytes)}
         />
         <StatCard
           icon={Database}
           iconGradient="linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)"
-          label="设备剩余空间"
+          label={t('dashboard.stats.remainingSpace')}
           value={formatBytes(summary.remainingBytes)}
           alert={summary.isDiskLow}
         />

@@ -1,13 +1,14 @@
 import type { CSSProperties } from 'react';
 import { LayoutDashboard, FolderOpen, Settings, HelpCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { glass, elevation } from '@syncflow/design-tokens';
 import syncflowLogo from '@renderer/assets/syncflow-mark-transparent.png';
 import { useAppStore, type AppView } from '@renderer/stores/app-store';
 
-const navItems: { key: AppView; label: string; icon: typeof LayoutDashboard }[] = [
-  { key: 'dashboard', label: '首页看板', icon: LayoutDashboard },
-  { key: 'directory', label: '目录管理', icon: FolderOpen },
-  { key: 'settings', label: '全局设置', icon: Settings },
+const navItems: { key: AppView; labelKey: string; icon: typeof LayoutDashboard }[] = [
+  { key: 'dashboard', labelKey: 'layout.nav.dashboard', icon: LayoutDashboard },
+  { key: 'directory', labelKey: 'layout.nav.directory', icon: FolderOpen },
+  { key: 'settings', labelKey: 'layout.nav.settings', icon: Settings },
 ];
 
 const dragRegionStyle = { WebkitAppRegion: 'drag' } as CSSProperties;
@@ -19,6 +20,7 @@ const activeNavStyle = {
 } as CSSProperties;
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const currentView = useAppStore((s) => s.currentView);
   const setView = useAppStore((s) => s.setView);
 
@@ -47,7 +49,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
-        {navItems.map(({ key, label, icon: Icon }) => {
+        {navItems.map(({ key, labelKey, icon: Icon }) => {
           const active = currentView === key || (key === 'dashboard' && currentView === 'device-detail');
           return (
             <button
@@ -59,7 +61,7 @@ export function Sidebar() {
               style={active ? activeNavStyle : noDragRegionStyle}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t(labelKey)}
             </button>
           );
         })}
@@ -77,7 +79,7 @@ export function Sidebar() {
           style={currentView === 'help' ? activeNavStyle : noDragRegionStyle}
         >
           <HelpCircle className="h-4 w-4" />
-          帮助
+          {t('layout.nav.help')}
         </button>
       </div>
     </aside>

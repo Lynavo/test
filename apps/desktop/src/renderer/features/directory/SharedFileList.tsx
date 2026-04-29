@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   Table,
   TableHeader,
@@ -46,6 +47,7 @@ function SortIcon({
 }
 
 export function SharedFileList() {
+  const { t } = useTranslation();
   const sharedFiles = useDirectoryStore((s) => s.sharedFiles);
   const sharedPath = useSettingsStore((s) => s.settings.sharedPath);
   const [sortField, setSortField] = useState<SharedSortField>('modifiedAt');
@@ -93,7 +95,10 @@ export function SharedFileList() {
         style={{ background: colors.statsBg }}
       >
         <span className="text-sm" style={{ color: colors.statsText }}>
-          共 {sharedFiles.length} 个文件&nbsp;&nbsp;总大小: {formatBytes(totalBytes)}
+          {t('directory.list.stats', {
+            count: sharedFiles.length,
+            size: formatBytes(totalBytes),
+          })}
         </span>
       </div>
 
@@ -103,7 +108,7 @@ export function SharedFileList() {
           <TableRow style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
             <TableHead className="pr-2" style={{ width: '35%' }}>
               <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-                文件名称
+                {t('directory.list.fileName')}
               </span>
             </TableHead>
             <TableHead className="pr-2" style={{ width: '15%' }}>
@@ -112,7 +117,7 @@ export function SharedFileList() {
                 className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium transition-[color,background-color,transform] duration-150 ease-out hover:bg-blue-50 hover:text-blue-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                 style={{ color: colors.headerText }}
               >
-                大小
+                {t('directory.list.size')}
                 <SortIcon field="size" activeField={sortField} direction={sortDirection} />
               </button>
             </TableHead>
@@ -122,13 +127,13 @@ export function SharedFileList() {
                 className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium transition-[color,background-color,transform] duration-150 ease-out hover:bg-blue-50 hover:text-blue-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                 style={{ color: colors.headerText }}
               >
-                修改时间
+                {t('directory.list.modifiedAt')}
                 <SortIcon field="modifiedAt" activeField={sortField} direction={sortDirection} />
               </button>
             </TableHead>
             <TableHead className="w-20 pr-2 text-right">
               <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-                操作
+                {t('directory.list.actions')}
               </span>
             </TableHead>
           </TableRow>
@@ -141,7 +146,7 @@ export function SharedFileList() {
                 className="py-16 text-center text-sm"
                 style={{ color: colors.emptyText }}
               >
-                共享目录暂无文件
+                {t('directory.list.emptyShared')}
               </TableCell>
             </TableRow>
           ) : (
@@ -176,10 +181,10 @@ export function SharedFileList() {
                     onClick={() => handleOpen(file)}
                     className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-[opacity,transform] duration-150 ease-out hover:opacity-80 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                     style={{ color: colors.actionButton }}
-                    title="打开文件"
+                    title={t('common.actions.openFile')}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    打开
+                    {t('common.actions.open')}
                   </button>
                 </TableCell>
               </TableRow>

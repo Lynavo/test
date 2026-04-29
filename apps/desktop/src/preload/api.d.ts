@@ -59,7 +59,7 @@ export interface ElectronAPI {
     getLocalIPs(): string[];
   };
   support: {
-    exportDiagnostics(): Promise<string | null>;
+    exportDiagnostics(locale?: string): Promise<string | null>;
     getAppInfo(): Promise<{ name: string; version: string; buildNumber: string }>;
   };
 }

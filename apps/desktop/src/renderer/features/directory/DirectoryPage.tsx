@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { FolderInput, Globe } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { ErrorState } from '@renderer/components/shared/ErrorState';
 import { useDirectoryStore, type DirectoryTab } from '@renderer/stores/directory-store';
@@ -13,11 +14,6 @@ const colors = {
   title: '#1a2a3a',
   subtitle: '#6b7a8d',
 } as const;
-
-const tabDescriptions: Record<DirectoryTab, string> = {
-  received: '接收移动端上传的素材文件，仅供 PC 本地保管使用',
-  shared: '共享目录中的文件，可供局域网内其他设备访问',
-};
 
 const DIRECTORY_AUTO_REFRESH_MS = 3000;
 
@@ -50,6 +46,7 @@ function TabButton({
 }
 
 export function DirectoryPage() {
+  const { t } = useTranslation();
   const activeTab = useDirectoryStore((s) => s.activeTab);
   const setTab = useDirectoryStore((s) => s.setTab);
   const receivedFiles = useDirectoryStore((s) => s.receivedFiles);
@@ -119,10 +116,10 @@ export function DirectoryPage() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-xl font-bold" style={{ color: colors.title }}>
-            目录管理
+            {t('directory.title')}
           </h1>
           <p className="mt-1 text-sm" style={{ color: colors.subtitle }}>
-            配置根目录路径并管理接收与共享目录的内容
+            {t('directory.subtitle')}
           </p>
         </div>
 
@@ -137,14 +134,14 @@ export function DirectoryPage() {
           <div className="mb-4 flex gap-1">
             <TabButton
               active={activeTab === 'received'}
-              label="接收目录"
+              label={t('directory.tabs.received')}
               count={receivedFiles.length}
               icon={FolderInput}
               onClick={() => handleTabChange('received')}
             />
             <TabButton
               active={activeTab === 'shared'}
-              label="共享目录"
+              label={t('directory.tabs.shared')}
               count={sharedFiles.length}
               icon={Globe}
               onClick={() => handleTabChange('shared')}
@@ -153,7 +150,11 @@ export function DirectoryPage() {
 
           {/* Tab description with background */}
           <div className="mb-4 rounded-xl bg-blue-50/60 px-4 py-2.5">
-            <p className="text-xs text-muted-foreground">{tabDescriptions[activeTab]}</p>
+            <p className="text-xs text-muted-foreground">
+              {activeTab === 'received'
+                ? t('directory.tabs.receivedDescription')
+                : t('directory.tabs.sharedDescription')}
+            </p>
           </div>
 
           {/* Tab content */}

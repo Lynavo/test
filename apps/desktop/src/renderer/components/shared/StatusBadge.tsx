@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@renderer/lib/utils';
 import type { DeviceDashboardStatus } from '@syncflow/contracts';
 
@@ -15,10 +16,10 @@ const dotVariants = cva('h-2 w-2 rounded-full', {
   },
 });
 
-const labelMap: Record<DeviceDashboardStatus, string> = {
-  transferring: '传输中',
-  connected_idle: '已连接',
-  offline: '未连接',
+const labelKeyMap: Record<DeviceDashboardStatus, string> = {
+  transferring: 'common.status.transferring',
+  connected_idle: 'common.status.connectedIdle',
+  offline: 'common.status.offline',
 };
 
 interface StatusBadgeProps extends VariantProps<typeof dotVariants> {
@@ -27,6 +28,7 @@ interface StatusBadgeProps extends VariantProps<typeof dotVariants> {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const { t } = useTranslation();
   return (
     <span
       className={cn(
@@ -35,7 +37,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
       )}
     >
       <span className={dotVariants({ status })} />
-      {labelMap[status]}
+      {t(labelKeyMap[status])}
     </span>
   );
 }

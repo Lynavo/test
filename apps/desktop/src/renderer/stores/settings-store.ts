@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { SettingsDTO, ShareStatusDTO } from '@syncflow/contracts';
+import i18n from '@renderer/i18n';
 import { useSidecarRuntimeStore } from './sidecar-runtime-store';
 
 function toShareStatusSnapshot(settings: SettingsDTO): ShareStatusDTO {
@@ -90,7 +91,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
             smbUrl: state.settings.shareAddress || null,
             status: 'error',
             shareName: state.settings.shareName || undefined,
-            lastError: '共享状态检测失败',
+            lastError: i18n.t('errors.settings.shareStatusCheckFailed'),
           },
         }));
       }

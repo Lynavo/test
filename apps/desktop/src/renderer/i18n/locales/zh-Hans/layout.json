@@ -1,0 +1,36 @@
+{
+  "nav": {
+    "dashboard": "首页看板",
+    "directory": "目录管理",
+    "settings": "全局设置",
+    "help": "帮助"
+  },
+  "errorBoundary": {
+    "helpLoadFailed": "帮助中心加载失败，请重试"
+  },
+  "sidecar": {
+    "bonjourWarningTitle": "Bonjour 广播未启用",
+    "retryingTitle": "后台服务正在重试",
+    "startingTitle": "后台服务启动中",
+    "failedTitle": "后台服务启动失败",
+    "bonjourFallbackDetail": "Windows 当前未检测到 Bonjour for Windows。",
+    "startingDetail": "桌面应用正在等待本地 sidecar 服务就绪。",
+    "failedDetail": "本地 sidecar 未能成功启动。",
+    "runtimeMessages": {
+      "bonjourNativeDetected": "已检测到 Bonjour for Windows，将用于设备发现。",
+      "bonjourFallbackDetected": "未检测到 Bonjour for Windows，当前使用兼容广播模式。",
+      "starting": "本地 sidecar 服务正在启动。",
+      "retrying": "本地 sidecar 服务正在重试启动。",
+      "startFailed": "本地 sidecar 服务启动失败。",
+      "exited": "本地 sidecar 服务意外退出。",
+      "healthCheckFailed": "本地 sidecar 服务健康检查未通过。",
+      "retryingAfterFailure": "正在重试启动后台服务（{{restart}}/{{max}}）。",
+      "failedCheckExecutable": "后台服务启动失败，请检查打包后的可执行文件或诊断包。"
+    },
+    "bonjourPath": "Bonjour 路径：{{path}}",
+    "lastExitCode": "最近退出码：{{code}}",
+    "installBonjour": "一键安装 Bonjour",
+    "viewSettings": "查看设置",
+    "retrySidecar": "重试后台服务"
+  }
+}

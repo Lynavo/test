@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   Table,
   TableHeader,
@@ -43,6 +44,7 @@ function SortIcon({ field }: { field: DirectorySortField }) {
 }
 
 export function ReceivedFileList() {
+  const { t } = useTranslation();
   const receivedFiles = useDirectoryStore((s) => s.receivedFiles);
   const receivedTotalBytes = useDirectoryStore((s) => s.receivedTotalBytes);
   const sortField = useDirectoryStore((s) => s.sortField);
@@ -82,7 +84,10 @@ export function ReceivedFileList() {
         style={{ background: colors.statsBg }}
       >
         <span className="text-sm" style={{ color: colors.statsText }}>
-          共 {receivedFiles.length} 个文件&nbsp;&nbsp;总大小: {formatBytes(receivedTotalBytes)}
+          {t('directory.list.stats', {
+            count: receivedFiles.length,
+            size: formatBytes(receivedTotalBytes),
+          })}
         </span>
       </div>
 
@@ -92,7 +97,7 @@ export function ReceivedFileList() {
           <TableRow style={{ borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
             <TableHead className="pr-2" style={{ width: '30%' }}>
               <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-                文件名称
+                {t('directory.list.fileName')}
               </span>
             </TableHead>
             <TableHead className="pr-2" style={{ width: '12%' }}>
@@ -101,7 +106,7 @@ export function ReceivedFileList() {
                 className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium transition-[color,background-color,transform] duration-150 ease-out hover:bg-blue-50 hover:text-blue-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                 style={{ color: colors.headerText }}
               >
-                大小
+                {t('directory.list.size')}
                 <SortIcon field="size" />
               </button>
             </TableHead>
@@ -111,18 +116,18 @@ export function ReceivedFileList() {
                 className="flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-xs font-medium transition-[color,background-color,transform] duration-150 ease-out hover:bg-blue-50 hover:text-blue-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                 style={{ color: colors.headerText }}
               >
-                接收时间
+                {t('directory.list.receivedAt')}
                 <SortIcon field="completedAt" />
               </button>
             </TableHead>
             <TableHead className="pr-2" style={{ width: '20%' }}>
               <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-                来源设备
+                {t('directory.list.sourceDevice')}
               </span>
             </TableHead>
             <TableHead className="w-20 pr-2 text-right">
               <span className="text-xs font-medium" style={{ color: colors.headerText }}>
-                操作
+                {t('directory.list.actions')}
               </span>
             </TableHead>
           </TableRow>
@@ -135,7 +140,7 @@ export function ReceivedFileList() {
                 className="py-16 text-center text-sm"
                 style={{ color: colors.emptyText }}
               >
-                正在加载文件列表...
+                {t('directory.list.loading')}
               </TableCell>
             </TableRow>
           ) : sortedFiles.length === 0 ? (
@@ -145,7 +150,7 @@ export function ReceivedFileList() {
                 className="py-16 text-center text-sm"
                 style={{ color: colors.emptyText }}
               >
-                暂无接收文件
+                {t('directory.list.emptyReceived')}
               </TableCell>
             </TableRow>
           ) : (
@@ -190,10 +195,10 @@ export function ReceivedFileList() {
                     disabled={!file.finalPath}
                     className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-[opacity,transform] duration-150 ease-out hover:opacity-80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
                     style={{ color: colors.actionButton }}
-                    title="打开文件"
+                    title={t('common.actions.openFile')}
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    打开
+                    {t('common.actions.open')}
                   </button>
                 </TableCell>
               </TableRow>

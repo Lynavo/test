@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { toast } from 'sonner';
 import type { DashboardDeviceDTO, DashboardSummaryDTO } from '@syncflow/contracts';
 import type { DeviceDashboardStatus } from '@syncflow/contracts';
+import i18n from '@renderer/i18n';
 import { useSidecarRuntimeStore } from './sidecar-runtime-store';
 
 const OFFLINE_STATUS_DEBOUNCE_MS = 3_000;
@@ -190,13 +191,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       console.error('Failed to fetch dashboard:', err);
       const storageUnavailable = isStorageUnavailableError(err);
       const message = storageUnavailable
-        ? '接收目录不可用，请重新选择或恢复文件夹'
-        : '加载设备列表失败';
+        ? i18n.t('errors.dashboard.receiveDirectoryUnavailable')
+        : i18n.t('errors.dashboard.loadDevicesFailed');
       set({ error: message });
       toast.error(message, {
         description: storageUnavailable
-          ? '电脑端仍在线，但目前无法存取设置的接收位置'
-          : '请检查网络连接后重试',
+          ? i18n.t('errors.dashboard.receiveDirectoryUnavailableDescription')
+          : i18n.t('errors.dashboard.checkNetworkAndRetry'),
       });
     }
   },
