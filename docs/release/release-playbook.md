@@ -62,15 +62,19 @@ cd services/sidecar-go && go test ./...
 從倉庫根目錄執行：
 
 ```bash
-pnpm package:mobile:testflight
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight
 ```
 
 如果你想拆步：
 
 ```bash
-pnpm package:mobile:testflight:archive
-pnpm package:mobile:testflight:upload
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:archive
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight:upload
 ```
+
+TestFlight 腳本會在 archive / upload 前比對 server `.env.prod` 與 mobile
+config 內的 `APP_REVIEW_PHONE`。不一致會直接失敗，避免 App Review 帳號
+連到錯誤後端。
 
 產物位置：
 
@@ -212,7 +216,7 @@ pnpm tag:beta:push
 倉庫根目錄已有：
 
 ```bash
-pnpm package:mobile:testflight
+SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight
 pnpm package:desktop:signed
 pnpm package:desktop:win
 pnpm tag:beta

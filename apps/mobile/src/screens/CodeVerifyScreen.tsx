@@ -13,7 +13,11 @@ import {
   type TextInputKeyPressEventData,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import {
+  CommonActions,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -45,9 +49,9 @@ export function CodeVerifyScreen() {
   const { deviceId, host, port, deviceName, prefilledCode } = route.params;
 
   const [code, setCode] = useState<string[]>(
-    prefilledCode && prefilledCode.length === CODE_LENGTH 
-      ? prefilledCode.split('') 
-      : Array(CODE_LENGTH).fill('')
+    prefilledCode && prefilledCode.length === CODE_LENGTH
+      ? prefilledCode.split('')
+      : Array(CODE_LENGTH).fill(''),
   );
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState(false);
@@ -64,8 +68,6 @@ export function CodeVerifyScreen() {
   const resolvedCodeBoxSize = Math.max(36, codeBoxSize);
   const codeBoxFontSize = Math.max(18, Math.floor(resolvedCodeBoxSize * 0.4));
   const codeBoxRadius = Math.max(14, Math.floor(resolvedCodeBoxSize * 0.3));
-
-
 
   const submitCode = useCallback(
     async (fullCode: string) => {
@@ -99,9 +101,9 @@ export function CodeVerifyScreen() {
         // Include actual error message so the user knows if it's a network timeout vs incorrect code
         const msg = e?.message || '';
         if (msg.includes('Pairing rejected')) {
-           setErrorMsg(t('errors.pairingWrongCode'));
+          setErrorMsg(t('errors.pairingWrongCode'));
         } else {
-           setErrorMsg(t('errors.pairingConnectFailed', { msg }));
+          setErrorMsg(t('errors.pairingConnectFailed', { msg }));
         }
         setCode(Array(CODE_LENGTH).fill(''));
         Vibration.vibrate(300);
@@ -113,11 +115,11 @@ export function CodeVerifyScreen() {
       setTimeout(() => {
         setVerifying(false);
         navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: 'SyncActivity' }],
-            }),
-          );
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'SyncActivity' }],
+          }),
+        );
       }, VERIFY_DELAY_MS);
     },
     [navigation, deviceId, host, port, t],
@@ -215,7 +217,9 @@ export function CodeVerifyScreen() {
           <View style={styles.deviceIconBox}>
             <Icon name="desktop-outline" size={16} color="#3b82f6" />
           </View>
-          <Text style={styles.deviceLabel}>{t('codeVerify.deviceLabel', { deviceName, host })}</Text>
+          <Text style={styles.deviceLabel}>
+            {t('codeVerify.deviceLabel', { deviceName, host })}
+          </Text>
         </View>
 
         {/* Prompt */}
@@ -226,7 +230,7 @@ export function CodeVerifyScreen() {
           {code.map((digit, index) => (
             <TextInput
               key={index}
-              ref={(ref) => {
+              ref={ref => {
                 inputRefs.current[index] = ref;
               }}
               style={[
@@ -242,8 +246,8 @@ export function CodeVerifyScreen() {
                 verifying && styles.codeBoxDisabled,
               ]}
               value={digit}
-              onChangeText={(value) => handleChangeText(index, value)}
-              onKeyPress={(e) => handleKeyPress(index, e)}
+              onChangeText={value => handleChangeText(index, value)}
+              onKeyPress={e => handleKeyPress(index, e)}
               keyboardType="number-pad"
               maxLength={1}
               autoFocus={index === 0}
@@ -283,31 +287,38 @@ export function CodeVerifyScreen() {
 
         {/* Help text */}
         <View style={styles.helpCard}>
-          <View style={styles.helpIconBox}>
-            <Icon name="desktop-outline" size={22} color="#3b82f6" />
+          <View style={styles.helpHeader}>
+            <View style={styles.helpIconBox}>
+              <Icon name="desktop-outline" size={20} color="#3b82f6" />
+            </View>
+            <View style={styles.helpCopy}>
+              <Text style={styles.helpTitle}>{t('codeVerify.helpTitle')}</Text>
+              <Text style={styles.helpText}>{t('codeVerify.helpText')}</Text>
+              <Text style={styles.helpSecondary}>
+                {t('codeVerify.helpSecondary')}
+              </Text>
+            </View>
           </View>
-          <View style={styles.helpCopy}>
-            <Text style={styles.helpTitle}>{t('codeVerify.helpTitle')}</Text>
-            <Text style={styles.helpText}>{t('codeVerify.helpText')}</Text>
-            <Text style={styles.helpSecondary}>{t('codeVerify.helpSecondary')}</Text>
-          </View>
+
           <View style={styles.helpExample}>
-            <View style={styles.helpExampleRow}>
-              {['3', '8', '5'].map(digit => (
-                <View key={digit} style={styles.helpExampleDigit}>
-                  <Text style={styles.helpExampleDigitText}>{digit}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.helpExampleRow}>
-              {['2', '1', '7'].map(digit => (
-                <View key={digit} style={styles.helpExampleDigit}>
-                  <Text style={styles.helpExampleDigitText}>{digit}</Text>
-                </View>
-              ))}
-            </View>
-            <Text style={styles.helpExampleLabel}>{t('codeVerify.exampleLabel')}</Text>
+            <Text style={styles.helpExampleLabel}>
+              {t('codeVerify.exampleLabel')}
+            </Text>
+            {['3', '8', '5', '2', '1', '7'].map((digit, index) => (
+              <View key={`${digit}-${index}`} style={styles.helpExampleDigit}>
+                <Text style={styles.helpExampleDigitText}>{digit}</Text>
+              </View>
+            ))}
           </View>
+
+          <TouchableOpacity
+            activeOpacity={0.65}
+            onPress={() => navigation.navigate('ConnectionTutorial')}
+            accessibilityRole="button"
+            accessibilityLabel={t('codeVerify.helpCta')}
+          >
+            <Text style={styles.helpCta}>{t('codeVerify.helpCta')}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -457,30 +468,34 @@ const styles = StyleSheet.create({
   helpCard: {
     width: '100%',
     marginTop: 36,
+    gap: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.8)',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    shadowColor: 'rgba(15,23,42,0.16)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  helpHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.62)',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    shadowColor: 'rgba(59,130,210,0.3)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 2,
   },
   helpIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     backgroundColor: 'rgba(59,130,246,0.09)',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(59,130,246,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   helpCopy: {
     flex: 1,
@@ -498,39 +513,39 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   helpSecondary: {
-    marginTop: 6,
+    marginTop: 4,
     fontSize: 11,
     color: '#94a3b8',
     lineHeight: 16,
   },
   helpExample: {
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 2,
-  },
-  helpExampleRow: {
     flexDirection: 'row',
-    gap: 3,
+    alignItems: 'center',
+    gap: 6,
   },
   helpExampleDigit: {
-    width: 16,
-    height: 20,
-    borderRadius: 5,
-    backgroundColor: 'rgba(59,130,246,0.1)',
+    width: 30,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(59,130,246,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(59,130,246,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   helpExampleDigitText: {
-    color: '#3b82f6',
-    fontSize: 10,
+    color: '#2563eb',
+    fontSize: 14,
     fontWeight: '800',
   },
   helpExampleLabel: {
-    marginTop: 1,
+    marginRight: 2,
     color: '#94a3b8',
-    fontSize: 9,
+    fontSize: 11,
+  },
+  helpCta: {
+    color: '#2563eb',
+    fontSize: 12,
     fontWeight: '600',
   },
 });

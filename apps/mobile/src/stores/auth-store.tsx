@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import i18next from 'i18next';
 import { ApiError, ERROR_CODE } from '../services/api';
+import { clearSessionBaseUrl, loadSessionBaseUrl } from '../services/config';
 import { useIapLifecycle } from '../hooks/useIapLifecycle';
 import {
   getOwnerUserId as nativeGetOwnerUserId,
@@ -161,6 +162,8 @@ async function loadPersistedTokens(): Promise<{
   accessToken: string | null;
   refreshToken: string | null;
 }> {
+  await loadSessionBaseUrl();
+
   // 1. Try the Keychain first.
   try {
     const cred = await Keychain.getGenericPassword({
@@ -198,6 +201,7 @@ async function loadPersistedTokens(): Promise<{
     console.warn('[auth-store] legacy AsyncStorage migration failed', err);
   }
 
+  await clearSessionBaseUrl();
   return { accessToken: null, refreshToken: null };
 }
 
@@ -374,6 +378,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'CLEAR' });
     syncTokensToModule(null, null);
     persistTokens(null, null);
+    void clearSessionBaseUrl();
   }, []);
 
   // Register store actions so the API layer can update tokens / force logout
@@ -401,6 +406,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'CLEAR' });
           syncTokensToModule(null, null);
           persistTokens(null, null);
+          void clearSessionBaseUrl();
         },
       ),
     );

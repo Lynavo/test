@@ -6,5 +6,6 @@
   "helpTitle": "去哪裡找連接碼？",
   "helpText": "請在電腦端 Vivi Drop 左側導覽列點擊「全域設定」，即可查看 6 位數字連接碼。",
   "helpSecondary": "連接碼不會自動刷新，需手動點擊「重新產生」才會更新。",
-  "exampleLabel": "示例"
+  "exampleLabel": "示例",
+  "helpCta": "查看詳細圖文教學 >"
 }

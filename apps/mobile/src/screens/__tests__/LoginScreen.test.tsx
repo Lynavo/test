@@ -96,7 +96,9 @@ describe('LoginScreen', () => {
       new ApiError(ERROR_CODE.SMS_TOO_FREQUENT, '驗證碼發送過於頻繁'),
     );
 
-    const { getByPlaceholderText, getByText, getByRole } = render(<LoginScreen />);
+    const { getByPlaceholderText, getByText, getByRole } = render(
+      <LoginScreen />,
+    );
 
     fireEvent.changeText(getByPlaceholderText('請輸入手機號碼'), '13312341234');
     fireEvent.press(getByRole('checkbox'));
@@ -107,5 +109,26 @@ describe('LoginScreen', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('passes the resolved auth base URL to the SMS verification screen', async () => {
+    mockSendSmsCode.mockResolvedValueOnce({
+      authBaseUrl: 'https://review-api.vividrop.cn',
+    });
+
+    const { getByPlaceholderText, getByText, getByRole } = render(
+      <LoginScreen />,
+    );
+
+    fireEvent.changeText(getByPlaceholderText('請輸入手機號碼'), '17000000001');
+    fireEvent.press(getByRole('checkbox'));
+    fireEvent.press(getByText('取得驗證碼'));
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('SmsVerify', {
+        phone: '17000000001',
+        authBaseUrl: 'https://review-api.vividrop.cn',
+      });
+    });
   });
 });

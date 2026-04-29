@@ -37,17 +37,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Sandbox-mode CVM so physical-device IAP receipts can round-trip through the
 // same backend Apple's V2 webhook hits. Revert before committing anything else.
 const DEV_API_BASE_URL: string =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8080' : 'https://api.vividrop.cn';
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:8080'
+    : 'https://api.vividrop.cn';
 
-// TODO: replace with the real production hostname before shipping. Wire via
-// react-native-config / a build-time constant injected by CI.
-const PROD_BASE_URL = 'https://api.vividrop.cn';
+export const PROD_BASE_URL = 'https://api.vividrop.cn';
+export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
+export const APP_REVIEW_PHONE = '17000000001';
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
+const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
 
 // In-memory cache of the AsyncStorage override; set by loadDebugBaseUrlOverride()
 // at app startup so the very first request can see it without a sync read.
 let _debugOverride: string | null = null;
+let _sessionBaseUrl: string | null = null;
 let _warnedRealDeviceLoopback = false;
 
 /**
@@ -72,7 +76,9 @@ export async function loadDebugBaseUrlOverride(): Promise<void> {
  * cold starts pick it up automatically. Pass `null` to revert to the
  * built-in default. Dev-builds only — silently ignored in release.
  */
-export async function setDebugBaseUrlOverride(url: string | null): Promise<void> {
+export async function setDebugBaseUrlOverride(
+  url: string | null,
+): Promise<void> {
   if (typeof __DEV__ === 'undefined' || !__DEV__) return;
   if (url !== null && !/^https?:\/\//.test(url)) {
     throw new Error('debug base URL must start with http:// or https://');
@@ -89,8 +95,55 @@ export function getDebugBaseUrlOverride(): string | null {
   return _debugOverride;
 }
 
+export function resolveAuthBaseUrlForPhone(phone: string): string {
+  if (_debugOverride) return _debugOverride;
+  if (normalizePhoneDigits(phone) === APP_REVIEW_PHONE) {
+    return REVIEW_API_BASE_URL;
+  }
+  return getBuiltInBaseUrl();
+}
+
+export async function loadSessionBaseUrl(): Promise<void> {
+  try {
+    const v = await AsyncStorage.getItem(SESSION_BASE_URL_STORAGE_KEY);
+    _sessionBaseUrl = v && /^https?:\/\//.test(v) ? v : null;
+  } catch {
+    _sessionBaseUrl = null;
+  }
+}
+
+export async function setSessionBaseUrl(url: string): Promise<void> {
+  if (!/^https?:\/\//.test(url)) {
+    throw new Error('session base URL must start with http:// or https://');
+  }
+  _sessionBaseUrl = url;
+  try {
+    await AsyncStorage.setItem(SESSION_BASE_URL_STORAGE_KEY, url);
+  } catch (err) {
+    console.warn('[config] failed to persist session API base URL', err);
+  }
+}
+
+export async function clearSessionBaseUrl(): Promise<void> {
+  _sessionBaseUrl = null;
+  try {
+    await AsyncStorage.removeItem(SESSION_BASE_URL_STORAGE_KEY);
+  } catch (err) {
+    console.warn('[config] failed to clear session API base URL', err);
+  }
+}
+
+export function getSessionBaseUrl(): string | null {
+  return _sessionBaseUrl;
+}
+
 export function getBaseUrl(): string {
   if (_debugOverride) return _debugOverride;
+  if (_sessionBaseUrl) return _sessionBaseUrl;
+  return getBuiltInBaseUrl();
+}
+
+function getBuiltInBaseUrl(): string {
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
     if (!_warnedRealDeviceLoopback) {
       _warnedRealDeviceLoopback = true;
@@ -103,6 +156,13 @@ export function getBaseUrl(): string {
     return DEV_API_BASE_URL;
   }
   return PROD_BASE_URL;
+}
+
+function normalizePhoneDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 13 && digits.startsWith('86')
+    ? digits.slice(2)
+    : digits;
 }
 
 // Returns null if the URL is acceptable, otherwise an error message describing

@@ -16,7 +16,10 @@ import { useTranslation } from 'react-i18next';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
-import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
+import {
+  AUTH_COLORS,
+  AuthScreenShell,
+} from '../components/auth/AuthScreenShell';
 import { useAuth } from '../stores/auth-store';
 import { isValidChinaPhone } from '../utils/phone-validation';
 import { sendSmsCode } from '../services/auth-service';
@@ -61,7 +64,11 @@ export function LoginScreen() {
     setPhone(digits);
     setHasTouched(true);
 
-    if (digits.length > 0 && digits.length === 11 && !isValidChinaPhone(digits)) {
+    if (
+      digits.length > 0 &&
+      digits.length === 11 &&
+      !isValidChinaPhone(digits)
+    ) {
       setPhoneError(t('auth.login.phoneInvalidSimplified'));
     } else {
       setPhoneError(null);
@@ -82,9 +89,9 @@ export function LoginScreen() {
     setPhoneError(null);
 
     try {
-      await sendSmsCode(phone);
+      const { authBaseUrl } = await sendSmsCode(phone);
       setSending(false);
-      navigation.navigate('SmsVerify', { phone });
+      navigation.navigate('SmsVerify', { phone, authBaseUrl });
     } catch (err) {
       setSending(false);
 
@@ -94,19 +101,34 @@ export function LoginScreen() {
             setPhoneError(t('auth.login.phoneInvalidTraditional'));
             break;
           case ERROR_CODE.SMS_TOO_FREQUENT:
-            Alert.alert(t('errors.authRequestTooFrequent'), t('errors.authTryLater'));
+            Alert.alert(
+              t('errors.authRequestTooFrequent'),
+              t('errors.authTryLater'),
+            );
             break;
           case ERROR_CODE.SMS_SEND_FAILED:
-            Alert.alert(t('errors.authSendFailed'), t('errors.authSendFailedRetry'));
+            Alert.alert(
+              t('errors.authSendFailed'),
+              t('errors.authSendFailedRetry'),
+            );
             break;
           case ERROR_CODE.RATE_LIMITED:
-            Alert.alert(t('errors.authRequestTooFrequent'), t('errors.authTryLater'));
+            Alert.alert(
+              t('errors.authRequestTooFrequent'),
+              t('errors.authTryLater'),
+            );
             break;
           default:
-            Alert.alert(t('errors.authSendFailed'), err.message || t('errors.unknown'));
+            Alert.alert(
+              t('errors.authSendFailed'),
+              err.message || t('errors.unknown'),
+            );
         }
       } else {
-        Alert.alert(t('errors.networkTitle'), t('errors.networkCheckConnection'));
+        Alert.alert(
+          t('errors.networkTitle'),
+          t('errors.networkCheckConnection'),
+        );
       }
     }
   }, [buttonEnabled, phone, navigation]);
@@ -129,11 +151,7 @@ export function LoginScreen() {
         <View style={styles.card}>
           {auth.signedOutTransition === 'session_replaced' ? (
             <View style={styles.noticeBanner}>
-              <Icon
-                name="alert-circle"
-                size={18}
-                color={AUTH_COLORS.primary}
-              />
+              <Icon name="alert-circle" size={18} color={AUTH_COLORS.primary} />
               <Text style={styles.noticeText}>
                 {t('auth.login.sessionReplaced')}
               </Text>
@@ -218,14 +236,18 @@ export function LoginScreen() {
             activeOpacity={0.8}
             disabled={!buttonEnabled}
           >
-            {sending ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+            {sending ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : null}
             <Text
               style={[
                 styles.sendButtonText,
                 !buttonEnabled ? styles.sendButtonTextDisabled : null,
               ]}
             >
-              {sending ? t('auth.login.requesting') : t('auth.login.requestCode')}
+              {sending
+                ? t('auth.login.requesting')
+                : t('auth.login.requestCode')}
             </Text>
           </TouchableOpacity>
         </View>

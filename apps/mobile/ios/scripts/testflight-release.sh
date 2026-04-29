@@ -20,6 +20,7 @@ APPLE_API_ISSUER="${APPLE_API_ISSUER:-54cad458-4184-4fc6-a1c7-cb4b0c6ded0e}"
 APPLE_API_KEY="${APPLE_API_KEY:-${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8}"
 
 PROJECT_FILE="${IOS_DIR}/SyncFlowMobile.xcodeproj/project.pbxproj"
+MOBILE_CONFIG_FILE="${MOBILE_CONFIG_FILE:-${REPO_ROOT}/apps/mobile/src/services/config.ts}"
 MARKETING_VERSION="$(sed -n 's/.*MARKETING_VERSION = \([^;]*\);/\1/p' "${PROJECT_FILE}" | head -n 1 | tr -d '[:space:]')"
 BUILD_NUMBER="$(sed -n 's/.*CURRENT_PROJECT_VERSION = \([^;]*\);/\1/p' "${PROJECT_FILE}" | head -n 1 | tr -d '[:space:]')"
 
@@ -30,14 +31,17 @@ ARCHIVE_PATH="${ARCHIVES_DIR}/SyncFlow-${MARKETING_VERSION}-b${BUILD_NUMBER}.xca
 usage() {
   cat <<EOF
 Usage:
-  ${IOS_DIR}/scripts/testflight-release.sh [archive|upload|archive-upload]
+  ${IOS_DIR}/scripts/testflight-release.sh [archive|upload|archive-upload|check-review-phone]
 
 Modes:
   archive         Build a Release xcarchive (auto-increments build number)
   upload          Upload an existing archive at ARCHIVE_PATH to TestFlight
   archive-upload  Increment, archive, and upload to TestFlight
+  check-review-phone
+                  Verify mobile APP_REVIEW_PHONE matches SERVER_ENV_FILE
 
 Note: If archive or upload fails, the build number will be rolled back automatically.
+Set SERVER_ENV_FILE=/path/to/server/.env.prod before TestFlight packaging.
 
 Defaults:
   BUILD_NUMBER=${BUILD_NUMBER}
@@ -45,7 +49,7 @@ Defaults:
 EOF
 }
 
-if [[ "${MODE}" != "archive" && "${MODE}" != "upload" && "${MODE}" != "archive-upload" ]]; then
+if [[ "${MODE}" != "archive" && "${MODE}" != "upload" && "${MODE}" != "archive-upload" && "${MODE}" != "check-review-phone" ]]; then
   usage >&2
   exit 1
 fi
@@ -60,6 +64,83 @@ ensure_prereqs() {
     echo "Missing export options: ${EXPORT_OPTIONS}" >&2
     exit 1
   fi
+}
+
+mask_phone() {
+  local phone="$1"
+  local len=${#phone}
+  if [[ "${len}" -le 4 ]]; then
+    echo "****"
+    return
+  fi
+  echo "${phone:0:3}****${phone: -4}"
+}
+
+extract_server_review_phone() {
+  local env_file="$1"
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      split($0, parts, "=")
+      key = parts[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key == "APP_REVIEW_PHONE") {
+        val = substr($0, index($0, "=") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+        gsub(/^'\''|'\''$/, "", val)
+        gsub(/^"|"$/, "", val)
+        print val
+        exit
+      }
+    }
+  ' "${env_file}"
+}
+
+extract_mobile_review_phone() {
+  local config_file="$1"
+  sed -n "s/^[[:space:]]*export const APP_REVIEW_PHONE[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${config_file}" | head -n 1
+}
+
+ensure_review_phone_matches() {
+  if [[ -z "${SERVER_ENV_FILE:-}" ]]; then
+    echo "ERROR: SERVER_ENV_FILE is required for TestFlight review-phone check." >&2
+    echo "Example: SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${SERVER_ENV_FILE}" ]]; then
+    echo "ERROR: SERVER_ENV_FILE not found: ${SERVER_ENV_FILE}" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${MOBILE_CONFIG_FILE}" ]]; then
+    echo "ERROR: mobile config file not found: ${MOBILE_CONFIG_FILE}" >&2
+    exit 1
+  fi
+
+  local server_phone mobile_phone
+  server_phone="$(extract_server_review_phone "${SERVER_ENV_FILE}")"
+  mobile_phone="$(extract_mobile_review_phone "${MOBILE_CONFIG_FILE}")"
+
+  if [[ -z "${server_phone}" ]]; then
+    echo "ERROR: APP_REVIEW_PHONE is missing from SERVER_ENV_FILE." >&2
+    exit 1
+  fi
+
+  if [[ -z "${mobile_phone}" ]]; then
+    echo "ERROR: APP_REVIEW_PHONE is missing from mobile config." >&2
+    exit 1
+  fi
+
+  if [[ "${server_phone}" != "${mobile_phone}" ]]; then
+    echo "ERROR: APP_REVIEW_PHONE mismatch." >&2
+    echo "Server: $(mask_phone "${server_phone}")" >&2
+    echo "Mobile: $(mask_phone "${mobile_phone}")" >&2
+    exit 1
+  fi
+
+  echo "Review phone check passed: $(mask_phone "${mobile_phone}")"
 }
 
 increment_build_number() {
@@ -85,7 +166,7 @@ rollback_build_number() {
 
 cleanup() {
   local EXIT_CODE=$?
-  if [ ${EXIT_CODE} -ne 0 ]; then
+  if [[ ${EXIT_CODE} -ne 0 && "${NEED_ROLLBACK}" == "true" ]]; then
     echo "Error detected (exit code: ${EXIT_CODE}). Triggering rollback..."
     rollback_build_number
   fi
@@ -175,7 +256,13 @@ upload_ipa() {
     --apiIssuer "${APPLE_API_ISSUER}"
 }
 
+if [[ "${MODE}" == "check-review-phone" ]]; then
+  ensure_review_phone_matches
+  exit 0
+fi
+
 ensure_prereqs
+ensure_review_phone_matches
 
 case "${MODE}" in
   archive)
