@@ -272,7 +272,7 @@ export const cnMarketConfig: MobileMarketConfig = {
   bundleId: 'com.vividrop.mobile.china',
   apiBaseUrl: 'https://api.vividrop.cn',
   reviewApiBaseUrl: 'https://review-api.vividrop.cn',
-  appReviewPhone: '17000000001',
+  appReviewPhone: '17000000002',
   privacyUrl: 'https://www.vividrop.cn/privacy',
   termsUrl: 'https://www.vividrop.cn/terms',
   loginProviders: ['phone'],
@@ -299,7 +299,7 @@ export const globalMarketConfig: MobileMarketConfig = {
   bundleId: 'com.vividrop.mobile.global',
   apiBaseUrl: 'https://api.vividrop.com',
   reviewApiBaseUrl: 'https://review-api.vividrop.com',
-  appReviewPhone: '17000000001',
+  appReviewPhone: '17000000002',
   privacyUrl: 'https://www.vividrop.com/privacy',
   termsUrl: 'https://www.vividrop.com/terms',
   loginProviders: ['apple', 'google'],
@@ -379,7 +379,7 @@ Update existing config tests so they assert:
 ```ts
 expect(PROD_BASE_URL).toBe('https://api.vividrop.cn');
 expect(REVIEW_API_BASE_URL).toBe('https://review-api.vividrop.cn');
-expect(APP_REVIEW_PHONE).toBe('17000000001');
+expect(APP_REVIEW_PHONE).toBe('17000000002');
 ```
 
 Expected China behavior stays unchanged because default `SYNCFLOW_MARKET` is `cn`.
@@ -397,7 +397,7 @@ Replace:
 ```ts
 export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
-export const APP_REVIEW_PHONE = '17000000001';
+export const APP_REVIEW_PHONE = '17000000002';
 ```
 
 with:

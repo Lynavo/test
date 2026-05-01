@@ -120,13 +120,13 @@ describe('LoginScreen', () => {
       <LoginScreen />,
     );
 
-    fireEvent.changeText(getByPlaceholderText('請輸入手機號碼'), '17000000001');
+    fireEvent.changeText(getByPlaceholderText('請輸入手機號碼'), '17000000002');
     fireEvent.press(getByRole('checkbox'));
     fireEvent.press(getByText('取得驗證碼'));
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('SmsVerify', {
-        phone: '17000000001',
+        phone: '17000000002',
         authBaseUrl: 'https://review-api.vividrop.cn',
       });
     });

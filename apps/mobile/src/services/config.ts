@@ -43,7 +43,7 @@ const DEV_API_BASE_URL: string =
 
 export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
-export const APP_REVIEW_PHONE = '17000000001';
+export const APP_REVIEW_PHONE = '17000000002';
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';

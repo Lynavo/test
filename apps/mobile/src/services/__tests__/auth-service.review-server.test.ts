@@ -9,7 +9,7 @@ jest.mock('../config', () => ({
   PROD_BASE_URL: 'https://api.vividrop.cn',
   REVIEW_API_BASE_URL: 'https://review-api.vividrop.cn',
   resolveAuthBaseUrlForPhone: jest.fn((phone: string) =>
-    phone === '17000000001'
+    phone === '17000000002'
       ? 'https://review-api.vividrop.cn'
       : 'https://api.vividrop.cn',
   ),
@@ -28,12 +28,12 @@ describe('auth-service review server routing', () => {
   test('sends App Review SMS requests to the review API server', async () => {
     (apiPostNoAuth as jest.Mock).mockResolvedValueOnce({});
 
-    const result = await sendSmsCode('17000000001');
+    const result = await sendSmsCode('17000000002');
 
     expect(result.authBaseUrl).toBe('https://review-api.vividrop.cn');
     expect(apiPostNoAuth).toHaveBeenCalledWith(
       '/auth/sms/send',
-      { phone: '17000000001' },
+      { phone: '17000000002' },
       { baseUrlOverride: 'https://review-api.vividrop.cn' },
     );
   });
@@ -60,7 +60,7 @@ describe('auth-service review server routing', () => {
     });
 
     const result = await smsLogin(
-      '17000000001',
+      '17000000002',
       '520813',
       'https://review-api.vividrop.cn',
     );
@@ -68,7 +68,7 @@ describe('auth-service review server routing', () => {
     expect(result.accessToken).toBe('access-1');
     expect(apiPostNoAuth).toHaveBeenCalledWith(
       '/auth/sms/login',
-      { phone: '17000000001', code: '520813' },
+      { phone: '17000000002', code: '520813' },
       { baseUrlOverride: 'https://review-api.vividrop.cn' },
     );
     expect(setSessionBaseUrl).toHaveBeenCalledWith(
