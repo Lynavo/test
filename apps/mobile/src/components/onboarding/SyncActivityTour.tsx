@@ -9,7 +9,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import Svg, { Defs, Mask, Rect } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { Icon } from '../Icon';
 
 interface SyncActivityTourProps {
@@ -127,12 +127,17 @@ function getTargetRect(
   }
 
   const ratio = TARGET_RATIO_RECTS[target];
-  return applyTargetPadding({
-    left: screenWidth * ratio.left,
-    top: screenHeight * ratio.top,
-    width: screenWidth * ratio.width,
-    height: screenHeight * ratio.height,
-  }, target, screenWidth, screenHeight);
+  return applyTargetPadding(
+    {
+      left: screenWidth * ratio.left,
+      top: screenHeight * ratio.top,
+      width: screenWidth * ratio.width,
+      height: screenHeight * ratio.height,
+    },
+    target,
+    screenWidth,
+    screenHeight,
+  );
 }
 
 function getTourLayout(
@@ -226,6 +231,41 @@ function getHighlightStrokeColor(target: TourTarget): string {
   return 'rgba(222,244,255,0.92)';
 }
 
+function getRoundedRectPath(rect: TourTargetLayout, radius: number): string {
+  const x = rect.left;
+  const y = rect.top;
+  const width = Math.max(0, rect.width);
+  const height = Math.max(0, rect.height);
+  const r = Math.min(radius, width / 2, height / 2);
+  const right = x + width;
+  const bottom = y + height;
+
+  return [
+    `M${x + r} ${y}`,
+    `H${right - r}`,
+    `Q${right} ${y} ${right} ${y + r}`,
+    `V${bottom - r}`,
+    `Q${right} ${bottom} ${right - r} ${bottom}`,
+    `H${x + r}`,
+    `Q${x} ${bottom} ${x} ${bottom - r}`,
+    `V${y + r}`,
+    `Q${x} ${y} ${x + r} ${y}`,
+    'Z',
+  ].join(' ');
+}
+
+function getCutoutOverlayPath(
+  screenWidth: number,
+  screenHeight: number,
+  targetRect: TourTargetLayout,
+  radius: number,
+): string {
+  return [
+    `M0 0 H${screenWidth} V${screenHeight} H0 Z`,
+    getRoundedRectPath(targetRect, radius),
+  ].join(' ');
+}
+
 export function SyncActivityTour({
   visible,
   onSkip,
@@ -291,27 +331,16 @@ export function SyncActivityTour({
           width={width}
           height={height}
         >
-          <Defs>
-            <Mask id="syncActivityTourCutout" maskType="luminance">
-              <Rect x={0} y={0} width={width} height={height} fill="#ffffff" />
-              <Rect
-                x={layout.target.left}
-                y={layout.target.top}
-                width={layout.target.width}
-                height={layout.target.height}
-                rx={highlightRadius}
-                ry={highlightRadius}
-                fill="#000000"
-              />
-            </Mask>
-          </Defs>
-          <Rect
-            x={0}
-            y={0}
-            width={width}
-            height={height}
+          <Path
+            testID="sync-activity-tour-cutout-overlay"
+            d={getCutoutOverlayPath(
+              width,
+              height,
+              layout.target,
+              highlightRadius,
+            )}
             fill={DIM_COLOR}
-            mask="url(#syncActivityTourCutout)"
+            fillRule="evenodd"
           />
           <Rect
             x={layout.target.left - highlightStrokeOffset}
