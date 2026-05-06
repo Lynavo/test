@@ -67,17 +67,17 @@
     },
     {
       "label": "mobile: start metro",
-      "type": "process",
-      "command": "corepack",
-      "args": ["pnpm", "--filter", "@syncflow/mobile", "start:reset"],
+      "type": "shell",
+      "command": "bash",
+      "args": ["${workspaceFolder}/scripts/dev/ensure-mobile-metro.sh"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "isBackground": true,
       "presentation": {
         "reveal": "always",
         "panel": "dedicated"
       },
+      "isBackground": true,
       "problemMatcher": {
         "owner": "custom",
         "pattern": {
@@ -86,16 +86,16 @@
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*Welcome to React Native.*",
-          "endsPattern": ".*(Welcome to Metro|Metro waiting on|Dev server ready).*"
+          "beginsPattern": ".*(Welcome to React Native|Starting Metro|Metro already running).*",
+          "endsPattern": ".*Metro launch requested.*"
         }
       }
     },
     {
       "label": "mobile: stop metro",
       "type": "shell",
-      "command": "pkill",
-      "args": ["-f", "react-native start"],
+      "command": "bash",
+      "args": ["${workspaceFolder}/scripts/dev/stop-mobile-metro.sh"],
       "options": {
         "cwd": "${workspaceFolder}"
       },

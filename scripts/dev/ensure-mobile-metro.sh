@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PORT="${METRO_PORT:-8081}"
+STATUS_URL="http://127.0.0.1:${PORT}/status"
+
+metro_ready() {
+  local body
+  body="$(curl -fsS --max-time 1 "${STATUS_URL}" 2>/dev/null || true)"
+  [[ "${body}" == *"packager-status:running"* ]]
+}
+
+port_pid() {
+  lsof -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | head -n 1 || true
+}
+
+if metro_ready; then
+  echo "Metro already running on port ${PORT}."
+  echo "Metro launch requested"
+  exit 0
+fi
+
+existing_pid="$(port_pid)"
+if [[ -n "${existing_pid}" ]]; then
+  echo "Port ${PORT} is already in use by PID ${existing_pid}, but it is not responding as Metro."
+  echo "Stop it first, then run F5 again:"
+  echo "  lsof -ti tcp:${PORT} | xargs kill"
+  exit 1
+fi
+
+echo "Starting Metro on port ${PORT}..."
+echo "Metro launch requested"
+cd "${ROOT}"
+exec corepack pnpm --filter @syncflow/mobile start

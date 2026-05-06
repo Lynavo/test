@@ -65,11 +65,21 @@ assert.equal(
 const metroTask = tasks.tasks.find((task) => task.label === 'mobile: start metro');
 
 assert.ok(metroTask, 'mobile: start metro task should exist');
+assert.equal(metroTask.type, 'shell');
+assert.equal(metroTask.command, 'bash');
+assert.deepEqual(metroTask.args, [
+  '${workspaceFolder}/scripts/dev/ensure-mobile-metro.sh',
+]);
 assert.equal(metroTask.isBackground, true);
-assert.deepEqual(metroTask.args, ['pnpm', '--filter', '@syncflow/mobile', 'start:reset']);
-assert.equal(metroTask.problemMatcher.background.beginsPattern, '.*Welcome to React Native.*');
-assert.match(metroTask.problemMatcher.background.endsPattern, /Welcome to Metro/);
-assert.equal(mobilePackage.scripts?.['start:reset'], 'react-native start --reset-cache');
+assert.match(
+  metroTask.problemMatcher.background.beginsPattern,
+  /Metro already running/,
+);
+assert.equal(
+  metroTask.problemMatcher.background.endsPattern,
+  '.*Metro launch requested.*',
+);
+assert.equal(mobilePackage.scripts?.start, 'react-native start');
 
 assert.match(
   androidBuildGradle,
