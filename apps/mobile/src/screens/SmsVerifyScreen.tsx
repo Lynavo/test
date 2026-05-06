@@ -21,6 +21,10 @@ import {
   AUTH_COLORS,
   AuthScreenShell,
 } from '../components/auth/AuthScreenShell';
+import {
+  authCardSurfaceStyle,
+  authTextScalingProps,
+} from '../components/auth/authPlatformStyles';
 import { maskPhone } from '../utils/phone-validation';
 import { smsLogin, sendSmsCode } from '../services/auth-service';
 import { ApiError, ERROR_CODE } from '../services/api';
@@ -276,9 +280,12 @@ export function SmsVerifyScreen() {
       contentStyle={styles.content}
     >
       <View style={styles.card}>
-        <Text style={styles.prompt}>{t('auth.smsVerify.prompt')}</Text>
+        <Text {...authTextScalingProps} style={styles.prompt}>
+          {t('auth.smsVerify.prompt')}
+        </Text>
 
         <TextInput
+          {...authTextScalingProps}
           ref={codeInputRef}
           style={styles.hiddenInput}
           value={code}
@@ -321,7 +328,10 @@ export function SmsVerifyScreen() {
                     verifying ? styles.codeBoxDisabled : null,
                   ]}
                 >
-                  <Text style={[styles.codeDigit, { fontSize: codeDigitSize }]}>
+                  <Text
+                    {...authTextScalingProps}
+                    style={[styles.codeDigit, { fontSize: codeDigitSize }]}
+                  >
                     {digit}
                   </Text>
                 </View>
@@ -332,7 +342,7 @@ export function SmsVerifyScreen() {
 
         {verifying ? (
           <View style={styles.statusRow}>
-            <Text style={styles.statusText}>
+            <Text {...authTextScalingProps} style={styles.statusText}>
               {t('auth.smsVerify.verifying')}
             </Text>
             <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
@@ -340,12 +350,14 @@ export function SmsVerifyScreen() {
         ) : null}
 
         {error && errorMsg ? (
-          <Text style={styles.errorText}>{errorMsg}</Text>
+          <Text {...authTextScalingProps} style={styles.errorText}>
+            {errorMsg}
+          </Text>
         ) : null}
 
         <View style={styles.resendRow}>
           {countdown > 0 ? (
-            <Text style={styles.countdownText}>
+            <Text {...authTextScalingProps} style={styles.countdownText}>
               {t('auth.smsVerify.resendCountdown', { seconds: countdown })}
             </Text>
           ) : (
@@ -358,7 +370,7 @@ export function SmsVerifyScreen() {
               {resending ? (
                 <ActivityIndicator size="small" color={AUTH_COLORS.primary} />
               ) : (
-                <Text style={styles.resendText}>
+                <Text {...authTextScalingProps} style={styles.resendText}>
                   {t('auth.smsVerify.resendButton')}
                 </Text>
               )}
@@ -390,7 +402,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 24,
-    elevation: 4,
+    ...authCardSurfaceStyle,
   },
   prompt: {
     fontSize: 12,
