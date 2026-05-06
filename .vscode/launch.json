@@ -2,6 +2,17 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Mobile: Android Debug (F5)",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "type": "reactnative",
+      "request": "launch",
+      "platform": "android",
+      "target": "device",
+      "variant": "debug",
+      "preLaunchTask": "mobile: start metro",
+      "logCatArguments": ["*:S", "ReactNative:V", "ReactNativeJS:V"]
+    },
+    {
       "name": "Mobile: iOS (macOS)",
       "type": "node-terminal",
       "request": "launch",
@@ -18,13 +29,6 @@
       "type": "node-terminal",
       "request": "launch",
       "command": "cd \"${workspaceFolder}\" && corepack pnpm --filter @syncflow/desktop dev"
-    },
-    {
-      "name": "Mobile: Android (quick launch)",
-      "type": "node-terminal",
-      "request": "launch",
-      "command": "cd \"${workspaceFolder}\" && corepack pnpm --filter @syncflow/mobile exec react-native run-android --no-packager",
-      "preLaunchTask": "mobile: start metro"
     }
   ]
 }

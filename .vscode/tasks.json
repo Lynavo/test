@@ -69,7 +69,7 @@
       "label": "mobile: start metro",
       "type": "process",
       "command": "corepack",
-      "args": ["pnpm", "--filter", "@syncflow/mobile", "start"],
+      "args": ["pnpm", "--filter", "@syncflow/mobile", "start:reset"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -86,7 +86,7 @@
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": ".*",
+          "beginsPattern": ".*Welcome to React Native.*",
           "endsPattern": ".*(Welcome to Metro|Metro waiting on|Dev server ready).*"
         }
       }

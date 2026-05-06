@@ -1,0 +1,13 @@
+diff --git a/android/src/play/java/com/dooboolab/rniap/RNIapModule.kt b/android/src/play/java/com/dooboolab/rniap/RNIapModule.kt
+index 54ca6969c543f5826d77b4ff8cdfcf960cbb5ffa..58d6bf53d43151a36b95dd361c72682ae1196c4c 100644
+--- a/android/src/play/java/com/dooboolab/rniap/RNIapModule.kt
++++ b/android/src/play/java/com/dooboolab/rniap/RNIapModule.kt
+@@ -461,7 +461,7 @@ class RNIapModule(
+         isOfferPersonalized: Boolean, // New parameter in V5
+         promise: Promise,
+     ) {
+-        val activity = currentActivity
++        val activity = reactApplicationContext.currentActivity
+         if (activity == null) {
+             promise.safeReject(PromiseUtils.E_UNKNOWN, "getCurrentActivity returned null")
+             return
