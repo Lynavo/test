@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ---------------------------------------------------------------------------
@@ -9,9 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // DEVELOPER NOTE — REAL-DEVICE DEBUG REQUIRES OVERRIDE
 // ============================================================================
 //
-// The defaults below ONLY work for iOS Simulator (`localhost`) and Android
-// Emulator (`10.0.2.2`). On a real iPhone or Android phone these resolve to
-// the device itself and your dev API will never be reached.
+// The built-in default below points at production so real-device debug builds
+// can exercise login and SMS flows without an extra local backend setup.
 //
 // To debug against your dev backend on a real device, do ONE of:
 //
@@ -28,22 +26,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //       so each developer's local override stays out of git automatically.
 // ============================================================================
 
-// iOS: LAN IP so real devices on the same WiFi can reach the Mac-hosted dev
-// server. iOS Simulator still works because the simulator shares the Mac's
-// network stack (LAN IP resolves to the Mac via the WiFi interface).
-// Android: 10.0.2.2 is the emulator's special loopback alias for the host.
-// Real Android device needs its own LAN-IP override (see option B above).
-// NOTE (2026-04-18, Task 22 sandbox testing): temporarily pointing iOS at the
-// Sandbox-mode CVM so physical-device IAP receipts can round-trip through the
-// same backend Apple's V2 webhook hits. Revert before committing anything else.
-const DEV_API_BASE_URL: string =
-  Platform.OS === 'android'
-    ? 'http://10.0.2.2:8080'
-    : 'https://api.vividrop.cn';
-
 export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
 export const APP_REVIEW_PHONE = '17000000002';
+
+// Use setDebugBaseUrlOverride('http://10.0.2.2:8080') for an Android Emulator
+// pointed at a host-machine backend, or a LAN IP for physical-device backend
+// debugging. Leaving the default on production avoids real-device SMS login
+// failures from emulator-only loopback addresses.
+const DEV_API_BASE_URL: string = PROD_BASE_URL;
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
@@ -148,9 +139,8 @@ function getBuiltInBaseUrl(): string {
     if (!_warnedRealDeviceLoopback) {
       _warnedRealDeviceLoopback = true;
       console.warn(
-        `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}" — this only ` +
-          `reaches your dev API from the iOS Simulator / Android Emulator. ` +
-          `On a real device, call setDebugBaseUrlOverride('http://<your-LAN-IP>:8080').`,
+        `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}". ` +
+          `Call setDebugBaseUrlOverride('http://<host>:8080') to point this dev build at a local backend.`,
       );
     }
     return DEV_API_BASE_URL;

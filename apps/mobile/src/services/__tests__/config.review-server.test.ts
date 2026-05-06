@@ -41,7 +41,7 @@ describe('review server routing config', () => {
     expect(resolveAuthBaseUrlForPhone('13312341234')).toBe(PROD_BASE_URL);
   });
 
-  test('keeps normal phone numbers on the Android dev API server in dev builds', () => {
+  test('routes normal phone numbers to production on Android dev builds by default', () => {
     jest.isolateModules(() => {
       jest.doMock('react-native', () => ({
         Platform: { OS: 'android' },
@@ -50,7 +50,7 @@ describe('review server routing config', () => {
       const config = require('../config') as typeof import('../config');
 
       expect(config.resolveAuthBaseUrlForPhone('13312341234')).toBe(
-        'http://10.0.2.2:8080',
+        config.PROD_BASE_URL,
       );
     });
   });
