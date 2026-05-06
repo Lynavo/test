@@ -8,6 +8,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -75,13 +76,16 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun requestPhotoPermission(promise: Promise) {
     val currentState = currentPhotoPermissionState()
+    recordNativeLog("PhotoPermission", "request started currentState=$currentState")
     if (currentState == "granted" || currentState == "limited") {
+      recordNativeLog("PhotoPermission", "request resolved without prompt state=$currentState")
       promise.resolve(currentState)
       return
     }
 
     val activity = getCurrentActivity()
     if (activity !is PermissionAwareActivity) {
+      recordNativeLog("PhotoPermission", "request unavailable activity=${activity?.javaClass?.simpleName ?: "null"}", Log.WARN)
       emitError(
         code = "ANDROID_PHOTO_PERMISSION_UNAVAILABLE",
         message = "Android 当前 Activity 不支持相簿权限请求。",
@@ -110,11 +114,14 @@ class NativeSyncEngineModule(
 
         val pendingPromise = pendingPhotoPermissionPromise
         pendingPhotoPermissionPromise = null
-        pendingPromise?.resolve(currentPhotoPermissionState())
+        val nextState = currentPhotoPermissionState()
+        recordNativeLog("PhotoPermission", "request completed state=$nextState")
+        pendingPromise?.resolve(nextState)
         true
       }
     } catch (error: Throwable) {
       pendingPhotoPermissionPromise = null
+      recordNativeLog("PhotoPermission", "request failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
       promise.reject(
         "ANDROID_PHOTO_PERMISSION_REQUEST_FAILED",
         error.message ?: "Failed to request Android photo permission",
@@ -125,8 +132,10 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun startDiscovery(promise: Promise) {
+    recordNativeLog("Discovery", "startDiscovery requested")
     val manager = reactApplicationContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
     if (manager == null) {
+      recordNativeLog("Discovery", "startDiscovery unavailable: NsdManager missing", Log.WARN)
       emitDiscoveredDevicesChanged()
       emitError(
         code = "ANDROID_DISCOVERY_UNAVAILABLE",
@@ -156,6 +165,7 @@ class NativeSyncEngineModule(
       synchronized(discoveryLock) {
         stopDiscoveryLocked()
       }
+      recordNativeLog("Discovery", "startDiscovery failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
       emitError(
         code = "ANDROID_DISCOVERY_START_FAILED",
         message = "启动 Android 局域网发现失败：${error.message ?: "unknown error"}",
@@ -166,6 +176,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun stopDiscovery(promise: Promise) {
+    recordNativeLog("Discovery", "stopDiscovery requested")
     stopDiscoveryInternal(emitUpdate = true)
     promise.resolve(null)
   }
@@ -184,6 +195,10 @@ class NativeSyncEngineModule(
       if (connectionCode.length != CONNECTION_CODE_LENGTH) {
         throw IllegalArgumentException("Connection code must be 6 digits")
       }
+      recordNativeLog(
+        "Pairing",
+        "pairDevice requested deviceId=${fallbackDeviceId.ifBlank { "<unknown>" }} host=$host port=$port codeProvided=${connectionCode.isNotBlank()}",
+      )
 
       val helloPayload = JSONObject().apply {
         put("clientId", getOrCreateClientId())
@@ -202,6 +217,11 @@ class NativeSyncEngineModule(
       )
 
       saveBinding(resolvedBinding)
+      recordNativeLog(
+        "Pairing",
+        "pairDevice successful deviceId=${resolvedBinding.deviceId} host=${resolvedBinding.host} shareEnabled=${resolvedBinding.shareEnabled}",
+        Log.INFO,
+      )
       emitBindingStateChanged(resolvedBinding)
       emitIdleSyncState(resolvedBinding)
       emitQueueUpdated(Arguments.createArray())
@@ -211,6 +231,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun disconnectAndUnbind(promise: Promise) {
+    recordNativeLog("Pairing", "disconnectAndUnbind requested")
     clearBinding()
     emitBindingStateCleared()
     emitIdleSyncState(null)
@@ -260,6 +281,8 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun exportDiagnostics(promise: Promise) {
     runAsync(promise) {
+      val engineLogSnapshot = diagnosticsLogSnapshot()
+      dumpDiagnosticsLogSnapshotToConsole(engineLogSnapshot)
       val archive = File(
         reactApplicationContext.cacheDir,
         "syncflow-android-diagnostics-${System.currentTimeMillis()}.json",
@@ -278,9 +301,10 @@ class NativeSyncEngineModule(
           },
         )
         put("binding", loadBinding()?.toJson() ?: JSONObject.NULL)
-        put("logs", JSONArray(diagnosticsLogSnapshot()))
+        put("logs", JSONArray(engineLogSnapshot))
       }
       archive.writeText(payload.toString(2), StandardCharsets.UTF_8)
+      recordNativeLog("Diagnostics", "exported android diagnostics file ${archive.name} bytes=${archive.length()}")
       promise.resolve(archive.absolutePath)
     }
   }
@@ -306,8 +330,10 @@ class NativeSyncEngineModule(
         )
         promise.resolve(result)
       } catch (error: NativeBridgeException) {
+        diagnosticsUploadLog("failed code=${error.nativeCode} message=${error.message.orEmpty()}")
         promise.reject(error.nativeCode, error.message, error)
       } catch (error: Throwable) {
+        diagnosticsUploadLog("failed code=NETWORK_ERROR message=${error.message.orEmpty()}")
         promise.reject("NETWORK_ERROR", error.message ?: "Diagnostics upload failed", error)
       }
     }
@@ -315,12 +341,37 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun recordDiagnosticsLog(category: String, message: String) {
-    val line = "${isoNow()} [${category.trim().ifBlank { "JS" }}] ${message.trim().ifBlank { "<empty>" }}"
+    recordNativeLog(category.trim().ifBlank { "JS" }, message)
+  }
+
+  private fun recordNativeLog(
+    category: String,
+    message: String,
+    priority: Int = Log.DEBUG,
+  ) {
+    val line = buildDiagnosticsLogLine(
+      timestampIso = isoNow(),
+      category = category,
+      message = message,
+    )
     synchronized(diagnosticsLogLock) {
       diagnosticsLogLines.add(line)
       if (diagnosticsLogLines.size > MAX_DIAGNOSTICS_LOG_LINES) {
-        diagnosticsLogLines.subList(0, diagnosticsLogLines.size - MAX_DIAGNOSTICS_LOG_LINES).clear()
+        val retained = retainRecentLogLines(diagnosticsLogLines, MAX_DIAGNOSTICS_LOG_LINES)
+        diagnosticsLogLines.clear()
+        diagnosticsLogLines.addAll(retained)
       }
+    }
+    val consoleMessage = buildConsoleLogMessage(
+      localTimestamp = localLogTimestamp(),
+      category = category,
+      message = message,
+    )
+    when (priority) {
+      Log.ERROR -> Log.e(MODULE_NAME, consoleMessage)
+      Log.WARN -> Log.w(MODULE_NAME, consoleMessage)
+      Log.INFO -> Log.i(MODULE_NAME, consoleMessage)
+      else -> Log.d(MODULE_NAME, consoleMessage)
     }
   }
 
@@ -357,6 +408,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun triggerSync(promise: Promise) {
+    recordNativeLog("Sync", "triggerSync requested")
     emitError(
       code = "ANDROID_SYNC_NOT_IMPLEMENTED",
       message = "Android 端原生同步引擎尚未接入，当前版本仅提供基础壳层与配对入口。",
@@ -380,6 +432,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun resetAllStatus(promise: Promise) {
+    recordNativeLog("SyncEngine", "resetAllStatus requested")
     emitIdleSyncState(loadBinding())
     emitQueueUpdated(Arguments.createArray())
     promise.resolve(null)
@@ -488,16 +541,19 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun submitManualUpload(params: ReadableMap, promise: Promise) {
+    recordNativeLog("ManualUpload", "submit requested")
     promise.reject("ANDROID_NOT_IMPLEMENTED", "手动上传功能暂未在 Android 端实现")
   }
 
   @ReactMethod
   fun cancelManualBatch(batchId: String, promise: Promise) {
+    recordNativeLog("ManualUpload", "cancel batch requested batchId=$batchId")
     promise.resolve(null)
   }
 
   @ReactMethod
   fun cancelAllManualUploads(promise: Promise) {
+    recordNativeLog("ManualUpload", "cancel all requested")
     emitQueueUpdated(Arguments.createArray())
     emitIdleSyncState(loadBinding())
     promise.resolve(null)
@@ -505,6 +561,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun pauseAutoUpload(promise: Promise) {
+    recordNativeLog("AutoUpload", "pause requested")
     persistAutoUploadInterruptedState()
     emitSyncState(loadBinding(), "paused_auto_upload")
     promise.resolve(null)
@@ -512,6 +569,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun disableAutoUpload(promise: Promise) {
+    recordNativeLog("AutoUpload", "disable requested")
     persistAutoUploadDisabledState()
     emitIdleSyncState(loadBinding())
     promise.resolve(null)
@@ -519,6 +577,7 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun resumeAutoUpload(promise: Promise) {
+    recordNativeLog("AutoUpload", "resume requested")
     persistAutoUploadActiveState()
     emitIdleSyncState(loadBinding())
     promise.resolve(null)
@@ -556,6 +615,10 @@ class NativeSyncEngineModule(
         timeRangeMode = timeRangeMode,
         customTimeFrom = customTimeFrom,
       ),
+    )
+    recordNativeLog(
+      "AutoUpload",
+      "config saved enabled=$enabled state=$state timeRangeMode=$timeRangeMode customTimeFrom=${customTimeFrom ?: "<none>"}",
     )
     promise.resolve(null)
   }
@@ -609,6 +672,7 @@ class NativeSyncEngineModule(
       try {
         block()
       } catch (error: Throwable) {
+        recordNativeLog("Bridge", "async method failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
         promise.reject("NATIVE_SYNC_ENGINE_ERROR", error.message, error)
       }
     }
@@ -622,14 +686,20 @@ class NativeSyncEngineModule(
     helloPayload: JSONObject,
   ): StoredBinding {
     Socket().use { socket ->
+      recordNativeLog("Pairing", "TCP connecting host=$host port=$port")
       socket.connect(InetSocketAddress(host, port), SOCKET_TIMEOUT_MS)
       socket.soTimeout = SOCKET_TIMEOUT_MS
+      recordNativeLog("Pairing", "TCP connected host=$host port=$port")
 
       val input = DataInputStream(socket.getInputStream())
       val output = DataOutputStream(socket.getOutputStream())
 
       writeJsonFrame(output, TYPE_HELLO_REQ, helloPayload)
       val helloResponse = readJsonFrame(input, TYPE_HELLO_RES)
+      recordNativeLog(
+        "Pairing",
+        "HELLO_RES serverId=${helloResponse.optString("serverId")} authRequired=${helloResponse.optBoolean("authRequired", true)}",
+      )
 
       val serverCapabilities = helloResponse.optJSONObject("serverCapabilities")
       val shareName = serverCapabilities?.optString("shareName")
@@ -642,6 +712,7 @@ class NativeSyncEngineModule(
         ?: host
 
       if (!helloResponse.optBoolean("authRequired", true)) {
+        recordNativeLog("Pairing", "HELLO_RES accepted without auth", Log.INFO)
         return StoredBinding(
           deviceId = serverId,
           deviceName = serverName,
@@ -665,8 +736,10 @@ class NativeSyncEngineModule(
       val pairResponse = readJsonFrame(input, TYPE_PAIR_RES)
 
       if (!pairResponse.optBoolean("ok", false)) {
+        recordNativeLog("Pairing", "PAIR_RES rejected error=${pairResponse.optString("error")}", Log.WARN)
         throw IllegalStateException("Pairing rejected")
       }
+      recordNativeLog("Pairing", "PAIR_RES ok pairingId=${pairResponse.optString("pairingId")}", Log.INFO)
 
       val serverInfo = pairResponse.optJSONObject("serverInfo")
       return StoredBinding(
@@ -882,6 +955,7 @@ class NativeSyncEngineModule(
   }
 
   private fun emitError(code: String, message: String) {
+    recordNativeLog("Error", "$code: $message", Log.ERROR)
     val error = Arguments.createMap().apply {
       putString("code", code)
       putString("message", message)
@@ -946,10 +1020,82 @@ class NativeSyncEngineModule(
     return formatter.format(Date())
   }
 
+  private fun localLogTimestamp(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    formatter.timeZone = TimeZone.getDefault()
+    return formatter.format(Date())
+  }
+
   private fun diagnosticsLogSnapshot(): List<String> =
     synchronized(diagnosticsLogLock) {
       diagnosticsLogLines.toList()
     }
+
+  private fun dumpDiagnosticsLogSnapshotToConsole(lines: List<String>) {
+    if (lines.isEmpty()) {
+      Log.d(
+        MODULE_NAME,
+        buildConsoleLogMessage(
+          localTimestamp = localLogTimestamp(),
+          category = "Diagnostics",
+          message = "engine.log snapshot is empty at export time",
+        ),
+      )
+      return
+    }
+
+    Log.d(
+      MODULE_NAME,
+      buildConsoleLogMessage(
+        localTimestamp = localLogTimestamp(),
+        category = "Diagnostics",
+        message = "engine.log snapshot begin (${lines.size} lines)",
+      ),
+    )
+    for (line in lines) {
+      Log.d(
+        MODULE_NAME,
+        buildConsoleLogMessage(
+          localTimestamp = localLogTimestamp(),
+          category = "DiagnosticsLog",
+          message = line,
+        ),
+      )
+    }
+    Log.d(
+      MODULE_NAME,
+      buildConsoleLogMessage(
+        localTimestamp = localLogTimestamp(),
+        category = "Diagnostics",
+        message = "engine.log snapshot end",
+      ),
+    )
+  }
+
+  private fun buildDiagnosticsLogLine(
+    timestampIso: String,
+    category: String,
+    message: String,
+  ): String =
+    "${timestampIso.trim()} [${normalizeLogCategory(category)}] ${normalizeLogMessage(message)}"
+
+  private fun buildConsoleLogMessage(
+    localTimestamp: String,
+    category: String,
+    message: String,
+  ): String =
+    "[${localTimestamp.trim()}] [${normalizeLogCategory(category)}] ${normalizeLogMessage(message)}"
+
+  private fun retainRecentLogLines(lines: List<String>, maxLines: Int): List<String> {
+    require(maxLines > 0) { "maxLines must be positive" }
+    return if (lines.size <= maxLines) lines else lines.takeLast(maxLines)
+  }
+
+  private fun normalizeLogCategory(category: String): String =
+    category.trim().ifBlank { "NativeSyncEngine" }
+
+  private fun normalizeLogMessage(message: String): String =
+    message.trim().ifBlank { "<empty>" }
 
   private fun getKnownDeviceIdsValue(): List<String> {
     val ids = mutableSetOf<String>()
@@ -1083,6 +1229,9 @@ class NativeSyncEngineModule(
         }
       }
       connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+      diagnosticsUploadLog(
+        "started url=$uploadUrl archive=${archive.name} bytes=${archive.length()} noteLen=${note.length}",
+      )
 
       BufferedOutputStream(connection.outputStream).use { output ->
         writeMultipartField(output, boundary, "client_id", getOrCreateClientId())
@@ -1096,8 +1245,7 @@ class NativeSyncEngineModule(
 
       val statusCode = connection.responseCode
       val responseBody = readResponseBody(connection, statusCode)
-      recordDiagnosticsLog(
-        "DiagnosticsUpload",
+      diagnosticsUploadLog(
         "completed status=$statusCode responseBytes=${responseBody.toByteArray(StandardCharsets.UTF_8).size}",
       )
 
@@ -1132,6 +1280,10 @@ class NativeSyncEngineModule(
       return File(Uri.parse(normalized).path.orEmpty())
     }
     return File(normalized)
+  }
+
+  private fun diagnosticsUploadLog(message: String) {
+    recordNativeLog("DiagnosticsUpload", message)
   }
 
   private fun writeMultipartField(
@@ -1234,18 +1386,27 @@ class NativeSyncEngineModule(
         )
       }
 
-      override fun onDiscoveryStarted(serviceType: String) = Unit
+      override fun onDiscoveryStarted(serviceType: String) {
+        recordNativeLog("Discovery", "discovery started serviceType=$serviceType")
+      }
 
-      override fun onDiscoveryStopped(serviceType: String) = Unit
+      override fun onDiscoveryStopped(serviceType: String) {
+        recordNativeLog("Discovery", "discovery stopped serviceType=$serviceType")
+      }
 
       override fun onServiceFound(serviceInfo: NsdServiceInfo) {
         if (!isTargetServiceType(serviceInfo.serviceType)) {
           return
         }
+        recordNativeLog(
+          "Discovery",
+          "service found name=${serviceInfo.serviceName} type=${serviceInfo.serviceType}",
+        )
         resolveService(manager, generation, serviceInfo)
       }
 
       override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+        recordNativeLog("Discovery", "service lost name=${serviceInfo.serviceName} type=${serviceInfo.serviceType}")
         val serviceKey = serviceKeyFor(serviceInfo)
         val shouldEmit = synchronized(discoveryLock) {
           if (generation != discoveryGeneration) {
@@ -1273,6 +1434,7 @@ class NativeSyncEngineModule(
       }
       stopDiscoveryLocked()
     }
+    recordNativeLog("Discovery", "$code: $message", Log.WARN)
     emitDiscoveredDevicesChanged()
     emitError(code = code, message = message)
   }
@@ -1302,6 +1464,11 @@ class NativeSyncEngineModule(
             synchronized(discoveryLock) {
               pendingResolveKeys.remove(serviceKey)
             }
+            recordNativeLog(
+              "Discovery",
+              "resolve failed name=${serviceInfo.serviceName} errorCode=$errorCode",
+              Log.WARN,
+            )
             emitError(
               code = "ANDROID_DISCOVERY_RESOLVE_FAILED",
               message = "解析局域网服务失败（$errorCode）",
@@ -1310,6 +1477,10 @@ class NativeSyncEngineModule(
 
           override fun onServiceResolved(resolvedServiceInfo: NsdServiceInfo) {
             val candidate = buildDiscoveredCandidate(resolvedServiceInfo)
+            recordNativeLog(
+              "Discovery",
+              "resolved name=${candidate.name} host=${candidate.ip} probeHost=${candidate.probeHost} port=${candidate.port}",
+            )
             synchronized(discoveryLock) {
               pendingResolveKeys.remove(serviceKey)
               if (generation != discoveryGeneration) {
@@ -1325,6 +1496,7 @@ class NativeSyncEngineModule(
       synchronized(discoveryLock) {
         pendingResolveKeys.remove(serviceKey)
       }
+      recordNativeLog("Discovery", "resolve submit failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
       emitError(
         code = "ANDROID_DISCOVERY_RESOLVE_FAILED",
         message = "提交局域网服务解析失败：${error.message ?: "unknown error"}",
@@ -1402,8 +1574,10 @@ class NativeSyncEngineModule(
             reachableCandidates[candidate.serviceKey] = reachable
           }
         }
+        recordNativeLog("Discovery", "reachable ${candidate.name} via ${candidate.probeHost}")
         emitReachableDevices()
       } catch (_: Throwable) {
+        recordNativeLog("Discovery", "reachability failed ${candidate.name} via ${candidate.probeHost}", Log.WARN)
         val shouldEmit = synchronized(discoveryLock) {
           if (generation != discoveryGeneration) {
             return@synchronized false
