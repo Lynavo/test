@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   Animated,
   Easing,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,7 +14,7 @@ import { Icon } from '../components/Icon';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-function IOSQRScannerScreen() {
+function CameraQRScannerScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { t } = useTranslation();
   const [hasPermission, setHasPermission] = useState(false);
@@ -213,37 +212,8 @@ function IOSQRScannerScreen() {
   );
 }
 
-function AndroidQRScannerFallback() {
-  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
-  const { t } = useTranslation();
-
-  return (
-    <SafeAreaView style={styles.androidFallbackContainer}>
-      <View style={styles.androidFallbackCard}>
-        <View style={styles.androidFallbackIcon}>
-          <Icon name="scan-outline" size={28} color="#3b9fd8" />
-        </View>
-        <Text style={styles.androidFallbackTitle}>{t('qrScanner.android.title')}</Text>
-        <Text style={styles.androidFallbackBody}>
-          {t('qrScanner.android.body')}
-        </Text>
-        <TouchableOpacity
-          style={styles.androidFallbackButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.androidFallbackButtonText}>{t('qrScanner.android.backToManual')}</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
-  );
-}
-
 export function QRScannerScreen() {
-  if (Platform.OS === 'android') {
-    return <AndroidQRScannerFallback />;
-  }
-
-  return <IOSQRScannerScreen />;
+  return <CameraQRScannerScreen />;
 }
 
 const styles = StyleSheet.create({
@@ -444,51 +414,5 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     fontSize: 12,
     lineHeight: 17,
-  },
-  androidFallbackContainer: {
-    flex: 1,
-    backgroundColor: '#d6ecf8',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  androidFallbackCard: {
-    backgroundColor: 'rgba(255,255,255,0.86)',
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    alignItems: 'center',
-    gap: 16,
-  },
-  androidFallbackIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: '#eef6fc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  androidFallbackTitle: {
-    color: '#1a3a5c',
-    fontSize: 20,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  androidFallbackBody: {
-    color: '#4a6a8a',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  androidFallbackButton: {
-    marginTop: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: '#3b9fd8',
-  },
-  androidFallbackButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

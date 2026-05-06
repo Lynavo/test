@@ -1,5 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import { Modal, Platform, StatusBar } from 'react-native';
 import { Path } from 'react-native-svg';
 
 import { SyncActivityTour } from '../SyncActivityTour';
@@ -22,6 +23,17 @@ jest.mock('../../Icon', () => ({
 }));
 
 describe('SyncActivityTour', () => {
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'ios',
+    });
+    Object.defineProperty(StatusBar, 'currentHeight', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
   it('renders the dim overlay as an even-odd path with the active target cut out', () => {
     const screen = render(
       <SyncActivityTour
@@ -44,5 +56,50 @@ describe('SyncActivityTour', () => {
     expect(overlayPath?.props.d).toContain('Q28 408');
     expect(overlayPath?.props.d).toContain('Q192 408');
     expect(overlayPath?.props.d).toContain('Q192 522');
+  });
+
+  it('allows the modal to draw under Android system navigation bars', () => {
+    const screen = render(
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+      />,
+    );
+
+    const modal = screen.UNSAFE_getByType(Modal);
+
+    expect(modal.props.statusBarTranslucent).toBe(true);
+    expect(modal.props.navigationBarTranslucent).toBe(true);
+  });
+
+  it('aligns measured Android targets to the translucent modal coordinate space', () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    Object.defineProperty(StatusBar, 'currentHeight', {
+      configurable: true,
+      value: 24,
+    });
+
+    const screen = render(
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetLayouts={{
+          album: { left: 40, top: 420, width: 140, height: 90 },
+        }}
+      />,
+    );
+
+    const overlayPath = screen
+      .UNSAFE_getAllByType(Path)
+      .find(node => node.props.testID === 'sync-activity-tour-cutout-overlay');
+
+    expect(overlayPath?.props.d).toContain('Q28 432');
+    expect(overlayPath?.props.d).toContain('Q192 432');
+    expect(overlayPath?.props.d).toContain('Q192 546');
   });
 });

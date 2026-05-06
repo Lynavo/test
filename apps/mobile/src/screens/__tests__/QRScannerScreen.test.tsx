@@ -76,6 +76,19 @@ describe('QRScannerScreen', () => {
     });
   });
 
+  it('uses the camera scanner guidance on Android', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+
+    const { getByText } = render(<QRScannerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('如何取得二維碼？')).toBeTruthy();
+    });
+  });
+
   it('opens the full tutorial flow from the QR guide card', async () => {
     const { getByText } = render(<QRScannerScreen />);
 

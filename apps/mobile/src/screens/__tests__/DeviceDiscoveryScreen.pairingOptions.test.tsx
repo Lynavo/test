@@ -105,6 +105,30 @@ describe('DeviceDiscoveryScreen pairing options', () => {
     expect(queryByText('掃碼配對')).toBeNull();
   });
 
+  it('shows the full pairing popover before the manual IP sheet on Android', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+
+    const { getByText, queryByText } = render(<DeviceDiscoveryScreen />);
+
+    fireEvent.press(getByText('手動配對'));
+
+    await waitFor(() => {
+      expect(getByText('手動輸入 IP')).toBeTruthy();
+      expect(getByText('掃碼配對')).toBeTruthy();
+      expect(getByText('匯出診斷包')).toBeTruthy();
+    });
+    expect(queryByText('去哪裡找連接碼和 IP？')).toBeNull();
+
+    fireEvent.press(getByText('手動輸入 IP'));
+
+    await waitFor(() => {
+      expect(getByText('去哪裡找連接碼和 IP？')).toBeTruthy();
+    });
+  });
+
   it('navigates to QRScanner from the scan pairing option', async () => {
     const { getByText } = render(<DeviceDiscoveryScreen />);
 

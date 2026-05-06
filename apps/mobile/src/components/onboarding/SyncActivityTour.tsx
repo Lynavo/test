@@ -1,7 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Dimensions,
   Modal,
+  Platform,
   StyleSheet,
+  StatusBar,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -120,10 +123,19 @@ function getTargetRect(
   screenWidth: number,
   screenHeight: number,
   measuredLayouts?: Partial<Record<TourTarget, TourTargetLayout>>,
+  measuredTargetTopOffset = 0,
 ): TourLayout['target'] {
   const measured = measuredLayouts?.[target];
   if (measured) {
-    return applyTargetPadding(measured, target, screenWidth, screenHeight);
+    return applyTargetPadding(
+      {
+        ...measured,
+        top: measured.top + measuredTargetTopOffset,
+      },
+      target,
+      screenWidth,
+      screenHeight,
+    );
   }
 
   const ratio = TARGET_RATIO_RECTS[target];
@@ -145,12 +157,14 @@ function getTourLayout(
   screenWidth: number,
   screenHeight: number,
   measuredLayouts?: Partial<Record<TourTarget, TourTargetLayout>>,
+  measuredTargetTopOffset = 0,
 ): TourLayout {
   const targetRect = getTargetRect(
     target,
     screenWidth,
     screenHeight,
     measuredLayouts,
+    measuredTargetTopOffset,
   );
 
   if (target === 'album') {
@@ -274,6 +288,10 @@ export function SyncActivityTour({
 }: SyncActivityTourProps) {
   const { t } = useTranslation();
   const { width, height } = useWindowDimensions();
+  const overlayHeight =
+    Platform.OS === 'android' ? Dimensions.get('screen').height : height;
+  const measuredTargetTopOffset =
+    Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0;
   const [stepIndex, setStepIndex] = useState(0);
   const steps: TourStep[] = useMemo(
     () => [
@@ -312,7 +330,13 @@ export function SyncActivityTour({
   );
   const current = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
-  const layout = getTourLayout(current.target, width, height, targetLayouts);
+  const layout = getTourLayout(
+    current.target,
+    width,
+    overlayHeight,
+    targetLayouts,
+    measuredTargetTopOffset,
+  );
   const highlightRadius = getHighlightRadius(current.target);
   const highlightStrokeOffset =
     HIGHLIGHT_STROKE_GAP + HIGHLIGHT_STROKE_WIDTH / 2;
@@ -323,19 +347,20 @@ export function SyncActivityTour({
       transparent
       animationType="fade"
       statusBarTranslucent
+      navigationBarTranslucent
     >
       <View style={styles.overlay} testID="sync-activity-tour">
         <Svg
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
           width={width}
-          height={height}
+          height={overlayHeight}
         >
           <Path
             testID="sync-activity-tour-cutout-overlay"
             d={getCutoutOverlayPath(
               width,
-              height,
+              overlayHeight,
               layout.target,
               highlightRadius,
             )}

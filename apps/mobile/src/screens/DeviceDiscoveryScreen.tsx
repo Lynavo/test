@@ -592,13 +592,7 @@ export function DeviceDiscoveryScreen() {
                 <TouchableOpacity
                   style={styles.scanButton}
                   activeOpacity={0.8}
-                  onPress={() => {
-                    if (isAndroid) {
-                      setShowManualModal(true);
-                      return;
-                    }
-                    setShowPairingMenu(true);
-                  }}
+                  onPress={() => setShowPairingMenu(true)}
                 >
                   <Icon name="settings-outline" size={16} color="#3b9fd8" />
                   <Text style={styles.scanButtonText}>{t('deviceDiscovery.actions.manualPair')}</Text>
@@ -719,34 +713,30 @@ export function DeviceDiscoveryScreen() {
                 <Icon name="create-outline" size={20} color="#3b9fd8" />
                 <Text style={styles.popoverText}>{t('deviceDiscovery.actions.manualInputIp')}</Text>
               </TouchableOpacity>
-              {isAndroid ? null : (
-                <>
-                  <View style={styles.popoverDivider} />
-                  <TouchableOpacity
-                    style={styles.popoverItem}
-                    onPress={() => {
-                      setShowPairingMenu(false);
-                      navigation.navigate('QRScanner');
-                    }}
-                  >
-                    <Icon name="scan-outline" size={20} color="#3b9fd8" />
-                    <Text style={styles.popoverText}>{t('deviceDiscovery.actions.qrPair')}</Text>
-                  </TouchableOpacity>
-                  <View style={styles.popoverDivider} />
-                  <TouchableOpacity
-                    style={styles.popoverItem}
-                    disabled={isExportingDiagnostics}
-                    onPress={() => void handleExportDiagnostics()}
-                  >
-                    <Icon name="download-outline" size={20} color="#3b9fd8" />
-                    <Text style={styles.popoverText}>
-                      {isExportingDiagnostics
-                        ? t('settings.actions.exportingDiagnostics')
-                        : t('settings.actions.exportDiagnostics')}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+              <View style={styles.popoverDivider} />
+              <TouchableOpacity
+                style={styles.popoverItem}
+                onPress={() => {
+                  setShowPairingMenu(false);
+                  navigation.navigate('QRScanner');
+                }}
+              >
+                <Icon name="scan-outline" size={20} color="#3b9fd8" />
+                <Text style={styles.popoverText}>{t('deviceDiscovery.actions.qrPair')}</Text>
+              </TouchableOpacity>
+              <View style={styles.popoverDivider} />
+              <TouchableOpacity
+                style={styles.popoverItem}
+                disabled={isExportingDiagnostics}
+                onPress={() => void handleExportDiagnostics()}
+              >
+                <Icon name="download-outline" size={20} color="#3b9fd8" />
+                <Text style={styles.popoverText}>
+                  {isExportingDiagnostics
+                    ? t('settings.actions.exportingDiagnostics')
+                    : t('settings.actions.exportDiagnostics')}
+                </Text>
+              </TouchableOpacity>
             </View>
           </Pressable>
         </Modal>
