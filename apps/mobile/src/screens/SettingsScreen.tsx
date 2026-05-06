@@ -27,6 +27,7 @@ import * as RNLocalize from 'react-native-localize';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { AUTH_COLORS } from '../components/auth/AuthScreenShell';
+import { authCardSurfaceStyle } from '../components/auth/authPlatformStyles';
 import {
   SUBSCRIPTION_STATUS_ICON_COLORS,
   SubscriptionStatusIcon,
@@ -1684,6 +1685,7 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: CARD_BORDER,
+    ...authCardSurfaceStyle,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 20,
@@ -1731,6 +1733,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
+    ...authCardSurfaceStyle,
   },
   topCardLeft: {},
   topCardRight: {},
@@ -1857,6 +1860,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
+    ...authCardSurfaceStyle,
   },
 
   // ---------------------------------------------------------------------------
@@ -1949,6 +1953,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
+    ...authCardSurfaceStyle,
   },
   listSep: {
     height: StyleSheet.hairlineWidth,
@@ -2057,6 +2062,7 @@ const styles = StyleSheet.create({
   dangerCard: {
     backgroundColor: DANGER_BG,
     borderColor: CARD_BORDER,
+    ...authCardSurfaceStyle,
   },
   dangerRowText: {
     fontSize: 15,
