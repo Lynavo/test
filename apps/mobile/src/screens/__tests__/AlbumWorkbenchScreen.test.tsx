@@ -5,6 +5,7 @@ import {
   FlatList,
   NativeModules,
   PanResponder,
+  Platform,
   Text,
   View,
 } from 'react-native';
@@ -141,6 +142,7 @@ const mockedBrowseAlbum = jest.fn();
 const mockedGetAlbumStats = jest.fn();
 const mockedGetAutoUploadConfig = jest.fn();
 const mockedGetPhotoAuthorizationStatus = jest.fn();
+const mockedRequestPhotoPermission = jest.fn();
 const mockedPresentLimitedPhotoPicker = jest.fn();
 const mockedSaveAutoUploadConfig = jest.fn();
 
@@ -168,6 +170,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   disableAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
   getPhotoAuthorizationStatus: () => mockedGetPhotoAuthorizationStatus(),
+  requestPhotoPermission: () => mockedRequestPhotoPermission(),
   presentLimitedPhotoPicker: () => mockedPresentLimitedPhotoPicker(),
   getAlbumCollections: jest.fn().mockResolvedValue([]),
   getAssetPreviewSource: jest.fn().mockResolvedValue({
@@ -247,6 +250,7 @@ describe('AlbumWorkbenchScreen', () => {
       customTimeFrom: null,
     });
     mockedGetPhotoAuthorizationStatus.mockResolvedValue('authorized');
+    mockedRequestPhotoPermission.mockResolvedValue('authorized');
     mockedPresentLimitedPhotoPicker.mockResolvedValue(undefined);
   });
 
@@ -254,6 +258,69 @@ describe('AlbumWorkbenchScreen', () => {
     ReactTestRenderer.act(() => {
       mountedTrees.splice(0).forEach(tree => tree.unmount());
     });
+  });
+
+  it('requests Android photo permission before reading album assets', async () => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      value: 'android',
+      configurable: true,
+    });
+
+    mockedGetPhotoAuthorizationStatus.mockResolvedValue('denied');
+    mockedRequestPhotoPermission.mockResolvedValue('authorized');
+    mockedBrowseAlbum.mockResolvedValue([
+      {
+        assetLocalId: 'android-asset-1',
+        filename: 'IMG_ANDROID.JPG',
+        mediaType: 'image',
+        fileSize: 1024,
+        creationDate: '2026-05-01T00:00:00Z',
+        thumbnailUri: 'content://media/external/images/media/1',
+        isTransferred: false,
+        isQueued: false,
+      },
+    ]);
+    mockedGetAlbumStats.mockResolvedValue({
+      totalCount: 1,
+      transferredCount: 0,
+      queuedCount: 0,
+      pendingCount: 1,
+    });
+
+    try {
+      let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+      await ReactTestRenderer.act(async () => {
+        tree = createAlbumWorkbenchScreen();
+      });
+      await ReactTestRenderer.act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockedRequestPhotoPermission).toHaveBeenCalledTimes(1);
+      expect(mockedBrowseAlbum).toHaveBeenCalledWith(
+        'all',
+        'all',
+        0,
+        60,
+        undefined,
+      );
+      expect(tree!.root.findByType(FlatList).props.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            assetLocalId: 'android-asset-1',
+            filename: 'IMG_ANDROID.JPG',
+          }),
+        ]),
+      );
+    } finally {
+      Object.defineProperty(Platform, 'OS', {
+        value: originalPlatformOS,
+        configurable: true,
+      });
+    }
   });
 
   it('keeps filter tabs visible when transferred filter has no assets', async () => {

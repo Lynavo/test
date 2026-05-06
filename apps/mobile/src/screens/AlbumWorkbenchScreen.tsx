@@ -54,6 +54,7 @@ import {
   getAlbumCollections,
   submitManualUpload,
   cancelAllManualUploads,
+  requestPhotoPermission,
   getAutoUploadConfig,
   saveAutoUploadConfig,
   disableAutoUpload,
@@ -305,6 +306,42 @@ export function AlbumWorkbenchScreen() {
   // Photo library authorization status — tracks limited access state
   const [photoAuthStatus, setPhotoAuthStatus] = useState<string>('unknown');
   const isAutoUploadActive = autoUploadConfig?.state === 'active';
+  const photoLibraryAccessRequestRef = useRef<Promise<boolean> | null>(null);
+
+  const ensurePhotoLibraryAccess = useCallback(async (): Promise<boolean> => {
+    try {
+      const currentStatus = await getPhotoAuthorizationStatus();
+      if (currentStatus === 'authorized' || currentStatus === 'limited') {
+        setPhotoAuthStatus(currentStatus);
+        return true;
+      }
+
+      if (Platform.OS !== 'android') {
+        setPhotoAuthStatus(currentStatus);
+        return false;
+      }
+
+      if (photoLibraryAccessRequestRef.current) {
+        return photoLibraryAccessRequestRef.current;
+      }
+
+      const request = requestPhotoPermission()
+        .then(requestedStatus => {
+          setPhotoAuthStatus(requestedStatus);
+          return (
+            requestedStatus === 'authorized' || requestedStatus === 'limited'
+          );
+        })
+        .finally(() => {
+          photoLibraryAccessRequestRef.current = null;
+        });
+      photoLibraryAccessRequestRef.current = request;
+      return request;
+    } catch (e) {
+      console.warn('[AlbumWorkbench] ensurePhotoLibraryAccess error:', e);
+      return false;
+    }
+  }, []);
 
   // Radar pulse animation for auto-upload active icon
   const radarAnims = useRef(
@@ -382,6 +419,18 @@ export function AlbumWorkbenchScreen() {
           setLoadingMore(true);
         }
 
+        if (Platform.OS === 'android') {
+          const canReadLibrary = await ensurePhotoLibraryAccess();
+          if (!canReadLibrary) {
+            if (reset) {
+              setAssets([]);
+              offsetRef.current = 0;
+            }
+            setHasMore(false);
+            return;
+          }
+        }
+
         const result = await browseAlbum(
           nextMediaFilter,
           nextTransferFilter,
@@ -413,7 +462,7 @@ export function AlbumWorkbenchScreen() {
         }
       }
     },
-    [],
+    [ensurePhotoLibraryAccess],
   );
 
   const loadAutoUploadSessionProgress = useCallback(
@@ -437,6 +486,19 @@ export function AlbumWorkbenchScreen() {
   const loadStats = useCallback(
     async (active = isAutoUploadActive) => {
       try {
+        if (Platform.OS === 'android') {
+          const canReadLibrary = await ensurePhotoLibraryAccess();
+          if (!canReadLibrary) {
+            setStats({
+              totalCount: 0,
+              transferredCount: 0,
+              queuedCount: 0,
+              pendingCount: 0,
+            });
+            void loadAutoUploadSessionProgress(active, 0);
+            return;
+          }
+        }
         const result = await getAlbumStats();
         setStats(result);
         void loadAutoUploadSessionProgress(active, result.transferredCount);
@@ -444,7 +506,11 @@ export function AlbumWorkbenchScreen() {
         console.warn('[AlbumWorkbench] loadStats error:', e);
       }
     },
-    [isAutoUploadActive, loadAutoUploadSessionProgress],
+    [
+      ensurePhotoLibraryAccess,
+      isAutoUploadActive,
+      loadAutoUploadSessionProgress,
+    ],
   );
 
   const primeAutoUploadRoundBaseline = useCallback(async () => {
@@ -1589,7 +1655,7 @@ export function AlbumWorkbenchScreen() {
           autoUploadSessionTransferredCount,
           autoUploadRoundCompletedCount,
         )
-      : (autoUploadSessionTransferredCount ?? autoUploadRoundCompletedCount);
+      : autoUploadSessionTransferredCount ?? autoUploadRoundCompletedCount;
   const autoUploadTransferredThisRound =
     resolvedAutoUploadTransferredCount ??
     (isAutoUploadActive && stats
@@ -2111,10 +2177,10 @@ export function AlbumWorkbenchScreen() {
           {isAutoUploadActive
             ? t('albumWorkbench.selectionHint.autoActiveLock')
             : selectedIds.size > 0
-              ? t('albumWorkbench.selectedCount', {
-                  count: selectedIds.size,
-                })
-              : t('albumWorkbench.selectionHint.none')}
+            ? t('albumWorkbench.selectedCount', {
+                count: selectedIds.size,
+              })
+            : t('albumWorkbench.selectionHint.none')}
         </Text>
         <View style={styles.uploadBarRight}>
           {!deviceConnected && !isAutoUploadActive && (

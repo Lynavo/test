@@ -189,10 +189,37 @@ export type PhotoAuthorizationStatus =
   | 'notDetermined'
   | 'unknown';
 
+function normalizePhotoAuthorizationStatus(
+  status: unknown,
+): PhotoAuthorizationStatus {
+  switch (status) {
+    case 'authorized':
+    case 'granted':
+      return 'authorized';
+    case 'limited':
+      return 'limited';
+    case 'denied':
+      return 'denied';
+    case 'restricted':
+      return 'restricted';
+    case 'notDetermined':
+    case 'not_determined':
+      return 'notDetermined';
+    default:
+      return 'unknown';
+  }
+}
+
 /** Check current photo library authorization without prompting. */
 export async function getPhotoAuthorizationStatus(): Promise<PhotoAuthorizationStatus> {
   const result = await NativeSyncEngine.getPhotoAuthorizationStatus();
-  return result as PhotoAuthorizationStatus;
+  return normalizePhotoAuthorizationStatus(result);
+}
+
+/** Request photo library authorization. Android needs this before MediaStore reads. */
+export async function requestPhotoPermission(): Promise<PhotoAuthorizationStatus> {
+  const result = await NativeSyncEngine.requestPhotoPermission();
+  return normalizePhotoAuthorizationStatus(result);
 }
 
 /** Present the iOS limited photo picker so the user can add more photos. */
