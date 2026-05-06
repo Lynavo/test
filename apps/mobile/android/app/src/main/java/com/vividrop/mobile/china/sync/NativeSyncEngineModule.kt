@@ -1,7 +1,9 @@
 package com.vividrop.mobile.china.sync
 
+import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -15,11 +17,17 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.modules.core.PermissionAwareActivity
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.io.OutputStream
+import java.net.HttpURLConnection
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
@@ -45,6 +53,7 @@ class NativeSyncEngineModule(
   private val pendingResolveKeys = mutableSetOf<String>()
   private val diagnosticsLogLock = Any()
   private val diagnosticsLogLines = mutableListOf<String>()
+  private var pendingPhotoPermissionPromise: Promise? = null
 
   override fun getName(): String = MODULE_NAME
 
@@ -65,7 +74,53 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun requestPhotoPermission(promise: Promise) {
-    promise.resolve(currentPhotoPermissionState())
+    val currentState = currentPhotoPermissionState()
+    if (currentState == "granted" || currentState == "limited") {
+      promise.resolve(currentState)
+      return
+    }
+
+    val activity = getCurrentActivity()
+    if (activity !is PermissionAwareActivity) {
+      emitError(
+        code = "ANDROID_PHOTO_PERMISSION_UNAVAILABLE",
+        message = "Android 当前 Activity 不支持相簿权限请求。",
+      )
+      promise.resolve(currentState)
+      return
+    }
+
+    if (pendingPhotoPermissionPromise != null) {
+      promise.reject(
+        "ANDROID_PHOTO_PERMISSION_REQUEST_IN_PROGRESS",
+        "Photo permission request is already in progress",
+      )
+      return
+    }
+
+    pendingPhotoPermissionPromise = promise
+    try {
+      activity.requestPermissions(
+        photoPermissionsForRequest(),
+        PHOTO_PERMISSION_REQUEST_CODE,
+      ) { requestCode, _, _ ->
+        if (requestCode != PHOTO_PERMISSION_REQUEST_CODE) {
+          return@requestPermissions false
+        }
+
+        val pendingPromise = pendingPhotoPermissionPromise
+        pendingPhotoPermissionPromise = null
+        pendingPromise?.resolve(currentPhotoPermissionState())
+        true
+      }
+    } catch (error: Throwable) {
+      pendingPhotoPermissionPromise = null
+      promise.reject(
+        "ANDROID_PHOTO_PERMISSION_REQUEST_FAILED",
+        error.message ?: "Failed to request Android photo permission",
+        error,
+      )
+    }
   }
 
   @ReactMethod
@@ -231,6 +286,34 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun uploadDiagnosticsArchive(params: ReadableMap, promise: Promise) {
+    thread(name = "NativeSyncEngineDiagnosticsUpload", isDaemon = true) {
+      try {
+        val uploadUrl = params.getStringOrNull("url")?.trim().orEmpty()
+        val archivePath = params.getStringOrNull("archivePath")?.trim().orEmpty()
+        val note = params.getStringOrNull("note")?.trim().orEmpty()
+        val headers = if (params.hasKey("headers") && !params.isNull("headers")) {
+          params.getMap("headers")
+        } else {
+          null
+        }
+
+        val result = performDiagnosticsArchiveUpload(
+          uploadUrl = uploadUrl,
+          archivePath = archivePath,
+          note = note,
+          headers = readableMapToStringMap(headers),
+        )
+        promise.resolve(result)
+      } catch (error: NativeBridgeException) {
+        promise.reject(error.nativeCode, error.message, error)
+      } catch (error: Throwable) {
+        promise.reject("NETWORK_ERROR", error.message ?: "Diagnostics upload failed", error)
+      }
+    }
+  }
+
+  @ReactMethod
   fun recordDiagnosticsLog(category: String, message: String) {
     val line = "${isoNow()} [${category.trim().ifBlank { "JS" }}] ${message.trim().ifBlank { "<empty>" }}"
     synchronized(diagnosticsLogLock) {
@@ -244,6 +327,20 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun getClientDisplayName(promise: Promise) {
     promise.resolve(getClientDisplayNameValue())
+  }
+
+  @ReactMethod
+  fun getClientId(promise: Promise) {
+    promise.resolve(getOrCreateClientId())
+  }
+
+  @ReactMethod
+  fun getKnownDeviceIds(promise: Promise) {
+    val result = Arguments.createArray()
+    for (deviceId in getKnownDeviceIdsValue()) {
+      result.pushString(deviceId)
+    }
+    promise.resolve(result)
   }
 
   @ReactMethod
@@ -381,6 +478,15 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun getAssetPreviewSource(assetLocalId: String, promise: Promise) {
+    promise.resolve(Arguments.createMap().apply {
+      putString("uri", "")
+      putString("mediaType", "image")
+      putString("error", "not_found")
+    })
+  }
+
+  @ReactMethod
   fun submitManualUpload(params: ReadableMap, promise: Promise) {
     promise.reject("ANDROID_NOT_IMPLEMENTED", "手动上传功能暂未在 Android 端实现")
   }
@@ -391,31 +497,66 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun cancelAllManualUploads(promise: Promise) {
+    emitQueueUpdated(Arguments.createArray())
+    emitIdleSyncState(loadBinding())
+    promise.resolve(null)
+  }
+
+  @ReactMethod
   fun pauseAutoUpload(promise: Promise) {
+    persistAutoUploadInterruptedState()
+    emitSyncState(loadBinding(), "paused_auto_upload")
     promise.resolve(null)
   }
 
   @ReactMethod
   fun disableAutoUpload(promise: Promise) {
+    persistAutoUploadDisabledState()
+    emitIdleSyncState(loadBinding())
     promise.resolve(null)
   }
 
   @ReactMethod
   fun resumeAutoUpload(promise: Promise) {
+    persistAutoUploadActiveState()
+    emitIdleSyncState(loadBinding())
     promise.resolve(null)
   }
 
   @ReactMethod
   fun getAutoUploadConfig(promise: Promise) {
-    promise.resolve(Arguments.createMap().apply {
-      putBoolean("enabled", false)
-      putString("state", "disabled")
-      putString("timeRangeMode", "all")
-    })
+    promise.resolve(buildAutoUploadConfigMap())
   }
 
   @ReactMethod
   fun saveAutoUploadConfig(params: ReadableMap, promise: Promise) {
+    val currentConfig = loadAutoUploadConfig()
+    val enabled = if (params.hasKey("enabled") && !params.isNull("enabled")) {
+      params.getBoolean("enabled")
+    } else {
+      currentConfig.enabled
+    }
+    val timeRangeMode = params.getStringOrNull("timeRangeMode")
+      ?.takeIf { it.isNotBlank() }
+      ?: currentConfig.timeRangeMode
+    val customTimeFrom = params.getStringOrNull("customTimeFrom")
+      ?.takeIf { it.isNotBlank() }
+      ?: currentConfig.customTimeFrom
+    val state = when {
+      !enabled -> "disabled"
+      currentConfig.state == "disabled" -> "active"
+      else -> currentConfig.state
+    }
+
+    saveAutoUploadConfig(
+      AutoUploadConfig(
+        enabled = enabled,
+        state = state,
+        timeRangeMode = timeRangeMode,
+        customTimeFrom = customTimeFrom,
+      ),
+    )
     promise.resolve(null)
   }
 
@@ -424,6 +565,7 @@ class NativeSyncEngineModule(
     promise.resolve(Arguments.createMap().apply {
       putString("path", path)
       putArray("files", Arguments.createArray())
+      putInt("totalCount", 0)
     })
   }
 
@@ -447,7 +589,13 @@ class NativeSyncEngineModule(
     // Reuse the same permission check as requestPhotoPermission so both
     // bridge methods agree on what "authorized" means.
     val state = currentPhotoPermissionState()
-    promise.resolve(if (state == "granted") "authorized" else "denied")
+    promise.resolve(
+      when {
+        state == "granted" -> "authorized"
+        state == "limited" -> "limited"
+        else -> "denied"
+      },
+    )
   }
 
   @ReactMethod
@@ -595,18 +743,52 @@ class NativeSyncEngineModule(
     return JSONObject(String(body, StandardCharsets.UTF_8))
   }
 
+  private fun photoPermissionsForRequest(): Array<String> {
+    return when {
+      Build.VERSION.SDK_INT >= ANDROID_14_API -> arrayOf(
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_VIDEO,
+        PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED,
+      )
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> arrayOf(
+        Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_VIDEO,
+      )
+      else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+    }
+  }
+
   private fun currentPhotoPermissionState(): String {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    return if (Build.VERSION.SDK_INT >= ANDROID_14_API) {
       val hasImages = reactApplicationContext.checkSelfPermission(
-        android.Manifest.permission.READ_MEDIA_IMAGES,
+        Manifest.permission.READ_MEDIA_IMAGES,
       ) == PackageManager.PERMISSION_GRANTED
       val hasVideo = reactApplicationContext.checkSelfPermission(
-        android.Manifest.permission.READ_MEDIA_VIDEO,
+        Manifest.permission.READ_MEDIA_VIDEO,
       ) == PackageManager.PERMISSION_GRANTED
-      if (hasImages && hasVideo) "granted" else "denied"
+      val hasSelected = reactApplicationContext.checkSelfPermission(
+        PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED,
+      ) == PackageManager.PERMISSION_GRANTED
+      when {
+        hasImages && hasVideo -> "granted"
+        hasSelected || hasImages || hasVideo -> "limited"
+        else -> "denied"
+      }
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val hasImages = reactApplicationContext.checkSelfPermission(
+        Manifest.permission.READ_MEDIA_IMAGES,
+      ) == PackageManager.PERMISSION_GRANTED
+      val hasVideo = reactApplicationContext.checkSelfPermission(
+        Manifest.permission.READ_MEDIA_VIDEO,
+      ) == PackageManager.PERMISSION_GRANTED
+      when {
+        hasImages && hasVideo -> "granted"
+        hasImages || hasVideo -> "limited"
+        else -> "denied"
+      }
     } else {
       val granted = reactApplicationContext.checkSelfPermission(
-        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.READ_EXTERNAL_STORAGE,
       ) == PackageManager.PERMISSION_GRANTED
       if (granted) "granted" else "denied"
     }
@@ -695,6 +877,10 @@ class NativeSyncEngineModule(
     emitEvent("onSyncStateChanged", buildIdleSyncSummary(binding))
   }
 
+  private fun emitSyncState(binding: StoredBinding?, uploadState: String) {
+    emitEvent("onSyncStateChanged", buildIdleSyncSummary(binding, uploadState))
+  }
+
   private fun emitError(code: String, message: String) {
     val error = Arguments.createMap().apply {
       putString("code", code)
@@ -709,7 +895,10 @@ class NativeSyncEngineModule(
       .emit(eventName, payload)
   }
 
-  private fun buildIdleSyncSummary(binding: StoredBinding?): WritableMap {
+  private fun buildIdleSyncSummary(
+    binding: StoredBinding?,
+    uploadState: String = "idle",
+  ): WritableMap {
     return Arguments.createMap().apply {
       putString("currentDeviceId", binding?.deviceId)
       putString("currentDeviceName", binding?.deviceAlias ?: binding?.deviceName)
@@ -717,7 +906,7 @@ class NativeSyncEngineModule(
       putDouble("transferredBytes", 0.0)
       putDouble("totalBytes", 0.0)
       putDouble("progressPercent", 0.0)
-      putString("uploadState", "idle")
+      putString("uploadState", uploadState)
       putString("performanceHint", "none")
       putNull("performanceMessage")
       putString("thermalState", "unknown")
@@ -729,7 +918,7 @@ class NativeSyncEngineModule(
       putDouble("currentFileConfirmedBytes", 0.0)
       putDouble("currentFileTotalBytes", 0.0)
       putString("sessionId", "")
-      putString("state", "idle")
+      putString("state", uploadState)
     }
   }
 
@@ -744,6 +933,7 @@ class NativeSyncEngineModule(
 
   private fun saveBinding(binding: StoredBinding) {
     prefs.edit().putString(PREF_BINDING, binding.toJson().toString()).apply()
+    rememberKnownDeviceId(binding.deviceId)
   }
 
   private fun clearBinding() {
@@ -760,6 +950,236 @@ class NativeSyncEngineModule(
     synchronized(diagnosticsLogLock) {
       diagnosticsLogLines.toList()
     }
+
+  private fun getKnownDeviceIdsValue(): List<String> {
+    val ids = mutableSetOf<String>()
+    val storedIds = prefs.getStringSet(PREF_KNOWN_DEVICE_IDS, emptySet()) ?: emptySet()
+    for (storedId in storedIds) {
+      storedId.trim().takeIf { it.isNotBlank() }?.let(ids::add)
+    }
+    loadBinding()?.deviceId?.trim()?.takeIf { it.isNotBlank() }?.let(ids::add)
+    return ids.sorted()
+  }
+
+  private fun rememberKnownDeviceId(deviceId: String) {
+    val normalized = deviceId.trim()
+    if (normalized.isBlank()) {
+      return
+    }
+
+    val updated = getKnownDeviceIdsValue().toMutableSet()
+    updated.add(normalized)
+    prefs.edit().putStringSet(PREF_KNOWN_DEVICE_IDS, updated).apply()
+  }
+
+  private fun loadAutoUploadConfig(): AutoUploadConfig {
+    return AutoUploadConfig(
+      enabled = prefs.getBoolean(PREF_AUTO_UPLOAD_ENABLED, false),
+      state = prefs.getString(PREF_AUTO_UPLOAD_STATE, "disabled")
+        ?.takeIf { it.isNotBlank() }
+        ?: "disabled",
+      timeRangeMode = prefs.getString(PREF_AUTO_UPLOAD_TIME_RANGE_MODE, "all")
+        ?.takeIf { it.isNotBlank() }
+        ?: "all",
+      customTimeFrom = prefs.getString(PREF_AUTO_UPLOAD_CUSTOM_TIME_FROM, null)
+        ?.takeIf { it.isNotBlank() },
+    )
+  }
+
+  private fun buildAutoUploadConfigMap(): WritableMap {
+    val config = loadAutoUploadConfig()
+    return Arguments.createMap().apply {
+      putBoolean("enabled", config.enabled)
+      putString("state", config.state)
+      putString("timeRangeMode", config.timeRangeMode)
+      if (config.customTimeFrom.isNullOrBlank()) {
+        putNull("customTimeFrom")
+      } else {
+        putString("customTimeFrom", config.customTimeFrom)
+      }
+    }
+  }
+
+  private fun saveAutoUploadConfig(config: AutoUploadConfig) {
+    val editor = prefs.edit()
+      .putBoolean(PREF_AUTO_UPLOAD_ENABLED, config.enabled)
+      .putString(PREF_AUTO_UPLOAD_STATE, config.state)
+      .putString(PREF_AUTO_UPLOAD_TIME_RANGE_MODE, config.timeRangeMode)
+
+    if (config.customTimeFrom.isNullOrBlank()) {
+      editor.remove(PREF_AUTO_UPLOAD_CUSTOM_TIME_FROM)
+    } else {
+      editor.putString(PREF_AUTO_UPLOAD_CUSTOM_TIME_FROM, config.customTimeFrom)
+    }
+    editor.apply()
+  }
+
+  private fun persistAutoUploadInterruptedState() {
+    val config = loadAutoUploadConfig()
+    saveAutoUploadConfig(config.copy(enabled = true, state = "interrupted"))
+  }
+
+  private fun persistAutoUploadDisabledState() {
+    val config = loadAutoUploadConfig()
+    saveAutoUploadConfig(config.copy(enabled = false, state = "disabled"))
+  }
+
+  private fun persistAutoUploadActiveState() {
+    val config = loadAutoUploadConfig()
+    saveAutoUploadConfig(config.copy(enabled = true, state = "active"))
+  }
+
+  private fun ReadableMap.getStringOrNull(key: String): String? {
+    return if (hasKey(key) && !isNull(key)) {
+      getString(key)
+    } else {
+      null
+    }
+  }
+
+  private fun readableMapToStringMap(map: ReadableMap?): Map<String, String> {
+    if (map == null) {
+      return emptyMap()
+    }
+
+    val result = mutableMapOf<String, String>()
+    val iterator = map.keySetIterator()
+    while (iterator.hasNextKey()) {
+      val key = iterator.nextKey()
+      if (!map.isNull(key)) {
+        result[key] = map.getString(key).orEmpty()
+      }
+    }
+    return result
+  }
+
+  private fun performDiagnosticsArchiveUpload(
+    uploadUrl: String,
+    archivePath: String,
+    note: String,
+    headers: Map<String, String>,
+  ): WritableMap {
+    if (uploadUrl.isBlank()) {
+      throw NativeBridgeException("INVALID_UPLOAD_URL", "Missing diagnostics upload URL")
+    }
+
+    val archive = diagnosticsArchiveFileFromPath(archivePath)
+    if (!archive.isFile) {
+      throw NativeBridgeException("FILE_NOT_FOUND", "Diagnostics archive does not exist")
+    }
+
+    val boundary = "syncflow-${UUID.randomUUID()}"
+    val connection = URL(uploadUrl).openConnection() as HttpURLConnection
+    try {
+      connection.requestMethod = "POST"
+      connection.doOutput = true
+      connection.connectTimeout = DIAGNOSTICS_UPLOAD_TIMEOUT_MS
+      connection.readTimeout = DIAGNOSTICS_UPLOAD_TIMEOUT_MS
+      connection.setChunkedStreamingMode(0)
+
+      for ((key, value) in headers) {
+        if (!key.equals("Content-Type", ignoreCase = true) && key.isNotBlank()) {
+          connection.setRequestProperty(key, value)
+        }
+      }
+      connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+
+      BufferedOutputStream(connection.outputStream).use { output ->
+        writeMultipartField(output, boundary, "client_id", getOrCreateClientId())
+        writeMultipartField(output, boundary, "platform", "android")
+        if (note.isNotBlank()) {
+          writeMultipartField(output, boundary, "note", note)
+        }
+        writeMultipartFile(output, boundary, "bundle", archive)
+        writeUtf8(output, "--$boundary--\r\n")
+      }
+
+      val statusCode = connection.responseCode
+      val responseBody = readResponseBody(connection, statusCode)
+      recordDiagnosticsLog(
+        "DiagnosticsUpload",
+        "completed status=$statusCode responseBytes=${responseBody.toByteArray(StandardCharsets.UTF_8).size}",
+      )
+
+      if (statusCode == HttpURLConnection.HTTP_ENTITY_TOO_LARGE) {
+        throw NativeBridgeException("BUNDLE_TOO_LARGE", "Diagnostics bundle too large")
+      }
+      if (statusCode != HttpURLConnection.HTTP_OK) {
+        throw NativeBridgeException(
+          "SERVER_ERROR",
+          responseBody.takeIf { it.isNotBlank() } ?: "Diagnostics upload failed with HTTP $statusCode",
+        )
+      }
+
+      val json = JSONObject(responseBody)
+      val refId = json.optString("ref_id").takeIf { it.isNotBlank() }
+        ?: throw NativeBridgeException("SERVER_ERROR", "Diagnostics upload response missing ref_id")
+      val uploadedAt = json.optString("uploaded_at").takeIf { it.isNotBlank() }
+        ?: throw NativeBridgeException("SERVER_ERROR", "Diagnostics upload response missing uploaded_at")
+
+      return Arguments.createMap().apply {
+        putString("ref_id", refId)
+        putString("uploaded_at", uploadedAt)
+      }
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  private fun diagnosticsArchiveFileFromPath(rawPath: String): File {
+    val normalized = rawPath.trim()
+    if (normalized.startsWith("file://")) {
+      return File(Uri.parse(normalized).path.orEmpty())
+    }
+    return File(normalized)
+  }
+
+  private fun writeMultipartField(
+    output: OutputStream,
+    boundary: String,
+    name: String,
+    value: String,
+  ) {
+    writeUtf8(output, "--$boundary\r\n")
+    writeUtf8(output, "Content-Disposition: form-data; name=\"$name\"\r\n\r\n")
+    writeUtf8(output, value)
+    writeUtf8(output, "\r\n")
+  }
+
+  private fun writeMultipartFile(
+    output: OutputStream,
+    boundary: String,
+    name: String,
+    file: File,
+  ) {
+    writeUtf8(output, "--$boundary\r\n")
+    writeUtf8(
+      output,
+      "Content-Disposition: form-data; name=\"$name\"; filename=\"${file.name}\"\r\n",
+    )
+    writeUtf8(output, "Content-Type: application/zip\r\n\r\n")
+    BufferedInputStream(file.inputStream()).use { input ->
+      input.copyTo(output)
+    }
+    writeUtf8(output, "\r\n")
+  }
+
+  private fun writeUtf8(output: OutputStream, value: String) {
+    output.write(value.toByteArray(StandardCharsets.UTF_8))
+  }
+
+  private fun readResponseBody(
+    connection: HttpURLConnection,
+    statusCode: Int,
+  ): String {
+    val stream = if (statusCode in 200..399) {
+      connection.inputStream
+    } else {
+      connection.errorStream
+    } ?: return ""
+
+    return stream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+  }
 
   private val prefs
     get() = reactApplicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -1209,13 +1629,35 @@ class NativeSyncEngineModule(
     }
   }
 
+  private data class AutoUploadConfig(
+    val enabled: Boolean,
+    val state: String,
+    val timeRangeMode: String,
+    val customTimeFrom: String?,
+  )
+
+  private class NativeBridgeException(
+    val nativeCode: String,
+    message: String,
+  ) : Exception(message)
+
   companion object {
     private const val MODULE_NAME = "NativeSyncEngine"
     private const val MAX_DIAGNOSTICS_LOG_LINES = 2_000
+    private const val PHOTO_PERMISSION_REQUEST_CODE = 39_394
+    private const val DIAGNOSTICS_UPLOAD_TIMEOUT_MS = 30_000
+    private const val ANDROID_14_API = 34
+    private const val PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED =
+      "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
     const val PREFS_NAME = "syncflow.android.native_sync_engine"
     private const val PREF_BINDING = "binding"
     private const val PREF_CLIENT_ID = "client_id"
     private const val PREF_CLIENT_DISPLAY_NAME = "client_display_name"
+    private const val PREF_KNOWN_DEVICE_IDS = "known_device_ids"
+    private const val PREF_AUTO_UPLOAD_ENABLED = "auto_upload_enabled"
+    private const val PREF_AUTO_UPLOAD_STATE = "auto_upload_state"
+    private const val PREF_AUTO_UPLOAD_TIME_RANGE_MODE = "auto_upload_time_range_mode"
+    private const val PREF_AUTO_UPLOAD_CUSTOM_TIME_FROM = "auto_upload_custom_time_from"
     /** Auth-layer EncryptedSharedPreferences file (react-native-keychain service).
      *  Mirror of the iOS Keychain service `cn.vividrop.auth`. */
     const val AUTH_KEYCHAIN_PREFS_NAME = "cn.vividrop.auth"

@@ -33,6 +33,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify:vscode-android-debug": "node scripts/verify-vscode-android-debug.mjs",
+    "verify:android-syncengine-bridge": "node scripts/verify-android-syncengine-bridge-parity.mjs",
     "check": "turbo run build test typecheck",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
   },
