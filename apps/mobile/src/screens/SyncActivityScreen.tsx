@@ -374,7 +374,12 @@ export function shouldKickAutoUploadSyncAfterGateRelease(snapshot: {
   currentTaskSource?: UploadTaskSource | null;
   autoPending?: number | null;
   lastErrorCode?: string | null;
+  localEnableInProgress?: boolean;
 }): boolean {
+  if (snapshot.localEnableInProgress) {
+    return false;
+  }
+
   if (snapshot.autoUploadState !== 'active') {
     return false;
   }
@@ -850,7 +855,10 @@ export function SyncActivityScreen() {
 
     if (
       autoUploadGateKickAttemptedRef.current ||
-      !shouldKickAutoUploadSyncAfterGateRelease(overview)
+      !shouldKickAutoUploadSyncAfterGateRelease({
+        ...overview,
+        localEnableInProgress: autoUploadPreparing,
+      })
     ) {
       return;
     }
@@ -881,7 +889,9 @@ export function SyncActivityScreen() {
     overview.autoUploadState,
     overview.uploadState,
     overview.currentTaskSource,
+    overview.autoPending,
     overview.lastErrorCode,
+    autoUploadPreparing,
   ]);
 
   // Foreground refresh + reset mount grace on foreground transitions

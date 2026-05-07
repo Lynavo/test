@@ -1384,6 +1384,17 @@ describe('shouldKickAutoUploadSyncAfterGateRelease', () => {
     ).toBe(false);
   });
 
+  it('does not duplicate the native round started by a local enable action', () => {
+    expect(
+      shouldKickAutoUploadSyncAfterGateRelease({
+        autoUploadState: 'active',
+        uploadState: 'idle',
+        autoPending: 1,
+        localEnableInProgress: true,
+      }),
+    ).toBe(false);
+  });
+
   it('leaves reconnect-exhausted recovery to the reconnect flow', () => {
     expect(
       shouldKickAutoUploadSyncAfterGateRelease({
