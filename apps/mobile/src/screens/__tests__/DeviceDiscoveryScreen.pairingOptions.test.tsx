@@ -1,5 +1,11 @@
 import React from 'react';
-import { NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import {
+  Alert,
+  Clipboard,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
+} from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
@@ -47,10 +53,23 @@ jest.mock('../../components/Icon', () => ({
   },
 }));
 
-jest.mock('../../utils/shareDiagnosticsArchive', () => ({
-  isDiagnosticsExportUnavailable: jest.fn().mockReturnValue(false),
-  shareDiagnosticsArchive: jest.fn().mockResolvedValue(undefined),
-}));
+const mockUploadDiagnostics = jest.fn();
+jest.mock('../../services/diagnostic-upload-service', () => {
+  class DiagnosticUploadError extends Error {
+    readonly detail: { kind: string; status?: number };
+    constructor(detail: { kind: string; status?: number }) {
+      super(detail.kind);
+      this.detail = detail;
+      this.name = 'DiagnosticUploadError';
+    }
+  }
+  return {
+    DiagnosticUploadError,
+    diagnosticUploadService: {
+      upload: (...args: unknown[]) => mockUploadDiagnostics(...args),
+    },
+  };
+});
 
 jest.mock('../../utils/onboardingStorage', () => ({
   hasSeenUnconnectedGuide: jest.fn().mockResolvedValue(true),
@@ -63,6 +82,10 @@ import { DeviceDiscoveryScreen } from '../DeviceDiscoveryScreen';
 const mockNativeSyncEngine = {
   startDiscovery: jest.fn().mockResolvedValue(undefined),
   stopDiscovery: jest.fn().mockResolvedValue(undefined),
+  exportDiagnostics: jest
+    .fn()
+    .mockResolvedValue('/tmp/discovery-diagnostics.zip'),
+  getClientId: jest.fn().mockResolvedValue('mobile-client-id'),
   addListener: jest.fn(),
   removeListeners: jest.fn(),
 };
@@ -74,6 +97,10 @@ describe('DeviceDiscoveryScreen pairing options', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUploadDiagnostics.mockResolvedValue({
+      refId: 'DISC1234',
+      uploadedAt: '2026-05-07T12:00:00.000Z',
+    });
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'ios',
@@ -82,6 +109,8 @@ describe('DeviceDiscoveryScreen pairing options', () => {
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
       .mockReturnValue({ remove: jest.fn() } as any);
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    jest.spyOn(Clipboard, 'setString').mockImplementation(() => undefined);
   });
 
   it('opens the v0-style manual IP pairing sheet from the pairing menu', async () => {
@@ -118,7 +147,7 @@ describe('DeviceDiscoveryScreen pairing options', () => {
     await waitFor(() => {
       expect(getByText('手動輸入 IP')).toBeTruthy();
       expect(getByText('掃碼配對')).toBeTruthy();
-      expect(getByText('匯出診斷包')).toBeTruthy();
+      expect(getByText('上傳診斷包')).toBeTruthy();
     });
     expect(queryByText('去哪裡找連接碼和 IP？')).toBeNull();
 
@@ -127,6 +156,30 @@ describe('DeviceDiscoveryScreen pairing options', () => {
     await waitFor(() => {
       expect(getByText('去哪裡找連接碼和 IP？')).toBeTruthy();
     });
+  });
+
+  it('uploads diagnostics from the pairing popover', async () => {
+    const { getByText } = render(<DeviceDiscoveryScreen />);
+
+    fireEvent.press(getByText('手動配對'));
+    await waitFor(() => expect(getByText('上傳診斷包')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByText('上傳診斷包'));
+    });
+
+    await waitFor(() => {
+      expect(mockNativeSyncEngine.exportDiagnostics).toHaveBeenCalled();
+      expect(mockNativeSyncEngine.getClientId).toHaveBeenCalled();
+      expect(mockUploadDiagnostics).toHaveBeenCalledWith(
+        'file:///tmp/discovery-diagnostics.zip',
+        'mobile-client-id',
+        expect.any(AbortSignal),
+        expect.any(Function),
+        undefined,
+      );
+    });
+    expect(Clipboard.setString).toHaveBeenCalledWith('DISC1234');
   });
 
   it('navigates to QRScanner from the scan pairing option', async () => {

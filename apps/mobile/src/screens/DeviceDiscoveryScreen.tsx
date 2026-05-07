@@ -11,6 +11,7 @@ import {
   NativeEventEmitter,
   ListRenderItemInfo,
   Alert,
+  Clipboard,
   TextInput,
   Keyboard,
   LayoutChangeEvent,
@@ -37,9 +38,9 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { Icon } from '../components/Icon';
 import {
-  isDiagnosticsExportUnavailable,
-  shareDiagnosticsArchive,
-} from '../utils/shareDiagnosticsArchive';
+  diagnosticUploadService,
+  DiagnosticUploadError,
+} from '../services/diagnostic-upload-service';
 import { UnconnectedGuide } from '../components/onboarding/UnconnectedGuide';
 import {
   hasSeenUnconnectedGuide,
@@ -167,7 +168,7 @@ export function DeviceDiscoveryScreen() {
   const [manualHostError, setManualHostError] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [manualSectionHeight, setManualSectionHeight] = useState(0);
-  const [isExportingDiagnostics, setIsExportingDiagnostics] = useState(false);
+  const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
   const [showUnconnectedGuide, setShowUnconnectedGuide] = useState(false);
 
   // Popover & Modal state
@@ -454,23 +455,59 @@ export function DeviceDiscoveryScreen() {
     setManualHostError(null);
     setShowManualModal(false);
     handleDevicePress(manualDevice);
-  }, [handleDevicePress, manualHost]);
+  }, [handleDevicePress, manualHost, t]);
 
-  const handleExportDiagnostics = useCallback(async () => {
+  const handleUploadDiagnostics = useCallback(async () => {
     try {
-      setIsExportingDiagnostics(true);
+      setIsUploadingDiagnostics(true);
       setShowPairingMenu(false);
-      await shareDiagnosticsArchive();
+
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine?.exportDiagnostics) {
+        Alert.alert(
+          t('settings.dialogs.exportUnavailable.title'),
+          t('settings.dialogs.exportUnavailable.body'),
+        );
+        return;
+      }
+
+      const archivePath: string = await NativeSyncEngine.exportDiagnostics();
+      const archiveUrl = archivePath.startsWith('file://')
+        ? archivePath
+        : `file://${archivePath}`;
+      const clientId = String(await NativeSyncEngine.getClientId());
+      const result = await diagnosticUploadService.upload(
+        archiveUrl,
+        clientId,
+        new AbortController().signal,
+        () => undefined,
+        undefined,
+      );
+
+      Clipboard.setString(result.refId);
+      Alert.alert(
+        t('settings.uploadDiagnostic.success.toast', {
+          refId: result.refId,
+        }),
+      );
     } catch (error) {
-      if (isDiagnosticsExportUnavailable(error)) {
-        Alert.alert(t('settings.dialogs.exportUnavailable.title'), t('settings.dialogs.exportUnavailable.body'));
+      if (
+        error instanceof DiagnosticUploadError &&
+        error.detail.kind === 'BUNDLE_TOO_LARGE'
+      ) {
+        Alert.alert(t('settings.uploadDiagnostic.tooLarge.toast'));
+      } else if (
+        error instanceof DiagnosticUploadError &&
+        error.detail.kind === 'ABORTED'
+      ) {
+        Alert.alert(t('settings.uploadDiagnostic.aborted.toast'));
       } else {
-        Alert.alert(t('settings.dialogs.exportFailed.title'), t('settings.dialogs.exportFailed.body'));
+        Alert.alert(t('settings.uploadDiagnostic.failure.toast'));
       }
     } finally {
-      setIsExportingDiagnostics(false);
+      setIsUploadingDiagnostics(false);
     }
-  }, []);
+  }, [t]);
 
   const handleDismissUnconnectedGuide = useCallback(async () => {
     await markUnconnectedGuideSeen();
@@ -727,14 +764,14 @@ export function DeviceDiscoveryScreen() {
               <View style={styles.popoverDivider} />
               <TouchableOpacity
                 style={styles.popoverItem}
-                disabled={isExportingDiagnostics}
-                onPress={() => void handleExportDiagnostics()}
+                disabled={isUploadingDiagnostics}
+                onPress={() => void handleUploadDiagnostics()}
               >
-                <Icon name="download-outline" size={20} color="#3b9fd8" />
+                <Icon name="cloud-upload-outline" size={20} color="#3b9fd8" />
                 <Text style={styles.popoverText}>
-                  {isExportingDiagnostics
-                    ? t('settings.actions.exportingDiagnostics')
-                    : t('settings.actions.exportDiagnostics')}
+                  {isUploadingDiagnostics
+                    ? t('settings.uploadDiagnostic.progress.title')
+                    : t('settings.uploadDiagnostic.button')}
                 </Text>
               </TouchableOpacity>
             </View>
