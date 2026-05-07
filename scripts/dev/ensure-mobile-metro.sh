@@ -32,4 +32,10 @@ fi
 echo "Starting Metro on port ${PORT}..."
 echo "Metro launch requested"
 cd "${ROOT}"
+
+unset NODE_OPTIONS
+unset VSCODE_INSPECTOR_OPTIONS
+unset VSCODE_JS_DEBUG_BOOTLOADER
+unset VSCODE_DEBUGGING
+
 exec corepack pnpm --filter @syncflow/mobile start

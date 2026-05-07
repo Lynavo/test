@@ -12,7 +12,8 @@
       "name": "Mobile: iOS (macOS)",
       "type": "node-terminal",
       "request": "launch",
-      "command": "cd \"${workspaceFolder}\" && corepack pnpm --filter @syncflow/mobile ios"
+      "preLaunchTask": "mobile: start metro",
+      "command": "cd \"${workspaceFolder}\" && bash scripts/dev/run-mobile-ios-device.sh"
     },
     {
       "name": "Mobile: iOS Simulator (no Metro)",

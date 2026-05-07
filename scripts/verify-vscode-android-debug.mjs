@@ -44,6 +44,18 @@ assert.match(
   /corepack pnpm --filter @syncflow\/mobile exec react-native run-ios --no-packager/,
 );
 
+const iosDeviceConfig = launch.configurations.find(
+  (configuration) => configuration.name === 'Mobile: iOS (macOS)',
+);
+assert.ok(iosDeviceConfig, 'Mobile: iOS (macOS) should exist');
+assert.equal(iosDeviceConfig.type, 'node-terminal');
+assert.equal(iosDeviceConfig.request, 'launch');
+assert.equal(iosDeviceConfig.preLaunchTask, 'mobile: start metro');
+assert.match(
+  iosDeviceConfig.command,
+  /bash scripts\/dev\/run-mobile-ios-device\.sh/,
+);
+
 const androidIosCompound = launch.compounds?.find(
   (compound) => compound.name === 'Mobile: Android + iOS',
 );
