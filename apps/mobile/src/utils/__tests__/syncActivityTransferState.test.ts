@@ -180,6 +180,24 @@ describe('syncActivityTransferState', () => {
     expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
   });
 
+  it('keeps disabled auto upload on the not-started card even with auto queue pending', () => {
+    const snapshot = {
+      uploadState: 'idle',
+      autoUploadState: 'disabled' as const,
+      completedCount: 0,
+      totalCount: 237,
+      autoPending: 237,
+      manualPending: 0,
+      currentTaskSource: undefined,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+    };
+
+    expect(hasOutstandingSyncRoundWork(snapshot)).toBe(false);
+    expect(isSyncActivityActivelyTransferring(snapshot)).toBe(false);
+    expect(getSyncActivityMainCardState(snapshot, false)).toBe('not_started');
+  });
+
   it('treats discovering state as actively transferring for preparation phase', () => {
     const snapshot = {
       uploadState: 'discovering',

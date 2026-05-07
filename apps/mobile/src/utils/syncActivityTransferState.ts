@@ -35,6 +35,15 @@ function isAutoUploadInterrupted(
   );
 }
 
+function isAutoUploadStopped(
+  snapshot: SyncActivityTransferSnapshot | null | undefined,
+): boolean {
+  return (
+    snapshot?.autoUploadState === 'disabled' ||
+    isAutoUploadInterrupted(snapshot)
+  );
+}
+
 function isReconnectExhaustedOffline(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
@@ -55,7 +64,7 @@ export function hasOutstandingSyncRoundWork(
   snapshot: SyncActivityTransferSnapshot | null | undefined,
 ): boolean {
   if (
-    isAutoUploadInterrupted(snapshot) &&
+    isAutoUploadStopped(snapshot) &&
     !hasPendingManualWork(snapshot) &&
     snapshot?.currentTaskSource !== 'manual'
   ) {
@@ -114,7 +123,7 @@ export function isSyncActivityActivelyTransferring(
   }
 
   if (
-    isAutoUploadInterrupted(snapshot) &&
+    isAutoUploadStopped(snapshot) &&
     !hasPendingManualWork(snapshot) &&
     snapshot?.currentTaskSource !== 'manual'
   ) {
@@ -128,7 +137,8 @@ export function isSyncActivityActivelyTransferring(
   return (
     ACTIVE_TRANSFER_STATES.has(snapshot?.uploadState ?? '') ||
     hasPendingManualWork(snapshot) ||
-    (snapshot?.autoPending ?? 0) > 0 ||
+    (snapshot?.autoUploadState === 'active' &&
+      (snapshot?.autoPending ?? 0) > 0) ||
     hasOutstandingSyncRoundWork(snapshot)
   );
 }

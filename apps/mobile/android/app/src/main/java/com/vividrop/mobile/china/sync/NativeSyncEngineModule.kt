@@ -3074,10 +3074,6 @@ class NativeSyncEngineModule(
               "resolve failed name=${serviceInfo.serviceName} errorCode=$errorCode",
               Log.WARN,
             )
-            emitError(
-              code = "ANDROID_DISCOVERY_RESOLVE_FAILED",
-              message = "解析局域网服务失败（$errorCode）",
-            )
           }
 
           override fun onServiceResolved(resolvedServiceInfo: NsdServiceInfo) {
@@ -3105,10 +3101,10 @@ class NativeSyncEngineModule(
       synchronized(discoveryLock) {
         pendingResolveKeys.remove(serviceKey)
       }
-      recordNativeLog("Discovery", "resolve submit failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
-      emitError(
-        code = "ANDROID_DISCOVERY_RESOLVE_FAILED",
-        message = "提交局域网服务解析失败：${error.message ?: "unknown error"}",
+      recordNativeLog(
+        "Discovery",
+        "resolve submit failed name=${serviceInfo.serviceName}: ${error.message ?: error.javaClass.simpleName}",
+        Log.WARN,
       )
     }
   }
