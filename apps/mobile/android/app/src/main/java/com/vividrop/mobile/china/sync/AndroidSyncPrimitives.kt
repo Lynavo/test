@@ -167,6 +167,17 @@ object AndroidSyncPrimitives {
     return hosts
   }
 
+  fun fallbackDiscoveryName(
+    serverName: String?,
+    host: String,
+  ): String {
+    val normalizedServerName = serverName?.trim().orEmpty()
+    if (normalizedServerName.isNotBlank()) {
+      return normalizedServerName
+    }
+    return "Vivi Drop ${host.trim()}"
+  }
+
   fun computeFileKey(
     clientId: String,
     assetLocalId: String,

@@ -145,6 +145,22 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun fallbackDiscoveryNamePrefersDesktopServerName() {
+    assertEquals(
+      "Mini4",
+      AndroidSyncPrimitives.fallbackDiscoveryName(" Mini4 ", "172.16.21.43"),
+    )
+  }
+
+  @Test
+  fun fallbackDiscoveryNameFallsBackToHostWhenServerNameIsBlank() {
+    assertEquals(
+      "Vivi Drop 172.16.21.43",
+      AndroidSyncPrimitives.fallbackDiscoveryName(" ", "172.16.21.43"),
+    )
+  }
+
+  @Test
   fun computeFileKeyMatchesIosClientAssetMediaTypeShape() {
     val key = AndroidSyncPrimitives.computeFileKey(
       clientId = "client-123",
