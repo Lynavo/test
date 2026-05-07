@@ -66,6 +66,60 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun shouldContinueAutoUploadRoundStopsAutoItemsAfterDisable() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldContinueAutoUploadRound(
+        roundReason = "auto_upload_resume",
+        itemSource = "auto",
+        autoUploadState = "disabled",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldContinueAutoUploadRound(
+        roundReason = "auto_upload_resume",
+        itemSource = "auto",
+        autoUploadState = "interrupted",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldContinueAutoUploadRound(
+        roundReason = "auto_upload_resume",
+        itemSource = "auto",
+        autoUploadState = "active",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldContinueAutoUploadRound(
+        roundReason = "manual_upload",
+        itemSource = "manual",
+        autoUploadState = "disabled",
+      ),
+    )
+  }
+
+  @Test
+  fun buildClientHelloPayloadFieldsUsesOnlyMobileIdentity() {
+    val fields = AndroidSyncPrimitives.buildClientHelloPayloadFields(
+      clientId = "android-client-1",
+      clientName = "Android CDY-TN20",
+      clientPlatform = "android",
+      appVersion = "0.1.0",
+      appState = "active",
+      clientIp = "192.168.10.239",
+      pairingToken = "token-1",
+    )
+
+    assertEquals("android-client-1", fields["clientId"])
+    assertEquals("Android CDY-TN20", fields["clientName"])
+    assertEquals("android", fields["clientPlatform"])
+    assertEquals("0.1.0", fields["appVersion"])
+    assertEquals("active", fields["appState"])
+    assertEquals("192.168.10.239", fields["clientIp"])
+    assertEquals("token-1", fields["pairingToken"])
+    assertFalse(fields.containsKey("deviceAlias"))
+  }
+
+  @Test
   fun deriveBindingConnectionStateFromProbeMarksStaleLiveStateOffline() {
     assertEquals(
       "offline",
@@ -89,7 +143,7 @@ class AndroidSyncPrimitivesTest {
       ),
     )
     assertEquals(
-      "offline",
+      "connected",
       AndroidSyncPrimitives.deriveBindingConnectionStateFromProbe(
         currentState = "offline",
         reachable = true,
@@ -115,6 +169,81 @@ class AndroidSyncPrimitivesTest {
       AndroidSyncPrimitives.shouldRequestNearbyWifiPermission(
         sdkInt = 33,
         permissionGranted = true,
+      ),
+    )
+  }
+
+  @Test
+  fun buildPresenceHeartbeatUrlUsesSidecarHttpPresenceEndpoint() {
+    assertEquals(
+      "http://192.168.10.237:39394/presence/client-123",
+      AndroidSyncPrimitives.buildPresenceHeartbeatUrl(
+        host = "192.168.10.237",
+        port = 39394,
+        clientId = "client-123",
+      ),
+    )
+
+    assertEquals(
+      "http://[fe80::1%wlan0]:39394/presence/client-123",
+      AndroidSyncPrimitives.buildPresenceHeartbeatUrl(
+        host = "fe80::1%wlan0",
+        port = 39394,
+        clientId = "client-123",
+      ),
+    )
+  }
+
+  @Test
+  fun failedPresenceHeartbeatStartsRecoveryOnlyForIdleConnectedBinding() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldStartPresenceRecoveryAfterHeartbeatFailure(
+        connectionState = "connected",
+        syncInProgress = false,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldStartPresenceRecoveryAfterHeartbeatFailure(
+        connectionState = "connected",
+        syncInProgress = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldStartPresenceRecoveryAfterHeartbeatFailure(
+        connectionState = "offline",
+        syncInProgress = false,
+      ),
+    )
+  }
+
+  @Test
+  fun boundDiscoveryResolutionRefreshesPresenceWhenBindingIsOffline() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldRefreshBoundPresenceFromDiscovery(
+        bindingDeviceId = "desktop-1",
+        candidateDeviceId = "desktop-1",
+        connectionState = "offline",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldRefreshBoundPresenceFromDiscovery(
+        bindingDeviceId = " desktop-1 ",
+        candidateDeviceId = "desktop-1",
+        connectionState = "connecting",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldRefreshBoundPresenceFromDiscovery(
+        bindingDeviceId = "desktop-1",
+        candidateDeviceId = "other-desktop",
+        connectionState = "offline",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldRefreshBoundPresenceFromDiscovery(
+        bindingDeviceId = "desktop-1",
+        candidateDeviceId = "desktop-1",
+        connectionState = "connected",
       ),
     )
   }

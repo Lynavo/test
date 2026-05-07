@@ -47,6 +47,8 @@ import java.util.TimeZone
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import org.json.JSONArray
@@ -67,15 +69,27 @@ class NativeSyncEngineModule(
   private val diagnosticsLogLines = mutableListOf<String>()
   private val syncRunLock = Any()
   private var syncInProgress = false
+  private val presenceHeartbeatLock = Any()
+  private var presenceHeartbeatExecutor: ScheduledExecutorService? = null
+  private var presenceHeartbeatFuture: ScheduledFuture<*>? = null
+  private val presenceRecoveryLock = Any()
+  private var presenceRecoveryGeneration = 0L
+  private var presenceRecoveryFuture: ScheduledFuture<*>? = null
   private var pendingPhotoPermissionPromise: Promise? = null
   private var pendingDiscoveryPermissionPromise: Promise? = null
   private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
   private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
 
+  init {
+    resumePresenceHeartbeatFromStoredBinding(reason = "module_initialized")
+  }
+
   override fun getName(): String = MODULE_NAME
 
   override fun invalidate() {
     stopDiscoveryInternal(emitUpdate = false)
+    cancelPresenceRecoveryProbe(reason = "module_invalidated")
+    stopPresenceHeartbeatTimer()
     super.invalidate()
   }
 
@@ -301,16 +315,16 @@ class NativeSyncEngineModule(
         null
       }
 
-      val helloPayload = JSONObject().apply {
-        put("clientId", getOrCreateClientId())
-        put("clientName", getClientDisplayNameValue())
-        put("clientPlatform", "android")
-        put("appVersion", getVersionName())
-        put("appState", "active")
-        if (!storedPairingToken.isNullOrBlank()) {
-          put("pairingToken", storedPairingToken)
-        }
-      }
+      val helloPayload = JSONObject(
+        AndroidSyncPrimitives.buildClientHelloPayloadFields(
+          clientId = getOrCreateClientId(),
+          clientName = getClientDisplayNameValue(),
+          clientPlatform = "android",
+          appVersion = getVersionName(),
+          appState = "active",
+          pairingToken = storedPairingToken,
+        ),
+      )
 
       val resolvedBinding = performPairing(
         host = host,
@@ -330,6 +344,8 @@ class NativeSyncEngineModule(
       emitBindingStateChanged(resolvedBinding)
       emitIdleSyncState(resolvedBinding)
       emitQueueUpdated(Arguments.createArray())
+      sendPresenceHeartbeatAsync(resolvedBinding, reason = "pairing_confirmed", recoverOnFailure = true)
+      startPresenceHeartbeatTimer(resolvedBinding)
       promise.resolve(null)
     }
   }
@@ -337,6 +353,8 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun disconnectAndUnbind(promise: Promise) {
     recordNativeLog("Pairing", "disconnectAndUnbind requested")
+    cancelPresenceRecoveryProbe(reason = "unbind")
+    stopPresenceHeartbeatTimer()
     clearBinding()
     emitBindingStateCleared()
     emitIdleSyncState(null)
@@ -1193,6 +1211,14 @@ class NativeSyncEngineModule(
             completedCount += 1
             continue
           }
+          val currentAutoState = loadAutoUploadConfig().state
+          if (!AndroidSyncPrimitives.shouldContinueAutoUploadRound(reason, current.source, currentAutoState)) {
+            recordDiagnosticsLog(
+              "AutoUpload",
+              "round stopped reason=$reason autoState=$currentAutoState before fileKey=${current.fileKey}",
+            )
+            break
+          }
           val result = uploadOneItem(
             connection = connection,
             binding = binding,
@@ -1255,21 +1281,26 @@ class NativeSyncEngineModule(
       synchronized(syncRunLock) {
         syncInProgress = false
       }
+      loadBinding()
+        ?.takeIf { it.connectionState == "connected" }
+        ?.let {
+          sendPresenceHeartbeatAsync(it, reason = "sync_round_finished", recoverOnFailure = true)
+          startPresenceHeartbeatTimer(it)
+        }
     }
   }
 
   private fun authenticateConnection(connection: ProtocolConnection, binding: StoredBinding) {
-    val helloPayload = JSONObject().apply {
-      put("clientId", getOrCreateClientId())
-      put("clientName", getClientDisplayNameValue())
-      put("clientPlatform", "android")
-      put("appVersion", getVersionName())
-      put("appState", "active")
-      put("deviceAlias", binding.deviceAlias)
-      if (binding.pairingToken.isNotBlank()) {
-        put("pairingToken", binding.pairingToken)
-      }
-    }
+    val helloPayload = JSONObject(
+      AndroidSyncPrimitives.buildClientHelloPayloadFields(
+        clientId = getOrCreateClientId(),
+        clientName = getClientDisplayNameValue(),
+        clientPlatform = "android",
+        appVersion = getVersionName(),
+        appState = "active",
+        pairingToken = binding.pairingToken,
+      ),
+    )
     writeJsonFrame(connection.output, TYPE_HELLO_REQ, helloPayload)
     val helloResponse = readJsonFrame(connection.input, TYPE_HELLO_RES)
     recordNativeLog(
@@ -2048,21 +2079,328 @@ class NativeSyncEngineModule(
     )
   }
 
-  private fun updateBindingConnectionState(binding: StoredBinding?, connectionState: String): StoredBinding? {
+  private fun updateBindingConnectionState(
+    binding: StoredBinding?,
+    connectionState: String,
+    reason: String? = null,
+  ): StoredBinding? {
     if (binding == null) {
       return null
     }
     if (binding.connectionState == connectionState) {
       return binding
     }
+    val reasonSuffix = reason?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
     recordNativeLog(
       "SyncEngine",
-      "binding connection state ${binding.connectionState} -> $connectionState",
+      "binding connection state ${binding.connectionState} -> $connectionState$reasonSuffix",
     )
     val updated = binding.copy(connectionState = connectionState)
     saveBinding(updated)
     emitBindingStateChanged(updated)
+    if (connectionState == "connected") {
+      cancelPresenceRecoveryProbe(reason = reason ?: "state_connected")
+      startPresenceHeartbeatTimer(updated)
+    } else if (connectionState == "offline") {
+      cancelPresenceRecoveryProbe(reason = reason ?: "state_offline")
+      stopPresenceHeartbeatTimer()
+    } else if (connectionState != "connecting") {
+      stopPresenceHeartbeatTimer()
+    } else {
+      stopPresenceHeartbeatTimer()
+    }
     return updated
+  }
+
+  private fun sendPresenceHeartbeatAsync(
+    binding: StoredBinding,
+    reason: String,
+    recoverOnFailure: Boolean = false,
+  ) {
+    presenceHeartbeatExecutor().execute {
+      val succeeded = sendPresenceHeartbeat(binding, reason = reason, updateStateOnFailure = false)
+      if (!succeeded && recoverOnFailure) {
+        startPresenceRecoveryProbeIfNeeded(binding)
+      }
+    }
+  }
+
+  private fun resumePresenceHeartbeatFromStoredBinding(reason: String) {
+    val binding = loadBinding()?.takeIf { it.connectionState == "connected" } ?: return
+    recordDiagnosticsLog("Presence", "resuming heartbeat for stored binding deviceId=${binding.deviceId} reason=$reason")
+    sendPresenceHeartbeatAsync(binding, reason = reason, recoverOnFailure = true)
+    startPresenceHeartbeatTimer(binding)
+  }
+
+  private fun startPresenceHeartbeatTimer(binding: StoredBinding) {
+    if (binding.connectionState != "connected") {
+      return
+    }
+    synchronized(presenceHeartbeatLock) {
+      presenceHeartbeatFuture?.cancel(false)
+      val deviceId = binding.deviceId
+      presenceHeartbeatFuture = presenceHeartbeatExecutorLocked().scheduleWithFixedDelay(
+        {
+          val current = loadBinding()
+          if (current == null || current.deviceId != deviceId || current.connectionState != "connected") {
+            stopPresenceHeartbeatTimer()
+            return@scheduleWithFixedDelay
+          }
+          if (syncInProgress) {
+            return@scheduleWithFixedDelay
+          }
+          val succeeded = sendPresenceHeartbeat(current, reason = "presence_heartbeat_timer", updateStateOnFailure = false)
+          if (!succeeded) {
+            startPresenceRecoveryProbeIfNeeded(current)
+          }
+        },
+        PRESENCE_HEARTBEAT_INTERVAL_MS,
+        PRESENCE_HEARTBEAT_INTERVAL_MS,
+        TimeUnit.MILLISECONDS,
+      )
+    }
+    recordDiagnosticsLog("Presence", "heartbeat timer started deviceId=${binding.deviceId}")
+  }
+
+  private fun stopPresenceHeartbeatTimer() {
+    synchronized(presenceHeartbeatLock) {
+      presenceHeartbeatFuture?.cancel(false)
+      presenceHeartbeatFuture = null
+    }
+  }
+
+  private fun presenceHeartbeatExecutor(): ScheduledExecutorService =
+    synchronized(presenceHeartbeatLock) { presenceHeartbeatExecutorLocked() }
+
+  private fun presenceHeartbeatExecutorLocked(): ScheduledExecutorService {
+    val existing = presenceHeartbeatExecutor
+    if (existing != null && !existing.isShutdown) {
+      return existing
+    }
+    return Executors.newSingleThreadScheduledExecutor { runnable ->
+      Thread(runnable, "NativeSyncEnginePresence").apply { isDaemon = true }
+    }.also { presenceHeartbeatExecutor = it }
+  }
+
+  private fun sendPresenceHeartbeat(
+    binding: StoredBinding,
+    reason: String,
+    updateStateOnFailure: Boolean,
+  ): Boolean = sendPresenceHeartbeat(
+    binding = binding,
+    successReason = reason,
+    failureReason = reason,
+    updateStateOnFailure = updateStateOnFailure,
+  )
+
+  private fun sendPresenceHeartbeat(
+    binding: StoredBinding,
+    successReason: String,
+    failureReason: String,
+    updateStateOnFailure: Boolean,
+  ): Boolean {
+    if (binding.host.isBlank()) {
+      return false
+    }
+    val clientId = getOrCreateClientId()
+    val url = try {
+      URL(AndroidSyncPrimitives.buildPresenceHeartbeatUrl(binding.host, DEFAULT_SIDECAR_HTTP_PORT, clientId))
+    } catch (error: Throwable) {
+      recordDiagnosticsLog(
+        "Presence",
+        "heartbeat skipped invalid target host=${binding.host} clientId=$clientId reason=$failureReason error=${error.message ?: error.javaClass.simpleName}",
+      )
+      return false
+    }
+
+    val connection = url.openConnection() as HttpURLConnection
+    return try {
+      connection.requestMethod = "POST"
+      connection.connectTimeout = PRESENCE_HEARTBEAT_TIMEOUT_MS
+      connection.readTimeout = PRESENCE_HEARTBEAT_TIMEOUT_MS
+      connection.doOutput = true
+      connection.setRequestProperty("Content-Type", "application/json")
+      connection.outputStream.use { output -> writeUtf8(output, "{}") }
+      val statusCode = connection.responseCode
+      val body = readResponseBody(connection, statusCode)
+      if (statusCode !in 200..299) {
+        throw IllegalStateException(body.ifBlank { "Sidecar returned HTTP $statusCode" })
+      }
+
+      refreshBindingMetadataFromPresence(binding.deviceId, binding.host, body)
+      val current = loadBinding()
+      if (current != null && current.deviceId == binding.deviceId && current.connectionState != "connected") {
+        updateBindingConnectionState(current, "connected", reason = successReason)
+      }
+      recordDiagnosticsLog("Presence", "heartbeat succeeded host=${binding.host} status=$statusCode reason=$successReason")
+      true
+    } catch (error: Throwable) {
+      recordDiagnosticsLog(
+        "Presence",
+        "heartbeat failed host=${binding.host} reason=$failureReason error=${error.message ?: error.javaClass.simpleName}",
+      )
+      if (updateStateOnFailure) {
+        updateBindingConnectionState(loadBinding(), "offline", reason = failureReason)
+      }
+      false
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  private fun startPresenceRecoveryProbeIfNeeded(binding: StoredBinding) {
+    if (!AndroidSyncPrimitives.shouldStartPresenceRecoveryAfterHeartbeatFailure(
+        connectionState = binding.connectionState,
+        syncInProgress = syncInProgress,
+      )
+    ) {
+      return
+    }
+    val current = loadBinding() ?: return
+    if (current.deviceId != binding.deviceId) {
+      return
+    }
+    startPresenceRecoveryProbe(current)
+  }
+
+  private fun startPresenceRecoveryProbe(
+    binding: StoredBinding,
+    maxAttempts: Int = PRESENCE_RECOVERY_MAX_ATTEMPTS,
+    retryIntervalMs: Long = PRESENCE_RECOVERY_INTERVAL_MS,
+  ) {
+    if (binding.connectionState != "connected") {
+      return
+    }
+    cancelPresenceRecoveryProbe(reason = "start_new_probe")
+    val current = loadBinding() ?: return
+    if (current.deviceId != binding.deviceId) {
+      return
+    }
+    val generation = synchronized(presenceRecoveryLock) {
+      presenceRecoveryGeneration += 1
+      presenceRecoveryGeneration
+    }
+    updateBindingConnectionState(current, "connecting", reason = "presence_recovery_started")
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "presence recovery probe started attempts=$maxAttempts interval=${retryIntervalMs / 1000.0}s",
+    )
+    performPresenceRecoveryProbe(
+      deviceId = binding.deviceId,
+      attempt = 1,
+      maxAttempts = maxAttempts,
+      retryIntervalMs = retryIntervalMs,
+      generation = generation,
+    )
+  }
+
+  private fun performPresenceRecoveryProbe(
+    deviceId: String,
+    attempt: Int,
+    maxAttempts: Int,
+    retryIntervalMs: Long,
+    generation: Long,
+  ) {
+    if (!isPresenceRecoveryGenerationCurrent(generation)) {
+      return
+    }
+    val binding = loadBinding()
+    if (binding == null || binding.deviceId != deviceId) {
+      cancelPresenceRecoveryProbe(reason = "stale_binding")
+      return
+    }
+
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "presence recovery attempt $attempt/$maxAttempts host=${binding.host}",
+    )
+    val succeeded = sendPresenceHeartbeat(
+      binding = binding,
+      successReason = "presence_recovery_succeeded",
+      failureReason = "presence_recovery_failed",
+      updateStateOnFailure = false,
+    )
+    if (succeeded) {
+      cancelPresenceRecoveryProbe(reason = "heartbeat_succeeded")
+      return
+    }
+    if (attempt >= maxAttempts) {
+      cancelPresenceRecoveryProbe(reason = "exhausted")
+      val current = loadBinding()
+      if (current != null && current.deviceId == deviceId) {
+        updateBindingConnectionState(current, "offline", reason = "presence_recovery_exhausted")
+      }
+      return
+    }
+
+    val future = presenceHeartbeatExecutor().schedule(
+      {
+        performPresenceRecoveryProbe(
+          deviceId = deviceId,
+          attempt = attempt + 1,
+          maxAttempts = maxAttempts,
+          retryIntervalMs = retryIntervalMs,
+          generation = generation,
+        )
+      },
+      retryIntervalMs,
+      TimeUnit.MILLISECONDS,
+    )
+    synchronized(presenceRecoveryLock) {
+      if (presenceRecoveryGeneration == generation) {
+        presenceRecoveryFuture = future
+      } else {
+        future.cancel(false)
+      }
+    }
+  }
+
+  private fun cancelPresenceRecoveryProbe(reason: String) {
+    val shouldLog = synchronized(presenceRecoveryLock) {
+      presenceRecoveryGeneration += 1
+      val future = presenceRecoveryFuture
+      presenceRecoveryFuture = null
+      future?.cancel(false)
+      future != null || reason == "exhausted"
+    }
+    if (shouldLog) {
+      recordDiagnosticsLog("SyncEngine", "presence recovery probe cancelled ($reason)")
+    }
+  }
+
+  private fun isPresenceRecoveryGenerationCurrent(generation: Long): Boolean =
+    synchronized(presenceRecoveryLock) { presenceRecoveryGeneration == generation }
+
+  private fun refreshBindingMetadataFromPresence(
+    expectedDeviceId: String,
+    host: String,
+    body: String,
+  ) {
+    if (body.isBlank()) {
+      return
+    }
+    val payload = try {
+      JSONObject(body)
+    } catch (_: Throwable) {
+      return
+    }
+    val current = loadBinding() ?: return
+    if (current.deviceId != expectedDeviceId) {
+      return
+    }
+    val serverName = payload.optString("serverName").takeIf { it.isNotBlank() }
+    val shareName = payload.optString("shareName").takeIf { it.isNotBlank() }
+    val updated = current.copy(
+      host = host,
+      deviceName = serverName ?: current.deviceName,
+      shareEnabled = shareName != null,
+      shareName = shareName,
+    )
+    if (updated == current) {
+      return
+    }
+    saveBinding(updated)
+    emitBindingStateChanged(updated)
   }
 
   private fun refreshBindingReachability(binding: StoredBinding?): StoredBinding? {
@@ -2233,6 +2571,8 @@ class NativeSyncEngineModule(
   }
 
   private fun clearBinding() {
+    cancelPresenceRecoveryProbe(reason = "binding_cleared")
+    stopPresenceHeartbeatTimer()
     prefs.edit().remove(PREF_BINDING).apply()
   }
 
@@ -2698,16 +3038,20 @@ class NativeSyncEngineModule(
               "Discovery",
               "resolved name=${candidate.name} host=${candidate.ip} probeHost=${candidate.probeHost} port=${candidate.port}",
             )
-            synchronized(discoveryLock) {
-              pendingResolveKeys.remove(serviceKey)
-              if (generation != discoveryGeneration) {
-                return
-              }
-              discoveredCandidates[serviceKey] = candidate
+          synchronized(discoveryLock) {
+            pendingResolveKeys.remove(serviceKey)
+            if (generation != discoveryGeneration) {
+              return
             }
-            probeReachability(candidate, generation)
+            discoveredCandidates[serviceKey] = candidate
           }
-        },
+          refreshBoundPresenceFromDiscoveryCandidate(
+            candidate = candidate,
+            reason = "bound_device_discovery_resolved",
+          )
+          probeReachability(candidate, generation)
+        }
+      },
       )
     } catch (error: Throwable) {
       synchronized(discoveryLock) {
@@ -2792,6 +3136,7 @@ class NativeSyncEngineModule(
           }
         }
         recordNativeLog("Discovery", "reachable ${candidate.name} via ${candidate.probeHost}")
+        refreshBoundBindingFromDiscoveryCandidate(candidate)
         emitReachableDevices()
       } catch (_: Throwable) {
         recordNativeLog("Discovery", "reachability failed ${candidate.name} via ${candidate.probeHost}", Log.WARN)
@@ -2879,6 +3224,7 @@ class NativeSyncEngineModule(
             }
             if (shouldEmit) {
               recordNativeLog("Discovery", "fallback reachable ${candidate.name} via $host")
+              refreshBoundBindingFromDiscoveryCandidate(candidate)
               emitReachableDevices()
             }
           }
@@ -2956,14 +3302,16 @@ class NativeSyncEngineModule(
 
       val input = DataInputStream(socket.getInputStream())
       val output = DataOutputStream(socket.getOutputStream())
-      val payload = JSONObject().apply {
-        put("clientId", getOrCreateClientId())
-        put("clientName", getClientDisplayNameValue())
-        put("clientPlatform", "android")
-        put("appVersion", getVersionName())
-        put("appState", "active")
-        currentClientIPv4()?.let { put("clientIp", it) }
-      }
+      val payload = JSONObject(
+        AndroidSyncPrimitives.buildClientHelloPayloadFields(
+          clientId = getOrCreateClientId(),
+          clientName = getClientDisplayNameValue(),
+          clientPlatform = "android",
+          appVersion = getVersionName(),
+          appState = "active",
+          clientIp = currentClientIPv4(),
+        ),
+      )
       writeJsonFrame(output, TYPE_HELLO_REQ, payload)
       return readJsonFrame(input, TYPE_HELLO_RES)
     }
@@ -2997,6 +3345,84 @@ class NativeSyncEngineModule(
         pushMap(candidate.toWritableMap())
       }
     }
+  }
+
+  private fun refreshBoundBindingFromDiscoveryCandidate(candidate: DiscoveredServiceCandidate) {
+    val binding = loadBinding() ?: return
+    if (binding.deviceId != candidate.deviceId) {
+      return
+    }
+
+    val nextState = AndroidSyncPrimitives.deriveBindingConnectionStateFromProbe(
+      currentState = binding.connectionState,
+      reachable = true,
+    )
+    val nextHost = candidate.ip.takeIf { it.isNotBlank() } ?: binding.host
+    val nextPort = candidate.port.takeIf { it > 0 } ?: binding.port
+    val updated = binding.copy(
+      host = nextHost,
+      port = nextPort,
+      deviceName = candidate.name.takeIf { it.isNotBlank() } ?: binding.deviceName,
+      shareEnabled = candidate.shareEnabled,
+      shareName = candidate.shareName,
+      connectionState = nextState,
+    )
+    if (updated == binding) {
+      return
+    }
+
+    recordNativeLog(
+      "SyncEngine",
+      "bound device discovery refreshed ${binding.connectionState} -> ${updated.connectionState} host=${binding.host}:${binding.port} -> ${updated.host}:${updated.port}",
+    )
+    saveBinding(updated)
+    emitBindingStateChanged(updated)
+    emitIdleSyncState(updated)
+    if (updated.connectionState == "connected") {
+      cancelPresenceRecoveryProbe(reason = "discovery_refreshed_connected")
+      sendPresenceHeartbeatAsync(updated, reason = "bound_device_discovery_refreshed", recoverOnFailure = true)
+      startPresenceHeartbeatTimer(updated)
+    }
+  }
+
+  private fun refreshBoundPresenceFromDiscoveryCandidate(
+    candidate: DiscoveredServiceCandidate,
+    reason: String,
+  ) {
+    val binding = loadBinding() ?: return
+    if (!AndroidSyncPrimitives.shouldRefreshBoundPresenceFromDiscovery(
+        bindingDeviceId = binding.deviceId,
+        candidateDeviceId = candidate.deviceId,
+        connectionState = binding.connectionState,
+      )
+    ) {
+      return
+    }
+
+    val nextHost = candidate.ip.takeIf { it.isNotBlank() } ?: binding.host
+    val nextPort = candidate.port.takeIf { it > 0 } ?: binding.port
+    val updated = binding.copy(
+      host = nextHost,
+      port = nextPort,
+      deviceName = candidate.name.takeIf { it.isNotBlank() } ?: binding.deviceName,
+      shareEnabled = candidate.shareEnabled,
+      shareName = candidate.shareName,
+    )
+    if (updated != binding) {
+      recordNativeLog(
+        "SyncEngine",
+        "bound device discovery metadata refreshed state=${binding.connectionState} host=${binding.host}:${binding.port} -> ${updated.host}:${updated.port}",
+      )
+      saveBinding(updated)
+      emitBindingStateChanged(updated)
+      emitIdleSyncState(updated)
+    }
+
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "bound device discovery triggered presence refresh state=${updated.connectionState} host=${updated.host}",
+    )
+    sendPresenceHeartbeatAsync(updated, reason = reason, recoverOnFailure = false)
   }
 
   private fun parseTxtAttributes(serviceInfo: NsdServiceInfo): Map<String, String> {
@@ -3293,6 +3719,10 @@ class NativeSyncEngineModule(
     const val PREF_OWNER_USER_ID = "lastSyncOwnerUserId"
     private const val SOCKET_TIMEOUT_MS = 5_000
     private const val BINDING_PROBE_TIMEOUT_MS = 1_200
+    private const val PRESENCE_HEARTBEAT_TIMEOUT_MS = 5_000
+    private const val PRESENCE_HEARTBEAT_INTERVAL_MS = 30_000L
+    private const val PRESENCE_RECOVERY_MAX_ATTEMPTS = 8
+    private const val PRESENCE_RECOVERY_INTERVAL_MS = 1_000L
     private const val HEADER_SIZE = 12
     private const val MAX_BODY_LENGTH = 64 * 1024 * 1024
     private const val DEFAULT_PROTOCOL_PORT = 39_393

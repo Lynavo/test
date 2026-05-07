@@ -117,6 +117,42 @@ object AndroidSyncPrimitives {
       nextState == "active" &&
       (!previousEnabled || previousState != "active")
 
+  fun shouldContinueAutoUploadRound(
+    roundReason: String,
+    itemSource: String,
+    autoUploadState: String,
+  ): Boolean {
+    if (roundReason == "manual_upload" || itemSource != "auto") {
+      return true
+    }
+    return autoUploadState == "active"
+  }
+
+  fun buildClientHelloPayloadFields(
+    clientId: String,
+    clientName: String,
+    clientPlatform: String,
+    appVersion: String,
+    appState: String,
+    clientIp: String? = null,
+    pairingToken: String? = null,
+  ): Map<String, String> {
+    val fields = linkedMapOf(
+      "clientId" to clientId,
+      "clientName" to clientName,
+      "clientPlatform" to clientPlatform,
+      "appVersion" to appVersion,
+      "appState" to appState,
+    )
+    clientIp?.trim()?.takeIf { it.isNotBlank() }?.let {
+      fields["clientIp"] = it
+    }
+    pairingToken?.trim()?.takeIf { it.isNotBlank() }?.let {
+      fields["pairingToken"] = it
+    }
+    return fields
+  }
+
   fun shouldProbeBindingConnectionState(currentState: String): Boolean =
     currentState.trim().ifBlank { "bound" } in LIVE_BINDING_STATES
 
@@ -125,7 +161,7 @@ object AndroidSyncPrimitives {
     reachable: Boolean,
   ): String {
     val normalized = currentState.trim().ifBlank { "bound" }
-    if (normalized !in LIVE_BINDING_STATES) {
+    if (normalized !in LIVE_BINDING_STATES && !(normalized == "offline" && reachable)) {
       return normalized
     }
     return if (reachable) "connected" else "offline"
@@ -176,6 +212,46 @@ object AndroidSyncPrimitives {
       return normalizedServerName
     }
     return "Vivi Drop ${host.trim()}"
+  }
+
+  fun buildPresenceHeartbeatUrl(
+    host: String,
+    port: Int,
+    clientId: String,
+  ): String {
+    val normalizedHost = host.trim()
+    val normalizedClientId = clientId.trim()
+    require(normalizedHost.isNotBlank()) { "Presence heartbeat host is required" }
+    require(port in 1..65_535) { "Presence heartbeat port is invalid" }
+    require(normalizedClientId.isNotBlank() && '/' !in normalizedClientId) {
+      "Presence heartbeat clientId is invalid"
+    }
+
+    val hostPart = if (':' in normalizedHost && !normalizedHost.startsWith("[")) {
+      "[$normalizedHost]"
+    } else {
+      normalizedHost
+    }
+    return "http://$hostPart:$port/presence/$normalizedClientId"
+  }
+
+  fun shouldStartPresenceRecoveryAfterHeartbeatFailure(
+    connectionState: String,
+    syncInProgress: Boolean,
+  ): Boolean =
+    connectionState.trim() == "connected" && !syncInProgress
+
+  fun shouldRefreshBoundPresenceFromDiscovery(
+    bindingDeviceId: String,
+    candidateDeviceId: String,
+    connectionState: String,
+  ): Boolean {
+    val normalizedBindingDeviceId = bindingDeviceId.trim()
+    val normalizedCandidateDeviceId = candidateDeviceId.trim()
+    if (normalizedBindingDeviceId.isBlank() || normalizedBindingDeviceId != normalizedCandidateDeviceId) {
+      return false
+    }
+    return connectionState.trim() != "connected"
   }
 
   fun computeFileKey(

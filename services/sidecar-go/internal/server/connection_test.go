@@ -531,6 +531,55 @@ func TestReturningHelloRefreshesClientNameAndIPv4(t *testing.T) {
 	}
 }
 
+func TestReturningHelloIgnoresDesktopNameAsClientAlias(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	pairingToken := doPairing(t, client)
+	client.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	staleDesktopAlias := cfg.DeviceName
+	device, err := st.GetPairedDevice(testClientID)
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	device.DeviceAlias = &staleDesktopAlias
+	if err := st.UpsertPairedDevice(*device); err != nil {
+		t.Fatalf("UpsertPairedDevice stale alias: %v", err)
+	}
+
+	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanup2()
+
+	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:       testClientID,
+		ClientName:     "Android CDY-TN20",
+		ClientPlatform: "android",
+		AppVersion:     "0.1.0",
+		DeviceAlias:    cfg.DeviceName,
+		PairingToken:   pairingToken,
+		AppState:       "foreground",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
+	if helloRes.AuthRequired {
+		t.Fatal("expected authRequired=false for returning device")
+	}
+
+	paired, err := st.GetPairedDevice(testClientID)
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if paired.ClientName != "Android CDY-TN20" {
+		t.Fatalf("client name=%q, want Android CDY-TN20", paired.ClientName)
+	}
+	if paired.DeviceAlias != nil {
+		t.Fatalf("device alias=%q, want nil", *paired.DeviceAlias)
+	}
+}
+
 func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
 	client, st, cfg, cleanup := setupTestConnection(t)
 	defer cleanup()

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/events"
@@ -99,8 +100,14 @@ func (c *connection) handleHello(body []byte) error {
 			shouldUpsertDevice = true
 			metadataChanged = true
 		}
-		if req.DeviceAlias != "" && (device.DeviceAlias == nil || *device.DeviceAlias != req.DeviceAlias) {
-			device.DeviceAlias = &req.DeviceAlias
+		if device.DeviceAlias != nil && normalizeClientDeviceAlias(*device.DeviceAlias, serverName) == "" {
+			device.DeviceAlias = nil
+			shouldUpsertDevice = true
+			metadataChanged = true
+		}
+		if alias := normalizeClientDeviceAlias(req.DeviceAlias, serverName); alias != "" &&
+			(device.DeviceAlias == nil || *device.DeviceAlias != alias) {
+			device.DeviceAlias = &alias
 			shouldUpsertDevice = true
 			metadataChanged = true
 		}
@@ -261,9 +268,10 @@ func (c *connection) handlePair(body []byte) error {
 	clientIP := preferredClientIP(req.ClientIP, c.conn)
 	c.clientIP = clientIP
 
+	serverName, _ := c.store.GetDeviceName()
 	var alias *string
-	if req.DeviceAlias != "" {
-		alias = &req.DeviceAlias
+	if normalizedAlias := normalizeClientDeviceAlias(req.DeviceAlias, serverName); normalizedAlias != "" {
+		alias = &normalizedAlias
 	}
 
 	platform := c.clientPlatform
@@ -292,7 +300,6 @@ func (c *connection) handlePair(body []byte) error {
 
 	// Build server info
 	serverID, _ := c.store.GetDeviceID()
-	serverName, _ := c.store.GetDeviceName()
 	shareConfig, _ := c.store.GetShareConfig()
 	shareName := ""
 	if shareConfig != nil {
@@ -363,4 +370,12 @@ func normalizeClientIP(raw string) string {
 		return ipv4.String()
 	}
 	return ip.String()
+}
+
+func normalizeClientDeviceAlias(raw, serverName string) string {
+	alias := strings.TrimSpace(raw)
+	if alias == "" || alias == strings.TrimSpace(serverName) {
+		return ""
+	}
+	return alias
 }
