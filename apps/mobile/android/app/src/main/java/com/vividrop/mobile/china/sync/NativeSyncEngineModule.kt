@@ -1,13 +1,17 @@
 package com.vividrop.mobile.china.sync
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -19,6 +23,7 @@ import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.modules.core.PermissionAwareActivity
+import androidx.core.content.FileProvider
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -26,9 +31,12 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.net.Inet4Address
 import java.net.InetSocketAddress
+import java.net.NetworkInterface
 import java.net.Socket
 import java.net.URL
+import java.net.URLEncoder
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
@@ -54,7 +62,12 @@ class NativeSyncEngineModule(
   private val pendingResolveKeys = mutableSetOf<String>()
   private val diagnosticsLogLock = Any()
   private val diagnosticsLogLines = mutableListOf<String>()
+  private val syncRunLock = Any()
+  private var syncInProgress = false
   private var pendingPhotoPermissionPromise: Promise? = null
+  private var pendingDiscoveryPermissionPromise: Promise? = null
+  private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
+  private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
 
   override fun getName(): String = MODULE_NAME
 
@@ -133,6 +146,83 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun startDiscovery(promise: Promise) {
     recordNativeLog("Discovery", "startDiscovery requested")
+    if (shouldRequestNearbyWifiPermission()) {
+      requestNearbyWifiPermissionThenStartDiscovery(promise)
+      return
+    }
+    startDiscoveryAfterPermission(promise)
+  }
+
+  private fun requestNearbyWifiPermissionThenStartDiscovery(promise: Promise) {
+    val activity = getCurrentActivity()
+    if (activity !is PermissionAwareActivity) {
+      recordNativeLog(
+        "Discovery",
+        "nearby wifi permission unavailable activity=${activity?.javaClass?.simpleName ?: "null"}",
+        Log.WARN,
+      )
+      emitDiscoveredDevicesChanged()
+      emitError(
+        code = "ANDROID_DISCOVERY_PERMISSION_UNAVAILABLE",
+        message = "目前無法請求附近裝置權限，無法搜尋桌面端。",
+      )
+      promise.resolve(null)
+      return
+    }
+
+    if (pendingDiscoveryPermissionPromise != null) {
+      promise.reject(
+        "ANDROID_DISCOVERY_PERMISSION_REQUEST_IN_PROGRESS",
+        "Nearby Wi-Fi permission request is already in progress",
+      )
+      return
+    }
+
+    pendingDiscoveryPermissionPromise = promise
+    recordNativeLog("Discovery", "requesting nearby wifi permission")
+    try {
+      activity.requestPermissions(
+        arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES),
+        DISCOVERY_PERMISSION_REQUEST_CODE,
+      ) { requestCode, _, _ ->
+        if (requestCode != DISCOVERY_PERMISSION_REQUEST_CODE) {
+          return@requestPermissions false
+        }
+
+        val pendingPromise = pendingDiscoveryPermissionPromise
+        pendingDiscoveryPermissionPromise = null
+        if (pendingPromise == null) {
+          return@requestPermissions true
+        }
+
+        if (shouldRequestNearbyWifiPermission()) {
+          recordNativeLog("Discovery", "nearby wifi permission denied", Log.WARN)
+          emitDiscoveredDevicesChanged()
+          emitError(
+            code = "ANDROID_DISCOVERY_PERMISSION_DENIED",
+            message = "需要允許「附近裝置」權限，才能在區網中搜尋桌面端。",
+          )
+          pendingPromise.resolve(null)
+          return@requestPermissions true
+        }
+
+        recordNativeLog("Discovery", "nearby wifi permission granted")
+        startDiscoveryAfterPermission(pendingPromise)
+        true
+      }
+    } catch (error: Throwable) {
+      pendingDiscoveryPermissionPromise = null
+      recordNativeLog("Discovery", "nearby wifi permission request failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
+      emitDiscoveredDevicesChanged()
+      emitError(
+        code = "ANDROID_DISCOVERY_PERMISSION_FAILED",
+        message = "請求附近裝置權限失敗：${error.message ?: "unknown error"}",
+      )
+      promise.resolve(null)
+    }
+  }
+
+  private fun startDiscoveryAfterPermission(promise: Promise) {
     val manager = reactApplicationContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
     if (manager == null) {
       recordNativeLog("Discovery", "startDiscovery unavailable: NsdManager missing", Log.WARN)
@@ -187,18 +277,23 @@ class NativeSyncEngineModule(
       val host = params.getString("host")?.trim().orEmpty()
       val port = if (params.hasKey("port")) params.getInt("port") else DEFAULT_PROTOCOL_PORT
       val fallbackDeviceId = params.getString("deviceId")?.trim().orEmpty()
-      val connectionCode = params.getString("connectionCode")?.trim().orEmpty()
+      val connectionCode = AndroidSyncPrimitives.normalizePairingConnectionCode(
+        params.getString("connectionCode"),
+      )
 
       if (host.isBlank()) {
         throw IllegalArgumentException("Missing host for pairing")
-      }
-      if (connectionCode.length != CONNECTION_CODE_LENGTH) {
-        throw IllegalArgumentException("Connection code must be 6 digits")
       }
       recordNativeLog(
         "Pairing",
         "pairDevice requested deviceId=${fallbackDeviceId.ifBlank { "<unknown>" }} host=$host port=$port codeProvided=${connectionCode.isNotBlank()}",
       )
+
+      val storedPairingToken = if (AndroidSyncPrimitives.shouldUseStoredPairingToken(connectionCode)) {
+        pairingTokenForKnownDevice(fallbackDeviceId)
+      } else {
+        null
+      }
 
       val helloPayload = JSONObject().apply {
         put("clientId", getOrCreateClientId())
@@ -206,6 +301,9 @@ class NativeSyncEngineModule(
         put("clientPlatform", "android")
         put("appVersion", getVersionName())
         put("appState", "active")
+        if (!storedPairingToken.isNullOrBlank()) {
+          put("pairingToken", storedPairingToken)
+        }
       }
 
       val resolvedBinding = performPairing(
@@ -213,6 +311,7 @@ class NativeSyncEngineModule(
         port = port,
         fallbackDeviceId = fallbackDeviceId,
         connectionCode = connectionCode,
+        storedPairingToken = storedPairingToken,
         helloPayload = helloPayload,
       )
 
@@ -241,23 +340,27 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun getBindingState(promise: Promise) {
-    promise.resolve(loadBinding()?.toWritableMap())
+    runAsync(promise) {
+      promise.resolve(refreshBindingReachability(loadBinding())?.toWritableMap())
+    }
   }
 
   @ReactMethod
   fun getSyncOverview(promise: Promise) {
-    promise.resolve(buildIdleSyncSummary(loadBinding()))
+    promise.resolve(buildIdleSyncSummary(loadBinding(), "idle", uploadStore.getPendingItems(limit = 10_000)))
   }
 
   @ReactMethod
   fun getReadOnlyQueue(promise: Promise) {
-    promise.resolve(Arguments.createArray())
+    val pending = uploadStore.getPendingItems(limit = 100)
+    promise.resolve(uploadStore.queueToWritableArray(pending))
   }
 
   @ReactMethod
   fun getHistoryDays(cursor: String?, promise: Promise) {
+    val ledgers = uploadStore.getLedgers()
     val result = Arguments.createMap().apply {
-      putArray("items", Arguments.createArray())
+      putArray("items", uploadStore.historyToWritableArray(ledgers))
       putNull("nextCursor")
     }
     promise.resolve(result)
@@ -273,7 +376,7 @@ class NativeSyncEngineModule(
       putString("version", getVersionName())
       putString("build", getVersionCode())
       putString("platform", "android")
-      putString("supportLevel", "shell")
+      putString("supportLevel", "sync")
     }
     promise.resolve(result)
   }
@@ -281,30 +384,86 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun exportDiagnostics(promise: Promise) {
     runAsync(promise) {
-      val engineLogSnapshot = diagnosticsLogSnapshot()
-      dumpDiagnosticsLogSnapshotToConsole(engineLogSnapshot)
+      val timestamp = diagnosticsArchiveTimestamp()
       val archive = File(
         reactApplicationContext.cacheDir,
-        "syncflow-android-diagnostics-${System.currentTimeMillis()}.json",
+        "SyncFlow-Mobile-Diagnostics-$timestamp.zip",
       )
+      val binding = loadBinding()
+      val queueItems = uploadStore.getPendingItems(limit = 10_000)
+      val historyPayload = JSONObject().apply {
+        put("items", JSONArray(uploadStore.getLedgers().map { it.toJson() }))
+        put("nextCursor", JSONObject.NULL)
+      }
+      val engineLogSnapshot = diagnosticsLogSnapshot()
+      dumpDiagnosticsLogSnapshotToConsole(engineLogSnapshot)
       val payload = JSONObject().apply {
         put("generatedAt", isoNow())
-        put("platform", "android")
-        put("supportLevel", "shell")
-        put("clientId", getOrCreateClientId())
-        put("clientDisplayName", getClientDisplayNameValue())
         put(
-          "appInfo",
+          "app",
           JSONObject().apply {
+            put(
+              "appName",
+              reactApplicationContext.applicationInfo.loadLabel(
+                reactApplicationContext.packageManager,
+              ).toString(),
+            )
             put("version", getVersionName())
             put("build", getVersionCode())
+            put("platform", "android")
+            put("supportLevel", "sync")
           },
         )
-        put("binding", loadBinding()?.toJson() ?: JSONObject.NULL)
-        put("logs", JSONArray(engineLogSnapshot))
+        put(
+          "device",
+          JSONObject().apply {
+            put("name", getClientDisplayNameValue())
+            put("manufacturer", Build.MANUFACTURER)
+            put("brand", Build.BRAND)
+            put("model", Build.MODEL)
+            put("device", Build.DEVICE)
+            put("osVersion", "Android ${Build.VERSION.RELEASE}")
+            put("systemName", "Android")
+            put("systemVersion", Build.VERSION.RELEASE)
+            put("sdkInt", Build.VERSION.SDK_INT)
+          },
+        )
+        put(
+          "client",
+          JSONObject().apply {
+            put("clientId", getOrCreateClientId())
+            put("displayName", getClientDisplayNameValue())
+            put("hasPairingToken", !binding?.pairingToken.isNullOrBlank())
+            put("preferredIPv4", currentClientIPv4() ?: JSONObject.NULL)
+          },
+        )
+        put(
+          "runtime",
+          JSONObject().apply {
+            put("applicationState", "active")
+            put("bindingState", binding?.toDiagnosticsJson() ?: JSONObject.NULL)
+            put("syncOverview", buildIdleSyncOverviewJson(binding, queueItems))
+            put("queueCount", queueItems.size)
+            put("historyPageCount", historyPayload.optJSONArray("items")?.length() ?: 0)
+            put("photoAuthorization", currentPhotoPermissionState())
+            put("sidecarHost", binding?.host ?: JSONObject.NULL)
+            put("activeSession", JSONObject.NULL)
+            put("recentRetry", JSONObject.NULL)
+            put("recentError", JSONObject.NULL)
+          },
+        )
       }
-      archive.writeText(payload.toString(2), StandardCharsets.UTF_8)
-      recordNativeLog("Diagnostics", "exported android diagnostics file ${archive.name} bytes=${archive.length()}")
+      writeDiagnosticsArchive(
+        archive = archive,
+        diagnosticsPayload = payload,
+        queuePayload = JSONArray(queueItems.map { it.toJson() }),
+        historyPayload = historyPayload,
+        engineLogLines = engineLogSnapshot,
+      )
+      recordDiagnosticsLog(
+        "Diagnostics",
+        "exported android diagnostics archive ${archive.name} bytes=${archive.length()}",
+      )
       promise.resolve(archive.absolutePath)
     }
   }
@@ -349,7 +508,7 @@ class NativeSyncEngineModule(
     message: String,
     priority: Int = Log.DEBUG,
   ) {
-    val line = buildDiagnosticsLogLine(
+    val line = AndroidSyncPrimitives.buildDiagnosticsLogLine(
       timestampIso = isoNow(),
       category = category,
       message = message,
@@ -357,12 +516,15 @@ class NativeSyncEngineModule(
     synchronized(diagnosticsLogLock) {
       diagnosticsLogLines.add(line)
       if (diagnosticsLogLines.size > MAX_DIAGNOSTICS_LOG_LINES) {
-        val retained = retainRecentLogLines(diagnosticsLogLines, MAX_DIAGNOSTICS_LOG_LINES)
+        val retained = AndroidSyncPrimitives.retainRecentLogLines(
+          diagnosticsLogLines,
+          MAX_DIAGNOSTICS_LOG_LINES,
+        )
         diagnosticsLogLines.clear()
         diagnosticsLogLines.addAll(retained)
       }
     }
-    val consoleMessage = buildConsoleLogMessage(
+    val consoleMessage = AndroidSyncPrimitives.buildConsoleLogMessage(
       localTimestamp = localLogTimestamp(),
       category = category,
       message = message,
@@ -409,11 +571,17 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun triggerSync(promise: Promise) {
     recordNativeLog("Sync", "triggerSync requested")
-    emitError(
-      code = "ANDROID_SYNC_NOT_IMPLEMENTED",
-      message = "Android 端原生同步引擎尚未接入，当前版本仅提供基础壳层与配对入口。",
-    )
+    thread(name = "NativeSyncEngineSync", isDaemon = true) {
+      performSyncRound(reason = "manual_trigger")
+    }
     promise.resolve(null)
+  }
+
+  private fun startAutoUploadSyncRound(reason: String) {
+    recordDiagnosticsLog("AutoUpload", "starting sync round reason=$reason")
+    thread(name = "NativeSyncEngineAutoUpload", isDaemon = true) {
+      performSyncRound(reason = reason)
+    }
   }
 
   @ReactMethod
@@ -433,18 +601,20 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun resetAllStatus(promise: Promise) {
     recordNativeLog("SyncEngine", "resetAllStatus requested")
+    uploadStore.resetQueue()
     emitIdleSyncState(loadBinding())
-    emitQueueUpdated(Arguments.createArray())
+    emitQueueUpdated(uploadStore.queueToWritableArray(emptyList()))
     promise.resolve(null)
   }
 
   // ---------------------------------------------------------------------------
   // Account Identity Reset (Phase 1 / 2 / 3)
   //
-  // Android shell has no upload queue / history DB, so "wipe" reduces to
-  // clearing the sync identity fields in SharedPreferences. We mirror the
-  // iOS 2-phase sentinel so a crash mid-wipe is recoverable on next launch
-  // (see MainApplication.onCreate).
+  // Android keeps sync identity plus local queue/history ledgers in
+  // SharedPreferences. The allowlist wipe below preserves only account/session
+  // guard keys, so client-scoped sync state is cleared with the identity. We
+  // mirror the iOS 2-phase sentinel so a crash mid-wipe is recoverable on next
+  // launch (see MainApplication.onCreate).
   // ---------------------------------------------------------------------------
 
   @ReactMethod
@@ -504,57 +674,100 @@ class NativeSyncEngineModule(
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Stub methods — Android native sync engine is not yet implemented.
-  // These stubs return safe defaults so JS screens don't crash when calling
-  // bridge methods that only have real implementations on iOS.
-  // ---------------------------------------------------------------------------
-
   @ReactMethod
   fun browseAlbum(params: ReadableMap, promise: Promise) {
-    promise.resolve(Arguments.createArray())
+    runAsync(promise) {
+      promise.resolve(
+        mediaStoreRepository.browseAlbum(
+          mediaFilter = params.getStringOrNull("mediaFilter") ?: "all",
+          transferFilter = params.getStringOrNull("transferFilter") ?: "all",
+          offset = if (params.hasKey("offset")) params.getInt("offset") else 0,
+          limit = if (params.hasKey("limit")) params.getInt("limit") else 50,
+          collectionId = params.getStringOrNull("collectionId"),
+          items = uploadStore.getAllItems(),
+        ),
+      )
+    }
   }
 
   @ReactMethod
   fun getAlbumStats(promise: Promise) {
-    promise.resolve(Arguments.createMap().apply {
-      putInt("totalCount", 0)
-      putInt("transferredCount", 0)
-      putInt("queuedCount", 0)
-      putInt("pendingCount", 0)
-    })
+    runAsync(promise) {
+      promise.resolve(mediaStoreRepository.getStats(uploadStore.getAllItems()))
+    }
   }
 
   @ReactMethod
   fun getAlbumCollections(mediaFilter: String, promise: Promise) {
-    promise.resolve(Arguments.createArray())
+    runAsync(promise) {
+      promise.resolve(mediaStoreRepository.getCollections(mediaFilter))
+    }
   }
 
   @ReactMethod
   fun getAssetPreviewSource(assetLocalId: String, promise: Promise) {
-    promise.resolve(Arguments.createMap().apply {
-      putString("uri", "")
-      putString("mediaType", "image")
-      putString("error", "not_found")
-    })
+    runAsync(promise) {
+      promise.resolve(mediaStoreRepository.getPreview(assetLocalId))
+    }
   }
 
   @ReactMethod
   fun submitManualUpload(params: ReadableMap, promise: Promise) {
-    recordNativeLog("ManualUpload", "submit requested")
-    promise.reject("ANDROID_NOT_IMPLEMENTED", "手动上传功能暂未在 Android 端实现")
+    runAsync(promise) {
+      val rawIds = params.getArray("assetLocalIds")
+      val assetIds = mutableListOf<String>()
+      if (rawIds != null) {
+        for (index in 0 until rawIds.size()) {
+          rawIds.getString(index)?.takeIf { it.isNotBlank() }?.let(assetIds::add)
+        }
+      }
+      val existingItems = uploadStore.getAllItems()
+      val activeIds = existingItems
+        .filter { it.status in ACTIVE_UPLOAD_STATUSES }
+        .mapTo(mutableSetOf()) { it.assetLocalId }
+      val batchId = UUID.randomUUID().toString().lowercase(Locale.US)
+      val candidates = mediaStoreRepository.findAssetsByIds(
+        assetLocalIds = assetIds,
+        clientId = getOrCreateClientId(),
+        source = "manual",
+        batchId = batchId,
+      )
+      val queued = candidates.filter { it.assetLocalId !in activeIds }
+      recordNativeLog(
+        "ManualUpload",
+        "submit requested selected=${assetIds.size} candidates=${candidates.size} queued=${queued.size} skipped=${assetIds.size - queued.size} batchId=$batchId",
+      )
+      uploadStore.upsertItems(queued)
+      emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+      emitIdleSyncState(loadBinding())
+      val result = Arguments.createMap().apply {
+        putInt("queuedCount", queued.size)
+        putInt("skippedCount", assetIds.size - queued.size)
+        putString("batchId", batchId)
+      }
+      promise.resolve(result)
+      if (queued.isNotEmpty()) {
+        thread(name = "NativeSyncEngineManualUpload", isDaemon = true) {
+          runCatching { performSyncRound(reason = "manual_upload") }
+        }
+      }
+    }
   }
 
   @ReactMethod
   fun cancelManualBatch(batchId: String, promise: Promise) {
     recordNativeLog("ManualUpload", "cancel batch requested batchId=$batchId")
+    uploadStore.cancelManualBatch(batchId, isoNow())
+    emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+    emitIdleSyncState(loadBinding())
     promise.resolve(null)
   }
 
   @ReactMethod
   fun cancelAllManualUploads(promise: Promise) {
     recordNativeLog("ManualUpload", "cancel all requested")
-    emitQueueUpdated(Arguments.createArray())
+    uploadStore.cancelAllManual(isoNow())
+    emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
     emitIdleSyncState(loadBinding())
     promise.resolve(null)
   }
@@ -577,10 +790,34 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun resumeAutoUpload(promise: Promise) {
-    recordNativeLog("AutoUpload", "resume requested")
-    persistAutoUploadActiveState()
-    emitIdleSyncState(loadBinding())
-    promise.resolve(null)
+    runAsync(promise) {
+      val previousConfig = loadAutoUploadConfig()
+      val nextConfig = previousConfig.copy(enabled = true, state = "active")
+      val shouldStartRound = AndroidSyncPrimitives.shouldStartAutoUploadRound(
+        previousEnabled = previousConfig.enabled,
+        previousState = previousConfig.state,
+        nextEnabled = nextConfig.enabled,
+        nextState = nextConfig.state,
+      )
+      val binding = if (shouldStartRound) refreshBindingReachability(loadBinding()) else loadBinding()
+      if (shouldStartRound && !isBindingConnected(binding)) {
+        recordDiagnosticsLog("AutoUpload", "resume blocked because desktop is offline")
+        emitIdleSyncState(binding)
+        promise.reject("ANDROID_SYNC_TARGET_OFFLINE", "桌面端未连接，无法开启自动上传。")
+        return@runAsync
+      }
+
+      saveAutoUploadConfig(nextConfig)
+      recordDiagnosticsLog(
+        "AutoUpload",
+        "resume requested previousState=${previousConfig.state} nextState=${nextConfig.state} startRound=$shouldStartRound",
+      )
+      emitIdleSyncState(binding)
+      promise.resolve(null)
+      if (shouldStartRound) {
+        startAutoUploadSyncRound(reason = "auto_upload_resume")
+      }
+    }
   }
 
   @ReactMethod
@@ -608,44 +845,85 @@ class NativeSyncEngineModule(
       else -> currentConfig.state
     }
 
-    saveAutoUploadConfig(
-      AutoUploadConfig(
-        enabled = enabled,
-        state = state,
-        timeRangeMode = timeRangeMode,
-        customTimeFrom = customTimeFrom,
-      ),
+    val nextConfig = AutoUploadConfig(
+      enabled = enabled,
+      state = state,
+      timeRangeMode = timeRangeMode,
+      customTimeFrom = customTimeFrom,
     )
-    recordNativeLog(
-      "AutoUpload",
-      "config saved enabled=$enabled state=$state timeRangeMode=$timeRangeMode customTimeFrom=${customTimeFrom ?: "<none>"}",
+    val shouldStartRound = AndroidSyncPrimitives.shouldStartAutoUploadRound(
+      previousEnabled = currentConfig.enabled,
+      previousState = currentConfig.state,
+      nextEnabled = nextConfig.enabled,
+      nextState = nextConfig.state,
     )
-    promise.resolve(null)
+
+    runAsync(promise) {
+      val binding = if (shouldStartRound) refreshBindingReachability(loadBinding()) else loadBinding()
+      if (shouldStartRound && !isBindingConnected(binding)) {
+        recordDiagnosticsLog("AutoUpload", "config enable blocked because desktop is offline")
+        emitIdleSyncState(binding)
+        promise.reject("ANDROID_SYNC_TARGET_OFFLINE", "桌面端未连接，无法开启自动上传。")
+        return@runAsync
+      }
+
+      saveAutoUploadConfig(nextConfig)
+      recordDiagnosticsLog(
+        "AutoUpload",
+        "config saved previousState=${currentConfig.state} nextState=${nextConfig.state} enabled=${nextConfig.enabled} startRound=$shouldStartRound",
+      )
+      promise.resolve(null)
+      if (shouldStartRound) {
+        startAutoUploadSyncRound(reason = "auto_upload_config_enabled")
+      }
+    }
   }
 
   @ReactMethod
   fun browseSharedFiles(path: String, promise: Promise) {
-    promise.resolve(Arguments.createMap().apply {
-      putString("path", path)
-      putArray("files", Arguments.createArray())
-      putInt("totalCount", 0)
-    })
+    runAsync(promise) {
+      promise.resolve(fetchSharedDirectory(path))
+    }
   }
 
   @ReactMethod
   fun downloadSharedFile(path: String, promise: Promise) {
-    promise.reject("ANDROID_NOT_IMPLEMENTED", "共享文件下载功能暂未在 Android 端实现")
+    runAsync(promise) {
+      promise.resolve(downloadSharedFileToLocalStorage(path))
+    }
   }
 
   @ReactMethod
   fun getSharedFileStreamUrl(path: String, promise: Promise) {
-    promise.reject("ANDROID_NOT_IMPLEMENTED", "共享文件流功能暂未在 Android 端实现")
+    promise.resolve(sharedFileUrl("stream", path).toString())
   }
 
   @ReactMethod
   fun shareFile(localPath: String, promise: Promise) {
-    promise.reject("ANDROID_NOT_IMPLEMENTED", "文件分享功能暂未在 Android 端实现")
+    try {
+      val uri = when {
+        localPath.startsWith("content://") -> Uri.parse(localPath)
+        localPath.startsWith("file://") -> fileProviderUri(File(Uri.parse(localPath).path ?: ""))
+        else -> fileProviderUri(File(localPath))
+      }
+      val intent = Intent(Intent.ACTION_SEND).apply {
+        type = reactApplicationContext.contentResolver.getType(uri) ?: "*/*"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      reactApplicationContext.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      promise.resolve(true)
+    } catch (error: Throwable) {
+      promise.reject("ANDROID_SHARE_FAILED", error.message, error)
+    }
   }
+
+  private fun fileProviderUri(file: File): Uri =
+    FileProvider.getUriForFile(
+      reactApplicationContext,
+      "${reactApplicationContext.packageName}.syncflow.fileprovider",
+      file,
+    )
 
   @ReactMethod
   fun getPhotoAuthorizationStatus(promise: Promise) {
@@ -678,11 +956,49 @@ class NativeSyncEngineModule(
     }
   }
 
+  private fun pairingTokenForKnownDevice(deviceId: String): String? {
+    val normalizedDeviceId = deviceId.trim()
+    if (normalizedDeviceId.isBlank()) {
+      return null
+    }
+
+    val binding = loadBinding() ?: return null
+    if (binding.deviceId != normalizedDeviceId) {
+      return null
+    }
+
+    return binding.pairingToken.takeIf { it.isNotBlank() }
+  }
+
+  private fun currentClientIPv4(): String? {
+    return try {
+      val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+      while (interfaces.hasMoreElements()) {
+        val networkInterface = interfaces.nextElement()
+        if (!networkInterface.isUp || networkInterface.isLoopback) {
+          continue
+        }
+
+        val addresses = networkInterface.inetAddresses
+        while (addresses.hasMoreElements()) {
+          val address = addresses.nextElement()
+          if (address is Inet4Address && !address.isLoopbackAddress && !address.isLinkLocalAddress) {
+            return address.hostAddress
+          }
+        }
+      }
+      null
+    } catch (_: Throwable) {
+      null
+    }
+  }
+
   private fun performPairing(
     host: String,
     port: Int,
     fallbackDeviceId: String,
     connectionCode: String,
+    storedPairingToken: String?,
     helloPayload: JSONObject,
   ): StoredBinding {
     Socket().use { socket ->
@@ -698,7 +1014,7 @@ class NativeSyncEngineModule(
       val helloResponse = readJsonFrame(input, TYPE_HELLO_RES)
       recordNativeLog(
         "Pairing",
-        "HELLO_RES serverId=${helloResponse.optString("serverId")} authRequired=${helloResponse.optBoolean("authRequired", true)}",
+        "HELLO_RES serverId=${helloResponse.optString("serverId").ifBlank { "<missing>" }} authRequired=${helloResponse.optBoolean("authRequired", true)}",
       )
 
       val serverCapabilities = helloResponse.optJSONObject("serverCapabilities")
@@ -712,7 +1028,6 @@ class NativeSyncEngineModule(
         ?: host
 
       if (!helloResponse.optBoolean("authRequired", true)) {
-        recordNativeLog("Pairing", "HELLO_RES accepted without auth", Log.INFO)
         return StoredBinding(
           deviceId = serverId,
           deviceName = serverName,
@@ -720,10 +1035,11 @@ class NativeSyncEngineModule(
           host = host,
           port = port,
           pairingId = "",
+          pairingToken = storedPairingToken.orEmpty(),
           shareEnabled = shareName != null,
           shareName = shareName,
           lastBoundAt = isoNow(),
-          connectionState = "bound",
+          connectionState = "connected",
         )
       }
 
@@ -731,15 +1047,16 @@ class NativeSyncEngineModule(
         put("clientId", getOrCreateClientId())
         put("clientName", getClientDisplayNameValue())
         put("connectionCode", connectionCode)
+        currentClientIPv4()?.let { put("clientIp", it) }
       }
       writeJsonFrame(output, TYPE_PAIR_REQ, pairPayload)
       val pairResponse = readJsonFrame(input, TYPE_PAIR_RES)
 
       if (!pairResponse.optBoolean("ok", false)) {
         recordNativeLog("Pairing", "PAIR_RES rejected error=${pairResponse.optString("error")}", Log.WARN)
-        throw IllegalStateException("Pairing rejected")
+        throw IllegalStateException(pairResponse.optString("error").ifBlank { "Pairing rejected" })
       }
-      recordNativeLog("Pairing", "PAIR_RES ok pairingId=${pairResponse.optString("pairingId")}", Log.INFO)
+      recordNativeLog("Pairing", "PAIR_RES ok pairingId=${pairResponse.optString("pairingId")}")
 
       val serverInfo = pairResponse.optJSONObject("serverInfo")
       return StoredBinding(
@@ -755,12 +1072,467 @@ class NativeSyncEngineModule(
         host = host,
         port = port,
         pairingId = pairResponse.optString("pairingId"),
+        pairingToken = pairResponse.optString("pairingToken"),
         shareEnabled = serverInfo?.optString("shareName")?.isNotBlank() == true,
         shareName = serverInfo?.optString("shareName")?.takeIf { it.isNotBlank() },
         lastBoundAt = isoNow(),
-        connectionState = "bound",
+        connectionState = "connected",
       )
     }
+  }
+
+  private fun performSyncRound(reason: String) {
+    synchronized(syncRunLock) {
+      if (syncInProgress) {
+        recordDiagnosticsLog("Sync", "round skipped reason=$reason syncInProgress=true")
+        return
+      }
+      syncInProgress = true
+    }
+    try {
+      var binding = loadBinding()
+      if (binding == null) {
+        recordDiagnosticsLog("Sync", "round paused reason=$reason no binding")
+        emitSyncState(null, "paused_no_target")
+        emitError("ANDROID_SYNC_NO_BINDING", "尚未绑定桌面端，无法同步。")
+        return
+      }
+      val permissionState = currentPhotoPermissionState()
+      if (permissionState == "denied") {
+        recordDiagnosticsLog("Sync", "round paused reason=$reason photoPermission=denied")
+        emitSyncState(binding, "paused_no_permission")
+        emitError("ANDROID_PHOTO_PERMISSION_DENIED", "Android 相簿权限尚未开启，无法扫描同步素材。")
+        return
+      }
+      val config = loadAutoUploadConfig()
+      recordDiagnosticsLog(
+        "Sync",
+        "round requested reason=$reason autoEnabled=${config.enabled} autoState=${config.state}",
+      )
+      if (reason != "manual_upload" && !config.enabled) {
+        recordDiagnosticsLog("Sync", "round ignored reason=$reason auto upload disabled")
+        emitIdleSyncState(binding)
+        return
+      }
+
+      emitSyncState(binding, "scanning")
+      val clientId = getOrCreateClientId()
+      val existing = uploadStore.getAllItems()
+      val existingAssetIds = existing
+        .filter { it.status in ACTIVE_UPLOAD_STATUSES }
+        .mapTo(mutableSetOf()) { it.assetLocalId }
+      val discovered = mediaStoreRepository.scanAssets(clientId)
+        .filter { it.assetLocalId !in existingAssetIds }
+      if (discovered.isNotEmpty() && config.enabled) {
+        uploadStore.upsertItems(discovered.map { it.copy(source = "auto", status = "queued", updatedAt = isoNow()) })
+      }
+
+      val pending = uploadStore.getPendingItems(limit = 10_000)
+      recordDiagnosticsLog(
+        "Sync",
+        "scan completed reason=$reason discovered=${discovered.size} pending=${pending.size}",
+      )
+      emitQueueUpdated(uploadStore.queueToWritableArray(pending.take(100)))
+      if (pending.isEmpty()) {
+        recordDiagnosticsLog("Sync", "round idle reason=$reason pending=0")
+        emitIdleSyncState(binding)
+        return
+      }
+
+      val sessionId = UUID.randomUUID().toString().lowercase(Locale.US)
+      val totalBytes = pending.sumOf { it.fileSize }
+      emitPreparationSyncState(
+        binding = binding,
+        sessionId = sessionId,
+        pending = pending,
+        totalBytes = totalBytes,
+      )
+      binding = updateBindingConnectionState(binding, "connecting") ?: binding
+      recordNativeLog("SyncPipeline", "TCP connecting to ${binding.host}:${binding.port}")
+      ProtocolConnection.open(binding).use { connection ->
+        recordNativeLog("SyncPipeline", "TCP connected to ${binding.host}:${binding.port}", Log.INFO)
+        authenticateConnection(connection, binding)
+        binding = updateBindingConnectionState(binding, "connected") ?: binding
+        val beginPayload = JSONObject().apply {
+          put("sessionId", sessionId)
+          put("queueTotalCount", pending.size)
+          put("queueTotalBytes", totalBytes)
+        }
+      val beginResponse = sendAndRead(connection, TYPE_SYNC_BEGIN_REQ, beginPayload, TYPE_SYNC_BEGIN_RES)
+      if (!beginResponse.optBoolean("ok", true)) {
+        throw IllegalStateException("SYNC_BEGIN rejected")
+      }
+      recordNativeLog(
+        "SyncPipeline",
+        "sync session started sessionId=$sessionId queueCount=${pending.size} queueBytes=$totalBytes",
+        Log.INFO,
+      )
+
+        var completedCount = 0
+        var completedBytes = 0L
+        var lastCompletedTaskSource: String? = null
+        for ((index, item) in pending.withIndex()) {
+          val current = uploadStore.getItemByAssetId(item.assetLocalId) ?: item
+          if (current.status == "cancelled") {
+            completedCount += 1
+            continue
+          }
+          val result = uploadOneItem(
+            connection = connection,
+            binding = binding,
+            sessionId = sessionId,
+            item = current,
+            queueIndex = index,
+            queueTotalCount = pending.size,
+            completedCount = completedCount,
+            completedBytes = completedBytes,
+            totalBytes = totalBytes,
+          )
+          if (result) {
+            completedCount += 1
+            completedBytes += current.fileSize
+            lastCompletedTaskSource = current.source
+          }
+        }
+
+        val endResponse = sendAndRead(
+          connection,
+          TYPE_SYNC_END_REQ,
+          JSONObject().apply { put("sessionId", sessionId) },
+          TYPE_SYNC_END_RES,
+        )
+        if (!endResponse.optBoolean("ok", true)) {
+          recordDiagnosticsLog("Sync", "SYNC_END returned ok=false")
+        }
+        recordNativeLog(
+          "SyncPipeline",
+          "sync session ended sessionId=$sessionId completed=$completedCount/${pending.size} bytes=$completedBytes/$totalBytes",
+          Log.INFO,
+        )
+        emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+        if (completedCount >= pending.size) {
+          emitCompletedSyncState(
+            binding = binding,
+            sessionId = sessionId,
+            completedCount = completedCount,
+            totalCount = pending.size,
+            completedBytes = completedBytes,
+            totalBytes = totalBytes,
+            lastCompletedTaskSource = lastCompletedTaskSource,
+          )
+        } else {
+          emitIdleSyncState(binding)
+        }
+      }
+    } catch (error: Throwable) {
+      val message = error.message ?: "Android sync failed"
+      recordDiagnosticsLog("Sync", "sync failed: $message")
+      emitError("ANDROID_SYNC_FAILED", message)
+      val failedBinding = updateBindingConnectionState(loadBinding(), "offline")
+      emitSyncState(
+        binding = failedBinding,
+        uploadState = "offline",
+        lastErrorCode = "ANDROID_SYNC_FAILED",
+        lastErrorMessage = message,
+      )
+    } finally {
+      synchronized(syncRunLock) {
+        syncInProgress = false
+      }
+    }
+  }
+
+  private fun authenticateConnection(connection: ProtocolConnection, binding: StoredBinding) {
+    val helloPayload = JSONObject().apply {
+      put("clientId", getOrCreateClientId())
+      put("clientName", getClientDisplayNameValue())
+      put("clientPlatform", "android")
+      put("appVersion", getVersionName())
+      put("appState", "active")
+      put("deviceAlias", binding.deviceAlias)
+      if (binding.pairingToken.isNotBlank()) {
+        put("pairingToken", binding.pairingToken)
+      }
+    }
+    writeJsonFrame(connection.output, TYPE_HELLO_REQ, helloPayload)
+    val helloResponse = readJsonFrame(connection.input, TYPE_HELLO_RES)
+    recordNativeLog(
+      "SyncPipeline",
+      "HELLO_RES received serverId=${helloResponse.optString("serverId").ifBlank { binding.deviceId }} authRequired=${helloResponse.optBoolean("authRequired", false)}",
+    )
+
+    val nonce = helloResponse.optString("nonce")
+    if (nonce.isNotBlank()) {
+      if (binding.pairingToken.isBlank()) {
+        throw IllegalStateException("Desktop requires re-pairing")
+      }
+      writeJsonFrame(
+        connection.output,
+        TYPE_AUTH_REQ,
+        JSONObject().apply {
+          put("clientId", getOrCreateClientId())
+          put("auth", AndroidSyncPrimitives.computeAuthHmac(binding.pairingToken, nonce))
+        },
+      )
+      val authResponse = readJsonFrame(connection.input, TYPE_AUTH_RES)
+      if (!authResponse.optBoolean("ok", false)) {
+        throw IllegalStateException("Desktop authentication failed")
+      }
+      recordNativeLog("SyncPipeline", "auth successful", Log.INFO)
+    } else if (helloResponse.optBoolean("authRequired", false)) {
+      throw IllegalStateException("Desktop requires re-pairing")
+    }
+  }
+
+  private fun uploadOneItem(
+    connection: ProtocolConnection,
+    binding: StoredBinding,
+    sessionId: String,
+    item: AndroidUploadItem,
+    queueIndex: Int,
+    queueTotalCount: Int,
+    completedCount: Int,
+    completedBytes: Long,
+    totalBytes: Long,
+  ): Boolean {
+    recordNativeLog(
+      "SyncUpload",
+      "[${queueIndex + 1}/$queueTotalCount] starting ${item.filename} fileKey=${item.fileKey} source=${item.source} size=${item.fileSize}",
+    )
+    uploadStore.updateStatus(item.fileKey, "uploading", isoNow())
+    emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+    emitEvent(
+      "onSyncStateChanged",
+      buildActiveSyncSummary(
+        binding = binding,
+        item = item,
+        sessionId = sessionId,
+        completedCount = completedCount,
+        totalCount = queueTotalCount,
+        completedBytes = completedBytes,
+        totalBytes = totalBytes,
+        currentOffset = item.ackedOffset,
+      ),
+    )
+
+    val initPayload = JSONObject().apply {
+      put("sessionId", sessionId)
+      put("fileKey", item.fileKey)
+      put("originalFilename", item.filename)
+      put("mediaType", item.mediaType)
+      put("mimeType", item.mimeType)
+      put("fileSize", item.fileSize)
+      put("createdAt", item.createdAt)
+      put("modifiedAt", item.modifiedAt)
+      put("queueIndex", queueIndex)
+      put("queueTotalCount", queueTotalCount)
+    }
+    val initResponse = sendAndRead(connection, TYPE_FILE_INIT_REQ, initPayload, TYPE_FILE_INIT_RES)
+    when (val action = initResponse.optString("action", "REJECT")) {
+      "SKIP" -> {
+        recordNativeLog("SyncUpload", "[${queueIndex + 1}/$queueTotalCount] SKIP ${item.filename}")
+        completeUploadedItem(item, binding, activeTransmissionMs = 0)
+        return true
+      }
+      "REJECT" -> {
+        val reason = initResponse.optString("reason")
+        recordNativeLog(
+          "SyncUpload",
+          "[${queueIndex + 1}/$queueTotalCount] REJECT ${item.filename} reason=${reason.ifBlank { "<empty>" }}",
+          Log.WARN,
+        )
+        uploadStore.updateStatus(
+          item.fileKey,
+          if (reason == "LOW_DISK_PAUSED" || reason == "STORAGE_UNAVAILABLE") "queued" else "skipped",
+          isoNow(),
+        )
+        return false
+      }
+      "UPLOAD", "RESUME" -> {
+        val startOffset = if (action == "RESUME") initResponse.optLong("resumeOffset", item.ackedOffset) else 0L
+        recordNativeLog(
+          "SyncUpload",
+          "[${queueIndex + 1}/$queueTotalCount] $action ${item.filename} offset=$startOffset",
+        )
+        streamFileData(connection, binding, sessionId, item, startOffset, completedCount, queueTotalCount, completedBytes, totalBytes)
+      }
+      else -> throw IllegalStateException("Unknown FILE_INIT action: $action")
+    }
+
+    writeJsonFrame(
+      connection.output,
+      TYPE_FILE_END_REQ,
+      JSONObject().apply {
+        put("fileKey", item.fileKey)
+        put("fileSize", item.fileSize)
+        put("sha256", "")
+      },
+    )
+    var endFrame = readJsonFrameAny(connection.input)
+    var drainCount = 0
+    while (endFrame.type != TYPE_FILE_END_RES && endFrame.type != TYPE_ERROR && drainCount < 8) {
+      endFrame = readJsonFrameAny(connection.input)
+      drainCount += 1
+    }
+    if (endFrame.type == TYPE_ERROR) {
+      throw IllegalStateException(endFrame.payload.optString("message", "Desktop returned protocol error"))
+    }
+    if (endFrame.type != TYPE_FILE_END_RES || !endFrame.payload.optBoolean("ok", true)) {
+      recordNativeLog("SyncUpload", "[${queueIndex + 1}/$queueTotalCount] FILE_END not ok for ${item.filename}", Log.WARN)
+      uploadStore.updateStatus(item.fileKey, "failed", isoNow())
+      return false
+    }
+    completeUploadedItem(
+      item = item,
+      binding = binding,
+      activeTransmissionMs = endFrame.payload.optLong("activeTransmissionMs", 0),
+      ledgerDate = endFrame.payload.optString("ledgerDate"),
+      storedBytes = endFrame.payload.optLong("storedBytes", item.fileSize),
+    )
+    recordNativeLog(
+      "SyncUpload",
+      "[${queueIndex + 1}/$queueTotalCount] completed ${item.filename} storedBytes=${endFrame.payload.optLong("storedBytes", item.fileSize)}",
+      Log.INFO,
+    )
+    return true
+  }
+
+  private fun streamFileData(
+    connection: ProtocolConnection,
+    binding: StoredBinding,
+    sessionId: String,
+    item: AndroidUploadItem,
+    startOffset: Long,
+    completedCount: Int,
+    queueTotalCount: Int,
+    completedBytes: Long,
+    totalBytes: Long,
+  ) {
+    mediaStoreRepository.openInputStream(item).use { rawInput ->
+      if (rawInput == null) {
+        recordNativeLog("SyncUpload", "open asset failed fileKey=${item.fileKey}", Log.ERROR)
+        throw IllegalStateException("Unable to open Android media asset")
+      }
+      var skipped = 0L
+      while (skipped < startOffset) {
+        val delta = rawInput.skip(startOffset - skipped)
+        if (delta <= 0) {
+          break
+        }
+        skipped += delta
+      }
+
+      val buffer = ByteArray(FILE_CHUNK_SIZE)
+      var offset = startOffset
+      while (offset < item.fileSize) {
+        val read = rawInput.read(buffer, 0, minOf(buffer.size.toLong(), item.fileSize - offset).toInt())
+        if (read <= 0) {
+          break
+        }
+        writeFileDataFrame(connection.output, item.fileKey, offset, buffer, read)
+        offset += read
+        val frame = readJsonFrameAny(connection.input)
+        if (frame.type == TYPE_ERROR) {
+          throw IllegalStateException(frame.payload.optString("message", "Desktop returned protocol error"))
+        }
+        if (frame.type == TYPE_FILE_ACK) {
+          val committedOffset = frame.payload.optLong("committedOffset", offset)
+          uploadStore.updateOffset(item.fileKey, committedOffset, isoNow())
+          emitEvent(
+            "onSyncStateChanged",
+            buildActiveSyncSummary(
+              binding = binding,
+              item = item,
+              sessionId = sessionId,
+              completedCount = completedCount,
+              totalCount = queueTotalCount,
+              completedBytes = completedBytes,
+              totalBytes = totalBytes,
+              currentOffset = committedOffset,
+            ),
+          )
+        }
+      }
+      if (offset < item.fileSize) {
+        recordNativeLog("SyncUpload", "FILE_DATA stream incomplete fileKey=${item.fileKey} offset=$offset size=${item.fileSize}", Log.ERROR)
+        throw IllegalStateException("FILE_DATA stream incomplete: $offset/${item.fileSize}")
+      }
+    }
+  }
+
+  private fun completeUploadedItem(
+    item: AndroidUploadItem,
+    binding: StoredBinding,
+    activeTransmissionMs: Long,
+    ledgerDate: String = localLedgerDateKey(),
+    storedBytes: Long = item.fileSize,
+  ) {
+    val now = isoNow()
+    uploadStore.updateOffset(item.fileKey, storedBytes, now)
+    uploadStore.updateStatus(item.fileKey, "completed", now)
+    uploadStore.upsertLedger(
+      AndroidHistoryLedger(
+        ledgerDate = ledgerDate.takeIf { it.isNotBlank() } ?: localLedgerDateKey(),
+        deviceId = binding.deviceId,
+        deviceName = binding.deviceAlias.ifBlank { binding.deviceName },
+        deviceIp = binding.host,
+        fileCount = 1,
+        totalBytes = storedBytes,
+        activeTransmissionMs = activeTransmissionMs,
+        updatedAt = now,
+      ),
+    )
+    recordNativeLog(
+      "SyncUpload",
+      "ledger updated fileKey=${item.fileKey} ledgerDate=${ledgerDate.takeIf { it.isNotBlank() } ?: localLedgerDateKey()} bytes=$storedBytes",
+    )
+    emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+    emitEvent("onHistoryUpdated", null)
+  }
+
+  private fun sendAndRead(
+    connection: ProtocolConnection,
+    requestType: Int,
+    payload: JSONObject,
+    expectedResponseType: Int,
+  ): JSONObject {
+    writeJsonFrame(connection.output, requestType, payload)
+    return readJsonFrame(connection.input, expectedResponseType)
+  }
+
+  private fun buildActiveSyncSummary(
+    binding: StoredBinding,
+    item: AndroidUploadItem,
+    sessionId: String,
+    completedCount: Int,
+    totalCount: Int,
+    completedBytes: Long,
+    totalBytes: Long,
+    currentOffset: Long,
+  ): WritableMap {
+    val pendingItems = uploadStore.getPendingItems(limit = 10_000)
+    val autoConfig = loadAutoUploadConfig()
+    return AndroidSyncPrimitives.buildSyncOverviewFields(
+      AndroidSyncOverviewInput(
+        currentDeviceId = binding.deviceId,
+        currentDeviceName = binding.deviceAlias.ifBlank { binding.deviceName },
+        uploadState = "uploading",
+        sessionId = sessionId,
+        completedCount = completedCount,
+        totalCount = totalCount,
+        completedBytes = completedBytes,
+        totalBytes = totalBytes,
+        currentFileKey = item.fileKey,
+        currentFilename = item.filename,
+        currentFileConfirmedBytes = currentOffset,
+        currentFileTotalBytes = item.fileSize,
+        activeTuningProfile = "standard",
+        currentTaskSource = item.source,
+        autoUploadState = autoConfig.state,
+        manualPending = AndroidSyncPrimitives.pendingCount(pendingItems, "manual"),
+        autoPending = AndroidSyncPrimitives.pendingCount(pendingItems, "auto"),
+      ),
+    ).toWritableMap()
   }
 
   private fun writeJsonFrame(
@@ -782,6 +1554,17 @@ class NativeSyncEngineModule(
   }
 
   private fun readJsonFrame(input: DataInputStream, expectedType: Int): JSONObject {
+    val frame = readJsonFrameAny(input)
+    if (frame.type == TYPE_ERROR) {
+      throw IllegalStateException(frame.payload.optString("message", "Desktop returned protocol error"))
+    }
+    if (frame.type != expectedType) {
+      throw IllegalStateException("Unexpected frame type: ${frame.type}")
+    }
+    return frame.payload
+  }
+
+  private fun readJsonFrameAny(input: DataInputStream): JsonFrame {
     val headerBytes = ByteArray(HEADER_SIZE)
     input.readFully(headerBytes)
     val header = ByteBuffer.wrap(headerBytes).order(ByteOrder.BIG_ENDIAN)
@@ -798,9 +1581,6 @@ class NativeSyncEngineModule(
     }
 
     val actualType = header.short.toInt()
-    if (actualType != expectedType) {
-      throw IllegalStateException("Unexpected frame type: $actualType")
-    }
 
     val bodyLength = header.int
     if (bodyLength < 0 || bodyLength > MAX_BODY_LENGTH) {
@@ -808,12 +1588,175 @@ class NativeSyncEngineModule(
     }
 
     if (bodyLength == 0) {
-      return JSONObject()
+      return JsonFrame(actualType, JSONObject())
     }
 
     val body = ByteArray(bodyLength)
     input.readFully(body)
-    return JSONObject(String(body, StandardCharsets.UTF_8))
+    return JsonFrame(actualType, JSONObject(String(body, StandardCharsets.UTF_8)))
+  }
+
+  private fun writeFileDataFrame(
+    output: DataOutputStream,
+    fileKey: String,
+    offset: Long,
+    buffer: ByteArray,
+    length: Int,
+  ) {
+    val keyBytes = fileKey.toByteArray(StandardCharsets.UTF_8)
+    val bodyLength = 2 + keyBytes.size + 8 + length
+    val header = ByteBuffer.allocate(HEADER_SIZE)
+      .order(ByteOrder.BIG_ENDIAN)
+      .put(MAGIC_BYTES)
+      .putShort(PROTOCOL_VERSION.toShort())
+      .putShort(TYPE_FILE_DATA.toShort())
+      .putInt(bodyLength)
+      .array()
+    output.write(header)
+    output.writeShort(keyBytes.size)
+    output.write(keyBytes)
+    output.writeLong(offset)
+    output.write(buffer, 0, length)
+    output.flush()
+  }
+
+  private fun fetchSharedDirectory(path: String): WritableMap {
+    val json = JSONObject(readHttpString(sharedFileUrl("list", path)))
+    val files = Arguments.createArray()
+    val sourceFiles = json.optJSONArray("files") ?: JSONArray()
+    for (index in 0 until sourceFiles.length()) {
+      val source = sourceFiles.optJSONObject(index) ?: continue
+      val filePath = source.optString("path")
+      val fileType = source.optString("type").ifBlank { "other" }
+      files.pushMap(Arguments.createMap().apply {
+        putString("name", source.optString("name"))
+        putString("path", filePath)
+        putString("type", fileType)
+        putDouble("size", source.optLong("size", 0).toDouble())
+        putString("modifiedAt", source.optString("modifiedAt"))
+        putBoolean("isDirectory", source.optBoolean("isDirectory", false))
+        if (fileType == "image") {
+          putString("thumbnailUrl", sharedFileUrl("thumbnail", filePath).toString())
+        }
+        if (fileType == "video") {
+          putString("streamUrl", sharedFileUrl("stream", filePath).toString())
+        }
+      })
+    }
+    return Arguments.createMap().apply {
+      putString("path", json.optString("path", path))
+      putArray("files", files)
+      putInt("totalCount", json.optInt("totalCount", sourceFiles.length()))
+    }
+  }
+
+  private fun downloadSharedFileToLocalStorage(path: String): WritableMap {
+    val filename = path.substringAfterLast('/').ifBlank { "shared-file" }
+    val mediaType = AndroidSyncPrimitives.classifyMediaType(
+      AndroidSyncPrimitives.mimeTypeForFilename(filename),
+      filename,
+    )
+    val url = sharedFileUrl("download", path)
+    val connection = url.openConnection() as HttpURLConnection
+    try {
+      connection.requestMethod = "GET"
+      connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+      connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
+      if (connection.responseCode !in 200..299) {
+        throw IllegalStateException("Sidecar returned HTTP ${connection.responseCode}")
+      }
+      val mimeType = connection.contentType?.substringBefore(';')
+        ?: AndroidSyncPrimitives.mimeTypeForFilename(filename)
+      if (mediaType == "image" || mediaType == "video") {
+        val collection = if (mediaType == "video") {
+          MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        } else {
+          MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        val values = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+          put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(
+              MediaStore.MediaColumns.RELATIVE_PATH,
+              if (mediaType == "video") "${Environment.DIRECTORY_MOVIES}/Vivi Drop" else "${Environment.DIRECTORY_PICTURES}/Vivi Drop",
+            )
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+          }
+        }
+        val uri = reactApplicationContext.contentResolver.insert(collection, values)
+          ?: throw IllegalStateException("Unable to create MediaStore item")
+        reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+          connection.inputStream.use { input -> input.copyTo(output) }
+        } ?: throw IllegalStateException("Unable to write MediaStore item")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          values.clear()
+          values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+          reactApplicationContext.contentResolver.update(uri, values, null, null)
+        }
+        return Arguments.createMap().apply {
+          putBoolean("savedToPhotos", true)
+          putNull("localPath")
+        }
+      }
+
+      val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_downloads")
+      if (!destDir.exists()) {
+        destDir.mkdirs()
+      }
+      val destFile = File(destDir, filename)
+      connection.inputStream.use { input ->
+        destFile.outputStream().use { output -> input.copyTo(output) }
+      }
+      return Arguments.createMap().apply {
+        putBoolean("savedToPhotos", false)
+        putString("localPath", destFile.absolutePath)
+      }
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  private fun readHttpString(url: URL): String {
+    val connection = url.openConnection() as HttpURLConnection
+    try {
+      connection.requestMethod = "GET"
+      connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+      connection.readTimeout = SHARED_HTTP_TIMEOUT_MS
+      val statusCode = connection.responseCode
+      val body = readResponseBody(connection, statusCode)
+      if (statusCode !in 200..299) {
+        throw IllegalStateException(body.ifBlank { "Sidecar returned HTTP $statusCode" })
+      }
+      return body
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  private fun sharedFileUrl(kind: String, path: String): URL {
+    val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
+    val normalizedPath = path.trim().trim('/')
+    val endpoint = when (kind) {
+      "list" -> if (normalizedPath.isBlank()) "/shared/list" else "/shared/list/${encodePath(normalizedPath)}"
+      "download" -> "/shared/download/${encodePath(normalizedPath)}"
+      "stream" -> "/shared/stream/${encodePath(normalizedPath)}"
+      "thumbnail" -> "/shared/thumbnail/${encodePath(normalizedPath)}"
+      else -> throw IllegalArgumentException("Unsupported shared endpoint: $kind")
+    }
+    return URL("http", binding.host, DEFAULT_SIDECAR_HTTP_PORT, endpoint)
+  }
+
+  private fun encodePath(path: String): String =
+    path.split('/')
+      .filter { it.isNotBlank() }
+      .joinToString("/") { segment -> URLEncoder.encode(segment, "UTF-8").replace("+", "%20") }
+      .ifBlank { "" }
+
+  private fun localLedgerDateKey(): String {
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    formatter.timeZone = TimeZone.getDefault()
+    return formatter.format(Date())
   }
 
   private fun photoPermissionsForRequest(): Array<String> {
@@ -947,11 +1890,25 @@ class NativeSyncEngineModule(
   }
 
   private fun emitIdleSyncState(binding: StoredBinding?) {
-    emitEvent("onSyncStateChanged", buildIdleSyncSummary(binding))
+    emitEvent("onSyncStateChanged", buildIdleSyncSummary(binding, "idle", uploadStore.getPendingItems(limit = 10_000)))
   }
 
-  private fun emitSyncState(binding: StoredBinding?, uploadState: String) {
-    emitEvent("onSyncStateChanged", buildIdleSyncSummary(binding, uploadState))
+  private fun emitSyncState(
+    binding: StoredBinding?,
+    uploadState: String,
+    lastErrorCode: String? = null,
+    lastErrorMessage: String? = null,
+  ) {
+    emitEvent(
+      "onSyncStateChanged",
+      buildIdleSyncSummary(
+        binding = binding,
+        uploadState = uploadState,
+        pendingItems = uploadStore.getPendingItems(limit = 10_000),
+        lastErrorCode = lastErrorCode,
+        lastErrorMessage = lastErrorMessage,
+      ),
+    )
   }
 
   private fun emitError(code: String, message: String) {
@@ -972,29 +1929,278 @@ class NativeSyncEngineModule(
   private fun buildIdleSyncSummary(
     binding: StoredBinding?,
     uploadState: String = "idle",
+    pendingItems: List<AndroidUploadItem> = emptyList(),
+    lastErrorCode: String? = null,
+    lastErrorMessage: String? = null,
   ): WritableMap {
-    return Arguments.createMap().apply {
-      putString("currentDeviceId", binding?.deviceId)
-      putString("currentDeviceName", binding?.deviceAlias ?: binding?.deviceName)
-      putDouble("currentSpeedMbps", 0.0)
-      putDouble("transferredBytes", 0.0)
-      putDouble("totalBytes", 0.0)
-      putDouble("progressPercent", 0.0)
-      putString("uploadState", uploadState)
-      putString("performanceHint", "none")
-      putNull("performanceMessage")
-      putString("thermalState", "unknown")
-      putString("activeTuningProfile", "idle")
-      putBoolean("isThermalLimited", false)
-      putDouble("completedCount", 0.0)
-      putDouble("totalCount", 0.0)
-      putDouble("completedBytes", 0.0)
-      putDouble("currentFileConfirmedBytes", 0.0)
-      putDouble("currentFileTotalBytes", 0.0)
-      putString("sessionId", "")
-      putString("state", uploadState)
+    val pendingBytes = pendingItems.sumOf { it.fileSize }
+    val manualPending = AndroidSyncPrimitives.pendingCount(pendingItems, "manual")
+    val autoPending = AndroidSyncPrimitives.pendingCount(pendingItems, "auto")
+    val autoConfig = loadAutoUploadConfig()
+    return AndroidSyncPrimitives.buildSyncOverviewFields(
+      AndroidSyncOverviewInput(
+        currentDeviceId = binding?.deviceId,
+        currentDeviceName = binding?.deviceAlias ?: binding?.deviceName,
+        uploadState = uploadState,
+        totalCount = pendingItems.size,
+        totalBytes = pendingBytes,
+        lastErrorCode = lastErrorCode,
+        lastErrorMessage = lastErrorMessage,
+        autoUploadState = autoConfig.state,
+        manualPending = manualPending,
+        autoPending = autoPending,
+      ),
+    ).toWritableMap()
+  }
+
+  private fun buildIdleSyncOverviewJson(
+    binding: StoredBinding?,
+    pendingItems: List<AndroidUploadItem>,
+  ): JSONObject {
+    val pendingBytes = pendingItems.sumOf { it.fileSize }
+    val autoConfig = loadAutoUploadConfig()
+    return AndroidSyncPrimitives.buildSyncOverviewFields(
+      AndroidSyncOverviewInput(
+        currentDeviceId = binding?.deviceId,
+        currentDeviceName = binding?.deviceAlias ?: binding?.deviceName,
+        uploadState = "idle",
+        totalCount = pendingItems.size,
+        totalBytes = pendingBytes,
+        autoUploadState = autoConfig.state,
+        manualPending = AndroidSyncPrimitives.pendingCount(pendingItems, "manual"),
+        autoPending = AndroidSyncPrimitives.pendingCount(pendingItems, "auto"),
+      ),
+    ).toJson()
+  }
+
+  private fun emitPreparationSyncState(
+    binding: StoredBinding,
+    sessionId: String,
+    pending: List<AndroidUploadItem>,
+    totalBytes: Long,
+  ) {
+    val autoConfig = loadAutoUploadConfig()
+    emitEvent(
+      "onSyncStateChanged",
+      AndroidSyncPrimitives.buildSyncOverviewFields(
+        AndroidSyncOverviewInput(
+          currentDeviceId = binding.deviceId,
+          currentDeviceName = binding.deviceAlias.ifBlank { binding.deviceName },
+          uploadState = "preparing",
+          sessionId = sessionId,
+          totalCount = pending.size,
+          totalBytes = totalBytes,
+          activeTuningProfile = "standard",
+          currentTaskSource = pending.firstOrNull()?.source,
+          autoUploadState = autoConfig.state,
+          manualPending = AndroidSyncPrimitives.pendingCount(pending, "manual"),
+          autoPending = AndroidSyncPrimitives.pendingCount(pending, "auto"),
+        ),
+      ).toWritableMap(),
+    )
+  }
+
+  private fun emitCompletedSyncState(
+    binding: StoredBinding,
+    sessionId: String,
+    completedCount: Int,
+    totalCount: Int,
+    completedBytes: Long,
+    totalBytes: Long,
+    lastCompletedTaskSource: String?,
+  ) {
+    val pendingItems = uploadStore.getPendingItems(limit = 10_000)
+    val autoConfig = loadAutoUploadConfig()
+    emitEvent(
+      "onSyncStateChanged",
+      AndroidSyncPrimitives.buildSyncOverviewFields(
+        AndroidSyncOverviewInput(
+          currentDeviceId = binding.deviceId,
+          currentDeviceName = binding.deviceAlias.ifBlank { binding.deviceName },
+          uploadState = "completed",
+          sessionId = sessionId,
+          completedCount = completedCount,
+          totalCount = totalCount,
+          completedBytes = completedBytes,
+          totalBytes = totalBytes,
+          lastCompletedTaskSource = lastCompletedTaskSource,
+          autoUploadState = autoConfig.state,
+          manualPending = AndroidSyncPrimitives.pendingCount(pendingItems, "manual"),
+          autoPending = AndroidSyncPrimitives.pendingCount(pendingItems, "auto"),
+        ),
+      ).toWritableMap(),
+    )
+  }
+
+  private fun updateBindingConnectionState(binding: StoredBinding?, connectionState: String): StoredBinding? {
+    if (binding == null) {
+      return null
+    }
+    if (binding.connectionState == connectionState) {
+      return binding
+    }
+    recordNativeLog(
+      "SyncEngine",
+      "binding connection state ${binding.connectionState} -> $connectionState",
+    )
+    val updated = binding.copy(connectionState = connectionState)
+    saveBinding(updated)
+    emitBindingStateChanged(updated)
+    return updated
+  }
+
+  private fun refreshBindingReachability(binding: StoredBinding?): StoredBinding? {
+    if (binding == null) {
+      return null
+    }
+    if (!AndroidSyncPrimitives.shouldProbeBindingConnectionState(binding.connectionState)) {
+      return binding
+    }
+
+    val reachable = probeBindingReachability(binding)
+    val nextState = AndroidSyncPrimitives.deriveBindingConnectionStateFromProbe(
+      currentState = binding.connectionState,
+      reachable = reachable,
+    )
+    if (nextState == binding.connectionState) {
+      return binding
+    }
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "binding reachability corrected ${binding.connectionState} -> $nextState host=${binding.host}:${binding.port}",
+    )
+    return updateBindingConnectionState(binding, nextState)
+  }
+
+  private fun probeBindingReachability(binding: StoredBinding): Boolean {
+    if (binding.host.isBlank() || binding.port <= 0) {
+      return false
+    }
+    return try {
+      Socket().use { socket ->
+        socket.connect(InetSocketAddress(binding.host, binding.port), BINDING_PROBE_TIMEOUT_MS)
+        true
+      }
+    } catch (error: Throwable) {
+      recordDiagnosticsLog(
+        "SyncEngine",
+        "binding reachability probe failed host=${binding.host}:${binding.port} error=${error.message ?: error.javaClass.simpleName}",
+      )
+      false
     }
   }
+
+  private fun isBindingConnected(binding: StoredBinding?): Boolean =
+    binding?.connectionState == "connected"
+
+  private fun AndroidSyncOverviewFields.toWritableMap(): WritableMap {
+    return Arguments.createMap().apply {
+      putString("currentDeviceId", currentDeviceId)
+      putString("currentDeviceName", currentDeviceName)
+      putDouble("currentSpeedMbps", currentSpeedMbps)
+      putDouble("transferredBytes", transferredBytes)
+      putDouble("totalBytes", totalBytes)
+      putDouble("progressPercent", progressPercent)
+      putString("uploadState", uploadState)
+      putString("performanceHint", performanceHint)
+      if (performanceMessage == null) {
+        putNull("performanceMessage")
+      } else {
+        putString("performanceMessage", performanceMessage)
+      }
+      putString("thermalState", thermalState)
+      putString("activeTuningProfile", activeTuningProfile)
+      putBoolean("isThermalLimited", isThermalLimited)
+      putDouble("completedCount", completedCount)
+      putDouble("totalCount", totalCount)
+      putDouble("completedBytes", completedBytes)
+      putDouble("roundBaselineCompletedCount", roundBaselineCompletedCount)
+      putDouble("roundBaselineCompletedBytes", roundBaselineCompletedBytes)
+      if (currentFile == null) {
+        putNull("currentFile")
+      } else {
+        putString("currentFile", currentFile)
+      }
+      if (currentFilename == null) {
+        putNull("currentFilename")
+      } else {
+        putString("currentFilename", currentFilename)
+      }
+      putDouble("currentFileConfirmedBytes", currentFileConfirmedBytes)
+      putDouble("currentFileTotalBytes", currentFileTotalBytes)
+      putString("sessionId", sessionId)
+      putString("state", state)
+      if (retryAttempt == null) {
+        putNull("retryAttempt")
+      } else {
+        putDouble("retryAttempt", retryAttempt)
+      }
+      if (retryDelaySec == null) {
+        putNull("retryDelaySec")
+      } else {
+        putDouble("retryDelaySec", retryDelaySec)
+      }
+      if (lastErrorCode == null) {
+        putNull("lastErrorCode")
+      } else {
+        putString("lastErrorCode", lastErrorCode)
+      }
+      if (lastErrorMessage == null) {
+        putNull("lastErrorMessage")
+      } else {
+        putString("lastErrorMessage", lastErrorMessage)
+      }
+      if (currentTaskSource == null) {
+        putNull("currentTaskSource")
+      } else {
+        putString("currentTaskSource", currentTaskSource)
+      }
+      if (lastCompletedTaskSource == null) {
+        putNull("lastCompletedTaskSource")
+      } else {
+        putString("lastCompletedTaskSource", lastCompletedTaskSource)
+      }
+      putString("autoUploadState", autoUploadState)
+      putDouble("manualPending", manualPending)
+      putDouble("autoPending", autoPending)
+    }
+  }
+
+  private fun AndroidSyncOverviewFields.toJson(): JSONObject =
+    JSONObject().apply {
+      put("currentDeviceId", currentDeviceId ?: JSONObject.NULL)
+      put("currentDeviceName", currentDeviceName ?: JSONObject.NULL)
+      put("currentSpeedMbps", currentSpeedMbps)
+      put("transferredBytes", transferredBytes)
+      put("totalBytes", totalBytes)
+      put("progressPercent", progressPercent)
+      put("uploadState", uploadState)
+      put("performanceHint", performanceHint)
+      put("performanceMessage", performanceMessage ?: JSONObject.NULL)
+      put("thermalState", thermalState)
+      put("activeTuningProfile", activeTuningProfile)
+      put("isThermalLimited", isThermalLimited)
+      put("completedCount", completedCount)
+      put("totalCount", totalCount)
+      put("completedBytes", completedBytes)
+      put("roundBaselineCompletedCount", roundBaselineCompletedCount)
+      put("roundBaselineCompletedBytes", roundBaselineCompletedBytes)
+      put("currentFile", currentFile ?: JSONObject.NULL)
+      put("currentFilename", currentFilename ?: JSONObject.NULL)
+      put("currentFileConfirmedBytes", currentFileConfirmedBytes)
+      put("currentFileTotalBytes", currentFileTotalBytes)
+      put("sessionId", sessionId)
+      put("state", state)
+      put("retryAttempt", retryAttempt ?: JSONObject.NULL)
+      put("retryDelaySec", retryDelaySec ?: JSONObject.NULL)
+      put("lastErrorCode", lastErrorCode ?: JSONObject.NULL)
+      put("lastErrorMessage", lastErrorMessage ?: JSONObject.NULL)
+      put("currentTaskSource", currentTaskSource ?: JSONObject.NULL)
+      put("lastCompletedTaskSource", lastCompletedTaskSource ?: JSONObject.NULL)
+      put("autoUploadState", autoUploadState)
+      put("manualPending", manualPending)
+      put("autoPending", autoPending)
+    }
 
   private fun loadBinding(): StoredBinding? {
     val raw = prefs.getString(PREF_BINDING, null) ?: return null
@@ -1026,6 +2232,12 @@ class NativeSyncEngineModule(
     return formatter.format(Date())
   }
 
+  private fun diagnosticsArchiveTimestamp(): String {
+    val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+    formatter.timeZone = TimeZone.getDefault()
+    return formatter.format(Date())
+  }
+
   private fun diagnosticsLogSnapshot(): List<String> =
     synchronized(diagnosticsLogLock) {
       diagnosticsLogLines.toList()
@@ -1035,10 +2247,10 @@ class NativeSyncEngineModule(
     if (lines.isEmpty()) {
       Log.d(
         MODULE_NAME,
-        buildConsoleLogMessage(
-          localTimestamp = localLogTimestamp(),
-          category = "Diagnostics",
-          message = "engine.log snapshot is empty at export time",
+        AndroidSyncPrimitives.buildConsoleLogMessage(
+          localLogTimestamp(),
+          "Diagnostics",
+          "engine.log snapshot is empty at export time",
         ),
       )
       return
@@ -1046,56 +2258,27 @@ class NativeSyncEngineModule(
 
     Log.d(
       MODULE_NAME,
-      buildConsoleLogMessage(
-        localTimestamp = localLogTimestamp(),
-        category = "Diagnostics",
-        message = "engine.log snapshot begin (${lines.size} lines)",
+      AndroidSyncPrimitives.buildConsoleLogMessage(
+        localLogTimestamp(),
+        "Diagnostics",
+        "engine.log snapshot begin (${lines.size} lines)",
       ),
     )
     for (line in lines) {
       Log.d(
         MODULE_NAME,
-        buildConsoleLogMessage(
-          localTimestamp = localLogTimestamp(),
-          category = "DiagnosticsLog",
-          message = line,
-        ),
+        AndroidSyncPrimitives.buildConsoleLogMessage(localLogTimestamp(), "DiagnosticsLog", line),
       )
     }
     Log.d(
       MODULE_NAME,
-      buildConsoleLogMessage(
-        localTimestamp = localLogTimestamp(),
-        category = "Diagnostics",
-        message = "engine.log snapshot end",
+      AndroidSyncPrimitives.buildConsoleLogMessage(
+        localLogTimestamp(),
+        "Diagnostics",
+        "engine.log snapshot end",
       ),
     )
   }
-
-  private fun buildDiagnosticsLogLine(
-    timestampIso: String,
-    category: String,
-    message: String,
-  ): String =
-    "${timestampIso.trim()} [${normalizeLogCategory(category)}] ${normalizeLogMessage(message)}"
-
-  private fun buildConsoleLogMessage(
-    localTimestamp: String,
-    category: String,
-    message: String,
-  ): String =
-    "[${localTimestamp.trim()}] [${normalizeLogCategory(category)}] ${normalizeLogMessage(message)}"
-
-  private fun retainRecentLogLines(lines: List<String>, maxLines: Int): List<String> {
-    require(maxLines > 0) { "maxLines must be positive" }
-    return if (lines.size <= maxLines) lines else lines.takeLast(maxLines)
-  }
-
-  private fun normalizeLogCategory(category: String): String =
-    category.trim().ifBlank { "NativeSyncEngine" }
-
-  private fun normalizeLogMessage(message: String): String =
-    message.trim().ifBlank { "<empty>" }
 
   private fun getKnownDeviceIdsValue(): List<String> {
     val ids = mutableSetOf<String>()
@@ -1280,6 +2463,24 @@ class NativeSyncEngineModule(
       return File(Uri.parse(normalized).path.orEmpty())
     }
     return File(normalized)
+  }
+
+  private fun writeDiagnosticsArchive(
+    archive: File,
+    diagnosticsPayload: JSONObject,
+    queuePayload: JSONArray,
+    historyPayload: JSONObject,
+    engineLogLines: List<String>,
+  ) {
+    AndroidSyncPrimitives.writeZipArchive(
+      archive,
+      AndroidSyncPrimitives.buildDiagnosticsArchiveEntries(
+        diagnosticsJson = diagnosticsPayload.toString(2),
+        queueJson = queuePayload.toString(2),
+        historyJson = historyPayload.toString(2),
+        engineLogLines = engineLogLines,
+      ),
+    )
   }
 
   private fun diagnosticsUploadLog(message: String) {
@@ -1660,9 +2861,17 @@ class NativeSyncEngineModule(
       .getSystemService(Context.WIFI_SERVICE) as? WifiManager
       ?: return
 
-    multicastLock = wifiManager.createMulticastLock("syncflow:discovery").apply {
-      setReferenceCounted(false)
-      acquire()
+    try {
+      multicastLock = wifiManager.createMulticastLock("syncflow:discovery").apply {
+        setReferenceCounted(false)
+        acquire()
+      }
+    } catch (error: SecurityException) {
+      recordNativeLog(
+        "Discovery",
+        "multicast lock denied: ${error.message ?: error.javaClass.simpleName}",
+        Log.WARN,
+      )
     }
   }
 
@@ -1677,6 +2886,14 @@ class NativeSyncEngineModule(
       multicastLock = null
     }
   }
+
+  private fun shouldRequestNearbyWifiPermission(): Boolean =
+    AndroidSyncPrimitives.shouldRequestNearbyWifiPermission(
+      sdkInt = Build.VERSION.SDK_INT,
+      permissionGranted = reactApplicationContext.checkSelfPermission(
+        Manifest.permission.NEARBY_WIFI_DEVICES,
+      ) == PackageManager.PERMISSION_GRANTED,
+    )
 
   private fun preferredProbeHost(advertisedIp: String, resolvedHost: String): String {
     if (isIPv4Address(advertisedIp)) {
@@ -1703,6 +2920,34 @@ class NativeSyncEngineModule(
       host.matches(Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$"))
   }
 
+  private data class JsonFrame(
+    val type: Int,
+    val payload: JSONObject,
+  )
+
+  private class ProtocolConnection(
+    private val socket: Socket,
+    val input: DataInputStream,
+    val output: DataOutputStream,
+  ) : AutoCloseable {
+    override fun close() {
+      socket.close()
+    }
+
+    companion object {
+      fun open(binding: StoredBinding): ProtocolConnection {
+        val socket = Socket()
+        socket.connect(InetSocketAddress(binding.host, binding.port), SOCKET_TIMEOUT_MS)
+        socket.soTimeout = SOCKET_TIMEOUT_MS
+        return ProtocolConnection(
+          socket = socket,
+          input = DataInputStream(socket.getInputStream()),
+          output = DataOutputStream(socket.getOutputStream()),
+        )
+      }
+    }
+  }
+
   private data class StoredBinding(
     val deviceId: String,
     val deviceName: String,
@@ -1710,6 +2955,7 @@ class NativeSyncEngineModule(
     val host: String,
     val port: Int,
     val pairingId: String,
+    val pairingToken: String,
     val shareEnabled: Boolean,
     val shareName: String?,
     val lastBoundAt: String,
@@ -1742,6 +2988,22 @@ class NativeSyncEngineModule(
         put("host", host)
         put("port", port)
         put("pairingId", pairingId)
+        put("pairingToken", pairingToken)
+        put("shareEnabled", shareEnabled)
+        put("shareName", shareName ?: JSONObject.NULL)
+        put("lastBoundAt", lastBoundAt)
+        put("connectionState", connectionState)
+      }
+    }
+
+    fun toDiagnosticsJson(): JSONObject {
+      return JSONObject().apply {
+        put("deviceId", deviceId)
+        put("deviceName", deviceName)
+        put("deviceAlias", deviceAlias)
+        put("host", host)
+        put("port", port)
+        put("pairingId", pairingId)
         put("shareEnabled", shareEnabled)
         put("shareName", shareName ?: JSONObject.NULL)
         put("lastBoundAt", lastBoundAt)
@@ -1759,6 +3021,7 @@ class NativeSyncEngineModule(
           host = json.optString("host"),
           port = json.optInt("port", DEFAULT_PROTOCOL_PORT),
           pairingId = json.optString("pairingId"),
+          pairingToken = json.optString("pairingToken"),
           shareEnabled = json.optBoolean("shareEnabled", false),
           shareName = json.optString("shareName").takeIf { it.isNotBlank() },
           lastBoundAt = json.optString("lastBoundAt"),
@@ -1819,6 +3082,7 @@ class NativeSyncEngineModule(
     private const val MODULE_NAME = "NativeSyncEngine"
     private const val MAX_DIAGNOSTICS_LOG_LINES = 2_000
     private const val PHOTO_PERMISSION_REQUEST_CODE = 39_394
+    private const val DISCOVERY_PERMISSION_REQUEST_CODE = 39_395
     private const val DIAGNOSTICS_UPLOAD_TIMEOUT_MS = 30_000
     private const val ANDROID_14_API = 34
     private const val PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED =
@@ -1846,18 +3110,44 @@ class NativeSyncEngineModule(
      *  "no owner recorded" (fresh install / post-wipe). */
     const val PREF_OWNER_USER_ID = "lastSyncOwnerUserId"
     private const val SOCKET_TIMEOUT_MS = 5_000
+    private const val BINDING_PROBE_TIMEOUT_MS = 1_200
     private const val HEADER_SIZE = 12
     private const val MAX_BODY_LENGTH = 64 * 1024 * 1024
     private const val DEFAULT_PROTOCOL_PORT = 39_393
+    private const val DEFAULT_SIDECAR_HTTP_PORT = 39_394
     private const val BONJOUR_SERVICE_TYPE = "_syncflow._tcp"
-    private const val CONNECTION_CODE_LENGTH = 6
     private const val DISCOVERY_PROBE_TIMEOUT_MS = 2_000
+    private const val SHARED_HTTP_TIMEOUT_MS = 15_000
+    private const val SHARED_DOWNLOAD_TIMEOUT_MS = 300_000
+    private const val FILE_CHUNK_SIZE = 1024 * 1024
     private val MAGIC_BYTES = byteArrayOf('L'.code.toByte(), 'M'.code.toByte(), 'U'.code.toByte(), 'P'.code.toByte())
     private const val PROTOCOL_VERSION = 2
     private const val TYPE_HELLO_REQ = 0x0001
     private const val TYPE_HELLO_RES = 0x0002
     private const val TYPE_PAIR_REQ = 0x0003
     private const val TYPE_PAIR_RES = 0x0004
+    private const val TYPE_SYNC_BEGIN_REQ = 0x0005
+    private const val TYPE_SYNC_BEGIN_RES = 0x0006
+    private const val TYPE_FILE_INIT_REQ = 0x0007
+    private const val TYPE_FILE_INIT_RES = 0x0008
+    private const val TYPE_FILE_DATA = 0x0009
+    private const val TYPE_FILE_ACK = 0x000A
+    private const val TYPE_FILE_END_REQ = 0x000B
+    private const val TYPE_FILE_END_RES = 0x000C
+    private const val TYPE_SYNC_END_REQ = 0x000D
+    private const val TYPE_SYNC_END_RES = 0x000E
+    private const val TYPE_ERROR = 0x0011
+    private const val TYPE_AUTH_REQ = 0x0012
+    private const val TYPE_AUTH_RES = 0x0013
+    private val ACTIVE_UPLOAD_STATUSES = setOf(
+      "queued",
+      "discovered",
+      "preparing",
+      "ready",
+      "cloud_downloading",
+      "uploading",
+      "completed",
+    )
 
     /**
      * Keys that survive a wipe. Everything else stored in this prefs file
