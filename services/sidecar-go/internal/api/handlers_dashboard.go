@@ -179,8 +179,8 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 				FileSize int64   `json:"fileSize"`
 			}{
 				Filename: *d.CurrentFile,
-				Progress: 0,
-				FileSize: 0,
+				Progress: d.CurrentProgress,
+				FileSize: d.CurrentFileSize,
 			}
 		}
 		result = append(result, dto)

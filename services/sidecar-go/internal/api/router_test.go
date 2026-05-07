@@ -155,6 +155,97 @@ func TestDashboardDevices(t *testing.T) {
 	}
 }
 
+func TestDashboardDevicesExposeCurrentTransferProgress(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	dirName := "Android CDY-TN20"
+	if err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         "client-active",
+		ClientName:       "Android CDY-TN20",
+		Platform:         "android",
+		PairingID:        "pair-active",
+		PairingTokenHash: "hash-active",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+		ReceiveDirName:   &dirName,
+	}); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+
+	fileKey := "file-active"
+	if err := st.UpsertSession(store.Session{
+		SessionID:     "session-active",
+		ClientID:      "client-active",
+		ClientName:    "Android CDY-TN20",
+		State:         "transferring",
+		ActiveFileKey: &fileKey,
+		StartedAt:     now,
+		UpdatedAt:     now,
+	}); err != nil {
+		t.Fatalf("UpsertSession: %v", err)
+	}
+
+	sessionID := "session-active"
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:          fileKey,
+		SessionID:        &sessionID,
+		ClientID:         "client-active",
+		OriginalFilename: "VID_0001.MP4",
+		MediaType:        "video/mp4",
+		FileSize:         2000,
+		Status:           "receiving",
+		CommittedBytes:   500,
+		UpdatedAt:        now,
+	}); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	handler := func() http.Handler {
+		_, h := api.NewServer(st, cfg, hub, fakeClientStates{"client-active": "syncing"})
+		return h
+	}()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/dashboard/devices")
+	if err != nil {
+		t.Fatalf("GET /dashboard/devices: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var devices []struct {
+		DeviceID    string `json:"deviceId"`
+		Status      string `json:"status"`
+		CurrentFile *struct {
+			Filename string  `json:"filename"`
+			Progress float64 `json:"progress"`
+			FileSize int64   `json:"fileSize"`
+		} `json:"currentFile,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		t.Fatalf("decode devices: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("expected one dashboard device, got %d", len(devices))
+	}
+	if devices[0].Status != "transferring" {
+		t.Fatalf("expected transferring status, got %q", devices[0].Status)
+	}
+	if devices[0].CurrentFile == nil {
+		t.Fatal("expected currentFile")
+	}
+	if devices[0].CurrentFile.Filename != "VID_0001.MP4" {
+		t.Fatalf("expected filename VID_0001.MP4, got %q", devices[0].CurrentFile.Filename)
+	}
+	if devices[0].CurrentFile.Progress != 25 {
+		t.Fatalf("expected progress 25, got %v", devices[0].CurrentFile.Progress)
+	}
+	if devices[0].CurrentFile.FileSize != 2000 {
+		t.Fatalf("expected file size 2000, got %d", devices[0].CurrentFile.FileSize)
+	}
+}
+
 func TestDashboardStatsIgnoreDeletedFinalFiles(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()

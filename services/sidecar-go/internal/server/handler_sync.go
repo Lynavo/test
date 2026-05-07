@@ -179,6 +179,13 @@ func (c *connection) handleFileInit(body []byte) error {
 				}
 			}
 			c.resetProgressFlush(req.FileKey, resumeOffset)
+			if err := c.store.UpdateSessionActiveFile(c.sessionID, req.FileKey, resumeOffset); err != nil {
+				slog.Warn("failed to set active session file for resumed upload",
+					"sessionID", c.sessionID,
+					"fileKey", req.FileKey,
+					"err", err,
+				)
+			}
 			c.startTransferTimer(req.FileKey)
 			c.resetAckState(req.FileKey, resumeOffset)
 
@@ -219,6 +226,13 @@ func (c *connection) handleFileInit(body []byte) error {
 	}
 	c.fileWriter = fw
 	c.resetProgressFlush(req.FileKey, 0)
+	if err := c.store.UpdateSessionActiveFile(c.sessionID, req.FileKey, 0); err != nil {
+		slog.Warn("failed to set active session file for fresh upload",
+			"sessionID", c.sessionID,
+			"fileKey", req.FileKey,
+			"err", err,
+		)
+	}
 	c.startTransferTimer(req.FileKey)
 	c.resetAckState(req.FileKey, 0)
 

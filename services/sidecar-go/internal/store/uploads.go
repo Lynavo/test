@@ -329,6 +329,12 @@ func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, erro
 			COALESCE(ds.file_count, 0),
 			COALESCE(ds.total_bytes, 0),
 			u.original_filename,
+			CASE
+				WHEN u.file_size > 0 THEN
+					CAST(u.committed_bytes AS REAL) * 100.0 / CAST(u.file_size AS REAL)
+				ELSE 0
+			END AS current_progress,
+			COALESCE(u.file_size, 0) AS current_file_size,
 			latest_sess.state
 		FROM paired_devices pd
 		LEFT JOIN device_daily_stats ds ON ds.client_id = pd.client_id AND ds.stat_date = ?
@@ -352,7 +358,8 @@ func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, erro
 		var d DashboardDeviceResult
 		if err := rows.Scan(
 			&d.ClientID, &d.ClientName, &d.DeviceAlias, &d.ReceiveDirName, &d.LastIP, &d.Platform,
-			&d.LastSeenAt, &d.FileCount, &d.TotalBytes, &d.CurrentFile, &d.SessionState,
+			&d.LastSeenAt, &d.FileCount, &d.TotalBytes, &d.CurrentFile, &d.CurrentProgress,
+			&d.CurrentFileSize, &d.SessionState,
 		); err != nil {
 			return nil, fmt.Errorf("scan dashboard device: %w", err)
 		}
