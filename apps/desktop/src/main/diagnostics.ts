@@ -363,7 +363,7 @@ async function createDiagnosticsBundle(
     generatedAt: new Date().toISOString(),
     app: {
       ...appInfo,
-      build: appInfo.buildNumber,
+      build: appInfo.buildNumber || 'dev',
       platform: process.platform,
     },
     device: {

@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { dialog } from 'electron';
+import type { SidecarManager } from '../sidecar-manager';
 
 const appState = vi.hoisted(() => ({
   isPackaged: false,
@@ -109,5 +115,44 @@ describe('checkForUpdates', () => {
     expect(requestUrl).toEqual(
       `http://localhost:9090/api/v1/desktop/update-check?${updateCheckQuery}`,
     );
+  });
+});
+
+describe('exportDiagnostics', () => {
+  beforeEach(() => {
+    appState.isPackaged = false;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('writes a non-empty app build in diagnostics.json', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const archivePath = join(tempRoot, 'diagnostics.zip');
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({
+      canceled: false,
+      filePath: archivePath,
+    });
+
+    const { exportDiagnostics } = await import('../diagnostics');
+
+    await exportDiagnostics({
+      getState: () => ({ status: 'healthy' }),
+    } as unknown as SidecarManager);
+
+    const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean);
+    const diagnosticsEntry = entries.find((entry) => entry.endsWith('/diagnostics.json'));
+    expect(diagnosticsEntry).toBeTruthy();
+
+    const diagnosticsJson = execFileSync('unzip', ['-p', archivePath, diagnosticsEntry ?? ''], {
+      encoding: 'utf8',
+    });
+    const diagnostics = JSON.parse(diagnosticsJson) as { app?: { build?: string } };
+    expect(diagnostics.app?.build).toBeTruthy();
+
+    rmSync(tempRoot, { recursive: true, force: true });
   });
 });
