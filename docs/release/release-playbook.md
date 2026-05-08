@@ -1,6 +1,6 @@
 # Vivi Drop Beta 發佈手冊
 
-本文件是目前 beta 發佈的總入口。iOS TestFlight、desktop 安裝包（macOS / Windows）和 beta tag 都按這裡的順序執行。
+本文件是目前 beta 發佈的總入口。iOS TestFlight、Android Debug 構建驗證、desktop 安裝包（macOS / Windows）和 beta tag 都按這裡的順序執行。
 
 詳細步驟仍然分別落在：
 
@@ -32,14 +32,16 @@ git status --short
 pnpm --filter @syncflow/mobile exec tsc --noEmit
 pnpm --filter @syncflow/desktop test
 pnpm --filter @syncflow/desktop typecheck
+pnpm build:mobile:android
 cd services/sidecar-go && go test ./...
 ```
 
 還要滿足：
 
 1. iOS Debug / Release build 通過
-2. 關鍵真機回歸過一輪
-3. 目前工作區乾淨
+2. Android Debug build 通過
+3. 關鍵真機回歸過一輪
+4. 目前工作區乾淨
 
 回歸基線見：
 
@@ -164,12 +166,13 @@ pnpm tag:beta:push
 1. 遞增 iOS build number
 2. 跑預檢測試
 3. 發 iOS TestFlight
-4. 出 macOS signed DMG
-5. 如本輪包含 Windows，出 Windows NSIS / ZIP
-6. 打 beta tag
-7. 確認工作區乾淨
-8. 推程式碼和 tag
-9. 等 TestFlight processing 完成後再擴大測試範圍
+4. 跑 Android Debug build
+5. 出 macOS signed DMG
+6. 如本輪包含 Windows，出 Windows NSIS / ZIP
+7. 打 beta tag
+8. 確認工作區乾淨
+9. 推程式碼和 tag
+10. 等 TestFlight processing 完成後再擴大測試範圍
 
 ## 8. 發佈後的最小冒煙
 
@@ -182,7 +185,16 @@ pnpm tag:beta:push
 5. 中途斷網恢復
 6. 歷史和設定頁狀態正常
 
-### 8.2 macOS
+### 8.2 Android
+
+1. Debug build 安裝
+2. 配對
+3. 同步一輪真實素材
+4. 切背景繼續上傳
+5. 中途斷網恢復
+6. 歷史和設定頁狀態正常
+
+### 8.3 macOS
 
 1. 從 DMG fresh install
 2. app 正常啟動
@@ -191,7 +203,7 @@ pnpm tag:beta:push
 5. 診斷包匯出正常
 6. detail 分頁、排序、滾動正常
 
-### 8.3 Windows
+### 8.4 Windows
 
 1. 從 `ViviDrop-Setup.exe` fresh install
 2. app 正常啟動
@@ -205,11 +217,12 @@ pnpm tag:beta:push
 建議每次 beta 都在發佈記錄裡明確寫出：
 
 1. iOS build：例如 `0.1.0 (6)`
-2. desktop build：例如 `0.1.0 (6)`，並註明平台（macOS / Windows）
-3. git tag：例如 `beta/v0.1.0-b6`
-4. 對應提交 SHA
-5. 本輪重點驗證項
-6. 已知限制
+2. Android build：註明 Debug build 版本與提交
+3. desktop build：例如 `0.1.0 (6)`，並註明平台（macOS / Windows）
+4. git tag：例如 `beta/v0.1.0-b6`
+5. 對應提交 SHA
+6. 本輪重點驗證項
+7. 已知限制
 
 ## 10. 目前已指令碼化的入口
 
@@ -217,6 +230,7 @@ pnpm tag:beta:push
 
 ```bash
 SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflight
+pnpm build:mobile:android
 pnpm package:desktop:signed
 pnpm package:desktop:win
 pnpm tag:beta

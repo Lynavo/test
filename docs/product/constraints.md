@@ -6,19 +6,18 @@
 
 Vivi Drop V2 当前做两件事：
 
-- `iPhone -> Desktop（macOS / Windows）` 的局域网增量同步（自动 + 手动上传共存）
+- `Mobile（iOS / Android） -> Desktop（macOS / Windows）` 的局域网增量同步（自动 + 手动上传共存）
 - 桌面端共享文件供移动端浏览和下载
 
 明确不在当前范围内：
 
 1. Linux 桌面端
-2. Android 客户端
-3. 云端中转/云备份
-4. 多文件并发上传
+2. 云端中转/云备份
+3. 多文件并发上传
 
 补充说明：
 
-- macOS / Windows 都属于当前桌面端范围
+- macOS / Windows 都属于当前桌面端范围，iOS / Android 都属于当前移动端范围
 - 不要求所有辅助能力在两个平台上完全同构；平台差异以当前实现为准，例如 Windows 的共享地址以手动配置为主
 
 ## 2. 必须保持的产品约束
@@ -61,7 +60,7 @@ Vivi Drop V2 当前做两件事：
 
 - 按拍摄日期
 - 按素材创建日期
-- 按 iPhone 本地 UTC 日期
+- 按 mobile 本地 UTC 日期
 
 ### 2.5 renderer 隔离
 
@@ -89,7 +88,7 @@ desktop renderer 不直接访问：
 不是承诺：
 
 1. 云端统一素材管理
-2. 多平台全覆盖
+2. Linux 桌面端覆盖
 
 ## 4. 体验优先级
 

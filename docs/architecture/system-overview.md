@@ -13,10 +13,10 @@ Vivi Drop 目前的目標非常聚焦：
 
 目前範圍明確限制為：
 
-- 支援 `iOS -> Desktop` 完整同步鏈路；`Android -> Desktop` 目前僅完成壳层、配對入口與基礎橋接
+- 支援 `iOS / Android -> Desktop` 同步鏈路
 - 僅支援區域網傳輸
 - 不支援使用者在 UI 手動挑選、刪除、跳過或重排佇列
-- 同一台 iPhone 同一時間只傳 1 個檔案
+- 同一台手機同一時間只傳 1 個檔案
 
 ## 2. 執行時組件
 
@@ -47,7 +47,7 @@ Vivi Drop 目前的目標非常聚焦：
 1. 提供 TCP 檔案接收協定服務
 2. 提供 HTTP API、WebSocket、共享偵測和 dashboard 聚合
 3. 管理落盤目錄、續傳 `.part` 檔案、SQLite 持久化
-4. 廣播 Bonjour/mDNS，供 iPhone 發現
+4. 廣播 Bonjour/mDNS，供 mobile 發現
 
 關鍵連接埠：
 
@@ -67,7 +67,7 @@ Vivi Drop 目前的目標非常聚焦：
 
 1. 展示發現頁、同步狀態、歷史、設定
 2. 透過原生 bridge 呼叫對應平台能力
-3. iOS 連到原生 `SyncEngine`；Android 目前連到基礎 `NativeSyncEngine` shell
+3. 透過原生 bridge 呼叫 iOS / Android 對應的 `SyncEngine` 能力
 4. 只承載 UI，不直接負責真實傳輸
 
 關鍵目錄：
@@ -76,7 +76,7 @@ Vivi Drop 目前的目標非常聚焦：
 - `apps/mobile/src/navigation`
 - `apps/mobile/specs`
 
-### 2.4 iOS 原生 SyncEngine
+### 2.4 Mobile 原生 SyncEngine
 
 職責：
 
@@ -88,7 +88,7 @@ Vivi Drop 目前的目標非常聚焦：
 關鍵目錄：
 
 - `apps/mobile/ios/SyncEngine`
-- `apps/mobile/android/app/src/main/java/com/syncflow/mobile/sync`
+- `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync`
 
 ## 3. 關鍵資料流
 
@@ -116,7 +116,7 @@ Vivi Drop 目前的目標非常聚焦：
 
 標準鏈路：
 
-1. mobile 從 PhotoKit 掃描素材並寫入本地 `upload_items`
+1. mobile 從平台相簿媒體庫掃描素材並寫入本地上傳佇列
 2. 主上傳輪次從本地 pending 佇列建構真實上傳集合
 3. `SyncEngine` 建立 TCP 會話並發 `HELLO_REQ / AUTH_REQ / SYNC_BEGIN_REQ`
 4. sidecar 逐檔案處理 `FILE_INIT_REQ / FILE_DATA / FILE_END_REQ`
@@ -159,7 +159,7 @@ Vivi Drop 目前的目標非常聚焦：
 
 ```text
 apps/desktop      Electron 桌面端
-apps/mobile       React Native iOS/Android + iOS 原生 SyncEngine + Android shell
+apps/mobile       React Native iOS/Android + 平台原生 SyncEngine
 packages/contracts 共享 DTO、常量、連接埠、事件名
 packages/design-tokens 共享設計 token
 services/sidecar-go Go sidecar

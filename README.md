@@ -1,11 +1,11 @@
 # Vivi Drop
 
-移动端 → Desktop（macOS / Windows）局域网素材无感增量同步工具，面向短视频团队。当前 iOS 具备完整同步链路，Android 已接入基础壳层、局域网发现与手动配对入口。
+移动端（iOS / Android）→ Desktop（macOS / Windows）局域网素材无感增量同步工具，面向短视频团队。
 
 ## 当前状态
 
-- 桌面端、Go sidecar、移动端和 iOS 原生 `SyncEngine` 都已落地
-- Android 移动端已接入原生工程、局域网自动发现、手动配对入口和设置/诊断壳层，扫码配对与真实同步引擎仍待补齐
+- 桌面端、Go sidecar、移动端和 iOS / Android 原生同步能力都已落地
+- iOS 与 Android 移动端都属于当前支持范围
 - 当前工作重点是 beta 收口、异常恢复、后台上传和发布验证
 - 仓库中目前没有单独维护的产品 spec 文件；开发基线以当前代码、`@syncflow/contracts` 和测试矩阵为准
 
@@ -72,9 +72,9 @@ vivi-drop/
 │   │       ├── main/         # 主進程（窗口、IPC、sidecar 生命周期）
 │   │       ├── preload/      # 預先加載橋接
 │   │       └── renderer/     # React 18 UI
-│   └── mobile/               # React Native iOS/Android 應用 + iOS 原生 SyncEngine
+│   └── mobile/               # React Native iOS/Android 應用 + 平台原生同步能力
 │       ├── ios/              # Xcode 工程、Swift 原生模組
-│       ├── android/          # Android 工程、Kotlin bridge、基础壳层
+│       ├── android/          # Android 工程、Kotlin bridge、原生同步能力
 │       ├── src/              # RN 頁面和 hooks
 │       └── __tests__/        # RN 測試
 ├── packages/
@@ -101,7 +101,7 @@ vivi-drop/
 | Desktop UI     | React 18.3 + zustand 5 + Tailwind CSS v4                   |
 | Mobile         | React Native 0.84.1 + React 19（iOS / Android）            |
 | iOS Native     | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
-| Android Native | Kotlin bridge + Android shell（同步引擎待补齐）            |
+| Android Native | Kotlin bridge + NativeSyncEngine / MediaStore / NsdManager |
 | Sidecar        | Go 1.25.6 + SQLite + WebSocket                             |
 | Shared         | `@syncflow/contracts` + `@syncflow/design-tokens`          |
 | Test           | vitest 4.1 + jest + `go test`                              |
@@ -111,7 +111,7 @@ vivi-drop/
 ```text
 Mobile (RN UI on iOS / Android)
   ├── iOS: Swift SyncEngine
-  └── Android: Kotlin NativeSyncEngine shell
+  └── Android: Kotlin NativeSyncEngine
   ├── Bonjour/mDNS discover
   ├── LMUP/TCP :39393
   └── Presence/HTTP :39394

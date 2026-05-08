@@ -60,7 +60,7 @@ cd /Volumes/workspace/work/sync-flow/apps/mobile/android
 1. TypeScript 通过
 2. iOS Debug 构建通过
 3. iOS Release smoke 构建通过
-4. Android Debug 构建通过（涉及 Android 工程或桥接时）
+4. Android Debug 构建通过
 
 ## 3. 真机脚本回归
 
@@ -117,7 +117,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 ### 4.1 首次安装
 
 1. 安装 desktop（macOS DMG 或 Windows NSIS）+ sidecar
-2. 安装 iPhone app
+2. 安装 mobile app（iOS / Android）
 3. 配对成功
 4. 首页显示已连接
 5. 设置页显示 `已连接`
@@ -149,7 +149,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 1. 从 `Vivi Drop-Setup.exe` fresh install
 2. 安装后确认 `Vivi Drop Sidecar TCP / Vivi Drop mDNS UDP` 防火墙规则存在
 3. 设置页能看到 Bonjour 运行时或 fallback 状态
-4. iPhone 能发现并配对
+4. mobile 能发现并配对
 5. 触发一轮真实素材同步
 
 ### 4.6 iOS thermal 回归
@@ -172,7 +172,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 8. 后台 + thermal != nominal 时确认：
    - `activeTuningProfile` 显示 `background_thermal`（而非普通 `background`）
    - incremental rescan 日志显示 `deferring incremental rescan`
-9. Android 不需要复现同等策略，但要确认 idle summary 兼容字段不影响基础构建
+9. Android 需完成基础构建与冒烟验证；iOS thermal 专属策略按本节验证
 
 ## 5. 当前已覆盖的重点场景
 
@@ -195,10 +195,11 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 1. `go test ./...` 全绿
 2. mobile TypeScript 通过
 3. iOS Debug/Release 构建通过
-4. `batch + recovery-sidecar + recovery-late-sidecar + recovery-app` 至少各过 1 轮
-5. 真实设备上手工验证一次：后台上传 + 断网恢复
-6. 如本轮包含 Windows 桌面包，至少完成一次 NSIS fresh install + 配对上传冒烟
-7. 如本轮包含 iOS thermal 策略改动，至少完成一次 serious/critical thermal 手工回归并导出 mobile diagnostics
+4. Android Debug 构建通过
+5. `batch + recovery-sidecar + recovery-late-sidecar + recovery-app` 至少各过 1 轮
+6. 真实设备上手工验证一次：后台上传 + 断网恢复
+7. 如本轮包含 Windows 桌面包，至少完成一次 NSIS fresh install + 配对上传冒烟
+8. 如本轮包含 iOS thermal 策略改动，至少完成一次 serious/critical thermal 手工回归并导出 mobile diagnostics
 
 ## 7. 日志与产物
 

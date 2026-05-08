@@ -104,7 +104,7 @@ Native bridge 暴露的原子操作。任何觸發清理的時機都調用這一
 **保留範圍：**
 
 - 語言設定、theme、系統權限狀態
-- `clientDisplayName`（「我的 iPhone」等裝置 label，視為裝置偏好非帳號資料）
+- `clientDisplayName`（「我的手機」等裝置 label，視為裝置偏好非帳號資料）
 - Debug override（`@vividrop/debug/api_base_url`，開發工具跟 user 無關）
 
 ### 3.3 Desktop sidecar reset（新增）
@@ -146,7 +146,7 @@ Native bridge 暴露的原子操作。任何觸發清理的時機都調用這一
 | --- | --- |
 | `apps/mobile/ios/SyncEngine/SyncEngineManager.swift` | 新增 `wipeSyncIdentity()` — 作為單一 orchestrator，協調清 binding / pairing token / clientId / upload queue / sync sessions / daily ledger / auto upload config。保留 clientDisplayName。 |
 | `apps/mobile/ios/SyncEngine/BindingService.swift` | 補 `clearClientId()` 等底層 keychain helper，供 `SyncEngineManager.wipeSyncIdentity()` 調用 |
-| `apps/mobile/android/.../NativeSyncEngineModule.kt` | 對應 Android 實作：清 `PREF_BINDING` / `PREF_CLIENT_ID` / owner/install marker；目前 Android shell 無 queue/history DB，不額外引入 Room |
+| `apps/mobile/android/.../NativeSyncEngineModule.kt` | 對應 Android 實作：清 `PREF_BINDING` / `PREF_CLIENT_ID` / owner/install marker；不額外引入 Room |
 | `apps/mobile/src/services/SyncEngineModule.ts` | 暴露 `wipeSyncIdentity(): Promise<void>` bridge |
 | `apps/mobile/src/services/sidecar-reset-service.ts`（新檔） | 根據目前 binding host，best-effort 呼叫 `POST http://<host>:39394/settings/reset-state` |
 | `apps/mobile/src/utils/clearUserScopedStorage.ts`（新檔） | `getAllKeys()` + filter `@vividrop/reminder-shown/*` + `multiRemove` |

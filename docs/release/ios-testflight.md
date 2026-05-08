@@ -148,7 +148,7 @@ SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflig
    - 断网恢复
    - 设置页连接状态
 3. 已知限制：
-   - 仅支持 iPhone -> Mac
+   - 当前 TestFlight 包仅覆盖 iOS 发布渠道
    - 当前 beta 重点验证局域网同步与异常恢复
 
 ## 8. 建议的发布顺序

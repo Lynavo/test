@@ -6,21 +6,21 @@
 
 ### 1.1 設備身份
 
-- **iPhone 身份**：`clientId`
-- 由 mobile 生成並持久化在 Keychain
+- **mobile 身份**：`clientId`
+- 由 mobile 生成並持久化在平台安全儲存中
 - desktop 端識別「是不是同一台手機」依賴它，而不是設備名或 IP
 
 ### 1.2 設備顯示名
 
 - 系統設備名在 iOS 16+ 並不可靠
-- 目前實作會為通用名生成穩定唯一名，例如 `iPhone 9C2A`
+- 目前實作會為通用名生成穩定唯一名，例如 `Phone 9C2A`
 - 使用者手動修改的顯示名保存在 Keychain
 
 ### 1.3 雙端 `deviceId`
 
 共享 `HistoryLedgerCardDTO` 的 `deviceId` 在兩端方向不同：
 
-- desktop：`deviceId = iPhone clientId`
+- desktop：`deviceId = mobile clientId`
 - mobile：`deviceId = desktop serverId`
 
 讀程式碼時必須注意這個方向差異。

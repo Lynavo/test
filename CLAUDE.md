@@ -2,13 +2,13 @@
 
 ## 项目概述
 
-**Vivi Drop**（内部 monorepo 代号 SyncFlow V2）是一款面向短视频与素材协作场景的**局域网素材同步与目录管理工具**，支持移动端（iPhone）与 PC 端（macOS / Windows）协同工作。核心工作流：
+**Vivi Drop**（内部 monorepo 代号 SyncFlow V2）是一款面向短视频与素材协作场景的**局域网素材同步与目录管理工具**，支持移动端（iOS / Android）与 PC 端（macOS / Windows）协同工作。核心工作流：
 
 1. 手机端拍摄或保存素材 → 上传到当前连接电脑的 **`received`** 接收目录
 2. PC 端集中管理、处理、剪辑素材 → 成品放入 **`shared`** 共享目录
 3. 手机端以**只读方式**访问当前连接电脑的 `shared`，支持预览图片、播放视频、下载
 
-Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS 原生 `SyncEngine`。
+Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS / Android 平台原生同步能力。
 
 ## 当前开发依据
 
@@ -188,7 +188,7 @@ pnpm format:check      # 格式检查
 
 - **Monorepo / Desktop / Sidecar / Mobile SyncEngine**：都已落地，不再是 greenfield 阶段
 - **当前重点**：异常恢复、后台上传、连接状态提示、beta 收口和发布验证
-- **回归基线**：以 `go test ./...`、`pnpm --filter @syncflow/mobile exec tsc --noEmit`、iOS 构建和 `docs/testing/beta-test-matrix.md` 为准
+- **回归基线**：以 `go test ./...`、`pnpm --filter @syncflow/mobile exec tsc --noEmit`、iOS 构建、Android Debug 构建和 `docs/testing/beta-test-matrix.md` 为准
 - **交接基线**：新同事优先依赖 `docs/architecture/*`、`docs/operations/*`、`docs/release/release-playbook.md`
 
 ## 排障与发布入口

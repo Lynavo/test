@@ -1,6 +1,6 @@
 # Mobile 诊断包说明
 
-本文件说明 iPhone 端“导出诊断包”当前包含什么、怎么看、有什么限制。
+本文件说明 mobile 端“导出诊断包”当前包含什么、怎么看、有什么限制。
 
 ## 1. 导出形式
 
@@ -27,7 +27,7 @@ mobile 端诊断包导出为一个 zip 文件，命名类似：
    - 版本号
    - build number
 3. `device`
-   - iOS 设备信息
+   - mobile 设备信息
 4. `client`
    - `clientId`
    - 当前显示名
@@ -171,7 +171,7 @@ mobile 本地 SQLite 快照。
 当前口径：
 
 - `performanceHint = thermal_limited`
-  - 代表 iOS 端已经主动降载
+  - 代表 mobile 端已经主动降载
 - `activeTuningProfile = background_thermal / thermal_serious / thermal_critical`
   - 代表当前限速来自热状态或后台热态保护
 - `THERMAL_PAUSE / THERMAL_RESUME`

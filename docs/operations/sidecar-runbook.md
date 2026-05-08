@@ -137,7 +137,7 @@ Get-Process syncflow-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
 现象：
 
 - desktop 实际没有监听端口
-- 但 iPhone 发现页还能看到这台设备
+- 但 mobile 发现页还能看到这台设备
 
 原因：
 
@@ -179,7 +179,7 @@ Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
 
 现象：
 
-- sidecar 已监听，但 iPhone 扫描不到或能扫到却连不上
+- sidecar 已监听，但 mobile 扫描不到或能扫到却连不上
 - 设置页提示 Bonjour fallback 或共享入口异常
 
 检查：

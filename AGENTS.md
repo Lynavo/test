@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-Vivi Drop V2：移动端 → Desktop（macOS / Windows）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端；其中 iOS 具备完整原生 `SyncEngine`，Android 当前为基础壳层和桥接入口。
+Vivi Drop V2：移动端（iOS / Android）→ Desktop（macOS / Windows）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS / Android 平台原生同步能力。
 
 ## 当前开发依据
 
@@ -131,7 +131,7 @@ pnpm format:check      # 格式检查
 
 - **Monorepo / Desktop / Sidecar / Mobile SyncEngine**：都已落地，不再是 greenfield 阶段
 - **当前重点**：异常恢复、后台上传、连接状态提示、beta 收口和发布验证
-- **回归基线**：以 `go test ./...`、`pnpm --filter @syncflow/mobile exec tsc --noEmit`、iOS 构建、Android Debug 构建（触及 Android 工程时）和 `docs/testing/beta-test-matrix.md` 为准
+- **回归基线**：以 `go test ./...`、`pnpm --filter @syncflow/mobile exec tsc --noEmit`、iOS 构建、Android Debug 构建和 `docs/testing/beta-test-matrix.md` 为准
 - **交接基线**：新同事优先依赖 `docs/architecture/*`、`docs/operations/*`、`docs/release/release-playbook.md`
 
 ## 排障与发布入口

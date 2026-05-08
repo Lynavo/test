@@ -13,7 +13,7 @@
 
 現況中，`clientName` / `deviceAlias` / `receiveDirName` 的責任邊界不夠清楚，導致以下問題：
 
-1. iPhone 改系統設備名後，桌面端接收目錄是否應跟著變動，語義不明
+1. mobile 改系統設備名後，桌面端接收目錄是否應跟著變動，語義不明
 2. UI 展示名稱與磁碟實際路徑互相耦合，容易造成誤解
 3. 若資料夾名會因展示名稱變動而自動 rename，外部備份、索引與腳本路徑會不穩定
 
@@ -57,7 +57,7 @@ displayName = deviceAlias ?? clientName ?? clientId
 
 ### 必須成立
 
-1. iPhone 改設備名稱後，Desktop 看板與 detail 可更新展示名稱
+1. mobile 改設備名稱後，Desktop 看板與 detail 可更新展示名稱
 2. 已存在的磁碟資料夾路徑保持不變
 3. 同一台設備不會因展示名稱改變而被識別成新設備
 4. Desktop「打開資料夾」永遠指向該設備既有的穩定接收路徑
@@ -122,9 +122,9 @@ candidate = sanitize(deviceAlias ?? clientName ?? clientId)
 
 若 `candidate` 已被其他設備占用，sidecar 需自動避衝突，例如：
 
-- `My iPhone`
-- `My iPhone (2)`
-- `My iPhone (3)`
+- `My Phone`
+- `My Phone (2)`
+- `My Phone (3)`
 
 避衝突檢查範圍：需同時檢查 DB `paired_devices.receive_dir_name` 和 `received/` 目錄，取聯集。原因：
 
@@ -502,7 +502,7 @@ const isPhone = /iphone|ipad|galaxy|pixel|android|mobile/i.test(
 
 完成後需滿足：
 
-1. iPhone 改設備名後，Desktop 展示名稱會更新
+1. mobile 改設備名後，Desktop 展示名稱會更新
 2. 既有接收資料夾名不會自動變更
 3. 新檔案仍落到原有設備資料夾下
 4. `clientId` 仍是唯一設備身份來源
