@@ -13,6 +13,7 @@ type PairedDevice struct {
 	LastSeenAt       string  `json:"lastSeenAt"`
 	RevokedAt        *string `json:"revokedAt,omitempty"`
 	ReceiveDirName   *string `json:"-"` // sanitized dir name on disk
+	StableDeviceID   *string `json:"stableDeviceId,omitempty"`
 }
 
 // Upload represents a single file upload record.
@@ -93,6 +94,7 @@ type DashboardDeviceResult struct {
 	ClientName      string  `json:"clientName"`
 	DeviceAlias     *string `json:"deviceAlias,omitempty"`
 	ReceiveDirName  *string `json:"-"`
+	StableDeviceID  *string `json:"stableDeviceId,omitempty"`
 	LastIP          *string `json:"ip,omitempty"`
 	Platform        string  `json:"platform"`
 	LastSeenAt      string  `json:"lastSeenAt"`

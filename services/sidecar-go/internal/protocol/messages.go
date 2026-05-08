@@ -11,6 +11,7 @@ type HelloReq struct {
 	PreviousSessionID string `json:"previousSessionId,omitempty"`
 	AppState          string `json:"appState"`
 	DeviceAlias       string `json:"deviceAlias,omitempty"`
+	StableDeviceID    string `json:"stableDeviceId,omitempty"`
 }
 
 // HelloRes is the server's response to HelloReq.
@@ -55,6 +56,7 @@ type PairReq struct {
 	ClientIP       string `json:"clientIp,omitempty"`
 	ConnectionCode string `json:"connectionCode"`
 	DeviceAlias    string `json:"deviceAlias,omitempty"`
+	StableDeviceID string `json:"stableDeviceId,omitempty"`
 }
 
 // PairRes is the server's response to PairReq.

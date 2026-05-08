@@ -4,6 +4,8 @@ import Security
 class BindingService {
     private static let keychainServiceName = "com.vividrop.mobile.china"
     private static let legacyKeychainServiceName = "com.syncflow.mobile"
+    private static let authDeviceIdKeychainServiceName = "cn.vividrop.auth-device-id"
+    private static let authDeviceIdKey = "auth-device-id"
     private static let clientIdKey = "syncflow_client_id"
     private static let pairingTokenKey = "syncflow_pairing_token"
     private static let clientDisplayNameKey = "syncflow_client_display_name"
@@ -100,6 +102,24 @@ class BindingService {
         deleteKeychain(key: Self.clientIdKey)
     }
 
+    /// Stable physical-device identifier shared with the JS auth API layer.
+    /// This survives app deletion on the same iPhone, but is not restored to a
+    /// different device. Desktop uses it only to hide older sync identities in
+    /// the dashboard; sync/upload identity remains `clientId`.
+    func getOrCreateStableDeviceId() -> String {
+        if let existing = readKeychainFromService(Self.authDeviceIdKeychainServiceName, key: Self.authDeviceIdKey) {
+            return existing
+        }
+        let newId = UUID().uuidString.lowercased()
+        writeKeychain(
+            service: Self.authDeviceIdKeychainServiceName,
+            key: Self.authDeviceIdKey,
+            value: newId,
+            accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        return newId
+    }
+
     /// Enumerate every keychain account stored under the current
     /// (`com.vividrop.mobile.china`) service. Exposed so the wipe orchestrator
     /// can discover per-device pairing tokens whose names are not known at
@@ -156,10 +176,19 @@ class BindingService {
     // MARK: - Keychain Helpers
 
     private func writeKeychain(key: String, value: String) {
+        writeKeychain(
+            service: Self.keychainServiceName,
+            key: key,
+            value: value,
+            accessible: kSecAttrAccessibleAfterFirstUnlock
+        )
+    }
+
+    private func writeKeychain(service: String, key: String, value: String, accessible: CFString) {
         let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.keychainServiceName,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
         // Delete any existing entry first to avoid errSecDuplicateItem
@@ -167,7 +196,7 @@ class BindingService {
 
         var addQuery = query
         addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        addQuery[kSecAttrAccessible as String] = accessible
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status != errSecSuccess {
             slog("[BindingService] Keychain write failed for %@: OSStatus=%d", key, status)

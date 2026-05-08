@@ -37,6 +37,8 @@ export interface DashboardSummaryDTO {
 
 export interface DashboardDeviceDTO {
   deviceId: string;
+  /** Stable physical-device identity, when reported by mobile */
+  stableDeviceId?: string;
   /** Resolved display label: deviceAlias ?? clientName ?? clientId */
   displayName: string;
   /** Raw device name reported at pairing time; kept for diagnostics */

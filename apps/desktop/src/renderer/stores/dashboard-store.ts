@@ -16,9 +16,41 @@ const STATUS_PRIORITY: Record<DeviceDashboardStatus, number> = {
 const pendingOfflineStatusTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function sortDevices(devices: DashboardDeviceDTO[]): DashboardDeviceDTO[] {
-  return [...devices].sort(
-    (a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status],
-  );
+  return [...devices].sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]);
+}
+
+function legacyDashboardIdentityKey(device: DashboardDeviceDTO): string {
+  return `${device.platform}\x00${device.displayName}`;
+}
+
+export function filterVisibleDashboardDevices(devices: DashboardDeviceDTO[]): DashboardDeviceDTO[] {
+  const visibleStableDeviceIds = new Set<string>();
+  const hiddenOfflineLegacyKeys = new Set<string>();
+  const visible: DashboardDeviceDTO[] = [];
+
+  for (const device of devices) {
+    const stableDeviceId = device.stableDeviceId?.trim();
+    const legacyKey = legacyDashboardIdentityKey(device);
+
+    if (stableDeviceId) {
+      if (visibleStableDeviceIds.has(stableDeviceId)) {
+        continue;
+      }
+
+      visibleStableDeviceIds.add(stableDeviceId);
+      hiddenOfflineLegacyKeys.add(legacyKey);
+      visible.push(device);
+      continue;
+    }
+
+    if (device.status === 'offline' && hiddenOfflineLegacyKeys.has(legacyKey)) {
+      continue;
+    }
+
+    visible.push(device);
+  }
+
+  return visible;
 }
 
 function isSidecarHealthy(): boolean {
@@ -66,9 +98,8 @@ function clearPendingOfflineStatus(deviceId: string): void {
 
 function scheduleOfflineStatus(
   deviceId: string,
-  set: (partial:
-    | Partial<DashboardState>
-    | ((state: DashboardState) => Partial<DashboardState>),
+  set: (
+    partial: Partial<DashboardState> | ((state: DashboardState) => Partial<DashboardState>),
   ) => void,
 ): void {
   clearPendingOfflineStatus(deviceId);
@@ -122,9 +153,8 @@ export interface DashboardState {
 function reconcileIncomingDevices(
   incomingDevices: DashboardDeviceDTO[],
   currentDevices: DashboardDeviceDTO[],
-  set: (partial:
-    | Partial<DashboardState>
-    | ((state: DashboardState) => Partial<DashboardState>),
+  set: (
+    partial: Partial<DashboardState> | ((state: DashboardState) => Partial<DashboardState>),
   ) => void,
 ): DashboardDeviceDTO[] {
   return incomingDevices.map((device) => {
@@ -185,7 +215,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       if (summary) set({ summary });
       if (devices) {
         const merged = reconcileIncomingDevices(devices, get().devices, set);
-        set({ devices: sortDevices(merged) });
+        set({ devices: sortDevices(filterVisibleDashboardDevices(merged)) });
       }
     } catch (err) {
       console.error('Failed to fetch dashboard:', err);
@@ -204,11 +234,13 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
 
   dismissDiskWarning: () => set({ diskWarningDismissed: true }),
 
-  updateSummary: (summary) => { if (summary) set({ summary }); },
+  updateSummary: (summary) => {
+    if (summary) set({ summary });
+  },
 
   updateDevices: (devices) => {
     const merged = reconcileIncomingDevices(devices, get().devices, set);
-    set({ devices: sortDevices(merged) });
+    set({ devices: sortDevices(filterVisibleDashboardDevices(merged)) });
   },
 
   updateDeviceProgress: (deviceId, fileKey, progress) => {

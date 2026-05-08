@@ -8,8 +8,8 @@ import (
 // UpsertPairedDevice inserts or replaces a paired device record.
 func (s *Store) UpsertPairedDevice(d PairedDevice) error {
 	_, err := s.db.Exec(`
-		INSERT INTO paired_devices (client_id, client_name, device_alias, last_ip, platform, pairing_id, pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO paired_devices (client_id, client_name, device_alias, last_ip, platform, pairing_id, pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name, stable_device_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(client_id) DO UPDATE SET
 			client_name = excluded.client_name,
 			device_alias = excluded.device_alias,
@@ -19,10 +19,11 @@ func (s *Store) UpsertPairedDevice(d PairedDevice) error {
 			pairing_token_hash = excluded.pairing_token_hash,
 			last_seen_at = excluded.last_seen_at,
 			revoked_at = excluded.revoked_at,
-			receive_dir_name = COALESCE(excluded.receive_dir_name, paired_devices.receive_dir_name)`,
+			receive_dir_name = COALESCE(excluded.receive_dir_name, paired_devices.receive_dir_name),
+			stable_device_id = COALESCE(excluded.stable_device_id, paired_devices.stable_device_id)`,
 		d.ClientID, d.ClientName, d.DeviceAlias, d.LastIP, d.Platform,
 		d.PairingID, d.PairingTokenHash, d.CreatedAt, d.LastSeenAt, d.RevokedAt,
-		d.ReceiveDirName,
+		d.ReceiveDirName, d.StableDeviceID,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert paired device %q: %w", d.ClientID, err)
@@ -35,12 +36,12 @@ func (s *Store) GetPairedDevice(clientID string) (*PairedDevice, error) {
 	d := &PairedDevice{}
 	err := s.db.QueryRow(`
 		SELECT client_id, client_name, device_alias, last_ip, platform, pairing_id,
-		       pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name
+		       pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name, stable_device_id
 		FROM paired_devices WHERE client_id = ?`, clientID,
 	).Scan(
 		&d.ClientID, &d.ClientName, &d.DeviceAlias, &d.LastIP, &d.Platform,
 		&d.PairingID, &d.PairingTokenHash, &d.CreatedAt, &d.LastSeenAt, &d.RevokedAt,
-		&d.ReceiveDirName,
+		&d.ReceiveDirName, &d.StableDeviceID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("get paired device %q: %w", clientID, err)
@@ -61,7 +62,7 @@ func (s *Store) UpdateReceiveDirName(clientID, dirName string) error {
 func (s *Store) ListPairedDevices() ([]PairedDevice, error) {
 	rows, err := s.db.Query(`
 		SELECT client_id, client_name, device_alias, last_ip, platform, pairing_id,
-		       pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name
+		       pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name, stable_device_id
 		FROM paired_devices ORDER BY last_seen_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list paired devices: %w", err)
@@ -74,7 +75,7 @@ func (s *Store) ListPairedDevices() ([]PairedDevice, error) {
 		if err := rows.Scan(
 			&d.ClientID, &d.ClientName, &d.DeviceAlias, &d.LastIP, &d.Platform,
 			&d.PairingID, &d.PairingTokenHash, &d.CreatedAt, &d.LastSeenAt, &d.RevokedAt,
-			&d.ReceiveDirName,
+			&d.ReceiveDirName, &d.StableDeviceID,
 		); err != nil {
 			return nil, fmt.Errorf("scan paired device: %w", err)
 		}

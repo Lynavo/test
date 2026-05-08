@@ -1651,6 +1651,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func buildClientHelloPayload(clientId: String, pairingToken: String? = nil) async -> [String: Any] {
         var payload: [String: Any] = [
             "clientId": clientId,
+            "stableDeviceId": bindingService.getOrCreateStableDeviceId(),
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": currentAppVersionLabel(),
@@ -4523,6 +4524,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // 3. PAIR_REQ → PAIR_RES  (spec Section 7.8)
         var pairPayload: [String: Any] = [
             "clientId": clientId,
+            "stableDeviceId": bindingService.getOrCreateStableDeviceId(),
             "clientName": getClientDisplayName(),
             "connectionCode": trimmedConnectionCode,
         ]

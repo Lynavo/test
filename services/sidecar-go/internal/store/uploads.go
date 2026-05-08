@@ -323,6 +323,7 @@ func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, erro
 			pd.client_name,
 			pd.device_alias,
 			pd.receive_dir_name,
+			pd.stable_device_id,
 			pd.last_ip,
 			pd.platform,
 			pd.last_seen_at,
@@ -357,7 +358,7 @@ func (s *Store) GetDashboardDevices(today string) ([]DashboardDeviceResult, erro
 	for rows.Next() {
 		var d DashboardDeviceResult
 		if err := rows.Scan(
-			&d.ClientID, &d.ClientName, &d.DeviceAlias, &d.ReceiveDirName, &d.LastIP, &d.Platform,
+			&d.ClientID, &d.ClientName, &d.DeviceAlias, &d.ReceiveDirName, &d.StableDeviceID, &d.LastIP, &d.Platform,
 			&d.LastSeenAt, &d.FileCount, &d.TotalBytes, &d.CurrentFile, &d.CurrentProgress,
 			&d.CurrentFileSize, &d.SessionState,
 		); err != nil {

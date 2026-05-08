@@ -79,6 +79,7 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 	// Transform to DashboardDeviceDTO shape expected by desktop renderer
 	type deviceDTO struct {
 		DeviceID        string `json:"deviceId"`
+		StableDeviceID  string `json:"stableDeviceId,omitempty"`
 		ClientName      string `json:"clientName"`
 		DisplayName     string `json:"displayName"`
 		DeviceAlias     string `json:"deviceAlias,omitempty"`
@@ -107,6 +108,26 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 		if d.LastIP != nil {
 			ip = *d.LastIP
 		}
+		if d.ReceiveDirName == nil || *d.ReceiveDirName == "" {
+			slog.Error("device missing receive_dir_name, skipping", "clientID", d.ClientID)
+			continue
+		}
+		devicePath := filepath.Join(s.config.ReceiveDir, *d.ReceiveDirName)
+
+		// Assemble displayName: deviceAlias ?? clientName ?? clientId
+		displayName := d.ClientName
+		if d.DeviceAlias != nil && *d.DeviceAlias != "" {
+			displayName = *d.DeviceAlias
+		}
+		if displayName == "" {
+			displayName = d.ClientID
+		}
+
+		stableDeviceID := ""
+		if d.StableDeviceID != nil {
+			stableDeviceID = *d.StableDeviceID
+		}
+
 		// Derive status: live TCP > HTTP presence > offline
 		status := "offline"
 		if s.clientStates != nil {
@@ -123,23 +144,9 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 			status = "connected_idle"
 		}
 
-		if d.ReceiveDirName == nil || *d.ReceiveDirName == "" {
-			slog.Error("device missing receive_dir_name, skipping", "clientID", d.ClientID)
-			continue
-		}
-		devicePath := filepath.Join(s.config.ReceiveDir, *d.ReceiveDirName)
-
-		// Assemble displayName: deviceAlias ?? clientName ?? clientId
-		displayName := d.ClientName
-		if d.DeviceAlias != nil && *d.DeviceAlias != "" {
-			displayName = *d.DeviceAlias
-		}
-		if displayName == "" {
-			displayName = d.ClientID
-		}
-
 		dto := deviceDTO{
 			DeviceID:       d.ClientID,
+			StableDeviceID: stableDeviceID,
 			ClientName:     d.ClientName,
 			DisplayName:    displayName,
 			Platform:       d.Platform,

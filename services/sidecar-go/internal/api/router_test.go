@@ -47,6 +47,51 @@ func testEnv(t *testing.T) (*store.Store, *config.Config, *events.Hub) {
 	return st, cfg, hub
 }
 
+func insertPairedDeviceWithStableID(
+	t *testing.T,
+	st *store.Store,
+	clientID string,
+	clientName string,
+	receiveDirName string,
+	stableDeviceID string,
+	lastSeenAt string,
+) {
+	t.Helper()
+	insertPairedDeviceWithOptionalStableID(t, st, clientID, clientName, receiveDirName, &stableDeviceID, lastSeenAt)
+}
+
+func insertPairedDeviceWithOptionalStableID(
+	t *testing.T,
+	st *store.Store,
+	clientID string,
+	clientName string,
+	receiveDirName string,
+	stableDeviceID *string,
+	lastSeenAt string,
+) {
+	t.Helper()
+
+	if _, err := st.DB().Exec(`
+		INSERT INTO paired_devices (
+			client_id, client_name, last_ip, platform, pairing_id, pairing_token_hash,
+			created_at, last_seen_at, receive_dir_name, stable_device_id
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		clientID,
+		clientName,
+		"192.168.1.10",
+		"ios",
+		"pair-"+clientID,
+		"hash-"+clientID,
+		lastSeenAt,
+		lastSeenAt,
+		receiveDirName,
+		stableDeviceID,
+	); err != nil {
+		t.Fatalf("insert paired device %q: %v", clientID, err)
+	}
+}
+
 type fakeClientStates map[string]string
 
 func (f fakeClientStates) ConnectedClientStates() map[string]string {
@@ -152,6 +197,89 @@ func TestDashboardDevices(t *testing.T) {
 	// Should be an empty array (not null)
 	if body == nil {
 		t.Error("expected empty array, got nil")
+	}
+}
+
+func TestDashboardDevicesIncludesStableIdentityMetadataWithoutHidingRows(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+
+	now := time.Now().UTC()
+	oldSeen := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	newSeen := now.Format(time.RFC3339)
+	stableDeviceID := "physical-phone-1"
+
+	insertPairedDeviceWithStableID(t, st, "client-old", "iPhone wen", "iPhone wen", stableDeviceID, oldSeen)
+	insertPairedDeviceWithStableID(t, st, "client-new", "iPhone wen", "iPhone wen 2", stableDeviceID, newSeen)
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/dashboard/devices")
+	if err != nil {
+		t.Fatalf("GET /dashboard/devices: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var devices []struct {
+		DeviceID       string `json:"deviceId"`
+		StableDeviceID string `json:"stableDeviceId,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		t.Fatalf("decode dashboard devices: %v", err)
+	}
+
+	if len(devices) != 2 {
+		t.Fatalf("expected API to keep both sync identities, got %d devices: %+v", len(devices), devices)
+	}
+	if devices[0].DeviceID != "client-new" {
+		t.Fatalf("expected newest client-new first, got %q", devices[0].DeviceID)
+	}
+	if devices[0].StableDeviceID != stableDeviceID || devices[1].StableDeviceID != stableDeviceID {
+		t.Fatalf("expected stable device metadata on both rows, got %+v", devices)
+	}
+}
+
+func TestDashboardDevicesKeepsLegacySameNameRowsForSharedConsumers(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+
+	now := time.Now().UTC()
+	oldSeen := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	newSeen := now.Format(time.RFC3339)
+	stableDeviceID := "physical-phone-1"
+
+	insertPairedDeviceWithOptionalStableID(t, st, "client-old", "iPhone wen", "iPhone wen", nil, oldSeen)
+	insertPairedDeviceWithStableID(t, st, "client-new", "iPhone wen", "iPhone wen 2", stableDeviceID, newSeen)
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/dashboard/devices")
+	if err != nil {
+		t.Fatalf("GET /dashboard/devices: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var devices []struct {
+		DeviceID       string `json:"deviceId"`
+		StableDeviceID string `json:"stableDeviceId,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&devices); err != nil {
+		t.Fatalf("decode dashboard devices: %v", err)
+	}
+
+	if len(devices) != 2 {
+		t.Fatalf("expected API to keep stable and legacy same-name rows, got %d devices: %+v", len(devices), devices)
+	}
+	if devices[0].DeviceID != "client-new" {
+		t.Fatalf("expected newest stable client-new first, got %q", devices[0].DeviceID)
+	}
+	if devices[0].StableDeviceID != stableDeviceID {
+		t.Fatalf("expected stable metadata on new row, got %+v", devices[0])
+	}
+	if devices[1].DeviceID != "client-old" || devices[1].StableDeviceID != "" {
+		t.Fatalf("expected legacy row to remain without stable metadata, got %+v", devices[1])
 	}
 }
 

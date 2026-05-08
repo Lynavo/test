@@ -121,6 +121,11 @@ func (c *connection) handleHello(body []byte) error {
 			shouldUpsertDevice = true
 			metadataChanged = true
 		}
+		if req.StableDeviceID != "" && (device.StableDeviceID == nil || *device.StableDeviceID != req.StableDeviceID) {
+			device.StableDeviceID = &req.StableDeviceID
+			shouldUpsertDevice = true
+			metadataChanged = true
+		}
 
 		if shouldUpsertDevice {
 			device.LastSeenAt = time.Now().UTC().Format(time.RFC3339)
@@ -289,6 +294,9 @@ func (c *connection) handlePair(body []byte) error {
 		PairingTokenHash: tokenHash,
 		CreatedAt:        now,
 		LastSeenAt:       now,
+	}
+	if req.StableDeviceID != "" {
+		device.StableDeviceID = &req.StableDeviceID
 	}
 
 	// Generate dir name + store device atomically under the dir-name mutex.

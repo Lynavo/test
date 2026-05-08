@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
+  filterVisibleDashboardDevices,
   resetPendingOfflineStatusDebounceForTests,
   useDashboardStore,
 } from '../dashboard-store';
@@ -106,6 +107,90 @@ describe('dashboard-store', () => {
     const devices = useDashboardStore.getState().devices;
     expect(devices[0].deviceId).toBe('x2');
     expect(devices[1].deviceId).toBe('x1');
+  });
+
+  it('filters duplicate dashboard cards by stable physical-device identity', () => {
+    const devices: DashboardDeviceDTO[] = [
+      {
+        deviceId: 'client-new',
+        stableDeviceId: 'physical-phone-1',
+        displayName: 'iPhone wen',
+        clientName: 'iPhone wen',
+        platform: 'ios',
+        ip: '10.0.0.2',
+        status: 'offline',
+        todayFileCount: 0,
+        todayBytes: 0,
+        storageLeft: '500 GB',
+        storagePath: '/tmp',
+        devicePath: '/tmp/iPhone_wen_2',
+      },
+      {
+        deviceId: 'client-old',
+        stableDeviceId: 'physical-phone-1',
+        displayName: 'iPhone wen',
+        clientName: 'iPhone wen',
+        platform: 'ios',
+        ip: '10.0.0.1',
+        status: 'offline',
+        todayFileCount: 0,
+        todayBytes: 0,
+        storageLeft: '500 GB',
+        storagePath: '/tmp',
+        devicePath: '/tmp/iPhone_wen',
+      },
+    ];
+
+    expect(filterVisibleDashboardDevices(devices).map((device) => device.deviceId)).toEqual([
+      'client-new',
+    ]);
+  });
+
+  it('only hides offline legacy same-name cards after a stable identity exists', () => {
+    const stableDevice: DashboardDeviceDTO = {
+      deviceId: 'client-new',
+      stableDeviceId: 'physical-phone-1',
+      displayName: 'iPhone wen',
+      clientName: 'iPhone wen',
+      platform: 'ios',
+      ip: '10.0.0.2',
+      status: 'connected_idle',
+      todayFileCount: 10,
+      todayBytes: 1024,
+      storageLeft: '500 GB',
+      storagePath: '/tmp',
+      devicePath: '/tmp/iPhone_wen_2',
+    };
+    const offlineLegacyDevice: DashboardDeviceDTO = {
+      deviceId: 'client-old',
+      displayName: 'iPhone wen',
+      clientName: 'iPhone wen',
+      platform: 'ios',
+      ip: '10.0.0.1',
+      status: 'offline',
+      todayFileCount: 0,
+      todayBytes: 0,
+      storageLeft: '500 GB',
+      storagePath: '/tmp',
+      devicePath: '/tmp/iPhone_wen',
+    };
+    const connectedLegacyDevice: DashboardDeviceDTO = {
+      ...offlineLegacyDevice,
+      deviceId: 'client-other',
+      status: 'connected_idle',
+      devicePath: '/tmp/iPhone_wen_other',
+    };
+
+    expect(
+      filterVisibleDashboardDevices([stableDevice, offlineLegacyDevice]).map(
+        (device) => device.deviceId,
+      ),
+    ).toEqual(['client-new']);
+    expect(
+      filterVisibleDashboardDevices([stableDevice, connectedLegacyDevice]).map(
+        (device) => device.deviceId,
+      ),
+    ).toEqual(['client-new', 'client-other']);
   });
 
   it('dismisses disk warning', () => {
@@ -502,9 +587,7 @@ describe('dashboard-store', () => {
 
     await useDashboardStore.getState().fetchDashboard();
 
-    expect(useDashboardStore.getState().error).toBe(
-      '接收目录不可用，请重新选择或恢复文件夹',
-    );
+    expect(useDashboardStore.getState().error).toBe('接收目录不可用，请重新选择或恢复文件夹');
   });
 
   it('does not preserve a stale 100 percent transfer over an idle snapshot', async () => {
