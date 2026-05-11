@@ -11,7 +11,10 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
-const tcpSocketBufferBytes = 16 * 1024 * 1024
+const (
+	tcpSocketBufferBytes         = 16 * 1024 * 1024
+	disconnectPresenceGraceWindow = 75 * time.Second
+)
 
 // TCPServer listens for incoming LMUP/2 connections from mobile clients.
 type TCPServer struct {
@@ -45,7 +48,7 @@ func (s *TCPServer) DisconnectBroadcastStatus(clientID string) string {
 	presence := s.presence
 	s.mu.RUnlock()
 
-	if clientID != "" && presence != nil && presence.IsAlive(clientID, 45*time.Second) {
+	if clientID != "" && presence != nil && presence.IsAlive(clientID, disconnectPresenceGraceWindow) {
 		return "connected_idle"
 	}
 

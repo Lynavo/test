@@ -285,6 +285,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         label: "com.syncflow.presence-recovery",
         qos: .utility
     )
+    private let presenceRecoveryMaxAttempts = 60
+    private let presenceRecoveryRetryInterval: TimeInterval = 1
     private let presenceRecoveryLock = NSLock()
     private var presenceRecoveryToken = UUID()
     private var presenceRecoveryWorkItem: DispatchWorkItem?
@@ -1455,10 +1457,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func startPresenceRecoveryProbe(
         clientId: String,
-        maxAttempts: Int = 8,
-        retryInterval: TimeInterval = 1,
+        maxAttempts: Int? = nil,
+        retryInterval: TimeInterval? = nil,
         promoteOfflineToConnecting: Bool = false
     ) {
+        let maxAttempts = maxAttempts ?? presenceRecoveryMaxAttempts
+        let retryInterval = retryInterval ?? presenceRecoveryRetryInterval
         cancelPresenceRecoveryProbe(reason: "start_new_probe")
         if bindingConnectionState != .offline || promoteOfflineToConnecting {
             updateBindingConnectionState(.connecting, reason: "presence_recovery_started")
@@ -1521,6 +1525,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             guard attempt < maxAttempts else {
                 self.cancelPresenceRecoveryProbe(reason: "exhausted")
                 self.updateBindingConnectionState(.offline, reason: "presence_recovery_exhausted")
+                self.restartDiscoveryAfterPresenceRecoveryExhausted()
                 return
             }
 
@@ -1564,6 +1569,25 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "connection recovery resuming sync (\(reason)) auto=\(configState) pending(manual=\(pendingCounts.manual) auto=\(pendingCounts.auto)) isSyncing=\(isSyncing) session=\(sessionService.state.rawValue)"
         )
         startSync()
+    }
+
+    private func restartDiscoveryAfterPresenceRecoveryExhausted() {
+        guard let binding = uploadStore?.getBinding() else { return }
+        guard bindingConnectionState == .offline else { return }
+
+        if discoveryService.isBrowsing {
+            syncDiagnosticsLog(
+                "DiscoveryService",
+                "presence recovery exhausted; discovery already browsing deviceId=\(binding.deviceId)"
+            )
+            return
+        }
+
+        discoveryService.startBrowsing()
+        syncDiagnosticsLog(
+            "DiscoveryService",
+            "presence recovery exhausted restarted discovery deviceId=\(binding.deviceId)"
+        )
     }
 
     private func verifyPresenceWithRecovery(

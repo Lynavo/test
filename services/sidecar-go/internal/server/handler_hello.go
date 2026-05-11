@@ -220,6 +220,16 @@ func (c *connection) handleAuth(body []byte) error {
 	c.state = stateAuthenticated
 	if c.server != nil {
 		c.server.SetClientState(c.clientID, "connected")
+		if c.hub != nil {
+			c.hub.Broadcast(events.Event{
+				Type: "device.state.changed",
+				Payload: map[string]any{
+					"deviceId": c.clientID,
+					"status":   "connected_idle",
+				},
+			})
+			c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
+		}
 	}
 
 	// Send AUTH_RES so the client isn't stuck waiting

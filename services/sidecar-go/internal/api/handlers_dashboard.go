@@ -12,6 +12,8 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
+const dashboardPresenceGraceWindow = 75 * time.Second
+
 type dashboardExistingFileStats struct {
 	FileCount  int
 	TotalBytes int64
@@ -140,7 +142,7 @@ func (s *Server) handleDashboardDevices(w http.ResponseWriter, _ *http.Request) 
 				}
 			}
 		}
-		if status == "offline" && s.presence.IsAlive(d.ClientID, 45*time.Second) {
+		if status == "offline" && s.presence.IsAlive(d.ClientID, dashboardPresenceGraceWindow) {
 			status = "connected_idle"
 		}
 
