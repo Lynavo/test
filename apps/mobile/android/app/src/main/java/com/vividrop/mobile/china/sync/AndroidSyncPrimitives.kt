@@ -146,12 +146,13 @@ object AndroidSyncPrimitives {
     stableDeviceId: String? = null,
     clientIp: String? = null,
     pairingToken: String? = null,
-  ): Map<String, String> {
-    val fields = linkedMapOf(
+  ): Map<String, Any> {
+    val fields = linkedMapOf<String, Any>(
       "clientId" to clientId,
       "clientName" to clientName,
       "clientPlatform" to clientPlatform,
       "appVersion" to appVersion,
+      "appCompatibilityVersion" to APP_COMPATIBILITY_VERSION,
       "appState" to appState,
     )
     stableDeviceId?.trim()?.takeIf { it.isNotBlank() }?.let {
@@ -164,6 +165,12 @@ object AndroidSyncPrimitives {
       fields["pairingToken"] = it
     }
     return fields
+  }
+
+  fun requireCompatibleDesktopAppVersion(serverCompatibilityVersion: Int) {
+    require(serverCompatibilityVersion == APP_COMPATIBILITY_VERSION) {
+      "手機與桌面 App 版本不相容，請同時更新兩端後再連線。"
+    }
   }
 
   fun shouldProbeBindingConnectionState(currentState: String, syncInProgress: Boolean = false): Boolean =

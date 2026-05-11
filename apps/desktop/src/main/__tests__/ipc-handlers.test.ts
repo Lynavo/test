@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_COMPATIBILITY_VERSION } from '@syncflow/contracts';
 import { IPC, registerIpcHandlers } from '../ipc-handlers';
 import { checkForUpdates, uploadDiagnostics } from '../diagnostics';
 import { sidecarClient } from '../sidecar-client';
@@ -31,36 +32,37 @@ vi.mock('electron-log', () => ({
   },
 }));
 
-vi.mock('../sidecar-client', () => ({
-  sidecarClient: {
-    getHealth: vi.fn(),
-    getDashboardSummary: vi.fn(),
-    getDashboardDevices: vi.fn(),
-    getDeviceFiles: vi.fn(),
-    getDeviceDates: vi.fn(),
-    getSettings: vi.fn(),
-    updateSettings: vi.fn(),
-    resetState: vi.fn(),
-    regenerateConnectionCode: vi.fn(),
-    getShareStatus: vi.fn(),
-    validateShare: vi.fn(),
-    getTransferActive: vi.fn(),
-    getSharedList: vi.fn(),
-  },
-  supportsPairingRevocationOnCodeRotation: (
-    health:
-      | {
-          ok?: boolean;
-          service?: string;
-          capabilities?: { revokesPairingsOnCodeRotation?: boolean };
-        }
-      | null
-      | undefined,
-  ) =>
-    health?.ok === true &&
-    health.service === 'syncflow-sidecar' &&
-    health.capabilities?.revokesPairingsOnCodeRotation === true,
-}));
+vi.mock('../sidecar-client', async () => {
+  const actual = await vi.importActual<typeof import('../sidecar-client')>('../sidecar-client');
+  return {
+    ...actual,
+    sidecarClient: {
+      ...actual.sidecarClient,
+      getHealth: vi.fn(),
+      getDashboardSummary: vi.fn(),
+      getDashboardDevices: vi.fn(),
+      getDeviceFiles: vi.fn(),
+      getDeviceDates: vi.fn(),
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
+      resetState: vi.fn(),
+      regenerateConnectionCode: vi.fn(),
+      getShareStatus: vi.fn(),
+      validateShare: vi.fn(),
+      getTransferActive: vi.fn(),
+      getSharedList: vi.fn(),
+    },
+  };
+});
+
+function compatibleHealth(capabilities?: { revokesPairingsOnCodeRotation?: boolean }) {
+  return {
+    ok: true,
+    service: 'syncflow-sidecar',
+    appCompatibilityVersion: APP_COMPATIBILITY_VERSION,
+    ...(capabilities ? { capabilities } : {}),
+  };
+}
 
 vi.mock('../diagnostics', () => ({
   exportDiagnostics: vi.fn(),
@@ -89,9 +91,7 @@ describe('registerIpcHandlers', () => {
 
   it('regenerates the connection code directly when the sidecar supports pair revocation', async () => {
     vi.mocked(sidecarClient.getHealth).mockResolvedValue({
-      ok: true,
-      service: 'syncflow-sidecar',
-      capabilities: { revokesPairingsOnCodeRotation: true },
+      ...compatibleHealth({ revokesPairingsOnCodeRotation: true }),
     });
     vi.mocked(sidecarClient.regenerateConnectionCode).mockResolvedValue({ code: '123456' });
 
@@ -103,10 +103,7 @@ describe('registerIpcHandlers', () => {
   });
 
   it('restarts a stale sidecar before regenerating the connection code', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValue({
-      ok: true,
-      service: 'syncflow-sidecar',
-    });
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
     vi.mocked(sidecarClient.regenerateConnectionCode).mockResolvedValue({ code: '654321' });
 
     const { handler, manager } = registerWithManager();

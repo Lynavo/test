@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
 import { app } from 'electron';
 import log from 'electron-log';
-import { SIDECAR_HTTP_PORT } from '@syncflow/contracts';
+import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@syncflow/contracts';
 import { sidecarClient, supportsPairingRevocationOnCodeRotation } from './sidecar-client';
 import type { SidecarHealth } from './sidecar-client';
 import type {
@@ -163,7 +163,9 @@ export class SidecarManager extends EventEmitter {
       return;
     }
     if (existingHealth?.ok) {
-      log.warn('[SidecarManager] existing sidecar is healthy but lacks required capabilities; restarting bundled sidecar');
+      log.warn(
+        '[SidecarManager] existing sidecar is healthy but lacks required capabilities; restarting bundled sidecar',
+      );
       const killedExistingSidecar = await this.forceShutdownExistingSidecar();
       if (killedExistingSidecar) {
         await this.waitForSidecarToStop(SIDECAR_STOP_TIMEOUT_MS);
@@ -191,9 +193,7 @@ export class SidecarManager extends EventEmitter {
       message: null,
       messageCode: this.restartCount > 0 ? 'retrying' : 'starting',
       messageArgs:
-        this.restartCount > 0
-          ? { restart: this.restartCount, max: this.maxRestarts }
-          : null,
+        this.restartCount > 0 ? { restart: this.restartCount, max: this.maxRestarts } : null,
       bonjour,
     });
     log.info(`[SidecarManager] starting: ${command} ${args.join(' ')}`);
@@ -205,6 +205,8 @@ export class SidecarManager extends EventEmitter {
         ...process.env,
         SYNCFLOW_CONFIG: '',
         CGO_ENABLED: '1',
+        SYNCFLOW_DESKTOP_APP_VERSION: app.getVersion(),
+        SYNCFLOW_APP_COMPATIBILITY_VERSION: String(APP_COMPATIBILITY_VERSION),
         ...(bonjour.path ? { SYNCFLOW_DNSSD_PATH: bonjour.path } : {}),
       },
     });
@@ -347,7 +349,11 @@ export class SidecarManager extends EventEmitter {
 
   async healthCheck(): Promise<boolean> {
     const res = await this.getHealthSnapshot();
-    return res?.ok === true && res.service === 'syncflow-sidecar';
+    return (
+      res?.ok === true &&
+      res.service === 'syncflow-sidecar' &&
+      res.appCompatibilityVersion === APP_COMPATIBILITY_VERSION
+    );
   }
 
   private async getHealthSnapshot(): Promise<SidecarHealth | null> {
@@ -362,6 +368,11 @@ export class SidecarManager extends EventEmitter {
     return supportsPairingRevocationOnCodeRotation(health);
   }
 
+  private async isSidecarReachable(): Promise<boolean> {
+    const res = await this.getHealthSnapshot();
+    return res?.ok === true && res.service === 'syncflow-sidecar';
+  }
+
   private async waitForHealth(retries: number, intervalMs: number): Promise<void> {
     for (let i = 0; i < retries; i++) {
       if (await this.healthCheck()) return;
@@ -373,7 +384,7 @@ export class SidecarManager extends EventEmitter {
   private async waitForSidecarToStop(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      if (!(await this.healthCheck())) {
+      if (!(await this.isSidecarReachable())) {
         return;
       }
       await new Promise((resolve) => setTimeout(resolve, 200));

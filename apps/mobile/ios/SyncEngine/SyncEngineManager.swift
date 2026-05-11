@@ -1679,6 +1679,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": currentAppVersionLabel(),
+            "appCompatibilityVersion": syncFlowAppCompatibilityVersion,
             "appState": await currentAppStateLabel(),
         ]
         if let pairingToken, !pairingToken.isEmpty {
@@ -1688,6 +1689,32 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             payload["clientIp"] = clientIP
         }
         return payload
+    }
+
+    private func throwIfHelloErrorFrame(type: LMUPMessageType, payload: [String: Any]) throws {
+        guard type == .error else { return }
+        let rawCode = (payload["code"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rawMessage = (payload["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let message = rawMessage.isEmpty ? "Desktop returned protocol error" : rawMessage
+        if rawCode == "APP_VERSION_INCOMPATIBLE" {
+            throw SyncEngineError.pairingError(message)
+        }
+        throw SyncEngineError.networkError(rawCode.isEmpty ? message : "\(rawCode): \(message)")
+    }
+
+    private func throwIfIncompatibleDesktopAppVersion(payload: [String: Any]) throws {
+        let serverCompatibilityVersion: Int?
+        if let value = payload["appCompatibilityVersion"] as? Int {
+            serverCompatibilityVersion = value
+        } else if let value = payload["appCompatibilityVersion"] as? NSNumber {
+            serverCompatibilityVersion = value.intValue
+        } else {
+            serverCompatibilityVersion = nil
+        }
+
+        guard serverCompatibilityVersion == syncFlowAppCompatibilityVersion else {
+            throw SyncEngineError.pairingError("手機與桌面 App 版本不相容，請同時更新兩端後再連線。")
+        }
     }
 
     private func connectMetadataRefreshSession(
@@ -1728,9 +1755,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     type: .helloReq,
                     payload: await self.buildClientHelloPayload(clientId: clientId, pairingToken: token)
                 )
+                try self.throwIfHelloErrorFrame(type: helloType, payload: helloRes)
                 guard helloType == .helloRes else {
                     return
                 }
+                try self.throwIfIncompatibleDesktopAppVersion(payload: helloRes)
                 if let nonce = helloRes["nonce"] as? String {
                     let hmac = transport.computeHMAC(token: token, nonce: nonce)
                     let _ = try? await session.sendAndReceive(type: .authReq, payload: [
@@ -3021,9 +3050,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             type: .helloReq,
             payload: await buildClientHelloPayload(clientId: clientId, pairingToken: token)
         )
+        try throwIfHelloErrorFrame(type: helloType, payload: helloRes)
         guard helloType == .helloRes else {
             throw SyncEngineError.networkError("Expected HELLO_RES")
         }
+        try throwIfIncompatibleDesktopAppVersion(payload: helloRes)
         try throwIfBindingChanged(expectedDeviceId: binding.deviceId)
         refreshBoundServerMetadata(
             expectedDeviceId: binding.deviceId,
@@ -4414,10 +4445,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             type: .helloReq,
             payload: await buildClientHelloPayload(clientId: clientId, pairingToken: storedToken)
         )
-
+        try throwIfHelloErrorFrame(type: helloType, payload: helloRes)
         guard helloType == .helloRes else {
             throw SyncEngineError.pairingError("Expected HELLO_RES, got \(helloType)")
         }
+        try throwIfIncompatibleDesktopAppVersion(payload: helloRes)
 
         let authRequired: Bool
         if let b = helloRes["authRequired"] as? Bool { authRequired = b }
@@ -4984,8 +5016,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             type: .helloReq,
             payload: await buildClientHelloPayload(clientId: clientId, pairingToken: token)
         )
+        try throwIfHelloErrorFrame(type: helloType, payload: helloRes)
         try throwIfBindingChanged(expectedDeviceId: binding.deviceId)
         if helloType == .helloRes {
+            try throwIfIncompatibleDesktopAppVersion(payload: helloRes)
             refreshBoundServerMetadata(
                 expectedDeviceId: binding.deviceId,
                 serverName: helloRes["serverName"] as? String,

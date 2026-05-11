@@ -2,29 +2,32 @@ package protocol
 
 // HelloReq is sent by the client to initiate a connection.
 type HelloReq struct {
-	ClientID          string `json:"clientId"`
-	ClientName        string `json:"clientName"`
-	ClientIP          string `json:"clientIp,omitempty"`
-	ClientPlatform    string `json:"clientPlatform"`
-	AppVersion        string `json:"appVersion"`
-	PairingToken      string `json:"pairingToken,omitempty"`
-	PreviousSessionID string `json:"previousSessionId,omitempty"`
-	AppState          string `json:"appState"`
-	DeviceAlias       string `json:"deviceAlias,omitempty"`
-	StableDeviceID    string `json:"stableDeviceId,omitempty"`
+	ClientID                string `json:"clientId"`
+	ClientName              string `json:"clientName"`
+	ClientIP                string `json:"clientIp,omitempty"`
+	ClientPlatform          string `json:"clientPlatform"`
+	AppVersion              string `json:"appVersion"`
+	AppCompatibilityVersion int    `json:"appCompatibilityVersion,omitempty"`
+	PairingToken            string `json:"pairingToken,omitempty"`
+	PreviousSessionID       string `json:"previousSessionId,omitempty"`
+	AppState                string `json:"appState"`
+	DeviceAlias             string `json:"deviceAlias,omitempty"`
+	StableDeviceID          string `json:"stableDeviceId,omitempty"`
 }
 
 // HelloRes is the server's response to HelloReq.
 type HelloRes struct {
-	ServerID           string             `json:"serverId"`
-	ServerName         string             `json:"serverName"`
-	ServerType         string             `json:"serverType"`
-	ProtoVersion       int                `json:"protoVersion"`
-	AuthRequired       bool               `json:"authRequired"`
-	Bound              bool               `json:"bound"`
-	Resume             *ResumeInfo        `json:"resume"`
-	ServerCapabilities ServerCapabilities `json:"serverCapabilities"`
-	Nonce              string             `json:"nonce"`
+	ServerID                string             `json:"serverId"`
+	ServerName              string             `json:"serverName"`
+	ServerType              string             `json:"serverType"`
+	ServerAppVersion        string             `json:"serverAppVersion,omitempty"`
+	AppCompatibilityVersion int                `json:"appCompatibilityVersion"`
+	ProtoVersion            int                `json:"protoVersion"`
+	AuthRequired            bool               `json:"authRequired"`
+	Bound                   bool               `json:"bound"`
+	Resume                  *ResumeInfo        `json:"resume"`
+	ServerCapabilities      ServerCapabilities `json:"serverCapabilities"`
+	Nonce                   string             `json:"nonce"`
 }
 
 // ResumeInfo carries session resume metadata when a client reconnects.

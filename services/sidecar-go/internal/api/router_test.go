@@ -14,6 +14,7 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/api"
 	"github.com/nicksyncflow/sidecar/internal/config"
 	"github.com/nicksyncflow/sidecar/internal/events"
+	"github.com/nicksyncflow/sidecar/internal/protocol"
 	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
@@ -130,6 +131,13 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if body["version"] != "0.1.0" {
 		t.Errorf("expected version=0.1.0, got %v", body["version"])
+	}
+	if body["appCompatibilityVersion"] != float64(protocol.AppCompatibilityVersion) {
+		t.Errorf(
+			"expected appCompatibilityVersion=%d, got %v",
+			protocol.AppCompatibilityVersion,
+			body["appCompatibilityVersion"],
+		)
 	}
 	capabilities, ok := body["capabilities"].(map[string]any)
 	if !ok {

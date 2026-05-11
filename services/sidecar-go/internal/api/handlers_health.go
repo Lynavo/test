@@ -1,12 +1,17 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/nicksyncflow/sidecar/internal/protocol"
+)
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":      true,
-		"service": "syncflow-sidecar",
-		"version": "0.1.0",
+		"ok":                      true,
+		"service":                 "syncflow-sidecar",
+		"version":                 "0.1.0",
+		"appCompatibilityVersion": protocol.AppCompatibilityVersion,
 		"capabilities": map[string]any{
 			"revokesPairingsOnCodeRotation": true,
 		},

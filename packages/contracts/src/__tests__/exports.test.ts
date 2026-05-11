@@ -5,6 +5,9 @@ describe('@syncflow/contracts exports', () => {
   it('exports PROTOCOL_VERSION', () => {
     expect(contracts.PROTOCOL_VERSION).toBe('LMUP/2');
   });
+  it('exports APP_COMPATIBILITY_VERSION', () => {
+    expect(contracts.APP_COMPATIBILITY_VERSION).toBe(1);
+  });
   it('exports PROTOCOL_PORT', () => {
     expect(contracts.PROTOCOL_PORT).toBe(39393);
   });
@@ -18,7 +21,8 @@ describe('@syncflow/contracts exports', () => {
   });
   it('exports all ErrorCode values', () => {
     expect(contracts.ErrorCode.PAIR_CODE_INVALID).toBe('PAIR_CODE_INVALID');
-    expect(Object.keys(contracts.ErrorCode)).toHaveLength(12);
+    expect(contracts.ErrorCode.APP_VERSION_INCOMPATIBLE).toBe('APP_VERSION_INCOMPATIBLE');
+    expect(Object.keys(contracts.ErrorCode)).toHaveLength(13);
   });
   it('exports BACKOFF_RETRY_MS', () => {
     expect(contracts.BACKOFF_RETRY_MS).toEqual([5000, 15000, 30000]);

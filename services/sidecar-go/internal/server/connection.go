@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -23,6 +24,8 @@ const (
 	ackFlushInterval            = 250 * time.Millisecond
 )
 
+var errProtocolErrorAlreadySent = errors.New("protocol error already sent")
+
 // connState tracks the protocol state machine for a single connection.
 type connState int
 
@@ -36,21 +39,21 @@ const (
 
 // connection represents a single LMUP/2 client connection and its state machine.
 type connection struct {
-	conn       net.Conn
-	store      *store.Store
-	config     *config.Config
-	hub        *events.Hub
-	server     *TCPServer // for tracking connected clients
-	state      connState
+	conn           net.Conn
+	store          *store.Store
+	config         *config.Config
+	hub            *events.Hub
+	server         *TCPServer // for tracking connected clients
+	state          connState
 	clientID       string
 	clientPlatform string // from HELLO_REQ, used at pairing time
 	sessionID      string
 	nonce          string      // generated on HELLO_RES for HMAC auth
 	fileWriter     *FileWriter // current .part file being written
 	clientIP       string
-	pingTimer  *time.Timer // 15s inactivity -> send PING
-	writeMu    sync.Mutex
-	ackMu      sync.Mutex
+	pingTimer      *time.Timer // 15s inactivity -> send PING
+	writeMu        sync.Mutex
+	ackMu          sync.Mutex
 
 	// Diagnostic-only timestamps. Used exclusively in log messages so
 	// operators can tell "connection closed because idle timeout" apart from
@@ -194,7 +197,9 @@ func (c *connection) handle() {
 				"type", fmt.Sprintf("0x%04x", hdr.Type),
 				"err", err,
 			)
-			_ = c.sendError("PROTOCOL_ERROR", err.Error())
+			if !errors.Is(err, errProtocolErrorAlreadySent) {
+				_ = c.sendError("PROTOCOL_ERROR", err.Error())
+			}
 			return
 		}
 		if release != nil {
@@ -499,4 +504,11 @@ func (c *connection) sendError(code, msg string) error {
 		Code:    code,
 		Message: msg,
 	})
+}
+
+func (c *connection) rejectWithError(code, msg string) error {
+	if err := c.sendError(code, msg); err != nil {
+		return err
+	}
+	return errProtocolErrorAlreadySent
 }
