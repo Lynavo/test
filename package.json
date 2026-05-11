@@ -7,7 +7,7 @@
   },
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "build": "turbo run build",
+    "build": "pnpm sync:versions:check && turbo run build",
     "dev": "turbo run dev",
     "dev:desktop": "pnpm --filter @syncflow/desktop dev",
     "build:desktop": "pnpm --filter @syncflow/desktop build",
@@ -34,7 +34,9 @@
     "format:check": "prettier --check .",
     "verify:vscode-android-debug": "node scripts/verify-vscode-android-debug.mjs",
     "verify:android-syncengine-bridge": "node scripts/verify-android-syncengine-bridge-parity.mjs",
-    "check": "turbo run build test typecheck",
+    "sync:versions": "node scripts/sync-version-manifest.mjs",
+    "sync:versions:check": "node scripts/sync-version-manifest.mjs --check",
+    "check": "pnpm sync:versions:check && turbo run build test typecheck",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { SIDECAR_HTTP_PORT } from '@syncflow/contracts';
+import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@syncflow/contracts';
 import type {
   DeviceFileLedgerPageDTO,
   DeviceFileSortField,
@@ -11,15 +11,19 @@ const BASE = `http://127.0.0.1:${SIDECAR_HTTP_PORT}`;
 export interface SidecarHealth {
   ok: boolean;
   service: string;
+  appCompatibilityVersion?: number;
   capabilities?: {
     revokesPairingsOnCodeRotation?: boolean;
   };
 }
 
-export function supportsPairingRevocationOnCodeRotation(health: SidecarHealth | null | undefined): boolean {
+export function supportsPairingRevocationOnCodeRotation(
+  health: SidecarHealth | null | undefined,
+): boolean {
   return (
     health?.ok === true &&
     health.service === 'syncflow-sidecar' &&
+    health.appCompatibilityVersion === APP_COMPATIBILITY_VERSION &&
     health.capabilities?.revokesPairingsOnCodeRotation === true
   );
 }
@@ -88,8 +92,7 @@ export const sidecarClient = {
     request<import('@syncflow/contracts').ShareStatusDTO>('GET', '/share/status'),
   validateShare: () =>
     request<import('@syncflow/contracts').ShareStatusDTO>('POST', '/share/validate'),
-  getTransferActive: () =>
-    request<{ active: boolean }>('GET', '/transfer/active'),
+  getTransferActive: () => request<{ active: boolean }>('GET', '/transfer/active'),
   getSharedList: (path?: string) => {
     const endpoint = path ? `/shared/list/${path}` : '/shared/list';
     return request<import('@syncflow/contracts').SharedDirectoryDTO>('GET', endpoint);

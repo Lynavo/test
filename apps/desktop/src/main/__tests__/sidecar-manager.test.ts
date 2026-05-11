@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_COMPATIBILITY_VERSION } from '@syncflow/contracts';
 import { SidecarManager } from '../sidecar-manager';
 import { sidecarClient } from '../sidecar-client';
 
@@ -14,6 +15,7 @@ vi.mock('electron', () => ({
   app: {
     isPackaged: false,
     getAppPath: () => '/Volumes/T7/Dev/Web/SyncFlow/apps/desktop',
+    getVersion: () => '0.1.0',
   },
 }));
 
@@ -34,24 +36,25 @@ vi.mock('node:child_process', () => ({
   execFile: execFileMock,
 }));
 
-vi.mock('../sidecar-client', () => ({
-  sidecarClient: {
-    getHealth: vi.fn(),
-  },
-  supportsPairingRevocationOnCodeRotation: (
-    health:
-      | {
-          ok?: boolean;
-          service?: string;
-          capabilities?: { revokesPairingsOnCodeRotation?: boolean };
-        }
-      | null
-      | undefined,
-  ) =>
-    health?.ok === true &&
-    health.service === 'syncflow-sidecar' &&
-    health.capabilities?.revokesPairingsOnCodeRotation === true,
-}));
+vi.mock('../sidecar-client', async () => {
+  const actual = await vi.importActual<typeof import('../sidecar-client')>('../sidecar-client');
+  return {
+    ...actual,
+    sidecarClient: {
+      ...actual.sidecarClient,
+      getHealth: vi.fn(),
+    },
+  };
+});
+
+function compatibleHealth(capabilities?: { revokesPairingsOnCodeRotation?: boolean }) {
+  return {
+    ok: true,
+    service: 'syncflow-sidecar',
+    appCompatibilityVersion: APP_COMPATIBILITY_VERSION,
+    ...(capabilities ? { capabilities } : {}),
+  };
+}
 
 function createChildProcessStub() {
   const child = new EventEmitter() as EventEmitter & {
@@ -82,10 +85,7 @@ describe('SidecarManager', () => {
       (
         _file: string,
         _args: string[],
-        callback?: (
-          error: Error | null,
-          result: { stdout: string; stderr: string },
-        ) => void,
+        callback?: (error: Error | null, result: { stdout: string; stderr: string }) => void,
       ) => {
         callback?.(null, { stdout: '', stderr: '' });
         return {} as never;
@@ -99,18 +99,14 @@ describe('SidecarManager', () => {
   });
 
   it('restarts with a managed sidecar when a reused external sidecar becomes unhealthy', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValueOnce({
-      ok: true,
-      service: 'syncflow-sidecar',
-      capabilities: { revokesPairingsOnCodeRotation: true },
-    });
+    vi.mocked(sidecarClient.getHealth).mockResolvedValueOnce(
+      compatibleHealth({ revokesPairingsOnCodeRotation: true }),
+    );
     vi.mocked(sidecarClient.getHealth).mockRejectedValueOnce(new Error('ECONNREFUSED'));
     vi.mocked(sidecarClient.getHealth).mockRejectedValueOnce(new Error('ECONNREFUSED'));
-    vi.mocked(sidecarClient.getHealth).mockResolvedValue({
-      ok: true,
-      service: 'syncflow-sidecar',
-      capabilities: { revokesPairingsOnCodeRotation: true },
-    });
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(
+      compatibleHealth({ revokesPairingsOnCodeRotation: true }),
+    );
 
     const manager = new SidecarManager();
 
@@ -129,7 +125,7 @@ describe('SidecarManager', () => {
   });
 
   it('cold starts a fresh sidecar by default in dev mode', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValue({ ok: true, service: 'syncflow-sidecar' });
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
 
     const manager = new SidecarManager();
 
@@ -146,9 +142,7 @@ describe('SidecarManager', () => {
         service: 'syncflow-sidecar',
       })
       .mockResolvedValue({
-        ok: true,
-        service: 'syncflow-sidecar',
-        capabilities: { revokesPairingsOnCodeRotation: true },
+        ...compatibleHealth({ revokesPairingsOnCodeRotation: true }),
       });
 
     const manager = new SidecarManager();

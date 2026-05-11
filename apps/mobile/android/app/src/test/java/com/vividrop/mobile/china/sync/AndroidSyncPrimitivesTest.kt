@@ -114,9 +114,23 @@ class AndroidSyncPrimitivesTest {
     assertEquals("android", fields["clientPlatform"])
     assertEquals("0.1.0", fields["appVersion"])
     assertEquals("active", fields["appState"])
+    assertEquals(APP_COMPATIBILITY_VERSION, fields["appCompatibilityVersion"])
     assertEquals("192.168.10.239", fields["clientIp"])
     assertEquals("token-1", fields["pairingToken"])
     assertFalse(fields.containsKey("deviceAlias"))
+  }
+
+  @Test
+  fun requireCompatibleDesktopAppVersionRejectsMismatch() {
+    AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
+      serverCompatibilityVersion = APP_COMPATIBILITY_VERSION,
+    )
+
+    assertThrows(IllegalArgumentException::class.java) {
+      AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
+        serverCompatibilityVersion = APP_COMPATIBILITY_VERSION + 1,
+      )
+    }
   }
 
   @Test

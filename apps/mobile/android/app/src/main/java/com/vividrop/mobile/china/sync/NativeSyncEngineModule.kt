@@ -1052,6 +1052,9 @@ class NativeSyncEngineModule(
 
       writeJsonFrame(output, TYPE_HELLO_REQ, helloPayload)
       val helloResponse = readJsonFrame(input, TYPE_HELLO_RES)
+      AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
+        helloResponse.optInt("appCompatibilityVersion", -1),
+      )
       recordNativeLog(
         "Pairing",
         "HELLO_RES serverId=${helloResponse.optString("serverId").ifBlank { "<missing>" }} authRequired=${helloResponse.optBoolean("authRequired", true)}",
@@ -1316,6 +1319,9 @@ class NativeSyncEngineModule(
     )
     writeJsonFrame(connection.output, TYPE_HELLO_REQ, helloPayload)
     val helloResponse = readJsonFrame(connection.input, TYPE_HELLO_RES)
+    AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
+      helloResponse.optInt("appCompatibilityVersion", -1),
+    )
     recordNativeLog(
       "SyncPipeline",
       "HELLO_RES received serverId=${helloResponse.optString("serverId").ifBlank { binding.deviceId }} authRequired=${helloResponse.optBoolean("authRequired", false)}",
@@ -3308,6 +3314,9 @@ class NativeSyncEngineModule(
         return null
       }
       val helloResponse = readFallbackHello(host)
+      AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
+        helloResponse.optInt("appCompatibilityVersion", -1),
+      )
       val serverCapabilities = helloResponse.optJSONObject("serverCapabilities")
       val serverId = helloResponse.optString("serverId")
         .takeIf { it.isNotBlank() }

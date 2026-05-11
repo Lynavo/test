@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +32,25 @@ func (c *connection) handleHello(body []byte) error {
 	if err := json.Unmarshal(body, &req); err != nil {
 		return fmt.Errorf("parse HELLO_REQ: %w", err)
 	}
+
+	if req.AppCompatibilityVersion != protocol.AppCompatibilityVersion {
+		slog.Warn("rejecting incompatible app version",
+			"clientID", req.ClientID,
+			"clientVersion", req.AppVersion,
+			"clientCompatibilityVersion", req.AppCompatibilityVersion,
+			"serverCompatibilityVersion", protocol.AppCompatibilityVersion,
+		)
+		return c.rejectWithError(
+			"APP_VERSION_INCOMPATIBLE",
+			fmt.Sprintf(
+				"手機與桌面 App 版本不相容，請同時更新兩端後再連線。手機版本=%s 相容版本=%d，桌面相容版本=%d",
+				req.AppVersion,
+				req.AppCompatibilityVersion,
+				protocol.AppCompatibilityVersion,
+			),
+		)
+	}
+
 	c.clientID = req.ClientID
 	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
 	c.clientPlatform = req.ClientPlatform
@@ -142,15 +162,17 @@ func (c *connection) handleHello(body []byte) error {
 
 		slog.Info("sending HELLO_RES (returning device, authRequired=false)", "clientID", req.ClientID)
 		res := protocol.HelloRes{
-			ServerID:           serverID,
-			ServerName:         serverName,
-			ServerType:         "desktop",
-			ProtoVersion:       protocol.Version,
-			AuthRequired:       false,
-			Bound:              true,
-			Nonce:              c.nonce,
-			Resume:             resume,
-			ServerCapabilities: caps,
+			ServerID:                serverID,
+			ServerName:              serverName,
+			ServerType:              "desktop",
+			ServerAppVersion:        desktopAppVersion(),
+			AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+			ProtoVersion:            protocol.Version,
+			AuthRequired:            false,
+			Bound:                   true,
+			Nonce:                   c.nonce,
+			Resume:                  resume,
+			ServerCapabilities:      caps,
 		}
 		if err := c.sendJSON(protocol.TypeHelloRes, res); err != nil {
 			return err
@@ -163,13 +185,15 @@ func (c *connection) handleHello(body []byte) error {
 	// Not paired — ask client to pair
 	slog.Info("sending HELLO_RES (new device, authRequired=true)", "clientID", req.ClientID)
 	res := protocol.HelloRes{
-		ServerID:           serverID,
-		ServerName:         serverName,
-		ServerType:         "desktop",
-		ProtoVersion:       protocol.Version,
-		AuthRequired:       true,
-		Bound:              false,
-		ServerCapabilities: caps,
+		ServerID:                serverID,
+		ServerName:              serverName,
+		ServerType:              "desktop",
+		ServerAppVersion:        desktopAppVersion(),
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		ProtoVersion:            protocol.Version,
+		AuthRequired:            true,
+		Bound:                   false,
+		ServerCapabilities:      caps,
 	}
 	if err := c.sendJSON(protocol.TypeHelloRes, res); err != nil {
 		return err
@@ -177,6 +201,13 @@ func (c *connection) handleHello(body []byte) error {
 	slog.Info("HELLO_RES sent, waiting for PAIR_REQ", "clientID", req.ClientID)
 	c.state = stateWaitPair
 	return nil
+}
+
+func desktopAppVersion() string {
+	if version := strings.TrimSpace(os.Getenv("SYNCFLOW_DESKTOP_APP_VERSION")); version != "" {
+		return version
+	}
+	return "0.1.1"
 }
 
 // handleAuth processes AUTH_REQ from a returning (already-paired) client.

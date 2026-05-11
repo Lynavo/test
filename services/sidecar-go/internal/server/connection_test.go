@@ -142,11 +142,12 @@ func doPairing(t *testing.T, client net.Conn) string {
 
 	// HELLO_REQ (no pairingToken -> new device)
 	sendJSON(t, client, protocol.TypeHelloReq, protocol.HelloReq{
-		ClientID:       testClientID,
-		ClientName:     testClientName,
-		ClientPlatform: "ios",
-		AppVersion:     "1.0.0",
-		AppState:       "active",
+		ClientID:                testClientID,
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		AppState:                "active",
 	})
 
 	var helloRes protocol.HelloRes
@@ -156,6 +157,16 @@ func doPairing(t *testing.T, client net.Conn) string {
 	}
 	if helloRes.Bound {
 		t.Fatal("expected bound=false for new device")
+	}
+	if helloRes.AppCompatibilityVersion != protocol.AppCompatibilityVersion {
+		t.Fatalf(
+			"appCompatibilityVersion=%d, want %d",
+			helloRes.AppCompatibilityVersion,
+			protocol.AppCompatibilityVersion,
+		)
+	}
+	if helloRes.ServerAppVersion == "" {
+		t.Fatal("serverAppVersion is empty")
 	}
 
 	// PAIR_REQ with correct connection code
@@ -246,6 +257,26 @@ func computeHMAC(t *testing.T, pairingToken, nonce string) string {
 }
 
 // --- Tests ---
+
+func TestHelloRejectsIncompatibleAppVersion(t *testing.T) {
+	client, _, _, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	sendJSON(t, client, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                testClientID,
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion + 1,
+		AppState:                "active",
+	})
+
+	var errMsg protocol.ErrorMsg
+	recvJSON(t, client, protocol.TypeError, &errMsg)
+	if errMsg.Code != "APP_VERSION_INCOMPATIBLE" {
+		t.Fatalf("error code=%q, want APP_VERSION_INCOMPATIBLE", errMsg.Code)
+	}
+}
 
 func TestFullPairingAndFileTransfer(t *testing.T) {
 	client, _, cfg, cleanup := setupTestConnection(t)
@@ -370,13 +401,14 @@ func TestResumeAfterDisconnect(t *testing.T) {
 
 	// Step 5: HELLO_REQ as returning device (with pairingToken + previousSessionId)
 	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
-		ClientID:          testClientID,
-		ClientName:        testClientName,
-		ClientPlatform:    "ios",
-		AppVersion:        "1.0.0",
-		PairingToken:      pairingToken,
-		PreviousSessionID: sessionID,
-		AppState:          "active",
+		ClientID:                testClientID,
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		PairingToken:            pairingToken,
+		PreviousSessionID:       sessionID,
+		AppState:                "active",
 	})
 
 	// Step 6: Receive HELLO_RES with nonce (returning device)
@@ -504,13 +536,14 @@ func TestReturningHelloRefreshesClientNameAndIPv4(t *testing.T) {
 	const advertisedIPv4 = "192.168.1.88"
 
 	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
-		ClientID:       testClientID,
-		ClientName:     updatedName,
-		ClientIP:       advertisedIPv4,
-		ClientPlatform: "ios",
-		AppVersion:     "0.1.0",
-		PairingToken:   pairingToken,
-		AppState:       "foreground",
+		ClientID:                testClientID,
+		ClientName:              updatedName,
+		ClientIP:                advertisedIPv4,
+		ClientPlatform:          "ios",
+		AppVersion:              "0.1.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		PairingToken:            pairingToken,
+		AppState:                "foreground",
 	})
 
 	var helloRes protocol.HelloRes
@@ -553,13 +586,14 @@ func TestReturningHelloIgnoresDesktopNameAsClientAlias(t *testing.T) {
 	defer cleanup2()
 
 	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
-		ClientID:       testClientID,
-		ClientName:     "Android CDY-TN20",
-		ClientPlatform: "android",
-		AppVersion:     "0.1.0",
-		DeviceAlias:    cfg.DeviceName,
-		PairingToken:   pairingToken,
-		AppState:       "foreground",
+		ClientID:                testClientID,
+		ClientName:              "Android CDY-TN20",
+		ClientPlatform:          "android",
+		AppVersion:              "0.1.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		DeviceAlias:             cfg.DeviceName,
+		PairingToken:            pairingToken,
+		AppState:                "foreground",
 	})
 
 	var helloRes protocol.HelloRes
@@ -600,12 +634,13 @@ func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
 	defer cleanup2()
 
 	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
-		ClientID:       testClientID,
-		ClientName:     testClientName,
-		ClientPlatform: "ios",
-		AppVersion:     "0.1.0",
-		PairingToken:   pairingToken,
-		AppState:       "foreground",
+		ClientID:                testClientID,
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "0.1.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		PairingToken:            pairingToken,
+		AppState:                "foreground",
 	})
 
 	var helloRes protocol.HelloRes
@@ -690,11 +725,12 @@ func TestErrorPaths(t *testing.T) {
 
 		// HELLO_REQ
 		sendJSON(t, client, protocol.TypeHelloReq, protocol.HelloReq{
-			ClientID:       "wrong-code-client",
-			ClientName:     "Bad Client",
-			ClientPlatform: "ios",
-			AppVersion:     "1.0.0",
-			AppState:       "active",
+			ClientID:                "wrong-code-client",
+			ClientName:              "Bad Client",
+			ClientPlatform:          "ios",
+			AppVersion:              "1.0.0",
+			AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+			AppState:                "active",
 		})
 
 		var helloRes protocol.HelloRes
