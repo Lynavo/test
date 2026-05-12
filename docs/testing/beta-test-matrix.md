@@ -147,7 +147,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 ### 4.5 Windows desktop 冒烟
 
 1. 从 `Vivi Drop-Setup.exe` fresh install
-2. 安装后确认 `Vivi Drop Sidecar TCP / Vivi Drop mDNS UDP` 防火墙规则存在
+2. 安装后确认 `SyncFlow Sidecar TCP / SyncFlow Sidecar HTTP / SyncFlow mDNS UDP` 防火墙规则存在，覆盖 `39393/TCP`、`39394/TCP` 和 `5353/UDP`
 3. 设置页能看到 Bonjour 运行时或 fallback 状态
 4. mobile 能发现并配对
 5. 触发一轮真实素材同步

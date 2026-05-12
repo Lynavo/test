@@ -2161,6 +2161,7 @@ class NativeSyncEngineModule(
   }
 
   private fun emitDiscoveredDevicesChanged(devices: WritableArray) {
+    recordNativeLog("Discovery", "emitting discovered devices count=${devices.size()}")
     emitEvent("onDiscoveredDevicesChanged", devices)
   }
 
@@ -3267,6 +3268,10 @@ class NativeSyncEngineModule(
         val serviceKey = serviceKeyFor(serviceInfo)
         val shouldEmit = synchronized(discoveryLock) {
           if (generation != discoveryGeneration) {
+            recordNativeLog(
+              "Discovery",
+              "service lost ignored stale generation probeGeneration=$generation currentGeneration=$discoveryGeneration",
+            )
             return@synchronized false
           }
           pendingResolveKeys.remove(serviceKey)
@@ -3304,6 +3309,10 @@ class NativeSyncEngineModule(
     val serviceKey = serviceKeyFor(serviceInfo)
     val shouldResolve = synchronized(discoveryLock) {
       if (generation != discoveryGeneration) {
+        recordNativeLog(
+          "Discovery",
+          "resolve ignored stale generation name=${serviceInfo.serviceName} probeGeneration=$generation currentGeneration=$discoveryGeneration",
+        )
         return@synchronized false
       }
       pendingResolveKeys.add(serviceKey)
@@ -3334,20 +3343,24 @@ class NativeSyncEngineModule(
               "Discovery",
               "resolved name=${candidate.name} host=${candidate.ip} probeHost=${candidate.probeHost} port=${candidate.port}",
             )
-          synchronized(discoveryLock) {
-            pendingResolveKeys.remove(serviceKey)
-            if (generation != discoveryGeneration) {
-              return
+            synchronized(discoveryLock) {
+              pendingResolveKeys.remove(serviceKey)
+              if (generation != discoveryGeneration) {
+                recordNativeLog(
+                  "Discovery",
+                  "resolved ignored stale generation name=${candidate.name} probeGeneration=$generation currentGeneration=$discoveryGeneration",
+                )
+                return
+              }
+              discoveredCandidates[serviceKey] = candidate
             }
-            discoveredCandidates[serviceKey] = candidate
+            refreshBoundPresenceFromDiscoveryCandidate(
+              candidate = candidate,
+              reason = "bound_device_discovery_resolved",
+            )
+            probeReachability(candidate, generation)
           }
-          refreshBoundPresenceFromDiscoveryCandidate(
-            candidate = candidate,
-            reason = "bound_device_discovery_resolved",
-          )
-          probeReachability(candidate, generation)
-        }
-      },
+        },
       )
     } catch (error: Throwable) {
       synchronized(discoveryLock) {
@@ -3395,6 +3408,10 @@ class NativeSyncEngineModule(
     if (candidate.probeHost.isBlank()) {
       val shouldEmit = synchronized(discoveryLock) {
         if (generation != discoveryGeneration) {
+          recordNativeLog(
+            "Discovery",
+            "probe skipped blank host ignored stale generation name=${candidate.name} probeGeneration=$generation currentGeneration=$discoveryGeneration",
+          )
           return@synchronized false
         }
         reachableCandidates.remove(candidate.serviceKey) != null
@@ -3405,39 +3422,98 @@ class NativeSyncEngineModule(
       return
     }
 
+    recordNativeLog(
+      "Discovery",
+      "probe start name=${candidate.name} host=${candidate.probeHost} port=${candidate.port} generation=$generation",
+    )
     thread(name = "NativeSyncEngineDiscoveryProbe", isDaemon = true) {
       try {
+        var reachableForRefresh: DiscoveredServiceCandidate? = null
+        var shouldEmit = false
         Socket().use { socket ->
           socket.connect(
             InetSocketAddress(candidate.probeHost, candidate.port),
             DISCOVERY_PROBE_TIMEOUT_MS,
           )
           socket.soTimeout = DISCOVERY_PROBE_TIMEOUT_MS
-
-          val probedHost = socket.inetAddress?.hostAddress.orEmpty()
-          val resolvedIp = preferredDisplayHost(candidate.ip, probedHost)
-          val reachable = candidate.copy(
-            ip = resolvedIp,
-            lastSeenAt = isoNow(),
+          recordNativeLog(
+            "Discovery",
+            "probe connect success name=${candidate.name} host=${candidate.probeHost} port=${candidate.port} generation=$generation",
           )
 
+          val probedHost = socket.inetAddress?.hostAddress.orEmpty()
           synchronized(discoveryLock) {
-            if (generation != discoveryGeneration) {
-              return@thread
+            val latestCandidate = discoveredCandidates[candidate.serviceKey]
+            val latestCandidateMatchesProbeEndpoint = latestCandidate?.let {
+              it.probeHost == candidate.probeHost && it.port == candidate.port
+            } == true
+            val resolution = AndroidSyncPrimitives.resolveDiscoveryProbeCandidate(
+              probeGeneration = generation,
+              currentGeneration = discoveryGeneration,
+              hasOriginalCandidate = generation == discoveryGeneration && latestCandidate != null,
+              latestCandidateMatchesProbeEndpoint = latestCandidateMatchesProbeEndpoint,
+            )
+            val selectedCandidate = when (resolution) {
+              AndroidDiscoveryProbeResolution.CURRENT_CANDIDATE -> latestCandidate ?: candidate
+              AndroidDiscoveryProbeResolution.LATEST_CANDIDATE -> {
+                recordNativeLog(
+                  "Discovery",
+                  "probe stale generation reused latest candidate name=${latestCandidate?.name ?: candidate.name} probeGeneration=$generation currentGeneration=$discoveryGeneration",
+                )
+                latestCandidate
+              }
+              AndroidDiscoveryProbeResolution.IGNORE_STALE_GENERATION -> {
+                recordNativeLog(
+                  "Discovery",
+                  "probe ignored stale generation name=${candidate.name} probeGeneration=$generation currentGeneration=$discoveryGeneration latestEndpointMatches=$latestCandidateMatchesProbeEndpoint",
+                )
+                null
+              }
+              AndroidDiscoveryProbeResolution.IGNORE_MISSING_CANDIDATE -> {
+                recordNativeLog(
+                  "Discovery",
+                  "probe ignored missing candidate name=${candidate.name} generation=$generation",
+                )
+                null
+              }
             }
-            if (!discoveredCandidates.containsKey(candidate.serviceKey)) {
-              return@thread
+            if (selectedCandidate == null) {
+              return@synchronized
             }
+            val resolvedIp = preferredDisplayHost(selectedCandidate.ip, probedHost)
+            val reachable = selectedCandidate.copy(
+              ip = resolvedIp,
+              lastSeenAt = isoNow(),
+            )
             reachableCandidates[candidate.serviceKey] = reachable
+            reachableForRefresh = reachable
+            shouldEmit = true
+            recordNativeLog(
+              "Discovery",
+              "probe stored reachable name=${reachable.name} reachableCount=${reachableCandidates.size}",
+            )
           }
         }
-        recordNativeLog("Discovery", "reachable ${candidate.name} via ${candidate.probeHost}")
-        refreshBoundBindingFromDiscoveryCandidate(candidate)
-        emitReachableDevices()
-      } catch (_: Throwable) {
-        recordNativeLog("Discovery", "reachability failed ${candidate.name} via ${candidate.probeHost}", Log.WARN)
+        val reachable = reachableForRefresh
+        if (reachable != null) {
+          recordNativeLog("Discovery", "reachable ${reachable.name} via ${reachable.probeHost}")
+          refreshBoundBindingFromDiscoveryCandidate(reachable)
+        }
+        if (shouldEmit) {
+          emitReachableDevices()
+        }
+      } catch (error: Throwable) {
+        recordNativeLog(
+          "Discovery",
+          "reachability failed ${candidate.name} via ${candidate.probeHost}: ${error.javaClass.simpleName} ${error.message.orEmpty()}",
+          Log.WARN,
+        )
         val shouldEmit = synchronized(discoveryLock) {
           if (generation != discoveryGeneration) {
+            recordNativeLog(
+              "Discovery",
+              "probe failure ignored stale generation name=${candidate.name} probeGeneration=$generation currentGeneration=$discoveryGeneration",
+            )
             return@synchronized false
           }
           reachableCandidates.remove(candidate.serviceKey) != null
@@ -3512,10 +3588,18 @@ class NativeSyncEngineModule(
                 !it.serviceKey.startsWith(FALLBACK_SERVICE_KEY_PREFIX)
               }
               if (generation != discoveryGeneration || hasBonjourCandidate) {
+                recordNativeLog(
+                  "Discovery",
+                  "fallback reachable ignored host=$host staleGeneration=${generation != discoveryGeneration} hasBonjourCandidate=$hasBonjourCandidate reachableCount=${reachableCandidates.size}",
+                )
                 return@synchronized false
               }
               discoveredCandidates[candidate.serviceKey] = candidate
               reachableCandidates[candidate.serviceKey] = candidate
+              recordNativeLog(
+                "Discovery",
+                "fallback stored reachable host=$host reachableCount=${reachableCandidates.size}",
+              )
               true
             }
             if (shouldEmit) {
@@ -3618,10 +3702,15 @@ class NativeSyncEngineModule(
   }
 
   private fun emitReachableDevices() {
-    val payload = synchronized(discoveryLock) {
-      buildReachableDevicesPayloadLocked()
+    val snapshot = synchronized(discoveryLock) {
+      val payload = buildReachableDevicesPayloadLocked()
+      payload to reachableCandidates.size
     }
-    emitDiscoveredDevicesChanged(payload)
+    recordNativeLog(
+      "Discovery",
+      "emit reachable devices reachableCount=${snapshot.second} emittedCount=${snapshot.first.size()}",
+    )
+    emitDiscoveredDevicesChanged(snapshot.first)
   }
 
   private fun buildReachableDevicesPayloadLocked(): WritableArray {

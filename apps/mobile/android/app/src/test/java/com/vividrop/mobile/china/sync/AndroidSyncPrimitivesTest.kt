@@ -480,6 +480,46 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun staleDiscoveryProbeCanUseLatestCandidateWhenEndpointStillMatches() {
+    assertEquals(
+      AndroidDiscoveryProbeResolution.CURRENT_CANDIDATE,
+      AndroidSyncPrimitives.resolveDiscoveryProbeCandidate(
+        probeGeneration = 3,
+        currentGeneration = 3,
+        hasOriginalCandidate = true,
+        latestCandidateMatchesProbeEndpoint = true,
+      ),
+    )
+    assertEquals(
+      AndroidDiscoveryProbeResolution.LATEST_CANDIDATE,
+      AndroidSyncPrimitives.resolveDiscoveryProbeCandidate(
+        probeGeneration = 2,
+        currentGeneration = 3,
+        hasOriginalCandidate = false,
+        latestCandidateMatchesProbeEndpoint = true,
+      ),
+    )
+    assertEquals(
+      AndroidDiscoveryProbeResolution.IGNORE_STALE_GENERATION,
+      AndroidSyncPrimitives.resolveDiscoveryProbeCandidate(
+        probeGeneration = 2,
+        currentGeneration = 3,
+        hasOriginalCandidate = false,
+        latestCandidateMatchesProbeEndpoint = false,
+      ),
+    )
+    assertEquals(
+      AndroidDiscoveryProbeResolution.IGNORE_MISSING_CANDIDATE,
+      AndroidSyncPrimitives.resolveDiscoveryProbeCandidate(
+        probeGeneration = 3,
+        currentGeneration = 3,
+        hasOriginalCandidate = false,
+        latestCandidateMatchesProbeEndpoint = false,
+      ),
+    )
+  }
+
+  @Test
   fun fallbackDiscoveryNamePrefersDesktopServerName() {
     assertEquals(
       "Mini4",

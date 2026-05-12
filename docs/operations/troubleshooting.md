@@ -94,13 +94,13 @@
 1. sidecar 是否真的監聽 `39393 / 39394`
 2. 本機是否有殘留的 `dns-sd` Bonjour 廣播孤兒行程
 3. mobile 實際選到的是 IPv4 還是 `fe80::` IPv6
-4. Windows 下 `Vivi Drop Sidecar TCP / Vivi Drop mDNS UDP` 防火牆規則是否生效，`Bonjour Service` 是否正在執行
+4. Windows 下 `SyncFlow Sidecar TCP / SyncFlow Sidecar HTTP / SyncFlow mDNS UDP` 防火牆規則是否生效，`Bonjour Service` 是否正在執行
 
 歷史上常見根因：
 
 - 殘留 `dns-sd` 導致假在線
 - 舊路徑優先用了 `fe80::` link-local IPv6
-- Windows 防火牆放行規則缺失或被策略覆蓋
+- Windows 防火牆放行規則缺失或被策略覆蓋，尤其是 Android fallback 需要的 `39394/TCP` sidecar HTTP `/health`
 - Windows 未安裝 / 未啟動 Bonjour for Windows，導致只能走相容廣播或發現失敗
 
 ## 3.5 「同一天統計在 app 和 desktop 不一致」

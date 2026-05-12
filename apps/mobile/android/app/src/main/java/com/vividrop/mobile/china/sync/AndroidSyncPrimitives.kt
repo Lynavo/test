@@ -95,6 +95,13 @@ data class AndroidSyncOverviewFields(
   val autoPending: Double,
 )
 
+enum class AndroidDiscoveryProbeResolution {
+  CURRENT_CANDIDATE,
+  LATEST_CANDIDATE,
+  IGNORE_STALE_GENERATION,
+  IGNORE_MISSING_CANDIDATE,
+}
+
 object AndroidSyncPrimitives {
   fun normalizePairingConnectionCode(rawCode: String?): String {
     val trimmed = rawCode?.trim().orEmpty()
@@ -232,6 +239,26 @@ object AndroidSyncPrimitives {
       return normalizedServerName
     }
     return "Vivi Drop ${host.trim()}"
+  }
+
+  fun resolveDiscoveryProbeCandidate(
+    probeGeneration: Long,
+    currentGeneration: Long,
+    hasOriginalCandidate: Boolean,
+    latestCandidateMatchesProbeEndpoint: Boolean,
+  ): AndroidDiscoveryProbeResolution {
+    if (probeGeneration == currentGeneration) {
+      return if (hasOriginalCandidate) {
+        AndroidDiscoveryProbeResolution.CURRENT_CANDIDATE
+      } else {
+        AndroidDiscoveryProbeResolution.IGNORE_MISSING_CANDIDATE
+      }
+    }
+    return if (latestCandidateMatchesProbeEndpoint) {
+      AndroidDiscoveryProbeResolution.LATEST_CANDIDATE
+    } else {
+      AndroidDiscoveryProbeResolution.IGNORE_STALE_GENERATION
+    }
   }
 
   fun buildPresenceHeartbeatUrl(

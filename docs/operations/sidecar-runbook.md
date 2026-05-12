@@ -47,6 +47,12 @@ desktop main 负责 sidecar 生命周期管理。
 
 如果这两个端口没有监听，绝大多数同步问题都没有必要继续往上看。
 
+Windows 安装包应写入以下入站防火墙规则：
+
+- `SyncFlow Sidecar TCP`：`39393/TCP`，LMUP 文件传输与 `HELLO`
+- `SyncFlow Sidecar HTTP`：`39394/TCP`，sidecar HTTP API、`/health`、mobile discovery fallback
+- `SyncFlow mDNS UDP`：`5353/UDP`，Bonjour/mDNS 发现
+
 ## 3. 最小健康检查
 
 ### 3.1 端口监听
@@ -186,14 +192,15 @@ Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
 
 ```powershell
 Get-Service -Name "Bonjour Service"
-netsh advfirewall firewall show rule name="Vivi Drop Sidecar TCP"
-netsh advfirewall firewall show rule name="Vivi Drop mDNS UDP"
+netsh advfirewall firewall show rule name="SyncFlow Sidecar TCP"
+netsh advfirewall firewall show rule name="SyncFlow Sidecar HTTP"
+netsh advfirewall firewall show rule name="SyncFlow mDNS UDP"
 ```
 
 处理原则：
 
 1. 先确认 `Bonjour Service` 已安装并处于 `Running`
-2. 再确认 `39393/TCP` 和 `5353/UDP` 防火墙规则存在且启用
+2. 再确认 `39393/TCP`、`39394/TCP` 和 `5353/UDP` 防火墙规则存在且启用
 3. 如果规则缺失，优先重装最新 Windows 安装包，让 NSIS 安装脚本重新写入规则
 
 ## 4.4 桌面端和源码 sidecar 冲突

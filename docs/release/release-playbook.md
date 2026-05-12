@@ -137,7 +137,7 @@ pnpm package:desktop:win
 
 1. fresh install 後 app 能正常啟動
 2. `resources\vivi-drop-sidecar.exe` 已隨包落地並能被 desktop 拉起
-3. 安裝器已寫入 `Vivi Drop Sidecar TCP` 和 `Vivi Drop mDNS UDP` 防火牆規則
+3. 安裝器已寫入 `SyncFlow Sidecar TCP`、`SyncFlow Sidecar HTTP` 和 `SyncFlow mDNS UDP` 防火牆規則，分別放行 `39393/TCP`、`39394/TCP` 和 `5353/UDP`
 4. 設定頁能看到 Bonjour 執行時資訊，缺少 Bonjour 時 fallback 狀態可解釋
 
 ## 6. 打 beta tag
@@ -208,7 +208,7 @@ pnpm tag:beta:push
 1. 從 `ViviDrop-Setup.exe` fresh install
 2. app 正常啟動
 3. sidecar 正常監聽和廣播
-4. `Vivi Drop Sidecar TCP / Vivi Drop mDNS UDP` 防火牆規則已寫入
+4. `SyncFlow Sidecar TCP / SyncFlow Sidecar HTTP / SyncFlow mDNS UDP` 防火牆規則已寫入
 5. 設定頁 Bonjour 執行時 / fallback 文案正常
 6. 診斷包匯出正常
 
