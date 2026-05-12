@@ -11,6 +11,7 @@ import {
   Alert,
   AppState,
   Modal,
+  Platform,
   type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -579,8 +580,7 @@ export function SyncActivityScreen() {
   const [autoRoundDisplayBaseline, setAutoRoundDisplayBaseline] =
     useState<AutoRoundDisplayBaseline | null>(null);
   const mainCardRef = useRef<View>(null);
-  const albumQuickEntryRef =
-    useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const albumQuickEntryTargetRef = useRef<View>(null);
   const helpHeaderActionRef =
     useRef<React.ElementRef<typeof TouchableOpacity>>(null);
   const historyHeaderActionRef =
@@ -678,7 +678,7 @@ export function SyncActivityScreen() {
     measureSyncActivityTourTarget('history', historyHeaderActionRef);
     measureSyncActivityTourTarget('settings', settingsHeaderActionRef);
     measureSyncActivityTourTarget('panel', mainCardRef);
-    measureSyncActivityTourTarget('album', albumQuickEntryRef);
+    measureSyncActivityTourTarget('album', albumQuickEntryTargetRef);
   }, [measureSyncActivityTourTarget, showSyncActivityTour]);
 
   // ---------------------------------------------------------------------------
@@ -1424,6 +1424,7 @@ export function SyncActivityScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               ref={helpHeaderActionRef}
+              testID="sync-activity-tour-target-help"
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.help')}
@@ -1437,6 +1438,7 @@ export function SyncActivityScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               ref={historyHeaderActionRef}
+              testID="sync-activity-tour-target-history"
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.history')}
@@ -1453,6 +1455,7 @@ export function SyncActivityScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               ref={settingsHeaderActionRef}
+              testID="sync-activity-tour-target-settings"
               style={styles.headerActionButton}
               accessibilityRole="button"
               accessibilityLabel={t('syncActivity.header.settings')}
@@ -1473,6 +1476,7 @@ export function SyncActivityScreen() {
         {/* Unified main card */}
         <View
           ref={mainCardRef}
+          testID="sync-activity-tour-target-panel"
           style={styles.mainCard}
           onLayout={() =>
             measureSyncActivityTourTarget('panel', mainCardRef)
@@ -2096,30 +2100,39 @@ export function SyncActivityScreen() {
             {t('syncActivity.quickEntry.title')}
           </Text>
           <View style={styles.quickEntryRow}>
-            <TouchableOpacity
-              ref={albumQuickEntryRef}
-              style={styles.quickEntryCard}
-              activeOpacity={0.7}
+            <View
+              ref={albumQuickEntryTargetRef}
+              collapsable={false}
+              testID="sync-activity-tour-target-album"
+              style={styles.quickEntryTarget}
               onLayout={() =>
-                measureSyncActivityTourTarget('album', albumQuickEntryRef)
+                measureSyncActivityTourTarget(
+                  'album',
+                  albumQuickEntryTargetRef,
+                )
               }
-              onPress={() => navigation.navigate('AlbumWorkbench')}
             >
-              <View
-                style={[
-                  styles.quickEntryIcon,
-                  { backgroundColor: 'rgba(59,159,216,0.12)' },
-                ]}
+              <TouchableOpacity
+                style={styles.quickEntryCard}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('AlbumWorkbench')}
               >
-                <Icon name="albums-outline" size={22} color={BLUE} />
-              </View>
-              <Text style={styles.quickEntryTitle}>
-                {t('syncActivity.quickEntry.albumTitle')}
-              </Text>
-              <Text style={styles.quickEntryDesc}>
-                {t('syncActivity.quickEntry.albumDesc')}
-              </Text>
-            </TouchableOpacity>
+                <View
+                  style={[
+                    styles.quickEntryIcon,
+                    { backgroundColor: 'rgba(59,159,216,0.12)' },
+                  ]}
+                >
+                  <Icon name="albums-outline" size={22} color={BLUE} />
+                </View>
+                <Text style={styles.quickEntryTitle}>
+                  {t('syncActivity.quickEntry.albumTitle')}
+                </Text>
+                <Text style={styles.quickEntryDesc}>
+                  {t('syncActivity.quickEntry.albumDesc')}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <TouchableOpacity
               style={styles.quickEntryCard}
@@ -2205,6 +2218,9 @@ export function SyncActivityScreen() {
         onSkip={() => void handleDismissSyncActivityTour()}
         onFinish={() => void handleDismissSyncActivityTour()}
         targetLayouts={syncActivityTourTargetLayouts}
+        targetFallbackMode={
+          Platform.OS === 'android' ? 'ratio' : 'hiddenUntilMeasured'
+        }
       />
     </SafeAreaView>
   );
@@ -2856,6 +2872,9 @@ const styles = StyleSheet.create({
   quickEntryRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  quickEntryTarget: {
+    flex: 1,
   },
   quickEntryCard: {
     flex: 1,

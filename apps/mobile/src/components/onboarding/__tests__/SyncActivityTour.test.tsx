@@ -1,10 +1,13 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import * as ReactNative from 'react-native';
-import { Modal, Platform, StatusBar } from 'react-native';
+import { Modal, Platform } from 'react-native';
 import { Path, Rect } from 'react-native-svg';
 
-import { SyncActivityTour } from '../SyncActivityTour';
+import {
+  convertWindowTargetToOverlayTarget,
+  SyncActivityTour,
+} from '../SyncActivityTour';
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -29,17 +32,13 @@ describe('SyncActivityTour', () => {
       configurable: true,
       value: 'ios',
     });
-    Object.defineProperty(StatusBar, 'currentHeight', {
-      configurable: true,
-      value: undefined,
-    });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('renders the dim overlay as an even-odd path with the active target cut out', () => {
+  it('renders the iOS dim overlay as an even-odd path with the active target cut out', () => {
     const screen = render(
       <SyncActivityTour
         visible
@@ -58,6 +57,7 @@ describe('SyncActivityTour', () => {
       .UNSAFE_getAllByType(Rect)
       .find(node => node.props.testID === 'sync-activity-tour-highlight');
 
+    expect(screen.queryByTestId('sync-activity-tour-background')).toBeNull();
     expect(overlayPath).toBeTruthy();
     expect(overlayPath?.props.fillRule).toBe('evenodd');
     expect(overlayPath?.props.d).toContain('M0 0');
@@ -96,7 +96,12 @@ describe('SyncActivityTour', () => {
 
   it('allows the modal to draw under Android system navigation bars', () => {
     const screen = render(
-      <SyncActivityTour visible onSkip={jest.fn()} onFinish={jest.fn()} />,
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetFallbackMode="ratio"
+      />,
     );
 
     const modal = screen.UNSAFE_getByType(Modal);
@@ -105,18 +110,10 @@ describe('SyncActivityTour', () => {
     expect(modal.props.navigationBarTranslucent).toBe(true);
   });
 
-  it('aligns measured Android targets to the translucent modal coordinate space', () => {
+  it('uses the static Android guide background without status bar heuristics', () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'android',
-    });
-    Object.defineProperty(Platform, 'Version', {
-      configurable: true,
-      value: 34,
-    });
-    Object.defineProperty(StatusBar, 'currentHeight', {
-      configurable: true,
-      value: 24,
     });
 
     const screen = render(
@@ -130,16 +127,13 @@ describe('SyncActivityTour', () => {
       />,
     );
 
-    const overlayPath = screen
-      .UNSAFE_getAllByType(Path)
-      .find(node => node.props.testID === 'sync-activity-tour-cutout-overlay');
-
-    expect(overlayPath?.props.d).toContain('Q28 432');
-    expect(overlayPath?.props.d).toContain('Q192 432');
-    expect(overlayPath?.props.d).toContain('Q192 546');
+    expect(screen.getByTestId('sync-activity-tour-background')).toBeTruthy();
+    expect(
+      screen.queryByTestId('sync-activity-tour-cutout-overlay'),
+    ).toBeNull();
   });
 
-  it('does not double-apply the status bar offset on Android edge-to-edge screens', () => {
+  it('does not depend on Android version for the guide background', () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'android',
@@ -148,10 +142,6 @@ describe('SyncActivityTour', () => {
       configurable: true,
       value: 35,
     });
-    Object.defineProperty(StatusBar, 'currentHeight', {
-      configurable: true,
-      value: 24,
-    });
 
     const screen = render(
       <SyncActivityTour
@@ -164,13 +154,47 @@ describe('SyncActivityTour', () => {
       />,
     );
 
-    const overlayPath = screen
-      .UNSAFE_getAllByType(Path)
-      .find(node => node.props.testID === 'sync-activity-tour-cutout-overlay');
+    expect(screen.getByTestId('sync-activity-tour-background')).toBeTruthy();
+  });
 
-    expect(overlayPath?.props.d).toContain('Q28 408');
-    expect(overlayPath?.props.d).toContain('Q192 408');
-    expect(overlayPath?.props.d).toContain('Q192 522');
+  it('does not depend on Android window and screen height differences for the guide background', () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    Object.defineProperty(Platform, 'Version', {
+      configurable: true,
+      value: 35,
+    });
+    jest
+      .spyOn(ReactNative.Dimensions, 'get')
+      .mockImplementation(dimension =>
+        dimension === 'window'
+          ? { width: 390, height: 820, scale: 3, fontScale: 1 }
+          : { width: 390, height: 844, scale: 3, fontScale: 1 },
+      );
+
+    const screen = render(
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetLayouts={{
+          album: { left: 40, top: 420, width: 140, height: 90 },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('sync-activity-tour-background')).toBeTruthy();
+  });
+
+  it('converts window-measured target coordinates into modal-local coordinates', () => {
+    expect(
+      convertWindowTargetToOverlayTarget(
+        { left: 40, top: 420, width: 140, height: 90 },
+        { left: 8, top: 24 },
+      ),
+    ).toEqual({ left: 32, top: 396, width: 140, height: 90 });
   });
 
   it('falls back to ratio positioning when cold-start measurement is invalid', () => {
@@ -179,6 +203,7 @@ describe('SyncActivityTour', () => {
         visible
         onSkip={jest.fn()}
         onFinish={jest.fn()}
+        targetFallbackMode="ratio"
         targetLayouts={{
           album: { left: Number.NaN, top: 420, width: 140, height: 90 },
         }}
@@ -195,6 +220,19 @@ describe('SyncActivityTour', () => {
     expect(Number.isFinite(highlight?.props.height)).toBe(true);
   });
 
+  it('stays hidden until the active target has a live measurement when requested', () => {
+    const screen = render(
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetFallbackMode="hiddenUntilMeasured"
+      />,
+    );
+
+    expect(screen.queryByTestId('sync-activity-tour')).toBeNull();
+  });
+
   it('uses the modal root layout when cold-start window dimensions are zero', () => {
     jest.spyOn(ReactNative, 'useWindowDimensions').mockReturnValue({
       width: 0,
@@ -204,7 +242,12 @@ describe('SyncActivityTour', () => {
     });
 
     const screen = render(
-      <SyncActivityTour visible onSkip={jest.fn()} onFinish={jest.fn()} />,
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetFallbackMode="ratio"
+      />,
     );
 
     fireEvent(screen.getByTestId('sync-activity-tour'), 'layout', {
@@ -240,7 +283,12 @@ describe('SyncActivityTour', () => {
       );
 
     const screen = render(
-      <SyncActivityTour visible onSkip={jest.fn()} onFinish={jest.fn()} />,
+      <SyncActivityTour
+        visible
+        onSkip={jest.fn()}
+        onFinish={jest.fn()}
+        targetFallbackMode="ratio"
+      />,
     );
 
     const overlayPath = screen

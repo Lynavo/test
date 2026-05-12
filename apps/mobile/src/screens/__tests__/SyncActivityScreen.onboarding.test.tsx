@@ -121,6 +121,50 @@ jest.mock('../../utils/onboardingStorage', () => ({
   markSyncActivityTourSeen: () => mockMarkSyncActivityTourSeen(),
 }));
 
+jest.mock('../../components/onboarding/SyncActivityTour', () => {
+  const actual = jest.requireActual('../../components/onboarding/SyncActivityTour');
+  const ReactInner = require('react');
+  const { Text, TouchableOpacity, View } = require('react-native');
+
+  return {
+    ...actual,
+    SyncActivityTour: ({
+      visible,
+      onFinish,
+    }: {
+      visible: boolean;
+      onFinish: () => void;
+    }) => {
+      const [step, setStep] = ReactInner.useState(1);
+
+      if (!visible) return null;
+
+      return ReactInner.createElement(
+        View,
+        null,
+        ReactInner.createElement(Text, null, '手動同步'),
+        ReactInner.createElement(
+          TouchableOpacity,
+          {
+            onPress: () => {
+              if (step >= 5) {
+                onFinish();
+                return;
+              }
+              setStep((current: number) => current + 1);
+            },
+          },
+          ReactInner.createElement(
+            Text,
+            null,
+            step >= 5 ? '開啟旅程' : `下一步 ${step}/5`,
+          ),
+        ),
+      );
+    },
+  };
+});
+
 import { SyncActivityScreen } from '../SyncActivityScreen';
 
 describe('SyncActivityScreen onboarding', () => {
