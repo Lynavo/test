@@ -2131,7 +2131,7 @@ class NativeSyncEngineModule(
       )
     }
 
-    return packageInfo.versionName ?: "0.1.1"
+    return packageInfo.versionName ?: "1.0.0"
   }
 
   private fun getVersionCode(): String {

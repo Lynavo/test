@@ -1644,7 +1644,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func currentAppVersionLabel() -> String {
         let bundle = Bundle.main
-        return bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.1"
+        return bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
     }
 
     private func currentClientIPv4() -> String? {
