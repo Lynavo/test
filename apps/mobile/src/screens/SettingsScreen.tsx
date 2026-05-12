@@ -225,7 +225,6 @@ export function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const auth = useAuth();
   const { setSubscription } = auth;
-  const isAndroid = Platform.OS === 'android';
   const [deviceName, setDeviceName] = useState('');
   const [deviceIp, setDeviceIp] = useState('');
   const [connectionState, setConnectionState] =
@@ -1044,17 +1043,6 @@ export function SettingsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {isAndroid ? (
-          <View style={styles.androidNoticeCard}>
-            <Text style={styles.androidNoticeTitle}>
-              {t('settings.android.title')}
-            </Text>
-            <Text style={styles.androidNoticeBody}>
-              {t('settings.android.body')}
-            </Text>
-          </View>
-        ) : null}
-
         {/* ============================================================= */}
         {/* Top two-card row: device + subscription                        */}
         {/* ============================================================= */}
@@ -1737,29 +1725,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 48,
-  },
-
-  // Android notice
-  androidNoticeCard: {
-    borderRadius: 16,
-    backgroundColor: CARD_BG,
-    borderWidth: 1,
-    borderColor: CARD_BORDER,
-    ...authCardSurfaceStyle,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 20,
-  },
-  androidNoticeTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#28597e',
-    marginBottom: 6,
-  },
-  androidNoticeBody: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#5d7f98',
   },
 
   // Section label

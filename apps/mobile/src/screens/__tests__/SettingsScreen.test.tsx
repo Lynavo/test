@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ReactTestInstance } from 'react-test-renderer';
@@ -264,6 +264,30 @@ describe('SettingsScreen', () => {
     });
 
     expect(queryByText('TEST: Flush IAP Queue')).toBeNull();
+  });
+
+  test('does not show Android capability notes on Android settings', async () => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+
+    try {
+      const { getByText, queryByText } = render(<SettingsScreen />);
+
+      await waitFor(() => {
+        expect(getByText('恢復已購買訂閱')).toBeTruthy();
+      });
+
+      expect(queryByText('Android 端能力說明')).toBeNull();
+      expect(queryByText(/目前版本已提供 Android 殼層/)).toBeNull();
+    } finally {
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
   });
 
   test('disables reset sync status while uploading', async () => {
