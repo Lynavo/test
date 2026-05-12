@@ -3,7 +3,8 @@
   "versionLabel": "v{{version}} ({{build}})",
   "sections": {
     "connectedDevice": "Connected Device",
-    "supportHelp": "Support & Help"
+    "supportHelp": "Support & Help",
+    "giftCard": "Gift Card"
   },
   "android": {
     "title": "Android Capability Notes",
@@ -75,6 +76,30 @@
     },
     "aborted": {
       "toast": "Upload cancelled"
+    }
+  },
+  "giftCard": {
+    "action": "Redeem gift card",
+    "monthlyPlan": "monthly subscription",
+    "yearlyPlan": "yearly subscription",
+    "modal": {
+      "title": "Redeem gift card",
+      "message": "Enter a gift card code to activate or extend your subscription.",
+      "placeholder": "Enter gift card code",
+      "cancel": "Cancel",
+      "submit": "Redeem"
+    },
+    "empty": {
+      "title": "Enter a gift card code",
+      "body": "Check the code before redeeming."
+    },
+    "success": {
+      "title": "Redeemed",
+      "body": "{{plan}} has been applied to your account."
+    },
+    "failure": {
+      "title": "Redeem failed",
+      "body": "Gift card redemption failed. Please try again later."
     }
   },
   "actions": {

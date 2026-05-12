@@ -7,15 +7,25 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Icon } from '../components/Icon';
 import {
   isDiagnosticsExportUnavailable,
   shareDiagnosticsArchive,
 } from '../utils/shareDiagnosticsArchive';
+import { useAuth } from '../stores/auth-store';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../services/gift-card-service';
+import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -61,6 +71,17 @@ interface ExpandableItem {
   answer: string;
 }
 
+function resolveGiftCardPlanLabel(plan: string, t: TFunction): string {
+  switch (plan) {
+    case 'yearly':
+      return t('settings.giftCard.yearlyPlan');
+    case 'monthly':
+      return t('settings.giftCard.monthlyPlan');
+    default:
+      return plan;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // HelpScreen
 // ---------------------------------------------------------------------------
@@ -68,8 +89,13 @@ interface ExpandableItem {
 export function HelpScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const auth = useAuth();
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
+  const [giftCardPromptVisible, setGiftCardPromptVisible] = useState(false);
+  const [giftCardCode, setGiftCardCode] = useState('');
+  const [isRedeemingGiftCard, setIsRedeemingGiftCard] = useState(false);
 
   const PRODUCT: FeatureItem = {
     icon: 'desktop-outline',
@@ -146,6 +172,27 @@ export function HelpScreen() {
     });
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getGiftCardConfig()
+        .then(config => {
+          if (!cancelled) {
+            setIsGiftCardEnabled(config.enabled);
+          }
+        })
+        .catch(err => {
+          console.warn('[help] gift card config refresh failed', err);
+          if (!cancelled) {
+            setIsGiftCardEnabled(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
   const handleExportDiagnostics = useCallback(async () => {
     try {
       setIsExporting(true);
@@ -170,6 +217,46 @@ export function HelpScreen() {
   const handleOpenDownload = useCallback(() => {
     void Linking.openURL(DOWNLOAD_URL);
   }, []);
+
+  const handleOpenGiftCardPrompt = useCallback(() => {
+    setGiftCardCode('');
+    setGiftCardPromptVisible(true);
+  }, []);
+
+  const handleRedeemGiftCard = useCallback(async () => {
+    const normalizedCode = giftCardCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      Alert.alert(
+        t('settings.giftCard.empty.title'),
+        t('settings.giftCard.empty.body'),
+      );
+      return;
+    }
+
+    setIsRedeemingGiftCard(true);
+    try {
+      const result = await redeemGiftCard(normalizedCode);
+      setGiftCardPromptVisible(false);
+      setGiftCardCode('');
+      markSubscriptionJustActivated();
+      await auth.loadSubscription();
+      Alert.alert(
+        t('settings.giftCard.success.title'),
+        t('settings.giftCard.success.body', {
+          plan: resolveGiftCardPlanLabel(result.plan, t),
+        }),
+      );
+    } catch (error) {
+      Alert.alert(
+        t('settings.giftCard.failure.title'),
+        error instanceof Error
+          ? error.message
+          : t('settings.giftCard.failure.body'),
+      );
+    } finally {
+      setIsRedeemingGiftCard(false);
+    }
+  }, [auth, giftCardCode, t]);
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -343,8 +430,113 @@ export function HelpScreen() {
           </TouchableOpacity>
         </View>
 
+        {isGiftCardEnabled ? (
+          <>
+            <Text style={styles.sectionLabel}>
+              {t('settings.sections.giftCard')}
+            </Text>
+            <View style={styles.listCard}>
+              <TouchableOpacity
+                style={styles.contactRow}
+                activeOpacity={0.6}
+                onPress={handleOpenGiftCardPrompt}
+              >
+                <View style={styles.contactRowLeft}>
+                  <View
+                    style={[styles.contactIconCircle, styles.contactIconBlue]}
+                  >
+                    <Icon name="gift-outline" size={18} color={BLUE} />
+                  </View>
+                  <View>
+                    <Text style={styles.contactRowTitle}>
+                      {t('settings.giftCard.action')}
+                    </Text>
+                    <Text style={styles.contactRowSub}>
+                      {t('settings.giftCard.modal.message')}
+                    </Text>
+                  </View>
+                </View>
+                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <Modal
+        visible={giftCardPromptVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (isRedeemingGiftCard) return;
+          setGiftCardPromptVisible(false);
+          setGiftCardCode('');
+        }}
+      >
+        <View style={styles.promptBackdrop}>
+          <View style={styles.promptCard}>
+            <Text style={styles.promptTitle}>
+              {t('settings.giftCard.modal.title')}
+            </Text>
+            <Text style={styles.promptMessage}>
+              {t('settings.giftCard.modal.message')}
+            </Text>
+            <TextInput
+              value={giftCardCode}
+              onChangeText={value => setGiftCardCode(value.toUpperCase())}
+              placeholder={t('settings.giftCard.modal.placeholder')}
+              placeholderTextColor={MUTED_TEXT}
+              style={styles.promptInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!isRedeemingGiftCard}
+              maxLength={64}
+              accessibilityLabel={t('settings.giftCard.modal.placeholder')}
+            />
+            <View style={styles.promptActions}>
+              <TouchableOpacity
+                style={[
+                  styles.promptButton,
+                  isRedeemingGiftCard && styles.promptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={isRedeemingGiftCard}
+                onPress={() => {
+                  setGiftCardPromptVisible(false);
+                  setGiftCardCode('');
+                }}
+              >
+                <Text style={styles.promptCancelText}>
+                  {t('settings.giftCard.modal.cancel')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.promptButton,
+                  styles.promptPrimaryButton,
+                  (!giftCardCode.trim() || isRedeemingGiftCard) &&
+                    styles.promptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={!giftCardCode.trim() || isRedeemingGiftCard}
+                onPress={() => {
+                  void handleRedeemGiftCard();
+                }}
+              >
+                {isRedeemingGiftCard ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.promptPrimaryText}>
+                    {t('settings.giftCard.modal.submit')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -606,6 +798,9 @@ const styles = StyleSheet.create({
   contactIconOrange: {
     backgroundColor: '#fff1df',
   },
+  contactIconBlue: {
+    backgroundColor: ICON_BLUE_BG,
+  },
   contactRowTitle: {
     fontSize: 14,
     fontWeight: '600',
@@ -619,5 +814,80 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 20,
+  },
+
+  // Gift card prompt
+  promptBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(26,58,92,0.34)',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  promptCard: {
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: CARD_BORDER,
+    padding: 18,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  promptTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: DARK,
+    textAlign: 'center',
+  },
+  promptMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED_TEXT,
+  },
+  promptInput: {
+    minHeight: 46,
+    maxHeight: 56,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: 'rgba(248,250,252,0.98)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: DARK,
+    fontSize: 14,
+    lineHeight: 20,
+    textTransform: 'uppercase',
+  },
+  promptActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  promptButton: {
+    minHeight: 40,
+    minWidth: 76,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  promptPrimaryButton: {
+    backgroundColor: BLUE,
+  },
+  promptButtonDisabled: {
+    opacity: 0.5,
+  },
+  promptCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: MUTED_TEXT,
+  },
+  promptPrimaryText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

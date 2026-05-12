@@ -3,7 +3,8 @@
   "versionLabel": "v{{version}} ({{build}})",
   "sections": {
     "connectedDevice": "已連接設備",
-    "supportHelp": "支援與幫助"
+    "supportHelp": "支援與幫助",
+    "giftCard": "禮品卡"
   },
   "android": {
     "title": "Android 端能力說明",
@@ -75,6 +76,30 @@
     },
     "aborted": {
       "toast": "已取消上傳"
+    }
+  },
+  "giftCard": {
+    "action": "禮品卡兌換",
+    "monthlyPlan": "月訂閱",
+    "yearlyPlan": "年訂閱",
+    "modal": {
+      "title": "禮品卡兌換",
+      "message": "輸入禮品卡代碼以啟用或延長訂閱。",
+      "placeholder": "輸入禮品卡代碼",
+      "cancel": "取消",
+      "submit": "兌換"
+    },
+    "empty": {
+      "title": "請輸入禮品卡代碼",
+      "body": "請確認代碼後再兌換。"
+    },
+    "success": {
+      "title": "兌換成功",
+      "body": "已為你套用 {{plan}}。"
+    },
+    "failure": {
+      "title": "兌換失敗",
+      "body": "禮品卡兌換失敗，請稍後再試。"
     }
   },
   "actions": {

@@ -86,6 +86,19 @@ jest.mock('../../services/subscription-service', () => ({
   }),
 }));
 
+jest.mock('../../services/gift-card-service', () => ({
+  getGiftCardConfig: jest.fn().mockResolvedValue({ enabled: false }),
+  redeemGiftCard: jest.fn().mockResolvedValue({
+    plan: 'monthly',
+    giftCardId: 1001,
+    startAt: '2026-05-12T00:00:00.000Z',
+    expireAt: '2026-06-12T00:00:00.000Z',
+    redeemedAt: '2026-05-12T00:00:00.000Z',
+    remainingUses: 0,
+    status: 'success',
+  }),
+}));
+
 jest.mock('../../utils/shareDiagnosticsArchive', () => ({
   isDiagnosticsExportUnavailable: jest.fn().mockReturnValue(false),
   shareDiagnosticsArchive: jest.fn().mockResolvedValue('mock.zip'),
@@ -160,6 +173,10 @@ import i18n from '../../i18n';
 import { SettingsScreen } from '../SettingsScreen';
 import { NativeModules, NativeEventEmitter } from 'react-native';
 import { ApiError, ERROR_CODE } from '../../services/api';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../../services/gift-card-service';
 import { iapService } from '../../services/iap-service';
 import { LANGUAGE_PREFERENCE_STORAGE_KEY } from '../../i18n/language-preference';
 
@@ -193,6 +210,16 @@ describe('SettingsScreen', () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     (AsyncStorage.removeItem as jest.Mock).mockResolvedValue(undefined);
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: false });
+    (redeemGiftCard as jest.Mock).mockResolvedValue({
+      plan: 'monthly',
+      giftCardId: 1001,
+      startAt: '2026-05-12T00:00:00.000Z',
+      expireAt: '2026-06-12T00:00:00.000Z',
+      redeemedAt: '2026-05-12T00:00:00.000Z',
+      remainingUses: 0,
+      status: 'success',
+    });
     resetMockAuth();
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
@@ -288,6 +315,44 @@ describe('SettingsScreen', () => {
         value: originalPlatformOS,
       });
     }
+  });
+
+  test('hides gift card redemption when the server switch is off', async () => {
+    const { queryByText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getGiftCardConfig).toHaveBeenCalled();
+    });
+
+    expect(queryByText('禮品卡兌換')).toBeNull();
+  });
+
+  test('redeems a gift card from Settings when the server switch is on', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValueOnce({ enabled: true });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText, getByPlaceholderText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('禮品卡兌換'));
+    fireEvent.changeText(
+      getByPlaceholderText('輸入禮品卡代碼'),
+      'vivi-abcd-efgh-ijkl',
+    );
+    fireEvent.press(getByText('兌換'));
+
+    await waitFor(() => {
+      expect(redeemGiftCard).toHaveBeenCalledWith('VIVI-ABCD-EFGH-IJKL');
+    });
+    expect(mockAuth.loadSubscription).toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      '兌換成功',
+      expect.stringContaining('月訂閱'),
+    );
+    alertSpy.mockRestore();
   });
 
   test('disables reset sync status while uploading', async () => {

@@ -3,7 +3,8 @@
   "versionLabel": "v{{version}} ({{build}})",
   "sections": {
     "connectedDevice": "已连接设备",
-    "supportHelp": "支持与帮助"
+    "supportHelp": "支持与帮助",
+    "giftCard": "礼品卡"
   },
   "android": {
     "title": "Android 端能力说明",
@@ -75,6 +76,30 @@
     },
     "aborted": {
       "toast": "已取消上传"
+    }
+  },
+  "giftCard": {
+    "action": "礼品卡兑换",
+    "monthlyPlan": "月订阅",
+    "yearlyPlan": "年订阅",
+    "modal": {
+      "title": "礼品卡兑换",
+      "message": "输入礼品卡代码以启用或延长订阅。",
+      "placeholder": "输入礼品卡代码",
+      "cancel": "取消",
+      "submit": "兑换"
+    },
+    "empty": {
+      "title": "请输入礼品卡代码",
+      "body": "请确认代码后再兑换。"
+    },
+    "success": {
+      "title": "兑换成功",
+      "body": "已为你套用 {{plan}}。"
+    },
+    "failure": {
+      "title": "兑换失败",
+      "body": "礼品卡兑换失败，请稍后重试。"
     }
   },
   "actions": {

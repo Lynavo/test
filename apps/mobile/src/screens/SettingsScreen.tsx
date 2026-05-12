@@ -40,6 +40,10 @@ import {
   deleteAccount,
 } from '../services/auth-service';
 import { getSubscriptionStatus } from '../services/subscription-service';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../services/gift-card-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
@@ -189,6 +193,17 @@ function resolveDeleteSubscriptionBlockCopy(language: string | undefined): {
   };
 }
 
+function resolveGiftCardPlanLabel(plan: string, t: TFunction): string {
+  switch (plan) {
+    case 'yearly':
+      return t('settings.giftCard.yearlyPlan');
+    case 'monthly':
+      return t('settings.giftCard.monthlyPlan');
+    default:
+      return plan;
+  }
+}
+
 function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
   if (!iso) return t('settings.status.noRecord');
   const date = new Date(iso);
@@ -246,6 +261,10 @@ export function SettingsScreen() {
   const [diagnosticPromptVisible, setDiagnosticPromptVisible] =
     useState(false);
   const [diagnosticPromptNote, setDiagnosticPromptNote] = useState('');
+  const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
+  const [giftCardPromptVisible, setGiftCardPromptVisible] = useState(false);
+  const [giftCardCode, setGiftCardCode] = useState('');
+  const [isRedeemingGiftCard, setIsRedeemingGiftCard] = useState(false);
   const diagnosticAbortRef = useRef<AbortController | null>(null);
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>('system');
@@ -305,6 +324,27 @@ export function SettingsScreen() {
         cancelled = true;
       };
     }, [setSubscription]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getGiftCardConfig()
+        .then(config => {
+          if (!cancelled) {
+            setIsGiftCardEnabled(config.enabled);
+          }
+        })
+        .catch(err => {
+          console.warn('[settings] gift card config refresh failed', err);
+          if (!cancelled) {
+            setIsGiftCardEnabled(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
   );
 
   // ---------------------------------------------------------------------------
@@ -833,6 +873,46 @@ export function SettingsScreen() {
       setIsRestoring(false);
     }
   }, [t, auth]);
+
+  const handleOpenGiftCardPrompt = useCallback(() => {
+    setGiftCardCode('');
+    setGiftCardPromptVisible(true);
+  }, []);
+
+  const handleRedeemGiftCard = useCallback(async () => {
+    const normalizedCode = giftCardCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      Alert.alert(
+        t('settings.giftCard.empty.title'),
+        t('settings.giftCard.empty.body'),
+      );
+      return;
+    }
+
+    setIsRedeemingGiftCard(true);
+    try {
+      const result = await redeemGiftCard(normalizedCode);
+      setGiftCardPromptVisible(false);
+      setGiftCardCode('');
+      markSubscriptionJustActivated();
+      await auth.loadSubscription();
+      Alert.alert(
+        t('settings.giftCard.success.title'),
+        t('settings.giftCard.success.body', {
+          plan: resolveGiftCardPlanLabel(result.plan, t),
+        }),
+      );
+    } catch (error) {
+      Alert.alert(
+        t('settings.giftCard.failure.title'),
+        error instanceof ApiError
+          ? error.message
+          : t('settings.giftCard.failure.body'),
+      );
+    } finally {
+      setIsRedeemingGiftCard(false);
+    }
+  }, [auth, giftCardCode, t]);
 
   // Belt-and-suspenders two-step confirmation for account deletion.
   // Apple App Store Guideline 5.1.1(v) requires the action to be easy to
@@ -1539,8 +1619,107 @@ export function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {isGiftCardEnabled ? (
+          <>
+            <Text style={styles.sectionLabel}>
+              {t('settings.sections.giftCard')}
+            </Text>
+            <View style={styles.listCard}>
+              <TouchableOpacity
+                style={styles.actionRow}
+                activeOpacity={0.6}
+                onPress={handleOpenGiftCardPrompt}
+              >
+                <View style={styles.actionRowLeft}>
+                  <Icon name="gift-outline" size={18} color={BLUE} />
+                  <Text style={styles.actionRowText}>
+                    {t('settings.giftCard.action')}
+                  </Text>
+                </View>
+                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      <Modal
+        visible={giftCardPromptVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (isRedeemingGiftCard) return;
+          setGiftCardPromptVisible(false);
+          setGiftCardCode('');
+        }}
+      >
+        <View style={styles.diagnosticPromptBackdrop}>
+          <View style={styles.diagnosticPromptCard}>
+            <Text style={styles.diagnosticPromptTitle}>
+              {t('settings.giftCard.modal.title')}
+            </Text>
+            <Text style={styles.diagnosticPromptMessage}>
+              {t('settings.giftCard.modal.message')}
+            </Text>
+            <TextInput
+              value={giftCardCode}
+              onChangeText={value => setGiftCardCode(value.toUpperCase())}
+              placeholder={t('settings.giftCard.modal.placeholder')}
+              placeholderTextColor={MUTED_TEXT}
+              style={[
+                styles.diagnosticPromptInput,
+                styles.giftCardCodeInput,
+              ]}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!isRedeemingGiftCard}
+              maxLength={64}
+              accessibilityLabel={t('settings.giftCard.modal.placeholder')}
+            />
+            <View style={styles.diagnosticPromptActions}>
+              <TouchableOpacity
+                style={[
+                  styles.diagnosticPromptButton,
+                  isRedeemingGiftCard && styles.diagnosticPromptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={isRedeemingGiftCard}
+                onPress={() => {
+                  setGiftCardPromptVisible(false);
+                  setGiftCardCode('');
+                }}
+              >
+                <Text style={styles.diagnosticPromptCancelText}>
+                  {t('settings.giftCard.modal.cancel')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.diagnosticPromptButton,
+                  styles.diagnosticPromptPrimaryButton,
+                  (!giftCardCode.trim() || isRedeemingGiftCard) &&
+                    styles.diagnosticPromptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={!giftCardCode.trim() || isRedeemingGiftCard}
+                onPress={() => {
+                  void handleRedeemGiftCard();
+                }}
+              >
+                {isRedeemingGiftCard ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.diagnosticPromptPrimaryText}>
+                    {t('settings.giftCard.modal.submit')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={diagnosticPromptVisible}
@@ -2191,6 +2370,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  giftCardCodeInput: {
+    minHeight: 46,
+    maxHeight: 56,
+    textTransform: 'uppercase',
+  },
   diagnosticPromptActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -2206,6 +2390,9 @@ const styles = StyleSheet.create({
   },
   diagnosticPromptPrimaryButton: {
     backgroundColor: BLUE,
+  },
+  diagnosticPromptButtonDisabled: {
+    opacity: 0.5,
   },
   diagnosticPromptCancelText: {
     fontSize: 15,

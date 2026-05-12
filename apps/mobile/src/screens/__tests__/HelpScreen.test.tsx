@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
@@ -17,6 +17,7 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     goBack: jest.fn(),
   }),
+  useFocusEffect: (callback: () => void | (() => void)) => callback(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -35,7 +36,31 @@ jest.mock('../../utils/shareDiagnosticsArchive', () => ({
   shareDiagnosticsArchive: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../stores/auth-store', () => ({
+  useAuth: () => ({
+    loadSubscription: jest.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+jest.mock('../../hooks/useExpiryReminder', () => ({
+  markSubscriptionJustActivated: jest.fn(),
+}));
+
+jest.mock('../../services/gift-card-service', () => ({
+  getGiftCardConfig: jest.fn().mockResolvedValue({ enabled: false }),
+  redeemGiftCard: jest.fn().mockResolvedValue({
+    plan: 'monthly',
+    giftCardId: 1001,
+    startAt: '2026-05-12T00:00:00.000Z',
+    expireAt: '2026-06-12T00:00:00.000Z',
+    redeemedAt: '2026-05-12T00:00:00.000Z',
+    remainingUses: 0,
+    status: 'success',
+  }),
+}));
+
 import i18n from '../../i18n';
+import { getGiftCardConfig } from '../../services/gift-card-service';
 import { HelpScreen } from '../HelpScreen';
 
 describe('HelpScreen', () => {
@@ -43,7 +68,12 @@ describe('HelpScreen', () => {
     await i18n.changeLanguage('zh-Hant');
   });
 
-  it('renders the v0 help-center copy and FAQ guidance', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: false });
+  });
+
+  it('renders the v0 help-center copy and FAQ guidance', async () => {
     const { getByText } = render(<HelpScreen />);
 
     expect(getByText('幫助中心')).toBeTruthy();
@@ -60,5 +90,31 @@ describe('HelpScreen', () => {
         '請確認手機和電腦處於同一 Wi-Fi 網路，且 Vivi Drop PC 端正在執行。嘗試重新啟動 PC 端後，在手機端點擊重新掃描，或改用 6 位連接碼手動連接。',
       ),
     ).toBeTruthy();
+
+    await waitFor(() => {
+      expect(getGiftCardConfig).toHaveBeenCalled();
+    });
+  });
+
+  it('hides gift card redemption when the server switch is off', async () => {
+    const { queryByText } = render(<HelpScreen />);
+
+    await waitFor(() => {
+      expect(getGiftCardConfig).toHaveBeenCalled();
+    });
+
+    expect(queryByText('禮品卡兌換')).toBeNull();
+  });
+
+  it('renders gift card redemption at the bottom when the server switch is on', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
+
+    const { getByText } = render(<HelpScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    expect(getByText('輸入禮品卡代碼以啟用或延長訂閱。')).toBeTruthy();
   });
 });
