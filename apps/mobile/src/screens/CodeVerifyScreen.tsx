@@ -5,6 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  Platform,
   ActivityIndicator,
   Vibration,
   NativeModules,
@@ -67,6 +68,10 @@ export function CodeVerifyScreen() {
   );
   const resolvedCodeBoxSize = Math.max(36, codeBoxSize);
   const codeBoxFontSize = Math.max(18, Math.floor(resolvedCodeBoxSize * 0.4));
+  const codeBoxLineHeight = Math.max(
+    codeBoxFontSize + 8,
+    Math.floor(resolvedCodeBoxSize * 0.68),
+  );
   const codeBoxRadius = Math.max(14, Math.floor(resolvedCodeBoxSize * 0.3));
 
   const submitCode = useCallback(
@@ -240,6 +245,9 @@ export function CodeVerifyScreen() {
                   height: resolvedCodeBoxSize,
                   borderRadius: codeBoxRadius,
                   fontSize: codeBoxFontSize,
+                  ...(Platform.OS === 'android'
+                    ? { lineHeight: codeBoxLineHeight }
+                    : {}),
                 },
                 digit ? styles.codeBoxFilled : styles.codeBoxEmpty,
                 error && styles.codeBoxError,
@@ -405,8 +413,15 @@ const styles = StyleSheet.create({
   codeBox: {
     borderWidth: 2,
     textAlign: 'center',
+    paddingVertical: 0,
     fontWeight: 'bold',
     color: DARK,
+    ...(Platform.OS === 'android'
+      ? {
+          includeFontPadding: false,
+          textAlignVertical: 'center' as const,
+        }
+      : {}),
     // Shadow
     shadowColor: 'rgba(59,130,210,0.35)',
     shadowOffset: { width: 0, height: 2 },

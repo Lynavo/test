@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Keyboard,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -356,10 +357,18 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
+    height: 48,
     paddingVertical: 0,
     fontSize: 15,
+    lineHeight: 22,
     fontWeight: '500',
     color: AUTH_COLORS.text,
+    ...(Platform.OS === 'android'
+      ? {
+          includeFontPadding: false,
+          textAlignVertical: 'center' as const,
+        }
+      : {}),
   },
   phoneErrorText: {
     marginTop: 10,
