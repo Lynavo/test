@@ -164,4 +164,16 @@ describe('LoginScreen', () => {
 
     expect(collectBackgroundColors(toJSON())).not.toContain('#60c4f0');
   });
+
+  it('lets iOS center the phone input without a forced line height', () => {
+    const { getByPlaceholderText } = render(<LoginScreen />);
+
+    const phoneInputStyle = StyleSheet.flatten(
+      getByPlaceholderText('請輸入手機號碼').props.style,
+    );
+
+    expect(phoneInputStyle.height).toBe(48);
+    expect(phoneInputStyle.paddingVertical).toBe(0);
+    expect(phoneInputStyle.lineHeight).toBeUndefined();
+  });
 });

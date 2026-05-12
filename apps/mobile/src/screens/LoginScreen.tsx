@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   Keyboard,
   Linking,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -23,6 +22,7 @@ import {
 } from '../components/auth/AuthScreenShell';
 import {
   authCardSurfaceStyle,
+  authSingleLineInputStyle,
   authTextScalingProps,
 } from '../components/auth/authPlatformStyles';
 import { useAuth } from '../stores/auth-store';
@@ -357,18 +357,10 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    height: 48,
-    paddingVertical: 0,
     fontSize: 15,
-    lineHeight: 22,
     fontWeight: '500',
     color: AUTH_COLORS.text,
-    ...(Platform.OS === 'android'
-      ? {
-          includeFontPadding: false,
-          textAlignVertical: 'center' as const,
-        }
-      : {}),
+    ...authSingleLineInputStyle,
   },
   phoneErrorText: {
     marginTop: 10,

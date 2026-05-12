@@ -1,5 +1,6 @@
 import {
   getAuthCardSurfaceStyle,
+  getAuthSingleLineInputStyle,
   getAuthTextScalingProps,
 } from '../authPlatformStyles';
 
@@ -20,9 +21,27 @@ describe('auth platform styles', () => {
     });
   });
 
+  it('centers Android single-line auth inputs with an equal-height line box', () => {
+    expect(getAuthSingleLineInputStyle('android')).toEqual({
+      height: 48,
+      lineHeight: 48,
+      paddingTop: 0,
+      paddingBottom: 0,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    });
+  });
+
   it('keeps iOS auth text scalable within the designed cap', () => {
     expect(getAuthTextScalingProps('ios')).toEqual({
       maxFontSizeMultiplier: 1.15,
+    });
+  });
+
+  it('keeps iOS single-line auth inputs on native vertical centering', () => {
+    expect(getAuthSingleLineInputStyle('ios')).toEqual({
+      height: 48,
+      paddingVertical: 0,
     });
   });
 });

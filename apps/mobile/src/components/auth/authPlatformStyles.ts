@@ -1,4 +1,9 @@
-import { Platform, type TextProps, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  type TextProps,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 
 type PlatformName = typeof Platform.OS | 'ios' | 'android';
 
@@ -40,5 +45,39 @@ export function getAuthCardSurfaceStyle(
   return {};
 }
 
+export type AuthSingleLineInputStyle = Partial<
+  Pick<
+    TextStyle,
+    | 'height'
+    | 'lineHeight'
+    | 'paddingVertical'
+    | 'paddingTop'
+    | 'paddingBottom'
+    | 'includeFontPadding'
+    | 'textAlignVertical'
+  >
+>;
+
+export function getAuthSingleLineInputStyle(
+  platform: PlatformName = Platform.OS,
+): AuthSingleLineInputStyle {
+  if (platform === 'android') {
+    return {
+      height: 48,
+      lineHeight: 48,
+      paddingTop: 0,
+      paddingBottom: 0,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+    };
+  }
+
+  return {
+    height: 48,
+    paddingVertical: 0,
+  };
+}
+
 export const authTextScalingProps = getAuthTextScalingProps();
 export const authCardSurfaceStyle = getAuthCardSurfaceStyle();
+export const authSingleLineInputStyle = getAuthSingleLineInputStyle();
