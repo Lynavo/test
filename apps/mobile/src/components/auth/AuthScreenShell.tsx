@@ -18,6 +18,8 @@ import { Icon } from '../Icon';
 import { authTextScalingProps } from './authPlatformStyles';
 
 const APP_LOGO = require('../../assets/icons/app-logo.png');
+const LOGO_WIDTH = 232;
+const LOGO_HEIGHT = 128;
 
 export const AUTH_COLORS = {
   background: '#ffffff',
@@ -179,15 +181,15 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logoWrap: {
-    width: 116,
-    height: 64,
+    width: LOGO_WIDTH,
+    height: LOGO_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   logo: {
-    width: 116,
-    height: 64,
+    width: LOGO_WIDTH,
+    height: LOGO_HEIGHT,
   },
   brandTitle: {
     fontSize: 24,
