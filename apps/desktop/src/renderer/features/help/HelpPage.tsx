@@ -9,6 +9,7 @@ import {
   Apple,
   Monitor,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
@@ -19,6 +20,7 @@ import {
   AccordionTrigger,
 } from '@renderer/components/ui/accordion';
 import { GiftCardSection } from '@renderer/features/settings/GiftCardSection';
+import { useElectronAPI } from '@renderer/hooks/use-electron-api';
 
 interface QuickStartStep {
   title: string;
@@ -51,6 +53,9 @@ const errorIcons: LucideIcon[] = [Wifi, HardDrive, AlertTriangle, UploadCloud];
 
 export function HelpPage() {
   const { t } = useTranslation();
+  const api = useElectronAPI();
+  const getClientConfig = api.sidecar.getClientConfig;
+  const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
   const quickStartSteps = t('help.quickStart.steps', { returnObjects: true }) as QuickStartStep[];
   const directoryCards = t('help.directory.cards', { returnObjects: true }) as DirectoryCard[];
   const macPermissionSections = t('help.permissions.mac', {
@@ -62,6 +67,26 @@ export function HelpPage() {
   const uploadRules = t('help.uploadRules.items', { returnObjects: true }) as string[];
   const faqItems = t('help.faq.items', { returnObjects: true }) as FaqItem[];
   const errorCards = t('help.errors.cards', { returnObjects: true }) as ErrorCard[];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getClientConfig()
+      .then((config) => {
+        if (!cancelled) {
+          setIsGiftCardEnabled(config.features.giftCard.enabled);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsGiftCardEnabled(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getClientConfig]);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -235,12 +260,14 @@ export function HelpPage() {
           </div>
         </section>
 
-        <section className="mb-8">
-          <h2 className="mb-4 text-base font-semibold text-foreground">
-            {t('settings.giftCard.title')}
-          </h2>
-          <GiftCardSection />
-        </section>
+        {isGiftCardEnabled ? (
+          <section className="mb-8">
+            <h2 className="mb-4 text-base font-semibold text-foreground">
+              {t('settings.giftCard.title')}
+            </h2>
+            <GiftCardSection />
+          </section>
+        ) : null}
       </div>
     </div>
   );

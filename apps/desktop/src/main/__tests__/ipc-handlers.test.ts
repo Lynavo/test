@@ -51,6 +51,7 @@ vi.mock('../sidecar-client', async () => {
       validateShare: vi.fn(),
       getTransferActive: vi.fn(),
       getSharedList: vi.fn(),
+      getClientConfig: vi.fn(),
       redeemGiftCard: vi.fn(),
       sendSMSCode: vi.fn(),
       loginWithSMSCode: vi.fn(),
@@ -152,6 +153,20 @@ describe('registerIpcHandlers', () => {
       message: 'done',
     });
     expect(sidecarClient.redeemGiftCard).toHaveBeenCalledWith({ code: 'ABCD-EFGH-IJKL' });
+  });
+
+  it('registers client config IPC', async () => {
+    vi.mocked(sidecarClient.getClientConfig).mockResolvedValue({
+      features: { giftCard: { enabled: true } },
+    });
+
+    registerIpcHandlers({ retryStart: vi.fn() } as never);
+    const handler = handlers.get(IPC.SIDECAR_CLIENT_CONFIG);
+
+    await expect(handler?.(undefined)).resolves.toEqual({
+      features: { giftCard: { enabled: true } },
+    });
+    expect(sidecarClient.getClientConfig).toHaveBeenCalledTimes(1);
   });
 
   it('registers phone auth IPC for SMS send and login', async () => {

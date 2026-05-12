@@ -4,7 +4,10 @@ const exposed = vi.hoisted(() => ({
   api: undefined as
     | undefined
     | {
-        sidecar: { redeemGiftCard(payload: { code: string }): Promise<unknown> };
+        sidecar: {
+          getClientConfig(): Promise<unknown>;
+          redeemGiftCard(payload: { code: string }): Promise<unknown>;
+        };
         auth: {
           sendSMSCode(payload: { phone: string }): Promise<unknown>;
           loginWithSMSCode(payload: { phone: string; code: string }): Promise<unknown>;
@@ -48,6 +51,17 @@ describe('preload electronAPI', () => {
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:redeem-gift-card', {
       code: 'ABCD-EFGH-IJKL',
     });
+  });
+
+  it('maps client config calls to the IPC channel', async () => {
+    exposed.invoke.mockResolvedValue({ features: { giftCard: { enabled: true } } });
+
+    await import('../index');
+
+    await expect(exposed.api?.sidecar.getClientConfig()).resolves.toEqual({
+      features: { giftCard: { enabled: true } },
+    });
+    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:client-config');
   });
 
   it('maps phone auth calls to IPC channels', async () => {

@@ -23,6 +23,61 @@ function createResponse(statusCode: number, body: string) {
 }
 
 describe('sidecarClient', () => {
+  it('fetches client config from the public API without user auth', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(
+        createResponse(
+          200,
+          JSON.stringify({
+            code: 0,
+            message: 'success',
+            data: { features: { gift_card: { enabled: true } } },
+          }),
+        ),
+      );
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_CLIENT_CONFIG_BASE_URL', 'https://config.example.test');
+    vi.stubEnv('SYNCFLOW_GIFTCARD_REDEEM_TOKEN', 'redeem-token');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.getClientConfig()).resolves.toEqual({
+      features: { giftCard: { enabled: true } },
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.protocol).toBe('https:');
+    expect(options.hostname).toBe('config.example.test');
+    expect(options.path).toBe('/api/v1/config');
+    expect(options.method).toBe('GET');
+    expect(options.headers).toEqual({ 'Content-Type': 'application/json' });
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('uses https transport when the redeem base url is https', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {

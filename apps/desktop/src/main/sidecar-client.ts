@@ -16,6 +16,10 @@ const GIFT_CARD_REDEEM_BASE_URL =
   process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL?.trim() || API_BASE;
 const GIFT_CARD_REDEEM_PATH =
   process.env.SYNCFLOW_GIFTCARD_REDEEM_PATH ?? '/api/v1/gift-cards/redeem';
+const CLIENT_CONFIG_BASE_URL =
+  process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL?.trim() || API_BASE;
+const CLIENT_CONFIG_PATH =
+  process.env.SYNCFLOW_CLIENT_CONFIG_PATH ?? '/api/v1/config';
 const AUTH_BASE_URL =
   process.env.SYNCFLOW_AUTH_BASE_URL?.trim() || GIFT_CARD_REDEEM_BASE_URL || API_BASE;
 const AUTH_SMS_SEND_PATH =
@@ -48,6 +52,14 @@ type GiftCardRedeemResponse = {
   ok: boolean;
   message?: string;
   reason?: GiftCardRedeemFailureReason;
+};
+
+export type ClientConfig = {
+  features: {
+    giftCard: {
+      enabled: boolean;
+    };
+  };
 };
 
 type AuthResponse = {
@@ -156,6 +168,33 @@ function normalizeGiftCardRedeemResponse(value: unknown): GiftCardRedeemResponse
     ok: false,
     reason: mapGiftCardRedeemFailureReason(data.code),
     message: typeof data.message === 'string' ? data.message : undefined,
+  };
+}
+
+function normalizeClientConfig(value: unknown): ClientConfig {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid client config response');
+  }
+
+  const envelope = value as Record<string, unknown>;
+  const data = envelope.data && typeof envelope.data === 'object'
+    ? (envelope.data as Record<string, unknown>)
+    : envelope;
+  const features = data.features && typeof data.features === 'object'
+    ? (data.features as Record<string, unknown>)
+    : {};
+  const giftCard = features.gift_card && typeof features.gift_card === 'object'
+    ? (features.gift_card as Record<string, unknown>)
+    : features.giftCard && typeof features.giftCard === 'object'
+      ? (features.giftCard as Record<string, unknown>)
+      : {};
+
+  return {
+    features: {
+      giftCard: {
+        enabled: giftCard.enabled === true,
+      },
+    },
   };
 }
 
@@ -317,6 +356,15 @@ export const sidecarClient = {
   getSharedList: (path?: string) => {
     const endpoint = path ? `/shared/list/${path}` : '/shared/list';
     return request<import('@syncflow/contracts').SharedDirectoryDTO>('GET', endpoint);
+  },
+  getClientConfig: async () => {
+    const response = await request<unknown>(
+      'GET',
+      CLIENT_CONFIG_PATH,
+      undefined,
+      CLIENT_CONFIG_BASE_URL,
+    );
+    return normalizeClientConfig(response);
   },
   redeemGiftCard: async (payload: GiftCardRedeemPayload) => {
     try {

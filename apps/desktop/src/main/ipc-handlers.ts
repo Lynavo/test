@@ -27,6 +27,7 @@ export const IPC = {
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
   SIDECAR_RESET_STATE: 'sidecar:reset-state',
+  SIDECAR_CLIENT_CONFIG: 'sidecar:client-config',
   SIDECAR_REDEEM_GIFT_CARD: 'sidecar:redeem-gift-card',
   AUTH_SEND_SMS_CODE: 'auth:send-sms-code',
   AUTH_LOGIN_WITH_SMS_CODE: 'auth:login-with-sms-code',
@@ -92,6 +93,7 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
     sidecarClient.updateSettings(partial),
   );
   ipcMain.handle(IPC.SIDECAR_RESET_STATE, () => sidecarClient.resetState());
+  ipcMain.handle(IPC.SIDECAR_CLIENT_CONFIG, () => sidecarClient.getClientConfig());
   ipcMain.handle(IPC.SIDECAR_REDEEM_GIFT_CARD, (_e, payload: { code: string }) =>
     sidecarClient.redeemGiftCard(payload),
   );

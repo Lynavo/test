@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { HelpPage } from '../HelpPage';
+
+const electronAPIMock = vi.hoisted(() => ({
+  getClientConfig: vi.fn(),
+}));
 
 vi.mock('@renderer/components/shared/GlassCard', () => ({
   GlassCard: ({ children, className }: { children: React.ReactNode; className?: string }) => (
@@ -45,7 +49,20 @@ vi.mock('@renderer/features/settings/GiftCardSection', () => ({
   GiftCardSection: () => <div data-testid="gift-card-section">兌換禮品卡</div>,
 }));
 
+vi.mock('@renderer/hooks/use-electron-api', () => ({
+  useElectronAPI: () => ({
+    sidecar: {
+      getClientConfig: electronAPIMock.getClientConfig,
+    },
+  }),
+}));
+
 describe('HelpPage', () => {
+  beforeEach(() => {
+    electronAPIMock.getClientConfig.mockReset();
+    electronAPIMock.getClientConfig.mockResolvedValue({ features: { giftCard: { enabled: true } } });
+  });
+
   it('renders page header', () => {
     render(<HelpPage />);
 
@@ -53,14 +70,28 @@ describe('HelpPage', () => {
     expect(screen.getByText(/为您了解和使用 Vivi Drop 提供全面的指导信息/)).toBeInTheDocument();
   });
 
-  it('renders gift card redeem entry at the bottom of help', () => {
+  it('renders gift card redeem entry at the bottom of help when config enables it', async () => {
     render(<HelpPage />);
 
-    const giftCardSection = screen.getByTestId('gift-card-section');
+    const giftCardSection = await screen.findByTestId('gift-card-section');
 
     expect(giftCardSection).toBeInTheDocument();
     expect(screen.getByText('兌換禮品卡')).toBeInTheDocument();
     expect(giftCardSection.closest('section')?.nextElementSibling).toBeNull();
+  });
+
+  it('hides gift card redeem entry when config disables it', async () => {
+    electronAPIMock.getClientConfig.mockResolvedValue({
+      features: { giftCard: { enabled: false } },
+    });
+
+    render(<HelpPage />);
+
+    await waitFor(() => {
+      expect(electronAPIMock.getClientConfig).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByTestId('gift-card-section')).not.toBeInTheDocument();
+    expect(screen.queryByText('兌換禮品卡')).not.toBeInTheDocument();
   });
 
   it('renders all 6 quick start steps', () => {

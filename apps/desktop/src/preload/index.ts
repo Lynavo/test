@@ -15,6 +15,7 @@ const IPC = {
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
   SIDECAR_RESET_STATE: 'sidecar:reset-state',
+  SIDECAR_CLIENT_CONFIG: 'sidecar:client-config',
   SIDECAR_REDEEM_GIFT_CARD: 'sidecar:redeem-gift-card',
   AUTH_SEND_SMS_CODE: 'auth:send-sms-code',
   AUTH_LOGIN_WITH_SMS_CODE: 'auth:login-with-sms-code',
@@ -56,6 +57,7 @@ const electronAPI: ElectronAPI = {
     getSettings: () => ipcRenderer.invoke(IPC.SIDECAR_SETTINGS),
     updateSettings: (settings) => ipcRenderer.invoke(IPC.SIDECAR_UPDATE_SETTINGS, settings),
     resetState: () => ipcRenderer.invoke(IPC.SIDECAR_RESET_STATE),
+    getClientConfig: () => ipcRenderer.invoke(IPC.SIDECAR_CLIENT_CONFIG),
     redeemGiftCard: (payload: { code: string }) =>
       ipcRenderer.invoke(IPC.SIDECAR_REDEEM_GIFT_CARD, payload),
     regenerateConnectionCode: () => ipcRenderer.invoke(IPC.SIDECAR_REGENERATE_CODE),

@@ -52,6 +52,13 @@ export interface ElectronAPI {
     getSettings(): Promise<SettingsDTO>;
     updateSettings(settings: Partial<SettingsDTO>): Promise<SettingsDTO>;
     resetState(): Promise<{ ok: boolean }>;
+    getClientConfig(): Promise<{
+      features: {
+        giftCard: {
+          enabled: boolean;
+        };
+      };
+    }>;
     redeemGiftCard(payload: { code: string }): Promise<{
       ok: boolean;
       message?: string;
