@@ -34,7 +34,7 @@ export const APP_REVIEW_PHONE = '17000000002';
 // pointed at a host-machine backend, or a LAN IP for physical-device backend
 // debugging. Leaving the default on production avoids real-device SMS login
 // failures from emulator-only loopback addresses.
-const DEV_API_BASE_URL: string = 'http://172.16.21.43:8080';
+const DEV_API_BASE_URL: string = PROD_BASE_URL;
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
@@ -136,7 +136,7 @@ export function getBaseUrl(): string {
 
 function getBuiltInBaseUrl(): string {
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
-    if (!_warnedRealDeviceLoopback) {
+    if (DEV_API_BASE_URL !== PROD_BASE_URL && !_warnedRealDeviceLoopback) {
       _warnedRealDeviceLoopback = true;
       console.warn(
         `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}". ` +

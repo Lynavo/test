@@ -21,11 +21,22 @@ import {
   setSessionBaseUrl,
 } from '../config';
 
+const testGlobal = globalThis as typeof globalThis & { __DEV__?: boolean };
+
 describe('review server routing config', () => {
+  const originalDevFlag = testGlobal.__DEV__;
+
   beforeEach(() => {
     jest.clearAllMocks();
     void clearSessionBaseUrl();
     void setDebugBaseUrlOverride(null);
+  });
+
+  afterEach(() => {
+    Object.defineProperty(testGlobal, '__DEV__', {
+      value: originalDevFlag,
+      configurable: true,
+    });
   });
 
   test('routes the App Review phone to the review API server', () => {
@@ -43,6 +54,10 @@ describe('review server routing config', () => {
 
   test('routes normal phone numbers to production on Android dev builds by default', () => {
     jest.isolateModules(() => {
+      Object.defineProperty(testGlobal, '__DEV__', {
+        value: true,
+        configurable: true,
+      });
       jest.doMock('react-native', () => ({
         Platform: { OS: 'android' },
       }));
