@@ -147,16 +147,37 @@ pnpm package:desktop:win
 1. TestFlight 上傳成功
 2. 本輪目標平台的 desktop 安裝包已完成並驗收
 
-執行：
+TestFlight 打包上傳觸發 beta tag 時，必須讓兩個倉庫都有同一個測試 tag：
+
+1. `/Volumes/T7/Dev/Web/SyncFlow`
+2. `/Volumes/T7/Dev/Web/vivi-drop-server`
+
+tag 名稱沿用本文件的 `beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`，例如 `beta/v1.0.0-b37`。不要只在 SyncFlow 單邊打 tag；若要推送遠端 tag，也必須兩邊都推送。
+
+先在 SyncFlow 執行：
 
 ```bash
 pnpm tag:beta
 ```
 
-如果要直接推遠端 tag：
+再到 server repo 用同一個 tag 名稱打 tag：
+
+```bash
+cd /Volumes/T7/Dev/Web/vivi-drop-server
+git tag -a beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION> -m "Vivi Drop beta <MARKETING_VERSION> (<CURRENT_PROJECT_VERSION>)"
+```
+
+如果要推遠端 tag，SyncFlow 可直接執行：
 
 ```bash
 pnpm tag:beta:push
+```
+
+server repo 另外推同名 tag：
+
+```bash
+cd /Volumes/T7/Dev/Web/vivi-drop-server
+git push origin beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>
 ```
 
 ## 7. 推薦發佈順序
@@ -169,7 +190,7 @@ pnpm tag:beta:push
 4. 跑 Android Debug build
 5. 出 macOS signed DMG
 6. 如本輪包含 Windows，出 Windows NSIS / ZIP
-7. 打 beta tag
+7. 給 SyncFlow 和 vivi-drop-server 打同一個 beta tag
 8. 確認工作區乾淨
 9. 推程式碼和 tag
 10. 等 TestFlight processing 完成後再擴大測試範圍

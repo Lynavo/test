@@ -150,6 +150,15 @@ pnpm format:check      # 格式检查
 
 Windows 桌面包当前跟随 `docs/release/release-playbook.md` 中的 Windows 小节，以及根目录脚本 `pnpm package:desktop:win`。
 
+## TestFlight 打包上传后的跨仓库 tag 规则
+
+如果本仓库被要求打包并上传 iOS TestFlight，完成上传后必须给以下两个仓库都打上对应的 beta 测试 tag：
+
+1. `/Volumes/T7/Dev/Web/SyncFlow`
+2. `/Volumes/T7/Dev/Web/vivi-drop-server`
+
+tag 名称必须与 TestFlight build 对齐，格式沿用 `beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`，例如 `beta/v1.0.0-b37`。两个仓库必须使用同一个 tag 名称；若要推送远端 tag，也必须两边都推送。不要只给其中一个仓库打 tag。
+
 ## Sidecar HTTP API 端口
 
 - TCP/LMUP 协议端口：**39393**
