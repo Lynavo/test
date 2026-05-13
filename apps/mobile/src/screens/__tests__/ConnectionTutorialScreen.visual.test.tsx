@@ -1,4 +1,5 @@
 import React from 'react';
+import { Dimensions, StyleSheet, ViewStyle } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockGoBack = jest.fn();
@@ -123,5 +124,22 @@ describe('ConnectionTutorialScreen visuals', () => {
     expect(screen.getByText('搜尋').props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ color: '#ffffff' })]),
     );
+  });
+
+  it('keeps each tutorial page the same width as the horizontal paging viewport', () => {
+    Dimensions.set({
+      window: { width: 375, height: 812, scale: 2, fontScale: 1 },
+      screen: { width: 375, height: 812, scale: 2, fontScale: 1 },
+    });
+
+    const screen = render(<ConnectionTutorialScreen />);
+    const firstPage = screen.getByTestId(
+      'connection-tutorial-page-lan',
+    ) as unknown as {
+      props: { style: ViewStyle };
+    };
+    const firstPageStyle = StyleSheet.flatten(firstPage.props.style);
+
+    expect(firstPageStyle.width).toBe(375);
   });
 });

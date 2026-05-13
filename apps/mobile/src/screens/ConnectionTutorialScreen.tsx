@@ -123,7 +123,7 @@ export function ConnectionTutorialScreen() {
   const pageScrollRef = useRef<ScrollView>(null);
   const [activeTab, setActiveTab] = useState<TutorialTabId>('lan');
   const [showTroubleshoot, setShowTroubleshoot] = useState(false);
-  const pageWidth = Math.max(windowWidth - 32, 1);
+  const pageWidth = Math.max(windowWidth, 1);
 
   const tabs = useMemo<TutorialTab[]>(
     () => [
@@ -285,6 +285,7 @@ export function ConnectionTutorialScreen() {
             return (
               <View
                 key={id}
+                testID={`connection-tutorial-page-${id}`}
                 style={[styles.tutorialPage, { width: pageWidth }]}
               >
                 <View style={styles.card}>
