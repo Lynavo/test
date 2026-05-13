@@ -99,7 +99,15 @@
     },
     "failure": {
       "title": "Redeem failed",
-      "body": "Gift card redemption failed. Please try again later."
+      "body": "Gift card redemption failed. Please try again later.",
+      "invalidCode": "This gift card code is invalid. Check it and try again.",
+      "expired": "This gift card has expired.",
+      "notAvailable": "This gift card is no longer available or has already been fully redeemed.",
+      "alreadyRedeemed": "This account has already redeemed this gift card.",
+      "planMismatch": "This gift card plan can't be applied to the current account.",
+      "invalidOperation": "The gift card redemption details are invalid. Check them and try again.",
+      "activeSubscription": "This account already has an active subscription and can't use a gift card.",
+      "network": "Network connection failed. Check your connection and try again."
     }
   },
   "actions": {

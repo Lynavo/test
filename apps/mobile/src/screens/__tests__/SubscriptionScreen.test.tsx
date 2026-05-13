@@ -132,6 +132,8 @@ const mockAuthState: {
     plan: string;
     expireAt: string | null;
     trialEnd: string | null;
+    autoRenewing?: boolean | null;
+    source?: string | null;
   } | null;
 } = {
   user: { id: 1, status: 'trial_expired' },
@@ -421,6 +423,28 @@ describe('SubscriptionScreen', () => {
     await waitFor(() =>
       expect(iapService.purchase).toHaveBeenCalledWith(IAP_PRODUCTS.monthly),
     );
+  });
+
+  test('gift card member CTA is disabled and does not start purchase', async () => {
+    mockAuthState.subscription = {
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-06-11T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: false,
+      source: 'gift_card',
+    };
+
+    const { findAllByText, queryByText } = renderScreen();
+
+    const giftCardLabels = await findAllByText(
+      /已是礼品卡会员|已是禮品卡會員|Gift card member/,
+    );
+    expect(queryByText(/已取消/)).toBeNull();
+
+    fireEvent.press(giftCardLabels[giftCardLabels.length - 1]);
+
+    expect(iapService.purchase).not.toHaveBeenCalled();
   });
 
   test('renders and purchases an admin catalog SKU without monthly/yearly in the product id', async () => {

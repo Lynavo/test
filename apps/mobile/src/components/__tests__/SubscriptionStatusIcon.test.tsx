@@ -18,6 +18,9 @@ describe('SubscriptionStatusIcon', () => {
     expect(getSubscriptionStatusIconTone('subscribed_cancelled')).toBe(
       'subscribed',
     );
+    expect(getSubscriptionStatusIconTone('gift_card_subscribed')).toBe(
+      'subscribed',
+    );
     expect(getSubscriptionStatusIconTone('unknown')).toBeNull();
   });
 

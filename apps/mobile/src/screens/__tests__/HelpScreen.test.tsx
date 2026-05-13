@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
@@ -60,7 +61,10 @@ jest.mock('../../services/gift-card-service', () => ({
 }));
 
 import i18n from '../../i18n';
-import { getGiftCardConfig } from '../../services/gift-card-service';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../../services/gift-card-service';
 import { HelpScreen } from '../HelpScreen';
 
 describe('HelpScreen', () => {
@@ -116,5 +120,34 @@ describe('HelpScreen', () => {
     });
 
     expect(getByText('輸入禮品卡代碼以啟用或延長訂閱。')).toBeTruthy();
+  });
+
+  it('localizes gift card already-redeemed errors from Help', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
+    (redeemGiftCard as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error('此账号已兑换过此礼品卡'), { code: 3004 }),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText, getByPlaceholderText } = render(<HelpScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('禮品卡兌換'));
+    fireEvent.changeText(
+      getByPlaceholderText('輸入禮品卡代碼'),
+      'vivi-abcd-efgh-ijkl',
+    );
+    fireEvent.press(getByText('兌換'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        '兌換失敗',
+        '此帳號已兌換過此禮品卡。',
+      );
+    });
+    alertSpy.mockRestore();
   });
 });

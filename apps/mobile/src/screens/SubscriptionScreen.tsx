@@ -77,11 +77,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PLAN_CARD_GAP = 12;
 const PLAN_CARD_HORIZONTAL_PADDING = 16;
 const POST_VERIFY_STATUS_POLL_DELAYS_MS = [
-  2_000,
-  5_000,
-  10_000,
-  20_000,
-  30_000,
+  2_000, 5_000, 10_000, 20_000, 30_000,
 ] as const;
 
 /** Card width grows/shrinks with plan count so 2 or 3 cards always tile
@@ -104,9 +100,10 @@ type PostSubscriptionRoute = Extract<
  *  Drives the "current plan" badge + card disabling on SubscriptionScreen.
  *  Exported for unit testing. */
 export function resolveCurrentPlan(
-  sub: { status: string; plan: string } | null,
+  sub: { status: string; plan: string; source?: string | null } | null,
 ): 'monthly' | 'yearly' | null {
   if (!sub) return null;
+  if (sub.source === 'gift_card') return null;
   if (sub.status !== 'subscribed' && sub.status !== 'trialing') return null;
   if (sub.plan === 'monthly' || sub.plan === 'yearly') return sub.plan;
   return null;
@@ -235,6 +232,12 @@ function StatusBadge({
       break;
     case 'subscribed':
       label = t('subscription.status.subscribed');
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      break;
+    case 'gift_card_subscribed':
+      label = t('subscription.status.giftCardSubscribed');
       dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
       backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
       textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
@@ -540,6 +543,8 @@ export function SubscriptionScreen() {
     subscription,
     user,
   });
+  const isGiftCardSubscribed =
+    subscriptionDisplay.kind === 'gift_card_subscribed';
   const canExitRootPaywall = isFeatureAccessAllowed(
     subscription?.status ?? user?.status,
   );
@@ -798,6 +803,10 @@ export function SubscriptionScreen() {
   }, [isUploadingDiagnostics, t]);
 
   const handleSubscribe = useCallback(async () => {
+    if (isGiftCardSubscribed) {
+      recordDiagnosticsLog('SubscriptionScreen', 'subscribe blocked gift card');
+      return;
+    }
     if (!selectedEntry || selectedPlanTier == null) {
       // Catalog hasn't resolved yet, or selection couldn't map back to a
       // backend tier. Bail rather than guessing which entitlement to verify.
@@ -842,6 +851,10 @@ export function SubscriptionScreen() {
         const fresh = await getSubscriptionStatus();
         setSubscription(fresh);
         const freshPlan = resolveCurrentPlan(fresh);
+        const freshDisplay = resolveSubscriptionDisplayState({
+          subscription: fresh,
+          user,
+        });
         recordDiagnosticsLog(
           'SubscriptionScreen',
           'subscribe preflight status',
@@ -849,8 +862,16 @@ export function SubscriptionScreen() {
             status: fresh.status,
             plan: fresh.plan,
             freshPlan,
+            source: fresh.source,
           },
         );
+        if (freshDisplay.kind === 'gift_card_subscribed') {
+          recordDiagnosticsLog(
+            'SubscriptionScreen',
+            'subscribe blocked by gift card preflight',
+          );
+          return;
+        }
         if (
           (freshPlan != null && targetTier === freshPlan) ||
           isDowngradePlan(freshPlan, targetTier)
@@ -1197,7 +1218,9 @@ export function SubscriptionScreen() {
     t,
     selectedEntry,
     selectedPlanTier,
+    isGiftCardSubscribed,
     currentPlan,
+    user,
     loadSubscription,
     setSubscription,
     handleRestore,
@@ -1315,12 +1338,13 @@ export function SubscriptionScreen() {
     resetToPostSubscriptionRoute,
   ]);
 
-  const subscribeButtonLabel =
-    currentPlan === 'yearly'
-      ? t('subscription.actions.currentYearly')
-      : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
-        ? t('subscription.actions.switchPlan')
-        : t('subscription.actions.subscribe');
+  const subscribeButtonLabel = isGiftCardSubscribed
+    ? t('subscription.actions.giftCardMember')
+    : currentPlan === 'yearly'
+    ? t('subscription.actions.currentYearly')
+    : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
+    ? t('subscription.actions.switchPlan')
+    : t('subscription.actions.subscribe');
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -1407,14 +1431,20 @@ export function SubscriptionScreen() {
                 oldPrice={entry.savings?.annualizedMonthlyDisplay}
                 savingsBadge={entry.savings?.display}
                 selected={selectedProductId === entry.plan.product_id}
-                disabled={cardIsCurrent || cardIsDowngrade}
+                disabled={
+                  isGiftCardSubscribed || cardIsCurrent || cardIsDowngrade
+                }
                 recommended={entry.plan.recommended}
                 currentBadge={
                   cardIsCurrent
                     ? t('subscription.plans.currentPlan')
                     : undefined
                 }
-                onPress={() => setSelectedProductId(entry.plan.product_id)}
+                onPress={() => {
+                  if (!isGiftCardSubscribed) {
+                    setSelectedProductId(entry.plan.product_id);
+                  }
+                }}
               />
             );
           })}
@@ -1454,6 +1484,7 @@ export function SubscriptionScreen() {
             // ASC mis-config / sandbox not signed in), we cannot price the
             // purchase — block it.
             selectedEntry?.product == null ||
+            isGiftCardSubscribed ||
             selectedPlanIsCurrent ||
             selectedPlanIsDowngrade ||
             (plansError != null && FEATURES.IAP_ENABLED)

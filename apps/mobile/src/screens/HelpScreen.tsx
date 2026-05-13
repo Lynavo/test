@@ -25,6 +25,7 @@ import {
   getGiftCardConfig,
   redeemGiftCard,
 } from '../services/gift-card-service';
+import { getGiftCardRedeemFailureTranslationKey } from '../services/gift-card-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
 
 // ---------------------------------------------------------------------------
@@ -247,12 +248,8 @@ export function HelpScreen() {
         }),
       );
     } catch (error) {
-      Alert.alert(
-        t('settings.giftCard.failure.title'),
-        error instanceof Error
-          ? error.message
-          : t('settings.giftCard.failure.body'),
-      );
+      const failureKey = getGiftCardRedeemFailureTranslationKey(error);
+      Alert.alert(t('settings.giftCard.failure.title'), t(failureKey));
     } finally {
       setIsRedeemingGiftCard(false);
     }

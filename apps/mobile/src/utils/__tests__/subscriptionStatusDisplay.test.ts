@@ -4,9 +4,9 @@ describe('resolveSubscriptionDisplayState', () => {
   const realNow = Date.now;
 
   beforeEach(() => {
-    jest.spyOn(Date, 'now').mockReturnValue(
-      new Date('2026-04-18T00:00:00.000Z').getTime(),
-    );
+    jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-04-18T00:00:00.000Z').getTime());
   });
 
   afterEach(() => {
@@ -83,6 +83,20 @@ describe('resolveSubscriptionDisplayState', () => {
         },
       }),
     ).toEqual({ kind: 'subscribed_cancelled', daysRemaining: 0 });
+  });
+
+  test('subscribed + gift_card source takes precedence over autoRenewing false', () => {
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+          autoRenewing: false,
+          source: 'gift_card',
+        },
+      }),
+    ).toEqual({ kind: 'gift_card_subscribed', daysRemaining: 0 });
   });
 
   test('subscribed + autoRenewing true → plain subscribed', () => {

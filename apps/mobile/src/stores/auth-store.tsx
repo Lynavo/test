@@ -55,6 +55,10 @@ export interface SubscriptionInfo {
   plan: SubscriptionPlan;
   expireAt: string | null;
   trialEnd: string | null;
+  /** Backend origin for the currently-effective entitlement. `gift_card`
+   *  grants access without Apple auto-renewal, so UI must not treat its
+   *  autoRenewing=false shape as an App Store cancellation. */
+  source?: string | null;
   /** Whether Apple will auto-renew at expireAt. Undefined / null when
    *  server hasn't populated the field (legacy status shape, status !=
    *  subscribed, or old test fixtures). When status === 'subscribed'

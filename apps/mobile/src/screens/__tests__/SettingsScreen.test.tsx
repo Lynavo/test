@@ -224,7 +224,7 @@ describe('SettingsScreen', () => {
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
-      .mockImplementation(() => ({ remove: jest.fn() }) as never);
+      .mockImplementation(() => ({ remove: jest.fn() } as never));
   });
 
   test('subscription card prefers subscription status over stale user status', async () => {
@@ -235,6 +235,27 @@ describe('SettingsScreen', () => {
     });
 
     expect(queryByText('已到期')).toBeNull();
+  });
+
+  test('gift card subscription card does not open the subscription screen', async () => {
+    mockAuth.subscription = {
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-06-11T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: false,
+      source: 'gift_card',
+    };
+
+    const { getByText, queryByText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('已是禮品卡會員')).toBeTruthy();
+    });
+
+    expect(queryByText(/已取消/)).toBeNull();
+    fireEvent.press(getByText('已是禮品卡會員'));
+    expect(mockNavigate).not.toHaveBeenCalledWith('Subscription');
   });
 
   test('monthly intro trial is displayed as subscription service, not account trial', async () => {
@@ -352,6 +373,35 @@ describe('SettingsScreen', () => {
       '兌換成功',
       expect.stringContaining('月訂閱'),
     );
+    alertSpy.mockRestore();
+  });
+
+  test('localizes gift card already-redeemed errors from Settings', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValueOnce({ enabled: true });
+    (redeemGiftCard as jest.Mock).mockRejectedValueOnce(
+      new ApiError(3004, '此账号已兑换过此礼品卡'),
+    );
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { getByText, getByPlaceholderText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('禮品卡兌換'));
+    fireEvent.changeText(
+      getByPlaceholderText('輸入禮品卡代碼'),
+      'vivi-abcd-efgh-ijkl',
+    );
+    fireEvent.press(getByText('兌換'));
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        '兌換失敗',
+        '此帳號已兌換過此禮品卡。',
+      );
+    });
     alertSpy.mockRestore();
   });
 

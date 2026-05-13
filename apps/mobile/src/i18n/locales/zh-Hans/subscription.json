@@ -65,6 +65,7 @@
     "introTrialing": "月订阅免费期，还剩 {{days}} 天",
     "trialExpired": "试用已结束",
     "subscribed": "已订阅",
+    "giftCardSubscribed": "已是礼品卡会员",
     "subscribedCancelled": "已取消，有效至 {{date}}",
     "subExpired": "订阅已到期"
   },
@@ -72,6 +73,7 @@
     "subscribe": "立即订阅",
     "switchPlan": "切换方案",
     "currentYearly": "已是年会员",
+    "giftCardMember": "已是礼品卡会员",
     "start": "开始使用"
   },
   "footer": "订阅即表示您同意自动续费条款，可随时取消",

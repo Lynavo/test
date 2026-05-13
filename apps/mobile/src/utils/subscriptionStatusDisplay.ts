@@ -9,6 +9,7 @@ export type SubscriptionDisplayKind =
   | 'account_trial'
   | 'subscription_intro_trial'
   | 'subscribed'
+  | 'gift_card_subscribed'
   /** status=subscribed + autoRenewing=false: user cancelled in iOS
    *  Settings, access continues until expireAt. UI should surface
    *  "Cancelled, valid until X" copy instead of plain "Subscribed". */
@@ -25,7 +26,7 @@ export interface SubscriptionDisplayState {
 type EntitlementSnapshot = Pick<UserProfile, 'status' | 'plan' | 'trialEnd'>;
 type SubscriptionSnapshot = Pick<
   SubscriptionInfo,
-  'status' | 'plan' | 'trialEnd' | 'autoRenewing'
+  'status' | 'plan' | 'trialEnd' | 'autoRenewing' | 'source'
 >;
 
 function getRemainingDays(trialEnd: string | null | undefined): number {
@@ -36,14 +37,13 @@ function getRemainingDays(trialEnd: string | null | undefined): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function classifySnapshot(
-  snapshot: {
-    status: AccountStatus;
-    plan: SubscriptionPlan;
-    trialEnd: string | null;
-    autoRenewing?: boolean | null;
-  },
-): SubscriptionDisplayState | null {
+function classifySnapshot(snapshot: {
+  status: AccountStatus;
+  plan: SubscriptionPlan;
+  trialEnd: string | null;
+  autoRenewing?: boolean | null;
+  source?: string | null;
+}): SubscriptionDisplayState | null {
   switch (snapshot.status) {
     case 'trialing':
       if (snapshot.plan === 'monthly') {
@@ -57,6 +57,9 @@ function classifySnapshot(
         daysRemaining: getRemainingDays(snapshot.trialEnd),
       };
     case 'subscribed':
+      if (snapshot.source === 'gift_card') {
+        return { kind: 'gift_card_subscribed', daysRemaining: 0 };
+      }
       // Only the subscription snapshot carries autoRenewing; user
       // entitlement snapshots don't, so legacy code paths that only
       // pass user still hit the plain "subscribed" branch.
@@ -88,6 +91,7 @@ export function resolveSubscriptionDisplayState(input: {
         plan: subscription.plan,
         trialEnd: subscription.trialEnd,
         autoRenewing: subscription.autoRenewing,
+        source: subscription.source,
       }) ?? { kind: 'unknown', daysRemaining: 0 }
     );
   }

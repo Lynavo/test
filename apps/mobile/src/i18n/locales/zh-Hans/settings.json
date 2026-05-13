@@ -99,7 +99,15 @@
     },
     "failure": {
       "title": "兑换失败",
-      "body": "礼品卡兑换失败，请稍后重试。"
+      "body": "礼品卡兑换失败，请稍后重试。",
+      "invalidCode": "礼品卡代码无效，请确认后再兑换。",
+      "expired": "此礼品卡已过期。",
+      "notAvailable": "此礼品卡已停用或已兑换完毕。",
+      "alreadyRedeemed": "此账号已兑换过此礼品卡。",
+      "planMismatch": "此礼品卡方案无法套用到当前账号。",
+      "invalidOperation": "礼品卡兑换资料不正确，请确认后再试。",
+      "activeSubscription": "当前已有订阅会员，无法使用礼品卡。",
+      "network": "网络连接异常，请检查后再试。"
     }
   },
   "actions": {

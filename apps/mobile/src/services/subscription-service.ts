@@ -15,6 +15,7 @@ interface SubscriptionStatusResponse {
    *  leave it absent/null (omitempty on the Go side). Client normalises
    *  to strict `boolean | null`. */
   auto_renewing?: boolean | null;
+  source?: string | null;
 }
 
 export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
@@ -31,12 +32,14 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
         typeof data.auto_renewing === 'boolean'
           ? data.auto_renewing
           : undefined,
+      source: data.source ?? undefined,
     });
     return {
       status: data.status as SubscriptionInfo['status'],
       plan: (data.plan || '') as SubscriptionInfo['plan'],
       expireAt: data.expire_at,
       trialEnd: data.trial_end,
+      source: typeof data.source === 'string' ? data.source : null,
       autoRenewing:
         typeof data.auto_renewing === 'boolean' ? data.auto_renewing : null,
     };

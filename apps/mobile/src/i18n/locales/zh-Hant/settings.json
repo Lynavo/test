@@ -99,7 +99,15 @@
     },
     "failure": {
       "title": "兌換失敗",
-      "body": "禮品卡兌換失敗，請稍後再試。"
+      "body": "禮品卡兌換失敗，請稍後再試。",
+      "invalidCode": "禮品卡代碼無效，請確認後再兌換。",
+      "expired": "此禮品卡已過期。",
+      "notAvailable": "此禮品卡已停用或已兌換完畢。",
+      "alreadyRedeemed": "此帳號已兌換過此禮品卡。",
+      "planMismatch": "此禮品卡方案無法套用到目前帳號。",
+      "invalidOperation": "禮品卡兌換資料不正確，請確認後再試。",
+      "activeSubscription": "目前已有訂閱會員，無法使用禮品卡。",
+      "network": "網路連線異常，請檢查後再試。"
     }
   },
   "actions": {

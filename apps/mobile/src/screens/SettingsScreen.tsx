@@ -44,6 +44,9 @@ import {
   getGiftCardConfig,
   redeemGiftCard,
 } from '../services/gift-card-service';
+import {
+  getGiftCardRedeemFailureTranslationKey,
+} from '../services/gift-card-errors';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
@@ -258,8 +261,7 @@ export function SettingsScreen() {
     useState(false);
   const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
   const [diagnosticUploadProgress, setDiagnosticUploadProgress] = useState(0);
-  const [diagnosticPromptVisible, setDiagnosticPromptVisible] =
-    useState(false);
+  const [diagnosticPromptVisible, setDiagnosticPromptVisible] = useState(false);
   const [diagnosticPromptNote, setDiagnosticPromptNote] = useState('');
   const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
   const [giftCardPromptVisible, setGiftCardPromptVisible] = useState(false);
@@ -903,11 +905,10 @@ export function SettingsScreen() {
         }),
       );
     } catch (error) {
+      const failureKey = getGiftCardRedeemFailureTranslationKey(error);
       Alert.alert(
         t('settings.giftCard.failure.title'),
-        error instanceof ApiError
-          ? error.message
-          : t('settings.giftCard.failure.body'),
+        t(failureKey),
       );
     } finally {
       setIsRedeemingGiftCard(false);
@@ -1051,6 +1052,8 @@ export function SettingsScreen() {
   const isSubscriptionIntroTrial =
     subscriptionDisplay.kind === 'subscription_intro_trial';
   const isSubscribed = subscriptionDisplay.kind === 'subscribed';
+  const isGiftCardSubscribed =
+    subscriptionDisplay.kind === 'gift_card_subscribed';
   const isSubscribedCancelled =
     subscriptionDisplay.kind === 'subscribed_cancelled';
   const isTrialExpired = subscriptionDisplay.kind === 'trial_expired';
@@ -1078,7 +1081,7 @@ export function SettingsScreen() {
   const accountDisplayValue =
     isPhoneRevealed && rawPhoneIdentifier
       ? rawPhoneIdentifier
-      : (primaryIdentity?.display ?? '');
+      : primaryIdentity?.display ?? '';
 
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
@@ -1136,8 +1139,8 @@ export function SettingsScreen() {
                   isConnected
                     ? styles.wifiIconCircleOnline
                     : isConnecting
-                      ? styles.wifiIconCircleConnecting
-                      : styles.wifiIconCircleOffline,
+                    ? styles.wifiIconCircleConnecting
+                    : styles.wifiIconCircleOffline,
                 ]}
               >
                 <Icon
@@ -1147,8 +1150,8 @@ export function SettingsScreen() {
                     isConnected
                       ? ONLINE_GREEN
                       : isConnecting
-                        ? CONNECTING_TEXT
-                        : OFFLINE_TEXT
+                      ? CONNECTING_TEXT
+                      : OFFLINE_TEXT
                   }
                 />
               </View>
@@ -1170,8 +1173,8 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusDotOnline
                       : isConnecting
-                        ? styles.statusDotConnecting
-                        : styles.statusDotOffline,
+                      ? styles.statusDotConnecting
+                      : styles.statusDotOffline,
                   ]}
                 />
                 <Text
@@ -1180,15 +1183,15 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusTextOnline
                       : isConnecting
-                        ? styles.statusTextConnecting
-                        : styles.statusTextOffline,
+                      ? styles.statusTextConnecting
+                      : styles.statusTextOffline,
                   ]}
                 >
                   {isConnected
                     ? t('settings.connection.online')
                     : isConnecting
-                      ? t('settings.connection.connecting')
-                      : t('settings.connection.offline')}
+                    ? t('settings.connection.connecting')
+                    : t('settings.connection.offline')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1207,8 +1210,13 @@ export function SettingsScreen() {
           {/* Right: Subscription status card */}
           <TouchableOpacity
             style={[styles.topCard, styles.topCardRight]}
-            activeOpacity={0.82}
-            onPress={() => navigation.navigate('Subscription')}
+            activeOpacity={isGiftCardSubscribed ? 1 : 0.82}
+            disabled={isGiftCardSubscribed}
+            onPress={
+              isGiftCardSubscribed
+                ? undefined
+                : () => navigation.navigate('Subscription')
+            }
             accessibilityRole="button"
           >
             <View style={styles.topCardIconRow}>
@@ -1226,13 +1234,14 @@ export function SettingsScreen() {
               )}
               <Text style={styles.topCardSmallLabel}>
                 {isSubscribed ||
+                isGiftCardSubscribed ||
                 isSubscribedCancelled ||
                 isSubExpired ||
                 isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
-                    ? t('settings.subscription.trial')
-                    : t('subscription.title')}
+                  ? t('settings.subscription.trial')
+                  : t('subscription.title')}
               </Text>
             </View>
             {isAccountTrial || isSubscriptionIntroTrial ? (
@@ -1260,6 +1269,15 @@ export function SettingsScreen() {
                   })}
                 </Text>
               </>
+            ) : isGiftCardSubscribed ? (
+              <Text
+                style={[
+                  styles.topCardTitle,
+                  { color: subscriptionStatusColor },
+                ]}
+              >
+                {t('subscription.status.giftCardSubscribed')}
+              </Text>
             ) : isSubscribed ? (
               <Text
                 style={[
@@ -1668,10 +1686,7 @@ export function SettingsScreen() {
               onChangeText={value => setGiftCardCode(value.toUpperCase())}
               placeholder={t('settings.giftCard.modal.placeholder')}
               placeholderTextColor={MUTED_TEXT}
-              style={[
-                styles.diagnosticPromptInput,
-                styles.giftCardCodeInput,
-              ]}
+              style={[styles.diagnosticPromptInput, styles.giftCardCodeInput]}
               autoCapitalize="characters"
               autoCorrect={false}
               editable={!isRedeemingGiftCard}

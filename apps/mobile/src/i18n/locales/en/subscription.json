@@ -65,6 +65,7 @@
     "introTrialing": "Monthly intro trial — {{days}} days left",
     "trialExpired": "Trial ended",
     "subscribed": "Subscribed",
+    "giftCardSubscribed": "Gift card member",
     "subscribedCancelled": "Cancelled — valid until {{date}}",
     "subExpired": "Subscription expired"
   },
@@ -72,6 +73,7 @@
     "subscribe": "Subscribe Now",
     "switchPlan": "Switch Plan",
     "currentYearly": "Current Yearly Plan",
+    "giftCardMember": "Gift card member",
     "start": "Get Started"
   },
   "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",
