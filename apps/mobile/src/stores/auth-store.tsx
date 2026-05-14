@@ -30,6 +30,12 @@ export type AccountStatus =
   | 'trial_expired'
   | 'sub_expired';
 export type SubscriptionPlan = 'monthly' | 'yearly' | '';
+export type SubscriptionPaymentProvider = 'apple' | 'mainland' | '';
+export type SubscriptionRenewalState =
+  | 'auto_renewing'
+  | 'cancelled'
+  | 'prepaid'
+  | '';
 
 export interface IdentityDescriptor {
   type: string; // 'phone_cn' | 'email' | 'apple' | 'google'
@@ -62,6 +68,8 @@ export interface SubscriptionInfo {
    *  access until expireAt — UI should surface that state explicitly
    *  instead of rendering plain "Subscribed". */
   autoRenewing?: boolean | null;
+  paymentProvider?: SubscriptionPaymentProvider | null;
+  renewalState?: SubscriptionRenewalState | null;
 }
 
 export type SignedOutTransition =

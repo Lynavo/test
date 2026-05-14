@@ -80,6 +80,25 @@
     "successSubtitle": "訂閱成功，繼續使用 Vivi Drop 吧！",
     "validUntil": "有效期至 {{date}}"
   },
+  "payment": {
+    "title": "選擇支付方式",
+    "close": "關閉",
+    "plan": "訂閱方案",
+    "amount": "支付金額",
+    "wechat": "微信支付",
+    "alipay": "支付寶",
+    "pay": "確認支付 {{amount}}",
+    "terms": "支付完成後將自動開通訂閱權益。",
+    "processingTitle": "正在支付",
+    "processingBody": "請在支付 App 內完成付款，返回後會自動更新訂閱狀態。",
+    "walletUnavailable": "目前版本尚未接入支付模組，請更新 App 後再試。",
+    "walletCancelled": "支付已取消，可重新選擇支付方式後再試。",
+    "walletPending": "支付仍在確認中，請稍候再重新整理訂閱狀態。",
+    "walletConfigError": "支付配置異常，請更新 App 或聯絡客服。",
+    "walletFailed": "支付未完成，請稍後再試。",
+    "googleFutureTitle": "Google Play 訂閱準備中",
+    "googleFutureBody": "海外 Android 訂閱將使用 Google Play Billing，會在後續版本開放。"
+  },
   "alert": {
     "devTitle": "提示",
     "devBody": "支付功能開發中，敬請期待",

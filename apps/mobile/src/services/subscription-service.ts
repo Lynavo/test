@@ -15,6 +15,8 @@ interface SubscriptionStatusResponse {
    *  leave it absent/null (omitempty on the Go side). Client normalises
    *  to strict `boolean | null`. */
   auto_renewing?: boolean | null;
+  payment_provider?: string | null;
+  renewal_state?: string | null;
 }
 
 export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
@@ -39,6 +41,17 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
       trialEnd: data.trial_end,
       autoRenewing:
         typeof data.auto_renewing === 'boolean' ? data.auto_renewing : null,
+      paymentProvider:
+        data.payment_provider === 'apple' ||
+        data.payment_provider === 'mainland'
+          ? data.payment_provider
+          : null,
+      renewalState:
+        data.renewal_state === 'auto_renewing' ||
+        data.renewal_state === 'cancelled' ||
+        data.renewal_state === 'prepaid'
+          ? data.renewal_state
+          : null,
     };
   } catch (error) {
     recordDiagnosticsLog('SubscriptionAPI', 'status failed', {

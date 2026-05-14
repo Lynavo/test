@@ -60,14 +60,13 @@ describe('SyncActivityTour', () => {
 
   it('allows the modal to draw under Android system navigation bars', () => {
     const screen = render(
-      <SyncActivityTour
-        visible
-        onSkip={jest.fn()}
-        onFinish={jest.fn()}
-      />,
+      <SyncActivityTour visible onSkip={jest.fn()} onFinish={jest.fn()} />,
     );
 
-    const modal = screen.UNSAFE_getByType(Modal);
+    const getByType = screen.UNSAFE_getByType as (type: unknown) => {
+      props: Record<string, unknown>;
+    };
+    const modal = getByType(Modal);
 
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);

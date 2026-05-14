@@ -18,6 +18,11 @@ const PLANS_PATH = '/subscription/plans';
 const MEMORY_CACHE_TTL_MS = 60_000;
 const BOOTSTRAP_MEMORY_CACHE_TTL_MS = 5_000;
 
+const ANDROID_MAINLAND_PRODUCTS = {
+  monthly: 'com.vividrop.android.china.monthly.999',
+  yearlyPromo: 'com.vividrop.android.china.yearly.9900',
+} as const;
+
 export type SubscriptionPlansSource = 'network' | 'cache' | 'bootstrap';
 export type CatalogSubscriptionPlan = SubscriptionPlanDto;
 
@@ -173,6 +178,44 @@ async function writeCache(
 export function buildBootstrapPlans(
   platform: SubscriptionPlanPlatform,
 ): CatalogSubscriptionPlan[] {
+  if (platform === 'android') {
+    const epoch = new Date(0).toISOString();
+    return [
+      {
+        id: 101,
+        product_id: ANDROID_MAINLAND_PRODUCTS.monthly,
+        plan: 'monthly',
+        platform,
+        name: '月度方案',
+        description: '按月訂閱，隨時取消',
+        amount_cents: 999,
+        currency: 'CNY',
+        badges: [],
+        recommended: false,
+        sort_order: 10,
+        active: true,
+        created_at: epoch,
+        updated_at: epoch,
+      },
+      {
+        id: 102,
+        product_id: ANDROID_MAINLAND_PRODUCTS.yearlyPromo,
+        plan: 'yearly',
+        platform,
+        name: '年度方案',
+        description: '一年無限同步',
+        amount_cents: 9900,
+        currency: 'CNY',
+        badges: ['限時'],
+        recommended: true,
+        sort_order: 20,
+        active: true,
+        created_at: epoch,
+        updated_at: epoch,
+      },
+    ];
+  }
+
   const epoch = new Date(0).toISOString();
   const allowedSkus: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
   const candidates: CatalogSubscriptionPlan[] = [
@@ -208,6 +251,37 @@ export function buildBootstrapPlans(
   return candidates.filter(plan => allowedSkus.has(plan.product_id));
 }
 
+const FIXED_PRODUCT_SUMMARY_BY_TIER: Readonly<
+  Record<SubscriptionPlanTier, Omit<IapProductSummary, 'productId'>>
+> = {
+  monthly: {
+    displayPrice: '¥9.90',
+    priceAmount: 9.9,
+    currency: 'CNY',
+    periodUnit: 'MONTH',
+    periodCount: 1,
+    eligibleForIntroOffer: false,
+  },
+  yearly: {
+    displayPrice: '¥99.00',
+    priceAmount: 99,
+    currency: 'CNY',
+    periodUnit: 'YEAR',
+    periodCount: 1,
+    eligibleForIntroOffer: false,
+  },
+};
+
+export function buildFixedProductSummary(
+  productId: string,
+  plan: SubscriptionPlanTier,
+): IapProductSummary {
+  return {
+    productId,
+    ...FIXED_PRODUCT_SUMMARY_BY_TIER[plan],
+  };
+}
+
 /**
  * Bootstrap counterpart for `buildBootstrapPlans` — provides StoreKit-shaped
  * `IapProductSummary` rows so the paywall can render real-looking prices on
@@ -229,24 +303,8 @@ export function buildBootstrapPlans(
 export function buildBootstrapProducts(): IapProductSummary[] {
   const allowedSkus: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
   const candidates: IapProductSummary[] = [
-    {
-      productId: IAP_PRODUCTS.monthly,
-      displayPrice: '¥9.99',
-      priceAmount: 9.99,
-      currency: 'CNY',
-      periodUnit: 'MONTH',
-      periodCount: 1,
-      eligibleForIntroOffer: false,
-    },
-    {
-      productId: IAP_PRODUCTS.yearlyPromo,
-      displayPrice: '¥99.00',
-      priceAmount: 99,
-      currency: 'CNY',
-      periodUnit: 'YEAR',
-      periodCount: 1,
-      eligibleForIntroOffer: false,
-    },
+    buildFixedProductSummary(IAP_PRODUCTS.monthly, 'monthly'),
+    buildFixedProductSummary(IAP_PRODUCTS.yearlyPromo, 'yearly'),
   ];
   return candidates.filter(p => allowedSkus.has(p.productId));
 }

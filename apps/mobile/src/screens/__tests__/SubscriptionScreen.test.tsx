@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Clipboard, NativeModules } from 'react-native';
+import { Alert, Clipboard, NativeModules, Platform } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import type {
   SubscriptionPlanDto,
@@ -83,6 +83,15 @@ jest.mock('../../services/subscription-plans-service', () => ({
   },
   buildBootstrapPlans: jest.fn(() => []),
   buildBootstrapProducts: jest.fn(() => []),
+  buildFixedProductSummary: jest.fn((productId: string, plan: string) => ({
+    productId,
+    displayPrice: plan === 'monthly' ? '¥9.90' : '¥99.00',
+    priceAmount: plan === 'monthly' ? 9.9 : 99,
+    currency: 'CNY',
+    periodUnit: plan === 'monthly' ? 'MONTH' : 'YEAR',
+    periodCount: 1,
+    eligibleForIntroOffer: false,
+  })),
 }));
 
 jest.mock('../../services/subscription-service', () => ({
@@ -93,6 +102,12 @@ jest.mock('../../services/subscription-service', () => ({
     expireAt: null,
     trialEnd: null,
   }),
+}));
+
+jest.mock('../../services/mainland-payment-service', () => ({
+  mainlandPaymentService: {
+    purchase: jest.fn(),
+  },
 }));
 
 const mockDiagnosticUpload = jest.fn();
@@ -152,7 +167,11 @@ jest.mock('../../stores/auth-store', () => ({
 }));
 
 import i18n from '../../i18n';
-import { SubscriptionScreen, resolveCurrentPlan } from '../SubscriptionScreen';
+import {
+  SubscriptionScreen,
+  resolveCurrentPlan,
+  resolveMainlandPaymentAlertKey,
+} from '../SubscriptionScreen';
 import { iapService, type IapProductSummary } from '../../services/iap-service';
 import {
   buildBootstrapPlans,
@@ -162,6 +181,7 @@ import {
 import { IAP_PRODUCTS } from '../../constants/iap';
 import { verifyIapReceipt } from '../../services/subscription-service';
 import { ApiError, ERROR_CODE } from '../../services/api';
+import { mainlandPaymentService } from '../../services/mainland-payment-service';
 
 // ---------------------------------------------------------------------------
 // Fixture builders — CN storefront data, mirrors what the server + StoreKit
@@ -276,11 +296,7 @@ function mockFixedBootstrapSkuFallback(): void {
     yearlyPromoPlan,
   ]);
   (buildBootstrapProducts as jest.Mock).mockReturnValue([
-    {
-      ...monthlyProduct,
-      displayPrice: '¥9.99',
-      priceAmount: 9.99,
-    },
+    monthlyProduct,
     yearlyPromoProduct,
   ]);
 }
@@ -301,6 +317,16 @@ function renderScreen() {
   return render(<SubscriptionScreen />);
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 async function advanceTimers(ms: number): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -310,6 +336,8 @@ async function advanceTimers(ms: number): Promise<void> {
 }
 
 describe('SubscriptionScreen', () => {
+  const originalPlatformOS = Platform.OS;
+
   beforeAll(async () => {
     await i18n.changeLanguage('zh-Hans');
   });
@@ -324,6 +352,10 @@ describe('SubscriptionScreen', () => {
     mockAuthState.subscription = null;
     mockLoadSubscription.mockResolvedValue(null);
     mockSetSubscription.mockReset();
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'ios',
+    });
     (buildBootstrapPlans as jest.Mock).mockReturnValue([]);
     (buildBootstrapProducts as jest.Mock).mockReturnValue([]);
     // Default catalog — both plans, both products. Individual tests override.
@@ -331,6 +363,10 @@ describe('SubscriptionScreen', () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: originalPlatformOS,
+    });
     jest.restoreAllMocks();
   });
 
@@ -364,6 +400,52 @@ describe('SubscriptionScreen', () => {
     );
   });
 
+  test('keeps the subscribe CTA inert while the Android catalog is still loading', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    (buildBootstrapPlans as jest.Mock).mockReturnValue([
+      monthlyPlan,
+      yearlyPromoPlan,
+    ]);
+    (buildBootstrapProducts as jest.Mock).mockReturnValue([
+      monthlyProduct,
+      yearlyPromoProduct,
+    ]);
+
+    const deferred = createDeferred<{
+      plans: SubscriptionPlanDto[];
+      source: 'network';
+    }>();
+    (subscriptionPlansService.fetchPlans as jest.Mock).mockReturnValueOnce(
+      deferred.promise,
+    );
+
+    const { findByText, queryByText } = renderScreen();
+    const subscribeButton = await findByText(/立即订阅|立即訂閱|Subscribe Now/);
+
+    fireEvent.press(subscribeButton);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mainlandPaymentService.purchase).not.toHaveBeenCalled();
+    expect(
+      queryByText(/选择支付方式|選擇支付方式|Choose payment method/),
+    ).toBeNull();
+
+    deferred.resolve({
+      plans: [monthlyPlan, yearlyPlan],
+      source: 'network',
+    });
+    await waitFor(() =>
+      expect(subscriptionPlansService.fetchPlans).toHaveBeenCalledWith(
+        'android',
+      ),
+    );
+  });
+
   test('renders a single card when the server returns one plan', async () => {
     // Arrange
     mockCatalog([yearlyPlan], [yearlyProduct]);
@@ -389,7 +471,7 @@ describe('SubscriptionScreen', () => {
     // Assert
     expect(await findByText('月度方案')).toBeTruthy();
     expect(await findByText('限时年费')).toBeTruthy();
-    expect(await findByText('¥9.99')).toBeTruthy();
+    expect(await findByText('¥9.90')).toBeTruthy();
     expect(await findByText('¥99.00')).toBeTruthy();
     expect(
       queryByText(/暂时无法获取方案信息|暫時無法獲取|temporarily unavailable/i),
@@ -421,6 +503,57 @@ describe('SubscriptionScreen', () => {
     await waitFor(() =>
       expect(iapService.purchase).toHaveBeenCalledWith(IAP_PRODUCTS.monthly),
     );
+  });
+
+  test('Android China subscribe flow selects a wallet before payment', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    (mainlandPaymentService.purchase as jest.Mock).mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'yearly',
+      expireAt: '2027-04-28T00:00:00Z',
+      trialEnd: null,
+      autoRenewing: null,
+    });
+
+    const { findByText, queryByText } = renderScreen();
+    await findByText('年度方案');
+
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    expect(
+      await findByText(/选择支付方式|選擇支付方式|Choose payment method/),
+    ).toBeTruthy();
+    expect(await findByText(/微信支付|WeChat Pay/)).toBeTruthy();
+    expect(await findByText(/支付宝|支付寶|Alipay/)).toBeTruthy();
+    expect(iapService.purchase).not.toHaveBeenCalled();
+
+    fireEvent.press(await findByText(/支付宝|支付寶|Alipay/));
+
+    expect(mainlandPaymentService.purchase).not.toHaveBeenCalled();
+
+    fireEvent.press(await findByText(/确认支付|確認支付|Pay ¥99.00/));
+
+    await waitFor(() =>
+      expect(mainlandPaymentService.purchase).toHaveBeenCalledWith({
+        method: 'alipay',
+        productId: IAP_PRODUCTS.yearly,
+        plan: 'yearly',
+      }),
+    );
+    await waitFor(() =>
+      expect(mockSetSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'subscribed',
+          plan: 'yearly',
+        }),
+      ),
+    );
+    expect(
+      queryByText(/选择支付方式|選擇支付方式|Choose payment method/),
+    ).toBeNull();
   });
 
   test('renders and purchases an admin catalog SKU without monthly/yearly in the product id', async () => {
@@ -861,5 +994,90 @@ describe('resolveCurrentPlan', () => {
 
   test('subscribed with empty plan → null (defensive)', () => {
     expect(resolveCurrentPlan({ status: 'subscribed', plan: '' })).toBeNull();
+  });
+});
+
+describe('resolveMainlandPaymentAlertKey', () => {
+  test('maps native unavailable errors to update guidance', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        Object.assign(new Error('WeChat is not installed'), {
+          code: 'MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED',
+        }),
+      ),
+    ).toBe('subscription.payment.walletUnavailable');
+  });
+
+  test('maps server provider-disabled errors to update guidance', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        new ApiError(
+          ERROR_CODE.MAINLAND_PAYMENT_PROVIDER_NOT_CONFIGURED,
+          'not configured',
+        ),
+      ),
+    ).toBe('subscription.payment.walletUnavailable');
+  });
+
+  test('maps user cancellation separately from failed payments', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        Object.assign(new Error('cancelled'), {
+          code: 'MAINLAND_PAYMENT_WECHAT_CANCELLED',
+        }),
+      ),
+    ).toBe('subscription.payment.walletCancelled');
+  });
+
+  test('maps explicit Alipay cancellation separately from failed payments', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        Object.assign(new Error('user cancelled'), {
+          code: 'MAINLAND_PAYMENT_ALIPAY_CANCELLED',
+          userInfo: { resultStatus: '6001' },
+        }),
+      ),
+    ).toBe('subscription.payment.walletCancelled');
+  });
+
+  test('keeps non-cancelled Alipay failures on the generic failed-payment copy', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        Object.assign(new Error('system error'), {
+          code: 'MAINLAND_PAYMENT_ALIPAY_NOT_COMPLETED',
+          userInfo: { resultStatus: '4000' },
+        }),
+      ),
+    ).toBe('subscription.payment.walletFailed');
+  });
+
+  test('maps pending confirmation timeouts to refresh guidance', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        new Error('MAINLAND_PAYMENT_PENDING_TIMEOUT'),
+      ),
+    ).toBe('subscription.payment.walletPending');
+  });
+
+  test('maps malformed order responses to configuration guidance', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        new Error('MAINLAND_PAYMENT_INVALID_ORDER'),
+      ),
+    ).toBe('subscription.payment.walletConfigError');
+  });
+
+  test('maps server order mismatch errors to configuration guidance', () => {
+    expect(
+      resolveMainlandPaymentAlertKey(
+        new ApiError(ERROR_CODE.MAINLAND_PAYMENT_ORDER_MISMATCH, 'mismatch'),
+      ),
+    ).toBe('subscription.payment.walletConfigError');
+  });
+
+  test('keeps unknown errors on the generic failed-payment copy', () => {
+    expect(resolveMainlandPaymentAlertKey(new Error('network failed'))).toBe(
+      'subscription.payment.walletFailed',
+    );
   });
 });

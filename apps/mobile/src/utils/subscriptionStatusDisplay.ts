@@ -25,7 +25,12 @@ export interface SubscriptionDisplayState {
 type EntitlementSnapshot = Pick<UserProfile, 'status' | 'plan' | 'trialEnd'>;
 type SubscriptionSnapshot = Pick<
   SubscriptionInfo,
-  'status' | 'plan' | 'trialEnd' | 'autoRenewing'
+  | 'status'
+  | 'plan'
+  | 'trialEnd'
+  | 'autoRenewing'
+  | 'paymentProvider'
+  | 'renewalState'
 >;
 
 function getRemainingDays(trialEnd: string | null | undefined): number {
@@ -36,14 +41,14 @@ function getRemainingDays(trialEnd: string | null | undefined): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function classifySnapshot(
-  snapshot: {
-    status: AccountStatus;
-    plan: SubscriptionPlan;
-    trialEnd: string | null;
-    autoRenewing?: boolean | null;
-  },
-): SubscriptionDisplayState | null {
+function classifySnapshot(snapshot: {
+  status: AccountStatus;
+  plan: SubscriptionPlan;
+  trialEnd: string | null;
+  autoRenewing?: boolean | null;
+  paymentProvider?: SubscriptionInfo['paymentProvider'];
+  renewalState?: SubscriptionInfo['renewalState'];
+}): SubscriptionDisplayState | null {
   switch (snapshot.status) {
     case 'trialing':
       if (snapshot.plan === 'monthly') {
@@ -60,7 +65,12 @@ function classifySnapshot(
       // Only the subscription snapshot carries autoRenewing; user
       // entitlement snapshots don't, so legacy code paths that only
       // pass user still hit the plain "subscribed" branch.
-      if (snapshot.autoRenewing === false) {
+      if (
+        snapshot.renewalState === 'cancelled' ||
+        (snapshot.autoRenewing === false &&
+          snapshot.paymentProvider !== 'mainland' &&
+          snapshot.renewalState !== 'prepaid')
+      ) {
         return { kind: 'subscribed_cancelled', daysRemaining: 0 };
       }
       return { kind: 'subscribed', daysRemaining: 0 };
@@ -88,6 +98,8 @@ export function resolveSubscriptionDisplayState(input: {
         plan: subscription.plan,
         trialEnd: subscription.trialEnd,
         autoRenewing: subscription.autoRenewing,
+        paymentProvider: subscription.paymentProvider,
+        renewalState: subscription.renewalState,
       }) ?? { kind: 'unknown', daysRemaining: 0 }
     );
   }

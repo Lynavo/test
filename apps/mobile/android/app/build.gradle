@@ -118,6 +118,8 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation(project(":react-native-vision-camera"))
     implementation("androidx.core:core:1.16.0")
+    implementation("com.alipay.sdk:alipaysdk-android:15.8.41")
+    implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
     testImplementation("junit:junit:4.13.2")
 
     if (hermesEnabled.toBoolean()) {

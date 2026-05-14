@@ -9,6 +9,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.mrousavy.camera.react.CameraPackage
+import com.vividrop.mobile.china.payments.NativeMainlandPaymentPackage
 import com.vividrop.mobile.china.sync.NativeSyncEngineModule
 import com.vividrop.mobile.china.sync.NativeSyncEnginePackage
 
@@ -20,6 +21,7 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(CameraPackage())
+          add(NativeMainlandPaymentPackage())
           add(NativeSyncEnginePackage())
         },
     )

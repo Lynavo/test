@@ -7,6 +7,7 @@ out/
 *.exe
 *.dmg
 *.docx
+!apps/desktop/src/renderer/i18n/locales/**/settings.json
 
 # Playwright
 .playwright-mcp/

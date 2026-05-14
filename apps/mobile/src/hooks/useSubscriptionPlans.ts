@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { SubscriptionPlanPlatform } from '@syncflow/contracts';
 import { iapService, type IapProductSummary } from '../services/iap-service';
 import {
   subscriptionPlansService,
   buildBootstrapPlans,
   buildBootstrapProducts,
+  buildFixedProductSummary,
   type CatalogSubscriptionPlan,
   type SubscriptionPlansSource,
 } from '../services/subscription-plans-service';
@@ -52,6 +54,8 @@ export interface UseSubscriptionPlansArgs {
   formatPrice: (amount: number, currency: string) => string;
   formatSavings: (savingsDisplay: string) => string;
   enabled?: boolean;
+  platform?: SubscriptionPlanPlatform;
+  useIapProducts?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,14 +127,50 @@ function computePlanSavings(
   );
 }
 
-function buildFixedSkuFallback(): {
+function buildFixedSkuFallback(platform: SubscriptionPlanPlatform): {
   plans: CatalogSubscriptionPlan[];
   products: IapProductSummary[];
 } {
   return {
-    plans: buildBootstrapPlans('ios').filter(plan => plan.active),
+    plans: buildBootstrapPlans(platform).filter(plan => plan.active),
     products: buildBootstrapProducts(),
   };
+}
+
+function buildWalletProductSummary(
+  plan: CatalogSubscriptionPlan,
+  formatPrice: (amount: number, currency: string) => string,
+): IapProductSummary | null {
+  const amountCents =
+    typeof plan.amount_cents === 'number' && Number.isFinite(plan.amount_cents)
+      ? plan.amount_cents
+      : null;
+  const currency =
+    typeof plan.currency === 'string' && plan.currency.trim().length > 0
+      ? plan.currency.trim()
+      : null;
+  if (amountCents != null && amountCents > 0 && currency != null) {
+    const priceAmount = amountCents / 100;
+    return {
+      productId: plan.product_id,
+      displayPrice: formatPrice(priceAmount, currency),
+      priceAmount,
+      currency,
+      periodUnit: plan.plan === 'monthly' ? 'MONTH' : 'YEAR',
+      periodCount: 1,
+      eligibleForIntroOffer: false,
+    };
+  }
+  return buildFixedProductSummary(plan.product_id, plan.plan);
+}
+
+function buildWalletProductSummaries(
+  plans: readonly CatalogSubscriptionPlan[],
+  formatPrice: (amount: number, currency: string) => string,
+): IapProductSummary[] {
+  return plans
+    .map(plan => buildWalletProductSummary(plan, formatPrice))
+    .filter((entry): entry is IapProductSummary => entry != null);
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +181,8 @@ export function useSubscriptionPlans({
   formatPrice,
   formatSavings,
   enabled = FEATURES.IAP_ENABLED,
+  platform = 'ios',
+  useIapProducts = true,
 }: UseSubscriptionPlansArgs): UseSubscriptionPlansResult {
   // Seed `plans` with the same hardcoded bootstrap rows the service uses on
   // its final fallback. Goal is purely UX: the paywall renders two cards
@@ -152,7 +194,7 @@ export function useSubscriptionPlans({
   // When `enabled` is false (IAP feature flag off) we deliberately stay
   // empty so the screen renders nothing IAP-related.
   const [plans, setPlans] = useState<CatalogSubscriptionPlan[]>(() =>
-    enabled ? buildBootstrapPlans('ios') : [],
+    enabled ? buildBootstrapPlans(platform) : [],
   );
   // Seed `products` alongside `plans` so the paywall renders real-looking
   // prices on first paint instead of the "—" placeholder. The seed is
@@ -161,11 +203,20 @@ export function useSubscriptionPlans({
   // is true (see SubscriptionScreen) so users cannot tap against the
   // unverified seed amount.
   const [products, setProducts] = useState<IapProductSummary[]>(() =>
-    enabled ? buildBootstrapProducts() : [],
+    enabled
+      ? useIapProducts
+        ? buildBootstrapProducts()
+        : buildWalletProductSummaries(
+            buildBootstrapPlans(platform),
+            formatPrice,
+          )
+      : [],
   );
   const [source, setSource] = useState<SubscriptionPlansSource>('bootstrap');
   const [loading, setLoading] = useState<boolean>(enabled);
-  const [productsLoading, setProductsLoading] = useState<boolean>(enabled);
+  const [productsLoading, setProductsLoading] = useState<boolean>(
+    enabled && useIapProducts,
+  );
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -179,7 +230,7 @@ export function useSubscriptionPlans({
       return;
     }
     setLoading(true);
-    setProductsLoading(true);
+    setProductsLoading(useIapProducts);
     setError(null);
     // Step 1 — server catalog (with cache + bootstrap fallback inside).
     // Decoupled from StoreKit so a slow / failed catalog fetch doesn't
@@ -187,19 +238,29 @@ export function useSubscriptionPlans({
     // vice versa.
     let validPlans: CatalogSubscriptionPlan[] = [];
     try {
-      const catalog = await subscriptionPlansService.fetchPlans('ios');
+      const catalog = await subscriptionPlansService.fetchPlans(platform);
       validPlans = catalog.plans.filter(p => p.active);
       setPlans(validPlans);
       setSource(catalog.source);
     } catch (err) {
       console.warn('[useSubscriptionPlans] catalog fetch failed', err);
-      const fallback = buildFixedSkuFallback();
+      const fallback = buildFixedSkuFallback(platform);
       validPlans = fallback.plans;
       setPlans(fallback.plans);
-      setProducts(fallback.products);
+      setProducts(
+        useIapProducts
+          ? fallback.products
+          : buildWalletProductSummaries(fallback.plans, formatPrice),
+      );
       setSource('bootstrap');
     } finally {
       setLoading(false);
+    }
+
+    if (!useIapProducts) {
+      setProducts(buildWalletProductSummaries(validPlans, formatPrice));
+      setProductsLoading(false);
+      return;
     }
 
     // Step 2 — Apple StoreKit prices/period for the SKUs the server told
@@ -215,7 +276,7 @@ export function useSubscriptionPlans({
         console.warn(
           '[useSubscriptionPlans] StoreKit returned no products; using fixed fallback SKUs',
         );
-        const fallback = buildFixedSkuFallback();
+        const fallback = buildFixedSkuFallback(platform);
         setPlans(fallback.plans);
         setProducts(fallback.products);
         setSource('bootstrap');
@@ -224,14 +285,14 @@ export function useSubscriptionPlans({
       }
     } catch (err) {
       console.warn('[useSubscriptionPlans] StoreKit product fetch failed', err);
-      const fallback = buildFixedSkuFallback();
+      const fallback = buildFixedSkuFallback(platform);
       setPlans(fallback.plans);
       setProducts(fallback.products);
       setSource('bootstrap');
     } finally {
       setProductsLoading(false);
     }
-  }, [enabled]);
+  }, [enabled, platform, useIapProducts, formatPrice]);
 
   useEffect(() => {
     void refresh();

@@ -4,9 +4,9 @@ describe('resolveSubscriptionDisplayState', () => {
   const realNow = Date.now;
 
   beforeEach(() => {
-    jest.spyOn(Date, 'now').mockReturnValue(
-      new Date('2026-04-18T00:00:00.000Z').getTime(),
-    );
+    jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-04-18T00:00:00.000Z').getTime());
   });
 
   afterEach(() => {
@@ -83,6 +83,21 @@ describe('resolveSubscriptionDisplayState', () => {
         },
       }),
     ).toEqual({ kind: 'subscribed_cancelled', daysRemaining: 0 });
+  });
+
+  test('mainland prepaid subscription does not render as subscribed_cancelled', () => {
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+          autoRenewing: false,
+          paymentProvider: 'mainland',
+          renewalState: 'prepaid',
+        },
+      }),
+    ).toEqual({ kind: 'subscribed', daysRemaining: 0 });
   });
 
   test('subscribed + autoRenewing true → plain subscribed', () => {
