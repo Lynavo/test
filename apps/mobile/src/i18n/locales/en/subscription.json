@@ -82,6 +82,25 @@
     "successSubtitle": "You're subscribed — enjoy Vivi Drop!",
     "validUntil": "Valid until {{date}}"
   },
+  "payment": {
+    "title": "Choose payment method",
+    "close": "Close",
+    "plan": "Plan",
+    "amount": "Amount",
+    "wechat": "WeChat Pay",
+    "alipay": "Alipay",
+    "pay": "Pay {{amount}}",
+    "terms": "Your subscription unlocks automatically after payment is complete.",
+    "processingTitle": "Processing payment",
+    "processingBody": "Complete payment in the payment app. Your subscription will update when you return.",
+    "walletUnavailable": "This build does not include the payment module yet. Please update the app and try again.",
+    "walletCancelled": "Payment was cancelled. You can choose a payment method and try again.",
+    "walletPending": "Payment is still being confirmed. Please wait a moment and refresh your subscription status.",
+    "walletConfigError": "Payment configuration error. Please update the app or contact support.",
+    "walletFailed": "Payment was not completed. Please try again.",
+    "googleFutureTitle": "Google Play subscription coming soon",
+    "googleFutureBody": "Android subscriptions outside mainland China will use Google Play Billing in a future release."
+  },
   "alert": {
     "devTitle": "Coming Soon",
     "devBody": "Payment is under development. Stay tuned!",

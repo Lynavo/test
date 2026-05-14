@@ -10,6 +10,15 @@ jest.mock('../../services/subscription-plans-service', () => ({
   },
   buildBootstrapPlans: jest.fn(() => []),
   buildBootstrapProducts: jest.fn(() => []),
+  buildFixedProductSummary: jest.fn((productId: string, plan: string) => ({
+    productId,
+    displayPrice: plan === 'monthly' ? '¥9.90' : '¥99.00',
+    priceAmount: plan === 'monthly' ? 9.9 : 99,
+    currency: 'CNY',
+    periodUnit: plan === 'monthly' ? 'MONTH' : 'YEAR',
+    periodCount: 1,
+    eligibleForIntroOffer: false,
+  })),
 }));
 
 jest.mock('../../services/iap-service', () => ({
@@ -254,6 +263,87 @@ describe('useSubscriptionPlans', () => {
     expect(iapService.getProductSummaries).not.toHaveBeenCalled();
     expect(result.current.plans).toEqual([]);
     expect(result.current.error).toBeNull();
+  });
+
+  test('uses Android catalog rows without StoreKit when IAP products are disabled', async () => {
+    const androidMonthlyPlan = makePlan({
+      id: 21,
+      product_id: IAP_PRODUCTS.monthly,
+      platform: 'android',
+      name: 'Android 月度方案',
+    });
+    const androidYearlyPlan = makePlan({
+      id: 22,
+      product_id: IAP_PRODUCTS.yearly,
+      platform: 'android',
+      plan: 'yearly',
+      name: 'Android 年度方案',
+    });
+    (subscriptionPlansService.fetchPlans as jest.Mock).mockResolvedValueOnce({
+      plans: [androidMonthlyPlan, androidYearlyPlan],
+      source: 'network',
+    });
+
+    const { result } = renderHook(() =>
+      useSubscriptionPlans({
+        formatPrice,
+        formatSavings,
+        platform: 'android',
+        useIapProducts: false,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.productsLoading).toBe(false));
+    expect(subscriptionPlansService.fetchPlans).toHaveBeenCalledWith('android');
+    expect(iapService.getProductSummaries).not.toHaveBeenCalled();
+    expect(result.current.plans.map(entry => entry.product?.currency)).toEqual([
+      'CNY',
+      'CNY',
+    ]);
+  });
+
+  test('Android wallet plans display server amount and currency when present', async () => {
+    const androidMonthlyPlan = makePlan({
+      id: 21,
+      product_id: 'com.vividrop.android.china.monthly.999',
+      platform: 'android',
+      plan: 'monthly',
+      name: 'Android 月度方案',
+      amount_cents: 999,
+      currency: 'CNY',
+    });
+    const androidStandardYearlyPlan = makePlan({
+      id: 22,
+      product_id: 'com.vividrop.android.china.yearly.10400',
+      platform: 'android',
+      plan: 'yearly',
+      name: 'Android 標準年費',
+      amount_cents: 10400,
+      currency: 'CNY',
+    });
+    (subscriptionPlansService.fetchPlans as jest.Mock).mockResolvedValueOnce({
+      plans: [androidMonthlyPlan, androidStandardYearlyPlan],
+      source: 'network',
+    });
+
+    const { result } = renderHook(() =>
+      useSubscriptionPlans({
+        formatPrice,
+        formatSavings,
+        platform: 'android',
+        useIapProducts: false,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.productsLoading).toBe(false));
+    expect(
+      result.current.plans.map(entry => entry.product?.priceAmount),
+    ).toEqual([9.99, 104]);
+    expect(
+      result.current.plans.map(entry => entry.product?.displayPrice),
+    ).toEqual(['CNY 9.99', 'CNY 104.00']);
   });
 
   test('falls back to the two fixed SKUs when Apple returns no products', async () => {

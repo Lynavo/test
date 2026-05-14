@@ -30,11 +30,9 @@ export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
 export const APP_REVIEW_PHONE = '17000000002';
 
-// Use setDebugBaseUrlOverride('http://10.0.2.2:8080') for an Android Emulator
-// pointed at a host-machine backend, or a LAN IP for physical-device backend
-// debugging. Leaving the default on production avoids real-device SMS login
-// failures from emulator-only loopback addresses.
-const DEV_API_BASE_URL: string = PROD_BASE_URL;
+// Current Android payment sandbox backend. Use setDebugBaseUrlOverride() for
+// temporary per-device overrides without changing this shared default.
+export const DEV_API_BASE_URL: string = 'http://175.178.55.99';
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
@@ -97,7 +95,14 @@ export function resolveAuthBaseUrlForPhone(phone: string): string {
 export async function loadSessionBaseUrl(): Promise<void> {
   try {
     const v = await AsyncStorage.getItem(SESSION_BASE_URL_STORAGE_KEY);
-    _sessionBaseUrl = v && /^https?:\/\//.test(v) ? v : null;
+    if (v && /^https?:\/\//.test(v) && !shouldIgnoreSessionBaseUrl(v)) {
+      _sessionBaseUrl = v;
+      return;
+    }
+    _sessionBaseUrl = null;
+    if (v && shouldIgnoreSessionBaseUrl(v)) {
+      await AsyncStorage.removeItem(SESSION_BASE_URL_STORAGE_KEY);
+    }
   } catch {
     _sessionBaseUrl = null;
   }
@@ -130,8 +135,16 @@ export function getSessionBaseUrl(): string | null {
 
 export function getBaseUrl(): string {
   if (_debugOverride) return _debugOverride;
-  if (_sessionBaseUrl) return _sessionBaseUrl;
+  if (_sessionBaseUrl && !shouldIgnoreSessionBaseUrl(_sessionBaseUrl)) {
+    return _sessionBaseUrl;
+  }
   return getBuiltInBaseUrl();
+}
+
+function shouldIgnoreSessionBaseUrl(url: string): boolean {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return false;
+  if (DEV_API_BASE_URL === PROD_BASE_URL) return false;
+  return url === PROD_BASE_URL;
 }
 
 function getBuiltInBaseUrl(): string {
@@ -140,7 +153,7 @@ function getBuiltInBaseUrl(): string {
       _warnedRealDeviceLoopback = true;
       console.warn(
         `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}". ` +
-          `Call setDebugBaseUrlOverride('http://<host>:8080') to point this dev build at a local backend.`,
+          `Call setDebugBaseUrlOverride('http://<host>') to point this dev build at another backend.`,
       );
     }
     return DEV_API_BASE_URL;

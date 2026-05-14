@@ -264,9 +264,9 @@ export type SubscriptionPlanTier = 'monthly' | 'yearly';
  * Server-controlled paywall entry. Returned by GET /api/v1/subscription/plans.
  *
  * The server owns the *business* layer: which SKUs to show, in what
- * order, with what marketing copy. Price / currency / period come from
- * Apple StoreKit at render time — not from this DTO. The mobile client
- * merges server rows with StoreKit product info to build the final paywall.
+ * order, with what marketing copy. iOS price / currency / period come from
+ * Apple StoreKit at render time. Mainland Android wallet rows may carry a
+ * server-owned fixed amount because there is no StoreKit product lookup.
  *
  * Date fields are ISO 8601 strings (Go time.Time default format, RFC 3339).
  */
@@ -281,6 +281,10 @@ export interface SubscriptionPlanDto {
   name: string;
   /** One-line subtitle shown under the name. */
   description: string;
+  /** Minor currency units for fixed-price wallet plans, e.g. 9900 = CNY 99.00. */
+  amount_cents?: number;
+  /** ISO 4217 currency for fixed-price wallet plans. */
+  currency?: string;
   /** Short marketing labels (e.g. "8.8 折", "限時"). Always an array — never null. */
   badges: string[];
   /** Highlighted card in the paywall. At most one plan per platform should be flagged. */

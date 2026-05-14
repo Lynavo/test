@@ -99,6 +99,21 @@ describe('resolveSubscriptionDisplayState', () => {
     ).toEqual({ kind: 'gift_card_subscribed', daysRemaining: 0 });
   });
 
+  test('mainland prepaid subscription does not render as subscribed_cancelled', () => {
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription: {
+          status: 'subscribed',
+          plan: 'monthly',
+          trialEnd: null,
+          autoRenewing: false,
+          paymentProvider: 'mainland',
+          renewalState: 'prepaid',
+        },
+      }),
+    ).toEqual({ kind: 'subscribed', daysRemaining: 0 });
+  });
+
   test('subscribed + autoRenewing true → plain subscribed', () => {
     expect(
       resolveSubscriptionDisplayState({

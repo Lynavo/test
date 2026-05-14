@@ -31,6 +31,8 @@ import type {
 } from '@syncflow/contracts';
 import { apiGet, ApiError } from '../api';
 import {
+  buildBootstrapPlans,
+  buildBootstrapProducts,
   resolveSubscriptionPlanTier,
   subscriptionPlansService,
 } from '../subscription-plans-service';
@@ -245,6 +247,33 @@ describe('subscriptionPlansService.fetchPlans', () => {
     );
   });
 
+  test('uses Android mainland SKUs for Android bootstrap fallback', async () => {
+    (apiGet as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(null);
+
+    const result = await subscriptionPlansService.fetchPlans('android');
+
+    expect(result.source).toBe('bootstrap');
+    expect(result.plans.map(plan => plan.product_id).sort()).toEqual(
+      [
+        'com.vividrop.android.china.monthly.999',
+        'com.vividrop.android.china.yearly.9900',
+      ].sort(),
+    );
+    expect(result.plans.every(plan => plan.platform === 'android')).toBe(true);
+  });
+
+  test('builds Android mainland bootstrap plans directly', () => {
+    const plans = buildBootstrapPlans('android');
+
+    expect(plans.map(plan => plan.product_id).sort()).toEqual(
+      [
+        'com.vividrop.android.china.monthly.999',
+        'com.vividrop.android.china.yearly.9900',
+      ].sort(),
+    );
+  });
+
   test('falls back to bootstrap when cache JSON is corrupt', async () => {
     // Arrange: cache schema validation should drop a non-JSON / mid-write
     // garbage payload rather than crashing or returning a half-typed plan.
@@ -271,5 +300,21 @@ describe('subscriptionPlansService.fetchPlans', () => {
     // Assert: platform value reaches the URL exactly so the server can scope
     // the catalog (different SKUs / pricing tiers per store).
     expect(apiGet).toHaveBeenCalledWith('/subscription/plans?platform=android');
+  });
+
+  test('bootstrap product prices stay aligned with the wallet fallback copy', () => {
+    const products = buildBootstrapProducts();
+    expect(products).toEqual([
+      expect.objectContaining({
+        productId: IAP_PRODUCTS.monthly,
+        displayPrice: '¥9.90',
+        priceAmount: 9.9,
+      }),
+      expect.objectContaining({
+        productId: IAP_PRODUCTS.yearlyPromo,
+        displayPrice: '¥99.00',
+        priceAmount: 99,
+      }),
+    ]);
   });
 });

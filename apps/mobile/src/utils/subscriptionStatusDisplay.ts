@@ -26,7 +26,13 @@ export interface SubscriptionDisplayState {
 type EntitlementSnapshot = Pick<UserProfile, 'status' | 'plan' | 'trialEnd'>;
 type SubscriptionSnapshot = Pick<
   SubscriptionInfo,
-  'status' | 'plan' | 'trialEnd' | 'autoRenewing' | 'source'
+  | 'status'
+  | 'plan'
+  | 'trialEnd'
+  | 'autoRenewing'
+  | 'source'
+  | 'paymentProvider'
+  | 'renewalState'
 >;
 
 function getRemainingDays(trialEnd: string | null | undefined): number {
@@ -43,6 +49,8 @@ function classifySnapshot(snapshot: {
   trialEnd: string | null;
   autoRenewing?: boolean | null;
   source?: string | null;
+  paymentProvider?: SubscriptionInfo['paymentProvider'];
+  renewalState?: SubscriptionInfo['renewalState'];
 }): SubscriptionDisplayState | null {
   switch (snapshot.status) {
     case 'trialing':
@@ -63,7 +71,12 @@ function classifySnapshot(snapshot: {
       // Only the subscription snapshot carries autoRenewing; user
       // entitlement snapshots don't, so legacy code paths that only
       // pass user still hit the plain "subscribed" branch.
-      if (snapshot.autoRenewing === false) {
+      if (
+        snapshot.renewalState === 'cancelled' ||
+        (snapshot.autoRenewing === false &&
+          snapshot.paymentProvider !== 'mainland' &&
+          snapshot.renewalState !== 'prepaid')
+      ) {
         return { kind: 'subscribed_cancelled', daysRemaining: 0 };
       }
       return { kind: 'subscribed', daysRemaining: 0 };
@@ -92,6 +105,8 @@ export function resolveSubscriptionDisplayState(input: {
         trialEnd: subscription.trialEnd,
         autoRenewing: subscription.autoRenewing,
         source: subscription.source,
+        paymentProvider: subscription.paymentProvider,
+        renewalState: subscription.renewalState,
       }) ?? { kind: 'unknown', daysRemaining: 0 }
     );
   }

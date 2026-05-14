@@ -17,12 +17,14 @@ import {
   Dimensions,
   NativeModules,
   Clipboard,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import * as RNLocalize from 'react-native-localize';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { SubscriptionPlanCard } from '../components/SubscriptionPlanCard';
@@ -38,6 +40,7 @@ import {
   type SubscriptionInfo,
 } from '../stores/auth-store';
 import { iapService } from '../services/iap-service';
+import { mainlandPaymentService } from '../services/mainland-payment-service';
 import { resolveSubscriptionPlanTier } from '../services/subscription-plans-service';
 import {
   useSubscriptionPlans,
@@ -64,6 +67,10 @@ import {
   type SubscriptionDisplayState,
 } from '../utils/subscriptionStatusDisplay';
 import { ERROR_CODE } from '../services/api';
+import {
+  resolveSubscriptionPaymentRoute,
+  type MainlandPaymentMethod,
+} from '../utils/subscriptionPaymentRouting';
 
 const DARK = '#202022';
 const SCREEN_BG = '#d6ecf8';
@@ -126,6 +133,68 @@ function formatExpireDate(dateStr: string | null): string {
 
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function resolveMainlandPaymentAlertKey(error: unknown): string {
+  const record =
+    typeof error === 'object' && error != null
+      ? (error as Record<string, unknown>)
+      : null;
+  const code =
+    typeof record?.code === 'string' || typeof record?.code === 'number'
+      ? record.code
+      : null;
+  const userInfo =
+    typeof record?.userInfo === 'object' && record.userInfo != null
+      ? (record.userInfo as Record<string, unknown>)
+      : null;
+  const resultStatus =
+    typeof userInfo?.resultStatus === 'string' ||
+    typeof userInfo?.resultStatus === 'number'
+      ? String(userInfo.resultStatus)
+      : null;
+  const message = error instanceof Error ? error.message : String(error);
+  const signal = `${code ?? ''} ${message}`;
+
+  if (
+    signal.includes('MAINLAND_PAYMENT_UNAVAILABLE') ||
+    signal.includes('MAINLAND_PAYMENT_ACTIVITY_UNAVAILABLE') ||
+    signal.includes('MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED') ||
+    code === ERROR_CODE.MAINLAND_PAYMENT_PROVIDER_NOT_CONFIGURED
+  ) {
+    return 'subscription.payment.walletUnavailable';
+  }
+  if (
+    signal.includes('MAINLAND_PAYMENT_WECHAT_CANCELLED') ||
+    signal.includes('MAINLAND_PAYMENT_ALIPAY_CANCELLED')
+  ) {
+    return 'subscription.payment.walletCancelled';
+  }
+  if (
+    signal.includes('MAINLAND_PAYMENT_PENDING_TIMEOUT') ||
+    signal.includes('MAINLAND_PAYMENT_WECHAT_TIMEOUT') ||
+    signal.includes('MAINLAND_PAYMENT_WECHAT_HOST_DESTROYED') ||
+    signal.includes('MAINLAND_PAYMENT_WECHAT_CALLBACK_INVALID') ||
+    (signal.includes('MAINLAND_PAYMENT_ALIPAY_NOT_COMPLETED') &&
+      resultStatus === '8000')
+  ) {
+    return 'subscription.payment.walletPending';
+  }
+  if (
+    signal.includes('MAINLAND_PAYMENT_INVALID_') ||
+    signal.includes('MAINLAND_PAYMENT_METHOD_MISMATCH') ||
+    signal.includes('MAINLAND_PAYMENT_UNSUPPORTED_METHOD') ||
+    signal.includes('MAINLAND_PAYMENT_ORDER') ||
+    signal.includes('MAINLAND_PAYMENT_VERIFY') ||
+    code === ERROR_CODE.MAINLAND_PAYMENT_ORDER_NOT_FOUND ||
+    code === ERROR_CODE.MAINLAND_PAYMENT_ORDER_MISMATCH ||
+    code === ERROR_CODE.MAINLAND_PAYMENT_VERIFY_FAILED ||
+    code === ERROR_CODE.PARAM_ERROR
+  ) {
+    return 'subscription.payment.walletConfigError';
+  }
+
+  return 'subscription.payment.walletFailed';
 }
 
 async function resolvePostSubscriptionRoute(): Promise<PostSubscriptionRoute> {
@@ -465,6 +534,325 @@ const modalStyles = StyleSheet.create({
   },
 });
 
+function WalletPaymentSheet({
+  visible,
+  methods,
+  planLabel,
+  priceLabel,
+  selectedMethod,
+  processingMethod,
+  onSelect,
+  onPay,
+  onClose,
+  t,
+}: {
+  visible: boolean;
+  methods: readonly MainlandPaymentMethod[];
+  planLabel: string;
+  priceLabel: string;
+  selectedMethod: MainlandPaymentMethod | null;
+  processingMethod: MainlandPaymentMethod | null;
+  onSelect: (method: MainlandPaymentMethod) => void;
+  onPay: () => void;
+  onClose: () => void;
+  t: TFunction;
+}) {
+  const isProcessing = processingMethod != null;
+  const canPay = selectedMethod != null && !isProcessing;
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={paymentSheetStyles.overlay}>
+        <TouchableOpacity
+          style={paymentSheetStyles.scrim}
+          activeOpacity={1}
+          onPress={isProcessing ? undefined : onClose}
+        />
+        <View style={paymentSheetStyles.sheet}>
+          <View style={paymentSheetStyles.handle} />
+          <View style={paymentSheetStyles.header}>
+            <Text style={paymentSheetStyles.title}>
+              {isProcessing
+                ? t('subscription.payment.processingTitle')
+                : t('subscription.payment.title')}
+            </Text>
+            <TouchableOpacity
+              style={paymentSheetStyles.closeButton}
+              activeOpacity={0.7}
+              onPress={onClose}
+              disabled={isProcessing}
+              accessibilityLabel={t('subscription.payment.close')}
+            >
+              <Icon name="close" size={20} color={DARK} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={paymentSheetStyles.summary}>
+            <View>
+              <Text style={paymentSheetStyles.summaryLabel}>
+                {t('subscription.payment.plan')}
+              </Text>
+              <Text style={paymentSheetStyles.summaryValue}>{planLabel}</Text>
+            </View>
+            <Text style={paymentSheetStyles.amountText}>{priceLabel}</Text>
+          </View>
+
+          {isProcessing ? (
+            <View style={paymentSheetStyles.processingBlock}>
+              <ActivityIndicator size="large" color={DARK} />
+              <Text style={paymentSheetStyles.processingText}>
+                {t('subscription.payment.processingBody')}
+              </Text>
+            </View>
+          ) : (
+            <View style={paymentSheetStyles.methods}>
+              {methods.map(method => {
+                const isSelected = selectedMethod === method;
+                return (
+                  <TouchableOpacity
+                    key={method}
+                    style={[
+                      paymentSheetStyles.methodButton,
+                      isSelected &&
+                        (method === 'wechat'
+                          ? paymentSheetStyles.wechatSelected
+                          : paymentSheetStyles.alipaySelected),
+                    ]}
+                    activeOpacity={0.75}
+                    onPress={() => onSelect(method)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    <View
+                      style={[
+                        paymentSheetStyles.methodIcon,
+                        method === 'wechat'
+                          ? paymentSheetStyles.wechatIcon
+                          : paymentSheetStyles.alipayIcon,
+                      ]}
+                    >
+                      <Text style={paymentSheetStyles.methodIconText}>
+                        {method === 'wechat' ? '微' : '支'}
+                      </Text>
+                    </View>
+                    <Text style={paymentSheetStyles.methodText}>
+                      {t(`subscription.payment.${method}` as never)}
+                    </Text>
+                    <View
+                      style={[
+                        paymentSheetStyles.radioOuter,
+                        isSelected && paymentSheetStyles.radioOuterSelected,
+                      ]}
+                    >
+                      {isSelected ? (
+                        <View style={paymentSheetStyles.radioInner} />
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={[
+                  paymentSheetStyles.payButton,
+                  !canPay && paymentSheetStyles.payButtonDisabled,
+                ]}
+                activeOpacity={0.8}
+                onPress={onPay}
+                disabled={!canPay}
+              >
+                <Text style={paymentSheetStyles.payButtonText}>
+                  {t('subscription.payment.pay', { amount: priceLabel })}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <Text style={paymentSheetStyles.terms}>
+            {t('subscription.payment.terms')}
+          </Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const paymentSheetStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(18, 29, 43, 0.42)',
+  },
+  sheet: {
+    backgroundColor: CARD_BG,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+    shadowColor: '#13283a',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#d5dee8',
+    marginBottom: 14,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '800',
+    color: DARK,
+  },
+  closeButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(214, 236, 248, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f4f8fb',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK,
+  },
+  amountText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: DARK,
+  },
+  methods: {
+    gap: 10,
+  },
+  methodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e4edf4',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  wechatSelected: {
+    backgroundColor: '#effdf4',
+    borderColor: '#86efac',
+  },
+  alipaySelected: {
+    backgroundColor: '#eef6ff',
+    borderColor: '#9ecbff',
+  },
+  methodIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wechatIcon: {
+    backgroundColor: '#20b15a',
+  },
+  alipayIcon: {
+    backgroundColor: '#1677ff',
+  },
+  methodIconText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  methodText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: DARK,
+  },
+  radioOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#bfd6e7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioOuterSelected: {
+    borderColor: '#3b9fd8',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3b9fd8',
+  },
+  payButton: {
+    marginTop: 4,
+    borderRadius: 16,
+    backgroundColor: DARK,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  payButtonDisabled: {
+    opacity: 0.45,
+  },
+  payButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  processingBlock: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 12,
+  },
+  processingText: {
+    fontSize: 14,
+    color: MUTED_TEXT,
+    textAlign: 'center',
+  },
+  terms: {
+    marginTop: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    color: MUTED_TEXT,
+    textAlign: 'center',
+  },
+});
+
 export function SubscriptionScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t, i18n } = useTranslation();
@@ -480,6 +868,14 @@ export function SubscriptionScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
   const diagnosticAbortRef = useRef<AbortController | null>(null);
+  const paymentRoute = useMemo(
+    () =>
+      resolveSubscriptionPaymentRoute({
+        os: Platform.OS,
+        countryCode: RNLocalize.getLocales()[0]?.countryCode,
+      }),
+    [],
+  );
 
   // Which Apple-level plan the user is currently holding (null when on
   // account trial, post-expiry, or no Apple IAP yet). Drives the "目前
@@ -497,6 +893,11 @@ export function SubscriptionScreen() {
     null,
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [showWalletPaymentSheet, setShowWalletPaymentSheet] = useState(false);
+  const [selectedWalletMethod, setSelectedWalletMethod] =
+    useState<MainlandPaymentMethod | null>(null);
+  const [processingWalletMethod, setProcessingWalletMethod] =
+    useState<MainlandPaymentMethod | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
   /** Apple SKU consumed by the most recent successful purchase. Surfaces in
    *  the success modal as a localized plan name (looked up against the
@@ -599,7 +1000,12 @@ export function SubscriptionScreen() {
     plans: rawPlans,
     source: plansSource,
     refresh: refreshPlans,
-  } = useSubscriptionPlans({ formatPrice, formatSavings });
+  } = useSubscriptionPlans({
+    formatPrice,
+    formatSavings,
+    platform: paymentRoute.catalogPlatform,
+    useIapProducts: paymentRoute.useIapProducts,
+  });
 
   // Layout cap: paywall design assumes 1-3 cards in a single row. Server can
   // technically return more (extra promo SKUs, A/B variants), but rendering
@@ -807,6 +1213,13 @@ export function SubscriptionScreen() {
       recordDiagnosticsLog('SubscriptionScreen', 'subscribe blocked gift card');
       return;
     }
+    if (plansLoading || productsLoading) {
+      recordDiagnosticsLog('SubscriptionScreen', 'subscribe blocked loading', {
+        plansLoading,
+        productsLoading,
+      });
+      return;
+    }
     if (!selectedEntry || selectedPlanTier == null) {
       // Catalog hasn't resolved yet, or selection couldn't map back to a
       // backend tier. Bail rather than guessing which entitlement to verify.
@@ -842,6 +1255,32 @@ export function SubscriptionScreen() {
         t('subscription.alert.devBody'),
         [{ text: t('subscription.alert.devConfirm') }],
       );
+      return;
+    }
+
+    if (paymentRoute.kind === 'google_play_billing') {
+      recordDiagnosticsLog(
+        'SubscriptionScreen',
+        'subscribe blocked google billing future',
+        {
+          productId: targetProductId,
+          targetTier,
+        },
+      );
+      Alert.alert(
+        t('subscription.payment.googleFutureTitle'),
+        t('subscription.payment.googleFutureBody'),
+      );
+      return;
+    }
+
+    if (paymentRoute.kind === 'android_cn_wallets') {
+      recordDiagnosticsLog('SubscriptionScreen', 'wallet sheet open', {
+        productId: targetProductId,
+        targetTier,
+      });
+      setSelectedWalletMethod(paymentRoute.walletMethods[0] ?? null);
+      setShowWalletPaymentSheet(true);
       return;
     }
 
@@ -1216,15 +1655,80 @@ export function SubscriptionScreen() {
     }
   }, [
     t,
+    plansLoading,
+    productsLoading,
     selectedEntry,
     selectedPlanTier,
     isGiftCardSubscribed,
     currentPlan,
     user,
+    paymentRoute.kind,
+    paymentRoute.walletMethods,
     loadSubscription,
     setSubscription,
     handleRestore,
   ]);
+
+  const handleMainlandWalletPayment = useCallback(
+    (method: MainlandPaymentMethod) => {
+      if (!selectedEntry || selectedPlanTier == null) return;
+      if (processingWalletMethod != null) return;
+
+      const targetProductId = selectedEntry.plan.product_id;
+      const targetTier = selectedPlanTier;
+      setProcessingWalletMethod(method);
+      recordDiagnosticsLog('SubscriptionScreen', 'wallet payment start', {
+        method,
+        productId: targetProductId,
+        targetTier,
+      });
+
+      void (async () => {
+        try {
+          const fresh = await mainlandPaymentService.purchase({
+            method,
+            productId: targetProductId,
+            plan: targetTier,
+          });
+          setSubscription(fresh);
+          markSubscriptionJustActivated();
+          setConfirmedProductId(targetProductId);
+          setConfirmedExpireAt(fresh.expireAt ?? null);
+          setShowWalletPaymentSheet(false);
+          setSelectedWalletMethod(null);
+          setShowPaymentSuccess(true);
+          recordDiagnosticsLog('SubscriptionScreen', 'wallet payment success', {
+            method,
+            productId: targetProductId,
+            status: fresh.status,
+            plan: fresh.plan,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          recordDiagnosticsLog('SubscriptionScreen', 'wallet payment failed', {
+            method,
+            productId: targetProductId,
+            error: message,
+          });
+          Alert.alert(t(resolveMainlandPaymentAlertKey(err) as never));
+        } finally {
+          setProcessingWalletMethod(null);
+        }
+      })();
+    },
+    [
+      processingWalletMethod,
+      selectedEntry,
+      selectedPlanTier,
+      setSubscription,
+      t,
+    ],
+  );
+
+  const handleConfirmWalletPayment = useCallback(() => {
+    if (selectedWalletMethod == null) return;
+    handleMainlandWalletPayment(selectedWalletMethod);
+  }, [handleMainlandWalletPayment, selectedWalletMethod]);
 
   const resetToPostSubscriptionRoute = useCallback(async () => {
     const route = await resolvePostSubscriptionRoute();
@@ -1345,6 +1849,10 @@ export function SubscriptionScreen() {
     : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
     ? t('subscription.actions.switchPlan')
     : t('subscription.actions.subscribe');
+  const canRestorePurchases =
+    paymentRoute.restorePurchases &&
+    FEATURES.IAP_ENABLED &&
+    FEATURES.IAP_RESTORE_ENABLED;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -1473,6 +1981,10 @@ export function SubscriptionScreen() {
           disabled={
             isLoading ||
             selectedEntry == null ||
+            // Android wallet routes do not use StoreKit, so productsLoading
+            // can be false while the server catalog is still in flight.
+            // Keep the CTA inert until the authoritative catalog resolves.
+            plansLoading ||
             // Block while StoreKit lookup is in flight. The hook may have
             // already populated the catalog (plansLoading=false) but the
             // displayed price is still the bootstrap seed until products
@@ -1502,7 +2014,7 @@ export function SubscriptionScreen() {
           )}
         </TouchableOpacity>
 
-        {FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED ? (
+        {canRestorePurchases ? (
           <TouchableOpacity
             onPress={handleRestore}
             disabled={isRestoring}
@@ -1526,6 +2038,23 @@ export function SubscriptionScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      <WalletPaymentSheet
+        visible={showWalletPaymentSheet}
+        methods={paymentRoute.walletMethods}
+        planLabel={selectedEntry?.plan.name ?? t('subscription.plans.fallback')}
+        priceLabel={selectedEntry?.product?.displayPrice ?? '—'}
+        selectedMethod={selectedWalletMethod}
+        processingMethod={processingWalletMethod}
+        onSelect={setSelectedWalletMethod}
+        onPay={handleConfirmWalletPayment}
+        onClose={() => {
+          if (processingWalletMethod == null) {
+            setShowWalletPaymentSheet(false);
+            setSelectedWalletMethod(null);
+          }
+        }}
+        t={t}
+      />
       <PaymentSuccessModal
         visible={showPaymentSuccess}
         planLabel={
