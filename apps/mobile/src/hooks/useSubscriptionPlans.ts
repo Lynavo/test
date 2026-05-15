@@ -3,8 +3,6 @@ import type { SubscriptionPlanPlatform } from '@syncflow/contracts';
 import { iapService, type IapProductSummary } from '../services/iap-service';
 import {
   subscriptionPlansService,
-  buildBootstrapPlans,
-  buildBootstrapProducts,
   buildFixedProductSummary,
   type CatalogSubscriptionPlan,
   type SubscriptionPlansSource,
@@ -127,16 +125,6 @@ function computePlanSavings(
   );
 }
 
-function buildFixedSkuFallback(platform: SubscriptionPlanPlatform): {
-  plans: CatalogSubscriptionPlan[];
-  products: IapProductSummary[];
-} {
-  return {
-    plans: buildBootstrapPlans(platform).filter(plan => plan.active),
-    products: buildBootstrapProducts(),
-  };
-}
-
 function buildWalletProductSummary(
   plan: CatalogSubscriptionPlan,
   formatPrice: (amount: number, currency: string) => string,
@@ -184,34 +172,11 @@ export function useSubscriptionPlans({
   platform = 'ios',
   useIapProducts = true,
 }: UseSubscriptionPlansArgs): UseSubscriptionPlansResult {
-  // Seed `plans` with the same hardcoded bootstrap rows the service uses on
-  // its final fallback. Goal is purely UX: the paywall renders two cards
-  // immediately on first paint instead of flashing an empty `planRow` while
-  // the network request and StoreKit lookup are in flight. Once the network
-  // catalog (or AsyncStorage cache) returns, `setPlans` replaces this seed
-  // with the authoritative list — product_ids match the production server
-  // response so a successful refresh is visually a no-op for the user.
-  // When `enabled` is false (IAP feature flag off) we deliberately stay
-  // empty so the screen renders nothing IAP-related.
-  const [plans, setPlans] = useState<CatalogSubscriptionPlan[]>(() =>
-    enabled ? buildBootstrapPlans(platform) : [],
-  );
-  // Seed `products` alongside `plans` so the paywall renders real-looking
-  // prices on first paint instead of the "—" placeholder. The seed is
-  // synced 1:1 with `buildBootstrapPlans` SKUs and replaced once StoreKit
-  // returns localized prices. Subscribe button is blocked while `loading`
-  // is true (see SubscriptionScreen) so users cannot tap against the
-  // unverified seed amount.
-  const [products, setProducts] = useState<IapProductSummary[]>(() =>
-    enabled
-      ? useIapProducts
-        ? buildBootstrapProducts()
-        : buildWalletProductSummaries(
-            buildBootstrapPlans(platform),
-            formatPrice,
-          )
-      : [],
-  );
+  // Server catalog is the only paywall source of truth. Do not seed with
+  // hardcoded SKUs: admin can disable a product and the subscription screen
+  // must not briefly or permanently re-render it from client fallback data.
+  const [plans, setPlans] = useState<CatalogSubscriptionPlan[]>([]);
+  const [products, setProducts] = useState<IapProductSummary[]>([]);
   const [source, setSource] = useState<SubscriptionPlansSource>('bootstrap');
   const [loading, setLoading] = useState<boolean>(enabled);
   const [productsLoading, setProductsLoading] = useState<boolean>(
@@ -244,14 +209,9 @@ export function useSubscriptionPlans({
       setSource(catalog.source);
     } catch (err) {
       console.warn('[useSubscriptionPlans] catalog fetch failed', err);
-      const fallback = buildFixedSkuFallback(platform);
-      validPlans = fallback.plans;
-      setPlans(fallback.plans);
-      setProducts(
-        useIapProducts
-          ? fallback.products
-          : buildWalletProductSummaries(fallback.plans, formatPrice),
-      );
+      validPlans = [];
+      setPlans([]);
+      setProducts([]);
       setSource('bootstrap');
     } finally {
       setLoading(false);
@@ -274,21 +234,13 @@ export function useSubscriptionPlans({
         skus.length > 0 ? await iapService.getProductSummaries(skus) : [];
       if (validPlans.length > 0 && fetchedProducts.length === 0) {
         console.warn(
-          '[useSubscriptionPlans] StoreKit returned no products; using fixed fallback SKUs',
+          '[useSubscriptionPlans] StoreKit returned no products for server catalog',
         );
-        const fallback = buildFixedSkuFallback(platform);
-        setPlans(fallback.plans);
-        setProducts(fallback.products);
-        setSource('bootstrap');
-      } else {
-        setProducts(fetchedProducts);
       }
+      setProducts(fetchedProducts);
     } catch (err) {
       console.warn('[useSubscriptionPlans] StoreKit product fetch failed', err);
-      const fallback = buildFixedSkuFallback(platform);
-      setPlans(fallback.plans);
-      setProducts(fallback.products);
-      setSource('bootstrap');
+      setProducts([]);
     } finally {
       setProductsLoading(false);
     }

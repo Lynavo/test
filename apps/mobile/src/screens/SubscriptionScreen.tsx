@@ -882,13 +882,12 @@ export function SubscriptionScreen() {
   // 方案" badge, card disable, and CTA copy.
   const currentPlan = resolveCurrentPlan(subscription);
 
-  // selectedProductId tracks the Apple SKU the user has tapped on. Defaults
-  // to null so the auto-select-first effect below picks the recommended /
-  // first plan once the catalog resolves. Keying by product_id (instead of
-  // the legacy 'monthly' | 'yearly' enum) lets us render N plans driven by
-  // the server catalog while still mapping back to backend tier semantics
-  // via the catalog `plan` / `tier` field for downgrade checks and
-  // verify-receipt calls.
+  // selectedProductId tracks the Apple SKU the user has tapped on. Defaults to
+  // null; `effectiveSelectedProductId` below derives the recommended / first
+  // selectable plan once the catalog resolves. Keying by product_id (instead of
+  // the legacy 'monthly' | 'yearly' enum) lets us render N plans driven by the
+  // server catalog while still mapping back to backend tier semantics via the
+  // catalog `plan` / `tier` field for downgrade checks and verify-receipt calls.
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null,
   );
@@ -1045,31 +1044,46 @@ export function SubscriptionScreen() {
     return filtered;
   }, [rawPlans, plansLoading, productsLoading]);
 
-  // Auto-select the first valid plan once the catalog resolves. Prefer the
-  // recommended row when present (server intent), otherwise the first
-  // post-sort entry. Re-runs only when the available SKU set changes so a
-  // user-initiated tap is preserved across re-renders.
-  useEffect(() => {
+  // Resolve the active selection without mutating state during catalog
+  // hydration. Prefer a user-tapped SKU when it is still available and
+  // selectable; otherwise fall back to the recommended row (server intent) or
+  // the first post-sort selectable entry. Keeping this derived avoids test-only
+  // act warnings and removes one render pass from the paywall.
+  const effectiveSelectedProductId = useMemo<string | null>(() => {
     if (plans.length === 0) {
-      if (selectedProductId != null) setSelectedProductId(null);
-      return;
+      return null;
     }
-    const stillAvailable = plans.some(
+
+    const isBlocked = (entry: PlanWithProduct): boolean => {
+      const tier = resolveSubscriptionPlanTier(entry.plan);
+      return (
+        tier != null &&
+        (tier === currentPlan || isDowngradePlan(currentPlan, tier))
+      );
+    };
+
+    const tapped = plans.find(
       entry => entry.plan.product_id === selectedProductId,
     );
-    if (stillAvailable) return;
-    const recommended = plans.find(entry => entry.plan.recommended);
-    setSelectedProductId((recommended ?? plans[0]).plan.product_id);
-  }, [plans, selectedProductId]);
+    if (tapped && !isBlocked(tapped)) return tapped.plan.product_id;
 
-  // Reconcile selection if the user already holds the SKU they're pointing
-  // at, OR if the SKU maps to a downgrade — flip to the first non-current,
-  // non-downgrade plan. Keeps the CTA in a meaningful state without forcing
-  // a "blank" UI before the user has explicitly tapped.
+    const recommended = plans.find(
+      entry => entry.plan.recommended && !isBlocked(entry),
+    );
+    const alternative = recommended ?? plans.find(entry => !isBlocked(entry));
+    if (alternative) return alternative.plan.product_id;
+
+    return (tapped ?? plans[0]).plan.product_id;
+  }, [plans, selectedProductId, currentPlan]);
+
+  // Map the effective SKU back to the full catalog row used by CTA copy,
+  // purchase, wallet checkout, and downgrade/current-plan guards.
   const selectedEntry = useMemo<PlanWithProduct | null>(
     () =>
-      plans.find(entry => entry.plan.product_id === selectedProductId) ?? null,
-    [plans, selectedProductId],
+      plans.find(
+        entry => entry.plan.product_id === effectiveSelectedProductId,
+      ) ?? null,
+    [plans, effectiveSelectedProductId],
   );
   const selectedPlanTier = useMemo<PlanKey | null>(() => {
     if (!selectedEntry) return null;
@@ -1081,22 +1095,6 @@ export function SubscriptionScreen() {
     selectedPlanTier === currentPlan;
   const selectedPlanIsDowngrade =
     selectedPlanTier != null && isDowngradePlan(currentPlan, selectedPlanTier);
-
-  useEffect(() => {
-    if (plans.length === 0) return;
-    if (!selectedPlanIsCurrent && !selectedPlanIsDowngrade) return;
-    // Find an alternative — preferring recommended, otherwise first non-self.
-    const alternative = plans.find(entry => {
-      const tier = resolveSubscriptionPlanTier(entry.plan);
-      if (tier == null) return false;
-      if (currentPlan != null && tier === currentPlan) return false;
-      if (isDowngradePlan(currentPlan, tier)) return false;
-      return true;
-    });
-    if (alternative) {
-      setSelectedProductId(alternative.plan.product_id);
-    }
-  }, [plans, currentPlan, selectedPlanIsCurrent, selectedPlanIsDowngrade]);
 
   const handleRestore = useCallback(async () => {
     if (!FEATURES.IAP_ENABLED || !FEATURES.IAP_RESTORE_ENABLED) return;
@@ -1845,10 +1843,10 @@ export function SubscriptionScreen() {
   const subscribeButtonLabel = isGiftCardSubscribed
     ? t('subscription.actions.giftCardMember')
     : currentPlan === 'yearly'
-    ? t('subscription.actions.currentYearly')
-    : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
-    ? t('subscription.actions.switchPlan')
-    : t('subscription.actions.subscribe');
+      ? t('subscription.actions.currentYearly')
+      : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
+        ? t('subscription.actions.switchPlan')
+        : t('subscription.actions.subscribe');
   const canRestorePurchases =
     paymentRoute.restorePurchases &&
     FEATURES.IAP_ENABLED &&
@@ -1938,7 +1936,7 @@ export function SubscriptionScreen() {
                 unit={unitLabel}
                 oldPrice={entry.savings?.annualizedMonthlyDisplay}
                 savingsBadge={entry.savings?.display}
-                selected={selectedProductId === entry.plan.product_id}
+                selected={effectiveSelectedProductId === entry.plan.product_id}
                 disabled={
                   isGiftCardSubscribed || cardIsCurrent || cardIsDowngrade
                 }

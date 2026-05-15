@@ -13,9 +13,8 @@ import { ALL_PRODUCT_IDS, IAP_PRODUCTS } from '../constants/iap';
 // Constants
 // ---------------------------------------------------------------------------
 
-const CACHE_KEY = '@vividrop/subscription-plans-cache:v1';
+const CACHE_KEY = '@vividrop/subscription-plans-cache:v2';
 const PLANS_PATH = '/subscription/plans';
-const MEMORY_CACHE_TTL_MS = 60_000;
 const BOOTSTRAP_MEMORY_CACHE_TTL_MS = 5_000;
 
 const ANDROID_MAINLAND_PRODUCTS = {
@@ -60,9 +59,7 @@ const inFlightFetches = new Map<
 interface PlansCacheEnvelope {
   platform: SubscriptionPlanPlatform;
   plans: CatalogSubscriptionPlan[];
-  /** ISO 8601 timestamp of when the network response was cached. Currently
-   *  informational only — we do not TTL the cache because the bootstrap
-   *  fallback already protects the UI on truly stale data. */
+  /** ISO 8601 timestamp of when the network response was cached. */
   cachedAt: string;
 }
 
@@ -129,7 +126,7 @@ async function readCache(
     const env = parseCache(raw);
     if (!env) return null;
     if (env.platform !== platform) return null;
-    return env.plans;
+    return env.plans.filter(plan => plan.active);
   } catch (err) {
     console.warn('[plans-service] cache read failed', err);
     return null;
@@ -160,20 +157,9 @@ async function writeCache(
 /**
  * Build a minimal `SubscriptionPlanDto[]` from the hardcoded SKU constants.
  *
- * Two roles:
- *   1. Service-level final fallback when both the server and the
- *      AsyncStorage cache are unavailable (cold install, offline, server
- *      outage). Without this the paywall would be empty and users could
- *      not subscribe at all.
- *   2. Hook-level initial render seed (consumed by `useSubscriptionPlans`)
- *      so the paywall shows two cards immediately while the network
- *      request is in flight, instead of flashing a blank `planRow`.
- *
- * The two SKUs and their copy mirror the production server response
- * (`/subscription/plans` → id=1 monthly, id=3 yearlyPromo) so the
- * seed→network swap is visually a no-op when the server is reachable.
- * `recommended` is intentionally `false` on both rows to match server
- * intent; the screen falls back to "first plan" auto-selection.
+ * Kept only as a last-resort metadata helper for non-authoritative flows.
+ * The paywall must render the server catalog, not this hardcoded list,
+ * because admin can disable SKUs at runtime.
  */
 export function buildBootstrapPlans(
   platform: SubscriptionPlanPlatform,
@@ -284,21 +270,12 @@ export function buildFixedProductSummary(
 
 /**
  * Bootstrap counterpart for `buildBootstrapPlans` — provides StoreKit-shaped
- * `IapProductSummary` rows so the paywall can render real-looking prices on
- * first paint instead of the "—" placeholder. Consumed only by the hook
- * seed; the live StoreKit lookup replaces these once `iapService
- * .getProductSummaries(...)` resolves (typically <500ms).
+ * `IapProductSummary` rows for tests and non-authoritative fallback helpers.
+ * The paywall no longer uses these rows as first-paint seed data, because
+ * hardcoded products can conflict with admin-disabled catalog rows.
  *
  * Numbers reflect the CN App Store storefront, which is the only locale
- * the SKU namespace (`com.vividrop.mobile.china.*`) is published to. Users
- * outside CN will briefly see ¥ then a localized currency swap; this is
- * still better UX than a blank "—".
- *
- * Safety: the bootstrap values are NOT trusted for purchase — the
- * SubscriptionScreen blocks the Subscribe button while `plansLoading` is
- * true so the user can never tap Subscribe against an unverified seed
- * price. Once StoreKit returns the real localizedPrice, the button
- * unblocks and the displayed amount is whatever Apple billed.
+ * the SKU namespace (`com.vividrop.mobile.china.*`) is published to.
  */
 export function buildBootstrapProducts(): IapProductSummary[] {
   const allowedSkus: ReadonlySet<string> = new Set(ALL_PRODUCT_IDS);
@@ -319,7 +296,11 @@ class SubscriptionPlansServiceImpl implements SubscriptionPlansService {
   ): Promise<SubscriptionPlansResult> {
     const now = Date.now();
     const cachedResult = memoryCache.get(platform);
-    if (cachedResult && cachedResult.expiresAt > now) {
+    if (
+      cachedResult &&
+      cachedResult.expiresAt > now &&
+      cachedResult.result.source === 'bootstrap'
+    ) {
       return cachedResult.result;
     }
 
@@ -336,7 +317,7 @@ class SubscriptionPlansServiceImpl implements SubscriptionPlansService {
   private remember(
     platform: SubscriptionPlanPlatform,
     result: SubscriptionPlansResult,
-    ttlMs: number = MEMORY_CACHE_TTL_MS,
+    ttlMs: number,
   ): SubscriptionPlansResult {
     memoryCache.set(platform, {
       result,
@@ -356,9 +337,12 @@ class SubscriptionPlansServiceImpl implements SubscriptionPlansService {
       const plans = Array.isArray(response.plans) ? response.plans : [];
       // Server is the sort authority but defensively re-sort so a transient
       // ordering bug on the backend cannot shuffle the paywall.
-      const sorted = [...plans].sort((a, b) => a.sort_order - b.sort_order);
+      const sorted = plans
+        .filter(plan => plan.active)
+        .sort((a, b) => a.sort_order - b.sort_order);
       void writeCache(platform, sorted);
-      return this.remember(platform, { plans: sorted, source: 'network' });
+      memoryCache.delete(platform);
+      return { plans: sorted, source: 'network' };
     } catch (err) {
       if (err instanceof ApiError) {
         console.warn(
@@ -372,17 +356,20 @@ class SubscriptionPlansServiceImpl implements SubscriptionPlansService {
     // 2. Fall back to the AsyncStorage cache.
     const cached = await readCache(platform);
     if (cached && cached.length > 0) {
-      return this.remember(platform, { plans: cached, source: 'cache' });
+      memoryCache.delete(platform);
+      return { plans: cached, source: 'cache' };
     }
 
-    // 3. Final fallback — protect the paywall so users can still subscribe.
+    // 3. Final fallback — keep admin-controlled catalog authoritative. A
+    // hardcoded SKU fallback can re-show products that were disabled in
+    // admin, so the UI should go empty and offer retry instead.
     console.warn(
-      '[plans-service] bootstrap fallback active — server unreachable and no cache',
+      '[plans-service] no subscription catalog available — server unreachable and no cache',
     );
     return this.remember(
       platform,
       {
-        plans: buildBootstrapPlans(platform),
+        plans: [],
         source: 'bootstrap',
       },
       BOOTSTRAP_MEMORY_CACHE_TTL_MS,

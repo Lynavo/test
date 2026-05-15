@@ -38,7 +38,7 @@ import {
 } from '../subscription-plans-service';
 import { IAP_PRODUCTS } from '../../constants/iap';
 
-const CACHE_KEY = '@vividrop/subscription-plans-cache:v1';
+const CACHE_KEY = '@vividrop/subscription-plans-cache:v2';
 
 const monthlyPlan: SubscriptionPlanDto = {
   id: 1,
@@ -163,14 +163,22 @@ describe('subscriptionPlansService.fetchPlans', () => {
     expect(firstResult.plans).toEqual([monthlyPlan]);
   });
 
-  test('serves repeated requests from short-lived memory cache', async () => {
-    (apiGet as jest.Mock).mockResolvedValueOnce({ plans: [monthlyPlan] });
+  test('re-fetches successful catalog requests so admin disables apply immediately', async () => {
+    (apiGet as jest.Mock)
+      .mockResolvedValueOnce({ plans: [monthlyPlan, yearlyPlan] })
+      .mockResolvedValueOnce({ plans: [monthlyPlan] });
 
     const first = await subscriptionPlansService.fetchPlans('ios');
     const second = await subscriptionPlansService.fetchPlans('ios');
 
-    expect(apiGet).toHaveBeenCalledTimes(1);
-    expect(second).toEqual(first);
+    expect(apiGet).toHaveBeenCalledTimes(2);
+    expect(first.plans.map(plan => plan.product_id)).toEqual([
+      monthlyPlan.product_id,
+      yearlyPlan.product_id,
+    ]);
+    expect(second.plans.map(plan => plan.product_id)).toEqual([
+      monthlyPlan.product_id,
+    ]);
   });
 
   test('bootstrap fallback memory cache expires quickly', async () => {
@@ -222,7 +230,7 @@ describe('subscriptionPlansService.fetchPlans', () => {
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 
-  test('falls back to bootstrap when network fails and cache is empty', async () => {
+  test('returns an empty bootstrap result when network fails and cache is empty', async () => {
     // Arrange: missing cache (null) AND network down.
     (apiGet as jest.Mock).mockRejectedValueOnce(new Error('boom'));
     (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(null);
@@ -230,37 +238,23 @@ describe('subscriptionPlansService.fetchPlans', () => {
     // Act
     const result = await subscriptionPlansService.fetchPlans('ios');
 
-    // Assert: bootstrap delivers the two production SKUs (monthly +
-    // yearlyPromo) so the paywall is never empty even on cold-install +
-    // offline. Mirrors the live server catalog (id=1, id=3) so a successful
-    // refresh later is visually a no-op.
+    // Assert: hardcoded SKUs are not rendered when the admin-controlled
+    // server catalog is unavailable; otherwise disabled products can reappear.
     expect(result.source).toBe('bootstrap');
-    expect(result.plans).toHaveLength(2);
-    const ids = result.plans.map(p => p.product_id).sort();
-    expect(ids).toEqual(
-      [IAP_PRODUCTS.monthly, IAP_PRODUCTS.yearlyPromo].sort(),
-    );
-    // Bootstrap mode must announce itself loudly so QA notices the
-    // degraded-state render rather than blaming "stale data".
+    expect(result.plans).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('bootstrap fallback active'),
+      expect.stringContaining('no subscription catalog available'),
     );
   });
 
-  test('uses Android mainland SKUs for Android bootstrap fallback', async () => {
+  test('returns empty Android bootstrap result when network fails and cache is empty', async () => {
     (apiGet as jest.Mock).mockRejectedValueOnce(new Error('boom'));
     (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(null);
 
     const result = await subscriptionPlansService.fetchPlans('android');
 
     expect(result.source).toBe('bootstrap');
-    expect(result.plans.map(plan => plan.product_id).sort()).toEqual(
-      [
-        'com.vividrop.android.china.monthly.999',
-        'com.vividrop.android.china.yearly.9900',
-      ].sort(),
-    );
-    expect(result.plans.every(plan => plan.platform === 'android')).toBe(true);
+    expect(result.plans).toEqual([]);
   });
 
   test('builds Android mainland bootstrap plans directly', () => {
@@ -274,7 +268,7 @@ describe('subscriptionPlansService.fetchPlans', () => {
     );
   });
 
-  test('falls back to bootstrap when cache JSON is corrupt', async () => {
+  test('returns empty bootstrap result when cache JSON is corrupt', async () => {
     // Arrange: cache schema validation should drop a non-JSON / mid-write
     // garbage payload rather than crashing or returning a half-typed plan.
     (apiGet as jest.Mock).mockRejectedValueOnce(new Error('offline'));
@@ -285,9 +279,9 @@ describe('subscriptionPlansService.fetchPlans', () => {
     // Act
     const result = await subscriptionPlansService.fetchPlans('ios');
 
-    // Assert: corrupt cache treated as miss → bootstrap path.
+    // Assert: corrupt cache treated as miss, without showing hardcoded SKUs.
     expect(result.source).toBe('bootstrap');
-    expect(result.plans.length).toBeGreaterThan(0);
+    expect(result.plans).toEqual([]);
   });
 
   test('passes platform query parameter through to apiGet', async () => {

@@ -35,11 +35,7 @@ jest.mock('../../constants/features', () => ({
   },
 }));
 
-import {
-  buildBootstrapPlans,
-  buildBootstrapProducts,
-  subscriptionPlansService,
-} from '../../services/subscription-plans-service';
+import { subscriptionPlansService } from '../../services/subscription-plans-service';
 import { iapService, type IapProductSummary } from '../../services/iap-service';
 import { useSubscriptionPlans } from '../useSubscriptionPlans';
 import { IAP_PRODUCTS } from '../../constants/iap';
@@ -144,17 +140,6 @@ const adminProduct: IapProductSummary = {
   eligibleForIntroOffer: false,
 };
 
-function mockFixedBootstrapSkuFallback(): void {
-  (buildBootstrapPlans as jest.Mock).mockReturnValue([
-    monthlyPlan,
-    yearlyPromoPlan,
-  ]);
-  (buildBootstrapProducts as jest.Mock).mockReturnValue([
-    monthlyProduct,
-    yearlyPromoProduct,
-  ]);
-}
-
 // Identity formatters keep assertions deterministic without depending on
 // Hermes Intl quirks. The hook's only contract with the formatters is that
 // `formatSavings(formatPrice(...))` produces a string the screen can render.
@@ -166,8 +151,6 @@ const formatSavings = (savingsDisplay: string): string =>
 describe('useSubscriptionPlans', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (buildBootstrapPlans as jest.Mock).mockReturnValue([]);
-    (buildBootstrapProducts as jest.Mock).mockReturnValue([]);
   });
 
   test('merges server catalog with StoreKit products and computes yearly savings', async () => {
@@ -346,16 +329,15 @@ describe('useSubscriptionPlans', () => {
     ).toEqual(['CNY 9.99', 'CNY 104.00']);
   });
 
-  test('falls back to the two fixed SKUs when Apple returns no products', async () => {
+  test('keeps the server catalog when Apple returns no products', async () => {
     // Arrange: catalog has plans but StoreKit is empty (sandbox not signed in,
-    // ASC mis-config, etc.). The hook should keep the paywall renderable with
-    // the fixed bootstrap SKU pair.
+    // ASC mis-config, etc.). The hook must not replace the server catalog with
+    // hardcoded SKUs, because admin-disabled products could reappear.
     (subscriptionPlansService.fetchPlans as jest.Mock).mockResolvedValueOnce({
       plans: [monthlyPlan, yearlyPlan],
       source: 'network',
     });
     (iapService.getProductSummaries as jest.Mock).mockResolvedValueOnce([]);
-    mockFixedBootstrapSkuFallback();
 
     // Act
     const { result } = renderHook(() =>
@@ -366,11 +348,14 @@ describe('useSubscriptionPlans', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     await waitFor(() => expect(result.current.productsLoading).toBe(false));
     expect(result.current.error).toBeNull();
-    expect(result.current.source).toBe('bootstrap');
+    expect(result.current.source).toBe('network');
     expect(result.current.plans.map(entry => entry.plan.product_id)).toEqual([
       IAP_PRODUCTS.monthly,
-      IAP_PRODUCTS.yearlyPromo,
+      IAP_PRODUCTS.yearly,
     ]);
+    expect(result.current.plans.every(entry => entry.product == null)).toBe(
+      true,
+    );
   });
 
   test('refresh re-fetches both catalog and StoreKit products', async () => {

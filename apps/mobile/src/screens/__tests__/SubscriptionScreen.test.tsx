@@ -292,17 +292,6 @@ const yearlyPromoProduct: IapProductSummary = {
   eligibleForIntroOffer: false,
 };
 
-function mockFixedBootstrapSkuFallback(): void {
-  (buildBootstrapPlans as jest.Mock).mockReturnValue([
-    monthlyPlan,
-    yearlyPromoPlan,
-  ]);
-  (buildBootstrapProducts as jest.Mock).mockReturnValue([
-    monthlyProduct,
-    yearlyPromoProduct,
-  ]);
-}
-
 function mockCatalog(
   plans: SubscriptionPlanDto[],
   products: IapProductSummary[],
@@ -460,24 +449,26 @@ describe('SubscriptionScreen', () => {
     expect(queryByText('月度方案')).toBeNull();
   });
 
-  test('renders fixed fallback SKU cards when StoreKit returns no products', async () => {
+  test('shows retry state when StoreKit returns no products', async () => {
     // Arrange: server catalog has rows but Apple returned nothing. The screen
-    // should switch to the fixed fallback SKU pair instead of showing the
-    // unavailable banner.
+    // must not switch to a fixed fallback SKU pair, otherwise admin-disabled
+    // products can reappear on the paywall.
     mockCatalog([monthlyPlan, yearlyPlan], []);
-    mockFixedBootstrapSkuFallback();
 
     // Act
     const { findByText, queryByText } = renderScreen();
 
     // Assert
-    expect(await findByText('月度方案')).toBeTruthy();
-    expect(await findByText('限时年费')).toBeTruthy();
-    expect(await findByText('¥9.90')).toBeTruthy();
-    expect(await findByText('¥99.00')).toBeTruthy();
     expect(
-      queryByText(/暂时无法获取方案信息|暫時無法獲取|temporarily unavailable/i),
-    ).toBeNull();
+      await findByText(
+        /暂时无法获取方案信息|暫時無法獲取|temporarily unavailable/i,
+      ),
+    ).toBeTruthy();
+    expect(queryByText('月度方案')).toBeNull();
+    expect(queryByText('年度方案')).toBeNull();
+    expect(queryByText('限时年费')).toBeNull();
+    expect(queryByText('¥9.90')).toBeNull();
+    expect(queryByText('¥99.00')).toBeNull();
   });
 
   test('shows offline-mode footer note when source is bootstrap', async () => {
