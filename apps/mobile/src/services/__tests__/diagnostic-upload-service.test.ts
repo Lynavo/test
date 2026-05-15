@@ -3,6 +3,13 @@
 jest.mock('../api', () => ({
   buildUrl: (p: string) => `https://test.local${p}`,
   authHeaders: () => ({ Authorization: 'Bearer test-token' }),
+  clientInfoHeaders: () =>
+    Promise.resolve({
+      'X-Client-App': 'vividrop-mobile',
+      'X-Client-Platform': 'ios',
+      'X-Client-Version': '1.0.0',
+      'X-Client-Build': '9',
+    }),
 }));
 
 import {
@@ -83,6 +90,14 @@ describe('diagnosticUploadService.upload', () => {
     expect(lastXHR.setRequestHeader).toHaveBeenCalledWith(
       'Authorization',
       'Bearer test-token',
+    );
+    expect(lastXHR.setRequestHeader).toHaveBeenCalledWith(
+      'X-Client-Version',
+      '1.0.0',
+    );
+    expect(lastXHR.setRequestHeader).toHaveBeenCalledWith(
+      'X-Client-Build',
+      '9',
     );
     expect(lastXHR.setRequestHeader).toHaveBeenCalledWith(
       'Content-Type',

@@ -1,5 +1,5 @@
 import { NativeModules } from 'react-native';
-import { authHeaders, buildUrl } from './api';
+import { authHeaders, buildUrl, clientInfoHeaders } from './api';
 
 export type UploadProgress = (loaded: number, total: number) => void;
 
@@ -25,6 +25,12 @@ export class DiagnosticUploadError extends Error {
     this.detail = detail;
     this.name = 'DiagnosticUploadError';
   }
+}
+
+function abortedUploadError(): Error & { code: string } {
+  const error = new Error('ABORTED') as Error & { code: string };
+  error.code = 'ABORTED';
+  return error;
 }
 
 interface NativeDiagnosticsUploadModule {
@@ -123,13 +129,21 @@ class XHRDiagnosticUploadService implements DiagnosticUploadService {
         }
 
         onProgress?.(0, 1);
-        nativeSyncEngine
-          .uploadDiagnosticsArchive({
-            url: buildUrl('/diagnostics/upload'),
-            archivePath: normalizedUri,
-            client_id: clientId,
-            note: trimmedNote || undefined,
-            headers: authHeaders(),
+        clientInfoHeaders()
+          .then(clientHeaders => {
+            if (signal.aborted) {
+              throw abortedUploadError();
+            }
+            return nativeSyncEngine.uploadDiagnosticsArchive!({
+              url: buildUrl('/diagnostics/upload'),
+              archivePath: normalizedUri,
+              client_id: clientId,
+              note: trimmedNote || undefined,
+              headers: {
+                ...clientHeaders,
+                ...authHeaders(),
+              },
+            });
           })
           .then(result => {
             if (signal.aborted) {
@@ -191,7 +205,10 @@ class XHRDiagnosticUploadService implements DiagnosticUploadService {
           trimmedNote,
         );
 
-        const headers = authHeaders();
+        const headers = {
+          ...(await clientInfoHeaders()),
+          ...authHeaders(),
+        };
         Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
         xhr.setRequestHeader('Content-Type', contentType);
 

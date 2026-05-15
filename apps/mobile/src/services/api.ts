@@ -1,4 +1,5 @@
 import i18next from 'i18next';
+import { NativeModules, Platform } from 'react-native';
 import { getAccessToken, getRefreshToken } from '../stores/auth-store';
 import { describeInsecureBaseUrl, getBaseUrl } from './config';
 
@@ -80,6 +81,10 @@ export class ApiError extends Error {
 // because of a black-holing captive portal or an unresponsive server.
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
 const AUTH_DEVICE_ID_HEADER = 'X-Auth-Device-Id';
+const CLIENT_APP_HEADER = 'X-Client-App';
+const CLIENT_PLATFORM_HEADER = 'X-Client-Platform';
+const CLIENT_VERSION_HEADER = 'X-Client-Version';
+const CLIENT_BUILD_HEADER = 'X-Client-Build';
 
 // On iOS, the first fetch after a cold start can fail with
 // NSURLErrorCannotFindHost (-1003) when the DNS resolver hasn't warmed up.
@@ -126,12 +131,68 @@ export function authHeaders(): Record<string, string> {
   return {};
 }
 
+type NativeAppInfoModule = {
+  getAppInfo?: () => Promise<{
+    version?: unknown;
+    build?: unknown;
+  }>;
+};
+
+let _clientInfoHeaders: Record<string, string> | null = null;
+let _clientInfoHeadersPromise: Promise<Record<string, string>> | null = null;
+
+function normalizeHeaderValue(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+async function resolveClientInfoHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    [CLIENT_APP_HEADER]: 'vividrop-mobile',
+    [CLIENT_PLATFORM_HEADER]: Platform.OS,
+  };
+
+  try {
+    const nativeSyncEngine = NativeModules.NativeSyncEngine as
+      | NativeAppInfoModule
+      | undefined;
+    const appInfo = await nativeSyncEngine?.getAppInfo?.();
+    const version = normalizeHeaderValue(appInfo?.version);
+    const build = normalizeHeaderValue(appInfo?.build);
+    if (version) headers[CLIENT_VERSION_HEADER] = version;
+    if (build) headers[CLIENT_BUILD_HEADER] = build;
+  } catch {
+    // Keep API requests moving even if the native module is not ready yet.
+  }
+
+  return headers;
+}
+
+export function clientInfoHeaders(): Promise<Record<string, string>> {
+  if (_clientInfoHeaders) return Promise.resolve(_clientInfoHeaders);
+  if (!_clientInfoHeadersPromise) {
+    _clientInfoHeadersPromise = resolveClientInfoHeaders()
+      .then(headers => {
+        if (headers[CLIENT_VERSION_HEADER] || headers[CLIENT_BUILD_HEADER]) {
+          _clientInfoHeaders = headers;
+        }
+        return headers;
+      })
+      .finally(() => {
+        _clientInfoHeadersPromise = null;
+      });
+  }
+  return _clientInfoHeadersPromise;
+}
+
 async function buildRequestHeaders(
   skipAuth: boolean,
 ): Promise<Record<string, string>> {
   const { getOrCreateAuthDeviceId } = await import('./auth-device-id');
   return {
     'Content-Type': 'application/json',
+    ...(await clientInfoHeaders()),
     [AUTH_DEVICE_ID_HEADER]: await getOrCreateAuthDeviceId(),
     ...(skipAuth ? {} : authHeaders()),
   };
