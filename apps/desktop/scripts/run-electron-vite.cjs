@@ -13,9 +13,14 @@ const projectRoot = path.resolve(__dirname, '..');
 const binName = process.platform === 'win32' ? 'electron-vite.cmd' : 'electron-vite';
 const binPath = path.join(projectRoot, 'node_modules', '.bin', binName);
 const env = { ...process.env };
+const reviewApiBaseUrl = 'https://review-api.vividrop.cn';
+
+if (command === 'dev' && !env.SYNCFLOW_API_BASE_URL && !env.VIVIDROP_API_BASE_URL) {
+  env.SYNCFLOW_API_BASE_URL = reviewApiBaseUrl;
+}
 
 if (command === 'dev' && !env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL) {
-  env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL = 'http://127.0.0.1:8080';
+  env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL = reviewApiBaseUrl;
 }
 
 if (process.platform === 'win32') {

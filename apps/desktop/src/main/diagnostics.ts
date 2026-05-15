@@ -319,7 +319,7 @@ export function getAppInfo(): AppInfo {
 }
 
 function defaultApiBaseUrl(): string {
-  return 'https://api.vividrop.cn';
+  return app.isPackaged ? 'https://api.vividrop.cn' : 'https://review-api.vividrop.cn';
 }
 
 function configuredApiBase(): { baseUrl: string; source: string } {

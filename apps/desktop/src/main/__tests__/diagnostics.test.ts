@@ -52,7 +52,7 @@ describe('checkForUpdates', () => {
     vi.unstubAllGlobals();
   });
 
-  it('uses the local Docker API by default in development mode', async () => {
+  it('uses the review API by default in development mode', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -69,7 +69,7 @@ describe('checkForUpdates', () => {
 
     const requestUrl = fetchMock.mock.calls[0]?.[0];
     expect(requestUrl).toEqual(
-      `http://127.0.0.1:8080/api/v1/desktop/update-check?${updateCheckQuery}`,
+      `https://review-api.vividrop.cn/api/v1/desktop/update-check?${updateCheckQuery}`,
     );
   });
 
