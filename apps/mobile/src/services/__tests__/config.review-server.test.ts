@@ -11,7 +11,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   APP_REVIEW_PHONE,
   DEV_API_BASE_URL,
-  PROD_BASE_URL,
   REVIEW_API_BASE_URL,
   clearSessionBaseUrl,
   getBaseUrl,
@@ -49,11 +48,11 @@ describe('review server routing config', () => {
     );
   });
 
-  test('routes normal phone numbers to the local dev API server', () => {
+  test('routes normal phone numbers to the review API server by default', () => {
     expect(resolveAuthBaseUrlForPhone('13312341234')).toBe(DEV_API_BASE_URL);
   });
 
-  test('routes normal phone numbers to the local dev API server on Android dev builds by default', () => {
+  test('routes normal phone numbers to the review API server on Android dev builds by default', () => {
     jest.isolateModules(() => {
       Object.defineProperty(testGlobal, '__DEV__', {
         value: true,
@@ -107,8 +106,10 @@ describe('review server routing config', () => {
     );
   });
 
-  test('ignores stale production session URL when using a local dev API server', async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(PROD_BASE_URL);
+  test('ignores stale production session URL when using the review API server', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(
+      'https://api.vividrop.cn',
+    );
 
     await loadSessionBaseUrl();
 

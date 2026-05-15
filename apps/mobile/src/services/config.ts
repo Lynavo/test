@@ -8,8 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // DEVELOPER NOTE — REAL-DEVICE DEBUG REQUIRES OVERRIDE
 // ============================================================================
 //
-// The built-in default below points at production so real-device debug builds
-// can exercise login and SMS flows without an extra local backend setup.
+// The built-in default below points at the review server so real-device debug
+// builds can exercise login, SMS, and payment flows against the sandbox backend.
 //
 // To debug against your dev backend on a real device, do ONE of:
 //
@@ -26,13 +26,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //       so each developer's local override stays out of git automatically.
 // ============================================================================
 
-export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
+export const PROD_BASE_URL = 'https://api.vividrop.cn';
 export const APP_REVIEW_PHONE = '17000000002';
 
 // Current Android payment sandbox backend. Use setDebugBaseUrlOverride() for
 // temporary per-device overrides without changing this shared default.
-export const DEV_API_BASE_URL: string = 'http://175.178.55.99';
+export const DEV_API_BASE_URL: string = REVIEW_API_BASE_URL;
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
