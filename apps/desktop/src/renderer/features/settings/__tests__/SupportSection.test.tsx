@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createElement, createRef, type ComponentType, type RefAttributes } from 'react';
 import type { DashboardDeviceDTO } from '@syncflow/contracts';
+import { Dialog, DialogOverlay, DialogPortal } from '@renderer/components/ui/dialog';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { SupportSection } from '../SupportSection';
 
@@ -73,6 +75,10 @@ describe('SupportSection', () => {
     });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('disables reset data while a transfer is active', () => {
     useDashboardStore.setState({ devices: [transferringDevice] });
 
@@ -103,6 +109,22 @@ describe('SupportSection', () => {
     });
   });
 
+  it('allows dialog overlay refs to reach the DOM element', () => {
+    const overlayRef = createRef<HTMLDivElement>();
+
+    render(
+      <Dialog open>
+        <DialogPortal>
+          {createElement(DialogOverlay as ComponentType<RefAttributes<HTMLDivElement>>, {
+            ref: overlayRef,
+          })}
+        </DialogPortal>
+      </Dialog>,
+    );
+
+    expect(overlayRef.current).toBeInstanceOf(HTMLDivElement);
+  });
+
   it('falls back to local export only when diagnostics upload reports network unreachable', async () => {
     const networkError = Object.assign(new Error('offline'), { code: 'NETWORK_UNREACHABLE' });
     const uploadDiagnostics = vi.fn().mockRejectedValue(networkError);
@@ -119,6 +141,25 @@ describe('SupportSection', () => {
 
     await waitFor(() => {
       expect(exportDiagnostics).toHaveBeenCalledWith('zh-Hans', '公司网络无法上传');
+    });
+  });
+
+  it('falls back to local export when diagnostics upload reports bundle too large', async () => {
+    const tooLargeError = Object.assign(new Error('too large'), { code: 'BUNDLE_TOO_LARGE' });
+    const uploadDiagnostics = vi.fn().mockRejectedValue(tooLargeError);
+    const exportDiagnostics = vi.fn().mockResolvedValue('/tmp/vivi-drop-diagnostics.zip');
+    setElectronAPI({ uploadDiagnostics, exportDiagnostics });
+
+    render(<SupportSection />);
+
+    fireEvent.click(screen.getByRole('button', { name: /上传诊断包/ }));
+    fireEvent.change(screen.getByLabelText('问题描述'), {
+      target: { value: '日志太大无法上传' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^上传$/ }));
+
+    await waitFor(() => {
+      expect(exportDiagnostics).toHaveBeenCalledWith('zh-Hans', '日志太大无法上传');
     });
   });
 

@@ -30,11 +30,15 @@ type UpdateCheckResult = Awaited<
   ReturnType<NonNullable<Window['electronAPI']>['support']['checkForUpdates']>
 >;
 
-function isNetworkUnreachable(error: unknown): boolean {
+function isRecoverableDiagnosticsUploadError(error: unknown): boolean {
   if (error && typeof error === 'object' && 'code' in error) {
-    return (error as { code?: unknown }).code === 'NETWORK_UNREACHABLE';
+    const code = (error as { code?: unknown }).code;
+    return code === 'NETWORK_UNREACHABLE' || code === 'BUNDLE_TOO_LARGE';
   }
-  return error instanceof Error && error.message.includes('NETWORK_UNREACHABLE');
+  return (
+    error instanceof Error &&
+    (error.message.includes('NETWORK_UNREACHABLE') || error.message.includes('BUNDLE_TOO_LARGE'))
+  );
 }
 
 export function SupportSection() {
@@ -122,7 +126,7 @@ export function SupportSection() {
       setDiagnosticsDescription('');
       setUploadDialogOpen(false);
     } catch (error) {
-      if (!isNetworkUnreachable(error)) {
+      if (!isRecoverableDiagnosticsUploadError(error)) {
         toast.error(t('errors.settings.diagnosticsUploadFailed'), {
           description: error instanceof Error ? error.message : t('errors.common.retryLater'),
         });

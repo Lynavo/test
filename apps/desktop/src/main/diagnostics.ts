@@ -12,6 +12,10 @@ import type { SidecarManager } from './sidecar-manager';
 import { getMainStrings } from '../shared/main-i18n';
 
 const execFileAsync = promisify(execFile);
+const DIAGNOSTICS_LOG_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+const DIAGNOSTICS_UPLOAD_LOG_TAIL_BYTES = 256 * 1024;
+const DIAGNOSTICS_UPLOAD_DB_MAX_BYTES = 128 * 1024;
+const DIAGNOSTICS_UPLOAD_ARCHIVE_MAX_BYTES = 900 * 1024;
 
 export { getAppInfo } from './app-info';
 
@@ -92,6 +96,8 @@ type DiagnosticSnapshot = {
   };
 };
 
+type DiagnosticsBundleMode = 'export' | 'upload';
+
 export type DiagnosticsUploadRequest = {
   description: string;
   locale?: string;
@@ -139,6 +145,69 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function isRecentDiagnosticLog(path: string, now = Date.now()): Promise<boolean> {
+  try {
+    const info = await stat(path);
+    return now - info.mtimeMs <= DIAGNOSTICS_LOG_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
+async function copyDiagnosticLogFile(
+  sourcePath: string,
+  destinationPath: string,
+  mode: DiagnosticsBundleMode,
+): Promise<void> {
+  if (mode === 'export') {
+    await copyFile(sourcePath, destinationPath);
+    return;
+  }
+
+  const info = await stat(sourcePath);
+  if (info.size <= DIAGNOSTICS_UPLOAD_LOG_TAIL_BYTES) {
+    await copyFile(sourcePath, destinationPath);
+    return;
+  }
+
+  const content = await readFile(sourcePath);
+  const tail = content.subarray(content.byteLength - DIAGNOSTICS_UPLOAD_LOG_TAIL_BYTES);
+  const notice = Buffer.from(
+    `[Vivi Drop diagnostics] This log was truncated for upload. Original size: ${info.size} bytes. Included tail bytes: ${tail.byteLength}.\n\n`,
+    'utf8',
+  );
+  await writeFile(destinationPath, Buffer.concat([notice, tail]));
+}
+
+async function copyDiagnosticDatabase(
+  sourcePath: string,
+  destinationPath: string,
+  omittedMarkerPath: string,
+  mode: DiagnosticsBundleMode,
+): Promise<void> {
+  if (!(await exists(sourcePath))) return;
+
+  if (mode === 'upload') {
+    const info = await stat(sourcePath);
+    if (info.size > DIAGNOSTICS_UPLOAD_DB_MAX_BYTES) {
+      await writeFile(
+        omittedMarkerPath,
+        [
+          'sidecar.db was omitted from the uploaded diagnostics bundle.',
+          `Original size: ${info.size} bytes.`,
+          `Upload limit for database snapshots: ${DIAGNOSTICS_UPLOAD_DB_MAX_BYTES} bytes.`,
+          'Use Export diagnostics locally if a full database snapshot is required.',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      return;
+    }
+  }
+
+  await copyFile(sourcePath, destinationPath);
 }
 
 async function safeCall<T>(fn: () => Promise<T>): Promise<T | { error: string }> {
@@ -234,11 +303,12 @@ async function captureEnvironmentSnapshot(): Promise<EnvironmentSnapshot> {
 
 /**
  * Enumerates the sidecar log files produced by the in-process rotation
- * (sidecar.log + sidecar.log.1..N). Returns absolute paths that exist on
- * disk, sorted newest-first so the primary file is first.
+ * (sidecar.log + sidecar.log.1..N). Returns recent absolute paths sorted
+ * newest-first so the primary file is first.
  */
 async function listSidecarLogFiles(sidecarDataDir: string): Promise<string[]> {
   const logsDir = join(sidecarDataDir, 'logs');
+  const now = Date.now();
   try {
     const entries = await readdir(logsDir);
     const candidates = entries
@@ -255,7 +325,7 @@ async function listSidecarLogFiles(sidecarDataDir: string): Promise<string[]> {
 
     const present: string[] = [];
     for (const p of candidates) {
-      if (await exists(p)) present.push(p);
+      if (await isRecentDiagnosticLog(p, now)) present.push(p);
     }
     return present;
   } catch {
@@ -265,15 +335,16 @@ async function listSidecarLogFiles(sidecarDataDir: string): Promise<string[]> {
 
 /**
  * Electron-log can create main, renderer, and rotated files in the same log
- * directory. Collecting that directory gives support enough history to debug
- * renderer-only failures and logs that rotated before the report was captured.
+ * directory. Collecting recent files gives support enough history to debug
+ * renderer-only failures without attaching stale multi-day logs to uploads.
  */
 async function listDesktopLogFiles(activeLogPath: string): Promise<string[]> {
   const logsDir = dirname(activeLogPath);
   const activeBaseName = basename(activeLogPath);
   const present = new Set<string>();
+  const now = Date.now();
 
-  if (await exists(activeLogPath)) {
+  if (await isRecentDiagnosticLog(activeLogPath, now)) {
     present.add(activeLogPath);
   }
 
@@ -294,7 +365,7 @@ async function listDesktopLogFiles(activeLogPath: string): Promise<string[]> {
       .map((name) => join(logsDir, name));
 
     for (const candidate of candidates) {
-      if (await exists(candidate)) {
+      if (await isRecentDiagnosticLog(candidate, now)) {
         present.add(candidate);
       }
     }
@@ -407,6 +478,7 @@ async function createDiagnosticsBundle(
   locale?: string,
   timestamp = diagnosticsTimestamp(),
   description?: string,
+  mode: DiagnosticsBundleMode = 'export',
 ): Promise<{ tempRoot: string; bundleDir: string }> {
   const strings = getMainStrings(locale);
   const tempRoot = join(tmpdir(), `syncflow-diagnostics-${timestamp}`);
@@ -482,17 +554,20 @@ async function createDiagnosticsBundle(
   await writeFile(join(bundleDir, 'README.txt'), strings.diagnostics.readme.join('\n'), 'utf8');
 
   for (const desktopLogFile of desktopLogFiles) {
-    await copyFile(desktopLogFile, join(filesDir, basename(desktopLogFile)));
+    await copyDiagnosticLogFile(desktopLogFile, join(filesDir, basename(desktopLogFile)), mode);
   }
-  if (await exists(sidecarDbPath)) {
-    await copyFile(sidecarDbPath, join(filesDir, 'sidecar.db'));
-  }
+  await copyDiagnosticDatabase(
+    sidecarDbPath,
+    join(filesDir, 'sidecar.db'),
+    join(filesDir, 'sidecar.db.omitted.txt'),
+    mode,
+  );
   // Copy every rotated sidecar log file so the bundle retains history
   // across size-based rotations. Names preserved so .1/.2 ordering is
   // obvious when the receiver opens the ZIP.
   for (const logPath of sidecarLogFiles) {
     const baseName = logPath.split(/[/\\]/).pop() ?? 'sidecar.log';
-    await copyFile(logPath, join(filesDir, baseName));
+    await copyDiagnosticLogFile(logPath, join(filesDir, baseName), mode);
   }
 
   return { tempRoot, bundleDir };
@@ -550,6 +625,7 @@ export async function uploadDiagnostics(
     request.locale,
     timestamp,
     description,
+    'upload',
   );
   const archivePath = join(tempRoot, `upload-${timestamp}.zip`);
 
@@ -562,6 +638,12 @@ export async function uploadDiagnostics(
       form.append('note', description);
     }
     const zipBytes = await readFile(archivePath);
+    if (zipBytes.byteLength > DIAGNOSTICS_UPLOAD_ARCHIVE_MAX_BYTES) {
+      throw new DiagnosticsUploadError(
+        'BUNDLE_TOO_LARGE',
+        `diagnostics bundle is ${zipBytes.byteLength} bytes after compaction`,
+      );
+    }
     form.append(
       'bundle',
       new Blob([new Uint8Array(zipBytes)], { type: 'application/zip' }),
