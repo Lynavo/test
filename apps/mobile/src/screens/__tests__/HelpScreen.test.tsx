@@ -122,6 +122,26 @@ describe('HelpScreen', () => {
     expect(getByText('輸入禮品卡代碼以啟用或延長訂閱。')).toBeTruthy();
   });
 
+  it('refreshes gift card switch before opening Help redemption prompt', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
+
+    const { getByText, queryByPlaceholderText } = render(<HelpScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    (getGiftCardConfig as jest.Mock).mockClear();
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: false });
+
+    fireEvent.press(getByText('禮品卡兌換'));
+
+    await waitFor(() => {
+      expect(getGiftCardConfig).toHaveBeenCalled();
+    });
+    expect(queryByPlaceholderText('輸入禮品卡代碼')).toBeNull();
+  });
+
   it('localizes gift card already-redeemed errors from Help', async () => {
     (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
     (redeemGiftCard as jest.Mock).mockRejectedValueOnce(
@@ -129,7 +149,7 @@ describe('HelpScreen', () => {
     );
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
-    const { getByText, getByPlaceholderText } = render(<HelpScreen />);
+    const { getByText, findByPlaceholderText } = render(<HelpScreen />);
 
     await waitFor(() => {
       expect(getByText('禮品卡兌換')).toBeTruthy();
@@ -137,7 +157,7 @@ describe('HelpScreen', () => {
 
     fireEvent.press(getByText('禮品卡兌換'));
     fireEvent.changeText(
-      getByPlaceholderText('輸入禮品卡代碼'),
+      await findByPlaceholderText('輸入禮品卡代碼'),
       'vivi-abcd-efgh-ijkl',
     );
     fireEvent.press(getByText('兌換'));

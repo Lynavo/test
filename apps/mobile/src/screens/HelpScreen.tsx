@@ -219,9 +219,22 @@ export function HelpScreen() {
     void Linking.openURL(DOWNLOAD_URL);
   }, []);
 
-  const handleOpenGiftCardPrompt = useCallback(() => {
-    setGiftCardCode('');
-    setGiftCardPromptVisible(true);
+  const handleOpenGiftCardPrompt = useCallback(async () => {
+    try {
+      const config = await getGiftCardConfig();
+      if (!config.enabled) {
+        setIsGiftCardEnabled(false);
+        setGiftCardPromptVisible(false);
+        return;
+      }
+      setIsGiftCardEnabled(true);
+      setGiftCardCode('');
+      setGiftCardPromptVisible(true);
+    } catch (err) {
+      console.warn('[help] gift card config refresh failed', err);
+      setIsGiftCardEnabled(false);
+      setGiftCardPromptVisible(false);
+    }
   }, []);
 
   const handleRedeemGiftCard = useCallback(async () => {
@@ -436,7 +449,9 @@ export function HelpScreen() {
               <TouchableOpacity
                 style={styles.contactRow}
                 activeOpacity={0.6}
-                onPress={handleOpenGiftCardPrompt}
+                onPress={() => {
+                  void handleOpenGiftCardPrompt();
+                }}
               >
                 <View style={styles.contactRowLeft}>
                   <View

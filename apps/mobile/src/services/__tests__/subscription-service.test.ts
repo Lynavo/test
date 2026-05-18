@@ -23,6 +23,7 @@ describe('getSubscriptionStatus', () => {
       trial_end: null,
       auto_renewing: false,
       source: 'gift_card',
+      payment_provider: 'gift_card',
     });
 
     await expect(getSubscriptionStatus()).resolves.toMatchObject({
@@ -32,6 +33,7 @@ describe('getSubscriptionStatus', () => {
       trialEnd: null,
       autoRenewing: false,
       source: 'gift_card',
+      paymentProvider: 'gift_card',
     });
   });
 });

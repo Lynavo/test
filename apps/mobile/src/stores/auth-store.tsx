@@ -30,7 +30,11 @@ export type AccountStatus =
   | 'trial_expired'
   | 'sub_expired';
 export type SubscriptionPlan = 'monthly' | 'yearly' | '';
-export type SubscriptionPaymentProvider = 'apple' | 'mainland' | '';
+export type SubscriptionPaymentProvider =
+  | 'apple'
+  | 'mainland'
+  | 'gift_card'
+  | '';
 export type SubscriptionRenewalState =
   | 'auto_renewing'
   | 'cancelled'
@@ -74,6 +78,8 @@ export interface SubscriptionInfo {
   autoRenewing?: boolean | null;
   paymentProvider?: SubscriptionPaymentProvider | null;
   renewalState?: SubscriptionRenewalState | null;
+  entitlementExpireAt?: string | null;
+  entitlementSource?: string | null;
 }
 
 export type SignedOutTransition =

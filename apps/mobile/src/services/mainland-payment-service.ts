@@ -141,7 +141,9 @@ function readNativePaymentErrorDetails(error: unknown): DiagnosticsDetails {
 function readPaymentProvider(
   value: unknown,
 ): SubscriptionInfo['paymentProvider'] {
-  if (value === 'apple' || value === 'mainland') return value;
+  if (value === 'apple' || value === 'mainland' || value === 'gift_card') {
+    return value;
+  }
   return null;
 }
 
@@ -240,9 +242,7 @@ function normalizePaymentOrder(
         value.alipay_order_info ?? value.alipayOrderInfo,
         'alipay_order_info',
       ),
-      alipaySandbox: readBoolean(
-        value.alipay_sandbox ?? value.alipaySandbox,
-      ),
+      alipaySandbox: readBoolean(value.alipay_sandbox ?? value.alipaySandbox),
       wechatPayRequest: null,
     };
   }
@@ -397,10 +397,7 @@ class MainlandPaymentService {
       });
       throw err;
     }
-    const order = normalizePaymentOrder(
-      orderResponse,
-      request.method,
-    );
+    const order = normalizePaymentOrder(orderResponse, request.method);
     recordDiagnosticsLog('MainlandPayment', 'order create success', {
       method: request.method,
       orderId: order.orderId,

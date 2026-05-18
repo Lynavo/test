@@ -66,6 +66,7 @@
     "trialExpired": "Trial ended",
     "subscribed": "Subscribed",
     "giftCardSubscribed": "Gift card member",
+    "giftCardQueued": "Gift card redeemed until {{date}}",
     "subscribedCancelled": "Cancelled — valid until {{date}}",
     "subExpired": "Subscription expired"
   },
@@ -74,6 +75,7 @@
     "switchPlan": "Switch Plan",
     "currentYearly": "Current Yearly Plan",
     "giftCardMember": "Gift card member",
+    "giftCardQueued": "Gift card redeemed",
     "start": "Get Started"
   },
   "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",

@@ -44,9 +44,7 @@ import {
   getGiftCardConfig,
   redeemGiftCard,
 } from '../services/gift-card-service';
-import {
-  getGiftCardRedeemFailureTranslationKey,
-} from '../services/gift-card-errors';
+import { getGiftCardRedeemFailureTranslationKey } from '../services/gift-card-errors';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
@@ -876,9 +874,22 @@ export function SettingsScreen() {
     }
   }, [t, auth]);
 
-  const handleOpenGiftCardPrompt = useCallback(() => {
-    setGiftCardCode('');
-    setGiftCardPromptVisible(true);
+  const handleOpenGiftCardPrompt = useCallback(async () => {
+    try {
+      const config = await getGiftCardConfig();
+      if (!config.enabled) {
+        setIsGiftCardEnabled(false);
+        setGiftCardPromptVisible(false);
+        return;
+      }
+      setIsGiftCardEnabled(true);
+      setGiftCardCode('');
+      setGiftCardPromptVisible(true);
+    } catch (err) {
+      console.warn('[settings] gift card config refresh failed', err);
+      setIsGiftCardEnabled(false);
+      setGiftCardPromptVisible(false);
+    }
   }, []);
 
   const handleRedeemGiftCard = useCallback(async () => {
@@ -906,10 +917,7 @@ export function SettingsScreen() {
       );
     } catch (error) {
       const failureKey = getGiftCardRedeemFailureTranslationKey(error);
-      Alert.alert(
-        t('settings.giftCard.failure.title'),
-        t(failureKey),
-      );
+      Alert.alert(t('settings.giftCard.failure.title'), t(failureKey));
     } finally {
       setIsRedeemingGiftCard(false);
     }
@@ -1054,6 +1062,8 @@ export function SettingsScreen() {
   const isSubscribed = subscriptionDisplay.kind === 'subscribed';
   const isGiftCardSubscribed =
     subscriptionDisplay.kind === 'gift_card_subscribed';
+  const isGiftCardEntitlementQueued =
+    subscriptionDisplay.kind === 'gift_card_entitlement_queued';
   const isSubscribedCancelled =
     subscriptionDisplay.kind === 'subscribed_cancelled';
   const isTrialExpired = subscriptionDisplay.kind === 'trial_expired';
@@ -1086,12 +1096,18 @@ export function SettingsScreen() {
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
   // the primary status line still shows.
-  const cancelledUntilDate = (() => {
-    if (!isSubscribedCancelled || !auth.subscription?.expireAt) return '';
-    const d = new Date(auth.subscription.expireAt);
+  const formatDate = (value: string | null | undefined): string => {
+    if (!value) return '';
+    const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-  })();
+  };
+  const cancelledUntilDate = isSubscribedCancelled
+    ? formatDate(auth.subscription?.expireAt)
+    : '';
+  const giftCardQueuedUntilDate = isGiftCardEntitlementQueued
+    ? formatDate(subscriptionDisplay.entitlementExpireAt)
+    : '';
 
   // ---------------------------------------------------------------------------
   // Render
@@ -1235,6 +1251,7 @@ export function SettingsScreen() {
               <Text style={styles.topCardSmallLabel}>
                 {isSubscribed ||
                 isGiftCardSubscribed ||
+                isGiftCardEntitlementQueued ||
                 isSubscribedCancelled ||
                 isSubExpired ||
                 isSubscriptionIntroTrial
@@ -1277,6 +1294,17 @@ export function SettingsScreen() {
                 ]}
               >
                 {t('subscription.status.giftCardSubscribed')}
+              </Text>
+            ) : isGiftCardEntitlementQueued ? (
+              <Text
+                style={[
+                  styles.topCardTitle,
+                  { color: subscriptionStatusColor },
+                ]}
+              >
+                {t('subscription.status.giftCardQueued', {
+                  date: giftCardQueuedUntilDate,
+                })}
               </Text>
             ) : isSubscribed ? (
               <Text
@@ -1646,7 +1674,9 @@ export function SettingsScreen() {
               <TouchableOpacity
                 style={styles.actionRow}
                 activeOpacity={0.6}
-                onPress={handleOpenGiftCardPrompt}
+                onPress={() => {
+                  void handleOpenGiftCardPrompt();
+                }}
               >
                 <View style={styles.actionRowLeft}>
                   <Icon name="gift-outline" size={18} color={BLUE} />

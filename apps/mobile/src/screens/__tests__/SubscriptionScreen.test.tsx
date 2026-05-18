@@ -110,6 +110,17 @@ jest.mock('../../services/mainland-payment-service', () => ({
   },
 }));
 
+jest.mock('../../services/gift-card-service', () => ({
+  getGiftCardConfig: jest.fn().mockResolvedValue({ enabled: false }),
+  redeemGiftCard: jest.fn().mockResolvedValue({
+    code: 'VIVI-ABCD-EFGH-IJKL',
+    giftCardId: 1001,
+    plan: 'monthly',
+    durationDays: 30,
+    redeemedAt: '2026-05-12T00:00:00.000Z',
+  }),
+}));
+
 const mockDiagnosticUpload = jest.fn();
 jest.mock('../../services/diagnostic-upload-service', () => {
   class DiagnosticUploadError extends Error {
@@ -181,9 +192,16 @@ import {
   subscriptionPlansService,
 } from '../../services/subscription-plans-service';
 import { IAP_PRODUCTS } from '../../constants/iap';
-import { verifyIapReceipt } from '../../services/subscription-service';
+import {
+  getSubscriptionStatus,
+  verifyIapReceipt,
+} from '../../services/subscription-service';
 import { ApiError, ERROR_CODE } from '../../services/api';
 import { mainlandPaymentService } from '../../services/mainland-payment-service';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../../services/gift-card-service';
 
 // ---------------------------------------------------------------------------
 // Fixture builders — CN storefront data, mirrors what the server + StoreKit
@@ -343,6 +361,20 @@ describe('SubscriptionScreen', () => {
     mockAuthState.subscription = null;
     mockLoadSubscription.mockResolvedValue(null);
     mockSetSubscription.mockReset();
+    (getSubscriptionStatus as jest.Mock).mockResolvedValue({
+      status: 'trial_expired',
+      plan: '',
+      expireAt: null,
+      trialEnd: null,
+    });
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: false });
+    (redeemGiftCard as jest.Mock).mockResolvedValue({
+      code: 'VIVI-ABCD-EFGH-IJKL',
+      giftCardId: 1001,
+      plan: 'monthly',
+      durationDays: 30,
+      redeemedAt: '2026-05-12T00:00:00.000Z',
+    });
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'ios',
@@ -518,6 +550,155 @@ describe('SubscriptionScreen', () => {
     fireEvent.press(giftCardLabels[giftCardLabels.length - 1]);
 
     expect(iapService.purchase).not.toHaveBeenCalled();
+  });
+
+  test('expired gift card subscription does not block a new App Store purchase', async () => {
+    (getSubscriptionStatus as jest.Mock).mockResolvedValue({
+      status: 'sub_expired',
+      plan: 'monthly',
+      expireAt: '2026-03-18T00:00:00.000Z',
+      trialEnd: null,
+      source: 'gift_card',
+      paymentProvider: 'gift_card',
+      renewalState: 'prepaid',
+    });
+
+    const { findByText } = renderScreen();
+    await findByText('年度方案');
+
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() =>
+      expect(iapService.purchase).toHaveBeenCalledWith(IAP_PRODUCTS.yearly),
+    );
+  });
+
+  test('queued gift card entitlement blocks a new App Store purchase', async () => {
+    (getSubscriptionStatus as jest.Mock).mockResolvedValue({
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-05-18T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: true,
+      source: 'apple_iap',
+      paymentProvider: 'apple',
+      renewalState: 'auto_renewing',
+      entitlementExpireAt: '2026-06-17T00:00:00.000Z',
+      entitlementSource: 'gift_card',
+    });
+
+    const { findByText } = renderScreen();
+    await findByText('月度方案');
+
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(() => expect(getSubscriptionStatus).toHaveBeenCalledTimes(2));
+    expect(iapService.purchase).not.toHaveBeenCalled();
+  });
+
+  test('redeems a gift card from Subscription when the server switch is on', async () => {
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-06-11T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: null,
+      source: 'gift_card',
+      paymentProvider: 'gift_card',
+      renewalState: 'prepaid',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { findByText, findByPlaceholderText, getByText } = renderScreen();
+
+    fireEvent.press(await findByText(/礼品卡兑换|禮品卡兌換|Redeem Gift Card/));
+    fireEvent.changeText(
+      await findByPlaceholderText(
+        /输入礼品卡代码|輸入禮品卡代碼|Enter gift card code/,
+      ),
+      'vivi-abcd-efgh-ijkl',
+    );
+    fireEvent.press(getByText(/^兑换$|^兌換$|^Redeem$/));
+
+    await waitFor(() => {
+      expect(redeemGiftCard).toHaveBeenCalledWith('VIVI-ABCD-EFGH-IJKL');
+    });
+    expect(mockLoadSubscription).toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      '兑换成功',
+      expect.stringContaining('月订阅'),
+      [
+        expect.objectContaining({
+          text: '好',
+          onPress: expect.any(Function),
+        }),
+      ],
+    );
+    const buttons = alertSpy.mock.calls.at(-1)?.[2];
+    buttons?.[0]?.onPress?.();
+    expect(mockNavigation.goBack).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
+  });
+
+  test('does not manually reset navigation after root paywall gift card redemption', async () => {
+    mockNavigation.canGoBack.mockReturnValue(false);
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-06-11T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: null,
+      source: 'gift_card',
+      paymentProvider: 'gift_card',
+      renewalState: 'prepaid',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const { findByText, findByPlaceholderText, getByText } = renderScreen();
+
+    fireEvent.press(await findByText(/礼品卡兑换|禮品卡兌換|Redeem Gift Card/));
+    fireEvent.changeText(
+      await findByPlaceholderText(
+        /输入礼品卡代码|輸入禮品卡代碼|Enter gift card code/,
+      ),
+      'vivi-abcd-efgh-ijkl',
+    );
+    fireEvent.press(getByText(/^兑换$|^兌換$|^Redeem$/));
+
+    await waitFor(() => {
+      expect(redeemGiftCard).toHaveBeenCalledWith('VIVI-ABCD-EFGH-IJKL');
+    });
+    expect(alertSpy).toHaveBeenCalledWith(
+      '兑换成功',
+      expect.stringContaining('月订阅'),
+      undefined,
+    );
+    expect(mockNavigation.goBack).not.toHaveBeenCalled();
+    expect(mockNavigation.reset).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  test('refreshes gift card switch before opening Subscription redemption prompt', async () => {
+    (getGiftCardConfig as jest.Mock)
+      .mockResolvedValueOnce({ enabled: true })
+      .mockResolvedValueOnce({ enabled: false });
+
+    const { findByText, queryByPlaceholderText } = renderScreen();
+
+    fireEvent.press(await findByText(/礼品卡兑换|禮品卡兌換|Redeem Gift Card/));
+
+    await waitFor(() => {
+      expect(
+        (getGiftCardConfig as jest.Mock).mock.calls.length,
+      ).toBeGreaterThanOrEqual(2);
+    });
+    expect(
+      queryByPlaceholderText(
+        /输入礼品卡代码|輸入禮品卡代碼|Enter gift card code/,
+      ),
+    ).toBeNull();
   });
 
   test('Android China subscribe flow selects a wallet before payment', async () => {

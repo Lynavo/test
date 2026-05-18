@@ -8,7 +8,11 @@ jest.mock('../api', () => ({
 jest.mock('../config', () => ({
   PROD_BASE_URL: 'https://api.vividrop.cn',
   REVIEW_API_BASE_URL: 'https://review-api.vividrop.cn',
-  resolveAuthBaseUrlForPhone: jest.fn(() => 'https://review-api.vividrop.cn'),
+  resolveAuthBaseUrlForPhone: jest.fn((phone: string) =>
+    phone === '17000000002'
+      ? 'https://review-api.vividrop.cn'
+      : 'https://api.vividrop.cn',
+  ),
   setSessionBaseUrl: jest.fn().mockResolvedValue(undefined),
 }));
 
@@ -34,16 +38,16 @@ describe('auth-service review server routing', () => {
     );
   });
 
-  test('sends normal SMS requests to the review API server by default', async () => {
+  test('sends normal SMS requests to the production API server by default', async () => {
     (apiPostNoAuth as jest.Mock).mockResolvedValueOnce({});
 
     const result = await sendSmsCode('13312341234');
 
-    expect(result.authBaseUrl).toBe('https://review-api.vividrop.cn');
+    expect(result.authBaseUrl).toBe('https://api.vividrop.cn');
     expect(apiPostNoAuth).toHaveBeenCalledWith(
       '/auth/sms/send',
       { phone: '13312341234' },
-      { baseUrlOverride: 'https://review-api.vividrop.cn' },
+      { baseUrlOverride: 'https://api.vividrop.cn' },
     );
   });
 

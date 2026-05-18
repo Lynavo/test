@@ -10,6 +10,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   ScrollView,
   Alert,
   Modal,
@@ -52,6 +53,11 @@ import {
   getSubscriptionStatus,
   verifyIapReceipt,
 } from '../services/subscription-service';
+import {
+  getGiftCardConfig,
+  redeemGiftCard,
+} from '../services/gift-card-service';
+import { getGiftCardRedeemFailureTranslationKey } from '../services/gift-card-errors';
 import { logout as serverLogout } from '../services/auth-service';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
@@ -63,6 +69,7 @@ import {
 import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
 import { FEATURES } from '../constants/features';
 import {
+  hasGiftCardEntitlement,
   resolveSubscriptionDisplayState,
   type SubscriptionDisplayState,
 } from '../utils/subscriptionStatusDisplay';
@@ -129,6 +136,17 @@ function formatExpireDate(dateStr: string | null): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return '';
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function resolveGiftCardPlanLabel(plan: string, t: TFunction): string {
+  switch (plan) {
+    case 'yearly':
+      return t('settings.giftCard.yearlyPlan');
+    case 'monthly':
+      return t('settings.giftCard.monthlyPlan');
+    default:
+      return t('subscription.plans.fallback');
+  }
 }
 
 function wait(ms: number): Promise<void> {
@@ -307,6 +325,14 @@ function StatusBadge({
       break;
     case 'gift_card_subscribed':
       label = t('subscription.status.giftCardSubscribed');
+      dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
+      textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
+      break;
+    case 'gift_card_entitlement_queued':
+      label = t('subscription.status.giftCardQueued', {
+        date: formatExpireDate(displayState.entitlementExpireAt ?? null),
+      });
       dotColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
       backgroundColor = SUBSCRIPTION_STATUS_ICON_BACKGROUNDS.subscribed;
       textColor = SUBSCRIPTION_STATUS_ICON_COLORS.subscribed;
@@ -907,6 +933,10 @@ export function SubscriptionScreen() {
   const [confirmedExpireAt, setConfirmedExpireAt] = useState<string | null>(
     null,
   );
+  const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
+  const [giftCardPromptVisible, setGiftCardPromptVisible] = useState(false);
+  const [giftCardCode, setGiftCardCode] = useState('');
+  const [isRedeemingGiftCard, setIsRedeemingGiftCard] = useState(false);
 
   useEffect(
     () => () => {
@@ -939,12 +969,37 @@ export function SubscriptionScreen() {
     }, [setSubscription]),
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      void getGiftCardConfig()
+        .then(config => {
+          if (!cancelled) {
+            setIsGiftCardEnabled(config.enabled);
+          }
+        })
+        .catch(err => {
+          console.warn('[subscription] gift card config refresh failed', err);
+          if (!cancelled) {
+            setIsGiftCardEnabled(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
+
   const subscriptionDisplay = resolveSubscriptionDisplayState({
     subscription,
     user,
   });
   const isGiftCardSubscribed =
     subscriptionDisplay.kind === 'gift_card_subscribed';
+  const hasQueuedGiftCardEntitlement =
+    subscriptionDisplay.kind === 'gift_card_entitlement_queued';
+  const hasActiveOrQueuedGiftCardEntitlement =
+    isGiftCardSubscribed || hasQueuedGiftCardEntitlement;
   const canExitRootPaywall = isFeatureAccessAllowed(
     subscription?.status ?? user?.status,
   );
@@ -957,6 +1012,34 @@ export function SubscriptionScreen() {
   const showBackButton = true;
 
   const [isRestoring, setIsRestoring] = useState(false);
+
+  const resetToPostSubscriptionRoute = useCallback(async () => {
+    const route = await resolvePostSubscriptionRoute();
+    navigation.reset({
+      index: 0,
+      routes: [{ name: route }],
+    });
+  }, [navigation]);
+
+  const handlePostSubscriptionDismiss = useCallback(() => {
+    // Came from Settings / elsewhere -> return there. Came from login
+    // (Subscription is the stack root for trial_expired / sub_expired) ->
+    // no back entry exists, so reset into the normal authed flow.
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      void resetToPostSubscriptionRoute();
+    }
+  }, [navigation, resetToPostSubscriptionRoute]);
+
+  const handleGiftCardSuccessDismiss = useCallback(() => {
+    // Root paywall redemption is already handled by RootNavigator reacting to
+    // the refreshed subscribed state. Only manual visits from another screen
+    // should pop back on OK.
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
+  }, [navigation]);
 
   // Prices flow exclusively from StoreKit. There are NO numeric fallbacks
   // baked into i18n — fake-number fallbacks are worse than no number, since
@@ -1124,6 +1207,72 @@ export function SubscriptionScreen() {
     }
   }, [t, loadSubscription]);
 
+  const handleOpenGiftCardPrompt = useCallback(async () => {
+    try {
+      const config = await getGiftCardConfig();
+      if (!config.enabled) {
+        setIsGiftCardEnabled(false);
+        setGiftCardPromptVisible(false);
+        return;
+      }
+      setIsGiftCardEnabled(true);
+      setGiftCardCode('');
+      setGiftCardPromptVisible(true);
+    } catch (err) {
+      console.warn('[subscription] gift card config refresh failed', err);
+      setIsGiftCardEnabled(false);
+      setGiftCardPromptVisible(false);
+    }
+  }, []);
+
+  const handleRedeemGiftCard = useCallback(async () => {
+    const normalizedCode = giftCardCode.trim().toUpperCase();
+    if (!normalizedCode) {
+      Alert.alert(
+        t('settings.giftCard.empty.title'),
+        t('settings.giftCard.empty.body'),
+      );
+      return;
+    }
+
+    setIsRedeemingGiftCard(true);
+    try {
+      const result = await redeemGiftCard(normalizedCode);
+      setGiftCardPromptVisible(false);
+      setGiftCardCode('');
+      markSubscriptionJustActivated();
+      const fresh = await loadSubscription();
+      const shouldExitSubscriptionScreen = isFeatureAccessAllowed(fresh.status);
+      const shouldReturnToPreviousScreen =
+        shouldExitSubscriptionScreen && navigation.canGoBack();
+      Alert.alert(
+        t('settings.giftCard.success.title'),
+        t('settings.giftCard.success.body', {
+          plan: resolveGiftCardPlanLabel(result.plan, t),
+        }),
+        shouldReturnToPreviousScreen
+          ? [
+              {
+                text: t('common.ok'),
+                onPress: handleGiftCardSuccessDismiss,
+              },
+            ]
+          : undefined,
+      );
+    } catch (error) {
+      const failureKey = getGiftCardRedeemFailureTranslationKey(error);
+      Alert.alert(t('settings.giftCard.failure.title'), t(failureKey));
+    } finally {
+      setIsRedeemingGiftCard(false);
+    }
+  }, [
+    giftCardCode,
+    handleGiftCardSuccessDismiss,
+    loadSubscription,
+    navigation,
+    t,
+  ]);
+
   const handleUploadDiagnostics = useCallback(() => {
     if (isUploadingDiagnostics) return;
     recordDiagnosticsLog('SubscriptionScreen', 'diagnostics upload start');
@@ -1207,7 +1356,7 @@ export function SubscriptionScreen() {
   }, [isUploadingDiagnostics, t]);
 
   const handleSubscribe = useCallback(async () => {
-    if (isGiftCardSubscribed) {
+    if (hasActiveOrQueuedGiftCardEntitlement) {
       recordDiagnosticsLog('SubscriptionScreen', 'subscribe blocked gift card');
       return;
     }
@@ -1302,7 +1451,10 @@ export function SubscriptionScreen() {
             source: fresh.source,
           },
         );
-        if (freshDisplay.kind === 'gift_card_subscribed') {
+        if (
+          freshDisplay.kind === 'gift_card_subscribed' ||
+          hasGiftCardEntitlement(fresh)
+        ) {
           recordDiagnosticsLog(
             'SubscriptionScreen',
             'subscribe blocked by gift card preflight',
@@ -1657,7 +1809,7 @@ export function SubscriptionScreen() {
     productsLoading,
     selectedEntry,
     selectedPlanTier,
-    isGiftCardSubscribed,
+    hasActiveOrQueuedGiftCardEntitlement,
     currentPlan,
     user,
     paymentRoute.kind,
@@ -1728,25 +1880,10 @@ export function SubscriptionScreen() {
     handleMainlandWalletPayment(selectedWalletMethod);
   }, [handleMainlandWalletPayment, selectedWalletMethod]);
 
-  const resetToPostSubscriptionRoute = useCallback(async () => {
-    const route = await resolvePostSubscriptionRoute();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: route }],
-    });
-  }, [navigation]);
-
   const handlePaymentSuccessDismiss = useCallback(() => {
     setShowPaymentSuccess(false);
-    // Came from Settings / elsewhere → return there. Came from login
-    // (Subscription is the stack root for trial_expired / sub_expired) →
-    // no back entry exists, so reset into the normal authed flow.
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      void resetToPostSubscriptionRoute();
-    }
-  }, [navigation, resetToPostSubscriptionRoute]);
+    handlePostSubscriptionDismiss();
+  }, [handlePostSubscriptionDismiss]);
 
   // Mirrors SettingsScreen.handleLogout ordering — see that file for the
   // load-bearing rationale: wipeSyncIdentity must run before clearAuth so
@@ -1840,13 +1977,15 @@ export function SubscriptionScreen() {
     resetToPostSubscriptionRoute,
   ]);
 
-  const subscribeButtonLabel = isGiftCardSubscribed
+  const subscribeButtonLabel = hasQueuedGiftCardEntitlement
+    ? t('subscription.actions.giftCardQueued')
+    : isGiftCardSubscribed
     ? t('subscription.actions.giftCardMember')
     : currentPlan === 'yearly'
-      ? t('subscription.actions.currentYearly')
-      : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
-        ? t('subscription.actions.switchPlan')
-        : t('subscription.actions.subscribe');
+    ? t('subscription.actions.currentYearly')
+    : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
+    ? t('subscription.actions.switchPlan')
+    : t('subscription.actions.subscribe');
   const canRestorePurchases =
     paymentRoute.restorePurchases &&
     FEATURES.IAP_ENABLED &&
@@ -1938,7 +2077,9 @@ export function SubscriptionScreen() {
                 savingsBadge={entry.savings?.display}
                 selected={effectiveSelectedProductId === entry.plan.product_id}
                 disabled={
-                  isGiftCardSubscribed || cardIsCurrent || cardIsDowngrade
+                  hasActiveOrQueuedGiftCardEntitlement ||
+                  cardIsCurrent ||
+                  cardIsDowngrade
                 }
                 recommended={entry.plan.recommended}
                 currentBadge={
@@ -1947,7 +2088,7 @@ export function SubscriptionScreen() {
                     : undefined
                 }
                 onPress={() => {
-                  if (!isGiftCardSubscribed) {
+                  if (!hasActiveOrQueuedGiftCardEntitlement) {
                     setSelectedProductId(entry.plan.product_id);
                   }
                 }}
@@ -1994,7 +2135,7 @@ export function SubscriptionScreen() {
             // ASC mis-config / sandbox not signed in), we cannot price the
             // purchase — block it.
             selectedEntry?.product == null ||
-            isGiftCardSubscribed ||
+            hasActiveOrQueuedGiftCardEntitlement ||
             selectedPlanIsCurrent ||
             selectedPlanIsDowngrade ||
             (plansError != null && FEATURES.IAP_ENABLED)
@@ -2023,6 +2164,22 @@ export function SubscriptionScreen() {
               {isRestoring
                 ? t('subscription.restore.inProgress')
                 : t('subscription.restore.action')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {isGiftCardEnabled ? (
+          <TouchableOpacity
+            onPress={() => {
+              void handleOpenGiftCardPrompt();
+            }}
+            accessibilityLabel={t('settings.giftCard.action')}
+            activeOpacity={0.72}
+            style={styles.giftCardButton}
+          >
+            <Icon name="gift-outline" size={16} color={DARK} />
+            <Text style={styles.giftCardButtonText}>
+              {t('settings.giftCard.action')}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -2064,6 +2221,78 @@ export function SubscriptionScreen() {
         onDismiss={handlePaymentSuccessDismiss}
         t={t}
       />
+      <Modal
+        visible={giftCardPromptVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (isRedeemingGiftCard) return;
+          setGiftCardPromptVisible(false);
+          setGiftCardCode('');
+        }}
+      >
+        <View style={styles.giftCardPromptBackdrop}>
+          <View style={styles.giftCardPromptCard}>
+            <Text style={styles.giftCardPromptTitle}>
+              {t('settings.giftCard.modal.title')}
+            </Text>
+            <Text style={styles.giftCardPromptMessage}>
+              {t('settings.giftCard.modal.message')}
+            </Text>
+            <TextInput
+              value={giftCardCode}
+              onChangeText={value => setGiftCardCode(value.toUpperCase())}
+              placeholder={t('settings.giftCard.modal.placeholder')}
+              placeholderTextColor={MUTED_TEXT}
+              style={styles.giftCardPromptInput}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              editable={!isRedeemingGiftCard}
+              maxLength={64}
+              accessibilityLabel={t('settings.giftCard.modal.placeholder')}
+            />
+            <View style={styles.giftCardPromptActions}>
+              <TouchableOpacity
+                style={[
+                  styles.giftCardPromptButton,
+                  isRedeemingGiftCard && styles.giftCardPromptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={isRedeemingGiftCard}
+                onPress={() => {
+                  setGiftCardPromptVisible(false);
+                  setGiftCardCode('');
+                }}
+              >
+                <Text style={styles.giftCardPromptCancelText}>
+                  {t('settings.giftCard.modal.cancel')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.giftCardPromptButton,
+                  styles.giftCardPromptPrimaryButton,
+                  (!giftCardCode.trim() || isRedeemingGiftCard) &&
+                    styles.giftCardPromptButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={!giftCardCode.trim() || isRedeemingGiftCard}
+                onPress={() => {
+                  void handleRedeemGiftCard();
+                }}
+              >
+                {isRedeemingGiftCard ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.giftCardPromptPrimaryText}>
+                    {t('settings.giftCard.modal.submit')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -2189,6 +2418,21 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     textDecorationLine: 'underline',
   },
+  giftCardButton: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginBottom: 8,
+  },
+  giftCardButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK,
+    textDecorationLine: 'underline',
+  },
   bottomSpacer: {
     height: 20,
   },
@@ -2214,5 +2458,79 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DESTRUCTIVE_RED,
     textDecorationLine: 'underline',
+  },
+  giftCardPromptBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  giftCardPromptCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    padding: 18,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  giftCardPromptTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: DARK,
+    textAlign: 'center',
+  },
+  giftCardPromptMessage: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: MUTED_TEXT,
+  },
+  giftCardPromptInput: {
+    minHeight: 46,
+    maxHeight: 56,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: 'rgba(248,250,252,0.98)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: DARK,
+    fontSize: 14,
+    lineHeight: 20,
+    textTransform: 'uppercase',
+  },
+  giftCardPromptActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  giftCardPromptButton: {
+    minHeight: 40,
+    minWidth: 76,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  giftCardPromptPrimaryButton: {
+    backgroundColor: DARK,
+  },
+  giftCardPromptButtonDisabled: {
+    opacity: 0.5,
+  },
+  giftCardPromptCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: MUTED_TEXT,
+  },
+  giftCardPromptPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

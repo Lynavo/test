@@ -349,10 +349,10 @@ describe('SettingsScreen', () => {
   });
 
   test('redeems a gift card from Settings when the server switch is on', async () => {
-    (getGiftCardConfig as jest.Mock).mockResolvedValueOnce({ enabled: true });
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
-    const { getByText, getByPlaceholderText } = render(<SettingsScreen />);
+    const { getByText, findByPlaceholderText } = render(<SettingsScreen />);
 
     await waitFor(() => {
       expect(getByText('禮品卡兌換')).toBeTruthy();
@@ -360,7 +360,7 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByText('禮品卡兌換'));
     fireEvent.changeText(
-      getByPlaceholderText('輸入禮品卡代碼'),
+      await findByPlaceholderText('輸入禮品卡代碼'),
       'vivi-abcd-efgh-ijkl',
     );
     fireEvent.press(getByText('兌換'));
@@ -376,14 +376,35 @@ describe('SettingsScreen', () => {
     alertSpy.mockRestore();
   });
 
+  test('refreshes gift card switch before opening Settings redemption prompt', async () => {
+    (getGiftCardConfig as jest.Mock)
+      .mockResolvedValueOnce({ enabled: true })
+      .mockResolvedValueOnce({ enabled: false });
+
+    const { getByText, queryByPlaceholderText } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('禮品卡兌換')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('禮品卡兌換'));
+
+    await waitFor(() => {
+      expect(
+        (getGiftCardConfig as jest.Mock).mock.calls.length,
+      ).toBeGreaterThanOrEqual(2);
+    });
+    expect(queryByPlaceholderText('輸入禮品卡代碼')).toBeNull();
+  });
+
   test('localizes gift card already-redeemed errors from Settings', async () => {
-    (getGiftCardConfig as jest.Mock).mockResolvedValueOnce({ enabled: true });
+    (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
     (redeemGiftCard as jest.Mock).mockRejectedValueOnce(
       new ApiError(3004, '此账号已兑换过此礼品卡'),
     );
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
-    const { getByText, getByPlaceholderText } = render(<SettingsScreen />);
+    const { getByText, findByPlaceholderText } = render(<SettingsScreen />);
 
     await waitFor(() => {
       expect(getByText('禮品卡兌換')).toBeTruthy();
@@ -391,7 +412,7 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByText('禮品卡兌換'));
     fireEvent.changeText(
-      getByPlaceholderText('輸入禮品卡代碼'),
+      await findByPlaceholderText('輸入禮品卡代碼'),
       'vivi-abcd-efgh-ijkl',
     );
     fireEvent.press(getByText('兌換'));

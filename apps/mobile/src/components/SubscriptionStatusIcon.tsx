@@ -49,6 +49,7 @@ export function getSubscriptionStatusIconTone(
       return 'expired';
     case 'subscribed':
     case 'gift_card_subscribed':
+    case 'gift_card_entitlement_queued':
     case 'subscribed_cancelled':
       return 'subscribed';
     default:

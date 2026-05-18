@@ -10,6 +10,7 @@ export type SubscriptionDisplayKind =
   | 'subscription_intro_trial'
   | 'subscribed'
   | 'gift_card_subscribed'
+  | 'gift_card_entitlement_queued'
   /** status=subscribed + autoRenewing=false: user cancelled in iOS
    *  Settings, access continues until expireAt. UI should surface
    *  "Cancelled, valid until X" copy instead of plain "Subscribed". */
@@ -21,19 +22,26 @@ export type SubscriptionDisplayKind =
 export interface SubscriptionDisplayState {
   kind: SubscriptionDisplayKind;
   daysRemaining: number;
+  entitlementExpireAt?: string | null;
 }
 
 type EntitlementSnapshot = Pick<UserProfile, 'status' | 'plan' | 'trialEnd'>;
 type SubscriptionSnapshot = Pick<
   SubscriptionInfo,
-  | 'status'
-  | 'plan'
-  | 'trialEnd'
-  | 'autoRenewing'
-  | 'source'
-  | 'paymentProvider'
-  | 'renewalState'
->;
+  'status' | 'plan' | 'trialEnd'
+> &
+  Partial<
+    Pick<
+      SubscriptionInfo,
+      | 'expireAt'
+      | 'autoRenewing'
+      | 'source'
+      | 'paymentProvider'
+      | 'renewalState'
+      | 'entitlementExpireAt'
+      | 'entitlementSource'
+    >
+  >;
 
 function getRemainingDays(trialEnd: string | null | undefined): number {
   if (!trialEnd) return 0;
@@ -43,14 +51,37 @@ function getRemainingDays(trialEnd: string | null | undefined): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+function isFutureDate(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) && timestamp > Date.now();
+}
+
+export function hasGiftCardEntitlement(
+  subscription?: Pick<
+    SubscriptionInfo,
+    'status' | 'source' | 'entitlementSource' | 'entitlementExpireAt'
+  > | null,
+): boolean {
+  if (!subscription || subscription.status !== 'subscribed') return false;
+  if (subscription.source === 'gift_card') return true;
+  return (
+    subscription.entitlementSource === 'gift_card' &&
+    isFutureDate(subscription.entitlementExpireAt)
+  );
+}
+
 function classifySnapshot(snapshot: {
   status: AccountStatus;
   plan: SubscriptionPlan;
   trialEnd: string | null;
+  expireAt?: string | null;
   autoRenewing?: boolean | null;
   source?: string | null;
   paymentProvider?: SubscriptionInfo['paymentProvider'];
   renewalState?: SubscriptionInfo['renewalState'];
+  entitlementExpireAt?: string | null;
+  entitlementSource?: string | null;
 }): SubscriptionDisplayState | null {
   switch (snapshot.status) {
     case 'trialing':
@@ -67,6 +98,16 @@ function classifySnapshot(snapshot: {
     case 'subscribed':
       if (snapshot.source === 'gift_card') {
         return { kind: 'gift_card_subscribed', daysRemaining: 0 };
+      }
+      if (
+        snapshot.entitlementSource === 'gift_card' &&
+        isFutureDate(snapshot.entitlementExpireAt)
+      ) {
+        return {
+          kind: 'gift_card_entitlement_queued',
+          daysRemaining: 0,
+          entitlementExpireAt: snapshot.entitlementExpireAt,
+        };
       }
       // Only the subscription snapshot carries autoRenewing; user
       // entitlement snapshots don't, so legacy code paths that only
@@ -103,10 +144,13 @@ export function resolveSubscriptionDisplayState(input: {
         status: subscription.status,
         plan: subscription.plan,
         trialEnd: subscription.trialEnd,
+        expireAt: subscription.expireAt,
         autoRenewing: subscription.autoRenewing,
         source: subscription.source,
         paymentProvider: subscription.paymentProvider,
         renewalState: subscription.renewalState,
+        entitlementExpireAt: subscription.entitlementExpireAt,
+        entitlementSource: subscription.entitlementSource,
       }) ?? { kind: 'unknown', daysRemaining: 0 }
     );
   }

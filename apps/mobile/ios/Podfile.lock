@@ -2027,11 +2027,11 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - SSZipArchive (2.4.3)
-  - VisionCamera (4.6.0):
-    - VisionCamera/Core (= 4.6.0)
-    - VisionCamera/React (= 4.6.0)
-  - VisionCamera/Core (4.6.0)
-  - VisionCamera/React (4.6.0):
+  - VisionCamera (4.7.3):
+    - VisionCamera/Core (= 4.7.3)
+    - VisionCamera/React (= 4.7.3)
+  - VisionCamera/Core (4.7.3)
+  - VisionCamera/React (4.7.3):
     - React-Core
   - Yoga (0.0.0)
 
@@ -2382,7 +2382,7 @@ SPEC CHECKSUMS:
   RNSVG: 69057633bc3f2f6567c7b4b3347645bbf7c425d6
   RNVectorIcons: 081a3c63100f19eafd61807ca539a853a5c31110
   SSZipArchive: fe6a26b2a54d5a0890f2567b5cc6de5caa600aef
-  VisionCamera: 024a4d33a11183851f19553f42658b02d8e4a7eb
+  VisionCamera: 7187b3dac1ff3071234ead959ce311875748e14f
   Yoga: 447c8baf495b8d96457a46e6691a2c9952cbd07f
 
 PODFILE CHECKSUM: 499648b6c5cb5d63727a300c2c4a0208aeaeeb43

@@ -18,6 +18,8 @@ interface SubscriptionStatusResponse {
   source?: string | null;
   payment_provider?: string | null;
   renewal_state?: string | null;
+  entitlement_expire_at?: string | null;
+  entitlement_source?: string | null;
 }
 
 export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
@@ -46,7 +48,8 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
         typeof data.auto_renewing === 'boolean' ? data.auto_renewing : null,
       paymentProvider:
         data.payment_provider === 'apple' ||
-        data.payment_provider === 'mainland'
+        data.payment_provider === 'mainland' ||
+        data.payment_provider === 'gift_card'
           ? data.payment_provider
           : null,
       renewalState:
@@ -54,6 +57,11 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
         data.renewal_state === 'cancelled' ||
         data.renewal_state === 'prepaid'
           ? data.renewal_state
+          : null,
+      entitlementExpireAt: data.entitlement_expire_at ?? null,
+      entitlementSource:
+        typeof data.entitlement_source === 'string'
+          ? data.entitlement_source
           : null,
     };
   } catch (error) {

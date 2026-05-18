@@ -1,4 +1,7 @@
-import { resolveSubscriptionDisplayState } from '../subscriptionStatusDisplay';
+import {
+  hasGiftCardEntitlement,
+  resolveSubscriptionDisplayState,
+} from '../subscriptionStatusDisplay';
 
 describe('resolveSubscriptionDisplayState', () => {
   const realNow = Date.now;
@@ -97,6 +100,62 @@ describe('resolveSubscriptionDisplayState', () => {
         },
       }),
     ).toEqual({ kind: 'gift_card_subscribed', daysRemaining: 0 });
+  });
+
+  test('subscribed + future gift card entitlement surfaces queued gift card state', () => {
+    const subscription = {
+      status: 'subscribed' as const,
+      plan: 'monthly' as const,
+      expireAt: '2026-05-18T00:00:00.000Z',
+      trialEnd: null,
+      autoRenewing: true,
+      source: 'apple_iap',
+      paymentProvider: 'apple' as const,
+      renewalState: 'auto_renewing' as const,
+      entitlementExpireAt: '2026-06-17T00:00:00.000Z',
+      entitlementSource: 'gift_card',
+    };
+
+    expect(
+      resolveSubscriptionDisplayState({
+        subscription,
+      }),
+    ).toEqual({
+      kind: 'gift_card_entitlement_queued',
+      daysRemaining: 0,
+      entitlementExpireAt: '2026-06-17T00:00:00.000Z',
+    });
+  });
+
+  test('hasGiftCardEntitlement ignores expired gift card subscriptions', () => {
+    expect(
+      hasGiftCardEntitlement({
+        status: 'sub_expired',
+        source: 'gift_card',
+        entitlementSource: null,
+        entitlementExpireAt: null,
+      }),
+    ).toBe(false);
+  });
+
+  test('hasGiftCardEntitlement detects active and queued gift card access', () => {
+    expect(
+      hasGiftCardEntitlement({
+        status: 'subscribed',
+        source: 'gift_card',
+        entitlementSource: null,
+        entitlementExpireAt: null,
+      }),
+    ).toBe(true);
+
+    expect(
+      hasGiftCardEntitlement({
+        status: 'subscribed',
+        source: 'apple_iap',
+        entitlementSource: 'gift_card',
+        entitlementExpireAt: '2026-06-17T00:00:00.000Z',
+      }),
+    ).toBe(true);
   });
 
   test('mainland prepaid subscription does not render as subscribed_cancelled', () => {

@@ -13,6 +13,7 @@ CONFIGURATION="Release"
 EXPORT_OPTIONS="${IOS_DIR}/ExportOptions-TestFlight.plist"
 ARCHIVES_DIR="${IOS_DIR}/build/archives"
 EXPORT_DIR="/tmp/syncflow-export"
+IOS_EXPORT_SIGNING_CERTIFICATE="${IOS_EXPORT_SIGNING_CERTIFICATE:-Apple Distribution}"
 
 # App Store Connect API key for Shenzhen Kaiyun (GKN7JQNCMC) — altool upload path.
 APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-HY8CAHGPW9}"
@@ -194,6 +195,25 @@ archive_build() {
     archive
 }
 
+verify_export_signing() {
+  local summary="${EXPORT_DIR}/DistributionSummary.plist"
+  if [[ ! -f "${summary}" ]]; then
+    echo "Distribution summary not found: ${summary}" >&2
+    exit 1
+  fi
+
+  local cert_type
+  cert_type="$(/usr/libexec/PlistBuddy -c 'Print :SyncFlowMobile.ipa:0:certificate:type' "${summary}")"
+  if [[ "${cert_type}" != "${IOS_EXPORT_SIGNING_CERTIFICATE}" ]]; then
+    echo "ERROR: exported IPA signing certificate mismatch." >&2
+    echo "Expected: ${IOS_EXPORT_SIGNING_CERTIFICATE}" >&2
+    echo "Actual: ${cert_type}" >&2
+    exit 1
+  fi
+
+  echo "Export signing certificate verified: ${cert_type}"
+}
+
 export_ipa() {
   if [[ ! -d "${ARCHIVE_PATH}" ]]; then
     echo "Archive not found: ${ARCHIVE_PATH}" >&2
@@ -213,6 +233,8 @@ export_ipa() {
     -exportPath "${EXPORT_DIR}" \
     -exportOptionsPlist "${EXPORT_OPTIONS}" \
     -allowProvisioningUpdates
+
+  verify_export_signing
 }
 
 ensure_altool_key() {

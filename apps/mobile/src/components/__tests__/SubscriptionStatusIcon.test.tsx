@@ -21,6 +21,9 @@ describe('SubscriptionStatusIcon', () => {
     expect(getSubscriptionStatusIconTone('gift_card_subscribed')).toBe(
       'subscribed',
     );
+    expect(getSubscriptionStatusIconTone('gift_card_entitlement_queued')).toBe(
+      'subscribed',
+    );
     expect(getSubscriptionStatusIconTone('unknown')).toBeNull();
   });
 
