@@ -6,6 +6,7 @@
 
 - `docs/release/ios-testflight.md`
 - `docs/release/macos-desktop-signing.md`
+- `docs/release/market-release-flow.md`
 
 Windows 桌面包目前直接走根目錄指令碼 `pnpm package:desktop:win`，詳細約束以目前程式碼和本文件為準。
 

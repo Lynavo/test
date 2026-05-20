@@ -1,21 +1,64 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, NativeModules, Pressable, StyleSheet, Text, View } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
+import { appleLogin, googleLogin } from '../services/auth-service';
+import { useAuth } from '../stores/auth-store';
 
 type Provider = 'apple' | 'google';
 
 export function LoginGlobalScreen() {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
+  const { login } = useAuth();
+
+  useEffect(() => {
+    try {
+      GoogleSignin.configure();
+    } catch (err) {
+      console.warn('Failed to configure Google Sign-In:', err);
+    }
+  }, []);
 
   const handleProviderPress = async (provider: Provider) => {
     if (pendingProvider) return;
     setPendingProvider(provider);
-    Alert.alert(
-      'Sign in unavailable',
-      'Apple and Google sign-in native SDK wiring will be added in feature/global-auth.',
-    );
-    setPendingProvider(null);
+    try {
+      if (provider === 'apple') {
+        const { AppleAuthModule } = NativeModules;
+        if (!AppleAuthModule) {
+          throw new Error('Apple Sign-In is only supported on iOS devices.');
+        }
+        const res = await AppleAuthModule.login();
+        const authRes = await appleLogin({
+          identityToken: res.identityToken,
+          authorizationCode: res.authorizationCode,
+          fullName: res.fullName,
+        });
+        login(authRes.accessToken, authRes.refreshToken);
+      } else {
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken || (userInfo as any).idToken;
+        if (!idToken) {
+          throw new Error('Google Sign-In failed: No ID token returned.');
+        }
+        const authRes = await googleLogin(idToken);
+        login(authRes.accessToken, authRes.refreshToken);
+      }
+    } catch (err: any) {
+      // Don't show alert if user cancelled explicitly
+      const isCancelled = 
+        err.code === 'SIGN_IN_CANCELLED' || 
+        err.message === 'Sign in cancelled' ||
+        err.message?.includes('cancel');
+      
+      if (!isCancelled) {
+        Alert.alert('Sign In Failed', err.message || String(err));
+      }
+    } finally {
+      setPendingProvider(null);
+    }
   };
 
   return (
@@ -62,7 +105,7 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.12)', // equivalent to AUTH_COLORS.inputBorder if strong not exposed or custom
+    borderColor: 'rgba(59,130,246,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
