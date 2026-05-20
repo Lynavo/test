@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { glass, elevation } from '@syncflow/design-tokens';
 import syncflowLogo from '@renderer/assets/syncflow-mark-transparent.png';
 import { useAppStore, type AppView } from '@renderer/stores/app-store';
+import { getProductName } from '../../../shared/market';
 
 const navItems: { key: AppView; labelKey: string; icon: typeof LayoutDashboard }[] = [
   { key: 'dashboard', labelKey: 'layout.nav.dashboard', icon: LayoutDashboard },
@@ -38,12 +39,12 @@ export function Sidebar() {
       <div className="flex items-center gap-3 px-5 py-5" style={dragRegionStyle}>
         <img
           src={syncflowLogo}
-          alt="Vivi Drop"
+          alt={getProductName()}
           draggable={false}
           className="h-9 w-9 object-contain"
         />
         <span className="text-base font-bold" style={{ color: '#1a2a3a' }}>
-          Vivi Drop
+          {getProductName()}
         </span>
       </div>
 

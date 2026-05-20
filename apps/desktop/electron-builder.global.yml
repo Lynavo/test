@@ -1,0 +1,67 @@
+appId: com.vividrop.desktop.global
+productName: SyncFlow
+mac:
+  artifactName: SyncFlow-${version}-${arch}.${ext}
+  target:
+    - dmg
+    - zip
+    - mas
+  category: public.app-category.utilities
+  icon: resources/icon.icns
+  sign: ./scripts/mac-sign.cjs
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
+  binaries:
+    - Contents/Resources/syncflow-sidecar
+  extraResources:
+    - from: resources/syncflow-sidecar
+      to: syncflow-sidecar
+dmg:
+  backgroundColor: '#f5f7fb'
+  iconSize: 128
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 150
+      y: 210
+      type: file
+    - x: 390
+      y: 210
+      type: link
+      path: /Applications
+mas:
+  extendInfo:
+    ITSAppUsesNonExemptEncryption: false
+  entitlements: resources/entitlements.mas.plist
+  entitlementsInherit: resources/entitlements.mas.inherit.plist
+  provisioningProfile: resources/embedded.provisionprofile
+  notarize: null
+win:
+  artifactName: SyncFlow-${version}-${arch}.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  executableName: SyncFlow
+  extraResources:
+    - from: resources
+      filter:
+        - syncflow-sidecar.exe
+        - dns-sd.exe
+        - dnssd.dll
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: SyncFlow
+  include: resources/installer.nsh
+directories:
+  output: release
+  buildResources: resources

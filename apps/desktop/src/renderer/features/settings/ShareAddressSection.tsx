@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
+import { getProductName } from '../../../shared/market';
 
 const MAC_SHARING_GUIDE_URL =
   'https://support.apple.com/guide/mac-help/set-up-file-sharing-on-mac-mh17131/mac';
@@ -29,7 +30,7 @@ export function ShareAddressSection() {
   const hostName = window.electronAPI?.platform.getHostName?.() ?? '';
 
   const effectiveStatus = validatingShare ? 'validating' : (shareStatusInfo.status ?? shareStatus);
-  const effectiveShareName = shareStatusInfo.shareName || shareName || 'Vivi Drop';
+  const effectiveShareName = shareStatusInfo.shareName || shareName || getProductName();
   const recommendedShareAddress = `\\\\${hostName || t('settings.shareAddress.recommendedHost')}\\${effectiveShareName}`;
   const effectiveShareAddress = shareAddress || recommendedShareAddress;
 

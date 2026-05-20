@@ -7,6 +7,7 @@ import { SidecarManager } from './sidecar-manager';
 import { checkForUpdatesOnStartup } from './startup-update-check';
 import { WsBridge } from './ws-bridge';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
+import { getProductName } from '../shared/market';
 
 // Prevent crash on broken pipe (sidecar stdout/stderr)
 process.on('uncaughtException', (err) => {
@@ -17,7 +18,7 @@ process.on('uncaughtException', (err) => {
 let mainWindow: BrowserWindow | null = null;
 
 if (process.platform === 'darwin') {
-  app.setName('Vivi Drop');
+  app.setName(getProductName());
 }
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
@@ -51,7 +52,7 @@ sidecar.on('state', (state: SidecarRuntimeState) => {
 
 export async function createMainWindow() {
   mainWindow = new BrowserWindow({
-    title: 'Vivi Drop',
+    title: getProductName(),
     width: 1440,
     height: 960,
     minWidth: 1200,
