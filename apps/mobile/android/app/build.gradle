@@ -103,12 +103,22 @@ android {
 
     namespace "com.vividrop.mobile.china"
     defaultConfig {
-        applicationId "com.vividrop.mobile.china"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10
         versionName "1.0.1"
         missingDimensionStrategy "store", "play"
+    }
+    flavorDimensions "market"
+    productFlavors {
+        cn {
+            dimension "market"
+            applicationId "com.vividrop.mobile.china"
+        }
+        global {
+            dimension "market"
+            applicationId "com.vividrop.mobile.global"
+        }
     }
     signingConfigs {
         debug {
@@ -150,8 +160,8 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation(project(":react-native-vision-camera"))
     implementation("androidx.core:core:1.16.0")
-    implementation("com.alipay.sdk:alipaysdk-android:15.8.41")
-    implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
+    cnImplementation "com.alipay.sdk:alipaysdk-android:15.8.41"
+    cnImplementation "com.tencent.mm.opensdk:wechat-sdk-android:6.8.34"
     testImplementation("junit:junit:4.13.2")
 
     if (hermesEnabled.toBoolean()) {
