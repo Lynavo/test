@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { marketConfig } from '../markets';
+
 // ---------------------------------------------------------------------------
 // Backend configuration
 // ---------------------------------------------------------------------------
@@ -27,9 +29,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 //       so each developer's local override stays out of git automatically.
 // ============================================================================
 
-export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
-export const PROD_BASE_URL = 'https://api.vividrop.cn';
-export const APP_REVIEW_PHONE = '17000000002';
+export const PROD_BASE_URL = marketConfig.apiBaseUrl;
+export const REVIEW_API_BASE_URL = marketConfig.reviewApiBaseUrl;
+export const APP_REVIEW_PHONE = marketConfig.appReviewPhone;
 
 // Default backend for normal debug sessions. Use setDebugBaseUrlOverride() for
 // temporary per-device overrides without changing this shared default.
@@ -154,7 +156,7 @@ function getBuiltInBaseUrl(): string {
       _warnedRealDeviceLoopback = true;
       console.warn(
         `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}". ` +
-          `Call setDebugBaseUrlOverride('http://<host>') to point this dev build at another backend.`,
+        `Call setDebugBaseUrlOverride('http://<host>') to point this dev build at another backend.`,
       );
     }
     return DEV_API_BASE_URL;
