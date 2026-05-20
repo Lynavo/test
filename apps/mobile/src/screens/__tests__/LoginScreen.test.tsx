@@ -67,10 +67,21 @@ jest.mock('../../stores/auth-store', () => ({
   useAuth: () => mockAuth,
 }));
 
+let mockIsGlobal = false;
+jest.mock('../../markets', () => {
+  const actual = jest.requireActual('../../markets');
+  return {
+    ...actual,
+    isGlobalMarket: () => mockIsGlobal,
+  };
+});
+
 const mockSendSmsCode = jest.fn();
+const mockSendEmailCode = jest.fn();
 
 jest.mock('../../services/auth-service', () => ({
   sendSmsCode: (phone: string) => mockSendSmsCode(phone),
+  sendEmailCode: (email: string) => mockSendEmailCode(email),
 }));
 
 import i18n from '../../i18n';
@@ -104,13 +115,12 @@ describe('LoginScreen', () => {
   beforeAll(async () => {
     await i18n.changeLanguage('zh-Hant');
   });
-
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth.signedOutTransition = null;
+    mockIsGlobal = false;
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
-
   afterEach(() => {
     jest.restoreAllMocks();
   });
@@ -164,7 +174,6 @@ describe('LoginScreen', () => {
 
     expect(collectBackgroundColors(toJSON())).not.toContain('#60c4f0');
   });
-
   it('lets iOS center the phone input without a forced line height', () => {
     const { getByPlaceholderText } = render(<LoginScreen />);
 
@@ -175,5 +184,42 @@ describe('LoginScreen', () => {
     expect(phoneInputStyle.height).toBe(48);
     expect(phoneInputStyle.paddingVertical).toBe(0);
     expect(phoneInputStyle.lineHeight).toBeUndefined();
+  });
+
+  describe('Global market email login', () => {
+    beforeEach(() => {
+      mockIsGlobal = true;
+    });
+
+    it('submits email and navigates to verify screen on success', async () => {
+      mockSendEmailCode.mockResolvedValueOnce(undefined);
+
+      const { getByPlaceholderText, getByText, getByRole } = render(
+        <LoginScreen />,
+      );
+
+      // In global market, placeholder should be email placeholder
+      const emailInput = getByPlaceholderText('請輸入電子郵件');
+      fireEvent.changeText(emailInput, 'test@example.com');
+      fireEvent.press(getByRole('checkbox'));
+      fireEvent.press(getByText('取得驗證碼'));
+
+      await waitFor(() => {
+        expect(mockSendEmailCode).toHaveBeenCalledWith('test@example.com');
+        expect(mockNavigate).toHaveBeenCalledWith('SmsVerify', {
+          email: 'test@example.com',
+        });
+      });
+    });
+
+    it('shows email format error if invalid email is entered', async () => {
+      const { getByPlaceholderText, getByText } = render(<LoginScreen />);
+      const emailInput = getByPlaceholderText('請輸入電子郵件');
+            fireEvent.changeText(emailInput, 'invalid-email');
+      fireEvent(emailInput, 'blur');
+      await waitFor(() => {
+        expect(getByText('請輸入有效的電子郵件地址')).toBeTruthy();
+      });
+    });
   });
 });

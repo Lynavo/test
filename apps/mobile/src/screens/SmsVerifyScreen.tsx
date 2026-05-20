@@ -26,7 +26,7 @@ import {
   authTextScalingProps,
 } from '../components/auth/authPlatformStyles';
 import { maskPhone } from '../utils/phone-validation';
-import { smsLogin, sendSmsCode } from '../services/auth-service';
+import { smsLogin, sendSmsCode, emailLogin, sendEmailCode } from '../services/auth-service';
 import { ApiError, ERROR_CODE } from '../services/api';
 import { useAuth } from '../stores/auth-store';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +47,8 @@ const COUNTDOWN_SECONDS = 60;
 export function SmsVerifyScreen() {
   const navigation = useNavigation<SmsVerifyNavProp>();
   const route = useRoute<SmsVerifyRouteProp>();
-  const { phone, authBaseUrl } = route.params;
+  const { phone, email, authBaseUrl } = route.params;
+  const isGlobal = !!email;
   const auth = useAuth();
   const { t } = useTranslation();
   const windowWidth = Dimensions.get('window').width;
@@ -157,7 +158,6 @@ export function SmsVerifyScreen() {
   // -----------------------------------------------------------------------
   // Submit code
   // -----------------------------------------------------------------------
-
   const submitCode = useCallback(
     async (fullCode: string) => {
       setVerifying(true);
@@ -165,11 +165,9 @@ export function SmsVerifyScreen() {
       setErrorMsg(null);
 
       try {
-        const result = await smsLogin(phone, fullCode, authBaseUrl);
-        // auth.login flips isLoggedIn=true → RootNavigator unmounts the
-        // UnauthStack and mounts AuthedStack, which picks the right initial
-        // route (DeviceDiscovery / SyncActivity / Subscription) once the
-        // profile auto-loads. No imperative navigation needed here.
+        const result = isGlobal
+          ? await emailLogin(email!, fullCode)
+          : await smsLogin(phone!, fullCode, authBaseUrl);
         auth.login(result.accessToken, result.refreshToken);
         setVerifying(false);
       } catch (err) {
@@ -178,6 +176,7 @@ export function SmsVerifyScreen() {
         if (err instanceof ApiError) {
           switch (err.code) {
             case ERROR_CODE.CODE_WRONG:
+            case ERROR_CODE.EMAIL_CODE_WRONG:
               setError(true);
               setErrorMsg(t('errors.smsCodeIncorrect'));
               triggerShake();
@@ -186,6 +185,7 @@ export function SmsVerifyScreen() {
               setTimeout(() => codeInputRef.current?.focus(), 120);
               break;
             case ERROR_CODE.CODE_EXPIRED:
+            case ERROR_CODE.EMAIL_CODE_EXPIRED:
               setError(true);
               setErrorMsg(t('errors.smsCodeExpired'));
               setCode('');
@@ -213,9 +213,8 @@ export function SmsVerifyScreen() {
         }
       }
     },
-    [phone, authBaseUrl, auth, triggerShake],
+    [isGlobal, email, phone, authBaseUrl, auth, triggerShake, t],
   );
-
   // -----------------------------------------------------------------------
   // Handle digit input
   // -----------------------------------------------------------------------
@@ -246,7 +245,11 @@ export function SmsVerifyScreen() {
     setErrorMsg(null);
 
     try {
-      await sendSmsCode(phone, authBaseUrl);
+      if (isGlobal) {
+        await sendEmailCode(email!);
+      } else {
+        await sendSmsCode(phone!, authBaseUrl);
+      }
       startCountdown();
       setCode('');
       setTimeout(() => codeInputRef.current?.focus(), 120);
@@ -265,7 +268,7 @@ export function SmsVerifyScreen() {
     } finally {
       setResending(false);
     }
-  }, [countdown, resending, phone, authBaseUrl, startCountdown]);
+  }, [countdown, resending, isGlobal, email, phone, authBaseUrl, startCountdown, t]);
 
   // -----------------------------------------------------------------------
   // Render
@@ -273,15 +276,17 @@ export function SmsVerifyScreen() {
 
   return (
     <AuthScreenShell
-      subtitle={t('auth.smsVerify.subtitlePattern', {
-        phone: maskPhone(phone),
-      })}
+      subtitle={
+        isGlobal
+          ? t('auth.smsVerify.subtitleEmailPattern', { email })
+          : t('auth.smsVerify.subtitlePattern', { phone: maskPhone(phone || '') })
+      }
       onBack={() => navigation.goBack()}
       contentStyle={styles.content}
     >
       <View style={styles.card}>
         <Text {...authTextScalingProps} style={styles.prompt}>
-          {t('auth.smsVerify.prompt')}
+          {isGlobal ? t('auth.smsVerify.promptEmail') : t('auth.smsVerify.prompt')}
         </Text>
 
         <TextInput

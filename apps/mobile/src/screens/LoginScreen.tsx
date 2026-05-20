@@ -27,9 +27,10 @@ import {
 } from '../components/auth/authPlatformStyles';
 import { useAuth } from '../stores/auth-store';
 import { isValidChinaPhone } from '../utils/phone-validation';
-import { sendSmsCode } from '../services/auth-service';
+import { sendSmsCode, sendEmailCode } from '../services/auth-service';
 import { ApiError, ERROR_CODE } from '../services/api';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
+import { isGlobalMarket } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -45,11 +46,13 @@ export function LoginScreen() {
   const navigation = useNavigation<LoginNavProp>();
   const { t } = useTranslation();
   const auth = useAuth();
-
+  const isGlobal = isGlobalMarket();
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [sending, setSending] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [hasTouched, setHasTouched] = useState(false);
 
   // -----------------------------------------------------------------------
@@ -57,7 +60,11 @@ export function LoginScreen() {
   // -----------------------------------------------------------------------
 
   const phoneValid = isValidChinaPhone(phone);
-  const buttonEnabled = phoneValid && agreed && !sending;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailValid = emailRegex.test(email);
+  const buttonEnabled = isGlobal
+    ? emailValid && agreed && !sending
+    : phoneValid && agreed && !sending;
 
   // -----------------------------------------------------------------------
   // Handlers
@@ -78,13 +85,31 @@ export function LoginScreen() {
     } else {
       setPhoneError(null);
     }
-  }, []);
+  }, [t]);
 
   const handlePhoneBlur = useCallback(() => {
     if (hasTouched && phone.length > 0 && !isValidChinaPhone(phone)) {
       setPhoneError(t('auth.login.phoneInvalidSimplified'));
     }
-  }, [hasTouched, phone]);
+  }, [hasTouched, phone, t]);
+
+  const handleEmailChange = useCallback((value: string) => {
+    const trimmed = value.trim();
+    setEmail(trimmed);
+    setHasTouched(true);
+
+    if (trimmed.length > 0 && !emailRegex.test(trimmed)) {
+      setEmailError(t('auth.login.emailInvalid'));
+    } else {
+      setEmailError(null);
+    }
+  }, [t]);
+
+  const handleEmailBlur = useCallback(() => {
+    if (hasTouched && email.length > 0 && !emailRegex.test(email)) {
+      setEmailError(t('auth.login.emailInvalid'));
+    }
+  }, [hasTouched, email, t]);
 
   const handleSendCode = useCallback(async () => {
     if (!buttonEnabled) return;
@@ -92,11 +117,18 @@ export function LoginScreen() {
     Keyboard.dismiss();
     setSending(true);
     setPhoneError(null);
+    setEmailError(null);
 
     try {
-      const { authBaseUrl } = await sendSmsCode(phone);
-      setSending(false);
-      navigation.navigate('SmsVerify', { phone, authBaseUrl });
+      if (isGlobal) {
+        await sendEmailCode(email);
+        setSending(false);
+        navigation.navigate('SmsVerify', { email });
+      } else {
+        const { authBaseUrl } = await sendSmsCode(phone);
+        setSending(false);
+        navigation.navigate('SmsVerify', { phone, authBaseUrl });
+      }
     } catch (err) {
       setSending(false);
 
@@ -105,7 +137,11 @@ export function LoginScreen() {
           case ERROR_CODE.PHONE_FORMAT_INVALID:
             setPhoneError(t('auth.login.phoneInvalidTraditional'));
             break;
+          case ERROR_CODE.EMAIL_FORMAT_INVALID:
+            setEmailError(t('auth.login.emailInvalid'));
+            break;
           case ERROR_CODE.SMS_TOO_FREQUENT:
+          case ERROR_CODE.RATE_LIMITED:
             Alert.alert(
               t('errors.authRequestTooFrequent'),
               t('errors.authTryLater'),
@@ -115,12 +151,6 @@ export function LoginScreen() {
             Alert.alert(
               t('errors.authSendFailed'),
               t('errors.authSendFailedRetry'),
-            );
-            break;
-          case ERROR_CODE.RATE_LIMITED:
-            Alert.alert(
-              t('errors.authRequestTooFrequent'),
-              t('errors.authTryLater'),
             );
             break;
           default:
@@ -136,7 +166,7 @@ export function LoginScreen() {
         );
       }
     }
-  }, [buttonEnabled, phone, navigation]);
+  }, [buttonEnabled, isGlobal, email, phone, navigation, t]);
 
   const handleOpenUserAgreement = useCallback(() => {
     Linking.openURL(USER_AGREEMENT_URL);
@@ -145,13 +175,12 @@ export function LoginScreen() {
   const handleOpenPrivacyPolicy = useCallback(() => {
     Linking.openURL(PRIVACY_POLICY_URL);
   }, []);
-
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
 
   return (
-    <AuthScreenShell subtitle={t('auth.login.subtitle')}>
+    <AuthScreenShell subtitle={isGlobal ? t('auth.login.subtitleEmail') : t('auth.login.subtitle')}>
       <View style={styles.pageContent}>
         <View style={styles.card}>
           {auth.signedOutTransition === 'session_replaced' ? (
@@ -170,38 +199,52 @@ export function LoginScreen() {
             <View
               style={[
                 styles.phoneField,
-                phoneError ? styles.phoneFieldError : null,
+                (isGlobal ? emailError : phoneError) ? styles.phoneFieldError : null,
               ]}
             >
-              <View style={styles.phonePrefix}>
-                <Icon
-                  name="phone-portrait-outline"
-                  size={16}
-                  color={AUTH_COLORS.textMuted}
-                />
-                <Text {...authTextScalingProps} style={styles.prefixText}>
-                  +86
-                </Text>
-              </View>
-              <View style={styles.divider} />
+              {isGlobal ? (
+                <View style={[styles.phonePrefix, { marginRight: 8 }]}>
+                  <Icon
+                    name="mail-outline"
+                    size={16}
+                    color={AUTH_COLORS.textMuted}
+                  />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.phonePrefix}>
+                    <Icon
+                      name="phone-portrait-outline"
+                      size={16}
+                      color={AUTH_COLORS.textMuted}
+                    />
+                    <Text {...authTextScalingProps} style={styles.prefixText}>
+                      +86
+                    </Text>
+                  </View>
+                  <View style={styles.divider} />
+                </>
+              )}
               <TextInput
                 {...authTextScalingProps}
                 style={styles.phoneInput}
-                value={phone}
-                onChangeText={handlePhoneChange}
-                onBlur={handlePhoneBlur}
-                keyboardType="phone-pad"
-                maxLength={11}
-                placeholder={t('auth.login.phonePlaceholder')}
+                value={isGlobal ? email : phone}
+                onChangeText={isGlobal ? handleEmailChange : handlePhoneChange}
+                onBlur={isGlobal ? handleEmailBlur : handlePhoneBlur}
+                keyboardType={isGlobal ? 'email-address' : 'phone-pad'}
+                maxLength={isGlobal ? 128 : 11}
+                placeholder={isGlobal ? t('auth.login.emailPlaceholder') : t('auth.login.phonePlaceholder')}
                 placeholderTextColor={AUTH_COLORS.textFaint}
                 editable={!sending}
                 returnKeyType="done"
                 selectionColor={AUTH_COLORS.primary}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
-            {phoneError && (
+            {(isGlobal ? emailError : phoneError) && (
               <Text {...authTextScalingProps} style={styles.phoneErrorText}>
-                {phoneError}
+                {isGlobal ? emailError : phoneError}
               </Text>
             )}
           </View>
