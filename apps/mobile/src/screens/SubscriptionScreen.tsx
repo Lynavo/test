@@ -2036,26 +2036,9 @@ export function SubscriptionScreen() {
           <Text style={styles.heroSubtitle}>
             {t('subscription.hero.subtitle')}
           </Text>
-          <View style={styles.heroBadgeRow}>
-            {subscriptionDisplay.kind !== 'unknown' ? (
-              <StatusBadge displayState={subscriptionDisplay} t={t} />
-            ) : null}
-            {isGiftCardEnabled && (
-              <TouchableOpacity
-                onPress={() => {
-                  void handleOpenGiftCardPrompt();
-                }}
-                accessibilityLabel={t('settings.giftCard.action')}
-                activeOpacity={0.72}
-                style={styles.giftCardHeroButton}
-              >
-                <Icon name="gift-outline" size={14} color={DARK} />
-                <Text style={styles.giftCardHeroButtonText}>
-                  {t('settings.giftCard.action')}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          {subscriptionDisplay.kind !== 'unknown' ? (
+            <StatusBadge displayState={subscriptionDisplay} t={t} />
+          ) : null}
         </View>
 
         <View style={styles.featureCard}>
@@ -2449,33 +2432,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DARK,
     textDecorationLine: 'underline',
-  },
-  heroBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  giftCardHeroButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(32, 32, 34, 0.1)',
-    shadowColor: DARK,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  giftCardHeroButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: DARK,
   },
   bottomSpacer: {
     height: 20,
