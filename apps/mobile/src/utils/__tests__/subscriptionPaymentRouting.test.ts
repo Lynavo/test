@@ -1,6 +1,15 @@
 import { resolveSubscriptionPaymentRoute } from '../subscriptionPaymentRouting';
+import { isGlobalMarket } from '../../markets';
+
+jest.mock('../../markets', () => ({
+  isGlobalMarket: jest.fn(() => false),
+}));
 
 describe('resolveSubscriptionPaymentRoute', () => {
+  beforeEach(() => {
+    jest.mocked(isGlobalMarket).mockReturnValue(false);
+  });
+
   it('routes iOS to Apple in-app purchase', () => {
     expect(
       resolveSubscriptionPaymentRoute({
@@ -58,6 +67,22 @@ describe('resolveSubscriptionPaymentRoute', () => {
       useIapProducts: false,
       restorePurchases: false,
       walletMethods: ['wechat', 'alipay'],
+    });
+  });
+
+  it('routes Android users in Global market to Google Play billing without wallets', () => {
+    jest.mocked(isGlobalMarket).mockReturnValue(true);
+    expect(
+      resolveSubscriptionPaymentRoute({
+        os: 'android',
+        countryCode: 'US',
+      }),
+    ).toEqual({
+      kind: 'google_play_billing',
+      catalogPlatform: 'android',
+      useIapProducts: true,
+      restorePurchases: false,
+      walletMethods: [],
     });
   });
 });

@@ -1,4 +1,5 @@
 import type { SubscriptionPlanPlatform } from '@syncflow/contracts';
+import { isGlobalMarket } from '../markets';
 
 export type MainlandPaymentMethod = 'wechat' | 'alipay';
 
@@ -34,6 +35,16 @@ export function resolveSubscriptionPaymentRoute({
   }
 
   if (os === 'android') {
+    if (isGlobalMarket()) {
+      return {
+        kind: 'google_play_billing',
+        catalogPlatform: 'android',
+        useIapProducts: true,
+        restorePurchases: false,
+        walletMethods: [],
+      };
+    }
+
     return {
       kind: 'android_cn_wallets',
       catalogPlatform: 'android',

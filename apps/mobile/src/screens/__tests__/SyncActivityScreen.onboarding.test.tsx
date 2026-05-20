@@ -240,6 +240,9 @@ describe('SyncActivityScreen onboarding', () => {
 
     await waitFor(() => {
       expect(mockMarkSyncActivityTourSeen).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
       expect(screen.queryByText('手動同步')).toBeNull();
     });
   });

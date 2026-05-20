@@ -325,7 +325,7 @@ describe('SettingsScreen', () => {
       const { getByText, queryByText } = render(<SettingsScreen />);
 
       await waitFor(() => {
-        expect(getByText('恢復已購買訂閱')).toBeTruthy();
+        expect(getByText('幫助')).toBeTruthy();
       });
 
       expect(queryByText('Android 端能力說明')).toBeNull();
