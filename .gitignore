@@ -29,6 +29,9 @@ AuthKey_*.p8
 .vscode/
 .claude/
 .gemini/
+.antigravitycli/
+.agent/
+
 
 # Locale resource files must remain trackable even if a developer has a broad
 # global settings.json ignore rule.

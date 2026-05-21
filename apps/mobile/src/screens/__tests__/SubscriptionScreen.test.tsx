@@ -1201,7 +1201,7 @@ describe('resolveMainlandPaymentAlertKey', () => {
           code: 'MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED',
         }),
       ),
-    ).toBe('subscription.payment.walletUnavailable');
+    ).toBe('subscription.payment.wechatNotInstalled');
   });
 
   test('maps server provider-disabled errors to update guidance', () => {
