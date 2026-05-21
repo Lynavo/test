@@ -28,7 +28,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ============================================================================
 
 export const REVIEW_API_BASE_URL = 'https://review-api.vividrop.cn';
-export const PROD_BASE_URL = 'https://api.vividrop.cn';
+// FIXME: Temporary review server binding for Alipay sandbox testing.
+// Revert to 'https://api.vividrop.cn' before production release!
+export const PROD_BASE_URL = 'https://review-api.vividrop.cn';
 export const APP_REVIEW_PHONE = '17000000002';
 
 // Default backend for normal debug sessions. Use setDebugBaseUrlOverride() for

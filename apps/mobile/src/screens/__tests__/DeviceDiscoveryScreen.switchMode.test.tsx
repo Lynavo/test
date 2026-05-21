@@ -2,6 +2,15 @@ import React from 'react';
 import { Alert, NativeModules, NativeEventEmitter } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn().mockResolvedValue(null),
+    setItem: jest.fn().mockResolvedValue(null),
+    removeItem: jest.fn().mockResolvedValue(null),
+  },
+}));
+
 // IMPORTANT: must be hoisted above the i18n import below — i18n.init reads
 // RNLocalize.getLocales() synchronously to pick the initial language.
 jest.mock('react-native-localize', () => ({

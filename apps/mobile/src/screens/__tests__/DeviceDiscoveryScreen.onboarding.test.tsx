@@ -2,6 +2,15 @@ import React from 'react';
 import { NativeEventEmitter, NativeModules } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getItem: jest.fn().mockResolvedValue(null),
+    setItem: jest.fn().mockResolvedValue(null),
+    removeItem: jest.fn().mockResolvedValue(null),
+  },
+}));
+
 const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 const mockMarkUnconnectedGuideSeen = jest.fn().mockResolvedValue(undefined);

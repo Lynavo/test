@@ -325,9 +325,10 @@ describe('SettingsScreen', () => {
       const { getByText, queryByText } = render(<SettingsScreen />);
 
       await waitFor(() => {
-        expect(getByText('恢復已購買訂閱')).toBeTruthy();
+        expect(getByText('訂閱服務')).toBeTruthy();
       });
 
+      expect(queryByText('恢復已購買訂閱')).toBeNull();
       expect(queryByText('Android 端能力說明')).toBeNull();
       expect(queryByText(/目前版本已提供 Android 殼層/)).toBeNull();
     } finally {

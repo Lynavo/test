@@ -109,7 +109,7 @@ describe('review server routing config', () => {
 
   test('keeps a stored production session URL when production is the dev default', async () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(
-      'https://api.vividrop.cn',
+      PROD_BASE_URL,
     );
     (AsyncStorage.removeItem as jest.Mock).mockClear();
 

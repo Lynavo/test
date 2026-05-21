@@ -1168,8 +1168,8 @@ export function SyncActivityScreen() {
     }
   }, [t, startAutoUploadPreparing, clearAutoUploadPreparing]);
 
-  const handleDismissSyncActivityTour = useCallback(async () => {
-    await markSyncActivityTourSeen();
+  const handleDismissSyncActivityTour = useCallback(() => {
+    void markSyncActivityTourSeen();
     setShowSyncActivityTour(false);
   }, []);
 
