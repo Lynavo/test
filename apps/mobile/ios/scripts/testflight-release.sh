@@ -25,7 +25,17 @@ IOS_EXPORT_SIGNING_CERTIFICATE="${IOS_EXPORT_SIGNING_CERTIFICATE:-Apple Distribu
 # App Store Connect API key for Shenzhen Kaiyun (GKN7JQNCMC) — altool upload path.
 APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-HY8CAHGPW9}"
 APPLE_API_ISSUER="${APPLE_API_ISSUER:-54cad458-4184-4fc6-a1c7-cb4b0c6ded0e}"
-APPLE_API_KEY="${APPLE_API_KEY:-${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8}"
+if [[ -z "${APPLE_API_KEY:-}" ]]; then
+  if [[ -f "${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8" ]]; then
+    APPLE_API_KEY="${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8"
+  elif [[ -f "${REPO_ROOT}/AuthKey_China_${APPLE_API_KEY_ID}.p8" ]]; then
+    APPLE_API_KEY="${REPO_ROOT}/AuthKey_China_${APPLE_API_KEY_ID}.p8"
+  elif [[ -f "${REPO_ROOT}/AuthKey_Global_${APPLE_API_KEY_ID}.p8" ]]; then
+    APPLE_API_KEY="${REPO_ROOT}/AuthKey_Global_${APPLE_API_KEY_ID}.p8"
+  else
+    APPLE_API_KEY="${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8"
+  fi
+fi
 
 PROJECT_FILE="${IOS_DIR}/SyncFlowMobile.xcodeproj/project.pbxproj"
 MOBILE_CONFIG_FILE="${MOBILE_CONFIG_FILE:-${REPO_ROOT}/apps/mobile/src/services/config.ts}"
