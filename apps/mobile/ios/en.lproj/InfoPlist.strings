@@ -9,3 +9,7 @@
 
 /* Photo Library Usage Description */
 "NSPhotoLibraryUsageDescription" = "Vivi Drop needs access to your photo library to sync media files with your computer.";
+
+/* Bundle Display Name */
+"CFBundleDisplayName" = "Vivi Drop";
+"CFBundleName" = "Vivi Drop";
