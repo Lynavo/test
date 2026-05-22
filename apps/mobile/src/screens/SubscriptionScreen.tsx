@@ -175,9 +175,13 @@ export function resolveMainlandPaymentAlertKey(error: unknown): string {
   const signal = `${code ?? ''} ${message}`;
 
   if (
+    signal.includes('MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED')
+  ) {
+    return 'subscription.payment.wechatNotInstalled';
+  }
+  if (
     signal.includes('MAINLAND_PAYMENT_UNAVAILABLE') ||
     signal.includes('MAINLAND_PAYMENT_ACTIVITY_UNAVAILABLE') ||
-    signal.includes('MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED') ||
     code === ERROR_CODE.MAINLAND_PAYMENT_PROVIDER_NOT_CONFIGURED
   ) {
     return 'subscription.payment.walletUnavailable';

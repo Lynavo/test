@@ -96,6 +96,7 @@
     "processingTitle": "正在支付",
     "processingBody": "請在支付 App 內完成付款，返回後會自動更新訂閱狀態。",
     "walletUnavailable": "目前版本尚未接入支付模組，請更新 App 後再試。",
+    "wechatNotInstalled": "未安裝微信，請安裝微信後再試。",
     "walletCancelled": "支付已取消，可重新選擇支付方式後再試。",
     "walletPending": "支付仍在確認中，請稍候再重新整理訂閱狀態。",
     "walletConfigError": "支付配置異常，請更新 App 或聯絡客服。",
