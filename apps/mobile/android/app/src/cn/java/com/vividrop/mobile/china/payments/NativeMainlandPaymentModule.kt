@@ -75,9 +75,14 @@ class NativeMainlandPaymentModule(
 
     thread(name = "NativeMainlandPaymentAlipay", isDaemon = true) {
       try {
-        EnvUtils.setEnv(if (sandbox) EnvUtils.EnvEnum.SANDBOX else EnvUtils.EnvEnum.ONLINE)
+        Log.i(MODULE_NAME, "Launching Alipay payment. Sandbox: $sandbox, OrderInfo length: ${orderInfo.length}")
+        if (sandbox) {
+          Log.i(MODULE_NAME, "Setting Alipay EnvUtils to SANDBOX")
+          EnvUtils.setEnv(EnvUtils.EnvEnum.SANDBOX)
+        }
         @Suppress("UNCHECKED_CAST")
         val result = PayTask(activity).payV2(orderInfo, true) as Map<String, String>
+        Log.i(MODULE_NAME, "Alipay PayTask returned status: ${result["resultStatus"]}")
         val normalized = MainlandPaymentPrimitives.normalizeAlipayResult(result)
         if (normalized.success) {
           val payload = Arguments.createMap().apply {

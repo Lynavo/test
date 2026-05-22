@@ -14,7 +14,9 @@ export function LoginGlobalScreen() {
 
   useEffect(() => {
     try {
-      GoogleSignin.configure();
+      GoogleSignin.configure({
+        webClientId: '318131526906-jdsojdqh6057pn3fo5hhtgudht1bh6c8.apps.googleusercontent.com',
+      });
     } catch (err) {
       console.warn('Failed to configure Google Sign-In:', err);
     }
