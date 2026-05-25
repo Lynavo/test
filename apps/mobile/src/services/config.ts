@@ -35,7 +35,7 @@ export const APP_REVIEW_PHONE = marketConfig.appReviewPhone;
 
 // Default backend for normal debug sessions. Use setDebugBaseUrlOverride() for
 // temporary per-device overrides without changing this shared default.
-export const DEV_API_BASE_URL: string = PROD_BASE_URL;
+export const DEV_API_BASE_URL: string = 'https://review-api.vividrop.cn';
 
 const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
 const SESSION_BASE_URL_STORAGE_KEY = '@vividrop/auth/api_base_url';
