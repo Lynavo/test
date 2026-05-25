@@ -46,7 +46,6 @@ import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 
 export type RootStackParamList = {
   Login: undefined;
-  LoginEmail: undefined;
   SmsVerify: { phone?: string; email?: string; authBaseUrl?: string };
   DeviceDiscovery: { mode?: 'switch' } | undefined;
   CodeVerify: {
@@ -191,11 +190,7 @@ function UnauthStack({
         screenOptions={{ headerShown: false }}
       >
         {isGlobalMarket() ? (
-          <>
-            <Stack.Screen name="Login" component={LoginGlobalScreen} />
-            <Stack.Screen name="LoginEmail" component={LoginScreen} />
-            <Stack.Screen name="SmsVerify" component={SmsVerifyScreen} />
-          </>
+          <Stack.Screen name="Login" component={LoginGlobalScreen} />
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
