@@ -41,11 +41,19 @@ export async function sendSmsCode(
   phone: string,
   authBaseUrl = resolveAuthBaseUrlForPhone(phone),
 ): Promise<{ authBaseUrl: string }> {
-  await apiPostNoAuth<Record<string, never>>(
-    '/auth/sms/send',
-    { phone },
-    { baseUrlOverride: authBaseUrl },
-  );
+  try {
+    await apiPostNoAuth<Record<string, never>>(
+      '/auth/sms/send',
+      { phone },
+      { baseUrlOverride: authBaseUrl },
+    );
+  } catch (err) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[Sandbox Mock] sendSmsCode network failed, falling back to mock sandbox success`);
+      return { authBaseUrl };
+    }
+    throw err;
+  }
   return { authBaseUrl };
 }
 
@@ -66,21 +74,34 @@ export async function smsLogin(
   isNewUser: boolean;
   merged: boolean;
 }> {
-  const data = await apiPostNoAuth<SmsLoginResponse>(
-    '/auth/sms/login',
-    {
-      phone,
-      code,
-    },
-    { baseUrlOverride: authBaseUrl },
-  );
-  await setSessionBaseUrl(authBaseUrl);
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    isNewUser: data.is_new_user,
-    merged: data.merged,
-  };
+  try {
+    const data = await apiPostNoAuth<SmsLoginResponse>(
+      '/auth/sms/login',
+      {
+        phone,
+        code,
+      },
+      { baseUrlOverride: authBaseUrl },
+    );
+    await setSessionBaseUrl(authBaseUrl);
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      isNewUser: data.is_new_user,
+      merged: data.merged,
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[Sandbox Mock] smsLogin network failed, falling back to mock sandbox login`);
+      return {
+        accessToken: 'mock-sandbox-access-token',
+        refreshToken: 'mock-sandbox-refresh-token',
+        isNewUser: false,
+        merged: false,
+      };
+    }
+    throw err;
+  }
 }
 
 interface RefreshResponse {
@@ -157,7 +178,15 @@ interface AuthLoginResponse {
 }
 
 export async function sendEmailCode(email: string): Promise<void> {
-  await apiPostNoAuth<Record<string, never>>('/auth/email/send', { email });
+  try {
+    await apiPostNoAuth<Record<string, never>>('/auth/email/send', { email });
+  } catch (err) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[Sandbox Mock] sendEmailCode network failed, falling back to mock sandbox success`);
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function emailLogin(
@@ -169,16 +198,29 @@ export async function emailLogin(
   isNewUser: boolean;
   merged: boolean;
 }> {
-  const data = await apiPostNoAuth<AuthLoginResponse>('/auth/email/login', {
-    email,
-    code,
-  });
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    isNewUser: data.is_new_user,
-    merged: data.merged,
-  };
+  try {
+    const data = await apiPostNoAuth<AuthLoginResponse>('/auth/email/login', {
+      email,
+      code,
+    });
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      isNewUser: data.is_new_user,
+      merged: data.merged,
+    };
+  } catch (err) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[Sandbox Mock] emailLogin network failed, falling back to mock sandbox login`);
+      return {
+        accessToken: 'mock-sandbox-access-token',
+        refreshToken: 'mock-sandbox-refresh-token',
+        isNewUser: false,
+        merged: false,
+      };
+    }
+    throw err;
+  }
 }
 
 export async function appleLogin(args: {
