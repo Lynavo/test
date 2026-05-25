@@ -190,7 +190,10 @@ function UnauthStack({
         screenOptions={{ headerShown: false }}
       >
         {isGlobalMarket() ? (
-          <Stack.Screen name="Login" component={LoginGlobalScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginGlobalScreen} />
+            <Stack.Screen name="SmsVerify" component={SmsVerifyScreen} />
+          </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
