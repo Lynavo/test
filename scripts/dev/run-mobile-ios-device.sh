@@ -80,6 +80,15 @@ unset VSCODE_INSPECTOR_OPTIONS
 unset VSCODE_JS_DEBUG_BOOTLOADER
 unset VSCODE_DEBUGGING
 
+extra_args=()
+if [[ "${SYNCFLOW_MARKET:-}" == "global" ]]; then
+  extra_args+=(--scheme "SyncFlowMobileGlobal" --mode "DebugGlobal")
+elif [[ "${SYNCFLOW_MARKET:-}" == "cn" ]]; then
+  extra_args+=(--scheme "SyncFlowMobile" --mode "Debug")
+fi
+
 exec corepack pnpm --filter @syncflow/mobile exec react-native run-ios \
   --device "${device_id}" \
-  --no-packager
+  --no-packager \
+  "${extra_args[@]}" \
+  "$@"
