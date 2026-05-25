@@ -49,11 +49,11 @@ describe('review server routing config', () => {
     );
   });
 
-  test('routes normal phone numbers to the production API server by default', () => {
-    expect(resolveAuthBaseUrlForPhone('13312341234')).toBe(PROD_BASE_URL);
+  test('routes normal phone numbers to the review API server by default', () => {
+    expect(resolveAuthBaseUrlForPhone('13312341234')).toBe(DEV_API_BASE_URL);
   });
 
-  test('routes normal phone numbers to the production API server on Android dev builds by default', () => {
+  test('routes normal phone numbers to the review API server on Android dev builds by default', () => {
     jest.isolateModules(() => {
       Object.defineProperty(testGlobal, '__DEV__', {
         value: true,
@@ -66,7 +66,7 @@ describe('review server routing config', () => {
       const config = require('../config') as typeof import('../config');
 
       expect(config.resolveAuthBaseUrlForPhone('13312341234')).toBe(
-        config.PROD_BASE_URL,
+        config.DEV_API_BASE_URL,
       );
     });
   });
@@ -107,17 +107,17 @@ describe('review server routing config', () => {
     );
   });
 
-  test('keeps a stored production session URL when production is the dev default', async () => {
+  test('ignores stale production session URL when using the review API server', async () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(
-      PROD_BASE_URL,
+      'https://api.vividrop.cn',
     );
-    (AsyncStorage.removeItem as jest.Mock).mockClear();
 
     await loadSessionBaseUrl();
 
-    expect(getSessionBaseUrl()).toBe(PROD_BASE_URL);
-    expect(getBaseUrl()).toBe(DEV_API_BASE_URL);
-    expect(AsyncStorage.removeItem).not.toHaveBeenCalled();
+    expect(getSessionBaseUrl()).toBeNull();
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
+      '@vividrop/auth/api_base_url',
+    );
   });
 
   test('does not block the active session when session URL persistence fails', async () => {
