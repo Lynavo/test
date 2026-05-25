@@ -42,8 +42,8 @@ describe('LoginGlobalScreen', () => {
   it('shows Apple and Google login without phone login', () => {
     const { getByText, queryByText } = render(<LoginGlobalScreen />);
 
-    expect(getByText('Continue with Apple')).toBeTruthy();
-    expect(getByText('Continue with Google')).toBeTruthy();
+    expect(getByText('Sign in with Apple')).toBeTruthy();
+    expect(getByText('Sign in with Google')).toBeTruthy();
     expect(queryByText('+86')).toBeNull();
   });
 
@@ -56,14 +56,15 @@ describe('LoginGlobalScreen', () => {
     
     NativeModules.AppleAuthModule.login = jest.fn().mockReturnValue(pendingPromise);
 
-    const { getByText } = render(<LoginGlobalScreen />);
+    const { getByText, queryByText } = render(<LoginGlobalScreen />);
 
-    const appleButton = getByText('Continue with Apple');
+    const appleButton = getByText('Sign in with Apple');
     fireEvent.press(appleButton);
 
-    // Apple button and Google button should remain rendered
-    expect(getByText('Continue with Apple')).toBeTruthy();
-    expect(getByText('Continue with Google')).toBeTruthy();
+    // Apple button is loading (text is temporarily replaced by ActivityIndicator)
+    // Google button remains rendered (but disabled)
+    expect(queryByText('Sign in with Apple')).toBeNull();
+    expect(getByText('Sign in with Google')).toBeTruthy();
     
     // Resolve the promise to clean up
     resolveLogin({
