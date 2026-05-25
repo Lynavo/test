@@ -180,7 +180,10 @@ export function LoginScreen() {
   // -----------------------------------------------------------------------
 
   return (
-    <AuthScreenShell subtitle={isGlobal ? t('auth.login.subtitleEmail') : t('auth.login.subtitle')}>
+    <AuthScreenShell
+      subtitle={isGlobal ? t('auth.login.subtitleEmail') : t('auth.login.subtitle')}
+      onBack={isGlobal ? () => navigation.goBack() : undefined}
+    >
       <View style={styles.pageContent}>
         <View style={styles.card}>
           {auth.signedOutTransition === 'session_replaced' ? (

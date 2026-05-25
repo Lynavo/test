@@ -3,6 +3,16 @@ import { fireEvent, render } from '@testing-library/react-native';
 import { NativeModules } from 'react-native';
 import { LoginGlobalScreen } from '../LoginGlobalScreen';
 
+const mockNavigate = jest.fn();
+
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: mockNavigate,
+  }),
+}));
+
+jest.mock('@react-navigation/stack', () => ({}));
+
 jest.mock('@react-native-google-signin/google-signin', () => ({
   GoogleSignin: {
     configure: jest.fn(),
@@ -24,12 +34,18 @@ jest.mock('../../services/auth-service', () => ({
   googleLogin: jest.fn().mockResolvedValue({ accessToken: 'a', refreshToken: 'r' }),
 }));
 
+jest.mock('../../components/Icon', () => ({
+  Icon: ({ name }: { name: string }) => {
+    const { Text } = require('react-native');
+    return <Text>{name}</Text>;
+  },
+}));
+
 describe('LoginGlobalScreen', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     NativeModules.AppleAuthModule = {
       login: jest.fn().mockImplementation(() => {
-        // Return a promise that resolves but stays pending briefly if we want to test disabled states,
-        // or just a resolved promise.
         return Promise.resolve({
           identityToken: 'mock-apple-id-token',
           authorizationCode: 'mock-auth-code',
@@ -39,12 +55,22 @@ describe('LoginGlobalScreen', () => {
     };
   });
 
-  it('shows Apple and Google login without phone login', () => {
+  it('shows Apple, Google and Email login without phone login', () => {
     const { getByText, queryByText } = render(<LoginGlobalScreen />);
 
     expect(getByText('Sign in with Apple')).toBeTruthy();
     expect(getByText('Sign in with Google')).toBeTruthy();
+    expect(getByText('Sign in with Email')).toBeTruthy();
     expect(queryByText('+86')).toBeNull();
+  });
+
+  it('navigates to LoginEmail screen when Email button is pressed', () => {
+    const { getByText } = render(<LoginGlobalScreen />);
+
+    const emailButton = getByText('Sign in with Email');
+    fireEvent.press(emailButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith('LoginEmail');
   });
 
   it('keeps provider buttons disabled while provider login is pending', () => {

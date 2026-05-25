@@ -10,14 +10,19 @@ import {
   View,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import Svg, { Path } from 'react-native-svg';
 
 import { AUTH_COLORS, AuthScreenShell } from '../components/auth/AuthScreenShell';
 import { appleLogin, googleLogin } from '../services/auth-service';
 import { useAuth } from '../stores/auth-store';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
+import type { RootStackParamList } from '../navigation/RootNavigator';
+import { Icon } from '../components/Icon';
 
-type Provider = 'apple' | 'google';
+type Provider = 'apple' | 'google' | 'email';
+type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
 // ---------------------------------------------------------------------------
 // Native SVG Icons for premium branding
@@ -58,6 +63,7 @@ function GoogleIcon() {
 }
 
 export function LoginGlobalScreen() {
+  const navigation = useNavigation<LoginGlobalNavProp>();
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const { login } = useAuth();
 
@@ -71,7 +77,7 @@ export function LoginGlobalScreen() {
     }
   }, []);
 
-  const handleProviderPress = async (provider: Provider) => {
+  const handleProviderPress = async (provider: 'apple' | 'google') => {
     if (pendingProvider) return;
     setPendingProvider(provider);
     try {
@@ -111,6 +117,10 @@ export function LoginGlobalScreen() {
       setPendingProvider(null);
     }
   };
+
+  const handleOpenEmailLogin = useCallback(() => {
+    navigation.navigate('LoginEmail');
+  }, [navigation]);
 
   const handleOpenTerms = useCallback(() => {
     Linking.openURL(USER_AGREEMENT_URL);
@@ -166,6 +176,23 @@ export function LoginGlobalScreen() {
               <Text style={[styles.providerText, styles.googleText]}>Sign in with Google</Text>
             </View>
           )}
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={pendingProvider !== null}
+          onPress={handleOpenEmailLogin}
+          style={({ pressed }) => [
+            styles.providerButton,
+            styles.emailButton,
+            pendingProvider !== null ? styles.buttonDisabled : null,
+            pressed ? { opacity: 0.9 } : null,
+          ]}
+        >
+          <View style={styles.buttonContent}>
+            <Icon name="mail-outline" size={18} color="#1f2937" />
+            <Text style={[styles.providerText, styles.emailText]}>Sign in with Email</Text>
+          </View>
         </Pressable>
 
         <View style={styles.legalFooter}>
@@ -238,6 +265,15 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 1,
   },
+  emailButton: {
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(0,0,0,0.12)',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 1,
+  },
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -249,6 +285,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   googleText: {
+    color: '#1f2937',
+  },
+  emailText: {
     color: '#1f2937',
   },
   legalFooter: {
