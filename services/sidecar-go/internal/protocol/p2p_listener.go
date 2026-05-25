@@ -182,23 +182,26 @@ func (m *P2PManager) acceptYamuxStreams(session *yamux.Session) {
 }
 
 func (m *P2PManager) handleForwardStream(stream net.Conn) {
-	defer stream.Close()
 	localConn, err := net.Dial("tcp", m.localAddress)
 	if err != nil {
 		slog.Error("failed to connect to local sidecar HTTP server", "err", err)
+		stream.Close()
 		return
 	}
-	defer localConn.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		io.Copy(localConn, stream)
-		wg.Done()
+		localConn.Close()
+		stream.Close()
 	}()
 	go func() {
+		defer wg.Done()
 		io.Copy(stream, localConn)
-		wg.Done()
+		localConn.Close()
+		stream.Close()
 	}()
 	wg.Wait()
 }
