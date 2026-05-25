@@ -26,6 +26,8 @@ struct SharedDirectory {
 class SharedFilesService {
     /// The resolved sidecar host IP address (set after connection is established).
     var sidecarHost: String?
+    var tunnelPort: UInt16?
+    var isTunnelActive: Bool = false
 
     private static let sidecarHttpPort = 39394
 
@@ -136,14 +138,19 @@ class SharedFilesService {
     // MARK: - Private Helpers
 
     private func buildURL(path: String) throws -> URL {
-        guard let host = sidecarHost, !host.isEmpty else {
-            throw SyncEngineError.networkError("Sidecar host not available for shared files")
-        }
-
         var components = URLComponents()
         components.scheme = "http"
-        components.host = host
-        components.port = Self.sidecarHttpPort
+
+        if isTunnelActive, let port = tunnelPort {
+            components.host = "127.0.0.1"
+            components.port = Int(port)
+        } else {
+            guard let host = sidecarHost, !host.isEmpty else {
+                throw SyncEngineError.networkError("Sidecar host not available for shared files")
+            }
+            components.host = host
+            components.port = Self.sidecarHttpPort
+        }
         components.path = path
 
         guard let url = components.url else {
