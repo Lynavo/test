@@ -21,10 +21,12 @@ import {
   authSingleLineInputStyle,
   authTextScalingProps,
 } from '../components/auth/authPlatformStyles';
-import { appleLogin, googleLogin, sendEmailCode } from '../services/auth-service';
+import { appleLogin, googleLogin, sendEmailCode, sendSmsCode } from '../services/auth-service';
 import { useAuth } from '../stores/auth-store';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { Icon } from '../components/Icon';
+import { isValidChinaPhone } from '../utils/phone-validation';
 
 type Provider = 'apple' | 'google' | 'email';
 type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
@@ -83,13 +85,15 @@ function PhoneIcon({ color = '#1a2a3a' }: { color?: string }) {
 
 export function LoginGlobalScreen() {
   const navigation = useNavigation<LoginGlobalNavProp>();
-  const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [method, setMethod] = useState<'email' | 'phone'>('email');
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const { login } = useAuth();
 
+  const isPhoneMode = method === 'phone';
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isButtonEnabled = email.trim().length > 0 && !pendingProvider;
+  const isButtonEnabled = inputValue.trim().length > 0 && !pendingProvider;
 
   useEffect(() => {
     try {
@@ -141,31 +145,60 @@ export function LoginGlobalScreen() {
     }
   };
 
-  const handleContinueWithPhone = useCallback(() => {
+  const handleToggleMethod = useCallback(() => {
     if (pendingProvider) return;
-    navigation.navigate('LoginEmail');
-  }, [navigation, pendingProvider]);
+    setMethod((prev) => (prev === 'email' ? 'phone' : 'email'));
+    setInputValue('');
+    setError(null);
+  }, [pendingProvider]);
 
-  const handleContinueWithEmail = useCallback(async () => {
-    const trimmed = email.trim();
+  const handleInputChange = useCallback((val: string) => {
+    if (isPhoneMode) {
+      // Only allow digits for phone number
+      const digits = val.replace(/\D/g, '').slice(0, 11);
+      setInputValue(digits);
+    } else {
+      setInputValue(val.trim());
+    }
+    setError(null);
+  }, [isPhoneMode]);
+
+  const handleContinue = useCallback(async () => {
+    const trimmed = inputValue.trim();
     if (!trimmed) return;
 
-    if (!emailRegex.test(trimmed)) {
-      setEmailError('Please enter a valid email address.');
-      return;
+    if (isPhoneMode) {
+      if (!isValidChinaPhone(trimmed)) {
+        setError('Please enter a valid phone number.');
+        return;
+      }
+      setError(null);
+      setPendingProvider('email'); // reuse indicator state
+      try {
+        const { authBaseUrl } = await sendSmsCode(trimmed);
+        setPendingProvider(null);
+        navigation.navigate('SmsVerify', { phone: trimmed, authBaseUrl });
+      } catch (err: any) {
+        setPendingProvider(null);
+        Alert.alert('Error', err.message || 'Failed to send SMS verification code.');
+      }
+    } else {
+      if (!emailRegex.test(trimmed)) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+      setError(null);
+      setPendingProvider('email');
+      try {
+        await sendEmailCode(trimmed);
+        setPendingProvider(null);
+        navigation.navigate('SmsVerify', { email: trimmed });
+      } catch (err: any) {
+        setPendingProvider(null);
+        Alert.alert('Error', err.message || 'Failed to send email verification code.');
+      }
     }
-
-    setEmailError(null);
-    setPendingProvider('email');
-    try {
-      await sendEmailCode(trimmed);
-      setPendingProvider(null);
-      navigation.navigate('SmsVerify', { email: trimmed });
-    } catch (err: any) {
-      setPendingProvider(null);
-      Alert.alert('Error', err.message || 'Failed to send email verification code.');
-    }
-  }, [email, navigation]);
+  }, [inputValue, isPhoneMode, navigation]);
 
   const handleOpenTerms = useCallback(() => {
     Linking.openURL(USER_AGREEMENT_URL);
@@ -226,7 +259,7 @@ export function LoginGlobalScreen() {
           <Pressable
             accessibilityRole="button"
             disabled={pendingProvider !== null}
-            onPress={handleContinueWithPhone}
+            onPress={handleToggleMethod}
             style={({ pressed }) => [
               styles.providerButton,
               pendingProvider !== null ? styles.buttonDisabled : null,
@@ -234,8 +267,17 @@ export function LoginGlobalScreen() {
             ]}
           >
             <View style={styles.buttonContent}>
-              <PhoneIcon color={AUTH_COLORS.text} />
-              <Text style={styles.providerText}>Continue with phone</Text>
+              {isPhoneMode ? (
+                <>
+                  <Icon name="mail-outline" size={18} color={AUTH_COLORS.text} />
+                  <Text style={styles.providerText}>Continue with email</Text>
+                </>
+              ) : (
+                <>
+                  <PhoneIcon color={AUTH_COLORS.text} />
+                  <Text style={styles.providerText}>Continue with phone</Text>
+                </>
+              )}
             </View>
           </Pressable>
         </View>
@@ -247,31 +289,52 @@ export function LoginGlobalScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        {/* Email Address Input */}
+        {/* Dynamic Address Input (Pill styled) */}
         <View style={styles.inputSection}>
-          <TextInput
-            {...authTextScalingProps}
+          <View
             style={[
-              styles.textInput,
-              emailError ? styles.textInputError : null,
+              styles.inputContainer,
+              error ? styles.textInputError : null,
             ]}
-            value={email}
-            onChangeText={(val) => {
-              setEmail(val);
-              if (emailError) setEmailError(null);
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="Email address"
-            placeholderTextColor={AUTH_COLORS.textFaint}
-            editable={!pendingProvider}
-            returnKeyType="done"
-            selectionColor={AUTH_COLORS.primary}
-            onSubmitEditing={handleContinueWithEmail}
-          />
-          {emailError && (
-            <Text style={styles.errorText}>{emailError}</Text>
+          >
+            {isPhoneMode ? (
+              <>
+                <View style={styles.phonePrefix}>
+                  <PhoneIcon color={AUTH_COLORS.textMuted} />
+                  <Text {...authTextScalingProps} style={styles.prefixText}>
+                    +86
+                  </Text>
+                </View>
+                <View style={styles.inputDivider} />
+              </>
+            ) : (
+              <View style={[styles.phonePrefix, { marginRight: 8 }]}>
+                <Icon
+                  name="mail-outline"
+                  size={16}
+                  color={AUTH_COLORS.textMuted}
+                />
+              </View>
+            )}
+            <TextInput
+              {...authTextScalingProps}
+              style={styles.textInput}
+              value={inputValue}
+              onChangeText={handleInputChange}
+              keyboardType={isPhoneMode ? 'phone-pad' : 'email-address'}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={isPhoneMode ? 'Phone number' : 'Email address'}
+              placeholderTextColor={AUTH_COLORS.textFaint}
+              editable={!pendingProvider}
+              returnKeyType="done"
+              selectionColor={AUTH_COLORS.primary}
+              maxLength={isPhoneMode ? 11 : 128}
+              onSubmitEditing={handleContinue}
+            />
+          </View>
+          {error && (
+            <Text style={styles.errorText}>{error}</Text>
           )}
         </View>
 
@@ -279,7 +342,7 @@ export function LoginGlobalScreen() {
         <Pressable
           accessibilityRole="button"
           disabled={!isButtonEnabled}
-          onPress={handleContinueWithEmail}
+          onPress={handleContinue}
           style={({ pressed }) => [
             styles.continueButton,
             !isButtonEnabled ? styles.continueButtonDisabled : null,
@@ -387,17 +450,39 @@ const styles = StyleSheet.create({
   inputSection: {
     marginBottom: 4,
   },
-  textInput: {
+  inputContainer: {
     height: 52,
     borderRadius: 26,
     borderWidth: 1.5,
     borderColor: AUTH_COLORS.inputBorder,
     backgroundColor: AUTH_COLORS.inputBackground,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  textInput: {
+    flex: 1,
     color: AUTH_COLORS.text,
     fontSize: 15,
     fontWeight: '500',
     ...authSingleLineInputStyle,
+    paddingLeft: 4,
+  },
+  phonePrefix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  prefixText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: AUTH_COLORS.textMuted,
+  },
+  inputDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+    marginHorizontal: 10,
   },
   textInputError: {
     borderColor: AUTH_COLORS.danger,
