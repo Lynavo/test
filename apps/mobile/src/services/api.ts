@@ -222,6 +222,56 @@ async function request<T>(
 ): Promise<T> {
   const { skipAuth = false, skipRefresh = false, timeoutMs } = options;
 
+  // Dev Sandbox Mock Interceptor: when using mock credentials in dev mode,
+  // return mock responses locally to prevent 401 token refresh loops or network failures.
+  if (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    getAccessToken() === 'mock-sandbox-access-token'
+  ) {
+    console.log(`[Sandbox Mock API] Intercepting path="${path}" method=${method}`);
+    if (path === '/user/profile') {
+      return {
+        id: 99999,
+        primary_identity: {
+          type: 'phone_cn',
+          display: '133****5678',
+        },
+        identities: [
+          {
+            type: 'phone_cn',
+            display: '133****5678',
+          },
+        ],
+        status: 'subscribed',
+        plan: 'yearly',
+        expire_at: '2030-12-31T23:59:59Z',
+        trial_end: null,
+      } as unknown as T;
+    }
+    if (path === '/subscription/status') {
+      return {
+        status: 'subscribed',
+        plan: 'yearly',
+        expire_at: '2030-12-31T23:59:59Z',
+        trial_end: null,
+        auto_renewing: true,
+        source: 'gift_card',
+        payment_provider: 'gift_card',
+        renewal_state: 'prepaid',
+      } as unknown as T;
+    }
+    if (path === '/auth/refresh') {
+      return {
+        access_token: 'mock-sandbox-access-token',
+        refresh_token: 'mock-sandbox-refresh-token',
+      } as unknown as T;
+    }
+    if (path === '/auth/logout') {
+      return {} as unknown as T;
+    }
+  }
+
   const headers = await buildRequestHeaders(skipAuth);
 
   let res: Response;
