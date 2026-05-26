@@ -45,9 +45,9 @@ const CN_PRODUCTS: IapProductRegistry = {
 };
 
 const GLOBAL_PRODUCTS: IapProductRegistry = {
-  monthly: 'com.vividrop.monthly',
-  yearly: 'com.vividrop.tenmonth',
-  yearlyPromo: 'com.vividrop.tenmonth',
+  monthly: 'com.vividrop.mobile.global.monthly.999',
+  yearly: 'com.vividrop.mobile.global.yearly.9900',
+  yearlyPromo: 'com.vividrop.mobile.global.yearly.9900',
 };
 
 export const IAP_PRODUCTS: IapProductRegistry =
