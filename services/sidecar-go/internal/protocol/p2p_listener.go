@@ -288,27 +288,56 @@ func (m *P2PManager) handleForwardStream(stream net.Conn) {
 
 // DataChannelWrapper adapters webrtc.DataChannel to net.Conn interface
 type DataChannelWrapper struct {
-	d      *webrtc.DataChannel
-	reader *io.PipeReader
-	writer *io.PipeWriter
+	d         *webrtc.DataChannel
+	reader    *io.PipeReader
+	writer    *io.PipeWriter
+	writeChan chan []byte
+	mu        sync.Mutex
+	closed    bool
 }
 
 func NewDataChannelWrapper(d *webrtc.DataChannel) *DataChannelWrapper {
 	r, w := io.Pipe()
+	writeChan := make(chan []byte, 1024)
+	wrapper := &DataChannelWrapper{
+		d:         d,
+		reader:    r,
+		writer:    w,
+		writeChan: writeChan,
+	}
+
+	go func() {
+		for data := range writeChan {
+			_, err := w.Write(data)
+			if err != nil {
+				break
+			}
+		}
+	}()
+
 	d.OnMessage(func(msg webrtc.DataChannelMessage) {
 		// Copy msg.Data to prevent referencing internal memory buffers asynchronously.
-		// Write to PipeWriter asynchronously to prevent blocking Pion's event/read loop.
 		data := make([]byte, len(msg.Data))
 		copy(data, msg.Data)
-		go func() {
-			w.Write(data)
-		}()
+
+		wrapper.mu.Lock()
+		defer wrapper.mu.Unlock()
+		if wrapper.closed {
+			return
+		}
+
+		select {
+		case writeChan <- data:
+		default:
+			slog.Warn("yamux tunnel write buffer overflow, dropping packet")
+		}
 	})
+
 	d.OnClose(func() {
-		r.Close()
-		w.Close()
+		wrapper.Close()
 	})
-	return &DataChannelWrapper{d: d, reader: r, writer: w}
+
+	return wrapper
 }
 
 func (w *DataChannelWrapper) Read(b []byte) (int, error) { return w.reader.Read(b) }
@@ -324,15 +353,22 @@ func (w *DataChannelWrapper) Write(b []byte) (int, error) {
 }
 
 func (w *DataChannelWrapper) Close() error {
+	w.mu.Lock()
+	if !w.closed {
+		w.closed = true
+		close(w.writeChan)
+	}
+	w.mu.Unlock()
+
 	w.d.Close()
 	w.reader.Close()
 	w.writer.Close()
 	return nil
 }
-func (w *DataChannelWrapper) LocalAddr() net.Addr            { return &net.IPAddr{IP: net.IPv6loopback} }
-func (w *DataChannelWrapper) RemoteAddr() net.Addr           { return &net.IPAddr{IP: net.IPv6loopback} }
-func (w *DataChannelWrapper) SetDeadline(t time.Time) error  { return nil }
-func (w *DataChannelWrapper) SetReadDeadline(t time.Time) error { return nil }
+func (w *DataChannelWrapper) LocalAddr() net.Addr                { return &net.IPAddr{IP: net.IPv6loopback} }
+func (w *DataChannelWrapper) RemoteAddr() net.Addr               { return &net.IPAddr{IP: net.IPv6loopback} }
+func (w *DataChannelWrapper) SetDeadline(t time.Time) error      { return nil }
+func (w *DataChannelWrapper) SetReadDeadline(t time.Time) error  { return nil }
 func (w *DataChannelWrapper) SetWriteDeadline(t time.Time) error { return nil }
 
 type safeWriteConn struct {

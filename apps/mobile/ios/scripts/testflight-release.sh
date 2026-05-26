@@ -117,7 +117,24 @@ extract_server_review_phone() {
 
 extract_mobile_review_phone() {
   local config_file="$1"
-  sed -n "s/^[[:space:]]*export const APP_REVIEW_PHONE[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${config_file}" | head -n 1
+  local raw_val
+  raw_val="$(sed -n "s/^[[:space:]]*export const APP_REVIEW_PHONE[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${config_file}" | head -n 1)"
+  
+  if [[ -z "${raw_val}" ]]; then
+    # Fallback to parsing from markets config based on SCHEME
+    local market_dir
+    market_dir="$(dirname "${config_file}")/../markets"
+    local market_config
+    if [[ "${SCHEME}" == "SyncFlowMobileGlobal" ]]; then
+      market_config="${market_dir}/global/config.ts"
+    else
+      market_config="${market_dir}/cn/config.ts"
+    fi
+    if [[ -f "${market_config}" ]]; then
+      raw_val="$(sed -n "s/^[[:space:]]*appReviewPhone[[:space:]]*:[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${market_config}" | head -n 1)"
+    fi
+  fi
+  echo "${raw_val}"
 }
 
 ensure_review_phone_matches() {
@@ -220,7 +237,7 @@ verify_export_signing() {
   fi
 
   local cert_type
-  cert_type="$(/usr/libexec/PlistBuddy -c 'Print :SyncFlowMobile.ipa:0:certificate:type' "${summary}")"
+  cert_type="$(/usr/libexec/PlistBuddy -c "Print :${SCHEME}.ipa:0:certificate:type" "${summary}")"
   if [[ "${cert_type}" != "${IOS_EXPORT_SIGNING_CERTIFICATE}" ]]; then
     echo "ERROR: exported IPA signing certificate mismatch." >&2
     echo "Expected: ${IOS_EXPORT_SIGNING_CERTIFICATE}" >&2

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	tcpSocketBufferBytes         = 16 * 1024 * 1024
+	tcpSocketBufferBytes          = 16 * 1024 * 1024
 	disconnectPresenceGraceWindow = 75 * time.Second
 )
 

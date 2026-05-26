@@ -115,7 +115,7 @@ describe('CodeVerifyScreen', () => {
 
     // Wait for the deferred submitCode timer (500ms) to fire
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise<void>(resolve => setTimeout(resolve, 600));
     });
 
     expect(mockPairDevice).toHaveBeenCalledWith({
