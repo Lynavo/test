@@ -6,10 +6,31 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd -- "${IOS_DIR}/../../.." && pwd)"
 MODE="${1:-archive-upload}"
+MARKET="${2:-}"
+
+# Auto-detect market if not explicitly provided as an argument
+if [[ -z "${MARKET}" ]]; then
+  if [[ "${SCHEME:-}" == "SyncFlowMobileGlobal" ]]; then
+    MARKET="global"
+  else
+    MARKET="cn"
+  fi
+fi
 
 WORKSPACE="${IOS_DIR}/SyncFlowMobile.xcworkspace"
-SCHEME="${SCHEME:-SyncFlowMobile}"
-CONFIGURATION="${CONFIGURATION:-Release}"
+
+# Set default settings based on market
+if [[ "${MARKET}" == "global" ]]; then
+  SCHEME="${SCHEME:-SyncFlowMobileGlobal}"
+  CONFIGURATION="${CONFIGURATION:-ReleaseGlobal}"
+  APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-AMY9XVV3LD}"
+  APPLE_API_ISSUER="${APPLE_API_ISSUER:-8de17ec0-4bff-4ab2-8c01-ace1f9307147}"
+else
+  SCHEME="${SCHEME:-SyncFlowMobile}"
+  CONFIGURATION="${CONFIGURATION:-Release}"
+  APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-HY8CAHGPW9}"
+  APPLE_API_ISSUER="${APPLE_API_ISSUER:-54cad458-4184-4fc6-a1c7-cb4b0c6ded0e}"
+fi
 
 if [[ -z "${EXPORT_OPTIONS:-}" ]]; then
   if [[ "${SCHEME}" == "SyncFlowMobileGlobal" ]]; then
@@ -22,9 +43,7 @@ ARCHIVES_DIR="${IOS_DIR}/build/archives"
 EXPORT_DIR="/tmp/syncflow-export"
 IOS_EXPORT_SIGNING_CERTIFICATE="${IOS_EXPORT_SIGNING_CERTIFICATE:-Apple Distribution}"
 
-# App Store Connect API key for Shenzhen Kaiyun (GKN7JQNCMC) — altool upload path.
-APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-HY8CAHGPW9}"
-APPLE_API_ISSUER="${APPLE_API_ISSUER:-54cad458-4184-4fc6-a1c7-cb4b0c6ded0e}"
+# Resolve App Store Connect API Key path
 if [[ -z "${APPLE_API_KEY:-}" ]]; then
   if [[ -f "${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8" ]]; then
     APPLE_API_KEY="${REPO_ROOT}/AuthKey_${APPLE_API_KEY_ID}.p8"
@@ -49,7 +68,7 @@ ARCHIVE_PATH="${ARCHIVES_DIR}/SyncFlow-${MARKETING_VERSION}-b${BUILD_NUMBER}.xca
 usage() {
   cat <<EOF
 Usage:
-  ${IOS_DIR}/scripts/testflight-release.sh [archive|upload|archive-upload|check-review-phone]
+  ${IOS_DIR}/scripts/testflight-release.sh [mode] [cn|global]
 
 Modes:
   archive         Build a Release xcarchive (auto-increments build number)
@@ -58,10 +77,17 @@ Modes:
   check-review-phone
                   Verify mobile APP_REVIEW_PHONE matches SERVER_ENV_FILE
 
+Markets:
+  cn              China market (default)
+  global          Global market
+
 Note: If archive or upload fails, the build number will be rolled back automatically.
 Set SERVER_ENV_FILE=/path/to/server/.env.prod before TestFlight packaging.
 
 Defaults:
+  MARKET=${MARKET}
+  SCHEME=${SCHEME}
+  CONFIGURATION=${CONFIGURATION}
   BUILD_NUMBER=${BUILD_NUMBER}
   ARCHIVE_PATH=${ARCHIVE_PATH}
 EOF
@@ -82,6 +108,8 @@ ensure_prereqs() {
     echo "Missing export options: ${EXPORT_OPTIONS}" >&2
     exit 1
   fi
+
+  ensure_altool_key
 }
 
 mask_phone() {
@@ -226,6 +254,9 @@ archive_build() {
     -destination "generic/platform=iOS" \
     -archivePath "${ARCHIVE_PATH}" \
     -allowProvisioningUpdates \
+    -authenticationKeyPath "${APPLE_API_KEY}" \
+    -authenticationKeyID "${APPLE_API_KEY_ID}" \
+    -authenticationKeyIssuerID "${APPLE_API_ISSUER}" \
     archive
 }
 
@@ -273,7 +304,10 @@ export_ipa() {
     -archivePath "${ARCHIVE_PATH}" \
     -exportPath "${EXPORT_DIR}" \
     -exportOptionsPlist "${EXPORT_OPTIONS}" \
-    -allowProvisioningUpdates
+    -allowProvisioningUpdates \
+    -authenticationKeyPath "${APPLE_API_KEY}" \
+    -authenticationKeyID "${APPLE_API_KEY_ID}" \
+    -authenticationKeyIssuerID "${APPLE_API_ISSUER}"
 
   verify_export_signing
 }
