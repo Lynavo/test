@@ -224,23 +224,43 @@ async function request<T>(
 
   // Dev Sandbox Mock Interceptor: when using mock credentials in dev mode,
   // return mock responses locally to prevent 401 token refresh loops or network failures.
+  const accessToken = getAccessToken();
   if (
     typeof __DEV__ !== 'undefined' &&
     __DEV__ &&
-    getAccessToken() === 'mock-sandbox-access-token'
+    accessToken &&
+    accessToken.startsWith('mock-sandbox-access-token')
   ) {
     console.log(`[Sandbox Mock API] Intercepting path="${path}" method=${method}`);
     if (path === '/user/profile') {
+      const parts = accessToken.split(':');
+      let display = '133****5678';
+      let type = 'phone_cn';
+      if (parts.length > 1) {
+        const rawVal = parts[1];
+        if (rawVal.includes('@')) {
+          type = 'email';
+          display = rawVal;
+        } else {
+          // Format phone display: mask middle digits (e.g. +8617000000002 -> +86170****0002)
+          type = rawVal.startsWith('+86') || /^\d{11}$/.test(rawVal) ? 'phone_cn' : 'phone';
+          if (rawVal.length > 7) {
+            display = rawVal.substring(0, rawVal.length - 8) + '****' + rawVal.substring(rawVal.length - 4);
+          } else {
+            display = rawVal;
+          }
+        }
+      }
       return {
         id: 99999,
         primary_identity: {
-          type: 'phone_cn',
-          display: '133****5678',
+          type,
+          display,
         },
         identities: [
           {
-            type: 'phone_cn',
-            display: '133****5678',
+            type,
+            display,
           },
         ],
         status: 'subscribed',
@@ -263,7 +283,7 @@ async function request<T>(
     }
     if (path === '/auth/refresh') {
       return {
-        access_token: 'mock-sandbox-access-token',
+        access_token: accessToken,
         refresh_token: 'mock-sandbox-refresh-token',
       } as unknown as T;
     }

@@ -94,7 +94,7 @@ export async function smsLogin(
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn(`[Sandbox Mock] smsLogin network failed, falling back to mock sandbox login`);
       return {
-        accessToken: 'mock-sandbox-access-token',
+        accessToken: `mock-sandbox-access-token:${phone}`,
         refreshToken: 'mock-sandbox-refresh-token',
         isNewUser: false,
         merged: false,
@@ -213,7 +213,7 @@ export async function emailLogin(
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.warn(`[Sandbox Mock] emailLogin network failed, falling back to mock sandbox login`);
       return {
-        accessToken: 'mock-sandbox-access-token',
+        accessToken: `mock-sandbox-access-token:${email}`,
         refreshToken: 'mock-sandbox-refresh-token',
         isNewUser: false,
         merged: false,
