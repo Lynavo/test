@@ -8,6 +8,7 @@ import type {
 import { apiGet, ApiError } from './api';
 import type { IapProductSummary } from './iap-service';
 import { ALL_PRODUCT_IDS, IAP_PRODUCTS } from '../constants/iap';
+import { marketConfig } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -332,7 +333,9 @@ class SubscriptionPlansServiceImpl implements SubscriptionPlansService {
     // 1. Try the network. apiGet handles auth, refresh, timeout, retry.
     try {
       const response = await apiGet<SubscriptionPlansResponse>(
-        `${PLANS_PATH}?platform=${encodeURIComponent(platform)}`,
+        `${PLANS_PATH}?platform=${encodeURIComponent(
+          platform,
+        )}&region=${encodeURIComponent(marketConfig.market)}`,
       );
       const plans = Array.isArray(response.plans) ? response.plans : [];
       // Server is the sort authority but defensively re-sort so a transient

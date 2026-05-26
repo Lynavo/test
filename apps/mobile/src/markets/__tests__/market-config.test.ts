@@ -15,7 +15,7 @@ describe('mobile market configs', () => {
     expect(globalMarketConfig.market).toBe('global');
     expect(globalMarketConfig.loginProviders).toEqual(['apple', 'google']);
     expect(globalMarketConfig.apiBaseUrl).toBe('https://api.vividrop.com');
-    expect(globalMarketConfig.reviewApiBaseUrl).toBe('https://review-api.vividrop.com');
+    expect(globalMarketConfig.reviewApiBaseUrl).toBe('https://review-api.vividrop.cn');
     expect(globalMarketConfig.privacyUrl).toBe('https://www.vividrop.com/privacy');
     expect(globalMarketConfig.termsUrl).toBe('https://www.vividrop.com/terms');
   });

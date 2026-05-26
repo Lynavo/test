@@ -29,23 +29,38 @@
  *                                referenced by the helpers above.
  */
 
+import { activeMarket } from '../markets';
 import type { SubscriptionPlan } from '../stores/auth-store';
 
-export const IAP_PRODUCTS = {
+interface IapProductRegistry {
+  readonly monthly: string;
+  readonly yearly: string;
+  readonly yearlyPromo: string;
+}
+
+const CN_PRODUCTS: IapProductRegistry = {
   monthly: 'com.vividrop.mobile.china.monthly.999',
   yearly: 'com.vividrop.mobile.china.yearly.10400',
-  // Promotional yearly SKU — same backend `plan: 'yearly'` from the
-  // receipt-verification side, but a cheaper price tier displayed alongside
-  // the standard yearly so users can compare. Backend treats both yearly
-  // SKUs identically; Apple-side billing handles the actual price/expiry.
   yearlyPromo: 'com.vividrop.mobile.china.yearly.9900',
-} as const;
+};
+
+const GLOBAL_PRODUCTS: IapProductRegistry = {
+  monthly: 'com.vividrop.monthly',
+  yearly: 'com.vividrop.tenmonth',
+  yearlyPromo: 'com.vividrop.tenmonth',
+};
+
+export const IAP_PRODUCTS: IapProductRegistry =
+  activeMarket === 'global' ? GLOBAL_PRODUCTS : CN_PRODUCTS;
 
 export type IapProductId = string;
-export type IapPlanKey = keyof typeof IAP_PRODUCTS;
+export type IapPlanKey = keyof IapProductRegistry;
 
-export const ALL_PRODUCT_IDS: readonly IapProductId[] =
-  Object.values(IAP_PRODUCTS);
+export const ALL_PRODUCT_IDS: readonly IapProductId[] = [
+  IAP_PRODUCTS.monthly,
+  IAP_PRODUCTS.yearly,
+  IAP_PRODUCTS.yearlyPromo,
+];
 
 // Apple configures the 7-day free trial only on the monthly product.
 export const TRIAL_ELIGIBLE_PRODUCTS: readonly IapProductId[] = [

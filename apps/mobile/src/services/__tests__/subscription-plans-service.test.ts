@@ -115,7 +115,7 @@ describe('subscriptionPlansService.fetchPlans', () => {
     expect(result.plans).toHaveLength(2);
     expect(result.plans[0]?.product_id).toBe(monthlyPlan.product_id);
     expect(result.plans[1]?.product_id).toBe(yearlyPlan.product_id);
-    expect(apiGet).toHaveBeenCalledWith('/subscription/plans?platform=ios');
+    expect(apiGet).toHaveBeenCalledWith('/subscription/plans?platform=ios&region=cn');
 
     // Cache written with sorted plans.
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
@@ -293,7 +293,7 @@ describe('subscriptionPlansService.fetchPlans', () => {
 
     // Assert: platform value reaches the URL exactly so the server can scope
     // the catalog (different SKUs / pricing tiers per store).
-    expect(apiGet).toHaveBeenCalledWith('/subscription/plans?platform=android');
+    expect(apiGet).toHaveBeenCalledWith('/subscription/plans?platform=android&region=cn');
   });
 
   test('bootstrap product prices stay aligned with the wallet fallback copy', () => {

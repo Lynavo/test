@@ -54,59 +54,18 @@ describe('LoginGlobalScreen', () => {
     };
   });
 
-  it('shows Google, Apple and Phone login buttons by default', () => {
+  it('shows Google, Apple buttons and Phone input by default', () => {
     const { getByText, getByPlaceholderText } = render(<LoginGlobalScreen />);
 
     expect(getByText('Continue with Google')).toBeTruthy();
     expect(getByText('Continue with Apple')).toBeTruthy();
-    expect(getByText('Continue with phone')).toBeTruthy();
-    expect(getByPlaceholderText('Email address')).toBeTruthy();
-  });
-
-  it('toggles between phone and email mode in place', () => {
-    const { getByText, getByPlaceholderText, queryByText, queryByPlaceholderText } = render(
-      <LoginGlobalScreen />
-    );
-
-    // 1. Switch to Phone Mode
-    fireEvent.press(getByText('Continue with phone'));
-
-    expect(queryByPlaceholderText('Email address')).toBeNull();
     expect(getByPlaceholderText('Phone number')).toBeTruthy();
-    expect(queryByText('Continue with phone')).toBeNull();
-    expect(getByText('Continue with email')).toBeTruthy();
-
-    // 2. Switch back to Email Mode
-    fireEvent.press(getByText('Continue with email'));
-
-    expect(queryByPlaceholderText('Phone number')).toBeNull();
-    expect(getByPlaceholderText('Email address')).toBeTruthy();
-    expect(queryByText('Continue with email')).toBeNull();
-    expect(getByText('Continue with phone')).toBeTruthy();
   });
 
-  it('submits email in email mode and navigates to SmsVerify', async () => {
-    mockSendEmailCode.mockResolvedValueOnce(undefined);
-
-    const { getByPlaceholderText, getByText } = render(<LoginGlobalScreen />);
-
-    const input = getByPlaceholderText('Email address');
-    fireEvent.changeText(input, 'global@example.com');
-    fireEvent.press(getByText('Continue'));
-
-    await waitFor(() => {
-      expect(mockSendEmailCode).toHaveBeenCalledWith('global@example.com');
-      expect(mockNavigate).toHaveBeenCalledWith('SmsVerify', { email: 'global@example.com' });
-    });
-  });
-
-  it('submits phone in phone mode and navigates to SmsVerify', async () => {
+  it('submits phone and navigates to SmsVerify', async () => {
     mockSendSmsCode.mockResolvedValueOnce({ authBaseUrl: 'https://api.vivi.cn' });
 
     const { getByText, getByPlaceholderText } = render(<LoginGlobalScreen />);
-
-    // Toggle to phone
-    fireEvent.press(getByText('Continue with phone'));
 
     const input = getByPlaceholderText('Phone number');
     fireEvent.changeText(input, '13312345678');
