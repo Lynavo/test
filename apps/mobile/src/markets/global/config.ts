@@ -7,8 +7,8 @@ export const globalMarketConfig: MobileMarketConfig = {
   apiBaseUrl: 'https://api.vividrop.com',
   reviewApiBaseUrl: 'https://review-api.vividrop.cn',
   appReviewPhone: '17000000002',
-  privacyUrl: 'https://www.vividrop.com/privacy',
-  termsUrl: 'https://www.vividrop.com/terms',
+  privacyUrl: 'https://www.vividrop.cn/privacy',
+  termsUrl: 'https://www.vividrop.cn/terms',
   loginProviders: ['apple', 'google'],
   theme: {
     primary: '#3f5fdb',
@@ -17,4 +17,7 @@ export const globalMarketConfig: MobileMarketConfig = {
     foreground: '#172033',
     accent: '#18a999',
   },
+  downloadUrl: 'https://www.vividrop.com',
+  supportEmail: 'support@vividrop.com',
 };
+

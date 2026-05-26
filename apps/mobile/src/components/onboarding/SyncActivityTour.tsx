@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
+import { isChinaMarket } from '../../markets';
+
 
 interface SyncActivityTourProps {
   visible: boolean;
@@ -97,13 +99,22 @@ const TOUR_BACKGROUND_WIDTH = 790;
 const TOUR_BACKGROUND_HEIGHT = 1710;
 const ZERO_COORDINATE_ORIGIN: TourCoordinateOrigin = { left: 0, top: 0 };
 
-const TOUR_BACKGROUND_IMAGES: Record<TourTarget, ImageSourcePropType> = {
-  album: require('../../assets/onboarding/sync-activity-manual.png'),
-  panel: require('../../assets/onboarding/sync-activity-panel.png'),
-  history: require('../../assets/onboarding/sync-activity-history.png'),
-  settings: require('../../assets/onboarding/sync-activity-settings.png'),
-  help: require('../../assets/onboarding/sync-activity-help.png'),
+const TOUR_BACKGROUND_IMAGES_CN: Record<TourTarget, ImageSourcePropType> = {
+  album: require('../../assets/onboarding/cn/sync-activity-manual.png'),
+  panel: require('../../assets/onboarding/cn/sync-activity-panel.png'),
+  history: require('../../assets/onboarding/cn/sync-activity-history.png'),
+  settings: require('../../assets/onboarding/cn/sync-activity-settings.png'),
+  help: require('../../assets/onboarding/cn/sync-activity-help.png'),
 };
+
+const TOUR_BACKGROUND_IMAGES_GLOBAL: Record<TourTarget, ImageSourcePropType> = {
+  album: require('../../assets/onboarding/global/sync-activity-manual.png'),
+  panel: require('../../assets/onboarding/global/sync-activity-panel.png'),
+  history: require('../../assets/onboarding/global/sync-activity-history.png'),
+  settings: require('../../assets/onboarding/global/sync-activity-settings.png'),
+  help: require('../../assets/onboarding/global/sync-activity-help.png'),
+};
+
 
 const TARGET_PADDING: Record<TourTarget, number> = {
   album: 12,
@@ -404,7 +415,11 @@ export function SyncActivityTour({
         onLayout={handleOverlayLayout}
       >
         <Image
-          source={TOUR_BACKGROUND_IMAGES[current.target]}
+          source={
+            isChinaMarket()
+              ? TOUR_BACKGROUND_IMAGES_CN[current.target]
+              : TOUR_BACKGROUND_IMAGES_GLOBAL[current.target]
+          }
           resizeMode="stretch"
           style={[
             styles.backgroundImage,

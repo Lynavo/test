@@ -27,6 +27,7 @@ import {
 } from '../services/gift-card-service';
 import { getGiftCardRedeemFailureTranslationKey } from '../services/gift-card-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
+import { marketConfig } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,7 +47,7 @@ const ICON_PURPLE_BG = '#f0eafe';
 const ICON_GREEN_BG = '#e6f8ed';
 const ICON_PURPLE = '#8b6fed';
 const ICON_GREEN = '#1dbb63';
-const DOWNLOAD_URL = 'https://www.vividrop.cn';
+const DOWNLOAD_URL = marketConfig.downloadUrl;
 
 // ---------------------------------------------------------------------------
 // Data types
@@ -392,7 +393,7 @@ export function HelpScreen() {
             style={styles.contactRow}
             activeOpacity={0.6}
             onPress={() => {
-              void Linking.openURL('mailto:support@vividrop.cn');
+              void Linking.openURL(`mailto:${marketConfig.supportEmail}`);
             }}
           >
             <View style={styles.contactRowLeft}>
@@ -405,7 +406,7 @@ export function HelpScreen() {
                 <Text style={styles.contactRowTitle}>
                   {t('help.contact.supportEmail')}
                 </Text>
-                <Text style={styles.contactRowSub}>support@vividrop.cn</Text>
+                <Text style={styles.contactRowSub}>{marketConfig.supportEmail}</Text>
               </View>
             </View>
           </TouchableOpacity>

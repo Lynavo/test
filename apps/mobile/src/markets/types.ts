@@ -21,4 +21,7 @@ export interface MobileMarketConfig {
   termsUrl: string;
   loginProviders: readonly LoginProvider[];
   theme: MarketTheme;
+  downloadUrl: string;
+  supportEmail: string;
 }
+

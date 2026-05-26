@@ -9,6 +9,8 @@ describe('mobile market configs', () => {
     expect(cnMarketConfig.reviewApiBaseUrl).toBe('https://review-api.vividrop.cn');
     expect(cnMarketConfig.privacyUrl).toBe('https://www.vividrop.cn/privacy');
     expect(cnMarketConfig.termsUrl).toBe('https://www.vividrop.cn/terms');
+    expect(cnMarketConfig.downloadUrl).toBe('https://www.vividrop.cn');
+    expect(cnMarketConfig.supportEmail).toBe('support@vividrop.cn');
   });
 
   it('keeps global build on Apple and Google login with global endpoints', () => {
@@ -16,7 +18,10 @@ describe('mobile market configs', () => {
     expect(globalMarketConfig.loginProviders).toEqual(['apple', 'google']);
     expect(globalMarketConfig.apiBaseUrl).toBe('https://api.vividrop.com');
     expect(globalMarketConfig.reviewApiBaseUrl).toBe('https://review-api.vividrop.cn');
-    expect(globalMarketConfig.privacyUrl).toBe('https://www.vividrop.com/privacy');
-    expect(globalMarketConfig.termsUrl).toBe('https://www.vividrop.com/terms');
+    expect(globalMarketConfig.privacyUrl).toBe('https://www.vividrop.cn/privacy');
+    expect(globalMarketConfig.termsUrl).toBe('https://www.vividrop.cn/terms');
+    expect(globalMarketConfig.downloadUrl).toBe('https://www.vividrop.com');
+    expect(globalMarketConfig.supportEmail).toBe('support@vividrop.com');
   });
 });
+

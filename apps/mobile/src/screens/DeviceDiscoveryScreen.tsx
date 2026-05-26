@@ -48,6 +48,7 @@ import {
 } from '../utils/onboardingStorage';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
+import { isChinaMarket } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -614,7 +615,10 @@ export function DeviceDiscoveryScreen() {
         <View style={styles.troubleshootingItem}>
           <View style={styles.troubleshootingBullet} />
           <Text style={styles.troubleshootingText}>
-            {t('deviceDiscovery.troubleshooting.desktopApp')}
+            {t('deviceDiscovery.troubleshooting.desktopApp').replace(
+              'vividrop.cn',
+              isChinaMarket() ? 'vividrop.cn' : 'vividrop.com',
+            )}
           </Text>
         </View>
       </View>

@@ -17,4 +17,7 @@ export const cnMarketConfig: MobileMarketConfig = {
     foreground: '#1a2a3c',
     accent: '#b8d4ec',
   },
+  downloadUrl: 'https://www.vividrop.cn',
+  supportEmail: 'support@vividrop.cn',
 };
+
