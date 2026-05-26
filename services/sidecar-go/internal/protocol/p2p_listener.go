@@ -18,16 +18,18 @@ type P2PManager struct {
 	desktopID    string
 	serverURL    string
 	localAddress string
+	authToken    string
 	signalingCtx context.Context
 	cancel       context.CancelFunc
 }
 
-func NewP2PManager(desktopID, serverURL, localAddress string) *P2PManager {
+func NewP2PManager(desktopID, serverURL, localAddress, authToken string) *P2PManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &P2PManager{
 		desktopID:    desktopID,
 		serverURL:    serverURL,
 		localAddress: localAddress,
+		authToken:    authToken,
 		signalingCtx: ctx,
 		cancel:       cancel,
 	}
@@ -43,7 +45,10 @@ func (m *P2PManager) Stop() {
 
 func (m *P2PManager) connectSignaling(paired []map[string]string) {
 	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
-	url := m.serverURL + "/api/v1/tunnel/signaling?role=desktop&clientId=" + m.desktopID
+	url := m.serverURL + "/api/v1/tunnel/signaling?role=desktop&clientId=" + m.desktopID + "&token=" + m.authToken
+
+	backoff := time.Second
+	const maxBackoff = 60 * time.Second
 
 	for {
 		select {
@@ -54,9 +59,18 @@ func (m *P2PManager) connectSignaling(paired []map[string]string) {
 
 		conn, _, err := dialer.Dial(url, nil)
 		if err != nil {
-			time.Sleep(5 * time.Second)
+			slog.Warn("signaling dial failed, retrying", "backoff", backoff, "err", err)
+			select {
+			case <-time.After(backoff):
+			case <-m.signalingCtx.Done():
+				return
+			}
+			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
+		backoff = time.Second // reset on successful connect
+
+		sConn := &safeWriteConn{conn: conn}
 
 		// Report pairing list
 		regPayload := map[string]interface{}{
@@ -65,20 +79,36 @@ func (m *P2PManager) connectSignaling(paired []map[string]string) {
 			"pairedDevices": paired,
 		}
 		regBytes, _ := json.Marshal(regPayload)
-		conn.WriteMessage(websocket.TextMessage, regBytes)
+		sConn.WriteMessage(websocket.TextMessage, regBytes)
 
-		m.handleSignalingSession(conn)
+		m.handleSignalingSession(sConn)
 		conn.Close()
-		time.Sleep(2 * time.Second)
+
+		// Brief pause before reconnecting after a clean session end
+		select {
+		case <-time.After(2 * time.Second):
+		case <-m.signalingCtx.Done():
+			return
+		}
 	}
 }
 
-func (m *P2PManager) handleSignalingSession(conn *websocket.Conn) {
+func (m *P2PManager) handleSignalingSession(sConn *safeWriteConn) {
 	peerConnections := make(map[string]*webrtc.PeerConnection)
 	var mu sync.Mutex
 
+	// M1: Clean up all PeerConnections when the signaling session ends
+	defer func() {
+		mu.Lock()
+		for id, pc := range peerConnections {
+			slog.Info("closing peer connection on session end", "mobileId", id)
+			pc.Close()
+		}
+		mu.Unlock()
+	}()
+
 	for {
-		_, msgBytes, err := conn.ReadMessage()
+		_, msgBytes, err := sConn.ReadMessage()
 		if err != nil {
 			break
 		}
@@ -94,9 +124,14 @@ func (m *P2PManager) handleSignalingSession(conn *websocket.Conn) {
 
 		mu.Lock()
 		pc, exists := peerConnections[senderID]
+		if exists && (pc.ConnectionState() == webrtc.PeerConnectionStateClosed || pc.ConnectionState() == webrtc.PeerConnectionStateFailed) {
+			slog.Info("discarding closed or failed peer connection", "mobileId", senderID, "state", pc.ConnectionState().String())
+			pc.Close()
+			exists = false
+		}
 		if !exists {
 			var err error
-			pc, err = m.createPeerConnection(conn, senderID)
+			pc, err = m.createPeerConnection(sConn, senderID)
 			if err != nil {
 				mu.Unlock()
 				continue
@@ -106,12 +141,24 @@ func (m *P2PManager) handleSignalingSession(conn *websocket.Conn) {
 		mu.Unlock()
 
 		if msgType == "offer" {
-			pc.SetRemoteDescription(webrtc.SessionDescription{
+			err := pc.SetRemoteDescription(webrtc.SessionDescription{
 				Type: webrtc.SDPTypeOffer,
 				SDP:  payload,
 			})
-			answer, _ := pc.CreateAnswer(nil)
-			pc.SetLocalDescription(answer)
+			if err != nil {
+				slog.Error("failed to set remote description", "err", err, "mobileId", senderID)
+				continue
+			}
+			answer, err := pc.CreateAnswer(nil)
+			if err != nil {
+				slog.Error("failed to create answer", "err", err, "mobileId", senderID)
+				continue
+			}
+			err = pc.SetLocalDescription(answer)
+			if err != nil {
+				slog.Error("failed to set local description", "err", err, "mobileId", senderID)
+				continue
+			}
 
 			ansMsg, _ := json.Marshal(map[string]string{
 				"type":       "answer",
@@ -119,16 +166,24 @@ func (m *P2PManager) handleSignalingSession(conn *websocket.Conn) {
 				"senderId":   m.desktopID,
 				"receiverId": senderID,
 			})
-			conn.WriteMessage(websocket.TextMessage, ansMsg)
+			sConn.WriteMessage(websocket.TextMessage, ansMsg)
 		} else if msgType == "candidate" {
 			var cand webrtc.ICECandidateInit
-			json.Unmarshal([]byte(payload), &cand)
-			pc.AddICECandidate(cand)
+			err := json.Unmarshal([]byte(payload), &cand)
+			if err != nil {
+				slog.Error("failed to unmarshal ice candidate", "err", err, "mobileId", senderID)
+				continue
+			}
+			err = pc.AddICECandidate(cand)
+			if err != nil {
+				slog.Error("failed to add ice candidate", "err", err, "mobileId", senderID)
+				continue
+			}
 		}
 	}
 }
 
-func (m *P2PManager) createPeerConnection(signalingConn *websocket.Conn, mobileID string) (*webrtc.PeerConnection, error) {
+func (m *P2PManager) createPeerConnection(signalingConn *safeWriteConn, mobileID string) (*webrtc.PeerConnection, error) {
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.cloudflare.com:3478"}},
@@ -144,22 +199,40 @@ func (m *P2PManager) createPeerConnection(signalingConn *websocket.Conn, mobileI
 		if c == nil {
 			return
 		}
-		candBytes, _ := json.Marshal(c.ToJSON())
-		msg, _ := json.Marshal(map[string]string{
+		candBytes, err := json.Marshal(c.ToJSON())
+		if err != nil {
+			slog.Error("failed to marshal candidate payload", "err", err, "mobileId", mobileID)
+			return
+		}
+		msg, err := json.Marshal(map[string]string{
 			"type":       "candidate",
 			"payload":    string(candBytes),
 			"senderId":   m.desktopID,
 			"receiverId": mobileID,
 		})
-		signalingConn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			slog.Error("failed to marshal candidate signaling envelope", "err", err, "mobileId", mobileID)
+			return
+		}
+		err = signalingConn.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			slog.Error("failed to send candidate to mobile client", "err", err, "mobileId", mobileID)
+		}
 	})
 
 	pc.OnDataChannel(func(d *webrtc.DataChannel) {
 		if d.Label() == "yamux-tunnel" {
+			// M4: Yamux requires TCP semantics (ordered + reliable)
+			if !d.Ordered() {
+				slog.Warn("yamux-tunnel DataChannel is not ordered, closing", "mobileId", mobileID)
+				d.Close()
+				return
+			}
 			d.OnOpen(func() {
 				wrapper := NewDataChannelWrapper(d)
 				session, err := yamux.Server(wrapper, nil)
 				if err != nil {
+					slog.Error("yamux server creation failed", "err", err)
 					return
 				}
 				go m.acceptYamuxStreams(session)
@@ -182,7 +255,7 @@ func (m *P2PManager) acceptYamuxStreams(session *yamux.Session) {
 }
 
 func (m *P2PManager) handleForwardStream(stream net.Conn) {
-	localConn, err := net.Dial("tcp", m.localAddress)
+	localConn, err := net.DialTimeout("tcp", m.localAddress, 5*time.Second)
 	if err != nil {
 		slog.Error("failed to connect to local sidecar HTTP server", "err", err)
 		stream.Close()
@@ -216,7 +289,13 @@ type DataChannelWrapper struct {
 func NewDataChannelWrapper(d *webrtc.DataChannel) *DataChannelWrapper {
 	r, w := io.Pipe()
 	d.OnMessage(func(msg webrtc.DataChannelMessage) {
-		w.Write(msg.Data)
+		// Copy msg.Data to prevent referencing internal memory buffers asynchronously.
+		// Write to PipeWriter asynchronously to prevent blocking Pion's event/read loop.
+		data := make([]byte, len(msg.Data))
+		copy(data, msg.Data)
+		go func() {
+			w.Write(data)
+		}()
 	})
 	d.OnClose(func() {
 		r.Close()
@@ -225,8 +304,18 @@ func NewDataChannelWrapper(d *webrtc.DataChannel) *DataChannelWrapper {
 	return &DataChannelWrapper{d: d, reader: r, writer: w}
 }
 
-func (w *DataChannelWrapper) Read(b []byte) (int, error)  { return w.reader.Read(b) }
-func (w *DataChannelWrapper) Write(b []byte) (int, error) { return w.writer.Write(b) }
+func (w *DataChannelWrapper) Read(b []byte) (int, error) { return w.reader.Read(b) }
+
+// H2 fix: Write must send data to the remote peer via DataChannel.Send(),
+// NOT into the local pipe (which would echo back to our own Read).
+func (w *DataChannelWrapper) Write(b []byte) (int, error) {
+	err := w.d.Send(b)
+	if err != nil {
+		return 0, err
+	}
+	return len(b), nil
+}
+
 func (w *DataChannelWrapper) Close() error {
 	w.d.Close()
 	w.reader.Close()
@@ -238,3 +327,20 @@ func (w *DataChannelWrapper) RemoteAddr() net.Addr           { return &net.IPAdd
 func (w *DataChannelWrapper) SetDeadline(t time.Time) error  { return nil }
 func (w *DataChannelWrapper) SetReadDeadline(t time.Time) error { return nil }
 func (w *DataChannelWrapper) SetWriteDeadline(t time.Time) error { return nil }
+
+type safeWriteConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (s *safeWriteConn) WriteMessage(messageType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteMessage(messageType, data)
+}
+
+func (s *safeWriteConn) ReadMessage() (int, []byte, error) {
+	// Read operations in gorilla/websocket do not require synchronization
+	// if called from a single reader goroutine.
+	return s.conn.ReadMessage()
+}

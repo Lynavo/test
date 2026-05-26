@@ -15,7 +15,10 @@ class LocalTCPProxy {
     func start(session: AnyObject) throws {
         self.webRTCSession = session
         let parameters = NWParameters.tcp
-        let loopback = try! IPv4Address("127.0.0.1")
+        guard let loopback = IPv4Address("127.0.0.1") else {
+            slog("[LocalTCPProxy] failed to create loopback address")
+            return
+        }
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(loopback), port: NWEndpoint.Port(integerLiteral: port))
         
         listener = try NWListener(using: parameters)

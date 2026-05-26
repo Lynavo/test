@@ -404,7 +404,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = SyncFlowMobile/SyncFlowMobile.entitlements;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = GKN7JQNCMC;
+				DEVELOPMENT_TEAM = S44ANBLMF9;
 				ENABLE_BITCODE = NO;
 				HERMES_CLI_PATH = "${PODS_ROOT}/hermes-engine/destroot/bin/hermesc";
 				INFOPLIST_FILE = SyncFlowMobile/Info.plist;
@@ -419,7 +419,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.china;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.global;
 				PRODUCT_NAME = SyncFlowMobile;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -482,7 +482,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = SyncFlowMobile/SyncFlowMobile.entitlements;
 				CURRENT_PROJECT_VERSION = 42;
-				DEVELOPMENT_TEAM = GKN7JQNCMC;
+				DEVELOPMENT_TEAM = S44ANBLMF9;
 				HERMES_CLI_PATH = "${PODS_ROOT}/hermes-engine/destroot/bin/hermesc";
 				INFOPLIST_FILE = SyncFlowMobile/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -496,7 +496,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.china;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.global;
 				PRODUCT_NAME = SyncFlowMobile;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
