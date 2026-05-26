@@ -13,7 +13,7 @@ const PLAN_SELECTED_BORDER = '#3a3a3d';
 export interface SubscriptionPlanCardProps {
   title: string;
   description: string;
-  badges: readonly string[];
+  badges?: readonly string[] | null;
   price: string;
   unit: string;
   oldPrice?: string;
@@ -46,6 +46,7 @@ export function SubscriptionPlanCard({
   width,
   onPress,
 }: SubscriptionPlanCardProps) {
+  const safeBadges = badges || [];
   return (
     <TouchableOpacity
       style={[
@@ -74,9 +75,9 @@ export function SubscriptionPlanCard({
           <Text style={planStyles.currentBadgeText}>{currentBadge}</Text>
         </View>
       ) : null}
-      {badges.length > 0 ? (
+      {safeBadges.length > 0 ? (
         <View style={planStyles.badgeRow}>
-          {badges.map(label => (
+          {safeBadges.map(label => (
             <View key={label} style={planStyles.metaBadge}>
               <Text style={planStyles.metaBadgeText} numberOfLines={1}>
                 {label}
