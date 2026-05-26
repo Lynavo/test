@@ -179,7 +179,7 @@ describe('LoginScreen', () => {
     fireEvent.press(getByRole('combobox'));
 
     // Select United States (+1)
-    fireEvent.press(getByText('United States (美国)'));
+    fireEvent.press(getByText('United States', { exact: false }));
 
     // US number input (maxLength 10)
     const phoneInput = getByPlaceholderText('請輸入手機號碼');
@@ -187,7 +187,7 @@ describe('LoginScreen', () => {
     // Type an invalid/short phone number and trigger blur to verify error
     fireEvent.changeText(phoneInput, '202555');
     fireEvent(phoneInput, 'blur');
-    expect(getByText('請輸入有效的 美国 手機號碼')).toBeTruthy();
+    expect(getByText('請輸入有效的 United States 手機號碼', { exact: false })).toBeTruthy();
 
     // Type a valid 10-digit phone number
     fireEvent.changeText(phoneInput, '2025550143');
@@ -216,8 +216,8 @@ describe('LoginScreen', () => {
     fireEvent.changeText(searchInput, 'Canada');
 
     // Canada should be visible, others like Germany should not
-    expect(getByText('Canada (加拿大)')).toBeTruthy();
-    expect(queryByText('Germany (德国)')).toBeNull();
+    expect(getByText('Canada', { exact: false })).toBeTruthy();
+    expect(queryByText('Germany', { exact: false })).toBeNull();
   });
 
   it('renders the enabled request-code button without a secondary blue overlay', () => {

@@ -114,23 +114,23 @@ describe('LoginGlobalScreen', () => {
     expect(searchInput).toBeTruthy();
     
     // Verify default list has China and Singapore
-    expect(getByText('China (中国)')).toBeTruthy();
-    expect(getByText('Singapore (新加坡)')).toBeTruthy();
+    expect(getByText('China', { exact: false })).toBeTruthy();
+    expect(getByText('Singapore', { exact: false })).toBeTruthy();
     
     // Search for "Singapore"
     fireEvent.changeText(searchInput, 'Singapore');
-    expect(getByText('Singapore (新加坡)')).toBeTruthy();
-    expect(queryByText('China (中国)')).toBeNull();
+    expect(getByText('Singapore', { exact: false })).toBeTruthy();
+    expect(queryByText('China', { exact: false })).toBeNull();
     
     // Search for "+86" (China)
     fireEvent.changeText(searchInput, '+86');
-    expect(getByText('China (中国)')).toBeTruthy();
-    expect(queryByText('Singapore (新加坡)')).toBeNull();
+    expect(getByText('China', { exact: false })).toBeTruthy();
+    expect(queryByText('Singapore', { exact: false })).toBeNull();
 
     // Search for "JP" (Japan)
     fireEvent.changeText(searchInput, 'JP');
-    expect(getByText('Japan (日本)')).toBeTruthy();
-    expect(queryByText('China (中国)')).toBeNull();
+    expect(getByText('Japan', { exact: false })).toBeTruthy();
+    expect(queryByText('China', { exact: false })).toBeNull();
   });
 
   it('resets search query when selecting a country or closing the modal', () => {
@@ -142,7 +142,7 @@ describe('LoginGlobalScreen', () => {
     fireEvent.changeText(searchInput, 'Singapore');
     
     // Select Singapore
-    fireEvent.press(getByText('Singapore (新加坡)'));
+    fireEvent.press(getByText('Singapore', { exact: false }));
     
     // Reopen picker and check query is empty
     fireEvent.press(getByRole('combobox'));

@@ -77,7 +77,7 @@ export function LoginScreen() {
     }
     const isZh = i18n.language?.startsWith('zh');
     const isHant = i18n.language === 'zh-Hant' || i18n.language?.startsWith('zh-TW') || i18n.language?.startsWith('zh-HK');
-    const countryName = isZh ? country.nameZh : country.nameEn;
+    const countryName = country.nameEn;
     if (isZh) {
       return isHant
         ? `請輸入有效的 ${countryName} 手機號碼`
@@ -92,7 +92,6 @@ export function LoginScreen() {
     if (!query) return true;
     return (
       country.nameEn.toLowerCase().includes(query) ||
-      country.nameZh.toLowerCase().includes(query) ||
       country.code.includes(query) ||
       country.iso.toLowerCase().includes(query)
     );
@@ -429,7 +428,7 @@ export function LoginScreen() {
                       }}
                     >
                       <Text style={styles.countryFlag}>{country.flag}</Text>
-                      <Text style={styles.countryName}>{country.nameEn} ({country.nameZh})</Text>
+                      <Text style={styles.countryName}>{country.nameEn}</Text>
                       <Text style={styles.countryCodeText}>{country.code}</Text>
                     </TouchableOpacity>
                   ))}
