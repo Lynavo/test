@@ -10,6 +10,7 @@ import {
   Vibration,
   NativeModules,
   Dimensions,
+  Alert,
   type NativeSyntheticEvent,
   type TextInputKeyPressEventData,
 } from 'react-native';
@@ -105,7 +106,18 @@ export function CodeVerifyScreen() {
         setError(true);
         // Include actual error message so the user knows if it's a network timeout vs incorrect code
         const msg = e?.message || '';
-        if (msg.includes('Pairing rejected')) {
+        if (
+          msg.includes('版本不相容') ||
+          msg.includes('APP_VERSION_INCOMPATIBLE') ||
+          msg.includes('版本不兼容')
+        ) {
+          Alert.alert(
+            t('errors.pairingVersionMismatchTitle'),
+            t('errors.pairingVersionMismatchMessage'),
+            [{ text: t('common.ok') }]
+          );
+          setErrorMsg(t('errors.pairingVersionMismatchMessage'));
+        } else if (msg.includes('Pairing rejected')) {
           setErrorMsg(t('errors.pairingWrongCode'));
         } else {
           setErrorMsg(t('errors.pairingConnectFailed', { msg }));
