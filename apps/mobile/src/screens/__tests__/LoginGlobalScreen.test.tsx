@@ -102,4 +102,60 @@ describe('LoginGlobalScreen', () => {
       fullName: 'Test User',
     });
   });
+
+  it('allows searching and filtering countries by name, code, or ISO', () => {
+    const { getByRole, getByPlaceholderText, getByText, queryByText } = render(<LoginGlobalScreen />);
+    
+    // Open picker
+    fireEvent.press(getByRole('combobox'));
+    
+    // Verify search input is rendered
+    const searchInput = getByPlaceholderText('Search by country or code...');
+    expect(searchInput).toBeTruthy();
+    
+    // Verify default list has China and Singapore
+    expect(getByText('China (中国)')).toBeTruthy();
+    expect(getByText('Singapore (新加坡)')).toBeTruthy();
+    
+    // Search for "Singapore"
+    fireEvent.changeText(searchInput, 'Singapore');
+    expect(getByText('Singapore (新加坡)')).toBeTruthy();
+    expect(queryByText('China (中国)')).toBeNull();
+    
+    // Search for "+86" (China)
+    fireEvent.changeText(searchInput, '+86');
+    expect(getByText('China (中国)')).toBeTruthy();
+    expect(queryByText('Singapore (新加坡)')).toBeNull();
+
+    // Search for "JP" (Japan)
+    fireEvent.changeText(searchInput, 'JP');
+    expect(getByText('Japan (日本)')).toBeTruthy();
+    expect(queryByText('China (中国)')).toBeNull();
+  });
+
+  it('resets search query when selecting a country or closing the modal', () => {
+    const { getByRole, getByPlaceholderText, getByText } = render(<LoginGlobalScreen />);
+    
+    // 1. Reset on selecting country
+    fireEvent.press(getByRole('combobox'));
+    const searchInput = getByPlaceholderText('Search by country or code...');
+    fireEvent.changeText(searchInput, 'Singapore');
+    
+    // Select Singapore
+    fireEvent.press(getByText('Singapore (新加坡)'));
+    
+    // Reopen picker and check query is empty
+    fireEvent.press(getByRole('combobox'));
+    const searchInput2 = getByPlaceholderText('Search by country or code...');
+    expect(searchInput2.props.value).toBe('');
+    
+    // 2. Reset on clicking "Done"
+    fireEvent.changeText(searchInput2, 'Japan');
+    fireEvent.press(getByText('Done'));
+    
+    // Reopen picker and check query is empty
+    fireEvent.press(getByRole('combobox'));
+    const searchInput3 = getByPlaceholderText('Search by country or code...');
+    expect(searchInput3.props.value).toBe('');
+  });
 });

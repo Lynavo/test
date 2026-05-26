@@ -30,6 +30,7 @@ import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { isValidChinaPhone } from '../utils/phone-validation';
+import { COUNTRY_CODES } from '../constants/countries';
 
 type Provider = 'apple' | 'google' | 'email';
 type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
@@ -86,19 +87,7 @@ function PhoneIcon({ color = '#1a2a3a' }: { color?: string }) {
   );
 }
 
-const COUNTRY_CODES = [
-  { code: '+86', name: 'China (中国)', flag: '🇨🇳', minLength: 11, maxLength: 11 },
-  { code: '+1', name: 'United States / Canada', flag: '🇺🇸', minLength: 10, maxLength: 10 },
-  { code: '+44', name: 'United Kingdom', flag: '🇬🇧', minLength: 10, maxLength: 11 },
-  { code: '+81', name: 'Japan (日本)', flag: '🇯🇵', minLength: 10, maxLength: 10 },
-  { code: '+82', name: 'South Korea (韩国)', flag: '🇰🇷', minLength: 9, maxLength: 10 },
-  { code: '+65', name: 'Singapore (新加坡)', flag: '🇸🇬', minLength: 8, maxLength: 8 },
-  { code: '+852', name: 'Hong Kong (香港)', flag: '🇭🇰', minLength: 8, maxLength: 8 },
-  { code: '+886', name: 'Taiwan (台湾)', flag: '🇹🇼', minLength: 9, maxLength: 9 },
-  { code: '+61', name: 'Australia', flag: '🇦🇺', minLength: 9, maxLength: 9 },
-  { code: '+49', name: 'Germany', flag: '🇩🇪', minLength: 10, maxLength: 11 },
-  { code: '+33', name: 'France', flag: '🇫🇷', minLength: 9, maxLength: 9 },
-];
+
 
 export function LoginGlobalScreen() {
   const navigation = useNavigation<LoginGlobalNavProp>();
@@ -108,7 +97,24 @@ export function LoginGlobalScreen() {
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const [selectedCountry, setSelectedCountry] = useState(COUNTRY_CODES[0]);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { login } = useAuth();
+
+  const closePicker = useCallback(() => {
+    setIsPickerVisible(false);
+    setSearchQuery('');
+  }, []);
+
+  const filteredCountries = COUNTRY_CODES.filter(country => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    return (
+      country.nameEn.toLowerCase().includes(query) ||
+      country.nameZh.toLowerCase().includes(query) ||
+      country.code.includes(query) ||
+      country.iso.toLowerCase().includes(query)
+    );
+  });
 
   const isPhoneMode = method === 'phone';
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -192,7 +198,7 @@ export function LoginGlobalScreen() {
         setError(
           isChina
             ? 'Please enter a valid phone number.'
-            : `Please enter a valid ${selectedCountry.name} phone number.`,
+            : `Please enter a valid ${selectedCountry.nameEn} phone number.`,
         );
         return;
       }
@@ -382,41 +388,59 @@ export function LoginGlobalScreen() {
           animationType="slide"
           transparent={true}
           visible={isPickerVisible}
-          onRequestClose={() => setIsPickerVisible(false)}
+          onRequestClose={closePicker}
         >
           <Pressable
             style={styles.modalOverlay}
-            onPress={() => setIsPickerVisible(false)}
+            onPress={closePicker}
           >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Country / Region</Text>
                 <TouchableOpacity
-                  onPress={() => setIsPickerVisible(false)}
+                  onPress={closePicker}
                   style={styles.modalCloseButton}
                 >
                   <Text style={styles.modalCloseText}>Done</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.countryList}>
-                {COUNTRY_CODES.map((country) => (
+
+              {/* Search Bar */}
+              <View style={styles.searchWrapper}>
+                <View style={styles.searchContainer}>
+                  <Icon name="search-outline" size={16} color={AUTH_COLORS.textMuted} />
+                  <TextInput
+                    style={styles.searchInput}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder="Search by country or code..."
+                    placeholderTextColor={AUTH_COLORS.textFaint}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    clearButtonMode="while-editing"
+                  />
+                </View>
+              </View>
+
+              <ScrollView style={styles.countryList} keyboardShouldPersistTaps="handled">
+                {filteredCountries.map((country) => (
                   <TouchableOpacity
-                    key={country.code}
+                    key={country.iso}
                     style={[
                       styles.countryItem,
-                      selectedCountry.code === country.code
+                      selectedCountry.iso === country.iso
                         ? styles.countryItemActive
                         : null,
                     ]}
                     onPress={() => {
                       setSelectedCountry(country);
-                      setIsPickerVisible(false);
+                      closePicker();
                       setInputValue('');
                       setError(null);
                     }}
                   >
                     <Text style={styles.countryFlag}>{country.flag}</Text>
-                    <Text style={styles.countryName}>{country.name}</Text>
+                    <Text style={styles.countryName}>{country.nameEn} ({country.nameZh})</Text>
                     <Text style={styles.countryCodeText}>{country.code}</Text>
                   </TouchableOpacity>
                 ))}
@@ -653,5 +677,28 @@ const styles = StyleSheet.create({
     color: AUTH_COLORS.textMuted,
     marginLeft: 2,
     marginTop: 1,
+  },
+  searchWrapper: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  searchContainer: {
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: AUTH_COLORS.inputBorder,
+    backgroundColor: AUTH_COLORS.inputBackground,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: AUTH_COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+    padding: 0,
   },
 });
