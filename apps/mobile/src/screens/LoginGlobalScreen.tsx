@@ -112,7 +112,6 @@ export function LoginGlobalScreen() {
     if (!query) return true;
     return (
       country.nameEn.toLowerCase().includes(query) ||
-      country.nameZh.toLowerCase().includes(query) ||
       country.code.includes(query) ||
       country.iso.toLowerCase().includes(query)
     );
@@ -442,7 +441,7 @@ export function LoginGlobalScreen() {
                     }}
                   >
                     <Text style={styles.countryFlag}>{country.flag}</Text>
-                    <Text style={styles.countryName}>{country.nameEn} ({country.nameZh})</Text>
+                    <Text style={styles.countryName}>{country.nameEn}</Text>
                     <Text style={styles.countryCodeText}>{country.code}</Text>
                   </TouchableOpacity>
                 ))}
