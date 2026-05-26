@@ -13,6 +13,7 @@ jest.mock('react-native-localize', () => ({
       isRTL: false,
     },
   ],
+  getCountry: () => 'CN',
 }));
 
 const mockNavigate = jest.fn();

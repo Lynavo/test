@@ -34,6 +34,7 @@ import { ApiError, ERROR_CODE } from '../services/api';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
 import { isGlobalMarket } from '../markets';
 import { COUNTRY_CODES, CountryCodeInfo } from '../constants/countries';
+import * as RNLocalize from 'react-native-localize';
 
 // ---------------------------------------------------------------------------
 // Navigation types
@@ -58,9 +59,14 @@ export function LoginScreen() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [hasTouched, setHasTouched] = useState(false);
 
-  const [selectedCountry, setSelectedCountry] = useState<CountryCodeInfo>(
-    COUNTRY_CODES.find(c => c.iso === 'CN') || COUNTRY_CODES[0]
-  );
+  const [selectedCountry, setSelectedCountry] = useState<CountryCodeInfo>(() => {
+    const systemCountry = RNLocalize.getCountry()?.toUpperCase();
+    return (
+      COUNTRY_CODES.find(c => c.iso === systemCountry) ||
+      COUNTRY_CODES.find(c => c.iso === 'CN') ||
+      COUNTRY_CODES[0]
+    );
+  });
   const [isPickerVisible, setIsPickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 

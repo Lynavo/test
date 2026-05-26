@@ -31,6 +31,7 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { isValidChinaPhone } from '../utils/phone-validation';
 import { COUNTRY_CODES } from '../constants/countries';
+import * as RNLocalize from 'react-native-localize';
 
 type Provider = 'apple' | 'google' | 'email';
 type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
@@ -95,9 +96,14 @@ export function LoginGlobalScreen() {
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState(
-    COUNTRY_CODES.find(c => c.iso === 'CN') || COUNTRY_CODES[0]
-  );
+  const [selectedCountry, setSelectedCountry] = useState(() => {
+    const systemCountry = RNLocalize.getCountry()?.toUpperCase();
+    return (
+      COUNTRY_CODES.find(c => c.iso === systemCountry) ||
+      COUNTRY_CODES.find(c => c.iso === 'CN') ||
+      COUNTRY_CODES[0]
+    );
+  });
   const [isPickerVisible, setIsPickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { login } = useAuth();
