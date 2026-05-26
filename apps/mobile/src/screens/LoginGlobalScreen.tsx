@@ -102,7 +102,7 @@ const COUNTRY_CODES = [
 
 export function LoginGlobalScreen() {
   const navigation = useNavigation<LoginGlobalNavProp>();
-  const [method, setMethod] = useState<'email' | 'phone'>('email');
+  const [method, setMethod] = useState<'email' | 'phone'>('phone');
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
@@ -164,12 +164,6 @@ export function LoginGlobalScreen() {
     }
   };
 
-  const handleToggleMethod = useCallback(() => {
-    if (pendingProvider) return;
-    setMethod((prev) => (prev === 'email' ? 'phone' : 'email'));
-    setInputValue('');
-    setError(null);
-  }, [pendingProvider]);
 
   const handleInputChange = useCallback((val: string) => {
     if (isPhoneMode) {
@@ -286,31 +280,6 @@ export function LoginGlobalScreen() {
                 <Text style={styles.providerText}>Continue with Apple</Text>
               </View>
             )}
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={pendingProvider !== null}
-            onPress={handleToggleMethod}
-            style={({ pressed }) => [
-              styles.providerButton,
-              pendingProvider !== null ? styles.buttonDisabled : null,
-              pressed ? styles.buttonPressed : null,
-            ]}
-          >
-            <View style={styles.buttonContent}>
-              {isPhoneMode ? (
-                <>
-                  <Icon name="mail-outline" size={18} color={AUTH_COLORS.text} />
-                  <Text style={styles.providerText}>Continue with email</Text>
-                </>
-              ) : (
-                <>
-                  <PhoneIcon color={AUTH_COLORS.text} />
-                  <Text style={styles.providerText}>Continue with phone</Text>
-                </>
-              )}
-            </View>
           </Pressable>
         </View>
 
