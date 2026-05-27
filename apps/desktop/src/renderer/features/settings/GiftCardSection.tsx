@@ -156,7 +156,7 @@ export function GiftCardSection() {
         toast.success(t('settings.giftCard.redeemSuccess'));
         return true;
       } else {
-        if (result.reason === 'auth_required' && openLoginOnAuth) {
+        if (result.reason === 'auth_required' && openLoginOnAuth && window.electronAPI?.auth) {
           setPendingRedeemCode(trimmedCode);
           setLoginDialogOpen(true);
           toast.message(t('settings.giftCard.phoneLogin.loginRequired'));

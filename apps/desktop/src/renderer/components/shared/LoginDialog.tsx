@@ -28,6 +28,36 @@ type AuthResult = {
   reason?: string;
 };
 
+function getSMSSendErrorMessage(result: AuthResult, t: (key: string) => string): string {
+  switch (result.reason) {
+    case 'phone_invalid':
+      return t('errors.settings.phoneInvalid');
+    case 'sms_too_frequent':
+      return t('errors.settings.smsTooFrequent');
+    case 'sms_send_failed':
+      return t('errors.settings.smsSendFailed');
+    default:
+      return result.message || t('errors.settings.sendSMSCodeFailed');
+  }
+}
+
+function getSMSLoginErrorMessage(result: AuthResult, t: (key: string) => string): string {
+  switch (result.reason) {
+    case 'phone_invalid':
+      return t('errors.settings.phoneInvalid');
+    case 'sms_code_invalid':
+      return t('errors.settings.smsCodeInvalid');
+    case 'sms_code_expired':
+      return t('errors.settings.smsCodeExpired');
+    case 'sms_max_attempts':
+      return t('errors.settings.smsMaxAttempts');
+    case 'session_replaced':
+      return t('errors.settings.sessionReplaced');
+    default:
+      return result.message || t('errors.settings.loginWithSMSCodeFailed');
+  }
+}
+
 const COMMON_COUNTRY_CODES = [
   { code: '+86', label: '🇨🇳 China (+86)' },
   { code: '+1', label: '🇺🇸/🇨🇦 North America (+1)' },
@@ -72,7 +102,7 @@ export function LoginDialog({ open, onOpenChange, onLoginSuccess }: LoginDialogP
       if (result.ok) {
         toast.success(t('settings.giftCard.phoneLogin.codeSent'));
       } else {
-        toast.error(result.message || t('errors.settings.sendSMSCodeFailed'));
+        toast.error(getSMSSendErrorMessage(result, t));
       }
     } catch (error: any) {
       toast.error(t('errors.settings.sendSMSCodeFailed'), { description: error.message });
@@ -111,7 +141,7 @@ export function LoginDialog({ open, onOpenChange, onLoginSuccess }: LoginDialogP
         setSMSCode('');
         onLoginSuccess();
       } else {
-        toast.error(result.message || t('errors.settings.loginWithSMSCodeFailed'));
+        toast.error(getSMSLoginErrorMessage(result, t));
       }
     } catch (error: any) {
       toast.error(t('errors.settings.loginWithSMSCodeFailed'), { description: error.message });

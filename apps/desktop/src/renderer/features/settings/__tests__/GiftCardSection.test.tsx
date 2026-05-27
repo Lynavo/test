@@ -21,6 +21,8 @@ function setElectronAPI(
   auth?: {
     sendSMSCode?: ReturnType<typeof vi.fn>;
     loginWithSMSCode?: ReturnType<typeof vi.fn>;
+    getAuthSession?: ReturnType<typeof vi.fn>;
+    logout?: ReturnType<typeof vi.fn>;
   },
 ) {
   (window as Window & { electronAPI?: unknown }).electronAPI = {
@@ -29,7 +31,13 @@ function setElectronAPI(
           redeemGiftCard,
         }
       : {},
-    auth,
+    auth: auth
+      ? {
+          getAuthSession: vi.fn().mockResolvedValue(null),
+          logout: vi.fn().mockResolvedValue({ ok: true }),
+          ...auth,
+        }
+      : undefined,
   } as unknown as Window['electronAPI'];
 }
 
@@ -186,7 +194,7 @@ describe('GiftCardSection', () => {
     fireEvent.change(screen.getByLabelText('验证码'), {
       target: { value: '123456' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '登入并兑换' }));
+    fireEvent.click(screen.getByRole('button', { name: '登入' }));
 
     await waitFor(() => {
       expect(loginWithSMSCode).toHaveBeenCalledWith({
@@ -251,7 +259,7 @@ describe('GiftCardSection', () => {
     fireEvent.change(screen.getByLabelText('验证码'), {
       target: { value: '123456' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '登入并兑换' }));
+    fireEvent.click(screen.getByRole('button', { name: '登入' }));
 
     await waitFor(() => {
       expect(toastFns.error).toHaveBeenCalledWith('验证码错误，请重新输入');
