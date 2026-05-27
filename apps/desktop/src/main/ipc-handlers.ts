@@ -1,5 +1,6 @@
-import { ipcMain } from 'electron';
-import { sidecarClient, supportsPairingRevocationOnCodeRotation } from './sidecar-client';
+import { ipcMain, BrowserWindow } from 'electron';
+import log from 'electron-log';
+import { sidecarClient, supportsPairingRevocationOnCodeRotation, syncCredentialsToSidecar } from './sidecar-client';
 import {
   openFolder,
   openFile,
@@ -31,6 +32,9 @@ export const IPC = {
   SIDECAR_REDEEM_GIFT_CARD: 'sidecar:redeem-gift-card',
   AUTH_SEND_SMS_CODE: 'auth:send-sms-code',
   AUTH_LOGIN_WITH_SMS_CODE: 'auth:login-with-sms-code',
+  AUTH_GET_SESSION: 'auth:get-session',
+  AUTH_LOGOUT: 'auth:logout',
+  AUTH_LOGIN_WITH_OAUTH: 'auth:login-with-oauth',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
@@ -100,9 +104,169 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   ipcMain.handle(IPC.AUTH_SEND_SMS_CODE, (_e, payload: { phone: string }) =>
     sidecarClient.sendSMSCode(payload),
   );
-  ipcMain.handle(IPC.AUTH_LOGIN_WITH_SMS_CODE, (_e, payload: { phone: string; code: string }) =>
-    sidecarClient.loginWithSMSCode(payload),
-  );
+  ipcMain.handle(IPC.AUTH_LOGIN_WITH_SMS_CODE, async (_e, payload: { phone: string; code: string }) => {
+    const res = await sidecarClient.loginWithSMSCode(payload);
+    if (res.ok) {
+      syncCredentialsToSidecar()
+        .then((success) => {
+          if (success) {
+            sidecarManager.startCredentialsSyncInterval();
+          }
+        })
+        .catch((err) => {
+          log.error('Failed to sync credentials after login:', err);
+        });
+    }
+    return res;
+  });
+  ipcMain.handle(IPC.AUTH_GET_SESSION, () => sidecarClient.getAuthSession());
+  ipcMain.handle(IPC.AUTH_LOGOUT, () => sidecarClient.logout());
+  ipcMain.handle(IPC.AUTH_LOGIN_WITH_OAUTH, async (_e, payload: { provider: 'google' | 'apple' }) => {
+    return new Promise(async (resolve) => {
+      let resolved = false;
+      const safeResolve = (val: any) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(val);
+        }
+      };
+
+      try {
+        const win = new BrowserWindow({
+          width: 500,
+          height: 600,
+          show: false,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+          },
+        });
+
+        // 避免 Google disallowed_useragent 限制
+        win.webContents.setUserAgent(
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        );
+
+        win.once('ready-to-show', () => win.show());
+
+        win.on('closed', () => {
+          safeResolve({ ok: false, message: 'Login window closed by user' });
+        });
+
+        if (payload.provider === 'google') {
+          const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=318131526906-jdsojdqh6057pn3fo5hhtgudht1bh6c8.apps.googleusercontent.com&redirect_uri=http://localhost/callback&response_type=id_token&scope=openid%20email%20profile&nonce=syncflow_desktop_nonce`;
+
+          const handleRedirect = async (targetUrl: string) => {
+            if (targetUrl.startsWith('http://localhost/callback')) {
+              win.destroy();
+              try {
+                const urlObj = new URL(targetUrl.replace('#', '?'));
+                const idToken = urlObj.searchParams.get('id_token');
+                if (!idToken) throw new Error('No id_token in redirect');
+                const res = await sidecarClient.loginWithGoogle({ identityToken: idToken });
+                if (res.ok) {
+                  await syncCredentialsToSidecar()
+                    .then((success) => {
+                      if (success) {
+                        sidecarManager.startCredentialsSyncInterval();
+                      }
+                    })
+                    .catch((err) => {
+                      log.error('Failed to sync credentials after Google login:', err);
+                    });
+                }
+                safeResolve(res);
+              } catch (err: any) {
+                safeResolve({ ok: false, message: err.message });
+              }
+            }
+          };
+
+          win.webContents.on('will-navigate', (e, url) => {
+            if (url.startsWith('http://localhost/callback')) {
+              e.preventDefault();
+              handleRedirect(url);
+            }
+          });
+          win.webContents.on('will-redirect', (e, url) => {
+            if (url.startsWith('http://localhost/callback')) {
+              e.preventDefault();
+              handleRedirect(url);
+            }
+          });
+
+          await win.loadURL(googleUrl);
+        } else if (payload.provider === 'apple') {
+          const clientId = process.env.SYNCFLOW_APPLE_CLIENT_ID || '';
+          const redirectUri = process.env.SYNCFLOW_APPLE_REDIRECT_URI || '';
+
+          if (!clientId || !redirectUri) {
+            win.destroy();
+            safeResolve({
+              ok: false,
+              message: 'Apple OAuth config missing (SYNCFLOW_APPLE_CLIENT_ID / SYNCFLOW_APPLE_REDIRECT_URI)',
+            });
+            return;
+          }
+
+          const appleUrl = `https://appleid.apple.com/auth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code%20id_token&response_mode=form_post&scope=name%20email`;
+
+          // 攔截 POST 到 redirectUri 的請求
+          const session = win.webContents.session;
+          session.webRequest.onBeforeRequest(
+            { urls: [redirectUri + '*'] },
+            async (details, callback) => {
+              if (details.method === 'POST' && details.uploadData && details.uploadData.length > 0) {
+                win.destroy();
+                try {
+                  const rawBody = Buffer.from(details.uploadData[0].bytes).toString();
+                  const params = new URLSearchParams(rawBody);
+                  const idToken = params.get('id_token');
+                  const code = params.get('code') || undefined;
+                  const userStr = params.get('user');
+                  let fullName = '';
+                  if (userStr) {
+                    const parsedUser = JSON.parse(userStr);
+                    if (parsedUser.name) {
+                      fullName = `${parsedUser.name.firstName || ''} ${parsedUser.name.lastName || ''}`.trim();
+                    }
+                  }
+
+                  if (!idToken) throw new Error('No id_token returned from Apple');
+                  const res = await sidecarClient.loginWithApple({
+                    identityToken: idToken,
+                    authorizationCode: code,
+                    fullName: fullName || undefined,
+                  });
+                  if (res.ok) {
+                    await syncCredentialsToSidecar()
+                      .then((success) => {
+                        if (success) {
+                          sidecarManager.startCredentialsSyncInterval();
+                        }
+                      })
+                      .catch((err) => {
+                        log.error('Failed to sync credentials after Apple login:', err);
+                      });
+                  }
+                  safeResolve(res);
+                } catch (err: any) {
+                  safeResolve({ ok: false, message: err.message });
+                }
+                callback({ cancel: true });
+              } else {
+                callback({});
+              }
+            }
+          );
+
+          await win.loadURL(appleUrl);
+        }
+      } catch (err: any) {
+        safeResolve({ ok: false, message: err.message });
+      }
+    });
+  });
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely(sidecarManager));
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
   ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());
