@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import log from 'electron-log';
 import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@syncflow/contracts';
 import type {
   DeviceFileLedgerPageDTO,
@@ -411,4 +412,95 @@ export const sidecarClient = {
     );
     return persistAuthSession(response);
   },
+  loginWithGoogle: async (payload: { identityToken: string }) => {
+    const response = await request<unknown>(
+      'POST',
+      '/api/v1/auth/google/login',
+      { identity_token: payload.identityToken },
+      AUTH_BASE_URL,
+    );
+    return persistAuthSession(response);
+  },
+  loginWithApple: async (payload: {
+    identityToken: string;
+    authorizationCode?: string;
+    fullName?: string;
+  }) => {
+    const response = await request<unknown>(
+      'POST',
+      '/api/v1/auth/apple/login',
+      {
+        identity_token: payload.identityToken,
+        authorization_code: payload.authorizationCode,
+        full_name: payload.fullName,
+      },
+      AUTH_BASE_URL,
+    );
+    return persistAuthSession(response);
+  },
+  syncTunnelCredentials: async (payload: {
+    signalingUrl: string;
+    accessToken: string;
+    iceServers: ICEServerPayload[];
+  }) => {
+    return request<{ ok: boolean; message: string }>('POST', '/tunnel/credentials', payload);
+  },
+  getAuthSession: () => authSession,
+  fetchTurnCredentials: async () => {
+    return request<{
+      code: number;
+      data: { username: string; credential: string; urls: string[] };
+    }>('GET', '/api/v1/tunnel/turn-credentials', undefined, API_BASE, apiAuthHeaders());
+  },
+  getApiBaseUrl: () => API_BASE,
+  logout: async () => {
+    authSession = null;
+    await syncCredentialsToSidecar();
+    return { ok: true };
+  },
 };
+
+export type ICEServerPayload = {
+  urls: string[];
+  username?: string;
+  credential?: string;
+};
+
+export async function syncCredentialsToSidecar(): Promise<boolean> {
+  try {
+    const session = sidecarClient.getAuthSession();
+    if (!session || !session.accessToken) {
+      await sidecarClient.syncTunnelCredentials({
+        signalingUrl: '',
+        accessToken: '',
+        iceServers: [],
+      });
+      return true;
+    }
+
+    const turnRes = await sidecarClient.fetchTurnCredentials();
+    if (!turnRes || turnRes.code !== 0 || !turnRes.data) {
+      throw new Error(`Fetch TURN credentials failed with code: ${turnRes?.code}`);
+    }
+
+    const iceServers: ICEServerPayload[] = [
+      {
+        urls: turnRes.data.urls,
+        username: turnRes.data.username,
+        credential: turnRes.data.credential,
+      },
+    ];
+
+    const signalingUrl = sidecarClient.getApiBaseUrl();
+    const res = await sidecarClient.syncTunnelCredentials({
+      signalingUrl,
+      accessToken: session.accessToken,
+      iceServers,
+    });
+    return res.ok;
+  } catch (error) {
+    log.error('Failed to sync credentials to sidecar:', error);
+    return false;
+  }
+}
+
