@@ -79,6 +79,9 @@ const mockFiles: ElectronAPI['files'] = {
 const mockAuth: ElectronAPI['auth'] = {
   sendSMSCode: async () => ({ ok: true }),
   loginWithSMSCode: async () => ({ ok: true }),
+  getAuthSession: async () => null,
+  logout: async () => ({ ok: true }),
+  loginWithOAuth: async () => ({ ok: true }),
 };
 
 const mockEvents: ElectronAPI['events'] = {
