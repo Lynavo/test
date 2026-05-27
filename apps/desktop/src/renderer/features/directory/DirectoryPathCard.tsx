@@ -328,6 +328,8 @@ export function DirectoryPathCard() {
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
         onLoginSuccess={checkSession}
+        title={t('settings.filePath.remoteFeaturePrompt')}
+        description={t('settings.filePath.remoteFeaturePromptDetail')}
       />
     </div>
   );

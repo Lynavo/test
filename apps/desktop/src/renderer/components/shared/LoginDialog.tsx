@@ -71,9 +71,17 @@ type LoginDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLoginSuccess: () => void;
+  title?: string;
+  description?: string;
 };
 
-export function LoginDialog({ open, onOpenChange, onLoginSuccess }: LoginDialogProps) {
+export function LoginDialog({
+  open,
+  onOpenChange,
+  onLoginSuccess,
+  title,
+  description,
+}: LoginDialogProps) {
   const { t } = useTranslation();
   const isGlobal = isGlobalMarket();
 
@@ -179,10 +187,10 @@ export function LoginDialog({ open, onOpenChange, onLoginSuccess }: LoginDialogP
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>
-            {isGlobal ? t('settings.giftCard.phoneLogin.title', { defaultValue: '登入或註冊' }) : t('settings.giftCard.phoneLogin.title')}
+            {title || (isGlobal ? t('settings.giftCard.phoneLogin.title', { defaultValue: '登入或註冊' }) : t('settings.giftCard.phoneLogin.title'))}
           </DialogTitle>
           <DialogDescription>
-            {isGlobal ? t('settings.giftCard.phoneLogin.description', { defaultValue: '登入後可解鎖遠端同步與更多功能' }) : t('settings.giftCard.phoneLogin.description')}
+            {description || (isGlobal ? t('settings.giftCard.phoneLogin.description', { defaultValue: '登入後可解鎖遠端同步與更多功能' }) : t('settings.giftCard.phoneLogin.description'))}
           </DialogDescription>
         </DialogHeader>
 
