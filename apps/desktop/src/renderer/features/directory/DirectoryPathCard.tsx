@@ -10,20 +10,6 @@ import { Input } from '@renderer/components/ui/input';
 import { Label } from '@renderer/components/ui/label';
 import { LoginDialog } from '@renderer/components/shared/LoginDialog';
 
-type AuthResult = {
-  ok: boolean;
-  message?: string;
-  reason?:
-    | 'phone_invalid'
-    | 'sms_too_frequent'
-    | 'sms_send_failed'
-    | 'sms_code_invalid'
-    | 'sms_code_expired'
-    | 'token_invalid'
-    | 'sms_max_attempts'
-    | 'session_replaced';
-};
-
 type RuntimeAuthAPI = Partial<Window['electronAPI']['auth']>;
 
 function getRuntimeAuthAPI(): RuntimeAuthAPI | undefined {
@@ -40,7 +26,7 @@ function extractErrorText(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function decodeJWT(token: string): { phone?: string } | null {
+function decodeJWT(token: string): { phone?: string; email?: string } | null {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -50,39 +36,9 @@ function decodeJWT(token: string): { phone?: string } | null {
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join(''),
     );
-    return JSON.parse(jsonPayload) as { phone?: string };
+    return JSON.parse(jsonPayload) as { phone?: string; email?: string };
   } catch {
     return null;
-  }
-}
-
-function getSMSSendErrorMessage(result: AuthResult, t: (key: string) => string): string {
-  switch (result.reason) {
-    case 'phone_invalid':
-      return t('errors.settings.phoneInvalid');
-    case 'sms_too_frequent':
-      return t('errors.settings.smsTooFrequent');
-    case 'sms_send_failed':
-      return t('errors.settings.smsSendFailed');
-    default:
-      return result.message || t('errors.settings.sendSMSCodeFailed');
-  }
-}
-
-function getSMSLoginErrorMessage(result: AuthResult, t: (key: string) => string): string {
-  switch (result.reason) {
-    case 'phone_invalid':
-      return t('errors.settings.phoneInvalid');
-    case 'sms_code_invalid':
-      return t('errors.settings.smsCodeInvalid');
-    case 'sms_code_expired':
-      return t('errors.settings.smsCodeExpired');
-    case 'sms_max_attempts':
-      return t('errors.settings.smsMaxAttempts');
-    case 'session_replaced':
-      return t('errors.settings.sessionReplaced');
-    default:
-      return result.message || t('errors.settings.loginWithSMSCodeFailed');
   }
 }
 
@@ -334,7 +290,11 @@ export function DirectoryPathCard() {
                 {session ? (
                   <>
                     {t('settings.giftCard.phoneLogin.loggedInAs')}
-                    {decodeJWT(session.accessToken)?.phone ? ` (${decodeJWT(session.accessToken)?.phone})` : ''}
+                    {decodeJWT(session.accessToken)?.phone
+                      ? ` (${decodeJWT(session.accessToken)?.phone})`
+                      : decodeJWT(session.accessToken)?.email
+                        ? ` (${decodeJWT(session.accessToken)?.email})`
+                        : ''}
                   </>
                 ) : (
                   t('settings.filePath.remoteFeaturePromptDetail', { defaultValue: '登入後可使用遠端同步' })

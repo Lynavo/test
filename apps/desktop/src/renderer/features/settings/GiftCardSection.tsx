@@ -55,7 +55,7 @@ function extractErrorText(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function decodeJWT(token: string): { phone?: string } | null {
+function decodeJWT(token: string): { phone?: string; email?: string } | null {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -65,7 +65,7 @@ function decodeJWT(token: string): { phone?: string } | null {
         .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
         .join(''),
     );
-    return JSON.parse(jsonPayload) as { phone?: string };
+    return JSON.parse(jsonPayload) as { phone?: string; email?: string };
   } catch {
     return null;
   }
@@ -237,7 +237,11 @@ export function GiftCardSection() {
               {session ? (
                 <>
                   {t('settings.giftCard.phoneLogin.loggedInAs', { defaultValue: '已登入' })}
-                  {decodeJWT(session.accessToken)?.phone ? ` (${decodeJWT(session.accessToken)?.phone})` : ''}
+                  {decodeJWT(session.accessToken)?.phone
+                    ? ` (${decodeJWT(session.accessToken)?.phone})`
+                    : decodeJWT(session.accessToken)?.email
+                      ? ` (${decodeJWT(session.accessToken)?.email})`
+                      : ''}
                 </>
               ) : (
                 t('settings.giftCard.phoneLogin.notLoggedIn', { defaultValue: '尚未登入' })
