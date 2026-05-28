@@ -1,6 +1,9 @@
 import http from 'node:http';
 import https from 'node:https';
 import log from 'electron-log';
+import { app, safeStorage } from 'electron';
+import { writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@syncflow/contracts';
 import type {
   DeviceFileLedgerPageDTO,
@@ -86,8 +89,83 @@ type AuthSession = {
 };
 
 let authSession: AuthSession | null = null;
+let authSessionLoaded = false;
+
+function getSessionFilePath(): string {
+  return join(app.getPath('userData'), 'session.json');
+}
+
+function saveSession(session: AuthSession | null): void {
+  try {
+    const filePath = getSessionFilePath();
+    if (!session) {
+      if (existsSync(filePath)) {
+        rmSync(filePath, { force: true });
+      }
+      return;
+    }
+
+    let accessTokenStr = session.accessToken;
+    let refreshTokenStr = session.refreshToken;
+    let encrypted = false;
+
+    if (safeStorage.isEncryptionAvailable()) {
+      accessTokenStr = safeStorage.encryptString(session.accessToken).toString('base64');
+      refreshTokenStr = safeStorage.encryptString(session.refreshToken).toString('base64');
+      encrypted = true;
+    } else {
+      log.warn('[sidecar-client] safeStorage encryption not available, storing session in plain text');
+    }
+
+    const data = {
+      accessToken: accessTokenStr,
+      refreshToken: refreshTokenStr,
+      encrypted,
+    };
+
+    writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    log.error('[sidecar-client] Failed to save auth session:', error);
+  }
+}
+
+function loadSession(): AuthSession | null {
+  try {
+    const filePath = getSessionFilePath();
+    if (!existsSync(filePath)) {
+      return null;
+    }
+
+    const raw = readFileSync(filePath, 'utf8');
+    const data = JSON.parse(raw);
+    if (!data.accessToken || !data.refreshToken) {
+      return null;
+    }
+
+    let accessToken = data.accessToken;
+    let refreshToken = data.refreshToken;
+
+    if (data.encrypted && safeStorage.isEncryptionAvailable()) {
+      accessToken = safeStorage.decryptString(Buffer.from(data.accessToken, 'base64'));
+      refreshToken = safeStorage.decryptString(Buffer.from(data.refreshToken, 'base64'));
+    }
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    log.error('[sidecar-client] Failed to load auth session:', error);
+    return null;
+  }
+}
+
+function ensureSessionLoaded(): void {
+  if (!authSessionLoaded) {
+    authSession = loadSession();
+    authSessionLoaded = true;
+  }
+}
 
 function optionalGiftCardRedeemToken(): string | null {
+  ensureSessionLoaded();
   // Gift-card redemption is user-scoped; generic API/diagnostics tokens are not valid user JWTs.
   if (authSession?.accessToken) {
     return authSession.accessToken;
@@ -229,6 +307,8 @@ function persistAuthSession(value: unknown): AuthResponse {
   const normalized = normalizeAuthResponse(value);
   if (!normalized.ok) {
     authSession = null;
+    authSessionLoaded = true;
+    saveSession(null);
     return normalized;
   }
 
@@ -247,6 +327,8 @@ function persistAuthSession(value: unknown): AuthResponse {
     accessToken: authData.access_token,
     refreshToken: authData.refresh_token,
   };
+  authSessionLoaded = true;
+  saveSession(authSession);
   return normalized;
 }
 
@@ -389,6 +471,8 @@ export const sidecarClient = {
     } catch (error) {
       if (isGiftCardAuthError(error)) {
         authSession = null;
+        authSessionLoaded = true;
+        saveSession(null);
         return { ok: false, reason: 'auth_required' };
       }
       throw error;
@@ -445,7 +529,10 @@ export const sidecarClient = {
   }) => {
     return request<{ ok: boolean; message: string }>('POST', '/tunnel/credentials', payload);
   },
-  getAuthSession: () => authSession,
+  getAuthSession: () => {
+    ensureSessionLoaded();
+    return authSession;
+  },
   fetchTurnCredentials: async () => {
     return request<{
       code: number;
@@ -455,6 +542,8 @@ export const sidecarClient = {
   getApiBaseUrl: () => API_BASE,
   logout: async () => {
     authSession = null;
+    authSessionLoaded = true;
+    saveSession(null);
     await syncCredentialsToSidecar();
     return { ok: true };
   },

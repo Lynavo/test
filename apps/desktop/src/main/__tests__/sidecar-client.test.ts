@@ -1,13 +1,31 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({
-  app: {
-    getAppPath: () => '/tmp/vividrop-app',
-    getName: () => 'Vivi Drop',
-    getVersion: () => '0.1.0',
-  },
-}));
+vi.mock('electron', () => {
+  const { tmpdir } = require('node:os');
+  const { join } = require('node:path');
+  const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+  const { mkdirSync } = require('node:fs');
+  try {
+    mkdirSync(userDataPath, { recursive: true });
+  } catch {}
+  return {
+    app: {
+      getAppPath: () => '/tmp/vividrop-app',
+      getName: () => 'Vivi Drop',
+      getVersion: () => '0.1.0',
+      getPath: (name: string) => {
+        if (name === 'userData') return userDataPath;
+        return tmpdir();
+      },
+    },
+    safeStorage: {
+      isEncryptionAvailable: () => true,
+      encryptString: (str: string) => Buffer.from(str),
+      decryptString: (buf: Buffer) => buf.toString(),
+    },
+  };
+});
 
 type RequestOptions = {
   method?: string;
@@ -677,6 +695,61 @@ describe('sidecarClient', () => {
     expect(httpsRequest).toHaveBeenCalledTimes(1);
 
     vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('loads persistent session from session.json on startup and removes it on logout', async () => {
+    const { writeFileSync, existsSync } = require('node:fs');
+    const { join } = require('node:path');
+    const { tmpdir } = require('node:os');
+    
+    const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+    const sessionFilePath = join(userDataPath, 'session.json');
+
+    const mockAccessToken = 'test-access-token';
+    const mockRefreshToken = 'test-refresh-token';
+    const encryptedAccess = Buffer.from(mockAccessToken).toString('base64');
+    const encryptedRefresh = Buffer.from(mockRefreshToken).toString('base64');
+
+    const mockData = {
+      accessToken: encryptedAccess,
+      refreshToken: encryptedRefresh,
+      encrypted: true,
+    };
+
+    writeFileSync(sessionFilePath, JSON.stringify(mockData, null, 2), 'utf8');
+
+    const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ ok: true })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+
+    vi.resetModules();
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    const session = client.getAuthSession();
+    expect(session).toEqual({
+      accessToken: mockAccessToken,
+      refreshToken: mockRefreshToken,
+    });
+
+    await client.logout();
+
+    expect(client.getAuthSession()).toBeNull();
+    expect(existsSync(sessionFilePath)).toBe(false);
+
     vi.resetModules();
   });
 });
