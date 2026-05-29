@@ -61,6 +61,8 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /shared/stream/{path...}", srv.handleSharedStream)
 	// Transfer state
 	mux.HandleFunc("GET /transfer/active", withJSON(srv.handleTransferActive))
+	// Tunnel credentials sync (mock/stub for P2P signaling credentials)
+	mux.HandleFunc("POST /tunnel/credentials", withJSON(srv.handleSyncTunnelCredentials))
 	// WebSocket
 	mux.HandleFunc("GET /events/stream", srv.handleEventStream)
 

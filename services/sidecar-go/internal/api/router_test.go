@@ -1581,3 +1581,30 @@ func TestShareValidate(t *testing.T) {
 		t.Error("missing status field")
 	}
 }
+
+func TestSyncTunnelCredentials(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	reqBody := `{"signalingUrl":"https://signaling.example.com","accessToken":"token","iceServers":[]}`
+	resp, err := http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["ok"] != true {
+		t.Errorf("expected ok = true, got %v", body["ok"])
+	}
+}
+

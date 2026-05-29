@@ -182,3 +182,21 @@ func (s *Server) assembleSettingsDTO() (*settingsDTO, error) {
 		ShareName:      shareConfig.ShareName,
 	}, nil
 }
+
+type syncTunnelCredentialsRequest struct {
+	SignalingURL string `json:"signalingUrl"`
+	AccessToken  string `json:"accessToken"`
+	ICEServers   any    `json:"iceServers"`
+}
+
+func (s *Server) handleSyncTunnelCredentials(w http.ResponseWriter, r *http.Request) {
+	var req syncTunnelCredentialsRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	slog.Info("sync tunnel credentials called", "signalingUrl", req.SignalingURL)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "credentials synced"})
+}
+
