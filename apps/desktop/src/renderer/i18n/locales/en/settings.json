@@ -44,7 +44,13 @@
       "loginAndRedeem": "Sign in and redeem",
       "loginRequired": "Sign in with your phone number to continue redeeming the gift card",
       "codeSent": "SMS code sent",
-      "loginSuccess": "Signed in. Continuing redeem"
+      "loginSuccess": "Signed in. Continuing redeem",
+      "logoutSuccess": "Signed out successfully",
+      "accountStatus": "Account Status",
+      "loggedInAs": "Signed in",
+      "notLoggedIn": "Not signed in",
+      "logout": "Sign out",
+      "login": "Sign in"
     }
   },
   "filePath": {
@@ -52,7 +58,9 @@
     "sharedAddress": "Shared folder",
     "chooseFolder": "Choose folder",
     "openReceived": "Open receive folder",
-    "openShared": "Open shared folder"
+    "openShared": "Open shared folder",
+    "remoteFeaturePrompt": "Remote Sync & Share",
+    "remoteFeaturePromptDetail": "Sign in to enable P2P remote syncing"
   },
   "shareAddress": {
     "label": "LAN share address",

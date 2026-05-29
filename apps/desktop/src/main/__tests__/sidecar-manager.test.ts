@@ -2,13 +2,16 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { APP_COMPATIBILITY_VERSION } from '@syncflow/contracts';
 import { SidecarManager } from '../sidecar-manager';
-import { sidecarClient } from '../sidecar-client';
+import { sidecarClient, syncCredentialsToSidecar } from '../sidecar-client';
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
 }));
 const { execFileMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
+}));
+const { syncCredentialsToSidecarMock } = vi.hoisted(() => ({
+  syncCredentialsToSidecarMock: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -40,9 +43,11 @@ vi.mock('../sidecar-client', async () => {
   const actual = await vi.importActual<typeof import('../sidecar-client')>('../sidecar-client');
   return {
     ...actual,
+    syncCredentialsToSidecar: syncCredentialsToSidecarMock,
     sidecarClient: {
       ...actual.sidecarClient,
       getHealth: vi.fn(),
+      getAuthSession: vi.fn(),
     },
   };
 });
@@ -81,6 +86,11 @@ describe('SidecarManager', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     spawnMock.mockReturnValue(createChildProcessStub());
+    syncCredentialsToSidecarMock.mockResolvedValue(true);
+    vi.mocked(sidecarClient.getAuthSession).mockReturnValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+    });
     execFileMock.mockImplementation(
       (
         _file: string,
@@ -133,6 +143,59 @@ describe('SidecarManager', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(manager.getState().status).toBe('healthy');
+  });
+
+  it('waits for the initial credentials sync before resolving startup', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
+
+    let resolveCredentialsSync: (value: boolean) => void = () => {};
+    syncCredentialsToSidecarMock.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveCredentialsSync = resolve;
+      }),
+    );
+
+    const manager = new SidecarManager();
+    let startupResolved = false;
+    const startup = manager.start().then(() => {
+      startupResolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(manager.getState().status).toBe('healthy');
+    expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(1);
+    expect(startupResolved).toBe(false);
+
+    resolveCredentialsSync(true);
+    await startup;
+
+    expect(startupResolved).toBe(true);
+  });
+
+  it('clears credentials refresh interval when the sidecar exits before scheduling restart', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
+
+    const manager = new SidecarManager();
+    await manager.start();
+    expect(vi.getTimerCount()).toBe(2);
+
+    const child = spawnMock.mock.results[0]?.value as ReturnType<typeof createChildProcessStub>;
+    child.emit('exit', 1);
+
+    expect(manager.getState().status).toBe('starting');
+    expect(manager.getState().messageCode).toBe('retryingAfterFailure');
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('does not schedule credentials refresh interval without an active session', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
+    vi.mocked(sidecarClient.getAuthSession).mockReturnValue(null);
+
+    const manager = new SidecarManager();
+    await manager.start();
+
+    expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('does not reuse an external sidecar without pairing-revocation capability', async () => {

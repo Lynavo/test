@@ -80,12 +80,12 @@ app.whenReady().then(async () => {
     `[App] ready version=${app.getVersion()} packaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`,
   );
   registerIpcHandlers(sidecar);
-  await createMainWindow();
-  void checkForUpdatesOnStartup(() => mainWindow);
   wsBridge = new WsBridge(() => mainWindow);
   void sidecar.start().catch((err) => {
     log.error('Failed to start sidecar:', err);
   });
+  await createMainWindow();
+  void checkForUpdatesOnStartup(() => mainWindow);
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {

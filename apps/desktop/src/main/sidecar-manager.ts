@@ -6,7 +6,11 @@ import { promisify } from 'node:util';
 import { app } from 'electron';
 import log from 'electron-log';
 import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@syncflow/contracts';
-import { sidecarClient, supportsPairingRevocationOnCodeRotation } from './sidecar-client';
+import {
+  sidecarClient,
+  supportsPairingRevocationOnCodeRotation,
+  syncCredentialsToSidecar,
+} from './sidecar-client';
 import type { SidecarHealth } from './sidecar-client';
 import type {
   BonjourRuntimeSource,
@@ -33,6 +37,7 @@ export class SidecarManager extends EventEmitter {
   private maxRestarts = 3;
   private healthInterval: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private credentialsSyncInterval: ReturnType<typeof setInterval> | null = null;
   private stopping = false;
   private healthFailureRecoveryScheduled = false;
   private state: SidecarRuntimeState = INITIAL_SIDECAR_RUNTIME_STATE;
@@ -142,6 +147,7 @@ export class SidecarManager extends EventEmitter {
     this.healthFailureRecoveryScheduled = false;
     this.clearRestartTimer();
     this.stopHealthCheck();
+    this.stopCredentialsSyncInterval();
     const bonjour = this.detectBonjourRuntime();
     const reuseExisting = options.reuseExisting ?? !isDev;
 
@@ -160,6 +166,7 @@ export class SidecarManager extends EventEmitter {
         bonjour: { ...bonjour, advertisedIP: this.state.bonjour.advertisedIP },
       });
       log.info('[SidecarManager] reusing existing healthy sidecar');
+      await this.syncCredentialsOnce('reused sidecar');
       return;
     }
     if (existingHealth?.ok) {
@@ -277,6 +284,7 @@ export class SidecarManager extends EventEmitter {
         bonjour: { ...bonjour, advertisedIP: this.state.bonjour.advertisedIP },
       });
       log.info('[SidecarManager] sidecar is healthy');
+      await this.syncCredentialsOnce('healthy sidecar');
     } catch (err) {
       log.error('[SidecarManager] health wait failed', err);
       if (this.process === child && !child.killed) {
@@ -297,6 +305,65 @@ export class SidecarManager extends EventEmitter {
     await this.start({ reuseExisting: false });
   }
 
+  private async syncCredentialsOnce(context: string): Promise<void> {
+    try {
+      const success = await syncCredentialsToSidecar();
+      const session = sidecarClient.getAuthSession();
+      if (success && session?.accessToken) {
+        this.startCredentialsSyncInterval();
+        return;
+      }
+      if (!success) {
+        log.warn(`[SidecarManager] credentials sync failed for ${context}`);
+      }
+      this.stopCredentialsSyncInterval();
+    } catch (err) {
+      this.stopCredentialsSyncInterval();
+      log.error(`[SidecarManager] failed to sync credentials to ${context}`, err);
+    }
+  }
+
+  startCredentialsSyncInterval(): void {
+    this.stopCredentialsSyncInterval();
+
+    // Refresh TURN credentials every 45 minutes
+    const intervalMs = 45 * 60 * 1000;
+    this.credentialsSyncInterval = setInterval(async () => {
+      const session = sidecarClient.getAuthSession();
+      if (!session || !session.accessToken) {
+        log.info('[SidecarManager] No active session, skipping periodic credentials sync');
+        this.stopCredentialsSyncInterval();
+        return;
+      }
+
+      if (this.state.status !== 'healthy') {
+        log.info('[SidecarManager] Sidecar is not healthy, skipping periodic credentials sync');
+        return;
+      }
+
+      log.info('[SidecarManager] Starting periodic credentials sync to refresh TURN credentials');
+      try {
+        const success = await syncCredentialsToSidecar();
+        if (success) {
+          log.info('[SidecarManager] Periodic credentials sync succeeded');
+        } else {
+          log.warn('[SidecarManager] Periodic credentials sync failed');
+        }
+      } catch (err) {
+        log.error('[SidecarManager] Error during periodic credentials sync', err);
+      }
+    }, intervalMs);
+    log.info('[SidecarManager] Scheduled periodic credentials sync interval (45 minutes)');
+  }
+
+  stopCredentialsSyncInterval(): void {
+    if (this.credentialsSyncInterval) {
+      clearInterval(this.credentialsSyncInterval);
+      this.credentialsSyncInterval = null;
+      log.info('[SidecarManager] Stopped periodic credentials sync interval');
+    }
+  }
+
   async stop(
     options: {
       killExternal?: boolean;
@@ -307,6 +374,7 @@ export class SidecarManager extends EventEmitter {
     this.stopping = true;
     this.clearRestartTimer();
     this.stopHealthCheck();
+    this.stopCredentialsSyncInterval();
     if (this.process) {
       log.info('[SidecarManager] stopping sidecar');
       this.process.kill('SIGTERM');
@@ -476,6 +544,7 @@ export class SidecarManager extends EventEmitter {
 
     this.healthFailureRecoveryScheduled = true;
     this.stopHealthCheck();
+    this.stopCredentialsSyncInterval();
 
     if (this.process && !this.process.killed) {
       log.warn('[SidecarManager] terminating unhealthy managed sidecar');
@@ -489,6 +558,7 @@ export class SidecarManager extends EventEmitter {
 
   private handleFailure(messageCode: SidecarRuntimeMessageCode, code: number | null): void {
     this.stopHealthCheck();
+    this.stopCredentialsSyncInterval();
     this.healthFailureRecoveryScheduled = false;
 
     if (this.stopping) {

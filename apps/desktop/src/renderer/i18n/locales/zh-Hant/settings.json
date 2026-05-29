@@ -44,7 +44,13 @@
       "loginAndRedeem": "登入並兌換",
       "loginRequired": "請先用手機號碼登入後繼續兌換禮品卡",
       "codeSent": "驗證碼已傳送",
-      "loginSuccess": "登入成功，正在繼續兌換"
+      "loginSuccess": "登入成功，正在繼續兌換",
+      "logoutSuccess": "已成功登出",
+      "accountStatus": "帳號狀態",
+      "loggedInAs": "已登入",
+      "notLoggedIn": "尚未登入",
+      "logout": "登出",
+      "login": "登入"
     }
   },
   "filePath": {
@@ -52,7 +58,9 @@
     "sharedAddress": "共享目錄",
     "chooseFolder": "選擇資料夾",
     "openReceived": "開啟接收目錄",
-    "openShared": "開啟共享目錄"
+    "openShared": "開啟共享目錄",
+    "remoteFeaturePrompt": "遠端同步與傳輸",
+    "remoteFeaturePromptDetail": "登入後可使用 P2P 遠端同步功能"
   },
   "shareAddress": {
     "label": "區域網路共享位址",
