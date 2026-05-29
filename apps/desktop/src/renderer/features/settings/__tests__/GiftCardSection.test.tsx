@@ -188,7 +188,7 @@ describe('GiftCardSection', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送验证码' }));
 
     await waitFor(() => {
-      expect(sendSMSCode).toHaveBeenCalledWith({ phone: '13800138000' });
+      expect(sendSMSCode).toHaveBeenCalledWith({ phone: '+8613800138000' });
     });
 
     fireEvent.change(screen.getByLabelText('验证码'), {
@@ -198,7 +198,7 @@ describe('GiftCardSection', () => {
 
     await waitFor(() => {
       expect(loginWithSMSCode).toHaveBeenCalledWith({
-        phone: '13800138000',
+        phone: '+8613800138000',
         code: '123456',
       });
       expect(redeemGiftCard).toHaveBeenCalledTimes(2);

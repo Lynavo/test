@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { describe, expect, it, vi } from 'vitest';
+import { existsSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => {
   const { tmpdir } = require('node:os');
@@ -55,6 +58,15 @@ const remoteClientHeaders = {
 };
 
 describe('sidecarClient', () => {
+  beforeEach(() => {
+    const sessionFile = join(tmpdir(), 'vividrop-test-userdata', 'session.json');
+    if (existsSync(sessionFile)) {
+      try {
+        unlinkSync(sessionFile);
+      } catch {}
+    }
+  });
+
   it('fetches client config from the public API without user auth', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
@@ -276,10 +288,7 @@ describe('sidecarClient', () => {
       req.write = vi.fn();
       req.end = vi.fn();
       callback(
-        createResponse(
-          200,
-          JSON.stringify({ code: 3001, message: '禮品卡碼無效', data: {} }),
-        ),
+        createResponse(200, JSON.stringify({ code: 3001, message: '禮品卡碼無效', data: {} })),
       );
       return req;
     });
@@ -413,12 +422,7 @@ describe('sidecarClient', () => {
       };
       req.write = vi.fn();
       req.end = vi.fn();
-      callback(
-        createResponse(
-          401,
-          JSON.stringify({ code: 1006, message: 'Token 無效或已過期' }),
-        ),
-      );
+      callback(createResponse(401, JSON.stringify({ code: 1006, message: 'Token 無效或已過期' })));
       return req;
     });
 
@@ -585,7 +589,9 @@ describe('sidecarClient', () => {
 
     const { sidecarClient: client } = await import('../sidecar-client');
 
-    await expect(client.loginWithSMSCode({ phone: '13800138000', code: '123456' })).resolves.toEqual({
+    await expect(
+      client.loginWithSMSCode({ phone: '13800138000', code: '123456' }),
+    ).resolves.toEqual({
       ok: true,
     });
     await expect(client.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' })).resolves.toEqual({
@@ -663,10 +669,7 @@ describe('sidecarClient', () => {
       req.write = vi.fn();
       req.end = vi.fn();
       callback(
-        createResponse(
-          200,
-          JSON.stringify({ code: 1004, message: '驗證碼錯誤', data: {} }),
-        ),
+        createResponse(200, JSON.stringify({ code: 1004, message: '驗證碼錯誤', data: {} })),
       );
       return req;
     });
@@ -685,7 +688,9 @@ describe('sidecarClient', () => {
 
     const { sidecarClient: client } = await import('../sidecar-client');
 
-    await expect(client.loginWithSMSCode({ phone: '13800138000', code: '123456' })).resolves.toEqual({
+    await expect(
+      client.loginWithSMSCode({ phone: '13800138000', code: '123456' }),
+    ).resolves.toEqual({
       ok: false,
       reason: 'sms_code_invalid',
       message: '驗證碼錯誤',
@@ -702,7 +707,7 @@ describe('sidecarClient', () => {
     const { writeFileSync, existsSync } = require('node:fs');
     const { join } = require('node:path');
     const { tmpdir } = require('node:os');
-    
+
     const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
     const sessionFilePath = join(userDataPath, 'session.json');
 

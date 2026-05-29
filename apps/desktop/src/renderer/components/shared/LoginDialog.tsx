@@ -91,13 +91,44 @@ export function LoginDialog({
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Reset inputs and default country code when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      setCountryCode('+86');
+      setPhone('');
+      setSMSCode('');
+    }
+  }, [open]);
+
+  const getFormattedPhone = useCallback(
+    (rawPhone: string) => {
+      const trimmed = rawPhone.trim();
+      if (trimmed.startsWith('+')) {
+        return trimmed;
+      }
+
+      if (isGlobal) {
+        if (countryCode === '+86' && trimmed.startsWith('86') && trimmed.length > 11) {
+          return '+' + trimmed;
+        }
+        return countryCode + trimmed;
+      } else {
+        if (trimmed.startsWith('86') && trimmed.length > 11) {
+          return '+' + trimmed;
+        }
+        return '+86' + trimmed;
+      }
+    },
+    [countryCode, isGlobal],
+  );
+
   const handleSendSMSCode = useCallback(async () => {
     const trimmedPhone = phone.trim();
     if (!trimmedPhone) {
       toast.error(t('errors.settings.phoneRequired'));
       return;
     }
-    const fullPhone = isGlobal ? (countryCode + trimmedPhone) : trimmedPhone;
+    const fullPhone = getFormattedPhone(trimmedPhone);
     const auth = (window as any).electronAPI?.auth;
     if (!auth?.sendSMSCode) {
       toast.error(t('errors.settings.authUnavailable'));
@@ -117,7 +148,7 @@ export function LoginDialog({
     } finally {
       setIsSendingCode(false);
     }
-  }, [phone, countryCode, isGlobal, t]);
+  }, [phone, getFormattedPhone, t]);
 
   const handleSMSLogin = useCallback(async () => {
     const trimmedPhone = phone.trim();
@@ -130,7 +161,7 @@ export function LoginDialog({
       toast.error(t('errors.settings.smsCodeRequired'));
       return;
     }
-    const fullPhone = isGlobal ? (countryCode + trimmedPhone) : trimmedPhone;
+    const fullPhone = getFormattedPhone(trimmedPhone);
     const auth = (window as any).electronAPI?.auth;
     if (!auth?.loginWithSMSCode) {
       toast.error(t('errors.settings.authUnavailable'));
@@ -156,41 +187,52 @@ export function LoginDialog({
     } finally {
       setIsLoggingIn(false);
     }
-  }, [phone, smsCode, countryCode, isGlobal, onOpenChange, onLoginSuccess, t]);
+  }, [phone, smsCode, getFormattedPhone, onOpenChange, onLoginSuccess, t]);
 
-  const handleOAuthLogin = useCallback(async (provider: 'google' | 'apple') => {
-    const auth = (window as any).electronAPI?.auth;
-    if (!auth?.loginWithOAuth) {
-      toast.error(t('errors.settings.authUnavailable'));
-      return;
-    }
-
-    setIsLoggingIn(true);
-    try {
-      const result: AuthResult = await auth.loginWithOAuth({ provider });
-      if (result.ok) {
-        toast.success(t('settings.giftCard.phoneLogin.loginSuccess'));
-        onOpenChange(false);
-        onLoginSuccess();
-      } else {
-        toast.error(result.message || `${provider} Sign-in failed`);
+  const handleOAuthLogin = useCallback(
+    async (provider: 'google' | 'apple') => {
+      const auth = (window as any).electronAPI?.auth;
+      if (!auth?.loginWithOAuth) {
+        toast.error(t('errors.settings.authUnavailable'));
+        return;
       }
-    } catch (error: any) {
-      toast.error(`${provider} Sign-in error`, { description: error.message });
-    } finally {
-      setIsLoggingIn(false);
-    }
-  }, [onOpenChange, onLoginSuccess, t]);
+
+      setIsLoggingIn(true);
+      try {
+        const result: AuthResult = await auth.loginWithOAuth({ provider });
+        if (result.ok) {
+          toast.success(t('settings.giftCard.phoneLogin.loginSuccess'));
+          onOpenChange(false);
+          onLoginSuccess();
+        } else {
+          toast.error(result.message || `${provider} Sign-in failed`);
+        }
+      } catch (error: any) {
+        toast.error(`${provider} Sign-in error`, { description: error.message });
+      } finally {
+        setIsLoggingIn(false);
+      }
+    },
+    [onOpenChange, onLoginSuccess, t],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
           <DialogTitle>
-            {title || (isGlobal ? t('settings.giftCard.phoneLogin.title', { defaultValue: '登入或註冊' }) : t('settings.giftCard.phoneLogin.title'))}
+            {title ||
+              (isGlobal
+                ? t('settings.giftCard.phoneLogin.title', { defaultValue: '登入或註冊' })
+                : t('settings.giftCard.phoneLogin.title'))}
           </DialogTitle>
           <DialogDescription>
-            {description || (isGlobal ? t('settings.giftCard.phoneLogin.description', { defaultValue: '登入後可解鎖遠端同步與更多功能' }) : t('settings.giftCard.phoneLogin.description'))}
+            {description ||
+              (isGlobal
+                ? t('settings.giftCard.phoneLogin.description', {
+                    defaultValue: '登入後可解鎖遠端同步與更多功能',
+                  })
+                : t('settings.giftCard.phoneLogin.description'))}
           </DialogDescription>
         </DialogHeader>
 
@@ -224,12 +266,10 @@ export function LoginDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="login-phone">
-              {t('settings.giftCard.phoneLogin.phoneLabel')}
-            </Label>
+            <Label htmlFor="login-phone">{t('settings.giftCard.phoneLogin.phoneLabel')}</Label>
             <div className="flex gap-2">
-              {isGlobal && (
-                <Select value={countryCode} onValueChange={setCountryCode}>
+              {isGlobal ? (
+                <Select value={countryCode} onValueChange={setCountryCode} defaultValue="+86">
                   <SelectTrigger className="w-[110px] shrink-0">
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
@@ -241,6 +281,10 @@ export function LoginDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              ) : (
+                <div className="flex items-center justify-center px-3 h-10 rounded-md border border-input bg-muted text-muted-foreground text-sm font-medium shrink-0">
+                  +86
+                </div>
               )}
               <Input
                 id="login-phone"
@@ -253,9 +297,7 @@ export function LoginDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="login-sms-code">
-              {t('settings.giftCard.phoneLogin.codeLabel')}
-            </Label>
+            <Label htmlFor="login-sms-code">{t('settings.giftCard.phoneLogin.codeLabel')}</Label>
             <div className="flex gap-2">
               <Input
                 id="login-sms-code"
