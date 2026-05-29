@@ -32,6 +32,7 @@ require (
 	github.com/pion/webrtc/v4 v4.2.13 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/mobile v0.0.0-20260209203831-923679eb55af // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
