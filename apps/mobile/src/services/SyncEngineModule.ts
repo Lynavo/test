@@ -167,6 +167,7 @@ export async function browseSharedFiles(
 export interface DownloadResult {
   savedToPhotos: boolean;
   localPath: string | null;
+  savedLocation?: string | null;
 }
 
 export async function downloadSharedFile(
@@ -290,4 +291,16 @@ export async function setOwnerUserId(userId: number | string): Promise<void> {
 export async function getKnownDeviceIds(): Promise<string[]> {
   const result = await NativeSyncEngine.getKnownDeviceIds();
   return (result ?? []) as string[];
+}
+
+export async function setTunnelCredentials(
+  signalingUrl: string,
+  accessToken: string,
+  iceServersJSON: string,
+): Promise<void> {
+  await NativeSyncEngine.setTunnelCredentials(
+    signalingUrl,
+    accessToken,
+    iceServersJSON,
+  );
 }

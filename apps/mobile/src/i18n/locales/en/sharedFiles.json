@@ -25,8 +25,8 @@
     "playVideo": "Tap to play video"
   },
   "dialogs": {
-    "downloadSavedToPhotos": "{{name}} saved to Photos",
-    "downloadSaved": "{{name}} saved",
+    "downloadSavedToPhotos": "{{name}} saved to {{location}}",
+    "downloadSaved": "{{name}} saved to {{location}}",
     "downloadComplete": "Download complete",
     "downloadFailed": "Download Failed",
     "downloadFailedMessage": "Could not download the file. Please try again later.",

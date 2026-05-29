@@ -86,6 +86,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   getOwnerUserId: jest.fn().mockResolvedValue('42'),
   setOwnerUserId: jest.fn().mockResolvedValue(undefined),
   wipeSyncIdentity: jest.fn().mockResolvedValue(undefined),
+  setTunnelCredentials: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../services/sidecar-reset-service', () => ({

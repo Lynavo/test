@@ -9,12 +9,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import i18next from 'i18next';
 import { ApiError, ERROR_CODE } from '../services/api';
-import { clearSessionBaseUrl, loadSessionBaseUrl } from '../services/config';
+import {
+  clearSessionBaseUrl,
+  loadSessionBaseUrl,
+  getBaseUrl,
+} from '../services/config';
 import { useIapLifecycle } from '../hooks/useIapLifecycle';
 import {
   getOwnerUserId as nativeGetOwnerUserId,
   setOwnerUserId as nativeSetOwnerUserId,
   wipeSyncIdentity as nativeWipeSyncIdentity,
+  setTunnelCredentials as nativeSetTunnelCredentials,
 } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
@@ -347,6 +352,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Keep module-level tokens in sync whenever state changes
   useEffect(() => {
     syncTokensToModule(state.accessToken, state.refreshToken);
+
+    let cancelled = false;
+    const capturedAuthSessionGeneration = _authSessionGeneration;
+    const isStale = (accessToken: string) =>
+      cancelled ||
+      _authSessionGeneration !== capturedAuthSessionGeneration ||
+      _accessToken !== accessToken;
+
+    if (!state.accessToken) {
+      void nativeSetTunnelCredentials('', '', '').catch(err => {
+        console.warn(
+          '[auth-store] failed to clear tunnel credentials from native:',
+          err,
+        );
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const baseUrl = getBaseUrl();
+    const accessToken = state.accessToken;
+    void import('../services/tunnel-credentials-service')
+      .then(({ fetchTunnelIceServersJSON }) => fetchTunnelIceServersJSON())
+      .then(iceServersJSON => {
+        if (isStale(accessToken)) return undefined;
+        return nativeSetTunnelCredentials(baseUrl, accessToken, iceServersJSON);
+      })
+      .catch(err => {
+        console.warn(
+          '[auth-store] failed to sync tunnel credentials to native:',
+          err,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [state.accessToken, state.refreshToken]);
 
   // Hydrate persisted tokens on mount before the navigator decides where to go.
@@ -465,9 +508,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const iapLifecycleReady =
-    state.isLoggedIn &&
-    state.user != null &&
-    state.profileError == null;
+    state.isLoggedIn && state.user != null && state.profileError == null;
   useIapLifecycle({ isLoggedIn: iapLifecycleReady, loadSubscription });
 
   // Single profile-load orchestrator. Delegates the Phase-2 owner-guard

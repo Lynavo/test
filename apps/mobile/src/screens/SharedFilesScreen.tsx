@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   NativeModules,
   NativeEventEmitter,
   Modal,
+  Platform,
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,6 +35,13 @@ import { formatBytes } from '../utils/format';
 
 type ErrorKind = 'device_unavailable' | 'directory_inaccessible' | 'network_error';
 
+interface SharedFileDownloadProgress {
+  path: string;
+  bytesWritten: number;
+  totalBytes: number;
+  progress: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -55,6 +63,35 @@ function fileTypeIcon(file: SharedFileDTO): { name: string; color: string } {
 
 function hasPreview(file: SharedFileDTO): boolean {
   return file.type === 'image' || file.type === 'video';
+}
+
+function clampDownloadProgress(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function formatDownloadPercent(value: number): string {
+  return `${Math.round(clampDownloadProgress(value) * 100)}%`;
+}
+
+function fallbackSavedLocation(
+  file: SharedFileDTO,
+  result: {
+    savedToPhotos: boolean;
+    localPath: string | null;
+    savedLocation?: string | null;
+  },
+): string | null {
+  if (result.savedLocation) return result.savedLocation;
+  if (result.localPath) return result.localPath;
+  if (!result.savedToPhotos) return null;
+
+  if (Platform.OS === 'android') {
+    if (file.type === 'video') return 'Movies/Vivi Drop';
+    if (file.type === 'image') return 'Pictures/Vivi Drop';
+  }
+
+  return 'Photos';
 }
 
 async function checkDeviceAvailable(): Promise<boolean> {
@@ -83,6 +120,8 @@ export function SharedFilesScreen() {
   const [currentPath, setCurrentPath] = useState('');
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const downloadingRef = useRef<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, SharedFileDownloadProgress>>({});
 
   // Preview state
   const [previewFile, setPreviewFile] = useState<SharedFileDTO | null>(null);
@@ -171,6 +210,28 @@ export function SharedFilesScreen() {
     return () => sub.remove();
   }, [loadFiles, currentPath]);
 
+  useEffect(() => {
+    const { NativeSyncEngine } = NativeModules;
+    if (!NativeSyncEngine) return;
+
+    const emitter = new NativeEventEmitter(NativeSyncEngine);
+    const sub = emitter.addListener(
+      'onSharedFileDownloadProgress',
+      (progress: SharedFileDownloadProgress | null) => {
+        if (!progress?.path) return;
+        setDownloadProgress((previous) => ({
+          ...previous,
+          [progress.path]: {
+            ...progress,
+            progress: clampDownloadProgress(progress.progress),
+          },
+        }));
+      },
+    );
+
+    return () => sub.remove();
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Directory navigation
   // ---------------------------------------------------------------------------
@@ -190,6 +251,8 @@ export function SharedFilesScreen() {
   // ---------------------------------------------------------------------------
 
   const handleDownload = useCallback(async (file: SharedFileDTO) => {
+    if (downloadingRef.current) return;
+
     // --- PRD §7.1 — downloads require active subscription ---
     if (!FEATURES.SUBSCRIPTION_ENFORCEMENT) {
       // Soft-off: skip the gate until enforcement is globally enabled.
@@ -208,19 +271,44 @@ export function SharedFilesScreen() {
       return;
     }
 
+    downloadingRef.current = file.path;
     setDownloading(file.path);
+    setDownloadProgress((previous) => {
+      const next = { ...previous };
+      delete next[file.path];
+      return next;
+    });
     try {
       const result = await downloadSharedFile(file.path);
+      const savedLocation = fallbackSavedLocation(file, result);
       if (result.savedToPhotos) {
-        Alert.alert(t('sharedFiles.dialogs.downloadComplete'), t('sharedFiles.dialogs.downloadSavedToPhotos', { name: file.name }));
-      } else if (result.localPath) {
-        Alert.alert(t('sharedFiles.dialogs.downloadComplete'), t('sharedFiles.dialogs.downloadSaved', { name: file.name }));
+        Alert.alert(
+          t('sharedFiles.dialogs.downloadComplete'),
+          t('sharedFiles.dialogs.downloadSavedToPhotos', {
+            name: file.name,
+            location: savedLocation,
+          }),
+        );
+      } else if (savedLocation) {
+        Alert.alert(
+          t('sharedFiles.dialogs.downloadComplete'),
+          t('sharedFiles.dialogs.downloadSaved', {
+            name: file.name,
+            location: savedLocation,
+          }),
+        );
       }
     } catch (e) {
       Alert.alert(t('sharedFiles.dialogs.downloadFailed'), t('sharedFiles.dialogs.downloadFailedMessage'));
       console.warn('[SharedFiles] download error:', e);
     } finally {
+      downloadingRef.current = null;
       setDownloading(null);
+      setDownloadProgress((previous) => {
+        const next = { ...previous };
+        delete next[file.path];
+        return next;
+      });
     }
   }, [subscription?.status, t, navigation]);
 
@@ -252,6 +340,8 @@ export function SharedFilesScreen() {
     ({ item }: ListRenderItemInfo<SharedFileDTO>) => {
       const icon = fileTypeIcon(item);
       const isDownloading = downloading === item.path;
+      const isDownloadDisabled = downloading !== null;
+      const progress = downloadProgress[item.path]?.progress ?? 0;
 
       return (
         <TouchableOpacity
@@ -284,8 +374,24 @@ export function SharedFilesScreen() {
               {item.name}
             </Text>
             <Text style={styles.fileMeta}>
-              {item.isDirectory ? t('sharedFiles.files.folder') : formatBytes(item.size)}
+              {isDownloading
+                ? formatDownloadPercent(progress)
+                : item.isDirectory
+                  ? t('sharedFiles.files.folder')
+                  : formatBytes(item.size)}
             </Text>
+            {isDownloading && (
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${Math.round(clampDownloadProgress(progress) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+            )}
           </View>
 
           {/* Actions */}
@@ -293,9 +399,12 @@ export function SharedFilesScreen() {
             <Icon name="chevron-forward" size={16} color="#8aabbd" />
           ) : (
             <TouchableOpacity
-              style={styles.downloadBtn}
+              style={[
+                styles.downloadBtn,
+                isDownloadDisabled && !isDownloading ? styles.downloadBtnDisabled : null,
+              ]}
               activeOpacity={0.7}
-              disabled={isDownloading}
+              disabled={isDownloadDisabled}
               testID="shared-file-download-button"
               onPress={() => void handleDownload(item)}
             >
@@ -309,7 +418,7 @@ export function SharedFilesScreen() {
         </TouchableOpacity>
       );
     },
-    [downloading, navigateIntoDir, handlePreview, handleDownload],
+    [downloading, downloadProgress, navigateIntoDir, handlePreview, handleDownload],
   );
 
   const keyExtractor = useCallback((item: SharedFileDTO) => item.path, []);
@@ -572,6 +681,18 @@ const styles = StyleSheet.create({
     color: '#9ab8cc',
     marginTop: 2,
   },
+  progressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(59,159,216,0.15)',
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: BLUE,
+  },
   downloadBtn: {
     width: 36,
     height: 36,
@@ -579,6 +700,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59,159,216,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  downloadBtnDisabled: {
+    opacity: 0.4,
   },
   separator: {
     height: 8,

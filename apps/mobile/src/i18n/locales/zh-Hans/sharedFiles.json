@@ -25,8 +25,8 @@
     "playVideo": "点击播放视频"
   },
   "dialogs": {
-    "downloadSavedToPhotos": "{{name}} 已保存到相册",
-    "downloadSaved": "{{name}} 已保存",
+    "downloadSavedToPhotos": "{{name}} 已保存到 {{location}}",
+    "downloadSaved": "{{name}} 已保存到 {{location}}",
     "downloadComplete": "下载完成",
     "downloadFailed": "下载失败",
     "downloadFailedMessage": "无法下载文件，请稍后重试",

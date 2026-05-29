@@ -78,6 +78,7 @@ import { SharedFilesScreen } from '../SharedFilesScreen';
 import { useAuth } from '../../stores/auth-store';
 
 const alertSpy = jest.spyOn(Alert, 'alert');
+const nativeListeners = new Map<string, (payload: unknown) => void>();
 
 const FAKE_FILE = {
   name: 'photo.jpg',
@@ -88,12 +89,22 @@ const FAKE_FILE = {
   thumbnailUrl: null,
 };
 
+const FAKE_OTHER_FILE = {
+  name: 'clip.mp4',
+  path: '/shared/clip.mp4',
+  size: 2048,
+  type: 'video',
+  isDirectory: false,
+  thumbnailUrl: null,
+};
+
 beforeAll(async () => {
   await i18n.changeLanguage('en');
 });
 
 beforeEach(() => {
   jest.clearAllMocks();
+  nativeListeners.clear();
 
   // Set up NativeSyncEngine on NativeModules so checkDeviceAvailable passes.
   (NativeModules as Record<string, unknown>).NativeSyncEngine = {
@@ -107,7 +118,14 @@ beforeEach(() => {
 
   // NativeEventEmitter mock needs addListener to return a removable sub.
   (NativeEventEmitter as jest.Mock).mockImplementation(() => ({
-    addListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
+    addListener: jest.fn(
+      (eventName: string, listener: (payload: unknown) => void) => {
+        nativeListeners.set(eventName, listener);
+        return {
+          remove: jest.fn(() => nativeListeners.delete(eventName)),
+        };
+      },
+    ),
   }));
 
   // Return one non-directory file so the FlatList renders the download button.
@@ -118,6 +136,147 @@ beforeEach(() => {
     // Simulate tap on the first non-cancel button.
     const go = buttons?.find((b: { style?: string }) => b.style !== 'cancel');
     go?.onPress?.();
+  });
+});
+
+describe('SharedFilesScreen download progress', () => {
+  test('renders native download progress for the active file', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    let resolveDownload: (value: { savedToPhotos: boolean; localPath: string | null }) => void =
+      () => undefined;
+    mockDownloadSharedFile.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDownload = resolve;
+        }),
+    );
+
+    const { getByTestId, getByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-download-button'));
+    });
+    await act(async () => {
+      nativeListeners.get('onSharedFileDownloadProgress')?.({
+        path: FAKE_FILE.path,
+        bytesWritten: 512,
+        totalBytes: 1024,
+        progress: 0.5,
+      });
+    });
+
+    expect(getByText('50%')).toBeTruthy();
+
+    await act(async () => {
+      resolveDownload({
+        savedToPhotos: false,
+        localPath: '/tmp/syncflow_shared_downloads/photo.jpg',
+      });
+    });
+  });
+
+  test('shows the saved location after download completes', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockResolvedValue({
+      savedToPhotos: false,
+      localPath: '/tmp/syncflow_shared_downloads/photo.jpg',
+    });
+
+    const { getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-download-button'));
+    });
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Download complete',
+        expect.stringContaining('/tmp/syncflow_shared_downloads/photo.jpg'),
+      ),
+    );
+  });
+
+  test('shows the saved location when native returns display location only', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockResolvedValue({
+      savedToPhotos: false,
+      localPath: null,
+      savedLocation: 'Documents/Vivi Drop/photo.jpg',
+    });
+
+    const { getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-download-button'));
+    });
+
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Download complete',
+        expect.stringContaining('Documents/Vivi Drop/photo.jpg'),
+      ),
+    );
+  });
+
+  test('does not start a second download while one is active', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockBrowseSharedFiles.mockResolvedValue({
+      files: [FAKE_FILE, FAKE_OTHER_FILE],
+    });
+    mockDownloadSharedFile.mockImplementation(() => new Promise(() => undefined));
+
+    const { getAllByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => expect(getAllByTestId('shared-file-download-button')).toHaveLength(2));
+
+    await act(async () => {
+      fireEvent.press(getAllByTestId('shared-file-download-button')[0]);
+    });
+    await act(async () => {
+      fireEvent.press(getAllByTestId('shared-file-download-button')[1]);
+    });
+
+    expect(mockDownloadSharedFile).toHaveBeenCalledTimes(1);
+    expect(mockDownloadSharedFile).toHaveBeenCalledWith(FAKE_FILE.path);
+  });
+
+  test('ignores repeated presses before the active download re-renders disabled state', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockImplementation(() => new Promise(() => undefined));
+
+    const { getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      const button = getByTestId('shared-file-download-button');
+      fireEvent.press(button);
+      fireEvent.press(button);
+    });
+
+    expect(mockDownloadSharedFile).toHaveBeenCalledTimes(1);
+    expect(mockDownloadSharedFile).toHaveBeenCalledWith(FAKE_FILE.path);
   });
 });
 

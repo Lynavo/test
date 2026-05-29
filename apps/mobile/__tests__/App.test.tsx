@@ -6,6 +6,22 @@ import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
 import { App } from '../src/App';
 
+jest.mock('../src/i18n', () => ({
+  default: {
+    changeLanguage: jest.fn().mockResolvedValue(undefined),
+    language: 'en',
+  },
+  __esModule: true,
+}));
+
+jest.mock('../src/services/config', () => ({
+  loadDebugBaseUrlOverride: jest.fn(),
+}));
+
+jest.mock('../src/stores/auth-store', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 jest.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: ({ children }: { children: React.ReactNode }) =>
     children,
@@ -41,8 +57,13 @@ jest.mock('react-native-keychain', () => ({
   },
 }));
 
-jest.mock('../src/stores/auth-store', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+jest.mock('@react-navigation/native', () => ({
+  NavigationContainer: ({ children }: { children: React.ReactNode }) =>
+    children,
+}));
+
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('../src/navigation/RootNavigator', () => ({
