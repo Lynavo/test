@@ -1,11 +1,8 @@
 jest.mock('../api', () => ({
   apiGet: jest.fn().mockResolvedValue({
-    code: 0,
-    data: {
-      username: 'user',
-      credential: 'secret',
-      urls: ['turn:review-api.vividrop.cn:3478?transport=udp'],
-    },
+    username: 'user',
+    credential: 'secret',
+    urls: ['turn:review-api.vividrop.cn:3478?transport=udp'],
   }),
 }));
 
@@ -24,5 +21,13 @@ describe('fetchTunnelIceServersJSON', () => {
       ]),
     );
     expect(apiGet).toHaveBeenCalledWith('/tunnel/turn-credentials');
+  });
+
+  it('rejects malformed TURN credentials data', async () => {
+    (apiGet as jest.Mock).mockResolvedValueOnce({ urls: [] });
+
+    await expect(fetchTunnelIceServersJSON()).rejects.toThrow(
+      'Failed to fetch TURN credentials',
+    );
   });
 });

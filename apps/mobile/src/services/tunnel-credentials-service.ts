@@ -6,27 +6,29 @@ type ICEServerPayload = {
   credential?: string;
 };
 
-type TurnCredentialsResponse = {
-  code: number;
-  data?: {
-    username: string;
-    credential: string;
-    urls: string[];
-  };
-  message?: string;
+type TurnCredentialsData = {
+  username: string;
+  credential: string;
+  urls: string[];
 };
 
 export async function fetchTunnelIceServersJSON(): Promise<string> {
-  const response = await apiGet<TurnCredentialsResponse>('/tunnel/turn-credentials');
-  if (!response || response.code !== 0 || !response.data) {
-    throw new Error(response?.message ?? 'Failed to fetch TURN credentials');
+  const data = await apiGet<TurnCredentialsData>('/tunnel/turn-credentials');
+  if (
+    !data ||
+    !Array.isArray(data.urls) ||
+    data.urls.length === 0 ||
+    typeof data.username !== 'string' ||
+    typeof data.credential !== 'string'
+  ) {
+    throw new Error('Failed to fetch TURN credentials');
   }
 
   const iceServers: ICEServerPayload[] = [
     {
-      urls: response.data.urls,
-      username: response.data.username,
-      credential: response.data.credential,
+      urls: data.urls,
+      username: data.username,
+      credential: data.credential,
     },
   ];
 
