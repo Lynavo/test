@@ -2092,20 +2092,49 @@ class NativeSyncEngineModule(
         }
       }
 
-      val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_downloads")
-      if (!destDir.exists()) {
-        destDir.mkdirs()
-      }
-      val destFile = File(destDir, filename)
-      connection.inputStream.use { input ->
-        destFile.outputStream().use { output ->
-          copySharedDownloadWithProgress(path, input, output, totalBytes)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+        val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
+        val values = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+          put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+          put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-      }
-      return Arguments.createMap().apply {
-        putBoolean("savedToPhotos", false)
-        putString("localPath", destFile.absolutePath)
-        putString("savedLocation", destFile.absolutePath)
+        val uri = reactApplicationContext.contentResolver.insert(collection, values)
+          ?: throw IllegalStateException("Unable to create MediaStore item")
+        reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+          connection.inputStream.use { input ->
+            copySharedDownloadWithProgress(path, input, output, totalBytes)
+          }
+        } ?: throw IllegalStateException("Unable to write MediaStore item")
+        values.clear()
+        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+        reactApplicationContext.contentResolver.update(uri, values, null, null)
+        return Arguments.createMap().apply {
+          putBoolean("savedToPhotos", false)
+          putNull("localPath")
+          putNull("savedLocation")
+        }
+      } else {
+        val destDir = File(
+          Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+          "Vivi Drop"
+        )
+        if (!destDir.exists()) {
+          destDir.mkdirs()
+        }
+        val destFile = File(destDir, filename)
+        destFile.outputStream().use { output ->
+          connection.inputStream.use { input ->
+            copySharedDownloadWithProgress(path, input, output, totalBytes)
+          }
+        }
+        return Arguments.createMap().apply {
+          putBoolean("savedToPhotos", false)
+          putString("localPath", destFile.absolutePath)
+          putNull("savedLocation")
+        }
       }
     } finally {
       connection.disconnect()

@@ -31,6 +31,9 @@
     "downloadFailed": "Download Failed",
     "downloadFailedMessage": "Could not download the file. Please try again later.",
     "previewFailed": "Preview Failed",
-    "previewFailedMessage": "Could not load file preview."
+    "previewFailedMessage": "Could not load file preview.",
+    "savedLocationPhotos": "Photos",
+    "savedLocationDocuments": "iOS Files App -> Vivi Drop folder",
+    "savedLocationDownloads": "system Downloads -> Vivi Drop folder"
   }
 }

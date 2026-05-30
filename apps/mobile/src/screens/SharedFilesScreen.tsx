@@ -86,17 +86,21 @@ function fallbackSavedLocation(
     localPath: string | null;
     savedLocation?: string | null;
   },
+  t: (key: string, options?: any) => string,
 ): string | null {
-  if (result.savedLocation) return result.savedLocation;
-  if (result.localPath) return result.localPath;
-  if (!result.savedToPhotos) return null;
-
-  if (Platform.OS === 'android') {
-    if (file.type === 'video') return 'Movies/Vivi Drop';
-    if (file.type === 'image') return 'Pictures/Vivi Drop';
+  if (result.savedToPhotos) {
+    if (Platform.OS === 'android') {
+      if (file.type === 'video') return 'Movies/Vivi Drop';
+      if (file.type === 'image') return 'Pictures/Vivi Drop';
+    }
+    return t('sharedFiles.dialogs.savedLocationPhotos', { defaultValue: 'Photos' });
   }
 
-  return 'Photos';
+  if (Platform.OS === 'ios') {
+    return t('sharedFiles.dialogs.savedLocationDocuments', { defaultValue: 'Files App -> Vivi Drop' });
+  } else {
+    return t('sharedFiles.dialogs.savedLocationDownloads', { defaultValue: 'Download/Vivi Drop' });
+  }
 }
 
 async function getDeviceAvailability(): Promise<DeviceAvailability> {
@@ -325,7 +329,7 @@ export function SharedFilesScreen() {
     });
     try {
       const result = await downloadSharedFile(file.path);
-      const savedLocation = fallbackSavedLocation(file, result);
+      const savedLocation = fallbackSavedLocation(file, result, t);
       if (result.savedToPhotos) {
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete'),

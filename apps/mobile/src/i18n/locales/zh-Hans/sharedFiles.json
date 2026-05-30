@@ -31,6 +31,9 @@
     "downloadFailed": "下载失败",
     "downloadFailedMessage": "无法下载文件，请稍后重试",
     "previewFailed": "预览失败",
-    "previewFailedMessage": "无法获取文件预览"
+    "previewFailedMessage": "无法获取文件预览",
+    "savedLocationPhotos": "相册",
+    "savedLocationDocuments": "iOS“文件”App -> Vivi Drop 目录",
+    "savedLocationDownloads": "系统 Downloads -> Vivi Drop 目录"
   }
 }

@@ -120,8 +120,29 @@ class UploadStore {
     }
 
     static func dbPath() -> String {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return docs.appendingPathComponent("syncflow.db").path
+        let libraryDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
+        let appSupportDir = libraryDir.appendingPathComponent("Application Support", isDirectory: true)
+        let newDBURL = appSupportDir.appendingPathComponent("syncflow.db")
+        
+        let oldDocs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let oldDBURL = oldDocs.appendingPathComponent("syncflow.db")
+        
+        if FileManager.default.fileExists(atPath: oldDBURL.path) && !FileManager.default.fileExists(atPath: newDBURL.path) {
+            try? FileManager.default.createDirectory(at: appSupportDir, withIntermediateDirectories: true)
+            
+            let oldWalURL = oldDocs.appendingPathComponent("syncflow.db-wal")
+            let newWalURL = appSupportDir.appendingPathComponent("syncflow.db-wal")
+            let oldShmURL = oldDocs.appendingPathComponent("syncflow.db-shm")
+            let newShmURL = appSupportDir.appendingPathComponent("syncflow.db-shm")
+            
+            try? FileManager.default.moveItem(at: oldDBURL, to: newDBURL)
+            try? FileManager.default.moveItem(at: oldWalURL, to: newWalURL)
+            try? FileManager.default.moveItem(at: oldShmURL, to: newShmURL)
+            
+            slog("[UploadStore] Migrated database files from Documents to Library/Application Support")
+        }
+        
+        return newDBURL.path
     }
 
     // MARK: - Migration

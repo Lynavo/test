@@ -189,8 +189,13 @@ class SharedFilesService {
             return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
         }
 
-        slog("[SharedFilesService] downloaded %@ to %@", path, destURL.path)
-        return DownloadResult(localPath: destURL.path, savedToPhotos: false, savedLocation: destURL.path)
+        // For other files: move to NSDocumentDirectory so it is accessible via iOS Files App
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let finalURL = documentsURL.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: finalURL)
+        try FileManager.default.moveItem(at: destURL, to: finalURL)
+
+        return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
     }
 
     struct DownloadResult {
