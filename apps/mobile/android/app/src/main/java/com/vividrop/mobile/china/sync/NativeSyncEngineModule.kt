@@ -1150,7 +1150,15 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun getSharedFileStreamUrl(path: String, promise: Promise) {
-    promise.resolve(sharedFileUrl("stream", path).toString())
+    runAsync(promise) {
+      val route = resolveSharedFileRoute(
+        kind = "stream",
+        path = path,
+        reason = "stream_shared_file",
+      )
+      logSharedFileRoute("getSharedFileStreamUrl", route)
+      promise.resolve(route.url.toString())
+    }
   }
 
   @ReactMethod
@@ -1953,7 +1961,27 @@ class NativeSyncEngineModule(
   }
 
   private fun fetchSharedDirectory(path: String): WritableMap {
-    val json = JSONObject(readHttpString(sharedFileUrl("list", path)))
+    var route = resolveSharedFileRoute(
+      kind = "list",
+      path = path,
+      reason = "browse_shared_files",
+    )
+    logSharedFileRoute("browseSharedFiles", route)
+    val json = try {
+      JSONObject(readHttpString(route.url))
+    } catch (err: Throwable) {
+      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        throw err
+      }
+      route = recoverSharedFileTunnelAfterRouteFailure(
+        kind = "list",
+        path = path,
+        reason = "browse_shared_files",
+        error = err,
+      )
+      logSharedFileRoute("browseSharedFiles", route, retry = true)
+      JSONObject(readHttpString(route.url))
+    }
     val files = Arguments.createArray()
     val sourceFiles = json.optJSONArray("files") ?: JSONArray()
     for (index in 0 until sourceFiles.length()) {
@@ -1968,10 +1996,10 @@ class NativeSyncEngineModule(
         putString("modifiedAt", source.optString("modifiedAt"))
         putBoolean("isDirectory", source.optBoolean("isDirectory", false))
         if (fileType == "image") {
-          putString("thumbnailUrl", sharedFileUrl("thumbnail", filePath).toString())
+          putString("thumbnailUrl", sharedFileUrlForRoute("thumbnail", filePath, route).toString())
         }
         if (fileType == "video") {
-          putString("streamUrl", sharedFileUrl("stream", filePath).toString())
+          putString("streamUrl", sharedFileUrlForRoute("stream", filePath, route).toString())
         }
       })
     }
@@ -1983,13 +2011,36 @@ class NativeSyncEngineModule(
   }
 
   private fun downloadSharedFileToLocalStorage(path: String): WritableMap {
+    var route = resolveSharedFileRoute(
+      kind = "download",
+      path = path,
+      reason = "download_shared_file",
+    )
+    logSharedFileRoute("downloadSharedFile", route)
+    return try {
+      downloadSharedFileFromRoute(path, route)
+    } catch (err: Throwable) {
+      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        throw err
+      }
+      route = recoverSharedFileTunnelAfterRouteFailure(
+        kind = "download",
+        path = path,
+        reason = "download_shared_file",
+        error = err,
+      )
+      logSharedFileRoute("downloadSharedFile", route, retry = true)
+      downloadSharedFileFromRoute(path, route)
+    }
+  }
+
+  private fun downloadSharedFileFromRoute(path: String, route: SharedFileRoute): WritableMap {
     val filename = path.substringAfterLast('/').ifBlank { "shared-file" }
     val mediaType = AndroidSyncPrimitives.classifyMediaType(
       AndroidSyncPrimitives.mimeTypeForFilename(filename),
       filename,
     )
-    val url = sharedFileUrl("download", path)
-    val connection = url.openConnection() as HttpURLConnection
+    val connection = route.url.openConnection() as HttpURLConnection
     try {
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
@@ -2228,24 +2279,191 @@ class NativeSyncEngineModule(
     }
   }
 
-  private fun sharedFileUrl(kind: String, path: String): URL {
+  private fun resolveSharedFileRoute(
+    kind: String,
+    path: String,
+    reason: String,
+    waitForTunnel: Boolean = true,
+  ): SharedFileRoute {
     val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
+    val initialSnapshot = p2pTunnelRouteSnapshot()
+    val initialDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+      isTunnelActive = initialSnapshot.isActive,
+      tunnelPort = initialSnapshot.port,
+      hasTunnelCredentials = initialSnapshot.hasCredentials,
+      directHost = binding.host,
+      directPort = DEFAULT_SIDECAR_HTTP_PORT,
+    )
+
+    when (initialDecision.mode) {
+      AndroidSharedFilesRouteMode.TUNNEL -> {
+        return sharedFileRoute(kind, path, initialDecision, initialSnapshot)
+      }
+
+      AndroidSharedFilesRouteMode.DIRECT_LAN -> {
+        recordNativeLog("SharedFiles", "P2P tunnel unavailable for shared files reason=$reason; credentials missing")
+        return sharedFileRoute(kind, path, initialDecision, initialSnapshot)
+      }
+
+      AndroidSharedFilesRouteMode.WAIT_FOR_TUNNEL -> {
+        if (waitForTunnel && waitForP2PTunnelActive(binding, reason)) {
+          val readySnapshot = p2pTunnelRouteSnapshot()
+          val readyDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+            isTunnelActive = readySnapshot.isActive,
+            tunnelPort = readySnapshot.port,
+            hasTunnelCredentials = readySnapshot.hasCredentials,
+            directHost = binding.host,
+            directPort = DEFAULT_SIDECAR_HTTP_PORT,
+          )
+          if (readyDecision.mode == AndroidSharedFilesRouteMode.TUNNEL) {
+            return sharedFileRoute(kind, path, readyDecision, readySnapshot)
+          }
+        }
+      }
+    }
+
+    val fallbackSnapshot = p2pTunnelRouteSnapshot()
+    val fallbackDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+      isTunnelActive = false,
+      tunnelPort = null,
+      hasTunnelCredentials = false,
+      directHost = binding.host,
+      directPort = DEFAULT_SIDECAR_HTTP_PORT,
+    )
+    if (waitForTunnel) {
+      recordNativeLog(
+        "SharedFiles",
+        "P2P tunnel wait timed out for shared files reason=$reason hasCredentials=${fallbackSnapshot.hasCredentials}",
+      )
+    }
+    return sharedFileRoute(kind, path, fallbackDecision, fallbackSnapshot)
+  }
+
+  private fun sharedFileRoute(
+    kind: String,
+    path: String,
+    decision: AndroidSharedFilesRouteDecision,
+    snapshot: P2PTunnelRouteSnapshot,
+  ): SharedFileRoute {
+    val endpoint = sharedFileEndpoint(kind, path)
+    val displayHost = if (decision.isTunnel) "${decision.host}:${decision.port}" else decision.host
+    return SharedFileRoute(
+      kind = kind,
+      path = path,
+      url = URL("http", decision.host, decision.port, endpoint),
+      urlHost = decision.host,
+      port = decision.port,
+      displayHost = displayHost,
+      isTunnel = decision.isTunnel,
+      tunnelActive = snapshot.isActive,
+      tunnelStarting = snapshot.isStarting,
+      activeTunnelPort = snapshot.port,
+    )
+  }
+
+  private fun sharedFileUrlForRoute(kind: String, path: String, route: SharedFileRoute): URL =
+    URL("http", route.urlHost, route.port, sharedFileEndpoint(kind, path))
+
+  private fun sharedFileEndpoint(kind: String, path: String): String {
     val normalizedPath = path.trim().trim('/')
-    val endpoint = when (kind) {
+    return when (kind) {
       "list" -> if (normalizedPath.isBlank()) "/shared/list" else "/shared/list/${encodePath(normalizedPath)}"
       "download" -> "/shared/download/${encodePath(normalizedPath)}"
       "stream" -> "/shared/stream/${encodePath(normalizedPath)}"
       "thumbnail" -> "/shared/thumbnail/${encodePath(normalizedPath)}"
       else -> throw IllegalArgumentException("Unsupported shared endpoint: $kind")
     }
-    val activeTunnelPort = synchronized(p2pTunnelLock) {
-      if (isTunnelActive) tunnelPort else null
+  }
+
+  private fun p2pTunnelRouteSnapshot(): P2PTunnelRouteSnapshot =
+    synchronized(p2pTunnelLock) {
+      P2PTunnelRouteSnapshot(
+        hasCredentials = !signalingUrl.isNullOrBlank() && !accessToken.isNullOrBlank(),
+        isActive = isTunnelActive && tunnelPort != null,
+        isStarting = tunnelStarting,
+        port = tunnelPort,
+      )
     }
-    return if (activeTunnelPort != null) {
-      URL("http", "127.0.0.1", activeTunnelPort, endpoint)
+
+  private fun waitForP2PTunnelActive(binding: StoredBinding, reason: String): Boolean {
+    val deadline = SystemClock.elapsedRealtime() + SHARED_TUNNEL_ROUTE_WAIT_MS
+    var attempt = 0
+    var didLogWait = false
+
+    while (true) {
+      val snapshot = p2pTunnelRouteSnapshot()
+      if (snapshot.isActive) {
+        recordNativeLog(
+          "SharedFiles",
+          "P2P tunnel ready for shared files reason=$reason port=${snapshot.port ?: "nil"} attempts=${attempt + 1}",
+        )
+        return true
+      }
+      if (!snapshot.hasCredentials) {
+        recordNativeLog("SharedFiles", "P2P tunnel unavailable for shared files reason=$reason; credentials missing")
+        return false
+      }
+      startP2PTunnelIfNeeded(binding)
+      if (SystemClock.elapsedRealtime() >= deadline) {
+        break
+      }
+      if (!didLogWait) {
+        didLogWait = true
+        recordNativeLog("SharedFiles", "waiting for P2P tunnel before shared files route reason=$reason")
+      }
+      Thread.sleep(SHARED_TUNNEL_ROUTE_POLL_MS)
+      attempt += 1
+    }
+
+    val finalSnapshot = p2pTunnelRouteSnapshot()
+    if (finalSnapshot.isActive) {
+      recordNativeLog(
+        "SharedFiles",
+        "P2P tunnel became ready at wait deadline reason=$reason port=${finalSnapshot.port ?: "nil"}",
+      )
+      return true
+    }
+    return false
+  }
+
+  private fun recoverSharedFileTunnelAfterRouteFailure(
+    kind: String,
+    path: String,
+    reason: String,
+    error: Throwable,
+  ): SharedFileRoute {
+    recordNativeLog(
+      "SharedFiles",
+      "tunnel route failed path=$path reason=$reason error=${error.message ?: error.javaClass.simpleName}; restarting tunnel",
+      Log.WARN,
+    )
+    val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
+    stopP2PTunnel()
+    return if (waitForP2PTunnelActive(binding, "${reason}_retry_after_tunnel_restart")) {
+      resolveSharedFileRoute(
+        kind = kind,
+        path = path,
+        reason = "${reason}_retry_after_tunnel_restart",
+        waitForTunnel = false,
+      )
     } else {
-      URL("http", binding.host, DEFAULT_SIDECAR_HTTP_PORT, endpoint)
+      resolveSharedFileRoute(
+        kind = kind,
+        path = path,
+        reason = "${reason}_direct_fallback_after_tunnel_restart",
+        waitForTunnel = false,
+      )
     }
+  }
+
+  private fun logSharedFileRoute(action: String, route: SharedFileRoute, retry: Boolean = false) {
+    val retryPrefix = if (retry) " retry" else ""
+    recordNativeLog(
+      "SharedFiles",
+      "$action$retryPrefix kind=${route.kind} path=${route.path} resolved_host=${route.displayHost} " +
+        "is_tunnel=${route.isTunnel} tunnel_active=${route.tunnelActive} " +
+        "tunnel_starting=${route.tunnelStarting} active_port=${route.activeTunnelPort ?: "nil"}",
+    )
   }
 
   private fun encodePath(path: String): String =
@@ -4363,6 +4581,26 @@ class NativeSyncEngineModule(
     val iceServersJSON: String,
   )
 
+  private data class SharedFileRoute(
+    val kind: String,
+    val path: String,
+    val url: URL,
+    val urlHost: String,
+    val port: Int,
+    val displayHost: String,
+    val isTunnel: Boolean,
+    val tunnelActive: Boolean,
+    val tunnelStarting: Boolean,
+    val activeTunnelPort: Int?,
+  )
+
+  private data class P2PTunnelRouteSnapshot(
+    val hasCredentials: Boolean,
+    val isActive: Boolean,
+    val isStarting: Boolean,
+    val port: Int?,
+  )
+
   companion object {
     private const val MODULE_NAME = "NativeSyncEngine"
     private const val MAX_DIAGNOSTICS_LOG_LINES = 2_000
@@ -4416,6 +4654,8 @@ class NativeSyncEngineModule(
     private const val FALLBACK_SERVICE_KEY_PREFIX = "fallback|"
     private const val SHARED_HTTP_TIMEOUT_MS = 15_000
     private const val SHARED_DOWNLOAD_TIMEOUT_MS = 300_000
+    private const val SHARED_TUNNEL_ROUTE_WAIT_MS = 4_000L
+    private const val SHARED_TUNNEL_ROUTE_POLL_MS = 120L
     private const val FILE_CHUNK_SIZE = 1024 * 1024
     private const val SPEED_SAMPLE_INTERVAL_MS = 500L
     private val MAGIC_BYTES = byteArrayOf('L'.code.toByte(), 'M'.code.toByte(), 'U'.code.toByte(), 'P'.code.toByte())

@@ -102,7 +102,55 @@ enum class AndroidDiscoveryProbeResolution {
   IGNORE_MISSING_CANDIDATE,
 }
 
+enum class AndroidSharedFilesRouteMode {
+  TUNNEL,
+  WAIT_FOR_TUNNEL,
+  DIRECT_LAN,
+}
+
+data class AndroidSharedFilesRouteDecision(
+  val mode: AndroidSharedFilesRouteMode,
+  val host: String,
+  val port: Int,
+  val isTunnel: Boolean,
+)
+
 object AndroidSyncPrimitives {
+  fun decideSharedFilesRoute(
+    isTunnelActive: Boolean,
+    tunnelPort: Int?,
+    hasTunnelCredentials: Boolean,
+    directHost: String,
+    directPort: Int,
+  ): AndroidSharedFilesRouteDecision {
+    if (isTunnelActive && tunnelPort != null) {
+      return AndroidSharedFilesRouteDecision(
+        mode = AndroidSharedFilesRouteMode.TUNNEL,
+        host = "127.0.0.1",
+        port = tunnelPort,
+        isTunnel = true,
+      )
+    }
+
+    if (hasTunnelCredentials) {
+      return AndroidSharedFilesRouteDecision(
+        mode = AndroidSharedFilesRouteMode.WAIT_FOR_TUNNEL,
+        host = "",
+        port = 0,
+        isTunnel = false,
+      )
+    }
+
+    return AndroidSharedFilesRouteDecision(
+      mode = AndroidSharedFilesRouteMode.DIRECT_LAN,
+      host = directHost.trim(),
+      port = directPort,
+      isTunnel = false,
+    )
+  }
+
+  fun shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute: Boolean): Boolean = isTunnelRoute
+
   fun normalizePairingConnectionCode(rawCode: String?): String {
     val trimmed = rawCode?.trim().orEmpty()
     require(trimmed.isEmpty() || trimmed.length == CONNECTION_CODE_LENGTH) {

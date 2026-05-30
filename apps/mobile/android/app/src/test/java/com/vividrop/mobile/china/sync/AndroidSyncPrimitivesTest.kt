@@ -9,6 +9,58 @@ import org.junit.Test
 
 class AndroidSyncPrimitivesTest {
   @Test
+  fun sharedFilesRouteUsesLoopbackWhenTunnelIsActive() {
+    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
+      isTunnelActive = true,
+      tunnelPort = 51234,
+      hasTunnelCredentials = true,
+      directHost = "172.20.10.3",
+      directPort = 39394,
+    )
+
+    assertEquals(AndroidSharedFilesRouteMode.TUNNEL, route.mode)
+    assertEquals("127.0.0.1", route.host)
+    assertEquals(51234, route.port)
+    assertTrue(route.isTunnel)
+  }
+
+  @Test
+  fun sharedFilesRouteWaitsForTunnelWhenCredentialsExistButTunnelIsNotActive() {
+    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
+      isTunnelActive = false,
+      tunnelPort = null,
+      hasTunnelCredentials = true,
+      directHost = "172.20.10.3",
+      directPort = 39394,
+    )
+
+    assertEquals(AndroidSharedFilesRouteMode.WAIT_FOR_TUNNEL, route.mode)
+    assertFalse(route.isTunnel)
+  }
+
+  @Test
+  fun sharedFilesRouteFallsBackToDirectLanWhenTunnelCredentialsAreMissing() {
+    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
+      isTunnelActive = false,
+      tunnelPort = null,
+      hasTunnelCredentials = false,
+      directHost = " 172.20.10.3 ",
+      directPort = 39394,
+    )
+
+    assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
+    assertEquals("172.20.10.3", route.host)
+    assertEquals(39394, route.port)
+    assertFalse(route.isTunnel)
+  }
+
+  @Test
+  fun sharedFilesRouteFailureRetriesOnlyTunnelRoute() {
+    assertTrue(AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute = true))
+    assertFalse(AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute = false))
+  }
+
+  @Test
   fun normalizePairingConnectionCodeAllowsKnownDeviceReconnectWithoutCode() {
     val code = AndroidSyncPrimitives.normalizePairingConnectionCode("  ")
 
