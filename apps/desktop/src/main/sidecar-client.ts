@@ -90,6 +90,7 @@ type AuthSession = {
 
 let authSession: AuthSession | null = null;
 let authSessionLoaded = false;
+let refreshSessionInFlight: Promise<boolean> | null = null;
 
 function getSessionFilePath(): string {
   return join(app.getPath('userData'), 'session.json');
@@ -540,51 +541,66 @@ export const sidecarClient = {
     }>('GET', '/api/v1/tunnel/turn-credentials', undefined, API_BASE, apiAuthHeaders());
   },
   refreshSession: async () => {
-    ensureSessionLoaded();
-    if (!authSession || !authSession.refreshToken) {
-      return false;
+    if (refreshSessionInFlight) {
+      return refreshSessionInFlight;
     }
 
-    try {
-      const response = await request<unknown>(
-        'POST',
-        '/api/v1/auth/refresh',
-        { refresh_token: authSession.refreshToken },
-        AUTH_BASE_URL
-      );
-
-      if (!response || typeof response !== 'object') {
-        throw new Error('Invalid refresh response');
-      }
-      const data = response as Record<string, unknown>;
-      if (data.code !== 0) {
-        log.error('[sidecar-client] Refresh session failed, clearing session. Code:', data.code);
-        authSession = null;
-        authSessionLoaded = true;
-        saveSession(null);
+    refreshSessionInFlight = (async () => {
+      ensureSessionLoaded();
+      if (!authSession || !authSession.refreshToken) {
         return false;
       }
 
-      const envelopeData = data.data;
-      if (!envelopeData || typeof envelopeData !== 'object') {
-        throw new Error('Invalid refresh response data');
-      }
+      try {
+        const response = await request<unknown>(
+          'POST',
+          '/api/v1/auth/refresh',
+          { refresh_token: authSession.refreshToken },
+          AUTH_BASE_URL,
+        );
 
-      const authData = envelopeData as Record<string, unknown>;
-      if (typeof authData.access_token !== 'string' || typeof authData.refresh_token !== 'string') {
-        throw new Error('Invalid refresh response tokens');
-      }
+        if (!response || typeof response !== 'object') {
+          throw new Error('Invalid refresh response');
+        }
+        const data = response as Record<string, unknown>;
+        if (data.code !== 0) {
+          log.error('[sidecar-client] Refresh session failed, clearing session. Code:', data.code);
+          authSession = null;
+          authSessionLoaded = true;
+          saveSession(null);
+          return false;
+        }
 
-      authSession = {
-        accessToken: authData.access_token,
-        refreshToken: authData.refresh_token,
-      };
-      authSessionLoaded = true;
-      saveSession(authSession);
-      return true;
-    } catch (error) {
-      log.error('[sidecar-client] Error refreshing session:', error);
-      return false;
+        const envelopeData = data.data;
+        if (!envelopeData || typeof envelopeData !== 'object') {
+          throw new Error('Invalid refresh response data');
+        }
+
+        const authData = envelopeData as Record<string, unknown>;
+        if (
+          typeof authData.access_token !== 'string' ||
+          typeof authData.refresh_token !== 'string'
+        ) {
+          throw new Error('Invalid refresh response tokens');
+        }
+
+        authSession = {
+          accessToken: authData.access_token,
+          refreshToken: authData.refresh_token,
+        };
+        authSessionLoaded = true;
+        saveSession(authSession);
+        return true;
+      } catch (error) {
+        log.error('[sidecar-client] Error refreshing session:', error);
+        return false;
+      }
+    })();
+
+    try {
+      return await refreshSessionInFlight;
+    } finally {
+      refreshSessionInFlight = null;
     }
   },
   getApiBaseUrl: () => API_BASE,
@@ -661,4 +677,3 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
     return false;
   }
 }
-

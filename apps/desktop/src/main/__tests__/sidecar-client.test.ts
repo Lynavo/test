@@ -914,6 +914,120 @@ describe('sidecarClient', () => {
   });
 
   describe('syncCredentialsToSidecar with token rotation', () => {
+    it('shares an in-flight refresh when concurrent syncs see an expired access token', async () => {
+      const { writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      const { tmpdir } = require('node:os');
+      const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+      const sessionFilePath = join(userDataPath, 'session.json');
+
+      const mockData = {
+        accessToken: Buffer.from('old-access-token').toString('base64'),
+        refreshToken: Buffer.from('old-refresh-token').toString('base64'),
+        encrypted: true,
+      };
+      writeFileSync(sessionFilePath, JSON.stringify(mockData, null, 2), 'utf8');
+
+      const sidecarPayloads: unknown[] = [];
+      const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn((chunk: string) => {
+          sidecarPayloads.push(JSON.parse(chunk));
+        });
+        req.end = vi.fn();
+        callback(createResponse(200, JSON.stringify({ ok: true })));
+        return req;
+      });
+
+      let turnFetchCount = 0;
+      let refreshCount = 0;
+      const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn();
+        req.end = vi.fn();
+
+        if (options.path?.includes('/tunnel/turn-credentials')) {
+          turnFetchCount++;
+          if (turnFetchCount <= 2) {
+            callback(createResponse(200, JSON.stringify({ code: 1006, message: 'Expired' })));
+          } else {
+            callback(
+              createResponse(
+                200,
+                JSON.stringify({
+                  code: 0,
+                  data: {
+                    urls: ['turn:example.com'],
+                    username: 'user',
+                    credential: 'pwd',
+                  },
+                }),
+              ),
+            );
+          }
+        } else if (options.path === '/api/v1/auth/refresh') {
+          refreshCount++;
+          callback(
+            createResponse(
+              200,
+              JSON.stringify({
+                code: 0,
+                data: {
+                  access_token: 'new-access-token',
+                  refresh_token: 'new-refresh-token',
+                },
+              }),
+            ),
+          );
+        }
+        return req;
+      });
+
+      vi.doMock('node:http', () => ({
+        default: { request: httpRequest },
+        request: httpRequest,
+      }));
+      vi.doMock('node:https', () => ({
+        default: { request: httpsRequest },
+        request: httpsRequest,
+      }));
+
+      vi.resetModules();
+      vi.stubEnv('SYNCFLOW_API_BASE_URL', 'https://review-api.vividrop.cn');
+      vi.stubEnv('SYNCFLOW_GIFTCARD_REDEEM_BASE_URL', 'https://review-api.vividrop.cn');
+      const { sidecarClient: client, syncCredentialsToSidecar } = await import('../sidecar-client');
+
+      await expect(
+        Promise.all([syncCredentialsToSidecar(), syncCredentialsToSidecar()]),
+      ).resolves.toEqual([true, true]);
+
+      expect(refreshCount).toBe(1);
+      expect(client.getAuthSession()).toEqual({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+      });
+      expect(sidecarPayloads).toHaveLength(2);
+      expect(sidecarPayloads).toEqual([
+        expect.objectContaining({
+          signalingUrl: 'https://review-api.vividrop.cn',
+          accessToken: 'new-access-token',
+        }),
+        expect.objectContaining({
+          signalingUrl: 'https://review-api.vividrop.cn',
+          accessToken: 'new-access-token',
+        }),
+      ]);
+      vi.resetModules();
+    });
+
     it('retries fetchTurnCredentials after a successful refreshSession when initial code is 1006', async () => {
       const { writeFileSync } = require('node:fs');
       const { join } = require('node:path');
