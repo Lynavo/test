@@ -243,6 +243,159 @@ func TestP2PEndToEndYamuxTunnel(t *testing.T) {
 	readLoopWG.Wait()
 }
 
+func TestP2PManagerReplacesPeerConnectionOnRepeatedOffer(t *testing.T) {
+	mockLocalHTTPSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockLocalHTTPSrv.Close()
+
+	signaling := &mockSignalingServer{clients: make(map[string]*websocket.Conn)}
+	signalingSrv := httptest.NewServer(signaling)
+	defer signalingSrv.Close()
+
+	m := NewP2PManager("desktop-123", signalingSrv.URL, mockLocalHTTPSrv.Listener.Addr().String(), "test-token")
+	m.Start([]map[string]string{
+		{"clientId": "mobile-123", "pairingToken": "test-pair-token"},
+	})
+	defer m.Stop()
+
+	time.Sleep(20 * time.Millisecond)
+
+	wsURL := "ws" + strings.TrimPrefix(signalingSrv.URL, "http") + "/api/v1/tunnel/signaling?role=mobile&clientId=mobile-123&targetClientId=desktop-123&token=test-token"
+	mobileWS, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to connect mobile WSS: %v", err)
+	}
+	defer mobileWS.Close()
+
+	var activeMu sync.Mutex
+	var activePC *webrtc.PeerConnection
+	var answerReceived chan struct{}
+	readLoopDone := make(chan struct{})
+	go func() {
+		defer close(readLoopDone)
+		for {
+			_, msgBytes, err := mobileWS.ReadMessage()
+			if err != nil {
+				return
+			}
+			var signal map[string]interface{}
+			if err := json.Unmarshal(msgBytes, &signal); err != nil {
+				continue
+			}
+			msgType, _ := signal["type"].(string)
+			payload, _ := signal["payload"].(string)
+
+			activeMu.Lock()
+			pc := activePC
+			answerCh := answerReceived
+			activeMu.Unlock()
+			if pc == nil {
+				continue
+			}
+
+			switch msgType {
+			case "answer":
+				if err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: payload}); err != nil {
+					t.Errorf("set remote answer: %v", err)
+					return
+				}
+				if answerCh != nil {
+					close(answerCh)
+				}
+			case "candidate":
+				var cand webrtc.ICECandidateInit
+				if err := json.Unmarshal([]byte(payload), &cand); err == nil {
+					_ = pc.AddICECandidate(cand)
+				}
+			}
+		}
+	}()
+
+	startAttempt := func(label string) (*webrtc.PeerConnection, <-chan struct{}) {
+		t.Helper()
+
+		pc, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+		if err != nil {
+			t.Fatalf("%s: create peer connection: %v", label, err)
+		}
+		pc.OnICECandidate(func(c *webrtc.ICECandidate) {
+			if c == nil {
+				return
+			}
+			candBytes, _ := json.Marshal(c.ToJSON())
+			msg, _ := json.Marshal(map[string]string{
+				"type":       "candidate",
+				"payload":    string(candBytes),
+				"senderId":   "mobile-123",
+				"receiverId": "desktop-123",
+			})
+			_ = mobileWS.WriteMessage(websocket.TextMessage, msg)
+		})
+
+		ordered := true
+		dc, err := pc.CreateDataChannel("yamux-tunnel", &webrtc.DataChannelInit{Ordered: &ordered})
+		if err != nil {
+			t.Fatalf("%s: create data channel: %v", label, err)
+		}
+		opened := make(chan struct{})
+		dc.OnOpen(func() {
+			close(opened)
+		})
+
+		answerCh := make(chan struct{})
+		activeMu.Lock()
+		activePC = pc
+		answerReceived = answerCh
+		activeMu.Unlock()
+
+		offer, err := pc.CreateOffer(nil)
+		if err != nil {
+			t.Fatalf("%s: create offer: %v", label, err)
+		}
+		if err := pc.SetLocalDescription(offer); err != nil {
+			t.Fatalf("%s: set local offer: %v", label, err)
+		}
+		offerMsg, _ := json.Marshal(map[string]string{
+			"type":       "offer",
+			"payload":    offer.SDP,
+			"senderId":   "mobile-123",
+			"receiverId": "desktop-123",
+		})
+		if err := mobileWS.WriteMessage(websocket.TextMessage, offerMsg); err != nil {
+			t.Fatalf("%s: write offer: %v", label, err)
+		}
+
+		select {
+		case <-answerCh:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: timeout waiting for SDP answer", label)
+		}
+
+		return pc, opened
+	}
+
+	firstPC, firstOpened := startAttempt("first")
+	defer firstPC.Close()
+	select {
+	case <-firstOpened:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first: timeout waiting for data channel open")
+	}
+
+	secondPC, secondOpened := startAttempt("second")
+	defer secondPC.Close()
+	select {
+	case <-secondOpened:
+	case <-time.After(5 * time.Second):
+		t.Fatal("second: timeout waiting for replacement data channel open")
+	}
+
+	mobileWS.Close()
+	<-readLoopDone
+}
+
 func TestP2PManagerPeerConnectionRecycling(t *testing.T) {
 	// Verify that P2PManager successfully close and recycle terminal states PC
 	mockLocalHTTPSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -132,9 +132,20 @@ func (m *P2PManager) handleSignalingSession(sConn *safeWriteConn) {
 
 		mu.Lock()
 		pc, exists := peerConnections[senderID]
+		if msgType == "offer" && exists {
+			slog.Info("replacing existing peer connection for new tunnel offer",
+				"mobileId", senderID,
+				"connectionState", pc.ConnectionState().String(),
+				"signalingState", pc.SignalingState().String(),
+			)
+			pc.Close()
+			delete(peerConnections, senderID)
+			exists = false
+		}
 		if exists && (pc.ConnectionState() == webrtc.PeerConnectionStateClosed || pc.ConnectionState() == webrtc.PeerConnectionStateFailed) {
 			slog.Info("discarding closed or failed peer connection", "mobileId", senderID, "state", pc.ConnectionState().String())
 			pc.Close()
+			delete(peerConnections, senderID)
 			exists = false
 		}
 		if !exists {
