@@ -140,6 +140,66 @@ beforeEach(() => {
 });
 
 describe('SharedFilesScreen download progress', () => {
+  test('coalesces a connected binding event while the current directory load is in flight', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    let resolveBrowse: (value: { files: Array<typeof FAKE_FILE> }) => void = () => undefined;
+    mockBrowseSharedFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBrowse = resolve;
+        }),
+    );
+
+    render(<SharedFilesScreen />);
+
+    await waitFor(() => expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'connected',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveBrowse({ files: [FAKE_FILE] });
+    });
+  });
+
+  test('does not reload the same path for repeated available binding events', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+    expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'connected',
+      });
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'bound',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1);
+  });
+
   test('renders native download progress for the active file', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

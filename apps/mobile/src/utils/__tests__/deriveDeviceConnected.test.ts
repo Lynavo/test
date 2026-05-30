@@ -1,12 +1,12 @@
 import { deriveDeviceConnected } from '../deriveDeviceConnected';
 
 describe('deriveDeviceConnected', () => {
-  it('returns true for connected and bound', () => {
+  it('returns true for connected', () => {
     expect(deriveDeviceConnected('connected', false)).toBe(true);
-    expect(deriveDeviceConnected('bound', false)).toBe(true);
   });
 
-  it('returns false for offline and discovering', () => {
+  it('returns false for bound, offline and discovering', () => {
+    expect(deriveDeviceConnected('bound', false)).toBe(false);
     expect(deriveDeviceConnected('offline', true)).toBe(false);
     expect(deriveDeviceConnected('discovering', true)).toBe(false);
   });

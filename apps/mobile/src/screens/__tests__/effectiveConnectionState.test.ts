@@ -72,6 +72,15 @@ describe('effectiveConnectionState', () => {
     ).toBe('connected');
   });
 
+  it('keeps bound binding state bound if no active sync evidence is present', () => {
+    expect(
+      getEffectiveConnectionState('bound', {
+        progressPercent: 0,
+        uploadState: 'idle',
+      }),
+    ).toBe('bound');
+  });
+
   it('keeps connected binding state connected without waiting for transfer evidence', () => {
     expect(
       getEffectiveConnectionState('connected', {

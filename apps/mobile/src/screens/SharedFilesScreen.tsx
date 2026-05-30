@@ -35,6 +35,11 @@ import { formatBytes } from '../utils/format';
 
 type ErrorKind = 'device_unavailable' | 'directory_inaccessible' | 'network_error';
 
+interface DeviceAvailability {
+  available: boolean;
+  deviceId: string | null;
+}
+
 interface SharedFileDownloadProgress {
   path: string;
   bytesWritten: number;
@@ -94,16 +99,18 @@ function fallbackSavedLocation(
   return 'Photos';
 }
 
-async function checkDeviceAvailable(): Promise<boolean> {
+async function getDeviceAvailability(): Promise<DeviceAvailability> {
   try {
-    const binding = await NativeModules.NativeSyncEngine?.getBindingState();
-    if (!binding?.deviceId) return false;
-    return (
-      binding.connectionState === 'connected' ||
-      binding.connectionState === 'bound'
-    );
+    const { NativeSyncEngine } = NativeModules;
+    if (!NativeSyncEngine) return { available: false, deviceId: null };
+    const binding = await NativeSyncEngine.getBindingState();
+    const deviceId = typeof binding?.deviceId === 'string' ? binding.deviceId : null;
+    // For P2P / IPv6 WAN connections, mDNS multicast auto-discovery does not run,
+    // so connectionState might be cached as 'offline'.
+    // If a device is paired (has deviceId), we should allow trying to fetch the files anyway.
+    return { available: deviceId !== null, deviceId };
   } catch {
-    return false;
+    return { available: false, deviceId: null };
   }
 }
 
@@ -121,6 +128,11 @@ export function SharedFilesScreen() {
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const downloadingRef = useRef<string | null>(null);
+  const activeLoadRef = useRef<{ path: string; promise: Promise<void> } | null>(null);
+  const bindingAvailabilityRef = useRef<{
+    deviceId: string | null;
+    available: boolean | null;
+  }>({ deviceId: null, available: null });
   const [downloadProgress, setDownloadProgress] = useState<Record<string, SharedFileDownloadProgress>>({});
 
   // Preview state
@@ -131,43 +143,64 @@ export function SharedFilesScreen() {
   // Load files via native bridge
   // ---------------------------------------------------------------------------
 
-  const loadFiles = useCallback(async (path: string) => {
-    setLoading(true);
-    setErrorKind(null);
+  const loadFiles = useCallback((path: string): Promise<void> => {
+    const activeLoad = activeLoadRef.current;
+    if (activeLoad?.path === path) return activeLoad.promise;
 
-    // P1#3: Pre-check device availability
-    const available = await checkDeviceAvailable();
-    if (!available) {
-      setErrorKind('device_unavailable');
-      setFiles([]);
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const result = await browseSharedFiles(path);
-      setFiles(result.files ?? []);
+    const loadPromise = (async () => {
+      setLoading(true);
       setErrorKind(null);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // 404 / 403 → directory genuinely missing or access denied.
-      // 400 is intentionally excluded: sidecar returns 400 for path
-      // traversal rejects, "not a directory", and resolve failures —
-      // none of which mean "shared directory inaccessible".
-      if (
-        msg.includes('403') ||
-        msg.includes('404') ||
-        msg.includes('not found')
-      ) {
-        setErrorKind('directory_inaccessible');
-      } else {
-        setErrorKind('network_error');
+
+      // P1#3: Pre-check device availability
+      const availability = await getDeviceAvailability();
+      if (!availability.available) {
+        bindingAvailabilityRef.current = { deviceId: null, available: false };
+        setErrorKind('device_unavailable');
+        setFiles([]);
+        setLoading(false);
+        return;
       }
-      setFiles([]);
-      console.warn('[SharedFiles] loadFiles error:', e);
-    } finally {
-      setLoading(false);
-    }
+
+      bindingAvailabilityRef.current = {
+        deviceId: availability.deviceId,
+        available: true,
+      };
+
+      try {
+        const result = await browseSharedFiles(path);
+        setFiles(result.files ?? []);
+        setErrorKind(null);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        // 404 / 403 → directory genuinely missing or access denied.
+        // 400 is intentionally excluded: sidecar returns 400 for path
+        // traversal rejects, "not a directory", and resolve failures —
+        // none of which mean "shared directory inaccessible".
+        if (
+          msg.includes('403') ||
+          msg.includes('404') ||
+          msg.includes('not found')
+        ) {
+          setErrorKind('directory_inaccessible');
+        } else {
+          setErrorKind('network_error');
+        }
+        setFiles([]);
+        console.warn('[SharedFiles] loadFiles error:', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+
+    activeLoadRef.current = { path, promise: loadPromise };
+    const clearActiveLoad = () => {
+      if (activeLoadRef.current?.promise === loadPromise) {
+        activeLoadRef.current = null;
+      }
+    };
+    void loadPromise.then(clearActiveLoad, clearActiveLoad);
+
+    return loadPromise;
   }, []);
 
   // ---------------------------------------------------------------------------
@@ -190,7 +223,9 @@ export function SharedFilesScreen() {
     const sub = emitter.addListener(
       'onBindingStateChanged',
       (state: Record<string, unknown> | null) => {
-        if (!state || !state.deviceId) {
+        const deviceId = typeof state?.deviceId === 'string' ? state.deviceId : null;
+        if (!state || !deviceId) {
+          bindingAvailabilityRef.current = { deviceId: null, available: false };
           setErrorKind('device_unavailable');
           setFiles([]);
           return;
@@ -198,9 +233,19 @@ export function SharedFilesScreen() {
 
         const connState = (state.connectionState as string) || 'bound';
         if (connState === 'connected' || connState === 'bound') {
-          // Device reconnected — reload current path
-          void loadFiles(currentPath);
+          const previousAvailability = bindingAvailabilityRef.current;
+          const shouldReload =
+            previousAvailability.available === false ||
+            (previousAvailability.available === true &&
+              previousAvailability.deviceId !== null &&
+              previousAvailability.deviceId !== deviceId);
+
+          bindingAvailabilityRef.current = { deviceId, available: true };
+          if (shouldReload) {
+            void loadFiles(currentPath);
+          }
         } else {
+          bindingAvailabilityRef.current = { deviceId, available: false };
           setErrorKind('device_unavailable');
           setFiles([]);
         }

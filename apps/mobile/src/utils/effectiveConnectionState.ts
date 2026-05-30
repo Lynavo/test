@@ -87,7 +87,7 @@ export function getEffectiveConnectionState(
     return 'connecting';
   }
 
-  if (connectionState === 'connected' || connectionState === 'bound') {
+  if (connectionState === 'connected') {
     return 'connected';
   }
 

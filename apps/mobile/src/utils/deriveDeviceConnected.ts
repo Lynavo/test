@@ -20,7 +20,7 @@ export function deriveDeviceConnected(
   connectionState: string,
   previous: boolean,
 ): boolean {
-  if (connectionState === 'connected' || connectionState === 'bound') {
+  if (connectionState === 'connected') {
     return true;
   }
   if (connectionState === 'connecting') {
