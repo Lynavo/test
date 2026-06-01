@@ -240,6 +240,78 @@ describe('SharedFilesScreen download progress', () => {
     });
   });
 
+  test('keeps active download visible during transient binding recovery', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockImplementation(() => new Promise(() => undefined));
+
+    const { getByTestId, getByText, queryByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-download-button'));
+    });
+    await act(async () => {
+      nativeListeners.get('onSharedFileDownloadProgress')?.({
+        path: FAKE_FILE.path,
+        bytesWritten: 512,
+        totalBytes: 1024,
+        progress: 0.5,
+      });
+    });
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'connecting',
+      });
+    });
+
+    expect(queryByText('Device Unavailable')).toBeNull();
+    expect(getByText('50%')).toBeTruthy();
+    expect(getByTestId('shared-file-download-button')).toBeTruthy();
+  });
+
+  test('reloads files after an unavailable binding reconnects through connecting', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+    mockBrowseSharedFiles.mockClear();
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'offline',
+      });
+    });
+    expect(getByText('Device Unavailable')).toBeTruthy();
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'connecting',
+      });
+    });
+    expect(mockBrowseSharedFiles).not.toHaveBeenCalled();
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'connected',
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1));
+  });
+
   test('shows the saved location after download completes', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

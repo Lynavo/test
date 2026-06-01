@@ -255,6 +255,14 @@ export function SharedFilesScreen() {
           if (shouldReload) {
             void loadFiles(currentPath);
           }
+        } else if (connState === 'connecting') {
+          const previousAvailability = bindingAvailabilityRef.current;
+          if (
+            previousAvailability.available === true &&
+            previousAvailability.deviceId === deviceId
+          ) {
+            bindingAvailabilityRef.current = { deviceId, available: true };
+          }
         } else {
           bindingAvailabilityRef.current = { deviceId, available: false };
           setErrorKind('device_unavailable');
