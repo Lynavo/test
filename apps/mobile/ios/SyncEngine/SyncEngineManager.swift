@@ -7087,6 +7087,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     "SharedFiles",
                     "downloadSharedFile attempt failed path=\(path) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) is_tunnel=\(route.isTunnel) error=\(error)"
                 )
+                guard SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+                    isLocalSaveFailure: error is SharedFileLocalSaveError
+                ) else {
+                    throw error
+                }
                 guard attempt < SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts else {
                     throw error
                 }

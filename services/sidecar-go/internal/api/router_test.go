@@ -241,12 +241,67 @@ func TestSharedDownloadSupportsRangeRequests(t *testing.T) {
 	if got := resp.Header.Get("Content-Range"); got != "bytes 4-9/10" {
 		t.Fatalf("expected Content-Range bytes 4-9/10, got %q", got)
 	}
+	if got := resp.Header.Get("Last-Modified"); got == "" {
+		t.Fatalf("expected Last-Modified validator for resumable downloads")
+	}
+	etag := resp.Header.Get("ETag")
+	if etag == "" {
+		t.Fatalf("expected ETag validator for resumable downloads")
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("read body: %v", err)
 	}
 	if string(body) != "456789" {
 		t.Fatalf("expected resumed body, got %q", string(body))
+	}
+
+	matchingReq, err := http.NewRequest(http.MethodGet, srv.URL+"/shared/download/range.txt", nil)
+	if err != nil {
+		t.Fatalf("new matching request: %v", err)
+	}
+	matchingReq.Header.Set("Range", "bytes=4-")
+	matchingReq.Header.Set("If-Range", etag)
+
+	matchingResp, err := http.DefaultClient.Do(matchingReq)
+	if err != nil {
+		t.Fatalf("GET /shared/download/range.txt with matching If-Range: %v", err)
+	}
+	defer matchingResp.Body.Close()
+
+	if matchingResp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("expected matching If-Range to return 206, got %d", matchingResp.StatusCode)
+	}
+	matchingBody, err := io.ReadAll(matchingResp.Body)
+	if err != nil {
+		t.Fatalf("read matching body: %v", err)
+	}
+	if string(matchingBody) != "456789" {
+		t.Fatalf("expected matching If-Range resumed body, got %q", string(matchingBody))
+	}
+
+	staleReq, err := http.NewRequest(http.MethodGet, srv.URL+"/shared/download/range.txt", nil)
+	if err != nil {
+		t.Fatalf("new stale request: %v", err)
+	}
+	staleReq.Header.Set("Range", "bytes=4-")
+	staleReq.Header.Set("If-Range", `"stale-etag"`)
+
+	staleResp, err := http.DefaultClient.Do(staleReq)
+	if err != nil {
+		t.Fatalf("GET /shared/download/range.txt with stale If-Range: %v", err)
+	}
+	defer staleResp.Body.Close()
+
+	if staleResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected stale If-Range to return 200, got %d", staleResp.StatusCode)
+	}
+	staleBody, err := io.ReadAll(staleResp.Body)
+	if err != nil {
+		t.Fatalf("read stale body: %v", err)
+	}
+	if string(staleBody) != "0123456789" {
+		t.Fatalf("expected stale If-Range full body, got %q", string(staleBody))
 	}
 }
 

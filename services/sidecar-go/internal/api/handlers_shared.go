@@ -238,8 +238,13 @@ func (s *Server) handleSharedDownload(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	w.Header().Set("ETag", sharedFileEntityTag(info))
 
 	http.ServeFile(w, r, resolved)
+}
+
+func sharedFileEntityTag(info os.FileInfo) string {
+	return fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
 }
 
 // handleSharedStream serves a file with support for HTTP Range requests (video streaming).

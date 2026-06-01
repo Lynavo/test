@@ -71,6 +71,26 @@ enum SharedFilesRoutePolicy {
         max(0, existingBytes) + max(0, receivedBytes)
     }
 
+    static func canResumePartialDownload(
+        existingBytes: Int64,
+        validator: String?,
+        expectedBytes: Int64?
+    ) -> Bool {
+        guard existingBytes > 0,
+              normalizedHost(validator) != nil
+        else {
+            return false
+        }
+        guard let expectedBytes else {
+            return true
+        }
+        return existingBytes < expectedBytes
+    }
+
+    static func shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: Bool) -> Bool {
+        !isLocalSaveFailure
+    }
+
     static func shouldWaitForP2PTunnelRoute(
         hasTunnelCredentials: Bool,
         isTunnelActive: Bool

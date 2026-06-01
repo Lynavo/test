@@ -85,3 +85,40 @@ expect(
     SharedFilesRoutePolicy.totalDownloadedBytes(existingBytes: 1_024, receivedBytes: 2_048) == 3_072,
     "shared-file progress must include bytes already persisted in the partial file"
 )
+
+expect(
+    SharedFilesRoutePolicy.canResumePartialDownload(
+        existingBytes: 1_024,
+        validator: "Wed, 01 Jun 2026 08:00:00 GMT",
+        expectedBytes: 4_096
+    ),
+    "shared-file partial downloads may resume only when a server validator is stored"
+)
+
+expect(
+    !SharedFilesRoutePolicy.canResumePartialDownload(
+        existingBytes: 1_024,
+        validator: nil,
+        expectedBytes: 4_096
+    ),
+    "shared-file partial downloads without a server validator must be discarded instead of being appended blindly"
+)
+
+expect(
+    !SharedFilesRoutePolicy.canResumePartialDownload(
+        existingBytes: 4_096,
+        validator: "Wed, 01 Jun 2026 08:00:00 GMT",
+        expectedBytes: 4_096
+    ),
+    "complete or oversized partial files must not be resumed with a Range request"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: false),
+    "transport failures should use bounded shared-file download retries"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: true),
+    "local save failures must not trigger route retry or duplicate downloads"
+)

@@ -25,8 +25,22 @@ private enum SharedFilePartialDownloadError: Error {
     case invalidPartial(String)
 }
 
+struct SharedFileLocalSaveError: Error, LocalizedError {
+    let underlyingError: Error
+
+    var errorDescription: String? {
+        "Failed to save shared file locally: \(underlyingError)"
+    }
+}
+
+private struct SharedFilePartialDownloadMetadata: Codable {
+    let validator: String
+    let expectedBytes: Int64?
+}
+
 private final class SharedFileDownloadDelegate: NSObject, URLSessionDataDelegate {
     private let destinationURL: URL
+    private let metadataURL: URL
     private let initialOffset: Int64
     private let onProgress: SharedFileDownloadProgressHandler?
     private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
@@ -37,8 +51,14 @@ private final class SharedFileDownloadDelegate: NSObject, URLSessionDataDelegate
     private var expectedTotalBytes: Int64 = 0
     private var didResume = false
 
-    init(destinationURL: URL, initialOffset: Int64, onProgress: SharedFileDownloadProgressHandler?) {
+    init(
+        destinationURL: URL,
+        metadataURL: URL,
+        initialOffset: Int64,
+        onProgress: SharedFileDownloadProgressHandler?
+    ) {
         self.destinationURL = destinationURL
+        self.metadataURL = metadataURL
         self.initialOffset = initialOffset
         self.onProgress = onProgress
     }
@@ -113,6 +133,11 @@ private final class SharedFileDownloadDelegate: NSObject, URLSessionDataDelegate
 
         self.response = response
         expectedTotalBytes = Self.expectedTotalBytes(from: httpResponse, initialOffset: initialOffset)
+        Self.writeMetadata(
+            validator: Self.partialValidator(from: httpResponse),
+            expectedBytes: expectedTotalBytes > 0 ? expectedTotalBytes : nil,
+            to: metadataURL
+        )
         completionHandler(.allow)
     }
 
@@ -189,6 +214,33 @@ private final class SharedFileDownloadDelegate: NSObject, URLSessionDataDelegate
         }
         return Int64(rangeStart)
     }
+
+    private static func partialValidator(from response: HTTPURLResponse) -> String? {
+        if let etag = response.value(forHTTPHeaderField: "ETag"),
+           !etag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return etag
+        }
+        if let lastModified = response.value(forHTTPHeaderField: "Last-Modified"),
+           !lastModified.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return lastModified
+        }
+        return nil
+    }
+
+    private static func writeMetadata(validator: String?, expectedBytes: Int64?, to url: URL) {
+        guard let validator else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        let metadata = SharedFilePartialDownloadMetadata(
+            validator: validator,
+            expectedBytes: expectedBytes
+        )
+        guard let data = try? JSONEncoder().encode(metadata) else {
+            return
+        }
+        try? data.write(to: url, options: .atomic)
+    }
 }
 
 // MARK: - SharedFilesService
@@ -240,9 +292,20 @@ class SharedFilesService {
     ) async throws -> DownloadResult {
         let endpoint = "/shared/download/\(path)"
         let partialURL = try partialDownloadURL(path: path)
+        let metadataURL = partialMetadataURL(for: partialURL)
+        var partialMetadata = readPartialDownloadMetadata(at: metadataURL)
         var resumeOffset = SharedFilesRoutePolicy.resumeOffsetForPartialDownload(
             existingBytes: fileSize(at: partialURL)
         )
+        if !SharedFilesRoutePolicy.canResumePartialDownload(
+            existingBytes: resumeOffset,
+            validator: partialMetadata?.validator,
+            expectedBytes: partialMetadata?.expectedBytes
+        ) {
+            removePartialDownload(partialURL: partialURL, metadataURL: metadataURL)
+            partialMetadata = nil
+            resumeOffset = 0
+        }
 
         var downloadedURLForCleanup: URL?
         defer {
@@ -257,15 +320,20 @@ class SharedFilesService {
             (downloadedURL, response) = try await performDownload(
                 endpoint: endpoint,
                 partialURL: partialURL,
+                metadataURL: metadataURL,
+                metadata: partialMetadata,
                 resumeOffset: resumeOffset,
                 onProgress: onProgress
             )
         } catch SharedFilePartialDownloadError.invalidPartial(_) {
-            try? FileManager.default.removeItem(at: partialURL)
+            removePartialDownload(partialURL: partialURL, metadataURL: metadataURL)
+            partialMetadata = nil
             resumeOffset = 0
             (downloadedURL, response) = try await performDownload(
                 endpoint: endpoint,
                 partialURL: partialURL,
+                metadataURL: metadataURL,
+                metadata: partialMetadata,
                 resumeOffset: resumeOffset,
                 onProgress: onProgress
             )
@@ -277,32 +345,37 @@ class SharedFilesService {
         try validateCompletedDownload(downloadedURL: downloadedURL, response: response)
         onProgress?(totalBytes, totalBytes, 1)
 
-        // Move to a stable temp location first
-        let filename = (path as NSString).lastPathComponent
-        let destDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
-        try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-        let destURL = destDir.appendingPathComponent(filename)
-        try? FileManager.default.removeItem(at: destURL)
-        try FileManager.default.moveItem(at: downloadedURL, to: destURL)
-        downloadedURLForCleanup = nil
-
-        // For images/videos: save to Camera Roll
-        let fileType = classifyLocalFileType(filename: filename)
-        if fileType == "image" || fileType == "video" {
-            try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
+        do {
+            // Move to a stable temp location first
+            let filename = (path as NSString).lastPathComponent
+            let destDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
+            try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+            let destURL = destDir.appendingPathComponent(filename)
             try? FileManager.default.removeItem(at: destURL)
-            slog("[SharedFilesService] saved %@ to Camera Roll", path)
-            return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
+            try FileManager.default.moveItem(at: downloadedURL, to: destURL)
+            downloadedURLForCleanup = nil
+            try? FileManager.default.removeItem(at: metadataURL)
+
+            // For images/videos: save to Camera Roll
+            let fileType = classifyLocalFileType(filename: filename)
+            if fileType == "image" || fileType == "video" {
+                try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
+                try? FileManager.default.removeItem(at: destURL)
+                slog("[SharedFilesService] saved %@ to Camera Roll", path)
+                return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
+            }
+
+            // For other files: move to NSDocumentDirectory so it is accessible via iOS Files App
+            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            let finalURL = documentsURL.appendingPathComponent(filename)
+            try? FileManager.default.removeItem(at: finalURL)
+            try FileManager.default.moveItem(at: destURL, to: finalURL)
+
+            return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
+        } catch {
+            throw SharedFileLocalSaveError(underlyingError: error)
         }
-
-        // For other files: move to NSDocumentDirectory so it is accessible via iOS Files App
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let finalURL = documentsURL.appendingPathComponent(filename)
-        try? FileManager.default.removeItem(at: finalURL)
-        try FileManager.default.moveItem(at: destURL, to: finalURL)
-
-        return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
     }
 
     struct DownloadResult {
@@ -326,6 +399,8 @@ class SharedFilesService {
     private func performDownload(
         endpoint: String,
         partialURL: URL,
+        metadataURL: URL,
+        metadata: SharedFilePartialDownloadMetadata?,
         resumeOffset: Int64,
         onProgress: SharedFileDownloadProgressHandler?
     ) async throws -> (URL, URLResponse) {
@@ -336,6 +411,9 @@ class SharedFilesService {
         request.timeoutInterval = SharedFilesRoutePolicy.sharedFileDownloadRequestTimeout
         if SharedFilesRoutePolicy.shouldUseRangeRequest(resumeOffset: resumeOffset) {
             request.setValue("bytes=\(resumeOffset)-", forHTTPHeaderField: "Range")
+            if let validator = metadata?.validator {
+                request.setValue(validator, forHTTPHeaderField: "If-Range")
+            }
         }
         syncDiagnosticsLog(
             "SharedFiles",
@@ -344,6 +422,7 @@ class SharedFilesService {
 
         let delegate = SharedFileDownloadDelegate(
             destinationURL: partialURL,
+            metadataURL: metadataURL,
             initialOffset: resumeOffset,
             onProgress: onProgress
         )
@@ -368,6 +447,22 @@ class SharedFilesService {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "=", with: "")
         return tempDir.appendingPathComponent("\(token).part")
+    }
+
+    private func partialMetadataURL(for partialURL: URL) -> URL {
+        partialURL.deletingPathExtension().appendingPathExtension("part.json")
+    }
+
+    private func readPartialDownloadMetadata(at url: URL) -> SharedFilePartialDownloadMetadata? {
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(SharedFilePartialDownloadMetadata.self, from: data)
+    }
+
+    private func removePartialDownload(partialURL: URL, metadataURL: URL) {
+        try? FileManager.default.removeItem(at: partialURL)
+        try? FileManager.default.removeItem(at: metadataURL)
     }
 
     private func fileSize(at url: URL) -> Int64 {
