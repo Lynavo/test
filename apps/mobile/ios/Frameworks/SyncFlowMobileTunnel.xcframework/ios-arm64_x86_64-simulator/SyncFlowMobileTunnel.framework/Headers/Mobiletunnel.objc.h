@@ -33,4 +33,9 @@ FOUNDATION_EXPORT long MobiletunnelStartTunnel(NSString* _Nullable signalingURL,
  */
 FOUNDATION_EXPORT void MobiletunnelStopTunnel(void);
 
+/**
+ * TakeDiagnosticsLog returns buffered mobile tunnel diagnostics and clears the buffer.
+ */
+FOUNDATION_EXPORT NSString* _Nonnull MobiletunnelTakeDiagnosticsLog(void);
+
 #endif

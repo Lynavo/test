@@ -27,6 +27,12 @@ type P2PManager struct {
 
 const DefaultSTUNServer = "stun:stun.cloudflare.com:3478"
 
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+)
+
 type iceServerPayload struct {
 	URLs       []string `json:"urls"`
 	Username   string   `json:"username"`
@@ -413,6 +419,33 @@ func (m *P2PManager) handleSignalingSession(sConn *safeWriteConn) {
 	peerConnections := make(map[string]*webrtc.PeerConnection)
 	var mu sync.Mutex
 
+	// Configure ping/pong keepalive
+	sConn.conn.SetReadDeadline(time.Now().Add(pongWait))
+	sConn.conn.SetPongHandler(func(string) error {
+		sConn.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	tickerCtx, tickerCancel := context.WithCancel(m.signalingCtx)
+	defer tickerCancel()
+
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := sConn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+					slog.Warn("signaling write ping failed, closing connection", "err", err)
+					sConn.conn.Close()
+					return
+				}
+			case <-tickerCtx.Done():
+				return
+			}
+		}
+	}()
+
 	// M1: Clean up all PeerConnections when the signaling session ends
 	defer func() {
 		mu.Lock()
@@ -712,6 +745,12 @@ func (s *safeWriteConn) WriteMessage(messageType int, data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.conn.WriteMessage(messageType, data)
+}
+
+func (s *safeWriteConn) WriteControl(messageType int, data []byte, deadline time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteControl(messageType, data, deadline)
 }
 
 func (s *safeWriteConn) ReadMessage() (int, []byte, error) {

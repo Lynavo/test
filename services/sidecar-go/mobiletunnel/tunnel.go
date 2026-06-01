@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"strings"
 	"sync"
@@ -39,6 +38,12 @@ var (
 
 const defaultSTUNServer = "stun:stun.cloudflare.com:3478"
 const tunnelStartupTimeout = 20 * time.Second
+
+const (
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+)
 const nat64LookupTimeout = 800 * time.Millisecond
 const nat64DialTimeout = 5 * time.Second
 
@@ -63,7 +68,7 @@ func parseICEServersJSON(raw string) []webrtc.ICEServer {
 
 	var payloads []iceServerPayload
 	if err := json.Unmarshal([]byte(trimmed), &payloads); err != nil {
-		slog.Warn("failed to parse ICE servers JSON, using default STUN", "err", err)
+		tunnelWarn("failed to parse ICE servers JSON, using default STUN", "err", err)
 		return defaultICEServers()
 	}
 
@@ -134,7 +139,7 @@ func sanitizeICEURL(rawURL string) string {
 
 func registerICELogging(pc *webrtc.PeerConnection, component string, peerKey string, peerID string, iceServers []webrtc.ICEServer) {
 	urls, hasTurn, hasStun := summarizeICEServers(iceServers)
-	slog.Info(component+" ICE config",
+	tunnelInfo(component+" ICE config",
 		peerKey, peerID,
 		"iceServerCount", len(iceServers),
 		"iceURLCount", len(urls),
@@ -144,18 +149,18 @@ func registerICELogging(pc *webrtc.PeerConnection, component string, peerKey str
 	)
 
 	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		slog.Info(component+" ICE connection state changed", peerKey, peerID, "state", state.String())
+		tunnelInfo(component+" ICE connection state changed", peerKey, peerID, "state", state.String())
 	})
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		slog.Info(component+" peer connection state changed", peerKey, peerID, "state", state.String())
+		tunnelInfo(component+" peer connection state changed", peerKey, peerID, "state", state.String())
 	})
 	pc.OnICEGatheringStateChange(func(state webrtc.ICEGatheringState) {
-		slog.Info(component+" ICE gathering state changed", peerKey, peerID, "state", state.String())
+		tunnelInfo(component+" ICE gathering state changed", peerKey, peerID, "state", state.String())
 	})
 
 	transport := peerConnectionICETransport(pc)
 	if transport == nil {
-		slog.Warn(component+" ICE transport unavailable for selected pair logging", peerKey, peerID)
+		tunnelWarn(component+" ICE transport unavailable for selected pair logging", peerKey, peerID)
 		return
 	}
 	transport.OnSelectedCandidatePairChange(func(pair *webrtc.ICECandidatePair) {
@@ -173,12 +178,12 @@ func peerConnectionICETransport(pc *webrtc.PeerConnection) *webrtc.ICETransport 
 func logCurrentSelectedICECandidatePair(pc *webrtc.PeerConnection, component string, peerKey string, peerID string, reason string) {
 	transport := peerConnectionICETransport(pc)
 	if transport == nil {
-		slog.Warn(component+" ICE selected candidate pair unavailable", peerKey, peerID, "reason", reason, "err", "ice transport unavailable")
+		tunnelWarn(component+" ICE selected candidate pair unavailable", peerKey, peerID, "reason", reason, "err", "ice transport unavailable")
 		return
 	}
 	pair, err := transport.GetSelectedCandidatePair()
 	if err != nil {
-		slog.Warn(component+" ICE selected candidate pair unavailable", peerKey, peerID, "reason", reason, "err", err)
+		tunnelWarn(component+" ICE selected candidate pair unavailable", peerKey, peerID, "reason", reason, "err", err)
 		return
 	}
 	logSelectedICECandidatePair(component+" ICE selected candidate pair", pair, peerKey, peerID, "reason", reason)
@@ -201,7 +206,7 @@ func logSelectedICECandidatePair(message string, pair *webrtc.ICECandidatePair, 
 		"remoteRelatedAddress", iceCandidateRelatedAddress(pairRemote(pair)),
 		"remoteRelatedPort", iceCandidateRelatedPort(pairRemote(pair)),
 	)
-	slog.Info(message, args...)
+	tunnelInfo(message, args...)
 }
 
 func selectedICERoute(pair *webrtc.ICECandidatePair) string {
@@ -276,7 +281,7 @@ func iceCandidateRelatedPort(candidate *webrtc.ICECandidate) uint16 {
 }
 
 func logLocalICECandidate(component string, peerKey string, peerID string, candidate *webrtc.ICECandidate) {
-	slog.Info(component+" local ICE candidate gathered",
+	tunnelInfo(component+" local ICE candidate gathered",
 		peerKey, peerID,
 		"candidateType", iceCandidateType(candidate),
 		"protocol", iceCandidateProtocol(candidate),
@@ -289,7 +294,7 @@ func logLocalICECandidate(component string, peerKey string, peerID string, candi
 
 func logRemoteICECandidate(component string, peerKey string, peerID string, candidate webrtc.ICECandidateInit) {
 	candidateType, protocol, address, port, relatedAddress, relatedPort := summarizeICECandidateInit(candidate)
-	slog.Info(component+" remote ICE candidate received",
+	tunnelInfo(component+" remote ICE candidate received",
 		peerKey, peerID,
 		"candidateType", candidateType,
 		"protocol", protocol,
@@ -348,7 +353,7 @@ func StartTunnel(signalingURL, clientID, targetClientID, token, pairingToken, ic
 
 	port, err := t.start(signalingURL, clientID, targetClientID, token, pairingToken)
 	if err != nil {
-		slog.Error("failed to start mobile tunnel", "err", err)
+		tunnelError("failed to start mobile tunnel", "err", err)
 		t.Stop()
 		return -1
 	}
@@ -435,7 +440,7 @@ func (t *Tunnel) runSignalingAndBridge(signalingURL, clientID, targetClientID, t
 
 		conn, _, err := dialer.Dial(url, nil)
 		if err != nil {
-			slog.Warn("mobile signaling dial failed, retrying in 5s", "err", err)
+			tunnelWarn("mobile signaling dial failed, retrying in 5s", "err", err)
 			select {
 			case <-time.After(5 * time.Second):
 				continue
@@ -456,7 +461,7 @@ func (t *Tunnel) runSignalingAndBridge(signalingURL, clientID, targetClientID, t
 		conn.Close()
 
 		if err != nil {
-			slog.Error("WebRTC tunnel disconnected with error, reconnecting in 5s", "err", err)
+			tunnelError("WebRTC tunnel disconnected with error, reconnecting in 5s", "err", err)
 			select {
 			case <-time.After(5 * time.Second):
 				continue
@@ -473,7 +478,7 @@ func dialSignalingContext(ctx context.Context, network, addr string) (net.Conn, 
 		if conn, err := dialNAT64Context(ctx, host, port); err == nil {
 			return conn, nil
 		} else if !errors.Is(err, errNoNAT64Prefix) {
-			slog.Warn("mobile signaling NAT64 fallback failed", "host", host, "err", err)
+			tunnelWarn("mobile signaling NAT64 fallback failed", "host", host, "err", err)
 		}
 	}
 
@@ -501,7 +506,7 @@ func dialNAT64Context(ctx context.Context, host, port string) (net.Conn, error) 
 		conn, dialErr := dialer.DialContext(dialCtx, "tcp6", target)
 		cancel()
 		if dialErr == nil {
-			slog.Info("mobile signaling connected through NAT64", "target", target)
+			tunnelInfo("mobile signaling connected through NAT64", "target", target)
 			return conn, nil
 		}
 		errs = append(errs, dialErr.Error())
@@ -636,6 +641,35 @@ func nat64IPv4Offset(prefixLength int) (int, bool) {
 }
 
 func (t *Tunnel) establishWebRTCTunnel(wsConn *websocket.Conn, clientID, targetClientID string) error {
+	sConn := &safeWriteConn{conn: wsConn}
+
+	// Configure ping/pong keepalive
+	wsConn.SetReadDeadline(time.Now().Add(pongWait))
+	wsConn.SetPongHandler(func(string) error {
+		wsConn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	tickerCtx, tickerCancel := context.WithCancel(t.ctx)
+	defer tickerCancel()
+
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := sConn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+					tunnelWarn("mobile signaling write ping failed, closing connection", "err", err)
+					wsConn.Close()
+					return
+				}
+			case <-tickerCtx.Done():
+				return
+			}
+		}
+	}()
+
 	config := webrtc.Configuration{
 		ICEServers: t.iceServers,
 	}
@@ -664,7 +698,7 @@ func (t *Tunnel) establishWebRTCTunnel(wsConn *websocket.Conn, clientID, targetC
 			"senderId":   clientID,
 			"receiverId": targetClientID,
 		})
-		wsConn.WriteMessage(websocket.TextMessage, msg)
+		sConn.WriteMessage(websocket.TextMessage, msg)
 	})
 
 	ordered := true
@@ -691,7 +725,7 @@ func (t *Tunnel) establishWebRTCTunnel(wsConn *websocket.Conn, clientID, targetC
 		"senderId":   clientID,
 		"receiverId": targetClientID,
 	})
-	err = wsConn.WriteMessage(websocket.TextMessage, offerMsg)
+	err = sConn.WriteMessage(websocket.TextMessage, offerMsg)
 	if err != nil {
 		return err
 	}
@@ -747,7 +781,7 @@ func (t *Tunnel) establishWebRTCTunnel(wsConn *websocket.Conn, clientID, targetC
 				if err := json.Unmarshal([]byte(payload), &cand); err == nil {
 					logRemoteICECandidate("mobile tunnel", "targetClientId", targetClientID, cand)
 					if err := pc.AddICECandidate(cand); err != nil {
-						slog.Error("mobile tunnel failed to add remote ICE candidate", "targetClientId", targetClientID, "err", err)
+						tunnelError("mobile tunnel failed to add remote ICE candidate", "targetClientId", targetClientID, "err", err)
 					}
 				}
 			}
@@ -792,7 +826,7 @@ func (t *Tunnel) bridgeTCPToYamux(session *yamux.Session) error {
 
 			stream, err := session.Open()
 			if err != nil {
-				slog.Error("failed to open Yamux stream", "err", err)
+				tunnelError("failed to open Yamux stream", "err", err)
 				return
 			}
 			defer stream.Close()
@@ -817,4 +851,21 @@ func (t *Tunnel) bridgeTCPToYamux(session *yamux.Session) error {
 			wg.Wait()
 		}(localConn)
 	}
+}
+
+type safeWriteConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (s *safeWriteConn) WriteMessage(messageType int, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteMessage(messageType, data)
+}
+
+func (s *safeWriteConn) WriteControl(messageType int, data []byte, deadline time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conn.WriteControl(messageType, data, deadline)
 }
