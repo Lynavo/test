@@ -96,6 +96,13 @@ function fallbackSavedLocation(
     return t('sharedFiles.dialogs.savedLocationPhotos', { defaultValue: 'Photos' });
   }
 
+  if (result.savedLocation) {
+    return result.savedLocation;
+  }
+  if (result.localPath) {
+    return result.localPath;
+  }
+
   if (Platform.OS === 'ios') {
     return t('sharedFiles.dialogs.savedLocationDocuments', { defaultValue: 'Files App -> Vivi Drop' });
   } else {
