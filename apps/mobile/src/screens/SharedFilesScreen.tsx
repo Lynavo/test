@@ -54,6 +54,8 @@ interface SharedFileDownloadProgress {
   progress: number;
 }
 
+type SharedFilesConnectionStatus = 'lan' | 'p2p' | 'offline';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -132,6 +134,18 @@ function isSharedFilesReachabilityAvailable(value: unknown): boolean {
   );
 }
 
+function sharedFilesConnectionStatusFromReachability(
+  value: unknown,
+): SharedFilesConnectionStatus | null {
+  if (typeof value !== 'object' || value === null) return 'offline';
+  const state = (value as { state?: unknown }).state;
+  if (state !== 'available') return 'offline';
+  const route = (value as { route?: unknown }).route;
+  if (route === 'lan') return 'lan';
+  if (route === 'tunnel') return 'p2p';
+  return null;
+}
+
 function fallbackSavedLocation(
   file: SharedFileDTO,
   result: {
@@ -192,6 +206,8 @@ export function SharedFilesScreen() {
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
+  const [sharedFilesConnectionStatus, setSharedFilesConnectionStatus] =
+    useState<SharedFilesConnectionStatus>('offline');
   const downloadingRef = useRef<string | null>(null);
   const activeLoadRef = useRef<{ path: string; promise: Promise<void> } | null>(null);
   const recoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -237,6 +253,7 @@ export function SharedFilesScreen() {
       if (!availability.available) {
         bindingAvailabilityRef.current = { deviceId: null, available: false };
         setActiveDeviceId(null);
+        setSharedFilesConnectionStatus('offline');
         setErrorKind('device_unavailable');
         setFiles([]);
         setLoading(false);
@@ -365,12 +382,20 @@ export function SharedFilesScreen() {
         if (!state || !deviceId) {
           bindingAvailabilityRef.current = { deviceId: null, available: false };
           setActiveDeviceId(null);
+          setSharedFilesConnectionStatus('offline');
           setErrorKind('device_unavailable');
           setFiles([]);
           return;
         }
 
         const connState = (state.connectionState as string) || 'bound';
+        const nextSharedFilesConnectionStatus =
+          sharedFilesConnectionStatusFromReachability(
+            state.sharedFilesReachability,
+          );
+        if (nextSharedFilesConnectionStatus) {
+          setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
+        }
         const sharedFilesAvailable = isSharedFilesReachabilityAvailable(
           state.sharedFilesReachability,
         );
@@ -397,6 +422,7 @@ export function SharedFilesScreen() {
           }
         } else {
           bindingAvailabilityRef.current = { deviceId, available: false };
+          setSharedFilesConnectionStatus('offline');
           setErrorKind('device_unavailable');
           setFiles([]);
         }
@@ -414,6 +440,12 @@ export function SharedFilesScreen() {
     const sub = emitter.addListener(
       'onSharedFilesReachabilityChanged',
       (state: SharedFilesReachabilityDTO | null) => {
+        const nextSharedFilesConnectionStatus =
+          sharedFilesConnectionStatusFromReachability(state);
+        if (nextSharedFilesConnectionStatus) {
+          setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
+        }
+
         if (!state?.deviceId) return;
         if (state.state !== 'available') return;
 
@@ -774,6 +806,21 @@ export function SharedFilesScreen() {
   const folderName = currentPath
     ? currentPath.split('/').filter(Boolean).pop() ?? t('sharedFiles.defaultFolderName')
     : t('sharedFiles.defaultFolderName');
+  const sharedFilesConnectionLabel = t(
+    `sharedFiles.connectionStatus.${sharedFilesConnectionStatus}`,
+  );
+  const sharedFilesConnectionStatusStyle =
+    sharedFilesConnectionStatus === 'lan'
+      ? styles.connectionStatusLan
+      : sharedFilesConnectionStatus === 'p2p'
+        ? styles.connectionStatusP2P
+        : styles.connectionStatusOffline;
+  const sharedFilesConnectionTextStyle =
+    sharedFilesConnectionStatus === 'offline'
+      ? styles.connectionStatusTextOffline
+      : sharedFilesConnectionStatus === 'p2p'
+        ? styles.connectionStatusTextP2P
+        : styles.connectionStatusTextLan;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -787,8 +834,26 @@ export function SharedFilesScreen() {
           >
             <Icon name="chevron-back" size={18} color={DARK} />
           </TouchableOpacity>
-          <Text style={styles.title}>{folderName}</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {folderName}
+          </Text>
           <View style={{ flex: 1 }} />
+          <View
+            style={[
+              styles.connectionStatusBadge,
+              sharedFilesConnectionStatusStyle,
+            ]}
+          >
+            <Text
+              style={[
+                styles.connectionStatusText,
+                sharedFilesConnectionTextStyle,
+              ]}
+              numberOfLines={1}
+            >
+              {sharedFilesConnectionLabel}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.refreshButton}
             activeOpacity={0.7}
@@ -884,6 +949,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: DARK,
+    flexShrink: 1,
+  },
+  connectionStatusBadge: {
+    minWidth: 76,
+    height: 28,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  connectionStatusLan: {
+    backgroundColor: 'rgba(22,163,74,0.14)',
+  },
+  connectionStatusP2P: {
+    backgroundColor: 'rgba(59,130,246,0.14)',
+  },
+  connectionStatusOffline: {
+    backgroundColor: 'rgba(71,85,105,0.12)',
+  },
+  connectionStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  connectionStatusTextLan: {
+    color: '#166534',
+  },
+  connectionStatusTextP2P: {
+    color: '#1d4ed8',
+  },
+  connectionStatusTextOffline: {
+    color: '#475569',
   },
   refreshButton: {
     width: 32,

@@ -5,6 +5,11 @@
     "folder": "資料夾",
     "downloaded": "已下載"
   },
+  "connectionStatus": {
+    "lan": "區域網路在線",
+    "p2p": "P2P 在線",
+    "offline": "離線"
+  },
   "emptyState": {
     "title": "共享目錄暫無內容",
     "message": "同步完成後，檔案將顯示在這裡"

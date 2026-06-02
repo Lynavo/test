@@ -152,6 +152,50 @@ beforeEach(() => {
 });
 
 describe('SharedFilesScreen download progress', () => {
+  test('shows offline shared-list status without reusing connected binding state', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByText, getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    expect(getByText('Offline')).toBeTruthy();
+  });
+
+  test('shows shared-list route status from shared files reachability', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByText, getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      nativeListeners.get('onSharedFilesReachabilityChanged')?.({
+        deviceId: 'device-1',
+        state: 'available',
+        route: 'lan',
+        reason: 'browse_shared_files_success',
+      });
+    });
+    expect(getByText('LAN online')).toBeTruthy();
+
+    await act(async () => {
+      nativeListeners.get('onSharedFilesReachabilityChanged')?.({
+        deviceId: 'device-1',
+        state: 'available',
+        route: 'tunnel',
+        reason: 'browse_shared_files_success',
+      });
+    });
+    expect(getByText('P2P online')).toBeTruthy();
+  });
+
   test('coalesces a connected binding event while the current directory load is in flight', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

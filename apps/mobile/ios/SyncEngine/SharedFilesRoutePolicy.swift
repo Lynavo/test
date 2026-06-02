@@ -38,6 +38,26 @@ enum SharedFilesRoutePolicy {
         return host
     }
 
+    static func shouldPublishLANReachabilityFromDiscovery(
+        hasFreshLANHost: Bool
+    ) -> Bool {
+        hasFreshLANHost
+    }
+
+    static func shouldPreferLANRoute(
+        hasReachableLANHost: Bool,
+        isTunnelActive _: Bool
+    ) -> Bool {
+        hasReachableLANHost
+    }
+
+    static func shouldPublishP2PReachabilityFromTunnel(
+        hasActiveTunnel: Bool,
+        hasReachableLANHost: Bool
+    ) -> Bool {
+        hasActiveTunnel && !hasReachableLANHost
+    }
+
     static func fallbackDirectHost(
         liveHost: String?,
         currentBindingHost: String?,

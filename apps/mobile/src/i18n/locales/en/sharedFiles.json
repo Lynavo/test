@@ -5,6 +5,11 @@
     "folder": "Folder",
     "downloaded": "Downloaded"
   },
+  "connectionStatus": {
+    "lan": "LAN online",
+    "p2p": "P2P online",
+    "offline": "Offline"
+  },
   "emptyState": {
     "title": "Shared Directory Is Empty",
     "message": "Files will appear here once syncing is complete."

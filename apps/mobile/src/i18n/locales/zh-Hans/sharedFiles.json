@@ -5,6 +5,11 @@
     "folder": "文件夹",
     "downloaded": "已下载"
   },
+  "connectionStatus": {
+    "lan": "局域网在线",
+    "p2p": "P2P 在线",
+    "offline": "离线"
+  },
   "emptyState": {
     "title": "共享目录暂无内容",
     "message": "同步完成后，文件将显示在这里"

@@ -47,6 +47,60 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(
+        hasFreshLANHost: true
+    ),
+    "shared files should publish LAN reachability as soon as discovery has a fresh LAN route"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(
+        hasFreshLANHost: false
+    ),
+    "shared files must not publish LAN reachability without a fresh LAN route"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPreferLANRoute(
+        hasReachableLANHost: true,
+        isTunnelActive: true
+    ),
+    "shared files should prefer a reachable LAN route over an active tunnel"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPreferLANRoute(
+        hasReachableLANHost: false,
+        isTunnelActive: true
+    ),
+    "shared files should keep using the tunnel when no reachable LAN route exists"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
+        hasActiveTunnel: true,
+        hasReachableLANHost: false
+    ),
+    "shared files should publish P2P reachability when the tunnel is active and LAN is not reachable"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
+        hasActiveTunnel: true,
+        hasReachableLANHost: true
+    ),
+    "shared files must not let an active tunnel override a reachable LAN route"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
+        hasActiveTunnel: false,
+        hasReachableLANHost: false
+    ),
+    "shared files must not publish P2P reachability when the tunnel is unavailable"
+)
+
+expect(
     SharedFilesRoutePolicy.fallbackDirectHost(
         liveHost: nil,
         currentBindingHost: "10.0.0.8",

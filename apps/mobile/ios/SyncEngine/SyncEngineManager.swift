@@ -2092,6 +2092,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         } else {
             syncDiagnosticsLog("SyncEngine", "presence recovery started while already offline; keeping offline state")
         }
+        publishSharedFilesP2PReachabilityAfterLANFailure(reason: "presence_recovery_started")
 
         let token = UUID()
         presenceRecoveryLock.lock()
@@ -5216,6 +5217,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                                 shareName: nil,
                                 host: resolvedHost
                             )
+                            publishSharedFilesLANReachabilityFromDiscovery(
+                                binding: binding,
+                                host: resolvedHost,
+                                reason: "discovery_lan_probe_success"
+                            )
                         } else {
                             syncDiagnosticsLog(
                                 "SyncEngine",
@@ -5236,6 +5242,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // before going offline; only mark offline if the probe also fails.
                 slog("[SyncEngine] bound device %@ disappeared from discovery, verifying via heartbeat", binding.deviceId)
                 syncDiagnosticsLog("SyncEngine", "bound device \(binding.deviceId) disappeared from discovery, verifying via heartbeat")
+                publishSharedFilesP2PReachabilityAfterLANFailure(
+                    reason: "discovery_bound_device_missing"
+                )
                 let clientId = bindingService.getOrCreateClientId()
                 verifyPresenceWithRecovery(clientId: clientId)
             } else if boundDeviceVisible && (bindingConnectionState == .offline || bindingConnectionState == .bound) {
@@ -6936,6 +6945,95 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
     }
 
+    private func applySharedFilesLANRoute(host: String, reason: String) {
+        sharedFilesService.sidecarHost = host
+        sharedFilesService.useTunnelRoute = false
+        updateSharedFilesReachability(
+            .available,
+            route: .lan,
+            reason: reason
+        )
+    }
+
+    private func applySharedFilesTunnelRoute(reason: String) {
+        sharedFilesService.useTunnelRoute = true
+        updateSharedFilesReachability(
+            .available,
+            route: .tunnel,
+            reason: reason
+        )
+    }
+
+    private func reachableSharedFilesLANHost(
+        for binding: BindingRecord,
+        probeTimeout: TimeInterval = 1.0
+    ) async -> String? {
+        var candidates: [String] = []
+        if let freshHost = freshSharedFilesLANHost(for: binding) {
+            candidates.append(freshHost)
+        }
+        if let fallbackHost = SharedFilesRoutePolicy.fallbackDirectHost(
+            liveHost: sidecarHost,
+            currentBindingHost: currentBinding?.sidecarHost,
+            persistedHost: binding.host
+        ),
+           SharedFilesRoutePolicy.isPrivateLANIPv4(fallbackHost),
+           !candidates.contains(fallbackHost)
+        {
+            candidates.append(fallbackHost)
+        }
+
+        for host in candidates {
+            if await canReachSharedFilesLANHost(host, timeout: probeTimeout) {
+                return host
+            }
+        }
+        return nil
+    }
+
+    private func publishSharedFilesLANReachabilityFromDiscovery(
+        binding: BindingRecord,
+        host: String,
+        reason: String
+    ) {
+        guard SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(
+            hasFreshLANHost: SharedFilesRoutePolicy.freshLANHost(discoveredHost: host) != nil
+        ) else {
+            return
+        }
+        guard uploadStore?.getBinding()?.deviceId == binding.deviceId else {
+            syncDiagnosticsLog(
+                "SharedFiles",
+                "ignored LAN reachability publish for stale device=\(binding.deviceId)"
+            )
+            return
+        }
+        applySharedFilesLANRoute(host: host, reason: reason)
+    }
+
+    private func publishSharedFilesP2PReachabilityAfterLANFailure(reason: String) {
+        Task { [weak self] in
+            await self?.publishSharedFilesP2PReachabilityIfNeeded(reason: reason)
+        }
+    }
+
+    private func publishSharedFilesP2PReachabilityIfNeeded(reason: String) async {
+        guard let binding = uploadStore?.getBinding() else { return }
+        let lanHost = await reachableSharedFilesLANHost(for: binding)
+        let tunnelState = await p2pTunnelRouteState(startReason: "\(reason)_p2p_route")
+        guard SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
+            hasActiveTunnel: tunnelState.isActive,
+            hasReachableLANHost: lanHost != nil
+        ) else {
+            syncDiagnosticsLog(
+                "SharedFiles",
+                "skipped P2P reachability publish reason=\(reason) lanHost=\(lanHost ?? "nil") tunnelActive=\(tunnelState.isActive)"
+            )
+            return
+        }
+        applySharedFilesTunnelRoute(reason: reason)
+    }
+
     private func prepareSharedFilesRoute(reason: String) async -> (host: String, isTunnel: Bool) {
         guard let binding = uploadStore?.getBinding() else {
             sharedFilesService.sidecarHost = nil
@@ -6948,7 +7046,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         var unreachableLANHost: String?
         if let lanHost = freshSharedFilesLANHost(for: binding) {
-            if await canReachSharedFilesLANHost(lanHost) {
+            if await canReachSharedFilesLANHost(lanHost),
+               SharedFilesRoutePolicy.shouldPreferLANRoute(
+                   hasReachableLANHost: true,
+                   isTunnelActive: sharedFilesService.isTunnelActive
+               )
+            {
                 sharedFilesService.sidecarHost = lanHost
                 sharedFilesService.useTunnelRoute = false
                 return (lanHost, false)
@@ -7028,6 +7131,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "download tunnel route failed path=\(path) reason=\(reason) error=\(error); restarting tunnel for tunnel retry"
         )
         await restartP2PTunnelAndWait(reason: "\(reason)_tunnel_route_failed")
+
+        if let binding = uploadStore?.getBinding(),
+           let lanHost = await waitForSharedFilesLANHost(binding: binding),
+           await canReachSharedFilesLANHost(lanHost),
+           SharedFilesRoutePolicy.shouldPreferLANRoute(
+               hasReachableLANHost: true,
+               isTunnelActive: sharedFilesService.isTunnelActive
+           )
+        {
+            applySharedFilesLANRoute(host: lanHost, reason: "\(reason)_lan_recovered")
+            return (lanHost, false)
+        }
 
         if await waitForP2PTunnelActive(reason: "\(reason)_retry_tunnel") {
             let port = sharedFilesService.tunnelPort.map { String($0) } ?? "unknown"
