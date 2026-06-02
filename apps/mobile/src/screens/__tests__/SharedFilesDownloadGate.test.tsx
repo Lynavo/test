@@ -312,6 +312,41 @@ describe('SharedFilesScreen download progress', () => {
     await waitFor(() => expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1));
   });
 
+  test('auto retries while unavailable when the paired device still exists', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+    mockBrowseSharedFiles.mockClear();
+    mockBrowseSharedFiles.mockResolvedValueOnce({ files: [FAKE_OTHER_FILE] });
+
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        nativeListeners.get('onBindingStateChanged')?.({
+          deviceId: 'device-1',
+          connectionState: 'offline',
+        });
+      });
+      expect(getByText('Device Unavailable')).toBeTruthy();
+
+      await act(async () => {
+        jest.runOnlyPendingTimers();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      await waitFor(() => expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1));
+      expect(getByText('clip.mp4')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('shows the saved location after download completes', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

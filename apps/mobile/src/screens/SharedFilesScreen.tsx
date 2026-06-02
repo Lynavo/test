@@ -54,6 +54,7 @@ interface SharedFileDownloadProgress {
 const SCREEN_BG = '#d6ecf8';
 const DARK = '#1a3a5c';
 const BLUE = '#3b9fd8';
+const SHARED_FILES_RECOVERY_RETRY_MS = 3000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -140,6 +141,7 @@ export function SharedFilesScreen() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const downloadingRef = useRef<string | null>(null);
   const activeLoadRef = useRef<{ path: string; promise: Promise<void> } | null>(null);
+  const recoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bindingAvailabilityRef = useRef<{
     deviceId: string | null;
     available: boolean | null;
@@ -153,6 +155,13 @@ export function SharedFilesScreen() {
   // ---------------------------------------------------------------------------
   // Load files via native bridge
   // ---------------------------------------------------------------------------
+
+  const clearRecoveryRetryTimer = useCallback(() => {
+    if (recoveryRetryTimerRef.current) {
+      clearTimeout(recoveryRetryTimerRef.current);
+      recoveryRetryTimerRef.current = null;
+    }
+  }, []);
 
   const loadFiles = useCallback((path: string): Promise<void> => {
     const activeLoad = activeLoadRef.current;
@@ -221,6 +230,26 @@ export function SharedFilesScreen() {
   useEffect(() => {
     void loadFiles(currentPath);
   }, [currentPath, loadFiles]);
+
+  useEffect(() => {
+    const shouldRetry =
+      errorKind === 'device_unavailable' || errorKind === 'network_error';
+    if (!shouldRetry) {
+      clearRecoveryRetryTimer();
+      return;
+    }
+
+    if (!bindingAvailabilityRef.current.deviceId || recoveryRetryTimerRef.current) {
+      return;
+    }
+
+    recoveryRetryTimerRef.current = setTimeout(() => {
+      recoveryRetryTimerRef.current = null;
+      void loadFiles(currentPath);
+    }, SHARED_FILES_RECOVERY_RETRY_MS);
+
+    return clearRecoveryRetryTimer;
+  }, [clearRecoveryRetryTimer, currentPath, errorKind, loadFiles]);
 
   // ---------------------------------------------------------------------------
   // P1#3: Subscribe to binding state changes
