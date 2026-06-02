@@ -2,7 +2,8 @@
   "defaultFolderName": "Shared Files",
   "loading": "Loading...",
   "files": {
-    "folder": "Folder"
+    "folder": "Folder",
+    "downloaded": "Downloaded"
   },
   "emptyState": {
     "title": "Shared Directory Is Empty",

@@ -4,6 +4,8 @@ import type {
   ConnectionState,
   DeviceDashboardStatus,
   DeviceType,
+  SharedFilesReachabilityState,
+  SharedFilesRouteKind,
   ShareStatus,
   UploadState,
   UploadTaskSource,
@@ -177,6 +179,15 @@ export interface BindingStateDTO {
   shareEnabled: boolean;
   shareName?: string;
   lastBoundAt: string;
+  sharedFilesReachability?: SharedFilesReachabilityDTO | null;
+}
+
+export interface SharedFilesReachabilityDTO {
+  deviceId: string;
+  state: SharedFilesReachabilityState;
+  route: SharedFilesRouteKind | null;
+  reason: string;
+  updatedAt: string;
 }
 
 // ── History (shared by both sides) ──
@@ -327,4 +338,3 @@ export interface DesktopRegisterMessage {
   clientId: string;
   pairedDevices: PairedDeviceInfo[];
 }
-

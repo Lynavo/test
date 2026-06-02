@@ -170,6 +170,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
             // SyncEngineManager.persistBinding after a successful re-pair.
             "onRepairStateChanged",
             "onSharedFileDownloadProgress",
+            "onSharedFilesReachabilityChanged",
         ]
     }
 
@@ -208,6 +209,10 @@ class NativeSyncEngineModule: RCTEventEmitter {
 
     func emitBindingStateChanged(_ binding: [String: Any]?) {
         sendEventOnMain(withName: "onBindingStateChanged", body: binding)
+    }
+
+    func emitSharedFilesReachabilityChanged(_ state: [String: Any]?) {
+        sendEventOnMain(withName: "onSharedFilesReachabilityChanged", body: state)
     }
 
     func emitError(_ error: [String: Any]) {

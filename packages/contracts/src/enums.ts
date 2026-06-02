@@ -4,6 +4,12 @@ export type DeviceType = 'mac' | 'win';
 export type ConnectionState =
   | 'discovering' | 'bound' | 'connecting' | 'connected' | 'offline';
 
+export type SharedFilesReachabilityState =
+  | 'unknown' | 'available' | 'unavailable';
+
+export type SharedFilesRouteKind =
+  | 'lan' | 'tunnel';
+
 export type UploadState =
   | 'idle' | 'scanning' | 'queued' | 'uploading'
   | 'paused' | 'retrying' | 'completed' | 'failed';

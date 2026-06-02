@@ -2,7 +2,8 @@
   "defaultFolderName": "共享目录",
   "loading": "加载中...",
   "files": {
-    "folder": "文件夹"
+    "folder": "文件夹",
+    "downloaded": "已下载"
   },
   "emptyState": {
     "title": "共享目录暂无内容",

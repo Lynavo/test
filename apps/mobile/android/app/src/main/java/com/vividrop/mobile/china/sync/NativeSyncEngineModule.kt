@@ -102,6 +102,7 @@ class NativeSyncEngineModule(
   private var signalingUrl: String? = null
   private var accessToken: String? = null
   private var tunnelIceServersJSON: String = ""
+  @Volatile private var sharedFilesReachability: SharedFilesReachability? = null
 
   init {
     registerNetworkAvailabilityMonitor()
@@ -575,6 +576,7 @@ class NativeSyncEngineModule(
     stopP2PTunnel()
     stopPresenceHeartbeatTimer()
     clearBinding()
+    clearSharedFilesReachability(reason = "disconnectAndUnbind")
     emitBindingStateCleared()
     emitIdleSyncState(null)
     emitQueueUpdated(Arguments.createArray())
@@ -584,7 +586,7 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun getBindingState(promise: Promise) {
     runAsync(promise) {
-      promise.resolve(refreshBindingReachability(loadBinding())?.toWritableMap())
+      promise.resolve(refreshBindingReachability(loadBinding())?.toWritableMapWithSharedFilesReachability())
     }
   }
 
@@ -1982,6 +1984,11 @@ class NativeSyncEngineModule(
       logSharedFileRoute("browseSharedFiles", route, retry = true)
       JSONObject(readHttpString(route.url))
     }
+    updateSharedFilesReachability(
+      state = "available",
+      route = route,
+      reason = "browse_shared_files_success",
+    )
     val files = Arguments.createArray()
     val sourceFiles = json.optJSONArray("files") ?: JSONArray()
     for (index in 0 until sourceFiles.length()) {
@@ -2018,7 +2025,13 @@ class NativeSyncEngineModule(
     )
     logSharedFileRoute("downloadSharedFile", route)
     return try {
-      downloadSharedFileFromRoute(path, route)
+      downloadSharedFileFromRoute(path, route).also {
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "download_shared_file_success",
+        )
+      }
     } catch (err: Throwable) {
       if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
         throw err
@@ -2030,7 +2043,13 @@ class NativeSyncEngineModule(
         error = err,
       )
       logSharedFileRoute("downloadSharedFile", route, retry = true)
-      downloadSharedFileFromRoute(path, route)
+      downloadSharedFileFromRoute(path, route).also {
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "download_shared_file_success",
+        )
+      }
     }
   }
 
@@ -2648,11 +2667,51 @@ class NativeSyncEngineModule(
   }
 
   private fun emitBindingStateChanged(binding: StoredBinding) {
-    emitEvent("onBindingStateChanged", binding.toWritableMap())
+    emitEvent("onBindingStateChanged", binding.toWritableMapWithSharedFilesReachability())
   }
 
   private fun emitBindingStateCleared() {
     emitEvent("onBindingStateChanged", null)
+  }
+
+  private fun updateSharedFilesReachability(
+    state: String,
+    route: SharedFileRoute?,
+    reason: String,
+  ) {
+    val binding = loadBinding() ?: return
+    val next = SharedFilesReachability(
+      deviceId = binding.deviceId,
+      state = state,
+      route = route?.let { if (it.isTunnel) "tunnel" else "lan" },
+      reason = reason,
+      updatedAt = isoNow(),
+    )
+    val previous = sharedFilesReachability
+    sharedFilesReachability = next
+    recordNativeLog(
+      "SharedFiles",
+      "reachability ${previous?.state ?: "nil"}/${previous?.route ?: "nil"} -> ${next.state}/${next.route ?: "nil"} ($reason)",
+    )
+    emitEvent("onSharedFilesReachabilityChanged", next.toWritableMap())
+  }
+
+  private fun clearSharedFilesReachability(reason: String) {
+    if (sharedFilesReachability == null) {
+      return
+    }
+    sharedFilesReachability = null
+    recordNativeLog("SharedFiles", "reachability cleared ($reason)")
+    emitEvent("onSharedFilesReachabilityChanged", null)
+  }
+
+  private fun StoredBinding.toWritableMapWithSharedFilesReachability(): WritableMap {
+    val map = toWritableMap()
+    val reachability = sharedFilesReachability
+    if (reachability != null && reachability.deviceId == deviceId) {
+      map.putMap("sharedFilesReachability", reachability.toWritableMap())
+    }
+    return map
   }
 
   private fun emitIdleSyncState(binding: StoredBinding?) {
@@ -3357,6 +3416,7 @@ class NativeSyncEngineModule(
   private fun clearBinding() {
     cancelPresenceRecoveryProbe(reason = "binding_cleared")
     stopPresenceHeartbeatTimer()
+    clearSharedFilesReachability(reason = "binding_cleared")
     prefs.edit().remove(PREF_BINDING).apply()
   }
 
@@ -4544,6 +4604,28 @@ class NativeSyncEngineModule(
           connectionState = json.optString("connectionState")
             .ifBlank { "bound" },
         )
+      }
+    }
+  }
+
+  private data class SharedFilesReachability(
+    val deviceId: String,
+    val state: String,
+    val route: String?,
+    val reason: String,
+    val updatedAt: String,
+  ) {
+    fun toWritableMap(): WritableMap {
+      return Arguments.createMap().apply {
+        putString("deviceId", deviceId)
+        putString("state", state)
+        if (route == null) {
+          putNull("route")
+        } else {
+          putString("route", route)
+        }
+        putString("reason", reason)
+        putString("updatedAt", updatedAt)
       }
     }
   }

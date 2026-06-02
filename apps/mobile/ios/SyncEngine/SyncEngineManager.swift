@@ -211,6 +211,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         case offline
     }
 
+    private enum SharedFilesReachabilityState: String {
+        case unknown
+        case available
+        case unavailable
+    }
+
+    private enum SharedFilesReachabilityRoute: String {
+        case lan
+        case tunnel
+    }
+
     private struct P2PTunnelCredentials: Equatable {
         let signalingURL: String
         let accessToken: String
@@ -236,6 +247,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// restore paths via `persistBinding(_:)`. Cleared by `clearBinding` /
     /// wipe / logout paths.
     private(set) var currentBinding: StoredBinding?
+    private var sharedFilesReachabilityPayload: [String: Any]?
     /// Set while the app is transitioning to background. The foreground TCP
     /// upload loop observes this between files and breaks out so the
     /// BackgroundUploadService can take over.
@@ -1533,7 +1545,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             return nil
         }
 
-        return [
+        var payload: [String: Any] = [
             "deviceId": binding.deviceId,
             "deviceName": binding.deviceName,
             "deviceAlias": binding.deviceAlias ?? binding.deviceName,
@@ -1546,10 +1558,51 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "shareName": binding.shareName ?? NSNull(),
             "lastBoundAt": binding.lastBoundAt,
         ]
+        if let sharedFilesReachabilityPayload,
+           sharedFilesReachabilityPayload["deviceId"] as? String == binding.deviceId {
+            payload["sharedFilesReachability"] = sharedFilesReachabilityPayload
+        }
+        return payload
     }
 
     private func emitBindingStateChanged() {
         NativeSyncEngineModule.shared?.emitBindingStateChanged(bindingStatePayload())
+    }
+
+    private func updateSharedFilesReachability(
+        _ state: SharedFilesReachabilityState,
+        route: SharedFilesReachabilityRoute?,
+        reason: String
+    ) {
+        guard let binding = uploadStore?.getBinding() else { return }
+        let routeValue: Any
+        if let route {
+            routeValue = route.rawValue
+        } else {
+            routeValue = NSNull()
+        }
+        let payload: [String: Any] = [
+            "deviceId": binding.deviceId,
+            "state": state.rawValue,
+            "route": routeValue,
+            "reason": reason,
+            "updatedAt": diagnosticsTimestamp(),
+        ]
+        let previousState = sharedFilesReachabilityPayload?["state"] as? String ?? "nil"
+        let previousRoute = sharedFilesReachabilityPayload?["route"] as? String ?? "nil"
+        sharedFilesReachabilityPayload = payload
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "reachability \(previousState)/\(previousRoute) -> \(state.rawValue)/\(route?.rawValue ?? "nil") (\(reason))"
+        )
+        NativeSyncEngineModule.shared?.emitSharedFilesReachabilityChanged(payload)
+    }
+
+    private func clearSharedFilesReachability(reason: String) {
+        guard sharedFilesReachabilityPayload != nil else { return }
+        sharedFilesReachabilityPayload = nil
+        syncDiagnosticsLog("SharedFiles", "reachability cleared (\(reason))")
+        NativeSyncEngineModule.shared?.emitSharedFilesReachabilityChanged(nil)
     }
 
     private func refreshBoundServerMetadata(
@@ -2547,6 +2600,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// up.
     private func persistBinding(_ binding: BindingRecord) throws {
         try uploadStore?.saveBinding(binding)
+        if let sharedFilesDeviceId = sharedFilesReachabilityPayload?["deviceId"] as? String,
+           sharedFilesDeviceId != binding.deviceId {
+            clearSharedFilesReachability(reason: "binding_changed")
+        }
         let stored = StoredBinding(
             serverId: binding.deviceId,
             sidecarHost: binding.host,
@@ -3355,6 +3412,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             try? uploadStore?.clearBinding()
             currentBinding = nil
             bindingConnectionState = .offline
+            clearSharedFilesReachability(reason: "pairing_token_missing")
             stopSyncLifecycle(finalState: .idle)
             NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
             return
@@ -3391,6 +3449,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 syncDiagnosticsLog("SyncPipeline", "pairing token missing — clearing stale binding")
                 try? uploadStore?.clearBinding()
                 bindingConnectionState = .offline
+                clearSharedFilesReachability(reason: "pairing_token_missing")
                 stopSyncLifecycle(finalState: .idle)
                 NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
                 return
@@ -5619,6 +5678,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         stopPresenceHeartbeatTimer()
         stopP2PTunnel(reason: "disconnectAndUnbind")
         bindingConnectionState = .offline
+        clearSharedFilesReachability(reason: "disconnectAndUnbind")
         sidecarHost = nil
         // M8: terminal cleanup — force-release clears any nested refcount.
         forceEndBackgroundTransition(reason: "disconnectAndUnbind")
@@ -6131,17 +6191,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
               let host = currentPresenceHeartbeatHost() else {
             return
         }
-        let useTunnel = sharedFilesService.isTunnelActive && sharedFilesService.tunnelPort != nil
-        let hostPart: String
-        let portPart: Int
-        if useTunnel, let tPort = sharedFilesService.tunnelPort {
-            hostPart = "127.0.0.1"
-            portPart = Int(tPort)
-        } else {
-            hostPart = host.contains(":") ? "[\(host)]" : host
-            portPart = 39394
-        }
-        let usedTunnelRoute = useTunnel
+        let hostPart = host.contains(":") ? "[\(host)]" : host
+        let portPart = 39394
+        let usedTunnelRoute = false
         let urlStr = "http://\(hostPart):\(portPart)/presence/\(clientId)"
         guard let url = URL(string: urlStr) else { return }
         var request = URLRequest(url: url)
@@ -7023,7 +7075,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 try await sharedFilesService.listSharedFiles(path: path)
             }
         }
-        if bindingConnectionState != .connected {
+        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? .tunnel : .lan
+        updateSharedFilesReachability(
+            .available,
+            route: reachabilityRoute,
+            reason: "browse_shared_files_success"
+        )
+        if !route.isTunnel && bindingConnectionState != .connected {
             updateBindingConnectionState(.connected, reason: "browse_shared_files_success")
         }
         let files: [[String: Any]] = directory.files.map { file in
@@ -7115,7 +7173,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard let result else {
             throw lastError ?? SyncEngineError.networkError("Shared file download failed without an error")
         }
-        if bindingConnectionState != .connected {
+        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? .tunnel : .lan
+        updateSharedFilesReachability(
+            .available,
+            route: reachabilityRoute,
+            reason: "download_shared_file_success"
+        )
+        if !route.isTunnel && bindingConnectionState != .connected {
             updateBindingConnectionState(.connected, reason: "download_shared_file_success")
         }
         return [
@@ -7288,6 +7352,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         // 9. Push fresh empty state to JS so any foregrounded UI does not keep
         // rendering stale data (binding card, queue, history).
+        clearSharedFilesReachability(reason: "wipeSyncIdentity")
         NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)
         NativeSyncEngineModule.shared?.emitQueueUpdated([])
         NativeSyncEngineModule.shared?.emitHistoryUpdated()

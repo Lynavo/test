@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { Alert, NativeModules, NativeEventEmitter } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Must mock react-native-localize before i18n import
 jest.mock('react-native-localize', () => ({
@@ -28,6 +29,7 @@ jest.mock('../../components/Icon', () => ({
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
   default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
 }));
 
@@ -84,6 +86,7 @@ const FAKE_FILE = {
   name: 'photo.jpg',
   path: '/shared/photo.jpg',
   size: 1024,
+  modifiedAt: '2026-06-02T03:00:00.000Z',
   type: 'image',
   isDirectory: false,
   thumbnailUrl: null,
@@ -93,10 +96,17 @@ const FAKE_OTHER_FILE = {
   name: 'clip.mp4',
   path: '/shared/clip.mp4',
   size: 2048,
+  modifiedAt: '2026-06-02T03:05:00.000Z',
   type: 'video',
   isDirectory: false,
   thumbnailUrl: null,
 };
+
+const FAKE_FILE_DOWNLOAD_ID = JSON.stringify([
+  FAKE_FILE.path,
+  FAKE_FILE.size,
+  FAKE_FILE.modifiedAt,
+]);
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -105,6 +115,8 @@ beforeAll(async () => {
 beforeEach(() => {
   jest.clearAllMocks();
   nativeListeners.clear();
+  (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+  (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
 
   // Set up NativeSyncEngine on NativeModules so checkDeviceAvailable passes.
   (NativeModules as Record<string, unknown>).NativeSyncEngine = {
@@ -347,6 +359,65 @@ describe('SharedFilesScreen download progress', () => {
     }
   });
 
+  test('keeps shared files available when binding is offline but shared files are reachable through tunnel', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId, queryByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'offline',
+        sharedFilesReachability: {
+          state: 'available',
+          route: 'tunnel',
+        },
+      });
+    });
+
+    expect(queryByText('Device Unavailable')).toBeNull();
+    expect(getByTestId('shared-file-download-button')).toBeTruthy();
+  });
+
+  test('reloads files when shared files reachability becomes available while binding remains offline', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId, getByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+    mockBrowseSharedFiles.mockClear();
+    mockBrowseSharedFiles.mockResolvedValueOnce({ files: [FAKE_OTHER_FILE] });
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'offline',
+      });
+    });
+    expect(getByText('Device Unavailable')).toBeTruthy();
+
+    await act(async () => {
+      nativeListeners.get('onSharedFilesReachabilityChanged')?.({
+        deviceId: 'device-1',
+        state: 'available',
+        route: 'tunnel',
+        reason: 'browse_shared_files_success',
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockBrowseSharedFiles).toHaveBeenCalledTimes(1));
+    expect(getByText('clip.mp4')).toBeTruthy();
+  });
+
   test('shows the saved location after download completes', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
@@ -370,6 +441,63 @@ describe('SharedFilesScreen download progress', () => {
         'Download complete',
         expect.stringContaining('/tmp/syncflow_shared_downloads/photo.jpg'),
       ),
+    );
+  });
+
+  test('marks the file as downloaded after download completes', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockResolvedValue({
+      savedToPhotos: false,
+      localPath: '/tmp/syncflow_shared_downloads/photo.jpg',
+    });
+
+    const { getByTestId, getByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-download-button'));
+    });
+
+    await waitFor(() => expect(getByText('Downloaded')).toBeTruthy());
+  });
+
+  test('restores downloaded status after reopening shared files', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockDownloadSharedFile.mockResolvedValue({
+      savedToPhotos: false,
+      localPath: '/tmp/syncflow_shared_downloads/photo.jpg',
+    });
+
+    const firstRender = render(<SharedFilesScreen />);
+
+    await waitFor(() => firstRender.getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      fireEvent.press(firstRender.getByTestId('shared-file-download-button'));
+    });
+
+    await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalled());
+    const [storageKey, storedDownloads] = (AsyncStorage.setItem as jest.Mock)
+      .mock.calls[0] as [string, string];
+    expect(storageKey).toContain('device-1');
+    expect(JSON.parse(storedDownloads)).toEqual([FAKE_FILE_DOWNLOAD_ID]);
+
+    firstRender.unmount();
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce(
+      JSON.stringify([FAKE_FILE_DOWNLOAD_ID]),
+    );
+
+    const secondRender = render(<SharedFilesScreen />);
+
+    await waitFor(() =>
+      expect(secondRender.getByText('Downloaded')).toBeTruthy(),
     );
   });
 

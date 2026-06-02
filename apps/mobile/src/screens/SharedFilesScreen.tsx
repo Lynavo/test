@@ -18,7 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import type { SharedFileDTO } from '@syncflow/contracts';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { SharedFileDTO, SharedFilesReachabilityDTO } from '@syncflow/contracts';
 import { FEATURES } from '../constants/features';
 import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
 import { Icon } from '../components/Icon';
@@ -40,6 +41,12 @@ interface DeviceAvailability {
   deviceId: string | null;
 }
 
+interface BindingStatePayload {
+  deviceId?: unknown;
+  connectionState?: unknown;
+  sharedFilesReachability?: unknown;
+}
+
 interface SharedFileDownloadProgress {
   path: string;
   bytesWritten: number;
@@ -55,6 +62,8 @@ const SCREEN_BG = '#d6ecf8';
 const DARK = '#1a3a5c';
 const BLUE = '#3b9fd8';
 const SHARED_FILES_RECOVERY_RETRY_MS = 3000;
+const SHARED_FILES_COMPLETED_DOWNLOADS_STORAGE_PREFIX =
+  '@syncflow/shared-files/completed-downloads/v1';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,6 +87,49 @@ function clampDownloadProgress(value: number): number {
 
 function formatDownloadPercent(value: number): string {
   return `${Math.round(clampDownloadProgress(value) * 100)}%`;
+}
+
+function sharedFilesCompletedDownloadsStorageKey(deviceId: string): string {
+  return `${SHARED_FILES_COMPLETED_DOWNLOADS_STORAGE_PREFIX}:${deviceId}`;
+}
+
+function sharedFileCompletedDownloadId(file: SharedFileDTO): string {
+  return JSON.stringify([file.path, file.size, file.modifiedAt]);
+}
+
+function completedDownloadsFromIds(ids: string[]): Record<string, true> {
+  return ids.reduce<Record<string, true>>((acc, id) => {
+    const normalizedId = id.trim();
+    if (normalizedId) {
+      acc[normalizedId] = true;
+    }
+    return acc;
+  }, {});
+}
+
+function parseCompletedDownloads(raw: string | null): Record<string, true> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return {};
+    return completedDownloadsFromIds(
+      parsed.filter((id): id is string => typeof id === 'string'),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function serializeCompletedDownloads(downloads: Record<string, true>): string {
+  return JSON.stringify(Object.keys(downloads).sort());
+}
+
+function isSharedFilesReachabilityAvailable(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { state?: unknown }).state === 'available'
+  );
 }
 
 function fallbackSavedLocation(
@@ -139,18 +191,27 @@ export function SharedFilesScreen() {
   const [currentPath, setCurrentPath] = useState('');
   const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
   const downloadingRef = useRef<string | null>(null);
   const activeLoadRef = useRef<{ path: string; promise: Promise<void> } | null>(null);
   const recoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completedDownloadsDeviceIdRef = useRef<string | null>(null);
+  const completedDownloadsRef = useRef<Record<string, true>>({});
   const bindingAvailabilityRef = useRef<{
     deviceId: string | null;
     available: boolean | null;
   }>({ deviceId: null, available: null });
   const [downloadProgress, setDownloadProgress] = useState<Record<string, SharedFileDownloadProgress>>({});
+  const [completedDownloads, setCompletedDownloads] = useState<Record<string, true>>({});
 
   // Preview state
   const [previewFile, setPreviewFile] = useState<SharedFileDTO | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const updateCompletedDownloads = useCallback((next: Record<string, true>) => {
+    completedDownloadsRef.current = next;
+    setCompletedDownloads(next);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Load files via native bridge
@@ -175,6 +236,7 @@ export function SharedFilesScreen() {
       const availability = await getDeviceAvailability();
       if (!availability.available) {
         bindingAvailabilityRef.current = { deviceId: null, available: false };
+        setActiveDeviceId(null);
         setErrorKind('device_unavailable');
         setFiles([]);
         setLoading(false);
@@ -185,6 +247,7 @@ export function SharedFilesScreen() {
         deviceId: availability.deviceId,
         available: true,
       };
+      setActiveDeviceId(availability.deviceId);
 
       try {
         const result = await browseSharedFiles(path);
@@ -232,6 +295,41 @@ export function SharedFilesScreen() {
   }, [currentPath, loadFiles]);
 
   useEffect(() => {
+    completedDownloadsDeviceIdRef.current = activeDeviceId;
+    if (!activeDeviceId) {
+      updateCompletedDownloads({});
+      return;
+    }
+
+    updateCompletedDownloads({});
+    let cancelled = false;
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(
+          sharedFilesCompletedDownloadsStorageKey(activeDeviceId),
+        );
+        if (
+          cancelled ||
+          completedDownloadsDeviceIdRef.current !== activeDeviceId
+        ) {
+          return;
+        }
+        const loaded = parseCompletedDownloads(raw);
+        updateCompletedDownloads({
+          ...loaded,
+          ...completedDownloadsRef.current,
+        });
+      } catch (e) {
+        console.warn('[SharedFiles] load completed downloads failed:', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDeviceId, updateCompletedDownloads]);
+
+  useEffect(() => {
     const shouldRetry =
       errorKind === 'device_unavailable' || errorKind === 'network_error';
     if (!shouldRetry) {
@@ -262,17 +360,21 @@ export function SharedFilesScreen() {
     const emitter = new NativeEventEmitter(NativeSyncEngine);
     const sub = emitter.addListener(
       'onBindingStateChanged',
-      (state: Record<string, unknown> | null) => {
+      (state: BindingStatePayload | null) => {
         const deviceId = typeof state?.deviceId === 'string' ? state.deviceId : null;
         if (!state || !deviceId) {
           bindingAvailabilityRef.current = { deviceId: null, available: false };
+          setActiveDeviceId(null);
           setErrorKind('device_unavailable');
           setFiles([]);
           return;
         }
 
         const connState = (state.connectionState as string) || 'bound';
-        if (connState === 'connected' || connState === 'bound') {
+        const sharedFilesAvailable = isSharedFilesReachabilityAvailable(
+          state.sharedFilesReachability,
+        );
+        if (connState === 'connected' || connState === 'bound' || sharedFilesAvailable) {
           const previousAvailability = bindingAvailabilityRef.current;
           const shouldReload =
             previousAvailability.available === false ||
@@ -281,6 +383,7 @@ export function SharedFilesScreen() {
               previousAvailability.deviceId !== deviceId);
 
           bindingAvailabilityRef.current = { deviceId, available: true };
+          setActiveDeviceId(deviceId);
           if (shouldReload) {
             void loadFiles(currentPath);
           }
@@ -302,6 +405,38 @@ export function SharedFilesScreen() {
 
     return () => sub.remove();
   }, [loadFiles, currentPath]);
+
+  useEffect(() => {
+    const { NativeSyncEngine } = NativeModules;
+    if (!NativeSyncEngine) return;
+
+    const emitter = new NativeEventEmitter(NativeSyncEngine);
+    const sub = emitter.addListener(
+      'onSharedFilesReachabilityChanged',
+      (state: SharedFilesReachabilityDTO | null) => {
+        if (!state?.deviceId) return;
+        if (state.state !== 'available') return;
+
+        const previousAvailability = bindingAvailabilityRef.current;
+        const shouldReload =
+          previousAvailability.available === false ||
+          previousAvailability.deviceId !== state.deviceId ||
+          errorKind === 'device_unavailable' ||
+          errorKind === 'network_error';
+
+        bindingAvailabilityRef.current = {
+          deviceId: state.deviceId,
+          available: true,
+        };
+        setActiveDeviceId(state.deviceId);
+        if (shouldReload) {
+          void loadFiles(currentPath);
+        }
+      },
+    );
+
+    return () => sub.remove();
+  }, [currentPath, errorKind, loadFiles]);
 
   useEffect(() => {
     const { NativeSyncEngine } = NativeModules;
@@ -374,6 +509,21 @@ export function SharedFilesScreen() {
     try {
       const result = await downloadSharedFile(file.path);
       const savedLocation = fallbackSavedLocation(file, result, t);
+      const completedDownloadId = sharedFileCompletedDownloadId(file);
+      const nextCompletedDownloads = {
+        ...completedDownloadsRef.current,
+        [completedDownloadId]: true,
+      };
+      updateCompletedDownloads(nextCompletedDownloads);
+      const deviceId = activeDeviceId ?? bindingAvailabilityRef.current.deviceId;
+      if (deviceId) {
+        void AsyncStorage.setItem(
+          sharedFilesCompletedDownloadsStorageKey(deviceId),
+          serializeCompletedDownloads(nextCompletedDownloads),
+        ).catch((e) => {
+          console.warn('[SharedFiles] persist completed download failed:', e);
+        });
+      }
       if (result.savedToPhotos) {
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete'),
@@ -403,7 +553,7 @@ export function SharedFilesScreen() {
         return next;
       });
     }
-  }, [subscription?.status, t, navigation]);
+  }, [activeDeviceId, subscription?.status, t, navigation, updateCompletedDownloads]);
 
   // ---------------------------------------------------------------------------
   // Preview handler
@@ -434,7 +584,17 @@ export function SharedFilesScreen() {
       const icon = fileTypeIcon(item);
       const isDownloading = downloading === item.path;
       const isDownloadDisabled = downloading !== null;
+      const isDownloaded =
+        completedDownloads[sharedFileCompletedDownloadId(item)] === true;
       const progress = downloadProgress[item.path]?.progress ?? 0;
+      let fileMeta = formatBytes(item.size);
+      if (isDownloading) {
+        fileMeta = formatDownloadPercent(progress);
+      } else if (isDownloaded) {
+        fileMeta = t('sharedFiles.files.downloaded');
+      } else if (item.isDirectory) {
+        fileMeta = t('sharedFiles.files.folder');
+      }
 
       return (
         <TouchableOpacity
@@ -466,13 +626,7 @@ export function SharedFilesScreen() {
             <Text style={styles.fileName} numberOfLines={1}>
               {item.name}
             </Text>
-            <Text style={styles.fileMeta}>
-              {isDownloading
-                ? formatDownloadPercent(progress)
-                : item.isDirectory
-                  ? t('sharedFiles.files.folder')
-                  : formatBytes(item.size)}
-            </Text>
+            <Text style={styles.fileMeta}>{fileMeta}</Text>
             {isDownloading && (
               <View style={styles.progressTrack}>
                 <View
@@ -494,6 +648,7 @@ export function SharedFilesScreen() {
             <TouchableOpacity
               style={[
                 styles.downloadBtn,
+                isDownloaded ? styles.downloadBtnCompleted : null,
                 isDownloadDisabled && !isDownloading ? styles.downloadBtnDisabled : null,
               ]}
               activeOpacity={0.7}
@@ -503,6 +658,8 @@ export function SharedFilesScreen() {
             >
               {isDownloading ? (
                 <ActivityIndicator size="small" color={BLUE} />
+              ) : isDownloaded ? (
+                <Icon name="checkmark-circle" size={18} color="#16a34a" />
               ) : (
                 <Icon name="download-outline" size={18} color={BLUE} />
               )}
@@ -511,7 +668,14 @@ export function SharedFilesScreen() {
         </TouchableOpacity>
       );
     },
-    [downloading, downloadProgress, navigateIntoDir, handlePreview, handleDownload],
+    [
+      completedDownloads,
+      downloading,
+      downloadProgress,
+      navigateIntoDir,
+      handlePreview,
+      handleDownload,
+    ],
   );
 
   const keyExtractor = useCallback((item: SharedFileDTO) => item.path, []);
@@ -793,6 +957,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59,159,216,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  downloadBtnCompleted: {
+    backgroundColor: 'rgba(22,163,74,0.1)',
   },
   downloadBtnDisabled: {
     opacity: 0.4,

@@ -5,6 +5,7 @@ import type {
   DiscoveredDeviceDTO,
   HistoryLedgerCardDTO,
   ReadOnlyQueueItemDTO,
+  SharedFilesReachabilityDTO,
   SyncSummaryDTO,
 } from '@syncflow/contracts';
 
@@ -46,6 +47,9 @@ export interface Spec extends TurboModule {
   readonly onQueueUpdated: (queue: ReadOnlyQueueItemDTO[]) => void;
   readonly onHistoryUpdated: (card: HistoryLedgerCardDTO) => void;
   readonly onBindingStateChanged: (state: BindingStateDTO | null) => void;
+  readonly onSharedFilesReachabilityChanged: (
+    state: SharedFilesReachabilityDTO | null,
+  ) => void;
   readonly onError: (error: { code: string; message: string }) => void;
 }
 
