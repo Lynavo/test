@@ -98,28 +98,24 @@ export function ShareAddressSection() {
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             {t('settings.shareAddress.label')}
           </label>
-          {isWindows ? null : (
-            <div
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
-            >
-              <StatusIcon className={`h-3.5 w-3.5 ${meta.iconClassName}`} />
-              {meta.label}
-            </div>
-          )}
-        </div>
-        {isWindows ? null : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void refreshShareStatus(false)}
-            disabled={validatingShare}
-            className="shrink-0"
+          <div
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${meta.tone}`}
           >
-            <RefreshCw className={`h-4 w-4 ${validatingShare ? 'animate-spin' : ''}`} />
-            {t('settings.shareAddress.refresh')}
-          </Button>
-        )}
+            <StatusIcon className={`h-3.5 w-3.5 ${meta.iconClassName}`} />
+            {meta.label}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void refreshShareStatus(false)}
+          disabled={validatingShare}
+          className="shrink-0"
+        >
+          <RefreshCw className={`h-4 w-4 ${validatingShare ? 'animate-spin' : ''}`} />
+          {t('settings.shareAddress.refresh')}
+        </Button>
       </div>
 
       <p className="mb-3 text-sm text-muted-foreground">{meta.detail}</p>

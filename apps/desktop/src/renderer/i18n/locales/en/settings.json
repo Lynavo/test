@@ -7,6 +7,8 @@
     "deviceNameDescription": "This name is shown on mobile devices",
     "connectionCode": "Pairing code",
     "connectionCodeDescription": "After regeneration, old phones need to pair again",
+    "shareAddress": "LAN sharing",
+    "shareAddressDescription": "Checks this computer's SMB sharing status for mobile access to the shared folder",
     "giftCard": "Gift card",
     "giftCardDescription": "Redeem your gift card to unlock more features or storage capacity",
     "bonjour": "Windows Bonjour broadcast",

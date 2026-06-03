@@ -7,6 +7,8 @@
     "deviceNameDescription": "手機端會看到這個名稱",
     "connectionCode": "連線碼管理",
     "connectionCodeDescription": "重新產生後，舊手機需要重新配對",
+    "shareAddress": "區域網路共享",
+    "shareAddressDescription": "偵測這台電腦的 SMB 共享狀態，供手機讀取共享目錄",
     "giftCard": "禮品卡",
     "giftCardDescription": "兌換禮品卡可提升配額、功能或同步時長",
     "bonjour": "Windows Bonjour 廣播",
