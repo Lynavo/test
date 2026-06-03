@@ -8,6 +8,12 @@ export type AppInfo = {
   buildNumber: string;
 };
 
+function normalizeBuildNumber(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
 export function resolveBuildNumber(): string {
   const fallback = '';
   const packagedPackageJson = join(app.getAppPath(), 'package.json');
@@ -22,9 +28,10 @@ export function resolveBuildNumber(): string {
 
   try {
     const packaged = JSON.parse(readFileSync(packagedPackageJson, 'utf8')) as {
-      syncflowBuildNumber?: string;
+      syncflowBuildNumber?: unknown;
     };
-    if (packaged.syncflowBuildNumber) return packaged.syncflowBuildNumber;
+    const packagedBuildNumber = normalizeBuildNumber(packaged.syncflowBuildNumber);
+    if (packagedBuildNumber) return packagedBuildNumber;
   } catch {
     // Fall through to repo build settings in development.
   }

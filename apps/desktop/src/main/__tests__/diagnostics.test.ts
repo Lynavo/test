@@ -167,6 +167,7 @@ describe('exportDiagnostics', () => {
     delete process.env.SYNCFLOW_API_BASE_URL;
     delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
     delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
+    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
     rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
     rmSync('/tmp/vividrop-main.log', { force: true });
     rmSync('/tmp/vividrop-main.log.1', { force: true });
@@ -179,6 +180,7 @@ describe('exportDiagnostics', () => {
     delete process.env.SYNCFLOW_API_BASE_URL;
     delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
     delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
+    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
     rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
     rmSync('/tmp/vividrop-main.log', { force: true });
     rmSync('/tmp/vividrop-main.log.1', { force: true });
@@ -211,6 +213,38 @@ describe('exportDiagnostics', () => {
     const diagnostics = JSON.parse(diagnosticsJson) as { app?: { build?: string } };
     expect(diagnostics.app?.build).toBeTruthy();
 
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('serializes a numeric packaged build number as a string in diagnostics.json', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const archivePath = join(tempRoot, 'diagnostics.zip');
+    mkdirSync('/tmp/vividrop-app', { recursive: true });
+    writeFileSync('/tmp/vividrop-app/package.json', '{"syncflowBuildNumber":50}');
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({
+      canceled: false,
+      filePath: archivePath,
+    });
+
+    const { exportDiagnostics } = await import('../diagnostics');
+
+    await exportDiagnostics({
+      getState: () => ({ status: 'healthy' }),
+    } as unknown as SidecarManager);
+
+    const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean);
+    const diagnosticsEntry = entries.find((entry) => entry.endsWith('/diagnostics.json'));
+    expect(diagnosticsEntry).toBeTruthy();
+
+    const diagnosticsJson = execFileSync('unzip', ['-p', archivePath, diagnosticsEntry ?? ''], {
+      encoding: 'utf8',
+    });
+    const diagnostics = JSON.parse(diagnosticsJson) as { app?: { build?: unknown } };
+    expect(diagnostics.app?.build).toBe('50');
+
+    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
@@ -362,6 +396,7 @@ describe('uploadDiagnostics', () => {
     delete process.env.SYNCFLOW_API_BASE_URL;
     delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
     delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
+    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
     rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
     rmSync('/tmp/vividrop-main.log', { force: true });
     rmSync('/tmp/vividrop-main.log.1', { force: true });
@@ -375,6 +410,7 @@ describe('uploadDiagnostics', () => {
     delete process.env.SYNCFLOW_API_BASE_URL;
     delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
     delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
+    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
     rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
     rmSync('/tmp/vividrop-main.log', { force: true });
     rmSync('/tmp/vividrop-main.log.1', { force: true });
