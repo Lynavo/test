@@ -20,4 +20,3 @@ export const globalMarketConfig: MobileMarketConfig = {
   downloadUrl: 'https://www.vividrop.com',
   supportEmail: 'support@vividrop.com',
 };
-

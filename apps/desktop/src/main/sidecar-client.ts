@@ -91,6 +91,7 @@ type AuthSession = {
 let authSession: AuthSession | null = null;
 let authSessionLoaded = false;
 let refreshSessionInFlight: Promise<boolean> | null = null;
+let preserveSidecarTunnelCredentialsAfterSessionLoss = false;
 
 function getSessionFilePath(): string {
   return join(app.getPath('userData'), 'session.json');
@@ -329,6 +330,7 @@ function persistAuthSession(value: unknown): AuthResponse {
     refreshToken: authData.refresh_token,
   };
   authSessionLoaded = true;
+  preserveSidecarTunnelCredentialsAfterSessionLoss = false;
   saveSession(authSession);
   return normalized;
 }
@@ -567,6 +569,7 @@ export const sidecarClient = {
           log.error('[sidecar-client] Refresh session failed, clearing session. Code:', data.code);
           authSession = null;
           authSessionLoaded = true;
+          preserveSidecarTunnelCredentialsAfterSessionLoss = true;
           saveSession(null);
           return false;
         }
@@ -589,6 +592,7 @@ export const sidecarClient = {
           refreshToken: authData.refresh_token,
         };
         authSessionLoaded = true;
+        preserveSidecarTunnelCredentialsAfterSessionLoss = false;
         saveSession(authSession);
         return true;
       } catch (error) {
@@ -607,6 +611,7 @@ export const sidecarClient = {
   logout: async () => {
     authSession = null;
     authSessionLoaded = true;
+    preserveSidecarTunnelCredentialsAfterSessionLoss = false;
     saveSession(null);
     await syncCredentialsToSidecar();
     return { ok: true };
@@ -623,6 +628,12 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
   try {
     let session = sidecarClient.getAuthSession();
     if (!session || !session.accessToken) {
+      if (preserveSidecarTunnelCredentialsAfterSessionLoss) {
+        log.warn(
+          '[sidecar-client] No active session after refresh loss. Preserving existing sidecar tunnel credentials.',
+        );
+        return false;
+      }
       await sidecarClient.syncTunnelCredentials({
         signalingUrl: '',
         accessToken: '',
@@ -637,13 +648,10 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
       const refreshed = await sidecarClient.refreshSession();
       session = sidecarClient.getAuthSession();
       if (!session || !session.accessToken) {
-        log.warn('[sidecar-client] Session cleared during refresh. Syncing empty credentials to sidecar.');
-        await sidecarClient.syncTunnelCredentials({
-          signalingUrl: '',
-          accessToken: '',
-          iceServers: [],
-        });
-        return true;
+        log.warn(
+          '[sidecar-client] Session cleared during refresh. Preserving existing sidecar tunnel credentials.',
+        );
+        return false;
       }
       if (refreshed) {
         log.info('[sidecar-client] Token refresh succeeded. Retrying fetch TURN credentials...');

@@ -159,6 +159,16 @@ pnpm format:check      # 格式检查
 
 Windows 桌面包当前跟随 `docs/release/release-playbook.md` 中的 Windows 小节，以及根目录脚本 `pnpm package:desktop:win`。
 
+## Release profile 打包规则
+
+AI 或人工执行 iOS TestFlight、Android APK、macOS DMG、Windows EXE/ZIP 正式打包时，必须优先使用根目录单一入口：
+
+```bash
+pnpm release --profile <cn-prod|global-prod|cn-review|global-review> --targets ios,android,mac,win
+```
+
+禁止用手动拼接 `SYNCFLOW_MARKET`、`SYNCFLOW_API_BASE_URL`、`VIVIDROP_API_BASE_URL` 等环境变量来替代 release profile。`*-prod` 不允许使用 `https://review-api.vividrop.cn`；`*-review` 必须使用 `https://review-api.vividrop.cn`。如果只是确认将执行什么，使用 `--dry-run`。
+
 ## TestFlight 打包上传后的跨仓库 tag 规则
 
 如果本仓库被要求打包并上传 iOS TestFlight，完成上传后必须给以下两个仓库都打上对应的 beta 测试 tag：

@@ -27,6 +27,8 @@ Environment overrides:
   APPLE_API_KEY      Path to App Store Connect API key (.p8)
   APPLE_API_KEY_ID   App Store Connect API key id
   APPLE_API_ISSUER   App Store Connect issuer id
+  ELECTRON_BUILDER_CONFIG
+                    Optional electron-builder config file, e.g. electron-builder.global.yml
 EOF
 }
 
@@ -90,6 +92,9 @@ echo "Signing identity: ${CSC_NAME}"
 echo "API key path: ${APPLE_API_KEY}"
 echo "Build number: ${SYNCFLOW_BUILD_NUMBER}"
 echo "Target: ${TARGET}"
+if [[ -n "${ELECTRON_BUILDER_CONFIG:-}" ]]; then
+  echo "Electron builder config: ${ELECTRON_BUILDER_CONFIG}"
+fi
 
 cd "${REPO_ROOT}"
 
@@ -100,6 +105,10 @@ BUILD_ARGS=(
   "-c.buildVersion=${SYNCFLOW_BUILD_NUMBER}"
   "-c.extraMetadata.syncflowBuildNumber=${SYNCFLOW_BUILD_NUMBER}"
 )
+
+if [[ -n "${ELECTRON_BUILDER_CONFIG:-}" ]]; then
+  BUILD_ARGS=("--config" "${ELECTRON_BUILDER_CONFIG}" "${BUILD_ARGS[@]}")
+fi
 
 if [[ "${TARGET}" == "dir" ]]; then
   pnpm --filter @syncflow/desktop exec electron-builder --mac dir --arm64 --x64 -c.mac.notarize=false "${BUILD_ARGS[@]}"

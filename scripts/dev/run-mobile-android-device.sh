@@ -7,6 +7,7 @@ METRO_PORT="${METRO_PORT:-${RCT_METRO_PORT:-8081}}"
 METRO_READY_TIMEOUT_SECONDS="${SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS:-20}"
 APP_ID="${SYNCFLOW_ANDROID_APP_ID:-com.vividrop.mobile.china}"
 MAIN_ACTIVITY="${SYNCFLOW_ANDROID_MAIN_ACTIVITY:-.MainActivity}"
+INSTALL_TASK="${SYNCFLOW_ANDROID_INSTALL_TASK:-}"
 
 unset NODE_OPTIONS
 unset VSCODE_INSPECTOR_OPTIONS
@@ -32,6 +33,22 @@ metro_ready() {
 
 require_command adb
 require_command curl
+
+if [[ -z "$INSTALL_TASK" ]]; then
+  case "$APP_ID" in
+    com.vividrop.mobile.china)
+      INSTALL_TASK=":app:installCnDebug"
+      ;;
+    com.vividrop.mobile.global)
+      INSTALL_TASK=":app:installGlobalDebug"
+      ;;
+    *)
+      echo "Unknown Android app id: $APP_ID" >&2
+      echo "Set SYNCFLOW_ANDROID_INSTALL_TASK to the matching Gradle install task." >&2
+      exit 1
+      ;;
+  esac
+fi
 
 selected_device="${SYNCFLOW_ANDROID_DEVICE:-${ANDROID_SERIAL:-}}"
 if [[ -n "$selected_device" ]]; then
@@ -74,7 +91,7 @@ fi
 echo "Installing SyncFlowMobile Android debug build on $device_model ($selected_device)..."
 (
   cd "$ANDROID_DIR"
-  ANDROID_SERIAL="$selected_device" ./gradlew :app:installDebug
+  ANDROID_SERIAL="$selected_device" ./gradlew "$INSTALL_TASK"
 )
 
 echo "Configuring Metro reverse port $METRO_PORT..."

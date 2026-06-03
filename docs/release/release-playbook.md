@@ -248,6 +248,29 @@ git push origin beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>
 
 ## 10. 目前已指令碼化的入口
 
+正式打包、Review 打包、TestFlight 上傳、Android APK 與 desktop DMG/EXE 打包都必須先選 release profile：
+
+```bash
+pnpm release --profile cn-prod --targets ios,mac,win
+pnpm release --profile global-prod --targets ios,mac,win
+pnpm release --profile cn-review --targets ios,mac,win
+pnpm release --profile global-review --targets ios,mac,win
+```
+
+Android APK 可加入 `android` target：
+
+```bash
+pnpm release --profile global-review --targets android,mac,win
+```
+
+可用 `--dry-run` 檢查實際會執行的 market、base URL 與命令，不會打包或上傳：
+
+```bash
+pnpm release --profile global-review --targets ios,mac,win --dry-run
+```
+
+AI 或人工發佈時不得手動拼接 `SYNCFLOW_API_BASE_URL`、`VIVIDROP_API_BASE_URL`、`SYNCFLOW_MARKET` 來代替 profile。`*-prod` profile 不允許使用 Review Server；`*-review` profile 的 backend URL 必須是 `https://review-api.vividrop.cn`。
+
 倉庫根目錄已有：
 
 ```bash

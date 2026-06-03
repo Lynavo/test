@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import test from 'node:test';
+
+test('prints the release plan without running build commands in dry-run mode', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/release/release.mjs',
+      '--profile',
+      'cn-review',
+      '--targets',
+      'ios,android,win',
+      '--dry-run',
+    ],
+    {
+      cwd: new URL('../../..', import.meta.url),
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Profile:\s+cn-review/);
+  assert.match(result.stdout, /Market:\s+cn/);
+  assert.match(result.stdout, /Base URL:\s+https:\/\/review-api\.vividrop\.cn/);
+  assert.match(result.stdout, /DRY RUN/);
+  assert.match(result.stdout, /SYNCFLOW_MARKET=cn/);
+  assert.match(result.stdout, /SYNCFLOW_API_BASE_URL=https:\/\/review-api\.vividrop\.cn/);
+  assert.match(result.stdout, /VIVIDROP_API_BASE_URL=https:\/\/review-api\.vividrop\.cn/);
+  assert.match(result.stdout, /ELECTRON_BUILDER_CONFIG=electron-builder\.cn\.yml/);
+  assert.match(
+    result.stdout,
+    /bash apps\/mobile\/ios\/scripts\/testflight-release\.sh archive-upload cn/,
+  );
+  assert.match(result.stdout, /bash -lc cd apps\/mobile\/android && \.\/gradlew assembleCnRelease/);
+  assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:win:cn/);
+});
+
+test('rejects missing profile', () => {
+  const result = spawnSync(process.execPath, ['scripts/release/release.mjs', '--dry-run'], {
+    cwd: new URL('../../..', import.meta.url),
+    encoding: 'utf8',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /--profile is required/);
+});

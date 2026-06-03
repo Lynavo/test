@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { marketConfig } from '../markets';
+import { releaseApiBaseUrl } from '../release-profile';
 
 // ---------------------------------------------------------------------------
 // Backend configuration
@@ -29,7 +30,7 @@ import { marketConfig } from '../markets';
 //       so each developer's local override stays out of git automatically.
 // ============================================================================
 
-export const PROD_BASE_URL = marketConfig.apiBaseUrl;
+export const PROD_BASE_URL = releaseApiBaseUrl ?? marketConfig.apiBaseUrl;
 export const REVIEW_API_BASE_URL = marketConfig.reviewApiBaseUrl;
 export const APP_REVIEW_PHONE = marketConfig.appReviewPhone;
 
@@ -156,7 +157,7 @@ function getBuiltInBaseUrl(): string {
       _warnedRealDeviceLoopback = true;
       console.warn(
         `[config] using DEV_API_BASE_URL="${DEV_API_BASE_URL}". ` +
-        `Call setDebugBaseUrlOverride('http://<host>') to point this dev build at another backend.`,
+          `Call setDebugBaseUrlOverride('http://<host>') to point this dev build at another backend.`,
       );
     }
     return DEV_API_BASE_URL;

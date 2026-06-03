@@ -5,18 +5,29 @@ import { fileURLToPath } from 'url';
 
 const projectRoot = fileURLToPath(new URL('.', import.meta.url));
 
+const envDefine = {
+  'process.env.SYNCFLOW_MARKET': JSON.stringify(process.env.SYNCFLOW_MARKET || 'cn'),
+  'process.env.VIVIDROP_API_BASE_URL': JSON.stringify(process.env.VIVIDROP_API_BASE_URL || ''),
+  'process.env.SYNCFLOW_API_BASE_URL': JSON.stringify(process.env.SYNCFLOW_API_BASE_URL || ''),
+  'process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL': JSON.stringify(
+    process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL || '',
+  ),
+  'process.env.SYNCFLOW_AUTH_BASE_URL': JSON.stringify(
+    process.env.SYNCFLOW_AUTH_BASE_URL || '',
+  ),
+  'process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL': JSON.stringify(
+    process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL || '',
+  ),
+};
+
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    define: {
-      'process.env.SYNCFLOW_MARKET': JSON.stringify(process.env.SYNCFLOW_MARKET || 'cn'),
-    },
+    define: envDefine,
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
-    define: {
-      'process.env.SYNCFLOW_MARKET': JSON.stringify(process.env.SYNCFLOW_MARKET || 'cn'),
-    },
+    define: envDefine,
   },
   renderer: {
     resolve: {
@@ -24,9 +35,7 @@ export default defineConfig({
         '@renderer': resolve(projectRoot, 'src/renderer'),
       },
     },
-    define: {
-      'process.env.SYNCFLOW_MARKET': JSON.stringify(process.env.SYNCFLOW_MARKET || 'cn'),
-    },
+    define: envDefine,
     optimizeDeps: {
       include: ['@syncflow/contracts', '@syncflow/design-tokens'],
     },
