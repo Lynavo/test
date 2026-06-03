@@ -231,6 +231,51 @@ describe('sidecarClient', () => {
     vi.resetModules();
   });
 
+  it('defaults global builds to the global production API base', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+    vi.stubEnv('SYNCFLOW_GIFTCARD_REDEEM_BASE_URL', '');
+    vi.stubEnv('VIVIDROP_API_BASE_URL', '');
+    vi.stubEnv('SYNCFLOW_API_BASE_URL', '');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('global-api.vividrop.com');
+    expect(options.path).toBe('/api/v1/gift-cards/redeem');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('adds bearer auth to gift card redeem requests when a token is configured', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
@@ -564,6 +609,9 @@ describe('sidecarClient', () => {
               data: {
                 access_token: 'user-access-token',
                 refresh_token: 'user-refresh-token',
+                user_id: 42,
+                is_new_user: true,
+                merged: false,
               },
             }),
           ),
@@ -593,6 +641,9 @@ describe('sidecarClient', () => {
       client.loginWithSMSCode({ phone: '13800138000', code: '123456' }),
     ).resolves.toEqual({
       ok: true,
+      userId: 42,
+      isNewUser: true,
+      merged: false,
     });
     await expect(client.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' })).resolves.toEqual({
       ok: true,
@@ -607,6 +658,65 @@ describe('sidecarClient', () => {
       ...remoteClientHeaders,
       Authorization: 'Bearer user-access-token',
     });
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('normalizes Google login user metadata from the auth response envelope', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(
+        createResponse(
+          200,
+          JSON.stringify({
+            code: 0,
+            message: 'success',
+            data: {
+              access_token: 'google-access-token',
+              refresh_token: 'google-refresh-token',
+              user_id: 77,
+              is_new_user: false,
+              merged: true,
+            },
+          }),
+        ),
+      );
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_AUTH_BASE_URL', 'https://auth.example.test');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.loginWithGoogle({ identityToken: 'id-token' })).resolves.toEqual({
+      ok: true,
+      userId: 77,
+      isNewUser: false,
+      merged: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.path).toBe('/api/v1/auth/google/login');
 
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -658,6 +768,91 @@ describe('sidecarClient', () => {
     vi.resetModules();
   });
 
+  it('routes App Review phone SMS requests to the review API base URL', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_PHONE', '17000000002');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.sendSMSCode({ phone: '+8617000000002' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('review-api.vividrop.cn');
+    expect(options.path).toBe('/api/v1/auth/sms/send');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('lets explicit auth base URL overrides bypass App Review phone routing', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_AUTH_BASE_URL', 'https://auth.example.test');
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_PHONE', '17000000002');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.sendSMSCode({ phone: '+8617000000002' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('auth.example.test');
+    expect(options.path).toBe('/api/v1/auth/sms/send');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('maps invalid SMS code response envelopes to a structured auth reason', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
@@ -698,6 +893,148 @@ describe('sidecarClient', () => {
 
     expect(httpRequest).not.toHaveBeenCalled();
     expect(httpsRequest).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('persists the App Review SMS login base URL with the auth session', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(
+        createResponse(
+          200,
+          JSON.stringify({
+            code: 0,
+            message: 'success',
+            data: {
+              access_token: 'review-access-token',
+              refresh_token: 'review-refresh-token',
+              user_id: 42,
+              is_new_user: false,
+              merged: false,
+            },
+          }),
+        ),
+      );
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_PHONE', '17000000002');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(
+      client.loginWithSMSCode({ phone: '+8617000000002', code: '123456' }),
+    ).resolves.toEqual({
+      ok: true,
+      userId: 42,
+      isNewUser: false,
+      merged: false,
+    });
+
+    expect(client.getAuthSession()).toEqual({
+      accessToken: 'review-access-token',
+      refreshToken: 'review-refresh-token',
+      baseUrl: 'https://review-api.vividrop.cn',
+    });
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('review-api.vividrop.cn');
+    expect(options.path).toBe('/api/v1/auth/sms/login');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('uses the App Review auth session base URL for subsequent gift card redemption', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+
+      if (options.path === '/api/v1/auth/sms/login') {
+        callback(
+          createResponse(
+            200,
+            JSON.stringify({
+              code: 0,
+              message: 'success',
+              data: {
+                access_token: 'review-access-token',
+                refresh_token: 'review-refresh-token',
+                user_id: 42,
+                is_new_user: false,
+                merged: false,
+              },
+            }),
+          ),
+        );
+        return req;
+      }
+
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_PHONE', '17000000002');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(
+      client.loginWithSMSCode({ phone: '+8617000000002', code: '123456' }),
+    ).resolves.toEqual({
+      ok: true,
+      userId: 42,
+      isNewUser: false,
+      merged: false,
+    });
+    await expect(client.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(2);
+    const [, redeemCall] = httpsRequest.mock.calls;
+    const [redeemOptions] = redeemCall as [RequestOptions, (res: unknown) => void];
+    expect(redeemOptions.hostname).toBe('review-api.vividrop.cn');
+    expect(redeemOptions.path).toBe('/api/v1/gift-cards/redeem');
+    expect(redeemOptions.headers).toEqual({
+      'Content-Type': 'application/json',
+      ...remoteClientHeaders,
+      Authorization: 'Bearer review-access-token',
+    });
 
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -814,6 +1151,67 @@ describe('sidecarClient', () => {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
+      vi.resetModules();
+    });
+
+    it('refreshes against the base URL persisted with the SMS auth session', async () => {
+      const { writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      const { tmpdir } = require('node:os');
+      const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+      const sessionFilePath = join(userDataPath, 'session.json');
+
+      const mockData = {
+        accessToken: Buffer.from('old-access-token').toString('base64'),
+        refreshToken: Buffer.from('old-refresh-token').toString('base64'),
+        baseUrl: 'https://review-api.vividrop.cn',
+        encrypted: true,
+      };
+      writeFileSync(sessionFilePath, JSON.stringify(mockData, null, 2), 'utf8');
+
+      const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn();
+        req.end = vi.fn();
+
+        callback(
+          createResponse(
+            200,
+            JSON.stringify({
+              code: 0,
+              message: 'success',
+              data: {
+                access_token: 'new-access-token',
+                refresh_token: 'new-refresh-token',
+              },
+            }),
+          ),
+        );
+        return req;
+      });
+
+      vi.doMock('node:https', () => ({
+        default: { request: httpsRequest },
+        request: httpsRequest,
+      }));
+
+      vi.resetModules();
+      const { sidecarClient: client } = await import('../sidecar-client');
+
+      await expect(client.refreshSession()).resolves.toBe(true);
+      expect(client.getAuthSession()).toEqual({
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token',
+        baseUrl: 'https://review-api.vividrop.cn',
+      });
+      const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+      expect(options.hostname).toBe('review-api.vividrop.cn');
+      expect(options.path).toBe('/api/v1/auth/refresh');
+
       vi.resetModules();
     });
 
@@ -1119,6 +1517,87 @@ describe('sidecarClient', () => {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
+      vi.resetModules();
+    });
+
+    it('uses the persisted auth base URL for TURN credentials and sidecar signaling URL', async () => {
+      const { writeFileSync } = require('node:fs');
+      const { join } = require('node:path');
+      const { tmpdir } = require('node:os');
+      const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+      const sessionFilePath = join(userDataPath, 'session.json');
+
+      const mockData = {
+        accessToken: Buffer.from('review-access-token').toString('base64'),
+        refreshToken: Buffer.from('review-refresh-token').toString('base64'),
+        baseUrl: 'https://review-api.vividrop.cn',
+        encrypted: true,
+      };
+      writeFileSync(sessionFilePath, JSON.stringify(mockData, null, 2), 'utf8');
+
+      const sidecarPayloads: unknown[] = [];
+      const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn((chunk: string) => {
+          sidecarPayloads.push(JSON.parse(chunk));
+        });
+        req.end = vi.fn();
+        callback(createResponse(200, JSON.stringify({ ok: true, message: 'success' })));
+        return req;
+      });
+
+      const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn();
+        req.end = vi.fn();
+        callback(
+          createResponse(
+            200,
+            JSON.stringify({
+              code: 0,
+              data: {
+                urls: ['turn:review.example.com'],
+                username: 'user',
+                credential: 'pwd',
+              },
+            }),
+          ),
+        );
+        return req;
+      });
+
+      vi.doMock('node:http', () => ({
+        default: { request: httpRequest },
+        request: httpRequest,
+      }));
+      vi.doMock('node:https', () => ({
+        default: { request: httpsRequest },
+        request: httpsRequest,
+      }));
+
+      vi.resetModules();
+      const { syncCredentialsToSidecar } = await import('../sidecar-client');
+
+      await expect(syncCredentialsToSidecar()).resolves.toBe(true);
+
+      const [turnOptions] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+      expect(turnOptions.hostname).toBe('review-api.vividrop.cn');
+      expect(turnOptions.path).toBe('/api/v1/tunnel/turn-credentials');
+      expect(sidecarPayloads).toEqual([
+        expect.objectContaining({
+          signalingUrl: 'https://review-api.vividrop.cn',
+          accessToken: 'review-access-token',
+        }),
+      ]);
+
       vi.resetModules();
     });
   });

@@ -54,6 +54,8 @@
     "sessionReplaced": "This account has signed in on another device",
     "sendSMSCodeFailed": "Failed to send SMS code",
     "loginWithSMSCodeFailed": "Phone sign-in failed",
+    "oauthLoginFailed": "{{provider}} sign-in failed",
+    "oauthLoginError": "{{provider}} sign-in error",
     "transferActiveCannotChangeReceivePath": "Transfer is in progress. The receive path cannot be changed.",
     "saveReceivePathFailed": "Failed to save receive path",
     "noReceivePathToOpen": "There is no receive path to open yet",
