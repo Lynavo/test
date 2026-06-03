@@ -37,11 +37,31 @@
     "redeemSuccess": "Gift card redeemed successfully",
     "phoneLogin": {
       "title": "Phone sign-in",
+      "globalTitle": "Sign in or create account",
       "description": "Enter your phone number and SMS code to continue redeeming.",
+      "globalDescription": "Sign in to enable remote sync and account features.",
       "phoneLabel": "Phone number",
       "phonePlaceholder": "Enter phone number",
       "codeLabel": "SMS code",
       "codePlaceholder": "6-digit code",
+      "countryCodePlaceholder": "Code",
+      "countryCodes": {
+        "china": "China",
+        "northAmerica": "US/Canada",
+        "taiwan": "Taiwan",
+        "hongKong": "Hong Kong",
+        "japan": "Japan",
+        "singapore": "Singapore"
+      },
+      "oauth": {
+        "continueWithGoogle": "Continue with Google",
+        "continueWithApple": "Continue with Apple",
+        "divider": "OR",
+        "providers": {
+          "google": "Google",
+          "apple": "Apple"
+        }
+      },
       "sendCode": "Send code",
       "loginAndRedeem": "Sign in and redeem",
       "loginRequired": "Sign in with your phone number to continue redeeming the gift card",

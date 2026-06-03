@@ -22,6 +22,9 @@ type RedeemResult = {
 type AuthResult = {
   ok: boolean;
   message?: string;
+  userId?: number;
+  isNewUser?: boolean;
+  merged?: boolean;
   reason?:
     | 'phone_invalid'
     | 'sms_too_frequent'
@@ -41,8 +44,9 @@ type ResultState = {
 type RuntimeAuthAPI = Partial<Window['electronAPI']['auth']>;
 
 function getRuntimeAuthAPI(): RuntimeAuthAPI | undefined {
-  return (window as Window & { electronAPI?: Partial<Window['electronAPI']> }).electronAPI
-    ?.auth as RuntimeAuthAPI | undefined;
+  return (window as Window & { electronAPI?: Partial<Window['electronAPI']> }).electronAPI?.auth as
+    | RuntimeAuthAPI
+    | undefined;
 }
 
 function extractErrorText(error: unknown, fallback: string): string {
@@ -124,7 +128,9 @@ export function GiftCardSection() {
     try {
       const res = await auth.logout();
       if (res.ok) {
-        toast.success(t('settings.giftCard.phoneLogin.logoutSuccess', { defaultValue: '已成功登出' }));
+        toast.success(
+          t('settings.giftCard.phoneLogin.logoutSuccess', { defaultValue: '已成功登出' }),
+        );
         setSession(null);
       } else {
         toast.error('Logout failed');
@@ -136,53 +142,56 @@ export function GiftCardSection() {
     }
   }, [t]);
 
-  const performRedeem = useCallback(async (trimmedCode: string, openLoginOnAuth: boolean) => {
-    const api = window.electronAPI?.sidecar;
-    if (!api?.redeemGiftCard) {
-      toast.error(t('errors.settings.redeemGiftCardUnavailable'));
-      return false;
-    }
+  const performRedeem = useCallback(
+    async (trimmedCode: string, openLoginOnAuth: boolean) => {
+      const api = window.electronAPI?.sidecar;
+      if (!api?.redeemGiftCard) {
+        toast.error(t('errors.settings.redeemGiftCardUnavailable'));
+        return false;
+      }
 
-    setLastResult(null);
+      setLastResult(null);
 
-    try {
-      const result: RedeemResult = await api.redeemGiftCard({ code: trimmedCode });
-      if (result.ok) {
-        setLastResult({
-          kind: 'success',
-          text: result.message || t('settings.giftCard.redeemSuccess'),
-        });
-        setCode('');
-        toast.success(t('settings.giftCard.redeemSuccess'));
-        return true;
-      } else {
-        if (result.reason === 'auth_required' && openLoginOnAuth && window.electronAPI?.auth) {
-          setPendingRedeemCode(trimmedCode);
-          setLoginDialogOpen(true);
-          toast.message(t('settings.giftCard.phoneLogin.loginRequired'));
+      try {
+        const result: RedeemResult = await api.redeemGiftCard({ code: trimmedCode });
+        if (result.ok) {
+          setLastResult({
+            kind: 'success',
+            text: result.message || t('settings.giftCard.redeemSuccess'),
+          });
+          setCode('');
+          toast.success(t('settings.giftCard.redeemSuccess'));
+          return true;
+        } else {
+          if (result.reason === 'auth_required' && openLoginOnAuth && window.electronAPI?.auth) {
+            setPendingRedeemCode(trimmedCode);
+            setLoginDialogOpen(true);
+            toast.message(t('settings.giftCard.phoneLogin.loginRequired'));
+            return false;
+          }
+
+          const message = getRedeemErrorMessage(result, t);
+          setLastResult({
+            kind: 'error',
+            text: message,
+          });
+          toast.error(message);
           return false;
         }
-
-        const message = getRedeemErrorMessage(result, t);
+      } catch (error) {
+        const message = extractErrorText(error, t('errors.settings.redeemGiftCardFailed'));
         setLastResult({
           kind: 'error',
           text: message,
         });
-        toast.error(message);
+        toast.error(t('errors.settings.redeemGiftCardFailed'), {
+          description: message,
+        });
         return false;
       }
-    } catch (error) {
-      const message = extractErrorText(error, t('errors.settings.redeemGiftCardFailed'));
-      setLastResult({
-        kind: 'error',
-        text: message,
-      });
-      toast.error(t('errors.settings.redeemGiftCardFailed'), {
-        description: message,
-      });
-      return false;
-    }
-  }, [t]);
+    },
+    [t],
+  );
 
   const handleRedeem = useCallback(async () => {
     const trimmedCode = code.trim();
@@ -249,12 +258,7 @@ export function GiftCardSection() {
             </span>
           </div>
           {session ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void handleLogout()}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()}>
               {t('settings.giftCard.phoneLogin.logout', { defaultValue: '登出' })}
             </Button>
           ) : (

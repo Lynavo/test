@@ -37,11 +37,31 @@
     "redeemSuccess": "礼品卡兑换成功",
     "phoneLogin": {
       "title": "手机登入",
+      "globalTitle": "登入或注册",
       "description": "请输入手机号并完成验证码登入后继续兑换。",
+      "globalDescription": "登入后可使用远端同步与账号功能。",
       "phoneLabel": "手机号",
       "phonePlaceholder": "请输入手机号",
       "codeLabel": "验证码",
       "codePlaceholder": "6 位验证码",
+      "countryCodePlaceholder": "区号",
+      "countryCodes": {
+        "china": "中国大陆",
+        "northAmerica": "美国/加拿大",
+        "taiwan": "中国台湾",
+        "hongKong": "中国香港",
+        "japan": "日本",
+        "singapore": "新加坡"
+      },
+      "oauth": {
+        "continueWithGoogle": "使用 Google 继续",
+        "continueWithApple": "使用 Apple 继续",
+        "divider": "或",
+        "providers": {
+          "google": "Google",
+          "apple": "Apple"
+        }
+      },
       "sendCode": "发送验证码",
       "loginAndRedeem": "登入并兑换",
       "loginRequired": "请先用手机号登入后继续兑换礼品卡",

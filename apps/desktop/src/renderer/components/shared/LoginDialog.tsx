@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -26,9 +27,12 @@ type AuthResult = {
   ok: boolean;
   message?: string;
   reason?: string;
+  userId?: number;
+  isNewUser?: boolean;
+  merged?: boolean;
 };
 
-function getSMSSendErrorMessage(result: AuthResult, t: (key: string) => string): string {
+function getSMSSendErrorMessage(result: AuthResult, t: TFunction): string {
   switch (result.reason) {
     case 'phone_invalid':
       return t('errors.settings.phoneInvalid');
@@ -41,7 +45,7 @@ function getSMSSendErrorMessage(result: AuthResult, t: (key: string) => string):
   }
 }
 
-function getSMSLoginErrorMessage(result: AuthResult, t: (key: string) => string): string {
+function getSMSLoginErrorMessage(result: AuthResult, t: TFunction): string {
   switch (result.reason) {
     case 'phone_invalid':
       return t('errors.settings.phoneInvalid');
@@ -59,13 +63,140 @@ function getSMSLoginErrorMessage(result: AuthResult, t: (key: string) => string)
 }
 
 const COMMON_COUNTRY_CODES = [
-  { code: '+86', label: '🇨🇳 China (+86)' },
-  { code: '+1', label: '🇺🇸/🇨🇦 North America (+1)' },
-  { code: '+886', label: '🇹🇼 Taiwan (+886)' },
-  { code: '+852', label: '🇭🇰 Hong Kong (+852)' },
-  { code: '+81', label: '🇯🇵 Japan (+81)' },
-  { code: '+65', label: '🇸🇬 Singapore (+65)' },
-];
+  { code: '+86', labelKey: 'settings.giftCard.phoneLogin.countryCodes.china' },
+  { code: '+1', labelKey: 'settings.giftCard.phoneLogin.countryCodes.northAmerica' },
+  { code: '+886', labelKey: 'settings.giftCard.phoneLogin.countryCodes.taiwan' },
+  { code: '+852', labelKey: 'settings.giftCard.phoneLogin.countryCodes.hongKong' },
+  { code: '+81', labelKey: 'settings.giftCard.phoneLogin.countryCodes.japan' },
+  { code: '+65', labelKey: 'settings.giftCard.phoneLogin.countryCodes.singapore' },
+] as const;
+
+type CountryCode = (typeof COMMON_COUNTRY_CODES)[number]['code'];
+type OAuthProvider = 'google' | 'apple';
+
+const COUNTRY_CODE_STORAGE_KEY = 'syncflow.desktop.login.countryCode';
+
+function isSupportedCountryCode(value: string | null | undefined): value is CountryCode {
+  return COMMON_COUNTRY_CODES.some((country) => country.code === value);
+}
+
+function getBrowserLanguages(): string[] {
+  if (typeof navigator === 'undefined') {
+    return [];
+  }
+
+  return navigator.languages?.length
+    ? [...navigator.languages]
+    : [navigator.language].filter(Boolean);
+}
+
+function getStoredCountryCode(): CountryCode | null {
+  try {
+    const value = window.localStorage.getItem(COUNTRY_CODE_STORAGE_KEY);
+    return isSupportedCountryCode(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistCountryCode(countryCode: CountryCode): void {
+  try {
+    window.localStorage.setItem(COUNTRY_CODE_STORAGE_KEY, countryCode);
+  } catch {
+    // localStorage can be unavailable in restricted browser contexts.
+  }
+}
+
+function resolveCountryCodeFromLocale(locale: string): CountryCode | null {
+  const normalized = locale.trim().toLowerCase().replace(/_/g, '-');
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.includes('-tw')) {
+    return '+886';
+  }
+
+  if (normalized.includes('-hk') || normalized.includes('-mo')) {
+    return '+852';
+  }
+
+  if (normalized.includes('-sg')) {
+    return '+65';
+  }
+
+  if (normalized.includes('-cn') || normalized.startsWith('zh-hans')) {
+    return '+86';
+  }
+
+  if (normalized.startsWith('zh-hant')) {
+    return '+886';
+  }
+
+  if (normalized.startsWith('ja')) {
+    return '+81';
+  }
+
+  if (normalized.startsWith('en')) {
+    return '+1';
+  }
+
+  return null;
+}
+
+export function resolveDefaultCountryCode({
+  isGlobal,
+  language,
+  navigatorLanguages = [],
+  storedCountryCode,
+}: {
+  isGlobal: boolean;
+  language?: string;
+  navigatorLanguages?: readonly string[];
+  storedCountryCode?: string | null;
+}): CountryCode {
+  if (!isGlobal) {
+    return '+86';
+  }
+
+  if (isSupportedCountryCode(storedCountryCode)) {
+    return storedCountryCode;
+  }
+
+  const localeCandidates = [language, ...navigatorLanguages].filter(Boolean) as string[];
+  for (const locale of localeCandidates) {
+    const countryCode = resolveCountryCodeFromLocale(locale);
+    if (countryCode) {
+      return countryCode;
+    }
+  }
+
+  return '+1';
+}
+
+function getOAuthProviderLabel(provider: OAuthProvider, t: TFunction): string {
+  return t(`settings.giftCard.phoneLogin.oauth.providers.${provider}`);
+}
+
+function getOAuthLoginErrorMessage(
+  result: AuthResult,
+  provider: OAuthProvider,
+  t: TFunction,
+): string {
+  return (
+    result.message ||
+    t('errors.settings.oauthLoginFailed', { provider: getOAuthProviderLabel(provider, t) })
+  );
+}
+
+function getErrorDescription(error: unknown): string | undefined {
+  return error instanceof Error ? error.message : undefined;
+}
+
+function normalizePhoneDigits(value: string): string {
+  return value.replace(/\D/g, '');
+}
 
 type LoginDialogProps = {
   open: boolean;
@@ -82,41 +213,71 @@ export function LoginDialog({
   title,
   description,
 }: LoginDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isGlobal = isGlobalMarket();
 
-  const [countryCode, setCountryCode] = useState('+86');
+  const [countryCode, setCountryCode] = useState<CountryCode>(() =>
+    resolveDefaultCountryCode({
+      isGlobal,
+      language: i18n.resolvedLanguage || i18n.language,
+      navigatorLanguages: getBrowserLanguages(),
+      storedCountryCode: getStoredCountryCode(),
+    }),
+  );
   const [phone, setPhone] = useState('');
   const [smsCode, setSMSCode] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Reset inputs and default country code when dialog opens
   React.useEffect(() => {
     if (open) {
-      setCountryCode('+86');
+      setCountryCode(
+        resolveDefaultCountryCode({
+          isGlobal,
+          language: i18n.resolvedLanguage || i18n.language,
+          navigatorLanguages: getBrowserLanguages(),
+          storedCountryCode: getStoredCountryCode(),
+        }),
+      );
       setPhone('');
       setSMSCode('');
     }
-  }, [open]);
+  }, [i18n.language, i18n.resolvedLanguage, isGlobal, open]);
+
+  const handleCountryCodeChange = useCallback(
+    (value: string) => {
+      if (!isSupportedCountryCode(value)) {
+        return;
+      }
+
+      setCountryCode(value);
+      if (isGlobal) {
+        persistCountryCode(value);
+      }
+    },
+    [isGlobal],
+  );
 
   const getFormattedPhone = useCallback(
     (rawPhone: string) => {
       const trimmed = rawPhone.trim();
+      const digits = normalizePhoneDigits(trimmed);
       if (trimmed.startsWith('+')) {
-        return trimmed;
+        return '+' + digits;
       }
 
       if (isGlobal) {
-        if (countryCode === '+86' && trimmed.startsWith('86') && trimmed.length > 11) {
-          return '+' + trimmed;
+        if (countryCode === '+86' && digits.startsWith('86') && digits.length > 11) {
+          return '+' + digits;
         }
-        return countryCode + trimmed;
+        const localDigits =
+          countryCode === '+1' || countryCode === '+86' ? digits : digits.replace(/^0+/, '');
+        return countryCode + localDigits;
       } else {
-        if (trimmed.startsWith('86') && trimmed.length > 11) {
-          return '+' + trimmed;
+        if (digits.startsWith('86') && digits.length > 11) {
+          return '+' + digits;
         }
-        return '+86' + trimmed;
+        return '+86' + digits;
       }
     },
     [countryCode, isGlobal],
@@ -129,7 +290,7 @@ export function LoginDialog({
       return;
     }
     const fullPhone = getFormattedPhone(trimmedPhone);
-    const auth = (window as any).electronAPI?.auth;
+    const auth = window.electronAPI?.auth;
     if (!auth?.sendSMSCode) {
       toast.error(t('errors.settings.authUnavailable'));
       return;
@@ -143,8 +304,10 @@ export function LoginDialog({
       } else {
         toast.error(getSMSSendErrorMessage(result, t));
       }
-    } catch (error: any) {
-      toast.error(t('errors.settings.sendSMSCodeFailed'), { description: error.message });
+    } catch (error: unknown) {
+      toast.error(t('errors.settings.sendSMSCodeFailed'), {
+        description: getErrorDescription(error),
+      });
     } finally {
       setIsSendingCode(false);
     }
@@ -162,7 +325,7 @@ export function LoginDialog({
       return;
     }
     const fullPhone = getFormattedPhone(trimmedPhone);
-    const auth = (window as any).electronAPI?.auth;
+    const auth = window.electronAPI?.auth;
     if (!auth?.loginWithSMSCode) {
       toast.error(t('errors.settings.authUnavailable'));
       return;
@@ -182,16 +345,18 @@ export function LoginDialog({
       } else {
         toast.error(getSMSLoginErrorMessage(result, t));
       }
-    } catch (error: any) {
-      toast.error(t('errors.settings.loginWithSMSCodeFailed'), { description: error.message });
+    } catch (error: unknown) {
+      toast.error(t('errors.settings.loginWithSMSCodeFailed'), {
+        description: getErrorDescription(error),
+      });
     } finally {
       setIsLoggingIn(false);
     }
   }, [phone, smsCode, getFormattedPhone, onOpenChange, onLoginSuccess, t]);
 
   const handleOAuthLogin = useCallback(
-    async (provider: 'google' | 'apple') => {
-      const auth = (window as any).electronAPI?.auth;
+    async (provider: OAuthProvider) => {
+      const auth = window.electronAPI?.auth;
       if (!auth?.loginWithOAuth) {
         toast.error(t('errors.settings.authUnavailable'));
         return;
@@ -205,10 +370,15 @@ export function LoginDialog({
           onOpenChange(false);
           onLoginSuccess();
         } else {
-          toast.error(result.message || `${provider} Sign-in failed`);
+          toast.error(getOAuthLoginErrorMessage(result, provider, t));
         }
-      } catch (error: any) {
-        toast.error(`${provider} Sign-in error`, { description: error.message });
+      } catch (error: unknown) {
+        toast.error(
+          t('errors.settings.oauthLoginError', { provider: getOAuthProviderLabel(provider, t) }),
+          {
+            description: getErrorDescription(error),
+          },
+        );
       } finally {
         setIsLoggingIn(false);
       }
@@ -223,15 +393,13 @@ export function LoginDialog({
           <DialogTitle>
             {title ||
               (isGlobal
-                ? t('settings.giftCard.phoneLogin.title', { defaultValue: '登入或註冊' })
+                ? t('settings.giftCard.phoneLogin.globalTitle')
                 : t('settings.giftCard.phoneLogin.title'))}
           </DialogTitle>
           <DialogDescription>
             {description ||
               (isGlobal
-                ? t('settings.giftCard.phoneLogin.description', {
-                    defaultValue: '登入後可解鎖遠端同步與更多功能',
-                  })
+                ? t('settings.giftCard.phoneLogin.globalDescription')
                 : t('settings.giftCard.phoneLogin.description'))}
           </DialogDescription>
         </DialogHeader>
@@ -245,7 +413,11 @@ export function LoginDialog({
               disabled={isLoggingIn || isSendingCode}
               className="w-full flex items-center justify-center gap-2 h-10 border border-muted-foreground/20 hover:bg-muted/50"
             >
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue with Google'}
+              {isLoggingIn ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t('settings.giftCard.phoneLogin.oauth.continueWithGoogle')
+              )}
             </Button>
             <Button
               variant="outline"
@@ -254,11 +426,17 @@ export function LoginDialog({
               disabled={isLoggingIn || isSendingCode}
               className="w-full flex items-center justify-center gap-2 h-10 border border-muted-foreground/20 hover:bg-muted/50"
             >
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue with Apple'}
+              {isLoggingIn ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t('settings.giftCard.phoneLogin.oauth.continueWithApple')
+              )}
             </Button>
             <div className="flex items-center my-2">
               <div className="flex-grow h-[1px] bg-border" />
-              <span className="mx-3 text-[11px] font-semibold text-muted-foreground">OR</span>
+              <span className="mx-3 text-[11px] font-semibold text-muted-foreground">
+                {t('settings.giftCard.phoneLogin.oauth.divider')}
+              </span>
               <div className="flex-grow h-[1px] bg-border" />
             </div>
           </div>
@@ -269,14 +447,17 @@ export function LoginDialog({
             <Label htmlFor="login-phone">{t('settings.giftCard.phoneLogin.phoneLabel')}</Label>
             <div className="flex gap-2">
               {isGlobal ? (
-                <Select value={countryCode} onValueChange={setCountryCode} defaultValue="+86">
-                  <SelectTrigger className="w-[110px] shrink-0">
-                    <SelectValue placeholder="Code" />
+                <Select value={countryCode} onValueChange={handleCountryCodeChange}>
+                  <SelectTrigger className="w-[150px] shrink-0">
+                    <SelectValue
+                      placeholder={t('settings.giftCard.phoneLogin.countryCodePlaceholder')}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {COMMON_COUNTRY_CODES.map((c) => (
                       <SelectItem key={c.code} value={c.code}>
-                        {c.code}
+                        <span className="font-medium">{c.code}</span>
+                        <span className="text-muted-foreground">{t(c.labelKey)}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -37,11 +37,31 @@
     "redeemSuccess": "禮品卡已兌換成功",
     "phoneLogin": {
       "title": "手機登入",
+      "globalTitle": "登入或註冊",
       "description": "請輸入手機號碼並完成驗證碼登入後繼續兌換。",
+      "globalDescription": "登入後可使用遠端同步與帳號功能。",
       "phoneLabel": "手機號碼",
       "phonePlaceholder": "請輸入手機號碼",
       "codeLabel": "驗證碼",
       "codePlaceholder": "6 位驗證碼",
+      "countryCodePlaceholder": "區碼",
+      "countryCodes": {
+        "china": "中國大陸",
+        "northAmerica": "美國/加拿大",
+        "taiwan": "台灣",
+        "hongKong": "香港",
+        "japan": "日本",
+        "singapore": "新加坡"
+      },
+      "oauth": {
+        "continueWithGoogle": "使用 Google 繼續",
+        "continueWithApple": "使用 Apple 繼續",
+        "divider": "或",
+        "providers": {
+          "google": "Google",
+          "apple": "Apple"
+        }
+      },
       "sendCode": "傳送驗證碼",
       "loginAndRedeem": "登入並兌換",
       "loginRequired": "請先用手機號碼登入後繼續兌換禮品卡",

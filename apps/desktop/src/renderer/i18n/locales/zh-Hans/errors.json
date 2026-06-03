@@ -54,6 +54,8 @@
     "sessionReplaced": "账号已在其他设备登入",
     "sendSMSCodeFailed": "发送验证码失败",
     "loginWithSMSCodeFailed": "手机登入失败",
+    "oauthLoginFailed": "{{provider}} 登入失败",
+    "oauthLoginError": "{{provider}} 登入出错",
     "transferActiveCannotChangeReceivePath": "传输进行中，无法更改接收路径",
     "saveReceivePathFailed": "保存接收路径失败",
     "noReceivePathToOpen": "当前还没有可打开的接收路径",

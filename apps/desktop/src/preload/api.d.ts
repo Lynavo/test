@@ -32,6 +32,15 @@ export type UpdateCheckResult = {
   checkedAt: string;
 };
 
+export type AuthLoginResult = {
+  ok: boolean;
+  message?: string;
+  reason?: string;
+  userId?: number;
+  isNewUser?: boolean;
+  merged?: boolean;
+};
+
 export interface ElectronAPI {
   sidecar: {
     getHealth(): Promise<{ ok: boolean; service: string }>;
@@ -92,27 +101,14 @@ export interface ElectronAPI {
       message?: string;
       reason?: 'phone_invalid' | 'sms_too_frequent' | 'sms_send_failed';
     }>;
-    loginWithSMSCode(payload: { phone: string; code: string }): Promise<{
-      ok: boolean;
-      message?: string;
-      reason?:
-        | 'phone_invalid'
-        | 'sms_code_invalid'
-        | 'sms_code_expired'
-        | 'token_invalid'
-        | 'sms_max_attempts'
-        | 'session_replaced';
-    }>;
+    loginWithSMSCode(payload: { phone: string; code: string }): Promise<AuthLoginResult>;
     getAuthSession(): Promise<{
       accessToken: string;
       refreshToken: string;
+      baseUrl?: string;
     } | null>;
     logout(): Promise<{ ok: boolean }>;
-    loginWithOAuth(payload: { provider: 'google' | 'apple' }): Promise<{
-      ok: boolean;
-      message?: string;
-      reason?: string;
-    }>;
+    loginWithOAuth(payload: { provider: 'google' | 'apple' }): Promise<AuthLoginResult>;
   };
   events: {
     onSidecarEvent(callback: (event: SidecarEvent) => void): () => void;

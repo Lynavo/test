@@ -1,6 +1,14 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import log from 'electron-log';
-import { sidecarClient, supportsPairingRevocationOnCodeRotation, syncCredentialsToSidecar } from './sidecar-client';
+import { createHash, randomBytes } from 'node:crypto';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import {
+  sidecarClient,
+  supportsPairingRevocationOnCodeRotation,
+  syncCredentialsToSidecar,
+} from './sidecar-client';
+import { resolveAppleOAuthConfig, resolveGoogleOAuthConfig } from './oauth-config';
 import {
   openFolder,
   openFile,
@@ -70,6 +78,207 @@ async function regenerateConnectionCodeSafely(
   return sidecarClient.regenerateConnectionCode();
 }
 
+type AuthIpcResult = {
+  ok: boolean;
+  message?: string;
+  reason?: string;
+  userId?: number;
+  isNewUser?: boolean;
+  merged?: boolean;
+};
+
+function createOAuthToken(): string {
+  return randomBytes(32).toString('base64url');
+}
+
+function createPKCEChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url');
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const payload = token.split('.')[1];
+  if (!payload) {
+    return null;
+  }
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+function idTokenHasNonce(idToken: string, expectedNonce: string): boolean {
+  return decodeJwtPayload(idToken)?.nonce === expectedNonce;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createOAuthCallbackParams(targetUrl: string): URLSearchParams {
+  const url = new URL(targetUrl);
+  const params = new URLSearchParams(url.search);
+  if (url.hash) {
+    new URLSearchParams(url.hash.slice(1)).forEach((value, key) => {
+      params.set(key, value);
+    });
+  }
+  return params;
+}
+
+function createLoopbackRedirectUri(registeredRedirectUri: string, port: number): string {
+  const redirectUrl = new URL(registeredRedirectUri);
+  if (redirectUrl.protocol !== 'http:') {
+    throw new Error('Google OAuth redirect URI must be an HTTP loopback URI');
+  }
+  if (!['localhost', '127.0.0.1'].includes(redirectUrl.hostname)) {
+    throw new Error('Google OAuth redirect URI must use localhost or loopback IP');
+  }
+  redirectUrl.hostname = '127.0.0.1';
+  redirectUrl.port = String(port);
+  redirectUrl.hash = '';
+  return redirectUrl.toString();
+}
+
+function readUploadDataBody(uploadData: Electron.UploadData[]): string {
+  return Buffer.concat(uploadData.map((entry) => Buffer.from(entry.bytes))).toString();
+}
+
+type GoogleOAuthLoopback = {
+  redirectUri: string;
+  waitForCode: Promise<string>;
+  close: () => void;
+};
+
+async function startGoogleOAuthLoopback(
+  registeredRedirectUri: string,
+  expectedState: string,
+): Promise<GoogleOAuthLoopback> {
+  const server = createServer();
+  let settled = false;
+  let timeout: NodeJS.Timeout;
+  const close = () => {
+    clearTimeout(timeout);
+    server.close();
+  };
+  let rejectCode: (reason?: unknown) => void = () => undefined;
+  timeout = setTimeout(() => {
+    if (!settled) {
+      settled = true;
+      close();
+      rejectCode(new Error('Google OAuth callback timed out'));
+    }
+  }, 5 * 60_000);
+
+  const waitForCode = new Promise<string>((resolve, reject) => {
+    rejectCode = reject;
+    server.on('request', (req, res) => {
+      if (settled) {
+        res.writeHead(409, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(
+          '<html><body>Google sign-in already handled. You can close this window.</body></html>',
+        );
+        return;
+      }
+
+      const host = req.headers.host;
+      const targetUrl = new URL(req.url ?? '/', `http://${host}`);
+      const params = targetUrl.searchParams;
+      const error = params.get('error');
+      if (error) {
+        settled = true;
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<html><body>Google sign-in failed. You can close this window.</body></html>');
+        close();
+        reject(new Error(error));
+        return;
+      }
+
+      const state = params.get('state');
+      const code = params.get('code');
+      if (state !== expectedState || !code) {
+        settled = true;
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(
+          '<html><body>Invalid Google sign-in response. You can close this window.</body></html>',
+        );
+        close();
+        reject(new Error(state !== expectedState ? 'OAuth state mismatch' : 'No code in redirect'));
+        return;
+      }
+
+      settled = true;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<html><body>Google sign-in complete. You can close this window.</body></html>');
+      close();
+      resolve(code);
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+
+  const address = server.address() as AddressInfo;
+  return {
+    redirectUri: createLoopbackRedirectUri(registeredRedirectUri, address.port),
+    waitForCode,
+    close,
+  };
+}
+
+async function exchangeGoogleAuthorizationCode(payload: {
+  clientId: string;
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}): Promise<string> {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: payload.clientId,
+      code: payload.code,
+      code_verifier: payload.codeVerifier,
+      grant_type: 'authorization_code',
+      redirect_uri: payload.redirectUri,
+    }),
+  });
+  const body = (await response.json()) as {
+    id_token?: string;
+    error?: string;
+    error_description?: string;
+  };
+  if (!response.ok || !body.id_token) {
+    throw new Error(
+      body.error_description || body.error || `Google token exchange failed (${response.status})`,
+    );
+  }
+  return body.id_token;
+}
+
+function syncLoginCredentialsAfterSuccess(
+  sidecarManager: SidecarManager,
+  source: string,
+): Promise<void> {
+  return syncCredentialsToSidecar()
+    .then((success) => {
+      if (success) {
+        sidecarManager.startCredentialsSyncInterval();
+      }
+    })
+    .catch((err) => {
+      log.error(`Failed to sync credentials after ${source} login:`, err);
+    });
+}
+
 export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   // Sidecar — real HTTP calls
   ipcMain.handle(IPC.SIDECAR_HEALTH, () => sidecarClient.getHealth());
@@ -104,169 +313,208 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   ipcMain.handle(IPC.AUTH_SEND_SMS_CODE, (_e, payload: { phone: string }) =>
     sidecarClient.sendSMSCode(payload),
   );
-  ipcMain.handle(IPC.AUTH_LOGIN_WITH_SMS_CODE, async (_e, payload: { phone: string; code: string }) => {
-    const res = await sidecarClient.loginWithSMSCode(payload);
-    if (res.ok) {
-      syncCredentialsToSidecar()
-        .then((success) => {
-          if (success) {
-            sidecarManager.startCredentialsSyncInterval();
-          }
-        })
-        .catch((err) => {
-          log.error('Failed to sync credentials after login:', err);
-        });
-    }
-    return res;
-  });
+  ipcMain.handle(
+    IPC.AUTH_LOGIN_WITH_SMS_CODE,
+    async (_e, payload: { phone: string; code: string }) => {
+      const res = await sidecarClient.loginWithSMSCode(payload);
+      if (res.ok) {
+        void syncLoginCredentialsAfterSuccess(sidecarManager, 'SMS');
+      }
+      return res;
+    },
+  );
   ipcMain.handle(IPC.AUTH_GET_SESSION, () => sidecarClient.getAuthSession());
   ipcMain.handle(IPC.AUTH_LOGOUT, () => sidecarClient.logout());
-  ipcMain.handle(IPC.AUTH_LOGIN_WITH_OAUTH, async (_e, payload: { provider: 'google' | 'apple' }) => {
-    return new Promise(async (resolve) => {
-      let resolved = false;
-      const safeResolve = (val: any) => {
-        if (!resolved) {
-          resolved = true;
-          resolve(val);
-        }
-      };
-
-      try {
-        const win = new BrowserWindow({
-          width: 500,
-          height: 600,
-          show: false,
-          webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-          },
-        });
-
-        // 避免 Google disallowed_useragent 限制
-        win.webContents.setUserAgent(
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        );
-
-        win.once('ready-to-show', () => win.show());
-
-        win.on('closed', () => {
-          safeResolve({ ok: false, message: 'Login window closed by user' });
-        });
-
-        if (payload.provider === 'google') {
-          const googleUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=318131526906-jdsojdqh6057pn3fo5hhtgudht1bh6c8.apps.googleusercontent.com&redirect_uri=http://localhost/callback&response_type=id_token&scope=openid%20email%20profile&nonce=syncflow_desktop_nonce`;
-
-          const handleRedirect = async (targetUrl: string) => {
-            if (targetUrl.startsWith('http://localhost/callback')) {
-              win.destroy();
-              try {
-                const urlObj = new URL(targetUrl.replace('#', '?'));
-                const idToken = urlObj.searchParams.get('id_token');
-                if (!idToken) throw new Error('No id_token in redirect');
-                const res = await sidecarClient.loginWithGoogle({ identityToken: idToken });
-                if (res.ok) {
-                  await syncCredentialsToSidecar()
-                    .then((success) => {
-                      if (success) {
-                        sidecarManager.startCredentialsSyncInterval();
-                      }
-                    })
-                    .catch((err) => {
-                      log.error('Failed to sync credentials after Google login:', err);
-                    });
-                }
-                safeResolve(res);
-              } catch (err: any) {
-                safeResolve({ ok: false, message: err.message });
-              }
-            }
-          };
-
-          win.webContents.on('will-navigate', (e, url) => {
-            if (url.startsWith('http://localhost/callback')) {
-              e.preventDefault();
-              handleRedirect(url);
-            }
-          });
-          win.webContents.on('will-redirect', (e, url) => {
-            if (url.startsWith('http://localhost/callback')) {
-              e.preventDefault();
-              handleRedirect(url);
-            }
-          });
-
-          await win.loadURL(googleUrl);
-        } else if (payload.provider === 'apple') {
-          const clientId = process.env.SYNCFLOW_APPLE_CLIENT_ID || '';
-          const redirectUri = process.env.SYNCFLOW_APPLE_REDIRECT_URI || '';
-
-          if (!clientId || !redirectUri) {
-            win.destroy();
-            safeResolve({
-              ok: false,
-              message: 'Apple OAuth config missing (SYNCFLOW_APPLE_CLIENT_ID / SYNCFLOW_APPLE_REDIRECT_URI)',
-            });
-            return;
+  ipcMain.handle(
+    IPC.AUTH_LOGIN_WITH_OAUTH,
+    async (_e, payload: { provider: 'google' | 'apple' }) => {
+      return new Promise<AuthIpcResult>((resolve) => {
+        let resolved = false;
+        let closingForCallback = false;
+        const safeResolve = (val: AuthIpcResult) => {
+          if (!resolved) {
+            resolved = true;
+            resolve(val);
           }
+        };
 
-          const appleUrl = `https://appleid.apple.com/auth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code%20id_token&response_mode=form_post&scope=name%20email`;
-
-          // 攔截 POST 到 redirectUri 的請求
-          const session = win.webContents.session;
-          session.webRequest.onBeforeRequest(
-            { urls: [redirectUri + '*'] },
-            async (details, callback) => {
-              if (details.method === 'POST' && details.uploadData && details.uploadData.length > 0) {
-                win.destroy();
-                try {
-                  const rawBody = Buffer.from(details.uploadData[0].bytes).toString();
-                  const params = new URLSearchParams(rawBody);
-                  const idToken = params.get('id_token');
-                  const code = params.get('code') || undefined;
-                  const userStr = params.get('user');
-                  let fullName = '';
-                  if (userStr) {
-                    const parsedUser = JSON.parse(userStr);
-                    if (parsedUser.name) {
-                      fullName = `${parsedUser.name.firstName || ''} ${parsedUser.name.lastName || ''}`.trim();
-                    }
-                  }
-
-                  if (!idToken) throw new Error('No id_token returned from Apple');
-                  const res = await sidecarClient.loginWithApple({
-                    identityToken: idToken,
-                    authorizationCode: code,
-                    fullName: fullName || undefined,
-                  });
-                  if (res.ok) {
-                    await syncCredentialsToSidecar()
-                      .then((success) => {
-                        if (success) {
-                          sidecarManager.startCredentialsSyncInterval();
-                        }
-                      })
-                      .catch((err) => {
-                        log.error('Failed to sync credentials after Apple login:', err);
-                      });
-                  }
-                  safeResolve(res);
-                } catch (err: any) {
-                  safeResolve({ ok: false, message: err.message });
-                }
-                callback({ cancel: true });
-              } else {
-                callback({});
-              }
+        void (async () => {
+          if (payload.provider === 'google') {
+            let googleConfig;
+            try {
+              googleConfig = resolveGoogleOAuthConfig();
+            } catch (err) {
+              safeResolve({ ok: false, message: errorMessage(err) });
+              return;
             }
-          );
 
-          await win.loadURL(appleUrl);
-        }
-      } catch (err: any) {
-        safeResolve({ ok: false, message: err.message });
-      }
-    });
-  });
+            if (!googleConfig.clientId) {
+              safeResolve({
+                ok: false,
+                message:
+                  'Google OAuth config missing (SYNCFLOW_GOOGLE_CLIENT_ID / GOOGLE_CLIENT_ID / SYNCFLOW_GOOGLE_CLIENT_CONFIG_FILE)',
+              });
+              return;
+            }
+
+            const state = createOAuthToken();
+            const nonce = createOAuthToken();
+            const codeVerifier = createOAuthToken();
+            const codeChallenge = createPKCEChallenge(codeVerifier);
+            let loopback: GoogleOAuthLoopback;
+            try {
+              loopback = await startGoogleOAuthLoopback(googleConfig.redirectUri, state);
+            } catch (err) {
+              safeResolve({ ok: false, message: errorMessage(err) });
+              return;
+            }
+            const googleUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+            googleUrl.search = new URLSearchParams({
+              client_id: googleConfig.clientId,
+              redirect_uri: loopback.redirectUri,
+              response_type: 'code',
+              scope: 'openid email profile',
+              state,
+              nonce,
+              code_challenge: codeChallenge,
+              code_challenge_method: 'S256',
+            }).toString();
+
+            try {
+              await openExternal(googleUrl.toString());
+              const code = await loopback.waitForCode;
+              const idToken = await exchangeGoogleAuthorizationCode({
+                clientId: googleConfig.clientId,
+                code,
+                codeVerifier,
+                redirectUri: loopback.redirectUri,
+              });
+              if (!idTokenHasNonce(idToken, nonce)) {
+                throw new Error('OAuth nonce mismatch');
+              }
+              const res = await sidecarClient.loginWithGoogle({ identityToken: idToken });
+              if (res.ok) {
+                await syncLoginCredentialsAfterSuccess(sidecarManager, 'Google');
+              }
+              safeResolve(res);
+            } catch (err) {
+              loopback.close();
+              safeResolve({ ok: false, message: errorMessage(err) });
+            }
+          } else if (payload.provider === 'apple') {
+            const win = new BrowserWindow({
+              width: 500,
+              height: 600,
+              show: false,
+              webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+              },
+            });
+
+            win.once('ready-to-show', () => win.show());
+
+            win.on('closed', () => {
+              if (!closingForCallback) {
+                safeResolve({ ok: false, message: 'Login window closed by user' });
+              }
+            });
+
+            let appleConfig;
+            try {
+              appleConfig = resolveAppleOAuthConfig();
+            } catch (err) {
+              closingForCallback = true;
+              win.destroy();
+              safeResolve({ ok: false, message: errorMessage(err) });
+              return;
+            }
+
+            if (!appleConfig.clientId || !appleConfig.redirectUri) {
+              closingForCallback = true;
+              win.destroy();
+              safeResolve({
+                ok: false,
+                message:
+                  'Apple OAuth config missing (SYNCFLOW_APPLE_CLIENT_ID / APPLE_OAUTH_CLIENT_ID / SYNCFLOW_APPLE_REDIRECT_URI / SYNCFLOW_APPLE_SIGN_CONFIG_DIR)',
+              });
+              return;
+            }
+
+            const state = createOAuthToken();
+            const nonce = createOAuthToken();
+            const appleUrl = new URL('https://appleid.apple.com/auth/authorize');
+            appleUrl.search = new URLSearchParams({
+              client_id: appleConfig.clientId,
+              redirect_uri: appleConfig.redirectUri,
+              response_type: 'code id_token',
+              response_mode: 'form_post',
+              scope: 'name email',
+              state,
+              nonce,
+            }).toString();
+
+            // 攔截 POST 到 redirectUri 的請求
+            const session = win.webContents.session;
+            session.webRequest.onBeforeRequest(
+              { urls: [appleConfig.redirectUri + '*'] },
+              async (details, callback) => {
+                if (
+                  details.method === 'POST' &&
+                  details.uploadData &&
+                  details.uploadData.length > 0
+                ) {
+                  closingForCallback = true;
+                  win.destroy();
+                  try {
+                    const rawBody = readUploadDataBody(details.uploadData);
+                    const params = new URLSearchParams(rawBody);
+                    if (params.get('state') !== state) {
+                      throw new Error('OAuth state mismatch');
+                    }
+                    const idToken = params.get('id_token');
+                    const code = params.get('code') || undefined;
+                    const userStr = params.get('user');
+                    let fullName = '';
+                    if (userStr) {
+                      const parsedUser = JSON.parse(userStr);
+                      if (parsedUser.name) {
+                        fullName =
+                          `${parsedUser.name.firstName || ''} ${parsedUser.name.lastName || ''}`.trim();
+                      }
+                    }
+
+                    if (!idToken) throw new Error('No id_token returned from Apple');
+                    if (!idTokenHasNonce(idToken, nonce)) {
+                      throw new Error('OAuth nonce mismatch');
+                    }
+                    const res = await sidecarClient.loginWithApple({
+                      identityToken: idToken,
+                      authorizationCode: code,
+                      fullName: fullName || undefined,
+                    });
+                    if (res.ok) {
+                      await syncLoginCredentialsAfterSuccess(sidecarManager, 'Apple');
+                    }
+                    safeResolve(res);
+                  } catch (err) {
+                    safeResolve({ ok: false, message: errorMessage(err) });
+                  }
+                  callback({ cancel: true });
+                } else {
+                  callback({});
+                }
+              },
+            );
+
+            await win.loadURL(appleUrl.toString());
+          }
+        })().catch((err) => {
+          safeResolve({ ok: false, message: errorMessage(err) });
+        });
+      });
+    },
+  );
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely(sidecarManager));
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
   ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());

@@ -11,26 +11,34 @@ import type {
   SortDirection,
 } from '@syncflow/contracts';
 import { desktopClientHeaders } from './app-info';
+import { isGlobalMarket } from '../shared/market';
 
 const BASE = `http://127.0.0.1:${SIDECAR_HTTP_PORT}`;
+const DEFAULT_API_BASE_URL = isGlobalMarket()
+  ? 'https://global-api.vividrop.com'
+  : 'https://api.vividrop.cn';
+const DEFAULT_REVIEW_API_BASE_URL = isGlobalMarket()
+  ? 'https://review-api.vividrop.com'
+  : 'https://review-api.vividrop.cn';
 const API_BASE =
   process.env.VIVIDROP_API_BASE_URL?.trim() ||
   process.env.SYNCFLOW_API_BASE_URL?.trim() ||
-  'https://api.vividrop.cn';
-const GIFT_CARD_REDEEM_BASE_URL =
-  process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL?.trim() || API_BASE;
+  DEFAULT_API_BASE_URL;
+const GIFT_CARD_REDEEM_BASE_URL = process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL?.trim() || API_BASE;
 const GIFT_CARD_REDEEM_PATH =
   process.env.SYNCFLOW_GIFTCARD_REDEEM_PATH ?? '/api/v1/gift-cards/redeem';
-const CLIENT_CONFIG_BASE_URL =
-  process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL?.trim() || API_BASE;
-const CLIENT_CONFIG_PATH =
-  process.env.SYNCFLOW_CLIENT_CONFIG_PATH ?? '/api/v1/config';
+const CLIENT_CONFIG_BASE_URL = process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL?.trim() || API_BASE;
+const CLIENT_CONFIG_PATH = process.env.SYNCFLOW_CLIENT_CONFIG_PATH ?? '/api/v1/config';
 const AUTH_BASE_URL =
   process.env.SYNCFLOW_AUTH_BASE_URL?.trim() || GIFT_CARD_REDEEM_BASE_URL || API_BASE;
-const AUTH_SMS_SEND_PATH =
-  process.env.SYNCFLOW_AUTH_SMS_SEND_PATH ?? '/api/v1/auth/sms/send';
-const AUTH_SMS_LOGIN_PATH =
-  process.env.SYNCFLOW_AUTH_SMS_LOGIN_PATH ?? '/api/v1/auth/sms/login';
+const AUTH_REVIEW_BASE_URL =
+  process.env.SYNCFLOW_AUTH_REVIEW_BASE_URL?.trim() || DEFAULT_REVIEW_API_BASE_URL;
+const APP_REVIEW_PHONE =
+  process.env.SYNCFLOW_APP_REVIEW_PHONE?.trim() ||
+  process.env.APP_REVIEW_PHONE?.trim() ||
+  '17000000002';
+const AUTH_SMS_SEND_PATH = process.env.SYNCFLOW_AUTH_SMS_SEND_PATH ?? '/api/v1/auth/sms/send';
+const AUTH_SMS_LOGIN_PATH = process.env.SYNCFLOW_AUTH_SMS_LOGIN_PATH ?? '/api/v1/auth/sms/login';
 
 type GiftCardRedeemPayload = {
   code: string;
@@ -71,6 +79,9 @@ type AuthResponse = {
   ok: boolean;
   message?: string;
   reason?: AuthFailureReason;
+  userId?: number;
+  isNewUser?: boolean;
+  merged?: boolean;
 };
 
 type AuthFailureReason =
@@ -86,6 +97,7 @@ type AuthFailureReason =
 type AuthSession = {
   accessToken: string;
   refreshToken: string;
+  baseUrl?: string;
 };
 
 let authSession: AuthSession | null = null;
@@ -116,12 +128,15 @@ function saveSession(session: AuthSession | null): void {
       refreshTokenStr = safeStorage.encryptString(session.refreshToken).toString('base64');
       encrypted = true;
     } else {
-      log.warn('[sidecar-client] safeStorage encryption not available, storing session in plain text');
+      log.warn(
+        '[sidecar-client] safeStorage encryption not available, storing session in plain text',
+      );
     }
 
     const data = {
       accessToken: accessTokenStr,
       refreshToken: refreshTokenStr,
+      baseUrl: session.baseUrl,
       encrypted,
     };
 
@@ -152,7 +167,9 @@ function loadSession(): AuthSession | null {
       refreshToken = safeStorage.decryptString(Buffer.from(data.refreshToken, 'base64'));
     }
 
-    return { accessToken, refreshToken };
+    const baseUrl =
+      typeof data.baseUrl === 'string' && isHttpUrl(data.baseUrl) ? data.baseUrl : undefined;
+    return createAuthSession(accessToken, refreshToken, baseUrl);
   } catch (error) {
     log.error('[sidecar-client] Failed to load auth session:', error);
     return null;
@@ -185,6 +202,50 @@ function apiAuthHeaders(): Record<string, string> {
 
 function remoteApiHeaders(baseUrl: string): Record<string, string> {
   return baseUrl === BASE ? {} : desktopClientHeaders();
+}
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//.test(value);
+}
+
+function normalizePhoneDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 13 && digits.startsWith('86') ? digits.slice(2) : digits;
+}
+
+function resolveAuthBaseUrlForPhone(phone: string): string {
+  if (process.env.SYNCFLOW_AUTH_BASE_URL?.trim()) {
+    return AUTH_BASE_URL;
+  }
+  if (normalizePhoneDigits(phone) === APP_REVIEW_PHONE) {
+    return AUTH_REVIEW_BASE_URL;
+  }
+  return AUTH_BASE_URL;
+}
+
+function getSessionBaseUrl(): string {
+  ensureSessionLoaded();
+  return authSession?.baseUrl || AUTH_BASE_URL;
+}
+
+function getGiftCardRedeemBaseUrl(): string {
+  if (process.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL?.trim()) {
+    return GIFT_CARD_REDEEM_BASE_URL;
+  }
+  ensureSessionLoaded();
+  return authSession?.baseUrl || GIFT_CARD_REDEEM_BASE_URL;
+}
+
+function createAuthSession(
+  accessToken: string,
+  refreshToken: string,
+  baseUrl?: string,
+): AuthSession {
+  return {
+    accessToken,
+    refreshToken,
+    ...(baseUrl ? { baseUrl } : {}),
+  };
 }
 
 function mapGiftCardRedeemFailureReason(code: number): GiftCardRedeemFailureReason | undefined {
@@ -263,17 +324,20 @@ function normalizeClientConfig(value: unknown): ClientConfig {
   }
 
   const envelope = value as Record<string, unknown>;
-  const data = envelope.data && typeof envelope.data === 'object'
-    ? (envelope.data as Record<string, unknown>)
-    : envelope;
-  const features = data.features && typeof data.features === 'object'
-    ? (data.features as Record<string, unknown>)
-    : {};
-  const giftCard = features.gift_card && typeof features.gift_card === 'object'
-    ? (features.gift_card as Record<string, unknown>)
-    : features.giftCard && typeof features.giftCard === 'object'
-      ? (features.giftCard as Record<string, unknown>)
+  const data =
+    envelope.data && typeof envelope.data === 'object'
+      ? (envelope.data as Record<string, unknown>)
+      : envelope;
+  const features =
+    data.features && typeof data.features === 'object'
+      ? (data.features as Record<string, unknown>)
       : {};
+  const giftCard =
+    features.gift_card && typeof features.gift_card === 'object'
+      ? (features.gift_card as Record<string, unknown>)
+      : features.giftCard && typeof features.giftCard === 'object'
+        ? (features.giftCard as Record<string, unknown>)
+        : {};
 
   return {
     features: {
@@ -295,7 +359,18 @@ function normalizeAuthResponse(value: unknown): AuthResponse {
   }
 
   if (data.code === 0) {
-    return { ok: true };
+    const envelopeData = data.data;
+    if (!envelopeData || typeof envelopeData !== 'object') {
+      return { ok: true };
+    }
+
+    const authData = envelopeData as Record<string, unknown>;
+    return {
+      ok: true,
+      userId: typeof authData.user_id === 'number' ? authData.user_id : undefined,
+      isNewUser: typeof authData.is_new_user === 'boolean' ? authData.is_new_user : undefined,
+      merged: typeof authData.merged === 'boolean' ? authData.merged : undefined,
+    };
   }
 
   return {
@@ -305,7 +380,7 @@ function normalizeAuthResponse(value: unknown): AuthResponse {
   };
 }
 
-function persistAuthSession(value: unknown): AuthResponse {
+function persistAuthSession(value: unknown, baseUrl = AUTH_BASE_URL): AuthResponse {
   const normalized = normalizeAuthResponse(value);
   if (!normalized.ok) {
     authSession = null;
@@ -325,10 +400,7 @@ function persistAuthSession(value: unknown): AuthResponse {
     throw new Error('Invalid auth response');
   }
 
-  authSession = {
-    accessToken: authData.access_token,
-    refreshToken: authData.refresh_token,
-  };
+  authSession = createAuthSession(authData.access_token, authData.refresh_token, baseUrl);
   authSessionLoaded = true;
   preserveSidecarTunnelCredentialsAfterSessionLoss = false;
   saveSession(authSession);
@@ -467,7 +539,7 @@ export const sidecarClient = {
         'POST',
         GIFT_CARD_REDEEM_PATH,
         payload,
-        GIFT_CARD_REDEEM_BASE_URL,
+        getGiftCardRedeemBaseUrl(),
         apiAuthHeaders(),
       );
       return normalizeGiftCardRedeemResponse(response);
@@ -482,22 +554,14 @@ export const sidecarClient = {
     }
   },
   sendSMSCode: async (payload: SendSMSCodePayload) => {
-    const response = await request<unknown>(
-      'POST',
-      AUTH_SMS_SEND_PATH,
-      payload,
-      AUTH_BASE_URL,
-    );
+    const authBaseUrl = resolveAuthBaseUrlForPhone(payload.phone);
+    const response = await request<unknown>('POST', AUTH_SMS_SEND_PATH, payload, authBaseUrl);
     return normalizeAuthResponse(response);
   },
   loginWithSMSCode: async (payload: PhoneLoginPayload) => {
-    const response = await request<unknown>(
-      'POST',
-      AUTH_SMS_LOGIN_PATH,
-      payload,
-      AUTH_BASE_URL,
-    );
-    return persistAuthSession(response);
+    const authBaseUrl = resolveAuthBaseUrlForPhone(payload.phone);
+    const response = await request<unknown>('POST', AUTH_SMS_LOGIN_PATH, payload, authBaseUrl);
+    return persistAuthSession(response, authBaseUrl);
   },
   loginWithGoogle: async (payload: { identityToken: string }) => {
     const response = await request<unknown>(
@@ -540,7 +604,7 @@ export const sidecarClient = {
     return request<{
       code: number;
       data: { username: string; credential: string; urls: string[] };
-    }>('GET', '/api/v1/tunnel/turn-credentials', undefined, API_BASE, apiAuthHeaders());
+    }>('GET', '/api/v1/tunnel/turn-credentials', undefined, getSessionBaseUrl(), apiAuthHeaders());
   },
   refreshSession: async () => {
     if (refreshSessionInFlight) {
@@ -558,7 +622,7 @@ export const sidecarClient = {
           'POST',
           '/api/v1/auth/refresh',
           { refresh_token: authSession.refreshToken },
-          AUTH_BASE_URL,
+          authSession.baseUrl || AUTH_BASE_URL,
         );
 
         if (!response || typeof response !== 'object') {
@@ -587,10 +651,11 @@ export const sidecarClient = {
           throw new Error('Invalid refresh response tokens');
         }
 
-        authSession = {
-          accessToken: authData.access_token,
-          refreshToken: authData.refresh_token,
-        };
+        authSession = createAuthSession(
+          authData.access_token,
+          authData.refresh_token,
+          authSession.baseUrl,
+        );
         authSessionLoaded = true;
         preserveSidecarTunnelCredentialsAfterSessionLoss = false;
         saveSession(authSession);
@@ -607,7 +672,7 @@ export const sidecarClient = {
       refreshSessionInFlight = null;
     }
   },
-  getApiBaseUrl: () => API_BASE,
+  getApiBaseUrl: () => getSessionBaseUrl(),
   logout: async () => {
     authSession = null;
     authSessionLoaded = true;
@@ -644,7 +709,9 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
 
     let turnRes = await sidecarClient.fetchTurnCredentials();
     if (turnRes && turnRes.code === 1006) {
-      log.info('[sidecar-client] Fetch TURN credentials returned 1006 (token expired). Attempting token refresh...');
+      log.info(
+        '[sidecar-client] Fetch TURN credentials returned 1006 (token expired). Attempting token refresh...',
+      );
       const refreshed = await sidecarClient.refreshSession();
       session = sidecarClient.getAuthSession();
       if (!session || !session.accessToken) {
