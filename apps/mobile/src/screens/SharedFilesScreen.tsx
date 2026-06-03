@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { TFunction } from 'i18next';
 import type { SharedFileDTO, SharedFilesReachabilityDTO } from '@syncflow/contracts';
 import { FEATURES } from '../constants/features';
 import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
@@ -154,7 +155,7 @@ function fallbackSavedLocation(
     localPath: string | null;
     savedLocation?: string | null;
   },
-  t: (key: string, options?: any) => string,
+  t: TFunction,
 ): string | null {
   if (result.savedToPhotos) {
     if (Platform.OS === 'android') {
@@ -551,9 +552,9 @@ export function SharedFilesScreen() {
       const result = await downloadSharedFile(file.path);
       const savedLocation = fallbackSavedLocation(file, result, t);
       const completedDownloadId = sharedFileCompletedDownloadId(file);
-      const nextCompletedDownloads = {
+      const nextCompletedDownloads: Record<string, true> = {
         ...completedDownloadsRef.current,
-        [completedDownloadId]: true,
+        [completedDownloadId]: true as const,
       };
       updateCompletedDownloads(nextCompletedDownloads);
       const deviceId = activeDeviceId ?? bindingAvailabilityRef.current.deviceId;
