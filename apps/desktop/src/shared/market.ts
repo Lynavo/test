@@ -3,5 +3,5 @@ export function isGlobalMarket(): boolean {
 }
 
 export function getProductName(): string {
-  return isGlobalMarket() ? 'SyncFlow' : 'Vivi Drop';
+  return 'Vivi Drop';
 }

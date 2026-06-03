@@ -1,7 +1,7 @@
 appId: com.vividrop.desktop.global
-productName: SyncFlow
+productName: Vivi Drop
 mac:
-  artifactName: SyncFlow-${version}-${arch}.${ext}
+  artifactName: ViviDrop-${version}-${arch}.${ext}
   target:
     - dmg
     - zip
@@ -40,7 +40,7 @@ mas:
   provisioningProfile: resources/embedded.provisionprofile
   notarize: null
 win:
-  artifactName: SyncFlow-${version}-${arch}.${ext}
+  artifactName: ViviDrop-${version}-${arch}.${ext}
   target:
     - target: nsis
       arch:
@@ -48,7 +48,7 @@ win:
     - target: zip
       arch:
         - x64
-  executableName: SyncFlow
+  executableName: Vivi Drop
   extraResources:
     - from: resources
       filter:
@@ -60,7 +60,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: SyncFlow
+  shortcutName: Vivi Drop
   include: resources/installer.nsh
 directories:
   output: release

@@ -48,7 +48,7 @@ win:
     - target: zip
       arch:
         - x64
-  executableName: SyncFlow
+  executableName: Vivi Drop
   extraResources:
     - from: resources
       filter:
@@ -60,7 +60,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: SyncFlow
+  shortcutName: Vivi Drop
   include: resources/installer.nsh
 directories:
   output: release
