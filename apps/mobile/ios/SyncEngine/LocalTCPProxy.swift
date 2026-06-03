@@ -78,4 +78,8 @@ class LocalTCPProxy {
     func getActivePort() -> Int? {
         return activePort
     }
+
+    func currentSelectedICERoute() -> String {
+        return MobiletunnelCurrentSelectedICERoute()
+    }
 }

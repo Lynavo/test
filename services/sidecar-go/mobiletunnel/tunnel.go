@@ -34,6 +34,9 @@ type Tunnel struct {
 var (
 	activeTunnel *Tunnel
 	activeMu     sync.Mutex
+
+	selectedICERouteMu      sync.Mutex
+	currentSelectedICERoute string
 )
 
 const defaultSTUNServer = "stun:stun.cloudflare.com:3478"
@@ -190,9 +193,11 @@ func logCurrentSelectedICECandidatePair(pc *webrtc.PeerConnection, component str
 }
 
 func logSelectedICECandidatePair(message string, pair *webrtc.ICECandidatePair, baseArgs ...any) {
+	route := selectedICERoute(pair)
+	setCurrentSelectedICERoute(route)
 	args := append([]any{}, baseArgs...)
 	args = append(args,
-		"route", selectedICERoute(pair),
+		"route", route,
 		"localType", iceCandidateType(pairLocal(pair)),
 		"localProtocol", iceCandidateProtocol(pairLocal(pair)),
 		"localAddress", iceCandidateAddress(pairLocal(pair)),
@@ -207,6 +212,24 @@ func logSelectedICECandidatePair(message string, pair *webrtc.ICECandidatePair, 
 		"remoteRelatedPort", iceCandidateRelatedPort(pairRemote(pair)),
 	)
 	tunnelInfo(message, args...)
+}
+
+// CurrentSelectedICERoute returns the active tunnel's selected ICE route.
+// It returns an empty string until the tunnel has selected a candidate pair.
+func CurrentSelectedICERoute() string {
+	selectedICERouteMu.Lock()
+	defer selectedICERouteMu.Unlock()
+	return currentSelectedICERoute
+}
+
+func setCurrentSelectedICERoute(route string) {
+	selectedICERouteMu.Lock()
+	defer selectedICERouteMu.Unlock()
+	currentSelectedICERoute = route
+}
+
+func resetCurrentSelectedICERoute() {
+	setCurrentSelectedICERoute("")
 }
 
 func selectedICERoute(pair *webrtc.ICECandidatePair) string {
@@ -338,6 +361,7 @@ func StartTunnel(signalingURL, clientID, targetClientID, token, pairingToken, ic
 	activeMu.Lock()
 	defer activeMu.Unlock()
 
+	resetCurrentSelectedICERoute()
 	if activeTunnel != nil {
 		activeTunnel.Stop()
 	}
@@ -370,6 +394,7 @@ func StopTunnel() {
 		activeTunnel.Stop()
 		activeTunnel = nil
 	}
+	resetCurrentSelectedICERoute()
 }
 
 func (t *Tunnel) Stop() {

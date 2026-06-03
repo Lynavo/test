@@ -2403,11 +2403,15 @@ class NativeSyncEngineModule(
       port = decision.port,
       displayHost = displayHost,
       isTunnel = decision.isTunnel,
+      reachabilityRoute = if (decision.isTunnel) currentSharedFilesTunnelReachabilityRoute() else "lan",
       tunnelActive = snapshot.isActive,
       tunnelStarting = snapshot.isStarting,
       activeTunnelPort = snapshot.port,
     )
   }
+
+  private fun currentSharedFilesTunnelReachabilityRoute(): String =
+    if (Mobiletunnel.currentSelectedICERoute() == "turn_relay") "relay" else "tunnel"
 
   private fun sharedFileUrlForRoute(kind: String, path: String, route: SharedFileRoute): URL =
     URL("http", route.urlHost, route.port, sharedFileEndpoint(kind, path))
@@ -2683,7 +2687,7 @@ class NativeSyncEngineModule(
     val next = SharedFilesReachability(
       deviceId = binding.deviceId,
       state = state,
-      route = route?.let { if (it.isTunnel) "tunnel" else "lan" },
+      route = route?.reachabilityRoute,
       reason = reason,
       updatedAt = isoNow(),
     )
@@ -2875,6 +2879,9 @@ class NativeSyncEngineModule(
     )
     val updated = binding.copy(connectionState = connectionState)
     saveBinding(updated)
+    if (connectionState == "offline") {
+      clearSharedFilesReachability(reason = "binding_state_offline")
+    }
     emitBindingStateChanged(updated)
     if (connectionState == "connected") {
       cancelPresenceRecoveryProbe(reason = reason ?: "state_connected")
@@ -4700,6 +4707,7 @@ class NativeSyncEngineModule(
     val port: Int,
     val displayHost: String,
     val isTunnel: Boolean,
+    val reachabilityRoute: String,
     val tunnelActive: Boolean,
     val tunnelStarting: Boolean,
     val activeTunnelPort: Int?,

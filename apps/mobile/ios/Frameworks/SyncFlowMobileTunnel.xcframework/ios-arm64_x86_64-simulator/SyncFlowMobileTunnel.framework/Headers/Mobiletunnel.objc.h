@@ -23,6 +23,12 @@
 @end
 
 /**
+ * CurrentSelectedICERoute returns the active tunnel's selected ICE route.
+It returns an empty string until the tunnel has selected a candidate pair.
+ */
+FOUNDATION_EXPORT NSString* _Nonnull MobiletunnelCurrentSelectedICERoute(void);
+
+/**
  * StartTunnel runs the WebRTC + Yamux tunnel and returns the local TCP port it listens on.
 If it fails, it returns -1.
  */

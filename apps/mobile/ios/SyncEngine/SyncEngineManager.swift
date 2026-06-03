@@ -220,6 +220,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private enum SharedFilesReachabilityRoute: String {
         case lan
         case tunnel
+        case relay
     }
 
     private struct P2PTunnelCredentials: Equatable {
@@ -1680,6 +1681,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
               reason)
         syncDiagnosticsLog("SyncEngine", "binding connection state \(bindingConnectionState.rawValue) -> \(newState.rawValue) (\(reason))")
         bindingConnectionState = newState
+        if newState == .offline {
+            clearSharedFilesReachability(reason: "binding_state_offline")
+        }
         emitBindingStateChanged()
 
         // Keep the standalone heartbeat timer in sync with connection state
@@ -6959,9 +6963,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         sharedFilesService.useTunnelRoute = true
         updateSharedFilesReachability(
             .available,
-            route: .tunnel,
+            route: currentSharedFilesTunnelReachabilityRoute(),
             reason: reason
         )
+    }
+
+    private func currentSharedFilesTunnelReachabilityRoute() -> SharedFilesReachabilityRoute {
+        if localTCPProxy.currentSelectedICERoute() == "turn_relay" {
+            return .relay
+        }
+        return .tunnel
     }
 
     private func reachableSharedFilesLANHost(
@@ -7190,7 +7201,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 try await sharedFilesService.listSharedFiles(path: path)
             }
         }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? .tunnel : .lan
+        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
             route: reachabilityRoute,
@@ -7288,7 +7299,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard let result else {
             throw lastError ?? SyncEngineError.networkError("Shared file download failed without an error")
         }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? .tunnel : .lan
+        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
             route: reachabilityRoute,
