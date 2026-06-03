@@ -17,14 +17,15 @@ type ClientStateProvider interface {
 
 // Server holds the dependencies for the HTTP API handlers.
 type Server struct {
-	store           *store.Store
-	config          *config.Config
-	hub             *events.Hub
-	clientStates    ClientStateProvider
-	presence        *PresenceTracker
-	tunnelMu        sync.Mutex
-	tunnel          *protocol.P2PManager
-	OnDeviceRenamed func(newName string) // called when device name changes, to restart Bonjour
+	store                *store.Store
+	config               *config.Config
+	hub                  *events.Hub
+	clientStates         ClientStateProvider
+	presence             *PresenceTracker
+	tunnelMu             sync.Mutex
+	tunnel               *protocol.P2PManager
+	OnDeviceRenamed      func(newName string) // called when device name changes, to restart Bonjour
+	OnShareStatusChanged func()               // called when share status changes, to restart Bonjour
 }
 
 func (s *Server) PresenceTracker() *PresenceTracker {

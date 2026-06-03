@@ -145,6 +145,71 @@ path:		/Volumes/workspace/temp/syncFolwData
 	}
 }
 
+func TestParseWindowsSmbShares_FiltersSystemShares(t *testing.T) {
+	output := []byte(`[
+		{"Name":"ADMIN$","Path":"C:\\Windows","Special":true},
+		{"Name":"C$","Path":"C:\\","Special":true},
+		{"Name":"SyncFlow","Path":"C:\\Users\\Alice\\SyncFlow\\shared","Special":false}
+	]`)
+
+	shares, err := parseWindowsSmbShares(output)
+	if err != nil {
+		t.Fatalf("parseWindowsSmbShares: %v", err)
+	}
+	if len(shares) != 1 {
+		t.Fatalf("expected 1 user share, got %d", len(shares))
+	}
+	if shares[0].Name != "SyncFlow" {
+		t.Fatalf("unexpected share name: %q", shares[0].Name)
+	}
+	if shares[0].Path != `C:\Users\Alice\SyncFlow\shared` {
+		t.Fatalf("unexpected share path: %q", shares[0].Path)
+	}
+	if !shares[0].SMBShared {
+		t.Fatal("expected Windows share to be smb-enabled")
+	}
+}
+
+func TestParseWindowsSmbShares_SingleObject(t *testing.T) {
+	output := []byte(`{"Name":"SyncFlow","Path":"C:\\Users\\Alice\\SyncFlow\\shared","Special":false}`)
+
+	shares, err := parseWindowsSmbShares(output)
+	if err != nil {
+		t.Fatalf("parseWindowsSmbShares: %v", err)
+	}
+	if len(shares) != 1 {
+		t.Fatalf("expected 1 share, got %d", len(shares))
+	}
+	if shares[0].Name != "SyncFlow" {
+		t.Fatalf("unexpected share name: %q", shares[0].Name)
+	}
+}
+
+func TestSharePathCoversReceivePath_WindowsCaseInsensitiveParent(t *testing.T) {
+	if !sharePathCoversReceivePathForGOOS(
+		`C:\Users\Alice\SyncFlow`,
+		`c:/users/alice/syncflow/shared`,
+		"windows",
+	) {
+		t.Fatal("expected Windows parent share path to cover receive path")
+	}
+}
+
+func TestIsAccessibleConfig(t *testing.T) {
+	if !IsAccessibleConfig("ready", "smb://192.168.1.10/SyncFlow") {
+		t.Fatal("expected ready share with URL to be accessible")
+	}
+	if !IsAccessibleConfig("share_registered", "smb://192.168.1.10/SyncFlow") {
+		t.Fatal("expected registered share with URL to be accessible")
+	}
+	if IsAccessibleConfig("ready", "") {
+		t.Fatal("expected ready share without URL to be inaccessible")
+	}
+	if IsAccessibleConfig("needs_manual_enable", "smb://192.168.1.10/SyncFlow") {
+		t.Fatal("expected manual-enable share to be inaccessible")
+	}
+}
+
 func TestStatusConstants(t *testing.T) {
 	// Verify the string values match spec definitions.
 	tests := []struct {

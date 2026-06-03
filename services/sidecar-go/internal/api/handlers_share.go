@@ -62,6 +62,10 @@ func (s *Server) handleShareValidate(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 
+	if s.OnShareStatusChanged != nil {
+		s.OnShareStatusChanged()
+	}
+
 	writeJSON(w, http.StatusOK, result)
 }
 

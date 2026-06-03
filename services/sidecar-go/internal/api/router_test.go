@@ -1217,6 +1217,32 @@ func TestSharedListRecreatesDeletedSharedDirectory(t *testing.T) {
 	}
 }
 
+func TestSharedListRejectsWindowsPathEscapes(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	if err := os.MkdirAll(cfg.SharedDir(), 0o755); err != nil {
+		t.Fatalf("mkdir shared dir: %v", err)
+	}
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	tests := []string{
+		"/shared/list/..%5Coutside",
+		"/shared/list/C:%5CWindows",
+	}
+	for _, path := range tests {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("GET %s status = %d, want 400", path, resp.StatusCode)
+		}
+	}
+}
+
 func TestResetState(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	cfg.ReceiveDir = filepath.Join(t.TempDir(), "external", "received")
@@ -1656,7 +1682,14 @@ func TestShareStatus(t *testing.T) {
 
 func TestShareValidate(t *testing.T) {
 	st, cfg, hub := testEnv(t)
-	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	shareStatusChanged := false
+	handler := func() http.Handler {
+		srv, h := api.NewServer(st, cfg, hub, nil)
+		srv.OnShareStatusChanged = func() {
+			shareStatusChanged = true
+		}
+		return h
+	}()
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
@@ -1676,6 +1709,9 @@ func TestShareValidate(t *testing.T) {
 	}
 	if _, ok := body["status"]; !ok {
 		t.Error("missing status field")
+	}
+	if !shareStatusChanged {
+		t.Fatal("expected share status changed callback")
 	}
 }
 

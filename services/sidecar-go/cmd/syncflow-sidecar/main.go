@@ -22,6 +22,7 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/mdns"
 	"github.com/nicksyncflow/sidecar/internal/runtimefs"
 	"github.com/nicksyncflow/sidecar/internal/server"
+	"github.com/nicksyncflow/sidecar/internal/share"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
@@ -136,6 +137,15 @@ func main() {
 			broadcaster.Shutdown()
 			broadcaster = nil
 		}
+		shareEnabled := false
+		shareName := "Vivi Drop"
+		if shareConfig, err := st.GetShareConfig(); err == nil && shareConfig != nil {
+			shareEnabled = share.IsAccessibleConfig(shareConfig.ShareStatus, shareConfig.ShareURL)
+			if strings.TrimSpace(shareConfig.ShareName) != "" {
+				shareName = shareConfig.ShareName
+			}
+		}
+
 		var err error
 		broadcaster, err = mdns.NewBroadcaster(mdns.BroadcastConfig{
 			DeviceID:     deviceID,
@@ -144,8 +154,8 @@ func main() {
 			DeviceIP:     selectedIP,
 			TCPPort:      cfg.TCPPort,
 			Proto:        2,
-			ShareEnabled: false,
-			ShareName:    "Vivi Drop",
+			ShareEnabled: shareEnabled,
+			ShareName:    shareName,
 		})
 		if err != nil {
 			slog.Warn("bonjour broadcast failed", "err", err, "reason", reason, "ip", selectedIP)
@@ -171,6 +181,11 @@ func main() {
 		broadcasterMu.Lock()
 		defer broadcasterMu.Unlock()
 		return currentDeviceName
+	}
+	apiSrv.OnShareStatusChanged = func() {
+		name := currentBonjourName()
+		slog.Info("share status changed, restarting bonjour", "name", name)
+		startBroadcaster(name, "share_status_changed")
 	}
 	go watchBonjourIPChanges(
 		ctx,

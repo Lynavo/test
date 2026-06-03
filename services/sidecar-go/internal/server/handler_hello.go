@@ -17,6 +17,7 @@ import (
 
 	"github.com/nicksyncflow/sidecar/internal/events"
 	"github.com/nicksyncflow/sidecar/internal/protocol"
+	"github.com/nicksyncflow/sidecar/internal/share"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
@@ -70,7 +71,7 @@ func (c *connection) handleHello(body []byte) error {
 		LowDiskPauseEnabled: true,
 	}
 	if shareConfig != nil {
-		caps.ShareEnabled = shareConfig.ShareStatus == "active"
+		caps.ShareEnabled = share.IsAccessibleConfig(shareConfig.ShareStatus, shareConfig.ShareURL)
 		caps.ShareName = shareConfig.ShareName
 	}
 

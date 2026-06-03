@@ -36,15 +36,14 @@ type sharedDirectoryDTO struct {
 func (s *Server) resolveSharedPath(relPath string) (string, error) {
 	sharedDir := s.config.SharedDir()
 
-	// Step 1: Lexical reject — block ".." segments before any filesystem access.
-	for _, seg := range strings.Split(relPath, "/") {
-		if seg == ".." {
-			return "", fmt.Errorf("path traversal rejected")
-		}
+	// Step 1: Lexical reject before filesystem access. Windows treats `\` as a
+	// separator, so normalize both separators here instead of only splitting on `/`.
+	if err := rejectUnsafeSharedRelPath(relPath); err != nil {
+		return "", err
 	}
 
 	lexical := filepath.Clean(filepath.Join(sharedDir, relPath))
-	if !strings.HasPrefix(lexical, sharedDir) {
+	if !pathWithinDir(sharedDir, lexical) {
 		return "", fmt.Errorf("path escapes shared directory")
 	}
 
@@ -67,11 +66,44 @@ func (s *Server) resolveSharedPath(relPath string) (string, error) {
 	}
 
 	// Step 4: Re-verify that the real path is still inside the real shared root.
-	if !strings.HasPrefix(realResolved, realSharedDir+string(filepath.Separator)) && realResolved != realSharedDir {
+	if !pathWithinDir(realSharedDir, realResolved) {
 		return "", fmt.Errorf("path escapes shared directory via symlink")
 	}
 
 	return realResolved, nil
+}
+
+func rejectUnsafeSharedRelPath(relPath string) error {
+	if relPath == "" {
+		return nil
+	}
+	if filepath.IsAbs(relPath) || strings.HasPrefix(relPath, "/") || strings.HasPrefix(relPath, `\`) || hasWindowsVolumePrefix(relPath) {
+		return fmt.Errorf("absolute path rejected")
+	}
+
+	normalized := strings.ReplaceAll(relPath, `\`, "/")
+	for _, seg := range strings.Split(normalized, "/") {
+		if seg == ".." {
+			return fmt.Errorf("path traversal rejected")
+		}
+	}
+	return nil
+}
+
+func hasWindowsVolumePrefix(path string) bool {
+	if len(path) < 2 || path[1] != ':' {
+		return false
+	}
+	first := path[0]
+	return (first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z')
+}
+
+func pathWithinDir(parent, child string) bool {
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // classifyFileType returns a simplified media type based on the file extension.
