@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { COUNTRY_CODES, type CountryCodeInfo } from '@syncflow/contracts';
 import { isGlobalMarket } from '@renderer/../shared/market';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
@@ -62,22 +63,46 @@ function getSMSLoginErrorMessage(result: AuthResult, t: TFunction): string {
   }
 }
 
-const COMMON_COUNTRY_CODES = [
-  { code: '+86', labelKey: 'settings.giftCard.phoneLogin.countryCodes.china' },
-  { code: '+1', labelKey: 'settings.giftCard.phoneLogin.countryCodes.northAmerica' },
-  { code: '+886', labelKey: 'settings.giftCard.phoneLogin.countryCodes.taiwan' },
-  { code: '+852', labelKey: 'settings.giftCard.phoneLogin.countryCodes.hongKong' },
-  { code: '+81', labelKey: 'settings.giftCard.phoneLogin.countryCodes.japan' },
-  { code: '+65', labelKey: 'settings.giftCard.phoneLogin.countryCodes.singapore' },
-] as const;
-
-type CountryCode = (typeof COMMON_COUNTRY_CODES)[number]['code'];
 type OAuthProvider = 'google' | 'apple';
 
 const COUNTRY_CODE_STORAGE_KEY = 'syncflow.desktop.login.countryCode';
+const DEFAULT_COUNTRY_ISO = 'CN';
 
-function isSupportedCountryCode(value: string | null | undefined): value is CountryCode {
-  return COMMON_COUNTRY_CODES.some((country) => country.code === value);
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" className={className}>
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C4 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 4 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+      />
+    </svg>
+  );
+}
+
+function AppleIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <path d="M17.05 12.14c-.03-2.98 2.45-4.42 2.56-4.48-1.39-2.03-3.54-2.31-4.29-2.34-1.82-.18-3.58 1.08-4.5 1.08-.94 0-2.36-1.05-3.89-1.02-1.98.03-3.84 1.18-4.86 2.98-2.1 3.64-.53 8.98 1.48 11.94.99 1.42 2.14 3 3.67 2.94 1.48-.06 2.03-.94 3.82-.94 1.77 0 2.29.94 3.85.91 1.6-.03 2.61-1.43 3.57-2.86 1.14-1.63 1.59-3.24 1.61-3.32-.04-.01-3.04-1.16-3.07-4.89zM14.13 3.39c.8-.99 1.34-2.33 1.19-3.7-1.16.05-2.61.8-3.44 1.76-.74.85-1.4 2.24-1.23 3.55 1.31.1 2.64-.66 3.48-1.61z" />
+    </svg>
+  );
 }
 
 function getBrowserLanguages(): string[] {
@@ -90,62 +115,81 @@ function getBrowserLanguages(): string[] {
     : [navigator.language].filter(Boolean);
 }
 
-function getStoredCountryCode(): CountryCode | null {
+function getFallbackCountry(): CountryCodeInfo {
+  const country = COUNTRY_CODES.find((candidate) => candidate.iso === DEFAULT_COUNTRY_ISO);
+  if (!country) {
+    throw new Error(`Missing default country code: ${DEFAULT_COUNTRY_ISO}`);
+  }
+  return country;
+}
+
+function findCountryByIso(value: string | null | undefined): CountryCodeInfo | null {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  return COUNTRY_CODES.find((country) => country.iso === normalized) ?? null;
+}
+
+function findCountryByCode(value: string | null | undefined): CountryCodeInfo | null {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+  return COUNTRY_CODES.find((country) => country.code === normalized) ?? null;
+}
+
+function getCountryFromStoredValue(value: string | null | undefined): CountryCodeInfo | null {
+  return findCountryByIso(value) ?? findCountryByCode(value);
+}
+
+function getStoredCountry(): CountryCodeInfo | null {
   try {
     const value = window.localStorage.getItem(COUNTRY_CODE_STORAGE_KEY);
-    return isSupportedCountryCode(value) ? value : null;
+    return getCountryFromStoredValue(value);
   } catch {
     return null;
   }
 }
 
-function persistCountryCode(countryCode: CountryCode): void {
+function persistCountryIso(countryIso: string): void {
   try {
-    window.localStorage.setItem(COUNTRY_CODE_STORAGE_KEY, countryCode);
+    window.localStorage.setItem(COUNTRY_CODE_STORAGE_KEY, countryIso);
   } catch {
     // localStorage can be unavailable in restricted browser contexts.
   }
 }
 
-function resolveCountryCodeFromLocale(locale: string): CountryCode | null {
+function resolveCountryFromLocale(locale: string): CountryCodeInfo | null {
   const normalized = locale.trim().toLowerCase().replace(/_/g, '-');
 
   if (!normalized) {
     return null;
   }
 
-  if (normalized.includes('-tw')) {
-    return '+886';
+  const parts = normalized.split('-');
+  const region = [...parts].reverse().find((part) => /^[a-z]{2}$/.test(part) && part !== parts[0]);
+  const countryFromRegion = findCountryByIso(region);
+  if (countryFromRegion) {
+    return countryFromRegion;
   }
 
-  if (normalized.includes('-hk') || normalized.includes('-mo')) {
-    return '+852';
-  }
-
-  if (normalized.includes('-sg')) {
-    return '+65';
-  }
-
-  if (normalized.includes('-cn') || normalized.startsWith('zh-hans')) {
-    return '+86';
+  if (normalized.startsWith('zh-hans')) {
+    return findCountryByIso('CN');
   }
 
   if (normalized.startsWith('zh-hant')) {
-    return '+886';
+    return findCountryByIso('TW');
   }
 
   if (normalized.startsWith('ja')) {
-    return '+81';
-  }
-
-  if (normalized.startsWith('en')) {
-    return '+1';
+    return findCountryByIso('JP');
   }
 
   return null;
 }
 
-export function resolveDefaultCountryCode({
+function resolveDefaultCountry({
   isGlobal,
   language,
   navigatorLanguages = [],
@@ -155,24 +199,34 @@ export function resolveDefaultCountryCode({
   language?: string;
   navigatorLanguages?: readonly string[];
   storedCountryCode?: string | null;
-}): CountryCode {
+}): CountryCodeInfo {
   if (!isGlobal) {
-    return '+86';
+    return getFallbackCountry();
   }
 
-  if (isSupportedCountryCode(storedCountryCode)) {
-    return storedCountryCode;
+  const storedCountry = getCountryFromStoredValue(storedCountryCode);
+  if (storedCountry) {
+    return storedCountry;
   }
 
   const localeCandidates = [language, ...navigatorLanguages].filter(Boolean) as string[];
   for (const locale of localeCandidates) {
-    const countryCode = resolveCountryCodeFromLocale(locale);
-    if (countryCode) {
-      return countryCode;
+    const country = resolveCountryFromLocale(locale);
+    if (country) {
+      return country;
     }
   }
 
-  return '+1';
+  return getFallbackCountry();
+}
+
+export function resolveDefaultCountryCode(options: {
+  isGlobal: boolean;
+  language?: string;
+  navigatorLanguages?: readonly string[];
+  storedCountryCode?: string | null;
+}): string {
+  return resolveDefaultCountry(options).code;
 }
 
 function getOAuthProviderLabel(provider: OAuthProvider, t: TFunction): string {
@@ -216,12 +270,12 @@ export function LoginDialog({
   const { t, i18n } = useTranslation();
   const isGlobal = isGlobalMarket();
 
-  const [countryCode, setCountryCode] = useState<CountryCode>(() =>
-    resolveDefaultCountryCode({
+  const [selectedCountry, setSelectedCountry] = useState<CountryCodeInfo>(() =>
+    resolveDefaultCountry({
       isGlobal,
       language: i18n.resolvedLanguage || i18n.language,
       navigatorLanguages: getBrowserLanguages(),
-      storedCountryCode: getStoredCountryCode(),
+      storedCountryCode: getStoredCountry()?.iso,
     }),
   );
   const [phone, setPhone] = useState('');
@@ -231,12 +285,12 @@ export function LoginDialog({
 
   React.useEffect(() => {
     if (open) {
-      setCountryCode(
-        resolveDefaultCountryCode({
+      setSelectedCountry(
+        resolveDefaultCountry({
           isGlobal,
           language: i18n.resolvedLanguage || i18n.language,
           navigatorLanguages: getBrowserLanguages(),
-          storedCountryCode: getStoredCountryCode(),
+          storedCountryCode: getStoredCountry()?.iso,
         }),
       );
       setPhone('');
@@ -244,15 +298,16 @@ export function LoginDialog({
     }
   }, [i18n.language, i18n.resolvedLanguage, isGlobal, open]);
 
-  const handleCountryCodeChange = useCallback(
+  const handleCountryChange = useCallback(
     (value: string) => {
-      if (!isSupportedCountryCode(value)) {
+      const country = findCountryByIso(value);
+      if (!country) {
         return;
       }
 
-      setCountryCode(value);
+      setSelectedCountry(country);
       if (isGlobal) {
-        persistCountryCode(value);
+        persistCountryIso(country.iso);
       }
     },
     [isGlobal],
@@ -267,6 +322,7 @@ export function LoginDialog({
       }
 
       if (isGlobal) {
+        const countryCode = selectedCountry.code;
         if (countryCode === '+86' && digits.startsWith('86') && digits.length > 11) {
           return '+' + digits;
         }
@@ -280,7 +336,7 @@ export function LoginDialog({
         return '+86' + digits;
       }
     },
-    [countryCode, isGlobal],
+    [isGlobal, selectedCountry.code],
   );
 
   const handleSendSMSCode = useCallback(async () => {
@@ -416,7 +472,10 @@ export function LoginDialog({
               {isLoggingIn ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                t('settings.giftCard.phoneLogin.oauth.continueWithGoogle')
+                <>
+                  <GoogleIcon className="h-4 w-4" />
+                  {t('settings.giftCard.phoneLogin.oauth.continueWithGoogle')}
+                </>
               )}
             </Button>
             <Button
@@ -429,7 +488,10 @@ export function LoginDialog({
               {isLoggingIn ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                t('settings.giftCard.phoneLogin.oauth.continueWithApple')
+                <>
+                  <AppleIcon className="h-4 w-4" />
+                  {t('settings.giftCard.phoneLogin.oauth.continueWithApple')}
+                </>
               )}
             </Button>
             <div className="flex items-center my-2">
@@ -447,24 +509,25 @@ export function LoginDialog({
             <Label htmlFor="login-phone">{t('settings.giftCard.phoneLogin.phoneLabel')}</Label>
             <div className="flex gap-2">
               {isGlobal ? (
-                <Select value={countryCode} onValueChange={handleCountryCodeChange}>
-                  <SelectTrigger className="w-[150px] shrink-0">
+                <Select value={selectedCountry.iso} onValueChange={handleCountryChange}>
+                  <SelectTrigger className="w-[170px] shrink-0">
                     <SelectValue
                       placeholder={t('settings.giftCard.phoneLogin.countryCodePlaceholder')}
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {COMMON_COUNTRY_CODES.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        <span className="font-medium">{c.code}</span>
-                        <span className="text-muted-foreground">{t(c.labelKey)}</span>
+                    {COUNTRY_CODES.map((country) => (
+                      <SelectItem key={country.iso} value={country.iso}>
+                        <span>{country.flag}</span>
+                        <span className="font-medium">{country.code}</span>
+                        <span className="text-muted-foreground">{country.nameEn}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               ) : (
                 <div className="flex items-center justify-center px-3 h-10 rounded-md border border-input bg-muted text-muted-foreground text-sm font-medium shrink-0">
-                  +86
+                  {getFallbackCountry().code}
                 </div>
               )}
               <Input

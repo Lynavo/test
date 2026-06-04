@@ -69,7 +69,13 @@ describe('resolveDefaultCountryCode', () => {
         navigatorLanguages: ['ja-JP'],
       }),
     ).toBe('+81');
-    expect(resolveDefaultCountryCode({ isGlobal: true })).toBe('+1');
+    expect(
+      resolveDefaultCountryCode({
+        isGlobal: true,
+        navigatorLanguages: ['en-US'],
+      }),
+    ).toBe('+1');
+    expect(resolveDefaultCountryCode({ isGlobal: true })).toBe('+86');
   });
 });
 

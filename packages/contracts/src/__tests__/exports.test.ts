@@ -27,4 +27,8 @@ describe('@syncflow/contracts exports', () => {
   it('exports BACKOFF_RETRY_MS', () => {
     expect(contracts.BACKOFF_RETRY_MS).toEqual([5000, 15000, 30000]);
   });
+  it('exports mobile country code data', () => {
+    expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'CN')?.code).toBe('+86');
+    expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'TW')?.code).toBe('+886');
+  });
 });
