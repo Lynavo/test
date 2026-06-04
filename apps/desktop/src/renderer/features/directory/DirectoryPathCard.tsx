@@ -1,29 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  FolderOpen,
-  FolderInput,
-  FolderSymlink,
-  Lock,
-  UserRound,
-} from 'lucide-react';
+import { FolderOpen, FolderInput, FolderSymlink, Lock, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
-import { LoginDialog } from '@renderer/components/shared/LoginDialog';
-import { useAuthStore } from '@renderer/stores/auth-store';
-
-function extractErrorText(error: unknown, fallback: string): string {
-  if (error instanceof Error) {
-    return error.message || fallback;
-  }
-  if (typeof error === 'string') {
-    return error || fallback;
-  }
-  return fallback;
-}
 
 const colors = {
   title: '#1a2a3a',
@@ -43,33 +25,6 @@ export function DirectoryPathCard() {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const [saving, setSaving] = useState(false);
   const [transferActive, setTransferActive] = useState(false);
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const session = useAuthStore((state) => state.session);
-  const refreshSession = useAuthStore((state) => state.refreshSession);
-  const logout = useAuthStore((state) => state.logout);
-
-  useEffect(() => {
-    void refreshSession();
-  }, [refreshSession]);
-
-  const handleLogout = useCallback(async () => {
-    if (!window.electronAPI?.auth?.logout) {
-      toast.error('Auth API unavailable');
-      return;
-    }
-    try {
-      const res = await logout();
-      if (res.ok) {
-        toast.success(t('settings.giftCard.phoneLogin.logoutSuccess'));
-      } else {
-        toast.error('Logout failed');
-      }
-    } catch (error) {
-      toast.error('Logout error', {
-        description: extractErrorText(error, 'Logout error'),
-      });
-    }
-  }, [logout, t]);
 
   const rootPath = settings.rootPath;
   const receivePath = settings.receivePath;
@@ -164,18 +119,21 @@ export function DirectoryPathCard() {
     }
   }, [personalPath, t, updateSettings]);
 
-  const handleOpenFolder = useCallback(async (path: string) => {
-    const api = window.electronAPI;
-    if (!api || !path) {
-      toast.error(t('errors.directory.pathMissing'));
-      return;
-    }
-    try {
-      await api.files.openFolder(path);
-    } catch {
-      toast.error(t('errors.directory.openFolderFailed'));
-    }
-  }, [t]);
+  const handleOpenFolder = useCallback(
+    async (path: string) => {
+      const api = window.electronAPI;
+      if (!api || !path) {
+        toast.error(t('errors.directory.pathMissing'));
+        return;
+      }
+      try {
+        await api.files.openFolder(path);
+      } catch {
+        toast.error(t('errors.directory.openFolderFailed'));
+      }
+    },
+    [t],
+  );
 
   return (
     <div className="space-y-4">
@@ -220,7 +178,7 @@ export function DirectoryPathCard() {
       {/* Sub-directory cards */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Received directory */}
-        <GlassCard className="p-4">
+        <GlassCard className="space-y-3 p-4">
           <div className="flex items-center gap-3">
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
@@ -232,12 +190,6 @@ export function DirectoryPathCard() {
               <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
                 {t('directory.pathCard.receivedDirectory')}
               </h4>
-              <code
-                className="mt-0.5 block truncate text-xs font-mono text-muted-foreground"
-                title={receivePath}
-              >
-                {receivePath || '--'}
-              </code>
             </div>
             <Button
               variant="outline"
@@ -250,10 +202,17 @@ export function DirectoryPathCard() {
               {t('common.actions.open')}
             </Button>
           </div>
+          <code
+            className="block w-full truncate rounded-md px-2.5 py-1.5 text-xs font-mono text-muted-foreground"
+            style={{ background: colors.pathBg }}
+            title={receivePath}
+          >
+            {receivePath || '--'}
+          </code>
         </GlassCard>
 
         {/* Personal directory */}
-        <GlassCard className="flex flex-col justify-between p-4">
+        <GlassCard className="space-y-3 p-4">
           <div className="flex items-center gap-3">
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
@@ -265,12 +224,6 @@ export function DirectoryPathCard() {
               <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
                 {t('directory.pathCard.personalDirectory')}
               </h4>
-              <code
-                className="mt-0.5 block truncate text-xs font-mono text-muted-foreground"
-                title={personalPath}
-              >
-                {personalPath || '--'}
-              </code>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button
@@ -282,58 +235,22 @@ export function DirectoryPathCard() {
                 <FolderOpen className="mr-1 h-3.5 w-3.5" />
                 {t('common.actions.open')}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleChangePersonal}
-                disabled={saving}
-              >
+              <Button variant="outline" size="sm" onClick={handleChangePersonal} disabled={saving}>
                 {t('common.actions.change')}
               </Button>
             </div>
           </div>
-
-          {/* Remote Sync Promotion / Account Panel */}
-          <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-medium text-foreground">
-                {t('settings.filePath.remoteFeaturePrompt', { defaultValue: '遠端傳輸功能' })}
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                {session ? (
-                  <>
-                    {t('settings.giftCard.phoneLogin.loggedInAs')}
-                    {session.phone ? ` (${session.phone})` : session.email ? ` (${session.email})` : ''}
-                  </>
-                ) : (
-                  t('settings.filePath.remoteFeaturePromptDetail', { defaultValue: '登入後可使用遠端同步' })
-                )}
-              </p>
-            </div>
-            {session ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void handleLogout()}
-                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-destructive shrink-0"
-              >
-                {t('settings.giftCard.phoneLogin.logout')}
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setLoginDialogOpen(true)}
-                className="h-7 px-2.5 text-xs border-blue-200 text-blue-600 hover:bg-blue-50/50 shrink-0"
-              >
-                {t('settings.giftCard.phoneLogin.login')}
-              </Button>
-            )}
-          </div>
+          <code
+            className="block w-full truncate rounded-md px-2.5 py-1.5 text-xs font-mono text-muted-foreground"
+            style={{ background: colors.pathBg }}
+            title={personalPath}
+          >
+            {personalPath || '--'}
+          </code>
         </GlassCard>
 
         {/* Shared directory */}
-        <GlassCard className="p-4">
+        <GlassCard className="space-y-3 p-4">
           <div className="flex items-center gap-3">
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
@@ -345,12 +262,6 @@ export function DirectoryPathCard() {
               <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
                 {t('directory.pathCard.sharedDirectory')}
               </h4>
-              <code
-                className="mt-0.5 block truncate text-xs font-mono text-muted-foreground"
-                title={sharedPath}
-              >
-                {sharedPath || '--'}
-              </code>
             </div>
             <Button
               variant="outline"
@@ -363,16 +274,15 @@ export function DirectoryPathCard() {
               {t('common.actions.open')}
             </Button>
           </div>
+          <code
+            className="block w-full truncate rounded-md px-2.5 py-1.5 text-xs font-mono text-muted-foreground"
+            style={{ background: colors.pathBg }}
+            title={sharedPath}
+          >
+            {sharedPath || '--'}
+          </code>
         </GlassCard>
       </div>
-
-      <LoginDialog
-        open={loginDialogOpen}
-        onOpenChange={setLoginDialogOpen}
-        onLoginSuccess={refreshSession}
-        title={t('settings.filePath.remoteFeaturePrompt')}
-        description={t('settings.filePath.remoteFeaturePromptDetail')}
-      />
     </div>
   );
 }

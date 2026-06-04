@@ -171,6 +171,24 @@ describe('DirectoryPathCard', () => {
     expect(screen.getByText('个人共享目录')).toBeInTheDocument();
   });
 
+  it('does not render account login or logout controls in the personal directory card', () => {
+    useAuthStore.setState({ session: { loggedIn: true, phone: '+8613800138000' }, loading: false });
+
+    render(<DirectoryPathCard />);
+
+    const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
+    expect(personalCard).not.toBeNull();
+    expect(
+      within(personalCard as HTMLElement).queryByText('远端同步与传输'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(personalCard as HTMLElement).queryByRole('button', { name: '登入' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(personalCard as HTMLElement).queryByRole('button', { name: '登出' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders root directory label', () => {
     render(<DirectoryPathCard />);
     expect(screen.getByText('根目录路径')).toBeInTheDocument();
