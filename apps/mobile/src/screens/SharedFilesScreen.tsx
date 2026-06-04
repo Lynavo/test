@@ -107,6 +107,19 @@ function formatDownloadPercent(value: number): string {
   return `${Math.round(clampDownloadProgress(value) * 100)}%`;
 }
 
+export function normalizeDirectoryPath(path: string): string {
+  return path.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}
+
+export function parentDirectoryPath(path: string): string {
+  const normalized = normalizeDirectoryPath(path);
+  if (!normalized) return '';
+
+  const parts = normalized.split('/').filter(Boolean);
+  parts.pop();
+  return parts.join('/');
+}
+
 function sharedFilesCompletedDownloadsStorageKey(
   deviceId: string,
   scope: DirectoryScope,
@@ -305,10 +318,11 @@ export function SharedFilesScreen() {
 
   const loadFiles = useCallback(
     (path: string): Promise<void> => {
+      const loadPath = normalizeDirectoryPath(path);
       const activeLoad = activeLoadRef.current;
       if (
         activeLoad?.scope === activeDirectoryScope &&
-        activeLoad.path === path
+        activeLoad.path === loadPath
       ) {
         return activeLoad.promise;
       }
@@ -344,7 +358,7 @@ export function SharedFilesScreen() {
         setActiveDeviceId(availability.deviceId);
 
         try {
-          const result = await browseDirectory(loadScope, path);
+          const result = await browseDirectory(loadScope, loadPath);
           if (!isCurrentLoad()) {
             return;
           }
@@ -382,7 +396,7 @@ export function SharedFilesScreen() {
 
       activeLoadRef.current = {
         scope: loadScope,
-        path,
+        path: loadPath,
         promise: loadPromise,
       };
       const clearActiveLoad = () => {
@@ -622,14 +636,12 @@ export function SharedFilesScreen() {
   // ---------------------------------------------------------------------------
 
   const navigateIntoDir = useCallback((path: string) => {
-    setCurrentPath(path);
+    setCurrentPath(normalizeDirectoryPath(path));
   }, []);
 
   const navigateBack = useCallback(() => {
-    const parts = currentPath.split('/').filter(Boolean);
-    parts.pop();
-    setCurrentPath(parts.join('/'));
-  }, [currentPath]);
+    setCurrentPath(previous => parentDirectoryPath(previous));
+  }, []);
 
   const selectDirectoryScope = useCallback(
     (scope: DirectoryScope) => {
@@ -904,6 +916,27 @@ export function SharedFilesScreen() {
   );
 
   const keyExtractor = useCallback((item: SharedFileDTO) => item.path, []);
+  const canNavigateToParent = currentPath !== '';
+  const renderParentDirectory = canNavigateToParent ? (
+    <TouchableOpacity
+      style={[styles.fileRow, styles.parentDirectoryRow]}
+      activeOpacity={0.7}
+      onPress={navigateBack}
+      testID="shared-file-parent-directory"
+    >
+      <View style={styles.fileIconWrapper}>
+        <Icon name="arrow-up-outline" size={18} color={DARK} />
+      </View>
+      <View style={styles.fileInfo}>
+        <Text style={styles.fileName} numberOfLines={1}>
+          {t('sharedFiles.files.parentFolder')}
+        </Text>
+        <Text style={styles.fileMeta}>
+          {t('sharedFiles.files.parentFolderMeta')}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  ) : null;
 
   // ---------------------------------------------------------------------------
   // Content
@@ -1008,7 +1041,7 @@ export function SharedFilesScreen() {
         </TouchableOpacity>
       </View>
     );
-  } else if (files.length === 0) {
+  } else if (files.length === 0 && !canNavigateToParent) {
     content = (
       <View style={styles.stateContainer}>
         <View style={styles.stateIconCircle}>
@@ -1030,6 +1063,19 @@ export function SharedFilesScreen() {
         keyExtractor={keyExtractor}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={renderParentDirectory}
+        ListEmptyComponent={
+          canNavigateToParent ? (
+            <View style={styles.inlineEmptyState}>
+              <Text style={styles.stateTitle}>
+                {t('sharedFiles.emptyState.title')}
+              </Text>
+              <Text style={styles.stateMessage}>
+                {t('sharedFiles.emptyState.message')}
+              </Text>
+            </View>
+          ) : null
+        }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     );
@@ -1074,6 +1120,7 @@ export function SharedFilesScreen() {
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.7}
+            testID="shared-files-back-button"
             onPress={
               currentPath !== '' ? navigateBack : () => navigation.goBack()
             }
@@ -1332,6 +1379,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
+  parentDirectoryRow: {
+    marginBottom: 8,
+  },
   fileThumbnail: {
     width: 44,
     height: 44,
@@ -1418,6 +1468,11 @@ const styles = StyleSheet.create({
     color: '#8aabbd',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  inlineEmptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 48,
   },
   loadingText: {
     fontSize: 14,

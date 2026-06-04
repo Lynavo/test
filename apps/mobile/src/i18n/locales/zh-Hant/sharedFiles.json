@@ -9,7 +9,9 @@
   "loading": "載入中...",
   "files": {
     "folder": "資料夾",
-    "downloaded": "已下載"
+    "downloaded": "已下載",
+    "parentFolder": "上一級",
+    "parentFolderMeta": "返回上層目錄"
   },
   "connectionStatus": {
     "lan": "區域網路在線",

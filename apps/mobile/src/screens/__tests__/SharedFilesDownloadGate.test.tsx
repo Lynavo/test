@@ -78,7 +78,11 @@ jest.mock('../../services/SyncEngineModule', () => ({
 }));
 
 import i18n from '../../i18n';
-import { SharedFilesScreen } from '../SharedFilesScreen';
+import {
+  SharedFilesScreen,
+  normalizeDirectoryPath,
+  parentDirectoryPath,
+} from '../SharedFilesScreen';
 import { useAuth } from '../../stores/auth-store';
 
 const alertSpy = jest.spyOn(Alert, 'alert');
@@ -101,6 +105,26 @@ const FAKE_OTHER_FILE = {
   modifiedAt: '2026-06-02T03:05:00.000Z',
   type: 'video',
   isDirectory: false,
+  thumbnailUrl: null,
+};
+
+const FAKE_DIRECTORY = {
+  name: 'Projects',
+  path: 'Projects',
+  size: 0,
+  modifiedAt: '2026-06-02T03:10:00.000Z',
+  type: 'other',
+  isDirectory: true,
+  thumbnailUrl: null,
+};
+
+const FAKE_NESTED_DIRECTORY = {
+  name: 'June',
+  path: 'Projects/June',
+  size: 0,
+  modifiedAt: '2026-06-02T03:15:00.000Z',
+  type: 'other',
+  isDirectory: true,
   thumbnailUrl: null,
 };
 
@@ -161,6 +185,21 @@ beforeEach(() => {
   });
 });
 
+describe('SharedFilesScreen directory navigation helpers', () => {
+  test('normalizes directory paths before requesting shared files', () => {
+    expect(normalizeDirectoryPath(' Projects/June ')).toBe('Projects/June');
+    expect(normalizeDirectoryPath('/Projects/June/')).toBe('Projects/June');
+    expect(normalizeDirectoryPath('Projects\\June')).toBe('Projects/June');
+  });
+
+  test('returns the parent directory path', () => {
+    expect(parentDirectoryPath('Projects/June')).toBe('Projects');
+    expect(parentDirectoryPath('/Projects/June/')).toBe('Projects');
+    expect(parentDirectoryPath('Projects')).toBe('');
+    expect(parentDirectoryPath('')).toBe('');
+  });
+});
+
 describe('SharedFilesScreen download progress', () => {
   test('shows offline shared-list status without reusing connected binding state', async () => {
     (useAuth as jest.Mock).mockReturnValue({
@@ -214,6 +253,110 @@ describe('SharedFilesScreen download progress', () => {
       });
     });
     expect(getByText('Relay online')).toBeTruthy();
+  });
+
+  test('returns to the parent directory from the header back button', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockBrowseDirectory.mockImplementation((_scope: string, path: string) => {
+      if (path === 'Projects') {
+        return Promise.resolve({
+          scope: 'team',
+          path,
+          files: [FAKE_NESTED_DIRECTORY],
+        });
+      }
+      return Promise.resolve({
+        scope: 'team',
+        path: '',
+        files: [FAKE_DIRECTORY, FAKE_FILE],
+      });
+    });
+
+    const { getByText, getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByText('Projects'));
+
+    await act(async () => {
+      fireEvent.press(getByText('Projects'));
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(mockBrowseDirectory).toHaveBeenCalledWith('team', 'Projects'),
+    );
+    expect(getByText('June')).toBeTruthy();
+
+    mockBrowseDirectory.mockClear();
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-files-back-button'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(mockBrowseDirectory).toHaveBeenCalledWith('team', ''),
+    );
+    expect(getByText('Projects')).toBeTruthy();
+  });
+
+  test('returns to the parent directory from the parent folder row', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockBrowseDirectory.mockImplementation((_scope: string, path: string) => {
+      if (path === 'Projects/June') {
+        return Promise.resolve({
+          scope: 'team',
+          path,
+          files: [],
+        });
+      }
+      if (path === 'Projects') {
+        return Promise.resolve({
+          scope: 'team',
+          path,
+          files: [FAKE_NESTED_DIRECTORY],
+        });
+      }
+      return Promise.resolve({
+        scope: 'team',
+        path: '',
+        files: [FAKE_DIRECTORY],
+      });
+    });
+
+    const { getByText, getByTestId } = render(<SharedFilesScreen />);
+
+    await waitFor(() => getByText('Projects'));
+    await act(async () => {
+      fireEvent.press(getByText('Projects'));
+      await Promise.resolve();
+    });
+    await waitFor(() => getByText('June'));
+    await act(async () => {
+      fireEvent.press(getByText('June'));
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(mockBrowseDirectory).toHaveBeenCalledWith(
+        'team',
+        'Projects/June',
+      ),
+    );
+    expect(getByText('Parent Folder')).toBeTruthy();
+
+    mockBrowseDirectory.mockClear();
+    await act(async () => {
+      fireEvent.press(getByTestId('shared-file-parent-directory'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(mockBrowseDirectory).toHaveBeenCalledWith('team', 'Projects'),
+    );
+    expect(getByText('June')).toBeTruthy();
   });
 
   test('switches to the personal directory scope from the root', async () => {

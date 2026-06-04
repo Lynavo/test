@@ -9,7 +9,9 @@
   "loading": "加载中...",
   "files": {
     "folder": "文件夹",
-    "downloaded": "已下载"
+    "downloaded": "已下载",
+    "parentFolder": "上一级",
+    "parentFolderMeta": "返回上层目录"
   },
   "connectionStatus": {
     "lan": "局域网在线",

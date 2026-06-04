@@ -9,7 +9,9 @@
   "loading": "Loading...",
   "files": {
     "folder": "Folder",
-    "downloaded": "Downloaded"
+    "downloaded": "Downloaded",
+    "parentFolder": "Parent Folder",
+    "parentFolderMeta": "Up one level"
   },
   "connectionStatus": {
     "lan": "LAN online",
