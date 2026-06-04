@@ -794,14 +794,29 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
         );
         return false;
       }
-      await sidecarClient.syncTunnelCredentials({
+      log.warn(
+        '[sidecar-client] Clearing sidecar tunnel credentials: no active auth session or access token.',
+        {
+          hasSession: Boolean(session),
+          hasAccessToken: Boolean(session?.accessToken),
+        },
+      );
+      const res = await sidecarClient.syncTunnelCredentials({
         signalingUrl: '',
         accessToken: '',
         iceServers: [],
       });
+      log.info('[sidecar-client] Sidecar tunnel credentials clear request completed.', {
+        ok: res.ok,
+        message: res.message,
+      });
       return true;
     }
 
+    const turnBaseUrl = sidecarClient.getApiBaseUrl();
+    log.info('[sidecar-client] Fetching TURN credentials for sidecar tunnel.', {
+      baseUrl: turnBaseUrl,
+    });
     let turnRes = await sidecarClient.fetchTurnCredentials();
     if (turnRes && turnRes.code === 1006) {
       log.info(
@@ -826,6 +841,12 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
     if (!turnRes || turnRes.code !== 0 || !turnRes.data) {
       throw new Error(`Fetch TURN credentials failed with code: ${turnRes?.code}`);
     }
+    log.info('[sidecar-client] TURN credentials fetched for sidecar tunnel.', {
+      baseUrl: sidecarClient.getApiBaseUrl(),
+      urlsCount: turnRes.data.urls.length,
+      hasUsername: Boolean(turnRes.data.username),
+      hasCredential: Boolean(turnRes.data.credential),
+    });
 
     const iceServers: ICEServerPayload[] = [
       {
@@ -836,10 +857,18 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
     ];
 
     const signalingUrl = sidecarClient.getApiBaseUrl();
+    log.info('[sidecar-client] Applying sidecar tunnel credentials.', {
+      signalingUrl,
+      iceServerCount: iceServers.length,
+    });
     const res = await sidecarClient.syncTunnelCredentials({
       signalingUrl,
       accessToken: session.accessToken,
       iceServers,
+    });
+    log.info('[sidecar-client] Sidecar tunnel credentials apply request completed.', {
+      ok: res.ok,
+      message: res.message,
     });
     return res.ok;
   } catch (error) {

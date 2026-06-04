@@ -4,6 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { logInfoMock, logWarnMock, logErrorMock } = vi.hoisted(() => ({
+  logInfoMock: vi.fn(),
+  logWarnMock: vi.fn(),
+  logErrorMock: vi.fn(),
+}));
+
 vi.mock('electron', () => {
   const { tmpdir } = require('node:os');
   const { join } = require('node:path');
@@ -29,6 +35,14 @@ vi.mock('electron', () => {
     },
   };
 });
+
+vi.mock('electron-log', () => ({
+  default: {
+    info: logInfoMock,
+    warn: logWarnMock,
+    error: logErrorMock,
+  },
+}));
 
 type RequestOptions = {
   method?: string;
@@ -70,6 +84,7 @@ describe('sidecarClient', () => {
         unlinkSync(sessionFile);
       } catch {}
     }
+    vi.clearAllMocks();
   });
 
   it('fetches client config from the public API without user auth', async () => {
@@ -1684,6 +1699,62 @@ describe('sidecarClient', () => {
       vi.resetModules();
     });
 
+    it('logs why sidecar tunnel credentials are cleared when no auth session is available', async () => {
+      const sidecarPayloads: unknown[] = [];
+      const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn((chunk: string) => {
+          sidecarPayloads.push(JSON.parse(chunk));
+        });
+        req.end = vi.fn();
+        callback(createResponse(200, JSON.stringify({ ok: true, message: 'credentials cleared' })));
+        return req;
+      });
+      const httpsRequest = vi.fn();
+
+      vi.doMock('node:http', () => ({
+        default: { request: httpRequest },
+        request: httpRequest,
+      }));
+      vi.doMock('node:https', () => ({
+        default: { request: httpsRequest },
+        request: httpsRequest,
+      }));
+
+      vi.resetModules();
+      const { syncCredentialsToSidecar } = await import('../sidecar-client');
+
+      await expect(syncCredentialsToSidecar()).resolves.toBe(true);
+
+      expect(sidecarPayloads).toEqual([
+        {
+          signalingUrl: '',
+          accessToken: '',
+          iceServers: [],
+        },
+      ]);
+      expect(logWarnMock).toHaveBeenCalledWith(
+        '[sidecar-client] Clearing sidecar tunnel credentials: no active auth session or access token.',
+        {
+          hasSession: false,
+          hasAccessToken: false,
+        },
+      );
+      expect(logInfoMock).toHaveBeenCalledWith(
+        '[sidecar-client] Sidecar tunnel credentials clear request completed.',
+        {
+          ok: true,
+          message: 'credentials cleared',
+        },
+      );
+
+      vi.resetModules();
+    });
+
     it('uses the persisted auth base URL for TURN credentials and sidecar signaling URL', async () => {
       const { writeFileSync } = require('node:fs');
       const { join } = require('node:path');
@@ -1761,6 +1832,35 @@ describe('sidecarClient', () => {
           accessToken: 'review-access-token',
         }),
       ]);
+      expect(logInfoMock).toHaveBeenCalledWith(
+        '[sidecar-client] Fetching TURN credentials for sidecar tunnel.',
+        {
+          baseUrl: 'https://review-api.vividrop.cn',
+        },
+      );
+      expect(logInfoMock).toHaveBeenCalledWith(
+        '[sidecar-client] TURN credentials fetched for sidecar tunnel.',
+        {
+          baseUrl: 'https://review-api.vividrop.cn',
+          urlsCount: 1,
+          hasUsername: true,
+          hasCredential: true,
+        },
+      );
+      expect(logInfoMock).toHaveBeenCalledWith(
+        '[sidecar-client] Applying sidecar tunnel credentials.',
+        {
+          signalingUrl: 'https://review-api.vividrop.cn',
+          iceServerCount: 1,
+        },
+      );
+      expect(logInfoMock).toHaveBeenCalledWith(
+        '[sidecar-client] Sidecar tunnel credentials apply request completed.',
+        {
+          ok: true,
+          message: 'success',
+        },
+      );
 
       vi.resetModules();
     });
