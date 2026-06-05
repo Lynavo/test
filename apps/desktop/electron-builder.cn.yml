@@ -13,6 +13,10 @@ mac:
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
+  extendInfo:
+    NSDesktopFolderUsageDescription: Vivi Drop 需要存取桌面資料夾，用於同步、儲存與開啟素材。
+    NSDocumentsFolderUsageDescription: Vivi Drop 需要存取文件資料夾，用於同步、儲存與開啟素材。
+    NSDownloadsFolderUsageDescription: Vivi Drop 需要存取下載資料夾，用於同步、儲存與開啟素材。
   binaries:
     - Contents/Resources/syncflow-sidecar
   extraResources:
@@ -35,6 +39,9 @@ dmg:
 mas:
   extendInfo:
     ITSAppUsesNonExemptEncryption: false
+    NSDesktopFolderUsageDescription: Vivi Drop 需要存取桌面資料夾，用於同步、儲存與開啟素材。
+    NSDocumentsFolderUsageDescription: Vivi Drop 需要存取文件資料夾，用於同步、儲存與開啟素材。
+    NSDownloadsFolderUsageDescription: Vivi Drop 需要存取下載資料夾，用於同步、儲存與開啟素材。
   entitlements: resources/entitlements.mas.plist
   entitlementsInherit: resources/entitlements.mas.inherit.plist
   provisioningProfile: resources/embedded.provisionprofile

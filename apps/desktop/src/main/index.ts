@@ -6,6 +6,7 @@ import { PowerSaveCoordinator } from './power-save-coordinator';
 import { PowerSaveManager } from './power-save-manager';
 import { PowerSavePreferences } from './power-save-preferences';
 import { PowerSaveSettingsController } from './power-save-settings-controller';
+import { requestMacFilesAndFoldersPermissionsOnStartup } from './macos-files-folders-permissions';
 import { attachRendererLogging } from './renderer-logging';
 import { SidecarManager } from './sidecar-manager';
 import { sidecarClient } from './sidecar-client';
@@ -87,6 +88,7 @@ app.whenReady().then(async () => {
   log.info(
     `[App] ready version=${app.getVersion()} packaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`,
   );
+  void requestMacFilesAndFoldersPermissionsOnStartup();
   const powerSavePreferences = new PowerSavePreferences(app.getPath('userData'));
   powerSaveManager.setEnabled(powerSavePreferences.read().preventSleepDuringTransfer);
   const powerSaveSettingsController = new PowerSaveSettingsController(
