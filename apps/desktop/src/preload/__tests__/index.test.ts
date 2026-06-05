@@ -14,6 +14,10 @@ const exposed = vi.hoisted(() => ({
           getAuthSession(): Promise<unknown>;
           logout(): Promise<unknown>;
         };
+        power: {
+          getState(): Promise<unknown>;
+          setPreventSleepDuringTransfer(enabled: boolean): Promise<unknown>;
+        };
       },
   invoke: vi.fn(),
   on: vi.fn(),
@@ -47,9 +51,9 @@ describe('preload electronAPI', () => {
 
     await import('../index');
 
-    await expect(
-      exposed.api?.sidecar.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' }),
-    ).resolves.toEqual({ ok: true });
+    await expect(exposed.api?.sidecar.redeemGiftCard({ code: 'ABCD-EFGH-IJKL' })).resolves.toEqual({
+      ok: true,
+    });
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:redeem-gift-card', {
       code: 'ABCD-EFGH-IJKL',
     });
@@ -100,5 +104,22 @@ describe('preload electronAPI', () => {
     await expect(exposed.api?.auth.logout()).resolves.toEqual({ ok: true });
     expect(exposed.invoke).toHaveBeenCalledWith('auth:get-session');
     expect(exposed.invoke).toHaveBeenCalledWith('auth:logout');
+  });
+
+  it('maps power save calls to IPC channels', async () => {
+    exposed.invoke.mockResolvedValue({ preventSleepDuringTransfer: true, blockingSleep: false });
+
+    await import('../index');
+
+    await expect(exposed.api?.power.getState()).resolves.toEqual({
+      preventSleepDuringTransfer: true,
+      blockingSleep: false,
+    });
+    await expect(exposed.api?.power.setPreventSleepDuringTransfer(false)).resolves.toEqual({
+      preventSleepDuringTransfer: true,
+      blockingSleep: false,
+    });
+    expect(exposed.invoke).toHaveBeenCalledWith('power-save:get-state');
+    expect(exposed.invoke).toHaveBeenCalledWith('power-save:set-prevent-sleep', false);
   });
 });

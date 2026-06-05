@@ -419,4 +419,31 @@ describe('registerIpcHandlers', () => {
     });
     expect(checkForUpdates).toHaveBeenCalledTimes(1);
   });
+
+  it('registers power-save preference IPC', async () => {
+    const powerSave = {
+      getState: vi.fn(() => ({
+        preventSleepDuringTransfer: true,
+        blockingSleep: false,
+      })),
+      setPreventSleepDuringTransfer: vi.fn((enabled: boolean) => ({
+        preventSleepDuringTransfer: enabled,
+        blockingSleep: enabled,
+      })),
+    };
+
+    registerIpcHandlers({ retryStart: vi.fn() } as never, powerSave);
+
+    await expect(handlers.get(IPC.POWER_SAVE_GET_STATE)?.()).resolves.toEqual({
+      preventSleepDuringTransfer: true,
+      blockingSleep: false,
+    });
+    await expect(
+      handlers.get(IPC.POWER_SAVE_SET_PREVENT_SLEEP)?.(undefined, false),
+    ).resolves.toEqual({
+      preventSleepDuringTransfer: false,
+      blockingSleep: false,
+    });
+    expect(powerSave.setPreventSleepDuringTransfer).toHaveBeenCalledWith(false);
+  });
 });

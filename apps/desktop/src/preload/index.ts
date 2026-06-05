@@ -39,6 +39,8 @@ const IPC = {
   FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
+  POWER_SAVE_GET_STATE: 'power-save:get-state',
+  POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
 
 const electronAPI: ElectronAPI = {
@@ -130,6 +132,11 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.invoke(IPC.SUPPORT_EXPORT_DIAGNOSTICS, locale, description),
     checkForUpdates: () => ipcRenderer.invoke(IPC.SUPPORT_CHECK_FOR_UPDATES),
     getAppInfo: () => ipcRenderer.invoke(IPC.SUPPORT_APP_INFO),
+  },
+  power: {
+    getState: () => ipcRenderer.invoke(IPC.POWER_SAVE_GET_STATE),
+    setPreventSleepDuringTransfer: (enabled: boolean) =>
+      ipcRenderer.invoke(IPC.POWER_SAVE_SET_PREVENT_SLEEP, enabled),
   },
 };
 

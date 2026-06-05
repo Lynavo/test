@@ -96,12 +96,24 @@ const mockPlatform: ElectronAPI['platform'] = {
   getLocalIPs: () => ['192.168.1.100'],
 };
 
+const mockPower: ElectronAPI['power'] = {
+  getState: async () => ({
+    preventSleepDuringTransfer: true,
+    blockingSleep: false,
+  }),
+  setPreventSleepDuringTransfer: async (enabled) => ({
+    preventSleepDuringTransfer: enabled,
+    blockingSleep: false,
+  }),
+};
+
 const mockAPI: ElectronAPI = {
   sidecar: mockSidecar,
   files: mockFiles,
   auth: mockAuth,
   events: mockEvents,
   platform: mockPlatform,
+  power: mockPower,
   support: {
     uploadDiagnostics: async () => ({
       refId: 'local-mock',

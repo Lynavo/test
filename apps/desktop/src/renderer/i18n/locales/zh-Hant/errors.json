@@ -34,6 +34,8 @@
   "settings": {
     "saveDeviceNameFailed": "儲存裝置名稱失敗",
     "regenerateCodeFailed": "重新產生連線碼失敗",
+    "powerSaveLoadFailed": "讀取電源管理設定失敗",
+    "powerSaveUpdateFailed": "儲存電源管理設定失敗",
     "redeemGiftCardAuthRequired": "請先用手機號碼登入後繼續兌換禮品卡。",
     "redeemGiftCardAlreadyRedeemed": "此帳號已兌換過此禮品卡",
     "redeemGiftCardExpired": "禮品卡已過期",

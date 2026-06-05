@@ -1,14 +1,17 @@
 import WebSocket from 'ws';
 import { BrowserWindow } from 'electron';
 import log from 'electron-log';
-import { SIDECAR_HTTP_PORT } from '@syncflow/contracts';
+import { SIDECAR_HTTP_PORT, type SidecarEvent } from '@syncflow/contracts';
 
 export class WsBridge {
   private ws: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manualDisconnect = false;
 
-  constructor(private getWindow: () => BrowserWindow | null) {}
+  constructor(
+    private getWindow: () => BrowserWindow | null,
+    private onSidecarEvent: (event: SidecarEvent) => void = () => undefined,
+  ) {}
 
   connect(): void {
     this.manualDisconnect = false;
@@ -41,14 +44,23 @@ export class WsBridge {
       if (this.ws !== ws) {
         return;
       }
+      let event: SidecarEvent;
       try {
-        const event = JSON.parse(data.toString());
-        const win = this.getWindow();
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('sidecar:event', event);
-        }
+        event = JSON.parse(data.toString()) as SidecarEvent;
       } catch (err) {
         log.warn('[WsBridge] failed to parse event', err);
+        return;
+      }
+
+      try {
+        this.onSidecarEvent(event);
+      } catch (err) {
+        log.warn('[WsBridge] sidecar event listener failed', err);
+      }
+
+      const win = this.getWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('sidecar:event', event);
       }
     });
 
@@ -65,9 +77,7 @@ export class WsBridge {
         return;
       }
 
-      log.info(
-        `[WsBridge] disconnected, reconnecting in 3s code=${code} reason=${reasonText}`,
-      );
+      log.info(`[WsBridge] disconnected, reconnecting in 3s code=${code} reason=${reasonText}`);
       this.scheduleReconnect();
     });
 

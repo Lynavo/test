@@ -7,6 +7,8 @@
     "deviceNameDescription": "手机端会看到这个名称",
     "connectionCode": "连接码管理",
     "connectionCodeDescription": "重新生成后，旧手机需要重新配对",
+    "powerSave": "电源管理",
+    "powerSaveDescription": "同步时保持桌面端可用",
     "shareAddress": "局域网共享",
     "shareAddressDescription": "检测这台电脑的 SMB 共享状态，供手机读取共享目录",
     "giftCard": "礼品卡",
@@ -27,6 +29,12 @@
   },
   "connectionCode": {
     "regenerate": "重新生成"
+  },
+  "powerSave": {
+    "preventSleepTitle": "同步期间防止电脑待机",
+    "preventSleepDescription": "仅在手机正在同步时保持电脑唤醒，传输结束后自动恢复系统待机设置。",
+    "blockingSleep": "正在保持唤醒",
+    "idle": "等待同步"
   },
   "giftCard": {
     "title": "礼品卡兑换",

@@ -34,6 +34,8 @@
   "settings": {
     "saveDeviceNameFailed": "Failed to save device name",
     "regenerateCodeFailed": "Failed to regenerate pairing code",
+    "powerSaveLoadFailed": "Failed to load power management settings",
+    "powerSaveUpdateFailed": "Failed to save power management settings",
     "redeemGiftCardAuthRequired": "Sign in with your phone number to continue redeeming the gift card.",
     "redeemGiftCardAlreadyRedeemed": "This account has already redeemed this gift card",
     "redeemGiftCardExpired": "This gift card has expired",

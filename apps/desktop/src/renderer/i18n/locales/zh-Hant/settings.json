@@ -7,6 +7,8 @@
     "deviceNameDescription": "手機端會看到這個名稱",
     "connectionCode": "連線碼管理",
     "connectionCodeDescription": "重新產生後，舊手機需要重新配對",
+    "powerSave": "電源管理",
+    "powerSaveDescription": "同步時保持桌面端可用",
     "shareAddress": "區域網路共享",
     "shareAddressDescription": "偵測這台電腦的 SMB 共享狀態，供手機讀取共享目錄",
     "giftCard": "禮品卡",
@@ -27,6 +29,12 @@
   },
   "connectionCode": {
     "regenerate": "重新產生"
+  },
+  "powerSave": {
+    "preventSleepTitle": "同步期間防止電腦待機",
+    "preventSleepDescription": "僅在手機正在同步時保持電腦喚醒，傳輸結束後自動恢復系統待機設定。",
+    "blockingSleep": "正在保持喚醒",
+    "idle": "等待同步"
   },
   "giftCard": {
     "title": "禮品卡兌換",

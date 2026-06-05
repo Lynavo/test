@@ -18,6 +18,10 @@ vi.mock('../BonjourRuntimeSection', () => ({
   ),
 }));
 
+vi.mock('../PowerSaveSection', () => ({
+  PowerSaveSection: () => <div data-testid="power-save-section">PowerSaveSection</div>,
+}));
+
 vi.mock('../ShareAddressSection', () => ({
   ShareAddressSection: () => <div data-testid="share-address-section">ShareAddressSection</div>,
 }));
@@ -81,6 +85,13 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     expect(screen.getByTestId('support-section')).toBeInTheDocument();
+  });
+
+  it('renders power save section', () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByText('电源管理')).toBeInTheDocument();
+    expect(screen.getByTestId('power-save-section')).toBeInTheDocument();
   });
 
   it('renders shared address status section', () => {
