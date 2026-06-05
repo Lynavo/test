@@ -726,7 +726,6 @@ export function SharedFilesScreen() {
           activeDirectoryScope,
           file.path,
         );
-        const savedLocation = fallbackSavedLocation(file, result, t);
         const completedDownloadId = sharedFileCompletedDownloadId(
           activeDirectoryScope,
           file,
@@ -750,6 +749,7 @@ export function SharedFilesScreen() {
           });
         }
         if (result.savedToPhotos) {
+          const savedLocation = fallbackSavedLocation(file, result, t);
           Alert.alert(
             t('sharedFiles.dialogs.downloadComplete'),
             t('sharedFiles.dialogs.downloadSavedToPhotos', {
@@ -757,12 +757,11 @@ export function SharedFilesScreen() {
               location: savedLocation,
             }),
           );
-        } else if (savedLocation) {
+        } else {
           Alert.alert(
             t('sharedFiles.dialogs.downloadComplete'),
-            t('sharedFiles.dialogs.downloadSaved', {
+            t('sharedFiles.dialogs.downloadSavedToFiles', {
               name: file.name,
-              location: savedLocation,
             }),
           );
         }

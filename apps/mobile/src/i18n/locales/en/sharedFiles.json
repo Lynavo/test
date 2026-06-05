@@ -46,6 +46,7 @@
   },
   "dialogs": {
     "downloadSavedToPhotos": "{{name}} saved to {{location}}",
+    "downloadSavedToFiles": "{{name}} saved to Files",
     "downloadSaved": "{{name}} saved to {{location}}",
     "downloadComplete": "Download complete",
     "downloadFailed": "Download Failed",

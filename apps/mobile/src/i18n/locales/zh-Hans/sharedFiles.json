@@ -46,6 +46,7 @@
   },
   "dialogs": {
     "downloadSavedToPhotos": "{{name}} 已保存到 {{location}}",
+    "downloadSavedToFiles": "{{name}} 已保存到文件",
     "downloadSaved": "{{name}} 已保存到 {{location}}",
     "downloadComplete": "下载完成",
     "downloadFailed": "下载失败",

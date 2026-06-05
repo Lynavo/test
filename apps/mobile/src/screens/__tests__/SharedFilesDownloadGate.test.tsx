@@ -915,7 +915,7 @@ describe('SharedFilesScreen download progress', () => {
     expect(getByText('clip.mp4')).toBeTruthy();
   });
 
-  test('shows the saved location after download completes', async () => {
+  test('shows the files destination without sandbox path after download completes', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
       loadSubscription: jest.fn(),
@@ -936,8 +936,12 @@ describe('SharedFilesScreen download progress', () => {
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith(
         'Download complete',
-        expect.stringContaining('/tmp/syncflow_shared_downloads/photo.jpg'),
+        'photo.jpg saved to Files',
       ),
+    );
+    expect(alertSpy).not.toHaveBeenCalledWith(
+      'Download complete',
+      expect.stringContaining('/tmp/syncflow_shared_downloads/photo.jpg'),
     );
   });
 
@@ -998,7 +1002,7 @@ describe('SharedFilesScreen download progress', () => {
     );
   });
 
-  test('shows the saved location when native returns display location only', async () => {
+  test('shows the files destination when native returns display location only', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
       loadSubscription: jest.fn(),
@@ -1020,8 +1024,12 @@ describe('SharedFilesScreen download progress', () => {
     await waitFor(() =>
       expect(alertSpy).toHaveBeenCalledWith(
         'Download complete',
-        expect.stringContaining('Documents/Vivi Drop/photo.jpg'),
+        'photo.jpg saved to Files',
       ),
+    );
+    expect(alertSpy).not.toHaveBeenCalledWith(
+      'Download complete',
+      expect.stringContaining('Documents/Vivi Drop/photo.jpg'),
     );
   });
 
