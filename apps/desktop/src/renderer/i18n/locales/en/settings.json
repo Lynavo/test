@@ -92,6 +92,9 @@
     "openReceived": "Open receive folder",
     "openPersonal": "Open personal shared folder",
     "openShared": "Open team shared folder",
+    "windowsDrives": "Local disks",
+    "windowsDrivesWithPath": "Local disks ({{path}})",
+    "restoreWindowsDrives": "Restore local disks",
     "remoteFeaturePrompt": "Remote Sync & Share",
     "remoteFeaturePromptDetail": "Sign in to enable P2P remote syncing"
   },

@@ -108,6 +108,7 @@ export interface SettingsDTO {
   rootPath: string;
   receivePath: string;
   personalPath: string;
+  personalPathMode?: 'path' | 'windowsDrives';
   sharedPath: string;
   shareAddress: string;
   shareStatus: ShareStatus;

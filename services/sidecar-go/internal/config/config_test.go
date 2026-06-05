@@ -203,8 +203,12 @@ func TestSetDefaultsFillsDataDirReceiveDirDeviceName(t *testing.T) {
 	if cfg.ReceiveDir != expectedReceiveDir {
 		t.Errorf("ReceiveDir = %q, want %q", cfg.ReceiveDir, expectedReceiveDir)
 	}
-	if cfg.PersonalShareDir != filepath.Join(expectedDataDir, "personal") {
-		t.Errorf("PersonalShareDir = %q, want %q", cfg.PersonalShareDir, filepath.Join(expectedDataDir, "personal"))
+	expectedPersonalShareDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	if cfg.PersonalShareDir != expectedPersonalShareDir {
+		t.Errorf("PersonalShareDir = %q, want %q", cfg.PersonalShareDir, expectedPersonalShareDir)
 	}
 
 	hostname, _ := os.Hostname()

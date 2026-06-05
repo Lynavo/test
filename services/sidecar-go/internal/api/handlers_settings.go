@@ -21,6 +21,7 @@ type settingsDTO struct {
 	RootPath       string `json:"rootPath"`
 	ReceivePath    string `json:"receivePath"`
 	PersonalPath   string `json:"personalPath"`
+	PersonalMode   string `json:"personalPathMode,omitempty"`
 	SharedPath     string `json:"sharedPath"`
 	ShareAddress   string `json:"shareAddress"`
 	ShareStatus    string `json:"shareStatus"`
@@ -169,25 +170,29 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "personal path must not be empty")
 			return
 		}
-		if !filepath.IsAbs(newPersonalPath) {
-			writeError(w, http.StatusBadRequest, "personal path must be an absolute path")
-			return
-		}
 
-		if err := os.MkdirAll(newPersonalPath, 0o755); err != nil {
-			slog.Error("cannot create personal directory", "path", newPersonalPath, "err", err)
-			writeError(w, http.StatusBadRequest, "cannot create directory: "+newPersonalPath)
-			return
+		usesWindowsDriveMode := usesWindowsPersonalVirtualDrivesForPath(newPersonalPath)
+		if !usesWindowsDriveMode {
+			if !filepath.IsAbs(newPersonalPath) {
+				writeError(w, http.StatusBadRequest, "personal path must be an absolute path")
+				return
+			}
+
+			if err := os.MkdirAll(newPersonalPath, 0o755); err != nil {
+				slog.Error("cannot create personal directory", "path", newPersonalPath, "err", err)
+				writeError(w, http.StatusBadRequest, "cannot create directory: "+newPersonalPath)
+				return
+			}
+			f, err := os.CreateTemp(newPersonalPath, ".syncflow_probe_*")
+			if err != nil {
+				slog.Error("personal directory not writable", "path", newPersonalPath, "err", err)
+				writeError(w, http.StatusBadRequest, "directory is not writable: "+newPersonalPath)
+				return
+			}
+			probePath := f.Name()
+			f.Close()
+			os.Remove(probePath)
 		}
-		f, err := os.CreateTemp(newPersonalPath, ".syncflow_probe_*")
-		if err != nil {
-			slog.Error("personal directory not writable", "path", newPersonalPath, "err", err)
-			writeError(w, http.StatusBadRequest, "directory is not writable: "+newPersonalPath)
-			return
-		}
-		probePath := f.Name()
-		f.Close()
-		os.Remove(probePath)
 
 		if err := s.store.SetSetting(personalShareRootSettingKey, newPersonalPath); err != nil {
 			slog.Error("update personal share root", "err", err)
@@ -195,7 +200,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.config.PersonalShareDir = newPersonalPath
-		slog.Info("personal share path hot-reloaded", "newPath", newPersonalPath)
+		if usesWindowsDriveMode {
+			slog.Info("personal share path hot-reloaded", "newPath", newPersonalPath, "mode", personalPathModeWindowsDrives)
+		} else {
+			slog.Info("personal share path hot-reloaded", "newPath", newPersonalPath)
+		}
 	}
 
 	dto, err := s.assembleSettingsDTO()
@@ -235,12 +244,18 @@ func (s *Server) assembleSettingsDTO() (*settingsDTO, error) {
 		return nil, err
 	}
 
+	personalMode := ""
+	if usesWindowsPersonalVirtualDrivesForPath(pathConfig.PersonalDir()) {
+		personalMode = personalPathModeWindowsDrives
+	}
+
 	return &settingsDTO{
 		DeviceName:     deviceName,
 		ConnectionCode: code,
 		RootPath:       pathConfig.RootDir(),
 		ReceivePath:    pathConfig.ReceiveDir,
 		PersonalPath:   pathConfig.PersonalDir(),
+		PersonalMode:   personalMode,
 		SharedPath:     pathConfig.SharedDir(),
 		ShareAddress:   shareConfig.ShareURL,
 		ShareStatus:    shareConfig.ShareStatus,

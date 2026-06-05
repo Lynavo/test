@@ -44,6 +44,7 @@ function setupElectronAPI() {
     platform: {
       isMac: () => true,
       isWindows: () => false,
+      getHomeDir: () => '/Users/alice',
       getHostName: () => 'Test-Mac',
       getLocalIPs: () => ['192.168.1.10'],
     },
@@ -169,6 +170,129 @@ describe('DirectoryPathCard', () => {
   it('renders personal directory label', () => {
     render(<DirectoryPathCard />);
     expect(screen.getByText('个人共享目录')).toBeInTheDocument();
+  });
+
+  it('renders selected Windows drive root in personal virtual drives mode', () => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      ...(window.electronAPI ?? {}),
+      platform: {
+        ...(window.electronAPI?.platform ?? {}),
+        isWindows: () => true,
+      },
+    } as unknown as Window['electronAPI'];
+    useSettingsStore.setState({
+      settings: {
+        ...mockSettings,
+        personalPath: 'C:\\',
+        personalPathMode: 'windowsDrives',
+      },
+    });
+
+    render(<DirectoryPathCard />);
+
+    const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
+    expect(personalCard).not.toBeNull();
+    expect(within(personalCard as HTMLElement).getByText('本机磁盘（C:\\）')).toBeInTheDocument();
+    expect(
+      within(personalCard as HTMLElement).getByRole('button', { name: '恢复本机磁盘' }),
+    ).toBeInTheDocument();
+    expect(within(personalCard as HTMLElement).getByRole('button', { name: '打开' })).toBeDisabled();
+  });
+
+  it('does not render Windows restore action on non-Windows hosts', () => {
+    useSettingsStore.setState({
+      settings: {
+        ...mockSettings,
+        personalPath: 'C:\\',
+        personalPathMode: 'windowsDrives',
+      },
+    });
+
+    render(<DirectoryPathCard />);
+
+    const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
+    expect(personalCard).not.toBeNull();
+    expect(
+      within(personalCard as HTMLElement).queryByRole('button', { name: '恢复本机磁盘' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders default Windows personal virtual drives without exposing the home path', () => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      ...(window.electronAPI ?? {}),
+      platform: {
+        ...(window.electronAPI?.platform ?? {}),
+        isWindows: () => true,
+      },
+    } as unknown as Window['electronAPI'];
+    useSettingsStore.setState({
+      settings: {
+        ...mockSettings,
+        personalPath: 'C:\\Users\\Alice',
+        personalPathMode: 'windowsDrives',
+      },
+    });
+
+    render(<DirectoryPathCard />);
+
+    const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
+    expect(personalCard).not.toBeNull();
+    expect(within(personalCard as HTMLElement).getByText('本机磁盘')).toBeInTheDocument();
+    expect(within(personalCard as HTMLElement).queryByText('C:\\Users\\Alice')).not.toBeInTheDocument();
+    expect(
+      within(personalCard as HTMLElement).queryByRole('button', { name: '恢复本机磁盘' }),
+    ).not.toBeInTheDocument();
+    expect(within(personalCard as HTMLElement).getByRole('button', { name: '打开' })).toBeDisabled();
+  });
+
+  it('restores Windows personal virtual drives display from a selected drive root', async () => {
+    const updateSettings = vi.fn().mockResolvedValue({
+      ...mockSettings,
+      personalPath: 'C:\\Users\\Alice',
+      personalPathMode: 'windowsDrives',
+    });
+    (window as Window & { electronAPI?: unknown }).electronAPI = {
+      ...(window.electronAPI ?? {}),
+      sidecar: {
+        ...(window.electronAPI?.sidecar ?? {}),
+        updateSettings,
+      },
+      platform: {
+        ...(window.electronAPI?.platform ?? {}),
+        isWindows: () => true,
+        getHomeDir: () => 'C:\\Users\\Alice',
+      },
+    } as unknown as Window['electronAPI'];
+    useSettingsStore.setState({
+      settings: {
+        ...mockSettings,
+        personalPath: 'C:\\',
+        personalPathMode: 'windowsDrives',
+      },
+    });
+
+    render(<DirectoryPathCard />);
+
+    const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
+    expect(personalCard).not.toBeNull();
+    fireEvent.click(within(personalCard as HTMLElement).getByRole('button', { name: '恢复本机磁盘' }));
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({ personalPath: 'C:\\Users\\Alice' });
+    });
+    expect(useSettingsStore.getState().settings.personalPath).toBe('C:\\Users\\Alice');
+    expect(useSettingsStore.getState().settings.personalPathMode).toBe('windowsDrives');
+  });
+
+  it('renders team shared directory before personal shared directory', () => {
+    render(<DirectoryPathCard />);
+
+    const sharedLabel = screen.getByText('团队共享目录');
+    const personalLabel = screen.getByText('个人共享目录');
+
+    expect(
+      sharedLabel.compareDocumentPosition(personalLabel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('does not render account login or logout controls in the personal directory card', () => {

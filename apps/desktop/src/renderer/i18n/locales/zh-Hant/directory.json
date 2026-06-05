@@ -12,7 +12,10 @@
     "changeLocked": "正在接收檔案，完成後可變更",
     "receivedDirectory": "接收目錄",
     "personalDirectory": "個人共享目錄",
-    "sharedDirectory": "團隊共享目錄"
+    "sharedDirectory": "團隊共享目錄",
+    "windowsDrives": "本機磁碟",
+    "windowsDrivesWithPath": "本機磁碟（{{path}}）",
+    "restoreWindowsDrives": "恢復本機磁碟"
   },
   "list": {
     "stats": "共 {{count}} 個檔案  總大小: {{size}}",

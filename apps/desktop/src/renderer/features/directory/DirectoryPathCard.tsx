@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FolderOpen, FolderInput, FolderSymlink, Lock, UserRound } from 'lucide-react';
+import { FolderOpen, FolderInput, FolderSymlink, Lock, RotateCcw, UserRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
+import { isWindowsDriveRootPath } from '@renderer/lib/windows-path';
 
 const colors = {
   title: '#1a2a3a',
@@ -30,6 +31,15 @@ export function DirectoryPathCard() {
   const receivePath = settings.receivePath;
   const personalPath = settings.personalPath;
   const sharedPath = settings.sharedPath;
+  const isWindowsHost = window.electronAPI?.platform.isWindows() ?? false;
+  const isWindowsPersonalDrives = settings.personalPathMode === 'windowsDrives';
+  const personalPathDisplay = isWindowsPersonalDrives
+    ? isWindowsDriveRootPath(personalPath)
+      ? t('directory.pathCard.windowsDrivesWithPath', { path: personalPath })
+      : t('directory.pathCard.windowsDrives')
+    : personalPath || '--';
+  const canRestoreWindowsPersonalDrives =
+    isWindowsHost && isWindowsPersonalDrives && isWindowsDriveRootPath(personalPath);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -101,6 +111,37 @@ export function DirectoryPathCard() {
         });
         updateSettings(updated);
       }
+    } catch (err: unknown) {
+      const body = err instanceof Error ? err.message : '';
+      if (
+        body.includes('cannot create') ||
+        body.includes('not writable') ||
+        body.includes('read-only')
+      ) {
+        toast.error(t('errors.directory.locationNotWritable'));
+      } else if (body.includes('must not be empty') || body.includes('absolute')) {
+        toast.error(t('errors.directory.selectValidDirectory'));
+      } else {
+        toast.error(t('errors.directory.directoryUnavailable'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [personalPath, t, updateSettings]);
+
+  const handleRestoreWindowsPersonalDrives = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api) return;
+    try {
+      const homeDir = api.platform.getHomeDir();
+      if (!homeDir || homeDir === personalPath) {
+        return;
+      }
+      setSaving(true);
+      const updated = await api.sidecar.updateSettings({
+        personalPath: homeDir,
+      });
+      updateSettings(updated);
     } catch (err: unknown) {
       const body = err instanceof Error ? err.message : '';
       if (
@@ -211,44 +252,6 @@ export function DirectoryPathCard() {
           </code>
         </GlassCard>
 
-        {/* Personal directory */}
-        <GlassCard className="space-y-3 p-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-              style={{ background: colors.iconPersonalBg }}
-            >
-              <UserRound className="h-4.5 w-4.5" style={{ color: colors.iconPersonal }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h4 className="text-sm font-semibold" style={{ color: colors.title }}>
-                {t('directory.pathCard.personalDirectory')}
-              </h4>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleOpenFolder(personalPath)}
-                disabled={!personalPath}
-              >
-                <FolderOpen className="mr-1 h-3.5 w-3.5" />
-                {t('common.actions.open')}
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleChangePersonal} disabled={saving}>
-                {t('common.actions.change')}
-              </Button>
-            </div>
-          </div>
-          <code
-            className="block w-full truncate rounded-md px-2.5 py-1.5 text-xs font-mono text-muted-foreground"
-            style={{ background: colors.pathBg }}
-            title={personalPath}
-          >
-            {personalPath || '--'}
-          </code>
-        </GlassCard>
-
         {/* Shared directory */}
         <GlassCard className="space-y-3 p-4">
           <div className="flex items-center gap-3">
@@ -280,6 +283,58 @@ export function DirectoryPathCard() {
             title={sharedPath}
           >
             {sharedPath || '--'}
+          </code>
+        </GlassCard>
+
+        {/* Personal directory */}
+        <GlassCard className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: colors.iconPersonalBg }}
+            >
+              <UserRound className="h-4.5 w-4.5" style={{ color: colors.iconPersonal }} />
+            </div>
+            <div className="min-w-fit flex-1">
+              <h4
+                className="whitespace-nowrap text-sm font-semibold"
+                style={{ color: colors.title }}
+              >
+                {t('directory.pathCard.personalDirectory')}
+              </h4>
+            </div>
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleOpenFolder(personalPath)}
+                disabled={!personalPath || isWindowsPersonalDrives}
+              >
+                <FolderOpen className="mr-1 h-3.5 w-3.5" />
+                {t('common.actions.open')}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleChangePersonal} disabled={saving}>
+                {t('common.actions.change')}
+              </Button>
+              {canRestoreWindowsPersonalDrives && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRestoreWindowsPersonalDrives}
+                  disabled={saving}
+                >
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                  {t('directory.pathCard.restoreWindowsDrives')}
+                </Button>
+              )}
+            </div>
+          </div>
+          <code
+            className="block w-full truncate rounded-md px-2.5 py-1.5 text-xs font-mono text-muted-foreground"
+            style={{ background: colors.pathBg }}
+            title={personalPathDisplay}
+          >
+            {personalPathDisplay}
           </code>
         </GlassCard>
       </div>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FolderOpen, Lock } from 'lucide-react';
+import { FolderOpen, Lock, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Input } from '@renderer/components/ui/input';
 import { Button } from '@renderer/components/ui/button';
 import { CopyButton } from '@renderer/components/shared/CopyButton';
 import { useSettingsStore } from '@renderer/stores/settings-store';
+import { isWindowsDriveRootPath } from '@renderer/lib/windows-path';
 
 export function FilePathSection() {
   const { t } = useTranslation();
@@ -15,6 +16,15 @@ export function FilePathSection() {
   const fetchSettings = useSettingsStore((s) => s.fetchSettings);
   const receivePath = settings.receivePath;
   const personalPath = settings.personalPath ?? '';
+  const isWindowsHost = window.electronAPI?.platform.isWindows() ?? false;
+  const isWindowsPersonalDrives = settings.personalPathMode === 'windowsDrives';
+  const personalPathDisplay = isWindowsPersonalDrives
+    ? isWindowsDriveRootPath(personalPath)
+      ? t('settings.filePath.windowsDrivesWithPath', { path: personalPath })
+      : t('settings.filePath.windowsDrives')
+    : personalPath;
+  const canRestoreWindowsPersonalDrives =
+    isWindowsHost && isWindowsPersonalDrives && isWindowsDriveRootPath(personalPath);
   const [saving, setSaving] = useState(false);
   const [transferActive, setTransferActive] = useState(false);
 
@@ -119,6 +129,24 @@ export function FilePathSection() {
     }
   }, [personalPath, t, updateSettings]);
 
+  const handleRestoreWindowsPersonalDrives = useCallback(async () => {
+    try {
+      const homeDir = window.electronAPI.platform.getHomeDir();
+      if (!homeDir || homeDir === personalPath) {
+        return;
+      }
+      setSaving(true);
+      const updated = await window.electronAPI.sidecar.updateSettings({
+        personalPath: homeDir,
+      });
+      updateSettings(updated);
+    } catch {
+      toast.error(t('errors.settings.savePersonalPathFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }, [personalPath, t, updateSettings]);
+
   const isLocked = transferActive;
 
   return (
@@ -176,7 +204,7 @@ export function FilePathSection() {
         <div className="mb-3 flex items-center gap-2">
           <Input
             type="text"
-            value={personalPath}
+            value={personalPathDisplay}
             readOnly
             className="flex-1"
           />
@@ -189,20 +217,35 @@ export function FilePathSection() {
           >
             <FolderOpen className="h-4 w-4" />
           </Button>
-          <CopyButton
-            text={personalPath}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
-          />
+          {!isWindowsPersonalDrives && (
+            <CopyButton
+              text={personalPath}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+            />
+          )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleOpenPersonalFolder}
-          disabled={!personalPath}
-        >
-          <FolderOpen className="h-4 w-4" />
-          {t('settings.filePath.openPersonal')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenPersonalFolder}
+            disabled={!personalPath || isWindowsPersonalDrives}
+          >
+            <FolderOpen className="h-4 w-4" />
+            {t('settings.filePath.openPersonal')}
+          </Button>
+          {canRestoreWindowsPersonalDrives && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRestoreWindowsPersonalDrives}
+              disabled={saving}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t('settings.filePath.restoreWindowsDrives')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Shared directory */}

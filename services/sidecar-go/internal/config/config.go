@@ -65,7 +65,7 @@ func (c *Config) setDefaults() {
 		c.ReceiveDir = filepath.Join(c.DataDir, "received")
 	}
 	if c.PersonalShareDir == "" {
-		c.PersonalShareDir = filepath.Join(c.RootDir(), "personal")
+		c.PersonalShareDir = defaultPersonalShareDir(c.RootDir())
 	}
 	if c.DeviceName == "" {
 		hostname, _ := os.Hostname()
@@ -93,6 +93,14 @@ func defaultDataDir() string {
 		filepath.Join(home, ".config", currentDataDirName),
 		filepath.Join(home, ".config", legacyDataDirName),
 	)
+}
+
+func defaultPersonalShareDir(fallbackRoot string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && strings.TrimSpace(home) != "" {
+		return home
+	}
+	return filepath.Join(fallbackRoot, "personal")
 }
 
 func selectDataDir(preferredPath string, legacyPath string) string {

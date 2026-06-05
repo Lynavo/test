@@ -40,6 +40,9 @@ func (s *Server) resolveSharedPath(relPath string) (string, error) {
 }
 
 func (s *Server) resolvePersonalPath(relPath string) (string, error) {
+	if s.usesWindowsPersonalVirtualDrives() {
+		return resolveWindowsPersonalDrivePath(relPath)
+	}
 	return resolveDirectoryPath(s.config.PersonalDir(), relPath, "personal")
 }
 

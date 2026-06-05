@@ -125,6 +125,7 @@ export interface ElectronAPI {
   platform: {
     isMac(): boolean;
     isWindows(): boolean;
+    getHomeDir(): string;
     getHostName(): string;
     getLocalIPs(): string[];
   };

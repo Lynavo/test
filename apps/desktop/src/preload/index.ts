@@ -110,6 +110,7 @@ const electronAPI: ElectronAPI = {
   platform: {
     isMac: () => process.platform === 'darwin',
     isWindows: () => process.platform === 'win32',
+    getHomeDir: () => os.homedir(),
     getHostName: () => os.hostname(),
     getLocalIPs: () => {
       const interfaces = os.networkInterfaces();

@@ -92,6 +92,9 @@
     "openReceived": "開啟接收目錄",
     "openPersonal": "開啟個人共享目錄",
     "openShared": "開啟團隊共享目錄",
+    "windowsDrives": "本機磁碟",
+    "windowsDrivesWithPath": "本機磁碟（{{path}}）",
+    "restoreWindowsDrives": "恢復本機磁碟",
     "remoteFeaturePrompt": "遠端同步與傳輸",
     "remoteFeaturePromptDetail": "登入後可使用 P2P 遠端同步功能"
   },

@@ -93,6 +93,7 @@ const mockEvents: ElectronAPI['events'] = {
 const mockPlatform: ElectronAPI['platform'] = {
   isMac: () => true,
   isWindows: () => false,
+  getHomeDir: () => '/Users/alice',
   getHostName: () => 'localhost',
   getLocalIPs: () => ['192.168.1.100'],
 };

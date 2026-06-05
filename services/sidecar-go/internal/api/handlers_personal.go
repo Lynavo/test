@@ -178,6 +178,11 @@ func (s *Server) listPersonalDir(w http.ResponseWriter, relPath string) {
 		return
 	}
 
+	if s.usesWindowsPersonalVirtualDrives() && relPath == "" {
+		s.listWindowsPersonalDriveRoot(w)
+		return
+	}
+
 	s.listDirectory(w, relPath, s.resolvePersonalPath, "personal", "/personal/thumbnail/")
 }
 
@@ -215,6 +220,10 @@ func (s *Server) handlePersonalStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) ensurePersonalDirForRequest(w http.ResponseWriter, operation string) bool {
+	if s.usesWindowsPersonalVirtualDrives() {
+		return true
+	}
+
 	result, err := runtimefs.EnsurePersonalDir(s.config)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "personal path unavailable")
