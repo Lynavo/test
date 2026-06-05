@@ -699,6 +699,16 @@ function requestTimeoutMs(baseUrl: string): number {
   return baseUrl === BASE ? SIDECAR_REQUEST_TIMEOUT_MS : REMOTE_REQUEST_TIMEOUT_MS;
 }
 
+function encodeSharedFilePath(path: string): string {
+  return path
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter((segment) => segment.trim().length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
 function errorDiagnostics(error: Error): Record<string, unknown> {
   const diagnostics: Record<string, unknown> = {
     name: error.name,
@@ -858,7 +868,8 @@ export const sidecarClient = {
     request<import('@syncflow/contracts').ShareStatusDTO>('POST', '/share/validate'),
   getTransferActive: () => request<{ active: boolean }>('GET', '/transfer/active'),
   getSharedList: (path?: string) => {
-    const endpoint = path ? `/shared/list/${path}` : '/shared/list';
+    const encodedPath = path ? encodeSharedFilePath(path) : '';
+    const endpoint = encodedPath ? `/shared/list/${encodedPath}` : '/shared/list';
     return request<import('@syncflow/contracts').SharedDirectoryDTO>('GET', endpoint);
   },
   getClientConfig: async () => {

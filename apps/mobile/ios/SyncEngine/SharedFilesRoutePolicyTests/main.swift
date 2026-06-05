@@ -277,3 +277,13 @@ expect(
     !SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: true),
     "local save failures must not trigger route retry or duplicate downloads"
 )
+
+expect(
+    SharedFilesRoutePolicy.encodedSharedFilePath("相簿 A/IMG #1%.jpg") == "%E7%9B%B8%E7%B0%BF%20A/IMG%20%231%25.jpg",
+    "shared-file browse/download paths must be encoded per segment so spaces, hash, percent, and non-ASCII names remain valid URL path components"
+)
+
+expect(
+    SharedFilesRoutePolicy.encodedSharedFilePath("/nested//file name.mov/") == "nested/file%20name.mov",
+    "shared-file path encoding must trim wrapper slashes and ignore empty path segments"
+)

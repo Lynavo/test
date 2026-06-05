@@ -285,7 +285,10 @@ class SharedFilesService {
         path: String = "",
         accessToken: String = ""
     ) async throws -> SharedDirectory {
-        let endpoint = path.isEmpty ? "\(scope.endpointPrefix)/list" : "\(scope.endpointPrefix)/list/\(path)"
+        let encodedPath = SharedFilesRoutePolicy.encodedSharedFilePath(path)
+        let endpoint = encodedPath.isEmpty
+            ? "\(scope.endpointPrefix)/list"
+            : "\(scope.endpointPrefix)/list/\(encodedPath)"
         let url = try buildURL(path: endpoint)
 
         var request = URLRequest(url: url)
@@ -311,7 +314,7 @@ class SharedFilesService {
         accessToken: String = "",
         onProgress: SharedFileDownloadProgressHandler? = nil
     ) async throws -> DownloadResult {
-        let endpoint = "\(scope.endpointPrefix)/download/\(path)"
+        let endpoint = "\(scope.endpointPrefix)/download/\(SharedFilesRoutePolicy.encodedSharedFilePath(path))"
         let partialURL = try partialDownloadURL(path: path)
         let metadataURL = partialMetadataURL(for: partialURL)
         var partialMetadata = readPartialDownloadMetadata(at: metadataURL)
@@ -530,20 +533,28 @@ class SharedFilesService {
 
     /// Construct the streaming URL for AVPlayer (video playback).
     func getStreamUrl(scope: SharedDirectoryScope = .team, path: String, accessToken: String = "") -> URL? {
-        return try? buildMediaURL(path: "\(scope.endpointPrefix)/stream/\(path)", scope: scope, accessToken: accessToken)
+        return try? buildMediaURL(
+            path: "\(scope.endpointPrefix)/stream/\(SharedFilesRoutePolicy.encodedSharedFilePath(path))",
+            scope: scope,
+            accessToken: accessToken
+        )
     }
 
     // MARK: - Thumbnail URL
 
     /// Construct the thumbnail URL for a shared file.
     func getThumbnailUrl(scope: SharedDirectoryScope = .team, path: String, accessToken: String = "") -> URL? {
-        return try? buildMediaURL(path: "\(scope.endpointPrefix)/thumbnail/\(path)", scope: scope, accessToken: accessToken)
+        return try? buildMediaURL(
+            path: "\(scope.endpointPrefix)/thumbnail/\(SharedFilesRoutePolicy.encodedSharedFilePath(path))",
+            scope: scope,
+            accessToken: accessToken
+        )
     }
 
     private func buildURL(path: String) throws -> URL {
         var components = URLComponents()
         components.scheme = "http"
-        components.path = path
+        components.percentEncodedPath = path
 
         if useTunnelRoute, isTunnelActive, let port = tunnelPort {
             components.host = "127.0.0.1"

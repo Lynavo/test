@@ -6,6 +6,11 @@ enum SharedFilesRoutePolicy {
     static let sharedFileDownloadResourceTimeout: TimeInterval = 86_400
     static let sharedFileTunnelHeartbeatGracePeriod: TimeInterval = 3
     static let sharedFileDownloadMaxAttempts = 4
+    private static let sharedFilePathSegmentAllowedCharacters: CharacterSet = {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return allowed
+    }()
 
     private static func normalizedHost(_ host: String?) -> String? {
         let value = host?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -115,6 +120,22 @@ enum SharedFilesRoutePolicy {
 
     static func shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: Bool) -> Bool {
         !isLocalSaveFailure
+    }
+
+    static func encodedSharedFilePath(_ path: String) -> String {
+        let normalizedPath = path
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        return normalizedPath
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .filter { !String($0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { segment in
+                String(segment).addingPercentEncoding(
+                    withAllowedCharacters: sharedFilePathSegmentAllowedCharacters
+                ) ?? ""
+            }
+            .joined(separator: "/")
     }
 
     static func shouldWaitForP2PTunnelRoute(

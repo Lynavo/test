@@ -149,6 +149,43 @@ describe('sidecarClient', () => {
     vi.resetModules();
   });
 
+  it('encodes shared directory list paths by URL segment', async () => {
+    const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ path: '', files: [], totalCount: 0 })));
+      return req;
+    });
+    const httpsRequest = vi.fn();
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.getSharedList('相簿 A/IMG #1%.jpg')).resolves.toEqual({
+      path: '',
+      files: [],
+      totalCount: 0,
+    });
+
+    const [options] = httpRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.path).toBe('/shared/list/%E7%9B%B8%E7%B0%BF%20A/IMG%20%231%25.jpg');
+  });
+
   it('uses https transport when the redeem base url is https', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
