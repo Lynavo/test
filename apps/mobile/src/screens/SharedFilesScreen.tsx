@@ -70,6 +70,10 @@ type SharedFilesConnectionStatus =
   | 'unavailable'
   | 'offline';
 
+interface LoadFilesOptions {
+  showLoading?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -181,6 +185,16 @@ function isSharedFilesReachabilityAvailable(value: unknown): boolean {
     typeof value === 'object' &&
     value !== null &&
     (value as { state?: unknown }).state === 'available'
+  );
+}
+
+function isRetainedOfflineTunnelReachability(value: unknown): boolean {
+  if (!isSharedFilesReachabilityAvailable(value)) return false;
+  const route = (value as { route?: unknown }).route;
+  const reason = (value as { reason?: unknown }).reason;
+  return (
+    (route === 'tunnel' || route === 'relay') &&
+    reason === 'presence_recovery_exhausted_tunnel_retained'
   );
 }
 
@@ -317,13 +331,17 @@ export function SharedFilesScreen() {
   }, []);
 
   const loadFiles = useCallback(
-    (path: string): Promise<void> => {
+    (path: string, options: LoadFilesOptions = {}): Promise<void> => {
       const loadPath = normalizeDirectoryPath(path);
+      const showLoading = options.showLoading !== false;
       const activeLoad = activeLoadRef.current;
       if (
         activeLoad?.scope === activeDirectoryScope &&
         activeLoad.path === loadPath
       ) {
+        if (showLoading) {
+          setLoading(true);
+        }
         return activeLoad.promise;
       }
 
@@ -333,8 +351,10 @@ export function SharedFilesScreen() {
       const isCurrentLoad = () => loadRequestSeqRef.current === loadRequestSeq;
 
       const loadPromise = (async () => {
-        setLoading(true);
-        setErrorKind(null);
+        if (showLoading) {
+          setLoading(true);
+          setErrorKind(null);
+        }
 
         // P1#3: Pre-check device availability
         const availability = await getDeviceAvailability();
@@ -478,7 +498,7 @@ export function SharedFilesScreen() {
 
     recoveryRetryTimerRef.current = setTimeout(() => {
       recoveryRetryTimerRef.current = null;
-      void loadFiles(currentPath);
+      void loadFiles(currentPath, { showLoading: false });
     }, SHARED_FILES_RECOVERY_RETRY_MS);
 
     return clearRecoveryRetryTimer;
@@ -504,16 +524,7 @@ export function SharedFilesScreen() {
           setSharedFilesConnectionStatus('offline');
           setErrorKind('device_unavailable');
           setFiles([]);
-          return;
-        }
-
-        const connState = (state.connectionState as string) || 'bound';
-        if (connState === 'offline') {
-          bindingAvailabilityRef.current = { deviceId, available: false };
-          setActiveDeviceId(deviceId);
-          setSharedFilesConnectionStatus('unavailable');
-          setErrorKind('network_error');
-          setFiles([]);
+          setLoading(false);
           return;
         }
 
@@ -524,13 +535,18 @@ export function SharedFilesScreen() {
         if (nextSharedFilesConnectionStatus) {
           setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
         }
+        const connState = (state.connectionState as string) || 'bound';
         const sharedFilesAvailable = isSharedFilesReachabilityAvailable(
+          state.sharedFilesReachability,
+        );
+        const retainedOfflineTunnel = isRetainedOfflineTunnelReachability(
           state.sharedFilesReachability,
         );
         if (
           connState === 'connected' ||
           connState === 'bound' ||
-          sharedFilesAvailable
+          (sharedFilesAvailable &&
+            (connState !== 'offline' || retainedOfflineTunnel))
         ) {
           const previousAvailability = bindingAvailabilityRef.current;
           const shouldReload =
@@ -544,6 +560,13 @@ export function SharedFilesScreen() {
           if (shouldReload) {
             void loadFiles(currentPath);
           }
+        } else if (connState === 'offline') {
+          bindingAvailabilityRef.current = { deviceId, available: false };
+          setActiveDeviceId(deviceId);
+          setSharedFilesConnectionStatus('unavailable');
+          setErrorKind('network_error');
+          setFiles([]);
+          setLoading(false);
         } else if (connState === 'connecting') {
           const previousAvailability = bindingAvailabilityRef.current;
           if (
@@ -557,6 +580,7 @@ export function SharedFilesScreen() {
           setSharedFilesConnectionStatus('offline');
           setErrorKind('device_unavailable');
           setFiles([]);
+          setLoading(false);
         }
       },
     );

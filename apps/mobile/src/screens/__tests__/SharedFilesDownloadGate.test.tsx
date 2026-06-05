@@ -526,6 +526,42 @@ describe('SharedFilesScreen download progress', () => {
     });
   });
 
+  test('stops the loading state when the binding goes offline during a shared files load', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    let resolveBrowse: (value: {
+      files: Array<typeof FAKE_FILE>;
+    }) => void = () => undefined;
+    mockBrowseDirectory.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveBrowse = resolve;
+        }),
+    );
+
+    const { getByText, queryByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() => expect(mockBrowseDirectory).toHaveBeenCalledTimes(1));
+    expect(getByText('Loading...')).toBeTruthy();
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'offline',
+      });
+    });
+
+    expect(queryByText('Loading...')).toBeNull();
+    expect(getByText('Desktop unreachable')).toBeTruthy();
+    expect(getByText('Failed to Load')).toBeTruthy();
+
+    await act(async () => {
+      resolveBrowse({ files: [FAKE_FILE] });
+    });
+  });
+
   test('does not reload the same path for repeated available binding events', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
@@ -633,7 +669,7 @@ describe('SharedFilesScreen download progress', () => {
     expect(getByTestId('shared-file-download-button')).toBeTruthy();
   });
 
-  test('reloads files after an unavailable binding reconnects through connecting', async () => {
+  test('reloads files after an unreachable desktop reconnects through connecting', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
       loadSubscription: jest.fn(),
@@ -650,7 +686,7 @@ describe('SharedFilesScreen download progress', () => {
         connectionState: 'offline',
       });
     });
-    expect(getByText('Remote unavailable')).toBeTruthy();
+    expect(getByText('Desktop unreachable')).toBeTruthy();
     expect(getByText('Failed to Load')).toBeTruthy();
 
     await act(async () => {
@@ -696,7 +732,7 @@ describe('SharedFilesScreen download progress', () => {
           connectionState: 'offline',
         });
       });
-      expect(getByText('Remote unavailable')).toBeTruthy();
+      expect(getByText('Desktop unreachable')).toBeTruthy();
       expect(getByText('Failed to Load')).toBeTruthy();
 
       await act(async () => {
@@ -712,7 +748,48 @@ describe('SharedFilesScreen download progress', () => {
     }
   });
 
-  test('marks shared files remote unavailable when an offline binding event carries stale tunnel reachability', async () => {
+  test('keeps the unavailable state visible while an automatic retry is in flight', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByTestId, getByText, queryByText } = render(
+      <SharedFilesScreen />,
+    );
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+    mockBrowseDirectory.mockClear();
+    mockBrowseDirectory.mockImplementation(() => new Promise(() => undefined));
+
+    jest.useFakeTimers();
+    try {
+      await act(async () => {
+        nativeListeners.get('onBindingStateChanged')?.({
+          deviceId: 'device-1',
+          connectionState: 'offline',
+        });
+      });
+      expect(getByText('Desktop unreachable')).toBeTruthy();
+      expect(getByText('Failed to Load')).toBeTruthy();
+
+      await act(async () => {
+        jest.advanceTimersByTime(3000);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockBrowseDirectory).toHaveBeenCalledTimes(1);
+      expect(queryByText('Loading...')).toBeNull();
+      expect(getByText('Desktop unreachable')).toBeTruthy();
+      expect(getByText('Failed to Load')).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('marks the shared files desktop unreachable when an offline binding event carries stale tunnel reachability', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
       loadSubscription: jest.fn(),
@@ -743,11 +820,41 @@ describe('SharedFilesScreen download progress', () => {
       });
     });
 
-    expect(getByText('Remote unavailable')).toBeTruthy();
+    expect(getByText('Desktop unreachable')).toBeTruthy();
     expect(getByText('Failed to Load')).toBeTruthy();
   });
 
-  test('shows remote unavailable instead of offline when a paired device loses LAN reachability', async () => {
+  test('keeps shared files available when presence offline retains an active P2P tunnel', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByText, getByTestId, queryByText } = render(
+      <SharedFilesScreen />,
+    );
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'offline',
+        sharedFilesReachability: {
+          state: 'available',
+          route: 'tunnel',
+          reason: 'presence_recovery_exhausted_tunnel_retained',
+        },
+      });
+    });
+
+    expect(getByText('P2P online')).toBeTruthy();
+    expect(getByText('photo.jpg')).toBeTruthy();
+    expect(queryByText('Desktop unreachable')).toBeNull();
+    expect(queryByText('Failed to Load')).toBeNull();
+  });
+
+  test('shows desktop unreachable instead of offline when a paired device loses LAN reachability', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },
       loadSubscription: jest.fn(),
@@ -764,7 +871,7 @@ describe('SharedFilesScreen download progress', () => {
       });
     });
 
-    expect(getByText('Remote unavailable')).toBeTruthy();
+    expect(getByText('Desktop unreachable')).toBeTruthy();
     expect(queryByText('Offline')).toBeNull();
     expect(getByText('Failed to Load')).toBeTruthy();
   });
@@ -791,7 +898,7 @@ describe('SharedFilesScreen download progress', () => {
         connectionState: 'offline',
       });
     });
-    expect(getByText('Remote unavailable')).toBeTruthy();
+    expect(getByText('Desktop unreachable')).toBeTruthy();
     expect(getByText('Failed to Load')).toBeTruthy();
 
     await act(async () => {
