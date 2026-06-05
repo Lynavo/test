@@ -114,9 +114,10 @@ export function PowerSaveSection() {
           )}
         >
           <span
+            data-testid="power-save-switch-thumb"
             className={cn(
-              'absolute top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow-sm transition-transform',
-              enabled ? 'translate-x-5.5' : 'translate-x-0.5',
+              'absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+              enabled ? 'translate-x-[18px]' : 'translate-x-0',
             )}
           />
         </button>

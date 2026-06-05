@@ -43,6 +43,7 @@ describe('PowerSaveSection', () => {
     const toggle = await screen.findByRole('switch', { name: '同步期间防止电脑待机' });
 
     expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('power-save-switch-thumb')).toHaveClass('translate-x-[18px]');
     expect(
       screen.getByText('仅在手机正在同步时保持电脑唤醒，传输结束后自动恢复系统待机设置。'),
     ).toBeInTheDocument();
