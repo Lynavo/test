@@ -87,6 +87,12 @@ describe('SupportSection', () => {
     expect(screen.getByRole('button', { name: /重置数据/ })).toBeDisabled();
   });
 
+  it('shows the desktop version with build number', async () => {
+    render(<SupportSection />);
+
+    expect(await screen.findByText('Vivi Drop v0.1.0 (1)')).toBeInTheDocument();
+  });
+
   it('requires a description before uploading diagnostics', async () => {
     const uploadDiagnostics = vi
       .fn()

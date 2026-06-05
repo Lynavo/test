@@ -155,6 +155,7 @@
     "advertisedIp": "广播 IP",
     "sameLanHint": "请确认手机和电脑连接到同一个局域网。",
     "desktopVersion": "桌面端版本",
+    "buildNumber": "{{buildNumber}}",
     "checkUpdates": "检查更新",
     "checkingUpdates": "正在检查",
     "updateAvailable": "有新版本 v{{version}} 可用",

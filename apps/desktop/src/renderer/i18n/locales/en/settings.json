@@ -155,6 +155,7 @@
     "advertisedIp": "Advertised IP",
     "sameLanHint": "Confirm the phone and computer are connected to the same LAN.",
     "desktopVersion": "Desktop version",
+    "buildNumber": "{{buildNumber}}",
     "checkUpdates": "Check for updates",
     "checkingUpdates": "Checking",
     "updateAvailable": "Version v{{version}} is available",

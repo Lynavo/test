@@ -155,6 +155,7 @@
     "advertisedIp": "廣播 IP",
     "sameLanHint": "請確認手機和電腦連到同一個區域網路。",
     "desktopVersion": "桌面端版本",
+    "buildNumber": "{{buildNumber}}",
     "checkUpdates": "檢查更新",
     "checkingUpdates": "正在檢查",
     "updateAvailable": "有新版本 v{{version}} 可用",

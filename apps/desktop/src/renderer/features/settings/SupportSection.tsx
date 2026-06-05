@@ -108,6 +108,13 @@ export function SupportSection() {
       summary.lastSuccessfulDeviceName ?? t('common.fallback.unknownDevice')
     }`;
   }, [summary.lastSuccessfulDeviceName, summary.lastSuccessfulSyncAt, t]);
+  const desktopVersionLabel = appInfo
+    ? `${appInfo.name} v${appInfo.version}${
+        appInfo.buildNumber
+          ? ` (${t('settings.support.buildNumber', { buildNumber: appInfo.buildNumber })})`
+          : ''
+      }`
+    : t('common.fallback.reading');
 
   const handleUploadDiagnostics = async () => {
     const api = window.electronAPI;
@@ -316,9 +323,7 @@ export function SupportSection() {
                   {t('settings.support.desktopVersion')}
                 </div>
                 <p className="text-sm font-medium text-foreground">
-                  {appInfo
-                    ? `${appInfo.name} v${appInfo.version}${appInfo.buildNumber ? ` (${appInfo.buildNumber})` : ''}`
-                    : t('common.fallback.reading')}
+                  {desktopVersionLabel}
                 </p>
               </div>
               <Button
