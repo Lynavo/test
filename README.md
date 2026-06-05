@@ -41,7 +41,7 @@ Electron 窗口會自動打開；桌面端會負責拉起 sidecar。
 pnpm dev:desktop
 pnpm build:desktop
 pnpm package:desktop:signed   # macOS signed DMG
-pnpm package:desktop:win      # Windows NSIS + zip
+pnpm package:desktop:win      # Windows NSIS + zip（預設 desktop Windows 包，不帶 release profile）
 
 # Mobile
 pnpm dev:mobile
@@ -61,6 +61,33 @@ pnpm typecheck
 pnpm format:check
 pnpm check
 ```
+
+## 發佈與 Review 打包
+
+正式發佈、Review 包、TestFlight 上傳、Android APK、Desktop DMG / EXE 都應先選 release profile，避免手動拼接 market 或 API base URL：
+
+```bash
+# 檢查實際 market、Review 狀態、base URL 與會執行的命令
+pnpm release --profile global-review --targets win --dry-run
+
+# 打 global-review Windows EXE / zip
+pnpm release --profile global-review --targets win
+
+# 打 global-prod Windows EXE / zip
+pnpm release --profile global-prod --targets win
+
+# 打 cn-prod Windows EXE / zip
+pnpm release --profile cn-prod --targets win
+
+# 打完整 global-review 版本（iOS TestFlight + macOS DMG + Windows EXE / zip）
+pnpm release --profile global-review --targets ios,mac,win
+
+# 打完整 global-prod / cn-prod 版本
+pnpm release --profile global-prod --targets ios,mac,win
+pnpm release --profile cn-prod --targets ios,mac,win
+```
+
+`package:desktop:win` / `@syncflow/desktop package:win:global` 只負責 Windows 封裝與 market 設定；`*-review` / `*-prod` 都應走 `release` 指令，讓 profile 統一注入正確的 `SYNCFLOW_RELEASE_PROFILE`、market 與 API base URL。`global-review` / `cn-review` 指向 `https://review-api.vividrop.cn`，`global-prod` 指向 `https://global-api.vividrop.cn`，`cn-prod` 指向 `https://api.vividrop.cn`。
 
 ## 專案結構
 
