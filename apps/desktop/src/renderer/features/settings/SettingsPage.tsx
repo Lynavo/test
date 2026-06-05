@@ -56,16 +56,6 @@ export function SettingsPage() {
           </section>
         )}
 
-        <section className="mb-8">
-          <h2 className="mb-1 text-sm font-semibold text-foreground">
-            {t('settings.sections.shareAddress')}
-          </h2>
-          <p className="mb-4 text-xs text-muted-foreground">
-            {t('settings.sections.shareAddressDescription')}
-          </p>
-          <ShareAddressSection />
-        </section>
-
         <section className="mt-8">
           <SupportSection />
         </section>

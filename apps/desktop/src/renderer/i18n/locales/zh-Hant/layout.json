@@ -7,12 +7,11 @@
   },
   "account": {
     "promptTitle": "登入帳號",
-    "promptDescription": "遠端同步與傳輸需要登入",
     "login": "登入",
     "logout": "登出",
     "signedIn": "已登入",
     "dialogTitle": "登入帳號",
-    "dialogDescription": "登入後可使用遠端同步與傳輸。"
+    "dialogDescription": "登入後可使用遠端傳輸。"
   },
   "errorBoundary": {
     "helpLoadFailed": "說明中心載入失敗，請重試"

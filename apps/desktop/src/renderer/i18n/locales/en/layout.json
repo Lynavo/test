@@ -7,12 +7,11 @@
   },
   "account": {
     "promptTitle": "Sign in",
-    "promptDescription": "Remote sync and transfer require sign-in.",
     "login": "Sign in",
     "logout": "Sign out",
     "signedIn": "Signed in",
     "dialogTitle": "Sign in",
-    "dialogDescription": "Sign in to use remote sync and transfer."
+    "dialogDescription": "Sign in to use remote transfer."
   },
   "errorBoundary": {
     "helpLoadFailed": "Help failed to load. Please retry."

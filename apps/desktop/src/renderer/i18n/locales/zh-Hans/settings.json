@@ -8,7 +8,6 @@
     "connectionCode": "连接码管理",
     "connectionCodeDescription": "重新生成后，旧手机需要重新配对",
     "shareAddress": "局域网共享",
-    "shareAddressDescription": "检测这台电脑的 SMB 共享状态，供手机读取团队共享目录",
     "giftCard": "礼品卡",
     "giftCardDescription": "兑换礼品卡可提升额度、功能或同步时长",
     "bonjour": "Windows Bonjour 广播",

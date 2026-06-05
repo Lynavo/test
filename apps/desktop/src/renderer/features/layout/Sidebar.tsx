@@ -118,7 +118,7 @@ export function Sidebar() {
                       {t('layout.account.promptTitle')}
                     </p>
                     <p className="mt-0.5 text-[11px] leading-4 text-[#6b7a8d]">
-                      {t('layout.account.promptDescription')}
+                      {t('layout.account.dialogDescription')}
                     </p>
                   </div>
                 </div>
