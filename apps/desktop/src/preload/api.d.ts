@@ -48,6 +48,11 @@ export type AuthSessionView = {
   accountLabel?: string;
 };
 
+export type PowerSaveState = {
+  preventSleepDuringTransfer: boolean;
+  blockingSleep: boolean;
+};
+
 export interface ElectronAPI {
   sidecar: {
     getHealth(): Promise<{ ok: boolean; service: string }>;
@@ -128,5 +133,9 @@ export interface ElectronAPI {
     exportDiagnostics(locale?: string, description?: string): Promise<string | null>;
     checkForUpdates(): Promise<UpdateCheckResult>;
     getAppInfo(): Promise<{ name: string; version: string; buildNumber: string }>;
+  };
+  power: {
+    getState(): Promise<PowerSaveState>;
+    setPreventSleepDuringTransfer(enabled: boolean): Promise<PowerSaveState>;
   };
 }

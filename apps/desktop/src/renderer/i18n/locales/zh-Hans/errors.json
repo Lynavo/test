@@ -34,6 +34,8 @@
   "settings": {
     "saveDeviceNameFailed": "保存设备名称失败",
     "regenerateCodeFailed": "重新生成连接码失败",
+    "powerSaveLoadFailed": "读取电源管理设置失败",
+    "powerSaveUpdateFailed": "保存电源管理设置失败",
     "redeemGiftCardAuthRequired": "请先用手机号登入后继续兑换礼品卡。",
     "redeemGiftCardAlreadyRedeemed": "此账号已兑换过此礼品卡",
     "redeemGiftCardExpired": "礼品卡已过期",

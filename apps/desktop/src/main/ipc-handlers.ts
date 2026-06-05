@@ -60,7 +60,19 @@ export const IPC = {
   FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
+  POWER_SAVE_GET_STATE: 'power-save:get-state',
+  POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
+
+type PowerSaveState = {
+  preventSleepDuringTransfer: boolean;
+  blockingSleep: boolean;
+};
+
+type PowerSaveController = {
+  getState(): PowerSaveState;
+  setPreventSleepDuringTransfer(enabled: boolean): PowerSaveState;
+};
 
 async function regenerateConnectionCodeSafely(
   sidecarManager: SidecarManager,
@@ -327,7 +339,10 @@ function syncLoginCredentialsAfterSuccess(
     });
 }
 
-export function registerIpcHandlers(sidecarManager: SidecarManager): void {
+export function registerIpcHandlers(
+  sidecarManager: SidecarManager,
+  powerSave?: PowerSaveController,
+): void {
   // Sidecar — real HTTP calls
   ipcMain.handle(IPC.SIDECAR_HEALTH, () => sidecarClient.getHealth());
   ipcMain.handle(IPC.SIDECAR_DASHBOARD_SUMMARY, () => sidecarClient.getDashboardSummary());
@@ -575,6 +590,12 @@ export function registerIpcHandlers(sidecarManager: SidecarManager): void {
   ipcMain.handle(IPC.SIDECAR_VALIDATE_SHARE, () => sidecarClient.validateShare());
   ipcMain.handle(IPC.SIDECAR_TRANSFER_ACTIVE, () => sidecarClient.getTransferActive());
   ipcMain.handle(IPC.SIDECAR_SHARED_LIST, (_e, path?: string) => sidecarClient.getSharedList(path));
+  if (powerSave) {
+    ipcMain.handle(IPC.POWER_SAVE_GET_STATE, async () => powerSave.getState());
+    ipcMain.handle(IPC.POWER_SAVE_SET_PREVENT_SLEEP, async (_e, enabled: boolean) =>
+      powerSave.setPreventSleepDuringTransfer(enabled),
+    );
+  }
   ipcMain.handle(IPC.SUPPORT_UPLOAD_DIAGNOSTICS, (_e, request: DiagnosticsUploadRequest) =>
     uploadDiagnostics(sidecarManager, request),
   );

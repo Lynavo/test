@@ -1,9 +1,14 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, powerSaveBlocker } from 'electron';
 import log from 'electron-log';
 import { join } from 'path';
 import { registerIpcHandlers } from './ipc-handlers';
+import { PowerSaveCoordinator } from './power-save-coordinator';
+import { PowerSaveManager } from './power-save-manager';
+import { PowerSavePreferences } from './power-save-preferences';
+import { PowerSaveSettingsController } from './power-save-settings-controller';
 import { attachRendererLogging } from './renderer-logging';
 import { SidecarManager } from './sidecar-manager';
+import { sidecarClient } from './sidecar-client';
 import { checkForUpdatesOnStartup } from './startup-update-check';
 import { WsBridge } from './ws-bridge';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
@@ -22,6 +27,8 @@ if (process.platform === 'darwin') {
 }
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
+const powerSaveManager = new PowerSaveManager(powerSaveBlocker);
+let powerSaveCoordinator: PowerSaveCoordinator | null = null;
 const isDev = !app.isPackaged;
 
 function broadcastSidecarRuntimeState(state: SidecarRuntimeState) {
@@ -33,11 +40,12 @@ function broadcastSidecarRuntimeState(state: SidecarRuntimeState) {
 }
 
 function syncWsBridgeWithRuntimeState(state: SidecarRuntimeState) {
-  if (!wsBridge) {
+  if (!wsBridge || !powerSaveCoordinator) {
     return;
   }
 
-  if (state.status === 'healthy') {
+  const action = powerSaveCoordinator.handleRuntimeState(state);
+  if (action === 'connect') {
     wsBridge.connect();
     return;
   }
@@ -79,8 +87,22 @@ app.whenReady().then(async () => {
   log.info(
     `[App] ready version=${app.getVersion()} packaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`,
   );
-  registerIpcHandlers(sidecar);
-  wsBridge = new WsBridge(() => mainWindow);
+  const powerSavePreferences = new PowerSavePreferences(app.getPath('userData'));
+  powerSaveManager.setEnabled(powerSavePreferences.read().preventSleepDuringTransfer);
+  const powerSaveSettingsController = new PowerSaveSettingsController(
+    powerSaveManager,
+    powerSavePreferences,
+  );
+  registerIpcHandlers(sidecar, powerSaveSettingsController);
+  powerSaveCoordinator = new PowerSaveCoordinator(
+    powerSaveManager,
+    () => sidecarClient.getTransferActive(),
+    (message, err) => log.warn(message, err),
+  );
+  wsBridge = new WsBridge(
+    () => mainWindow,
+    (event) => powerSaveCoordinator?.handleSidecarEvent(event),
+  );
   void sidecar.start().catch((err) => {
     log.error('Failed to start sidecar:', err);
   });
@@ -105,6 +127,7 @@ app.on('before-quit', (event) => {
   if (isQuitting) return;
   event.preventDefault();
   isQuitting = true;
+  powerSaveManager.stop();
   wsBridge?.disconnect();
   sidecar.stop({ killExternal: true, killBonjourBroadcasts: true }).finally(() => app.quit());
 });

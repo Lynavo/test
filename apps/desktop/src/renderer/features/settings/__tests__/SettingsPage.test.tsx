@@ -18,6 +18,10 @@ vi.mock('../BonjourRuntimeSection', () => ({
   ),
 }));
 
+vi.mock('../PowerSaveSection', () => ({
+  PowerSaveSection: () => <div data-testid="power-save-section">PowerSaveSection</div>,
+}));
+
 vi.mock('../ShareAddressSection', () => ({
   ShareAddressSection: () => <div data-testid="share-address-section">ShareAddressSection</div>,
 }));
@@ -83,11 +87,18 @@ describe('SettingsPage', () => {
     expect(screen.getByTestId('support-section')).toBeInTheDocument();
   });
 
-  it('renders shared address status section', () => {
+  it('renders power save section', () => {
     render(<SettingsPage />);
 
-    expect(screen.getByText('局域网共享')).toBeInTheDocument();
-    expect(screen.getByTestId('share-address-section')).toBeInTheDocument();
+    expect(screen.getByText('电源管理')).toBeInTheDocument();
+    expect(screen.getByTestId('power-save-section')).toBeInTheDocument();
+  });
+
+  it('does NOT render shared address status section', () => {
+    render(<SettingsPage />);
+
+    expect(screen.queryByText('局域网共享')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('share-address-section')).not.toBeInTheDocument();
   });
 
   it('does NOT render BonjourRuntimeSection on macOS', () => {

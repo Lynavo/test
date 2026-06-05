@@ -7,7 +7,10 @@
     "deviceNameDescription": "This name is shown on mobile devices",
     "connectionCode": "Pairing code",
     "connectionCodeDescription": "After regeneration, old phones need to pair again",
+    "powerSave": "Power management",
+    "powerSaveDescription": "Keep desktop available during sync",
     "shareAddress": "LAN sharing",
+    "shareAddressDescription": "Checks this computer's SMB sharing status for mobile access to the shared folder",
     "giftCard": "Gift card",
     "giftCardDescription": "Redeem your gift card to unlock more features or storage capacity",
     "bonjour": "Windows Bonjour broadcast",
@@ -26,6 +29,12 @@
   },
   "connectionCode": {
     "regenerate": "Regenerate"
+  },
+  "powerSave": {
+    "preventSleepTitle": "Prevent computer sleep during sync",
+    "preventSleepDescription": "Keeps this computer awake only while a phone is syncing, then restores normal sleep behavior.",
+    "blockingSleep": "Keeping awake",
+    "idle": "Waiting for sync"
   },
   "giftCard": {
     "title": "Gift card redeem",
