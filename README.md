@@ -73,14 +73,18 @@ pnpm release --profile global-review --targets win --dry-run
 # 打 global-review Windows EXE / zip
 pnpm release --profile global-review --targets win
 
+# 打 cn-review Windows EXE / zip
+pnpm release --profile cn-review --targets win
+
 # 打 global-prod Windows EXE / zip
 pnpm release --profile global-prod --targets win
 
 # 打 cn-prod Windows EXE / zip
 pnpm release --profile cn-prod --targets win
 
-# 打完整 global-review 版本（iOS TestFlight + macOS DMG + Windows EXE / zip）
+# 打完整 Review 版本（iOS TestFlight + macOS DMG + Windows EXE / zip）
 pnpm release --profile global-review --targets ios,mac,win
+pnpm release --profile cn-review --targets ios,mac,win
 
 # 打完整 global-prod / cn-prod 版本
 pnpm release --profile global-prod --targets ios,mac,win

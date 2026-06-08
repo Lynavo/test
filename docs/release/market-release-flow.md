@@ -12,7 +12,7 @@
 graph TD
     dev[dev - 主開發分支] -->|合併/切出| release_cn[release/cn - 中國市場發佈分支]
     dev -->|合併/切出| release_global[release/global - 全球市場發佈分支]
-    
+
     release_cn -->|建置 CN| app_cn[Vivi Drop CN App / Desktop]
     release_global -->|建置 Global| app_global[Vivi Drop Global App / Desktop]
 ```
@@ -26,6 +26,18 @@ graph TD
 ## 2. 獨立市場建置指南
 
 在各自的發佈分支上，使用對應市場的環境變數與 scheme 進行建置。
+
+正式發佈與 Review 打包都必須使用根目錄 release profile，不要手動拼接
+`SYNCFLOW_MARKET` 或 API base URL：
+
+| Market | Production profile | Review profile  | API base URL                                                                     |
+| ------ | ------------------ | --------------- | -------------------------------------------------------------------------------- |
+| CN     | `cn-prod`          | `cn-review`     | prod: `https://api.vividrop.cn`, review: `https://review-api.vividrop.cn`        |
+| Global | `global-prod`      | `global-review` | prod: `https://global-api.vividrop.cn`, review: `https://review-api.vividrop.cn` |
+
+Review profile 只切換後端到 `https://review-api.vividrop.cn`，不改變市場身份：
+`cn-review` 仍使用 CN app/desktop packaging，`global-review` 仍使用 Global
+app/desktop packaging。
 
 ### 2.1 中國市場（CN）
 
@@ -58,16 +70,18 @@ graph TD
 ### 3.1 Tag 格式命名
 
 - **中國市場**：`beta/cn/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`
-  *例如：`beta/cn/v0.1.0-b6`*
+  _例如：`beta/cn/v0.1.0-b6`_
 - **全球市場**：`beta/global/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`
-  *例如：`beta/global/v0.1.0-b6`*
+  _例如：`beta/global/v0.1.0-b6`_
 
 ### 3.2 雙倉庫對齊規則（跨倉庫約束）
+
 若打包並上傳了 iOS TestFlight，完成後**必須**在以下兩個倉庫打上完全相同的 Tag 並推送到遠端：
+
 1. `/Volumes/T7/Dev/Web/SyncFlow`
 2. `/Volumes/T7/Dev/Web/vivi-drop-server`
 
-*請確保兩邊使用同一個 Tag 名稱，切勿只對其中一個倉庫打 Tag。*
+_請確保兩邊使用同一個 Tag 名稱，切勿只對其中一個倉庫打 Tag。_
 
 ---
 
@@ -81,7 +95,7 @@ sequenceDiagram
     participant DevBranch as dev 分支
     participant CNBranch as release/cn 分支
     participant GlobalBranch as release/global 分支
-    
+
     Developer->>DevBranch: 1. 提交 Hotfix 並進行本機驗證
     Note over DevBranch: 驗證通過 (Green)
     Developer->>CNBranch: 2. git cherry-pick <commit-sha>
