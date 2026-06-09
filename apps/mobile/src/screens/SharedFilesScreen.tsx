@@ -36,6 +36,7 @@ import {
   prepareDirectoryFilePreview,
 } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
+import { isGlobalMarket } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -301,9 +302,13 @@ async function getDeviceAvailability(): Promise<DeviceAvailability> {
 export function SharedFilesScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
+  const isGlobalBuild = isGlobalMarket();
+  const visibleDirectoryScopes: DirectoryScope[] = isGlobalBuild
+    ? ['personal']
+    : DIRECTORY_SCOPES;
   const { subscription } = useAuth();
   const [activeDirectoryScope, setActiveDirectoryScope] =
-    useState<DirectoryScope>('team');
+    useState<DirectoryScope>(() => (isGlobalBuild ? 'personal' : 'team'));
   const [loading, setLoading] = useState(true);
   const [files, setFiles] = useState<SharedFileDTO[]>([]);
   const [currentPath, setCurrentPath] = useState('');
@@ -1151,7 +1156,11 @@ export function SharedFilesScreen() {
     ? (currentPath.split('/').filter(Boolean).pop() ??
       t('sharedFiles.defaultFolderName'))
     : activeDirectoryScope === 'personal'
-      ? t('sharedFiles.personalFolderName')
+      ? t(
+          isGlobalBuild
+            ? 'sharedFiles.globalPersonalFolderName'
+            : 'sharedFiles.personalFolderName',
+        )
       : t('sharedFiles.teamFolderName');
   const sharedFilesConnectionLabel = t(
     `sharedFiles.connectionStatus.${sharedFilesConnectionStatus}`,
@@ -1221,38 +1230,40 @@ export function SharedFilesScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.scopeTabs} testID="shared-files-scope-tabs">
-          {DIRECTORY_SCOPES.map(scope => {
-            const isActive = scope === activeDirectoryScope;
-            const isDisabled = downloading !== null;
-            return (
-              <TouchableOpacity
-                key={scope}
-                style={[
-                  styles.scopeTab,
-                  isActive ? styles.scopeTabActive : null,
-                  isDisabled ? styles.scopeTabDisabled : null,
-                ]}
-                activeOpacity={0.75}
-                disabled={isDisabled}
-                onPress={() => selectDirectoryScope(scope)}
-              >
-                <Text
+        {visibleDirectoryScopes.length > 1 && (
+          <View style={styles.scopeTabs} testID="shared-files-scope-tabs">
+            {visibleDirectoryScopes.map(scope => {
+              const isActive = scope === activeDirectoryScope;
+              const isDisabled = downloading !== null;
+              return (
+                <TouchableOpacity
+                  key={scope}
                   style={[
-                    styles.scopeTabText,
-                    isActive ? styles.scopeTabTextActive : null,
-                    isDisabled && !isActive
-                      ? styles.scopeTabTextDisabled
-                      : null,
+                    styles.scopeTab,
+                    isActive ? styles.scopeTabActive : null,
+                    isDisabled ? styles.scopeTabDisabled : null,
                   ]}
-                  numberOfLines={1}
+                  activeOpacity={0.75}
+                  disabled={isDisabled}
+                  onPress={() => selectDirectoryScope(scope)}
                 >
-                  {t(`sharedFiles.scopes.${scope}`)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[
+                      styles.scopeTabText,
+                      isActive ? styles.scopeTabTextActive : null,
+                      isDisabled && !isActive
+                        ? styles.scopeTabTextDisabled
+                        : null,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {t(`sharedFiles.scopes.${scope}`)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {content}
       </View>

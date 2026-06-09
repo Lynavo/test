@@ -2,6 +2,7 @@
   "defaultFolderName": "Shared Folder",
   "teamFolderName": "Shared Folder",
   "personalFolderName": "Personal Shared Folder",
+  "globalPersonalFolderName": "My Computer",
   "scopes": {
     "team": "Shared Folder",
     "personal": "Personal Shared Folder"

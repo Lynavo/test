@@ -21,6 +21,7 @@ import {
 } from '@renderer/components/ui/accordion';
 import { GiftCardSection } from '@renderer/features/settings/GiftCardSection';
 import { useElectronAPI } from '@renderer/hooks/use-electron-api';
+import { isGlobalMarket } from '../../../shared/market';
 
 interface QuickStartStep {
   title: string;
@@ -54,10 +55,19 @@ const errorIcons: LucideIcon[] = [Wifi, HardDrive, AlertTriangle, UploadCloud];
 export function HelpPage() {
   const { t } = useTranslation();
   const api = useElectronAPI();
+  const isGlobalBuild = isGlobalMarket();
   const getClientConfig = api.sidecar.getClientConfig;
   const [isGiftCardEnabled, setIsGiftCardEnabled] = useState(false);
-  const quickStartSteps = t('help.quickStart.steps', { returnObjects: true }) as QuickStartStep[];
-  const directoryCards = t('help.directory.cards', { returnObjects: true }) as DirectoryCard[];
+  const quickStartSteps = t(
+    isGlobalBuild ? 'help.quickStart.globalSteps' : 'help.quickStart.steps',
+    {
+      returnObjects: true,
+    },
+  ) as QuickStartStep[];
+  const directoryCards = t(isGlobalBuild ? 'help.directory.globalCards' : 'help.directory.cards', {
+    returnObjects: true,
+  }) as DirectoryCard[];
+  const directoryTree = t(isGlobalBuild ? 'help.directory.globalTree' : 'help.directory.tree');
   const macPermissionSections = t('help.permissions.mac', {
     returnObjects: true,
   }) as PermissionSection[];
@@ -136,7 +146,7 @@ export function HelpPage() {
 
           <GlassCard className="mt-4 p-4">
             <pre className="whitespace-pre font-mono text-xs leading-relaxed text-foreground">
-              {t('help.directory.tree')}
+              {directoryTree}
             </pre>
           </GlassCard>
         </section>
@@ -239,9 +249,7 @@ export function HelpPage() {
         </section>
 
         <section className="mb-8">
-          <h2 className="mb-4 text-base font-semibold text-foreground">
-            {t('help.errors.title')}
-          </h2>
+          <h2 className="mb-4 text-base font-semibold text-foreground">{t('help.errors.title')}</h2>
           <div className="grid grid-cols-2 gap-4">
             {errorCards.map((card, index) => {
               const Icon = errorIcons[index] ?? AlertTriangle;

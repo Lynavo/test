@@ -93,7 +93,9 @@
     "albumTitle": "Album",
     "albumDesc": "Browse and upload photos manually",
     "sharedFilesTitle": "Shared Folder",
-    "sharedFilesDesc": "Browse shared folder and personal shared folder"
+    "sharedFilesDesc": "Browse shared folder and personal shared folder",
+    "globalSharedFilesTitle": "My Computer",
+    "globalSharedFilesDesc": "Browse files from My Computer"
   },
   "trialUpgrade": {
     "entry": "{{days}} days left in your free trial. Upgrade to Pro to unlock everything."

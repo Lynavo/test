@@ -6,6 +6,7 @@ const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 const mockHasSeenSyncActivityTour = jest.fn().mockResolvedValue(false);
 const mockMarkSyncActivityTourSeen = jest.fn().mockResolvedValue(undefined);
+let mockIsGlobalMarket = false;
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -44,24 +45,23 @@ jest.mock('react-i18next', () => ({
         'syncActivity.quickEntry.albumDesc': '瀏覽並手動上傳素材',
         'syncActivity.quickEntry.sharedFilesTitle': '共享目錄',
         'syncActivity.quickEntry.sharedFilesDesc': '瀏覽共享目錄與個人共享目錄',
+        'syncActivity.quickEntry.globalSharedFilesTitle': '我的電腦',
+        'syncActivity.quickEntry.globalSharedFilesDesc': '瀏覽我的電腦中的檔案',
         'syncActivity.onboarding.skip': '跳過引導',
         'syncActivity.onboarding.previous': '上一步',
         'syncActivity.onboarding.next': `下一步 ${values?.step ?? ''}/${values?.total ?? ''}`,
         'syncActivity.onboarding.startJourney': '開啟旅程',
         'syncActivity.onboarding.manual.title': '手動同步',
-        'syncActivity.onboarding.manual.body':
-          '點擊這裡發送素材至電腦。',
+        'syncActivity.onboarding.manual.body': '點擊這裡發送素材至電腦。',
         'syncActivity.onboarding.panel.title': '無感備份',
-        'syncActivity.onboarding.panel.body':
-          '這裡即時展示自動上傳進度。',
+        'syncActivity.onboarding.panel.body': '這裡即時展示自動上傳進度。',
         'syncActivity.onboarding.history.title': '傳輸歷史',
         'syncActivity.onboarding.history.body': '查看所有已完成的傳輸記錄。',
         'syncActivity.onboarding.settings.title': '全域設定',
         'syncActivity.onboarding.settings.body':
           '查看設備與訂閱狀態，修改手機顯示名稱。',
         'syncActivity.onboarding.help.title': '幫助中心',
-        'syncActivity.onboarding.help.body':
-          '遇到問題時可查看快速上手指南。',
+        'syncActivity.onboarding.help.body': '遇到問題時可查看快速上手指南。',
       })[key] ?? key,
   }),
 }));
@@ -116,13 +116,20 @@ jest.mock('../../constants/features', () => ({
   },
 }));
 
+jest.mock('../../markets', () => ({
+  ...jest.requireActual('../../markets'),
+  isGlobalMarket: () => mockIsGlobalMarket,
+}));
+
 jest.mock('../../utils/onboardingStorage', () => ({
   hasSeenSyncActivityTour: () => mockHasSeenSyncActivityTour(),
   markSyncActivityTourSeen: () => mockMarkSyncActivityTourSeen(),
 }));
 
 jest.mock('../../components/onboarding/SyncActivityTour', () => {
-  const actual = jest.requireActual('../../components/onboarding/SyncActivityTour');
+  const actual = jest.requireActual(
+    '../../components/onboarding/SyncActivityTour',
+  );
   const ReactInner = require('react');
   const { Text, TouchableOpacity, View } = require('react-native');
 
@@ -187,6 +194,7 @@ describe('SyncActivityScreen onboarding', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsGlobalMarket = false;
     mockHasSeenSyncActivityTour.mockResolvedValue(false);
     mockMarkSyncActivityTourSeen.mockResolvedValue(undefined);
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
@@ -256,5 +264,19 @@ describe('SyncActivityScreen onboarding', () => {
       expect(mockHasSeenSyncActivityTour).toHaveBeenCalledTimes(1);
     });
     expect(screen.queryByText('手動同步')).toBeNull();
+  });
+
+  it('uses My Computer copy for the shared files quick entry in global builds', async () => {
+    mockIsGlobalMarket = true;
+    mockHasSeenSyncActivityTour.mockResolvedValueOnce(true);
+
+    const screen = render(<SyncActivityScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('我的電腦')).toBeTruthy();
+    });
+
+    expect(screen.getByText('瀏覽我的電腦中的檔案')).toBeTruthy();
+    expect(screen.queryByText('共享目錄')).toBeNull();
   });
 });

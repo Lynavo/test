@@ -1,6 +1,7 @@
 {
   "title": "目錄管理",
   "subtitle": "設定根目錄路徑並管理接收、個人共享與團隊共享目錄的內容",
+  "globalSubtitle": "設定根目錄路徑並管理接收目錄與我的電腦內容",
   "tabs": {
     "received": "接收目錄",
     "shared": "團隊共享",
@@ -12,6 +13,7 @@
     "changeLocked": "正在接收檔案，完成後可變更",
     "receivedDirectory": "接收目錄",
     "personalDirectory": "個人共享目錄",
+    "globalPersonalDirectory": "我的電腦",
     "sharedDirectory": "團隊共享目錄",
     "windowsDrives": "本機磁碟",
     "windowsDrivesWithPath": "本機磁碟（{{path}}）",

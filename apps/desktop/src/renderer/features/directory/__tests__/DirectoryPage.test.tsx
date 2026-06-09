@@ -64,6 +64,7 @@ function setupElectronAPI() {
 describe('DirectoryPage', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
     Reflect.deleteProperty(window, 'electronAPI');
     useDirectoryStore.setState(useDirectoryStore.getInitialState());
     useAuthStore.setState({ session: null, loading: false });
@@ -107,6 +108,14 @@ describe('DirectoryPage', () => {
     expect(useDirectoryStore.getState().activeTab).toBe('shared');
   });
 
+  it('hides the team shared directory tab in global builds', () => {
+    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+
+    render(<DirectoryPage />);
+
+    expect(screen.queryByText(/团队共享/)).not.toBeInTheDocument();
+  });
+
   it('polls the active tab while the page stays visible', async () => {
     vi.useFakeTimers();
 
@@ -132,6 +141,7 @@ describe('DirectoryPage', () => {
 describe('DirectoryPathCard', () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
     Reflect.deleteProperty(window, 'electronAPI');
     useAuthStore.setState({ session: null, loading: false });
     useSettingsStore.setState({
@@ -172,6 +182,15 @@ describe('DirectoryPathCard', () => {
     expect(screen.getByText('个人共享目录')).toBeInTheDocument();
   });
 
+  it('renames personal directory and hides team shared directory in global builds', () => {
+    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+
+    render(<DirectoryPathCard />);
+
+    expect(screen.getByText('我的电脑')).toBeInTheDocument();
+    expect(screen.queryByText('团队共享目录')).not.toBeInTheDocument();
+  });
+
   it('renders selected Windows drive root in personal virtual drives mode', () => {
     (window as Window & { electronAPI?: unknown }).electronAPI = {
       ...(window.electronAPI ?? {}),
@@ -196,7 +215,9 @@ describe('DirectoryPathCard', () => {
     expect(
       within(personalCard as HTMLElement).getByRole('button', { name: '恢复本机磁盘' }),
     ).toBeInTheDocument();
-    expect(within(personalCard as HTMLElement).getByRole('button', { name: '打开' })).toBeDisabled();
+    expect(
+      within(personalCard as HTMLElement).getByRole('button', { name: '打开' }),
+    ).toBeDisabled();
   });
 
   it('does not render Windows restore action on non-Windows hosts', () => {
@@ -238,11 +259,15 @@ describe('DirectoryPathCard', () => {
     const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
     expect(personalCard).not.toBeNull();
     expect(within(personalCard as HTMLElement).getByText('本机磁盘')).toBeInTheDocument();
-    expect(within(personalCard as HTMLElement).queryByText('C:\\Users\\Alice')).not.toBeInTheDocument();
+    expect(
+      within(personalCard as HTMLElement).queryByText('C:\\Users\\Alice'),
+    ).not.toBeInTheDocument();
     expect(
       within(personalCard as HTMLElement).queryByRole('button', { name: '恢复本机磁盘' }),
     ).not.toBeInTheDocument();
-    expect(within(personalCard as HTMLElement).getByRole('button', { name: '打开' })).toBeDisabled();
+    expect(
+      within(personalCard as HTMLElement).getByRole('button', { name: '打开' }),
+    ).toBeDisabled();
   });
 
   it('restores Windows personal virtual drives display from a selected drive root', async () => {
@@ -275,7 +300,9 @@ describe('DirectoryPathCard', () => {
 
     const personalCard = screen.getByText('个人共享目录').closest('.rounded-2xl');
     expect(personalCard).not.toBeNull();
-    fireEvent.click(within(personalCard as HTMLElement).getByRole('button', { name: '恢复本机磁盘' }));
+    fireEvent.click(
+      within(personalCard as HTMLElement).getByRole('button', { name: '恢复本机磁盘' }),
+    );
 
     await waitFor(() => {
       expect(updateSettings).toHaveBeenCalledWith({ personalPath: 'C:\\Users\\Alice' });

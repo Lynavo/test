@@ -59,8 +59,11 @@ vi.mock('@renderer/hooks/use-electron-api', () => ({
 
 describe('HelpPage', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     electronAPIMock.getClientConfig.mockReset();
-    electronAPIMock.getClientConfig.mockResolvedValue({ features: { giftCard: { enabled: true } } });
+    electronAPIMock.getClientConfig.mockResolvedValue({
+      features: { giftCard: { enabled: true } },
+    });
   });
 
   it('renders page header', () => {
@@ -129,7 +132,9 @@ describe('HelpPage', () => {
 
     // Key content from each card
     expect(screen.getByText(/用于接收局域网手机上传的原片/, { exact: false })).toBeInTheDocument();
-    expect(screen.getAllByText(/只有登入相同账号的手机与桌面/, { exact: false }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/只有登入相同账号的手机与桌面/, { exact: false }).length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/局域网内连接设备可查看、预览、在线播放和下载/, { exact: false }),
     ).toBeInTheDocument();
@@ -138,6 +143,17 @@ describe('HelpPage', () => {
     // Directory tree
     expect(screen.getByText(/received\/.*接收局域网手机上传/)).toBeInTheDocument();
     expect(screen.getByText(/PersonalShare\/.*个人共享目录/)).toBeInTheDocument();
+  });
+
+  it('uses My Computer directory help copy and hides team shared directory in global builds', () => {
+    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+
+    render(<HelpPage />);
+
+    expect(screen.getByText('手机查看我的电脑')).toBeInTheDocument();
+    expect(screen.getByText('我的电脑 (personal)')).toBeInTheDocument();
+    expect(screen.queryByText('团队共享目录 (shared)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/shared\/.*团队共享/)).not.toBeInTheDocument();
   });
 
   it('renders system permission guide for both Windows and macOS', () => {
@@ -149,7 +165,9 @@ describe('HelpPage', () => {
     expect(screen.getByText('macOS')).toBeInTheDocument();
 
     // Windows steps
-    expect(screen.getByText(/首次启动时系统可能弹出防火墙提示/, { exact: false })).toBeInTheDocument();
+    expect(
+      screen.getByText(/首次启动时系统可能弹出防火墙提示/, { exact: false }),
+    ).toBeInTheDocument();
 
     // macOS steps
     expect(screen.getByText(/确保 Vivi Drop 有权限访问所选的同步根目录/)).toBeInTheDocument();

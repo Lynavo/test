@@ -93,7 +93,9 @@
     "albumTitle": "相册",
     "albumDesc": "浏览和手动上传素材",
     "sharedFilesTitle": "共享目录",
-    "sharedFilesDesc": "浏览共享目录与个人共享目录"
+    "sharedFilesDesc": "浏览共享目录与个人共享目录",
+    "globalSharedFilesTitle": "我的电脑",
+    "globalSharedFilesDesc": "浏览我的电脑中的文件"
   },
   "trialUpgrade": {
     "entry": "免费试用剩余 {{days}} 天，点击升级 Pro 解锁全部功能"

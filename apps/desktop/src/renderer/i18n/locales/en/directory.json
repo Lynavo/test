@@ -1,6 +1,7 @@
 {
   "title": "Folder Management",
   "subtitle": "Configure the root folder and manage received, personal shared, and team shared contents",
+  "globalSubtitle": "Configure the root folder and manage received files and My Computer",
   "tabs": {
     "received": "Received",
     "shared": "Team Shared",
@@ -12,6 +13,7 @@
     "changeLocked": "Files are being received. You can change this after transfer finishes.",
     "receivedDirectory": "Received folder",
     "personalDirectory": "Personal shared folder",
+    "globalPersonalDirectory": "My Computer",
     "sharedDirectory": "Team shared folder",
     "windowsDrives": "Local disks",
     "windowsDrivesWithPath": "Local disks ({{path}})",

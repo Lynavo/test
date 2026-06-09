@@ -55,6 +55,13 @@ jest.mock('../../constants/features', () => ({
   FEATURES: { SUBSCRIPTION_ENFORCEMENT: true },
 }));
 
+let mockIsGlobalMarket = false;
+
+jest.mock('../../markets', () => ({
+  ...jest.requireActual('../../markets'),
+  isGlobalMarket: () => mockIsGlobalMarket,
+}));
+
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
@@ -171,6 +178,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockIsGlobalMarket = false;
   nativeListeners.clear();
   (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
   (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
@@ -488,6 +496,27 @@ describe('SharedFilesScreen download progress', () => {
       expect(mockBrowseDirectory).toHaveBeenCalledWith('personal', ''),
     );
     expect(getByText('clip.mp4')).toBeTruthy();
+  });
+
+  test('global builds start in the personal directory scope and hide the team scope tab', async () => {
+    mockIsGlobalMarket = true;
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    mockBrowseDirectory.mockResolvedValue({
+      scope: 'personal',
+      path: '',
+      files: [FAKE_FILE],
+    });
+
+    const { getByText, queryByText } = render(<SharedFilesScreen />);
+
+    await waitFor(() =>
+      expect(mockBrowseDirectory).toHaveBeenCalledWith('personal', ''),
+    );
+    expect(getByText('My Computer')).toBeTruthy();
+    expect(queryByText('Shared Folder')).toBeNull();
   });
 
   test('shows personal unauthorized state without auto retrying on HTTP 401', async () => {

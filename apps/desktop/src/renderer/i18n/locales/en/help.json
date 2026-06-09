@@ -28,6 +28,32 @@
         "title": "View shared files on the phone",
         "description": "Place team-ready files in the shared folder so phones can view, preview, and download them from the team shared folder"
       }
+    ],
+    "globalSteps": [
+      {
+        "title": "Choose a sync folder",
+        "description": "Open Vivi Drop and choose a local folder as the sync root (for example ~/ViviDrop on macOS or D:\\ViviDrop on Windows)"
+      },
+      {
+        "title": "Get the pairing code and connect",
+        "description": "Find the 6-digit pairing code in Settings, then enter it on the phone to complete pairing"
+      },
+      {
+        "title": "Check the network",
+        "description": "Make sure the computer and phone are on the same Wi-Fi network. Use 5GHz Wi-Fi for the best transfer speed."
+      },
+      {
+        "title": "Upload media",
+        "description": "Enable automatic upload in the phone album, or manually choose media to upload to the computer"
+      },
+      {
+        "title": "View files on the computer",
+        "description": "Use the received folder on the Folder Management page to view received media, or open it directly in the file manager"
+      },
+      {
+        "title": "View My Computer on the phone",
+        "description": "Use My Computer on the phone to browse, preview, and download files from the paired desktop"
+      }
     ]
   },
   "directory": {
@@ -35,61 +61,130 @@
     "cards": [
       {
         "title": "Received folder (received)",
-        "points": ["Lives under the root folder as received and receives original photos, videos, and other media uploaded from LAN phones", "Affected by the root folder path and automatically organized by device name and date", "Acts as the LAN phone-to-computer transfer destination and is not automatically included in the personal shared folder"]
+        "points": [
+          "Lives under the root folder as received and receives original photos, videos, and other media uploaded from LAN phones",
+          "Affected by the root folder path and automatically organized by device name and date",
+          "Acts as the LAN phone-to-computer transfer destination and is not automatically included in the personal shared folder"
+        ]
       },
       {
         "title": "Personal shared folder (personal)",
-        "points": ["Can point to any permitted local folder or disk root, such as the whole Macintosh HD, C drive, or D drive", "Visible only to phones and desktops signed in to the same account", "Not affected by the root folder path; use it for content that should not be visible to other LAN users"]
+        "points": [
+          "Can point to any permitted local folder or disk root, such as the whole Macintosh HD, C drive, or D drive",
+          "Visible only to phones and desktops signed in to the same account",
+          "Not affected by the root folder path; use it for content that should not be visible to other LAN users"
+        ]
       },
       {
         "title": "Team shared folder (shared)",
-        "points": ["Stores team-ready content processed on the computer", "Connected devices on the LAN can view, preview, stream, and download these files", "Phones have read-only access and cannot modify or delete files"]
+        "points": [
+          "Stores team-ready content processed on the computer",
+          "Connected devices on the LAN can view, preview, stream, and download these files",
+          "Phones have read-only access and cannot modify or delete files"
+        ]
       }
     ],
-    "tree": "ViviDrop/\n├── received/      (media uploaded from LAN phones)\n└── shared/        (team files shared to LAN devices)\n\nPersonalShare/    (personal shared folder, independently configurable)"
+    "globalCards": [
+      {
+        "title": "Received folder (received)",
+        "points": [
+          "Lives under the root folder as received and receives original photos, videos, and other media uploaded from LAN phones",
+          "Affected by the root folder path and automatically organized by device name and date",
+          "Acts as the LAN phone-to-computer transfer destination"
+        ]
+      },
+      {
+        "title": "My Computer (personal)",
+        "points": [
+          "Can point to any permitted local folder or disk root, such as the whole Macintosh HD, C drive, or D drive",
+          "Visible only to phones and desktops signed in to the same account",
+          "Not affected by the root folder path; use it to browse local desktop files from the phone"
+        ]
+      }
+    ],
+    "tree": "ViviDrop/\n├── received/      (media uploaded from LAN phones)\n└── shared/        (team files shared to LAN devices)\n\nPersonalShare/    (personal shared folder, independently configurable)",
+    "globalTree": "ViviDrop/\n└── received/      (media uploaded from LAN phones)\n\nMy Computer/      (local desktop folder or disk selected for phone access)"
   },
   "permissions": {
     "title": "🔐 System Permissions",
     "mac": [
       {
         "title": "Firewall",
-        "steps": ["System Settings → Network → Firewall", "If Firewall is enabled, click “Options…” and make sure Vivi Drop is set to “Allow incoming connections”", "When macOS prompts on first launch, click “Allow”"]
+        "steps": [
+          "System Settings → Network → Firewall",
+          "If Firewall is enabled, click “Options…” and make sure Vivi Drop is set to “Allow incoming connections”",
+          "When macOS prompts on first launch, click “Allow”"
+        ]
       },
       {
         "title": "Local Network",
-        "steps": ["System Settings → Privacy & Security → Local Network", "Make sure Vivi Drop is enabled. Phone discovery depends on this permission.", "If the phone cannot find the computer, check this item first"]
+        "steps": [
+          "System Settings → Privacy & Security → Local Network",
+          "Make sure Vivi Drop is enabled. Phone discovery depends on this permission.",
+          "If the phone cannot find the computer, check this item first"
+        ]
       },
       {
         "title": "Files and folders",
-        "steps": ["System Settings → Privacy & Security → Files and Folders", "Make sure Vivi Drop can access the selected sync root folder", "If the sync folder is on an external drive, also grant Full Disk Access"]
+        "steps": [
+          "System Settings → Privacy & Security → Files and Folders",
+          "Make sure Vivi Drop can access the selected sync root folder",
+          "If the sync folder is on an external drive, also grant Full Disk Access"
+        ]
       },
       {
         "title": "Gatekeeper and first launch",
-        "steps": ["If first launch says the developer cannot be verified, right-click the app and choose “Open”", "Or go to System Settings → Privacy & Security and click “Open Anyway”", "After one approval, future launches should not show this prompt"]
+        "steps": [
+          "If first launch says the developer cannot be verified, right-click the app and choose “Open”",
+          "Or go to System Settings → Privacy & Security and click “Open Anyway”",
+          "After one approval, future launches should not show this prompt"
+        ]
       }
     ],
     "windows": [
       {
         "title": "Firewall",
-        "steps": ["Windows may show a firewall prompt on first launch. Choose “Allow access”.", "If blocked: Settings → Privacy & security → Windows Security → Firewall & network protection", "Click “Allow an app through firewall” and make sure Vivi Drop is checked for both private and public networks"]
+        "steps": [
+          "Windows may show a firewall prompt on first launch. Choose “Allow access”.",
+          "If blocked: Settings → Privacy & security → Windows Security → Firewall & network protection",
+          "Click “Allow an app through firewall” and make sure Vivi Drop is checked for both private and public networks"
+        ]
       },
       {
         "title": "Network discovery",
-        "steps": ["Settings → Network & Internet → Advanced network settings → Advanced sharing settings", "Make sure “Network discovery” is enabled for the current network profile", "If the phone cannot find the computer, confirm the network type is Private, not Public"]
+        "steps": [
+          "Settings → Network & Internet → Advanced network settings → Advanced sharing settings",
+          "Make sure “Network discovery” is enabled for the current network profile",
+          "If the phone cannot find the computer, confirm the network type is Private, not Public"
+        ]
       },
       {
         "title": "Folder access",
-        "steps": ["Make sure the disk containing the sync root has sufficient read/write permissions", "Avoid protected system folders such as C:\\Program Files", "If using an external drive, keep it connected during transfers"]
+        "steps": [
+          "Make sure the disk containing the sync root has sufficient read/write permissions",
+          "Avoid protected system folders such as C:\\Program Files",
+          "If using an external drive, keep it connected during transfers"
+        ]
       },
       {
         "title": "SmartScreen and first launch",
-        "steps": ["If Windows says it protected your PC on first launch, click “More info” → “Run anyway”", "Or check “Unblock” in file properties before running", "After one approval, future launches should not show this prompt"]
+        "steps": [
+          "If Windows says it protected your PC on first launch, click “More info” → “Run anyway”",
+          "Or check “Unblock” in file properties before running",
+          "After one approval, future launches should not show this prompt"
+        ]
       }
     ]
   },
   "uploadRules": {
     "title": "📤 Upload Rules",
-    "items": ["Automatic and manual uploads can coexist. Manual uploads take priority.", "After each file completes, the queue head is selected again so manual media stays prioritized.", "Manual uploads form an append-only batch; new media is deduplicated before appending.", "Only one file may transfer at a time. The queue uploads in order.", "Pause/resume automatic upload and cancel manual batches are supported. Per-item deletion or reordering is not supported."]
+    "items": [
+      "Automatic and manual uploads can coexist. Manual uploads take priority.",
+      "After each file completes, the queue head is selected again so manual media stays prioritized.",
+      "Manual uploads form an append-only batch; new media is deduplicated before appending.",
+      "Only one file may transfer at a time. The queue uploads in order.",
+      "Pause/resume automatic upload and cancel manual batches are supported. Per-item deletion or reordering is not supported."
+    ]
   },
   "faq": {
     "title": "❓ FAQ",

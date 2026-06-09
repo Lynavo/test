@@ -64,6 +64,7 @@ import {
 import { resolveSubscriptionDisplayState } from '../utils/subscriptionStatusDisplay';
 import { FEATURES } from '../constants/features';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import { isGlobalMarket } from '../markets';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -563,6 +564,7 @@ export function SyncActivityScreen() {
   const navigation = useNavigation<SyncActivityNav>();
   const isScreenFocused = useIsFocused();
   const { t } = useTranslation();
+  const isGlobalBuild = isGlobalMarket();
   const auth = useAuth();
   const [overview, setOverview] = useState<SyncOverview>(EMPTY_OVERVIEW);
   const [bindingState, setBindingState] = useState<BindingState | null>(null);
@@ -1444,10 +1446,7 @@ export function SyncActivityScreen() {
               accessibilityLabel={t('syncActivity.header.history')}
               activeOpacity={0.7}
               onLayout={() =>
-                measureSyncActivityTourTarget(
-                  'history',
-                  historyHeaderActionRef,
-                )
+                measureSyncActivityTourTarget('history', historyHeaderActionRef)
               }
               onPress={() => navigation.navigate('History')}
             >
@@ -1478,9 +1477,7 @@ export function SyncActivityScreen() {
           ref={mainCardRef}
           testID="sync-activity-tour-target-panel"
           style={styles.mainCard}
-          onLayout={() =>
-            measureSyncActivityTourTarget('panel', mainCardRef)
-          }
+          onLayout={() => measureSyncActivityTourTarget('panel', mainCardRef)}
         >
           {/* Device info row — always shown at top of card */}
           <View style={styles.deviceRow}>
@@ -2106,10 +2103,7 @@ export function SyncActivityScreen() {
               testID="sync-activity-tour-target-album"
               style={styles.quickEntryTarget}
               onLayout={() =>
-                measureSyncActivityTourTarget(
-                  'album',
-                  albumQuickEntryTargetRef,
-                )
+                measureSyncActivityTourTarget('album', albumQuickEntryTargetRef)
               }
             >
               <TouchableOpacity
@@ -2148,10 +2142,18 @@ export function SyncActivityScreen() {
                 <Icon name="folder-outline" size={22} color="#22c55e" />
               </View>
               <Text style={styles.quickEntryTitle}>
-                {t('syncActivity.quickEntry.sharedFilesTitle')}
+                {t(
+                  isGlobalBuild
+                    ? 'syncActivity.quickEntry.globalSharedFilesTitle'
+                    : 'syncActivity.quickEntry.sharedFilesTitle',
+                )}
               </Text>
               <Text style={styles.quickEntryDesc}>
-                {t('syncActivity.quickEntry.sharedFilesDesc')}
+                {t(
+                  isGlobalBuild
+                    ? 'syncActivity.quickEntry.globalSharedFilesDesc'
+                    : 'syncActivity.quickEntry.sharedFilesDesc',
+                )}
               </Text>
             </TouchableOpacity>
           </View>

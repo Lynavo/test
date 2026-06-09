@@ -2,6 +2,7 @@
   "defaultFolderName": "共享目錄",
   "teamFolderName": "共享目錄",
   "personalFolderName": "個人共享目錄",
+  "globalPersonalFolderName": "我的電腦",
   "scopes": {
     "team": "共享目錄",
     "personal": "個人共享目錄"
