@@ -228,6 +228,18 @@ function isRetainedOfflineTunnelReachability(value: unknown): boolean {
   );
 }
 
+function shouldTrustBindingSharedFilesReachability(
+  connectionState: string,
+  value: unknown,
+): boolean {
+  if (!isSharedFilesReachabilityAvailable(value)) return true;
+  if (connectionState === 'bound') return false;
+  if (connectionState === 'offline') {
+    return isRetainedOfflineTunnelReachability(value);
+  }
+  return true;
+}
+
 function sharedFilesConnectionStatusFromReachability(
   value: unknown,
 ): SharedFilesConnectionStatus | null {
@@ -562,13 +574,6 @@ export function SharedFilesScreen() {
           return;
         }
 
-        const nextSharedFilesConnectionStatus =
-          sharedFilesConnectionStatusFromReachability(
-            state.sharedFilesReachability,
-          );
-        if (nextSharedFilesConnectionStatus) {
-          setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
-        }
         const connState = (state.connectionState as string) || 'bound';
         const sharedFilesAvailable = isSharedFilesReachabilityAvailable(
           state.sharedFilesReachability,
@@ -576,10 +581,22 @@ export function SharedFilesScreen() {
         const retainedOfflineTunnel = isRetainedOfflineTunnelReachability(
           state.sharedFilesReachability,
         );
+        const trustSharedFilesReachability =
+          shouldTrustBindingSharedFilesReachability(
+            connState,
+            state.sharedFilesReachability,
+          );
+        const nextSharedFilesConnectionStatus =
+          sharedFilesConnectionStatusFromReachability(
+            state.sharedFilesReachability,
+          );
+        if (nextSharedFilesConnectionStatus && trustSharedFilesReachability) {
+          setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
+        }
         if (
           connState === 'connected' ||
-          connState === 'bound' ||
-          (sharedFilesAvailable &&
+          (trustSharedFilesReachability &&
+            sharedFilesAvailable &&
             (connState !== 'offline' || retainedOfflineTunnel))
         ) {
           const previousAvailability = bindingAvailabilityRef.current;
@@ -601,7 +618,7 @@ export function SharedFilesScreen() {
           setErrorKind('network_error');
           setFiles([]);
           setLoading(false);
-        } else if (connState === 'connecting') {
+        } else if (connState === 'connecting' || connState === 'bound') {
           const previousAvailability = bindingAvailabilityRef.current;
           if (
             previousAvailability.available === true &&

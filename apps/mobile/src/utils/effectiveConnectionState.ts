@@ -26,6 +26,12 @@ export type SyncConnectionSnapshot = {
 
 export type ConnectionBadgeState = 'online' | 'connecting' | 'offline';
 
+const ACTIVE_UPLOAD_STATES = new Set([
+  'uploading',
+  'preparing',
+  'cloud_downloading',
+]);
+
 export function buildSyncConnectionEvidence(
   snapshot: SyncConnectionSnapshot,
 ): SyncConnectionEvidence {
@@ -43,23 +49,7 @@ export function buildSyncConnectionEvidence(
 export function syncActivityImpliesConnected(
   evidence: SyncConnectionEvidence,
 ): boolean {
-  if (
-    evidence.uploadState === 'uploading' ||
-    evidence.uploadState === 'completed' ||
-    evidence.uploadState === 'preparing' ||
-    evidence.uploadState === 'cloud_downloading'
-  ) {
-    return true;
-  }
-
-  if (
-    (evidence.progressPercent ?? 0) > 0 ||
-    (evidence.transferredBytes ?? 0) > 0
-  ) {
-    return true;
-  }
-
-  if (evidence.currentFileKey) {
+  if (ACTIVE_UPLOAD_STATES.has(evidence.uploadState ?? '')) {
     return true;
   }
 
@@ -73,9 +63,8 @@ export function getEffectiveConnectionState(
   connectionState: MobileConnectionState | null | undefined,
   evidence: SyncConnectionEvidence,
 ): MobileConnectionState | null | undefined {
-  // When the native layer explicitly says offline, only override if the queue
-  // proves a transfer is truly in-flight right now — stale progress values
-  // (e.g. 100% from a previous completed upload) must not keep the badge green.
+  // Native offline is authoritative; stale progress from a previous upload
+  // must not keep the badge green.
   if (connectionState === 'offline') {
     return 'offline';
   }
@@ -91,7 +80,10 @@ export function getEffectiveConnectionState(
     return 'connected';
   }
 
-  if (syncActivityImpliesConnected(evidence)) {
+  if (
+    connectionState !== 'bound' &&
+    syncActivityImpliesConnected(evidence)
+  ) {
     return 'connected';
   }
 

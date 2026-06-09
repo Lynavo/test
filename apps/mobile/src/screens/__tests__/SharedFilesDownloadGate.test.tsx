@@ -368,6 +368,35 @@ describe('SharedFilesScreen download progress', () => {
     expect(getByText('Relay online')).toBeTruthy();
   });
 
+  test('does not show LAN online for a bound binding before shared files reachability is verified', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+
+    const { getByText, getByTestId, queryByText } = render(
+      <SharedFilesScreen />,
+    );
+
+    await waitFor(() => getByTestId('shared-file-download-button'));
+
+    await act(async () => {
+      nativeListeners.get('onBindingStateChanged')?.({
+        deviceId: 'device-1',
+        connectionState: 'bound',
+        sharedFilesReachability: {
+          deviceId: 'device-1',
+          state: 'available',
+          route: 'lan',
+          reason: 'persisted_binding_snapshot',
+        },
+      });
+    });
+
+    expect(queryByText('LAN online')).toBeNull();
+    expect(getByText('Offline')).toBeTruthy();
+  });
+
   test('returns to the parent directory from the header back button', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

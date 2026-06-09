@@ -289,6 +289,17 @@ object AndroidSyncPrimitives {
     return "Vivi Drop ${host.trim()}"
   }
 
+  fun presenceResponseMatchesBinding(
+    expectedDeviceId: String,
+    responseServerId: String?,
+  ): Boolean {
+    val normalizedExpectedDeviceId = expectedDeviceId.trim()
+    val normalizedResponseServerId = responseServerId?.trim().orEmpty()
+    return normalizedExpectedDeviceId.isNotBlank() &&
+      normalizedResponseServerId.isNotBlank() &&
+      normalizedExpectedDeviceId == normalizedResponseServerId
+  }
+
   fun resolveDiscoveryProbeCandidate(
     probeGeneration: Long,
     currentGeneration: Long,

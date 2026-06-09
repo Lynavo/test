@@ -57,6 +57,11 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get device name")
 		return
 	}
+	serverID, err := s.store.GetDeviceID()
+	if err != nil && err != sql.ErrNoRows {
+		writeError(w, http.StatusInternalServerError, "failed to get device id")
+		return
+	}
 
 	var shareName any = nil
 	shareConfig, err := s.store.GetShareConfig()
@@ -70,6 +75,7 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
+		"serverId":   serverID,
 		"serverName": serverName,
 		"shareName":  shareName,
 	})

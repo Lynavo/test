@@ -62,9 +62,9 @@ describe('effectiveConnectionState', () => {
     ).toBe('connected');
   });
 
-  it('treats visible queue uploading state as connected evidence', () => {
+  it('treats visible queue uploading state as connected evidence while reconnecting', () => {
     expect(
-      getEffectiveConnectionState('bound', {
+      getEffectiveConnectionState('connecting', {
         progressPercent: 0,
         queueHasUploadingItem: true,
         uploadState: 'idle',
@@ -100,6 +100,32 @@ describe('effectiveConnectionState', () => {
         }),
       ),
     ).toBe('offline');
+  });
+
+  it('does not show online for a cold-start bound binding with stale completed sync evidence', () => {
+    expect(
+      getConnectionBadgeState(
+        'bound',
+        buildSyncConnectionEvidence({
+          progressPercent: 100,
+          transferredBytes: 4096,
+          uploadState: 'completed',
+        }),
+      ),
+    ).toBe('connecting');
+  });
+
+  it('does not show online for reconnecting binding with stale idle progress evidence', () => {
+    expect(
+      getConnectionBadgeState(
+        'connecting',
+        buildSyncConnectionEvidence({
+          progressPercent: 100,
+          currentFileConfirmedBytes: 4096,
+          uploadState: 'idle',
+        }),
+      ),
+    ).toBe('connecting');
   });
 
   it('keeps connecting badge state distinct from online when no sync evidence exists', () => {

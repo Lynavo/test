@@ -793,6 +793,13 @@ func TestPresenceHeartbeatBroadcastsConnectedIdleEvent(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode presence response: %v", err)
 	}
+	deviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	if body["serverId"] != deviceID {
+		t.Fatalf("expected serverId %q, got %v", deviceID, body["serverId"])
+	}
 	if body["serverName"] != "Desk Renamed" {
 		t.Fatalf("expected serverName Desk Renamed, got %v", body["serverName"])
 	}

@@ -362,6 +362,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private let presenceRecoveryLock = NSLock()
     private var presenceRecoveryToken = UUID()
     private var presenceRecoveryWorkItem: DispatchWorkItem?
+    private var presenceDelayedRecoveryProbeFailures = 0
     private let localTCPProxy = LocalTCPProxy()
     private let p2pTunnelQueue = DispatchQueue(
         label: "com.syncflow.p2p-tunnel",
@@ -1778,6 +1779,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return true
     }
 
+    private func clearSharedFilesLANReachabilityOnPresenceRecoveryStart() {
+        let reachabilityState = sharedFilesReachabilityPayload?["state"] as? String
+        let reachabilityRoute = sharedFilesReachabilityPayload?["route"] as? String
+        guard SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
+            reachabilityState: reachabilityState,
+            reachabilityRoute: reachabilityRoute
+        ) else {
+            return
+        }
+        clearSharedFilesReachability(reason: "presence_recovery_started_lan_unreachable")
+    }
+
     private func maintainConnectedBindingState(reason: String) {
         guard uploadStore?.getBinding() != nil else { return }
         if bindingConnectionState != .connected {
@@ -2163,11 +2176,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         clientId: String,
         maxAttempts: Int? = nil,
         retryInterval: TimeInterval? = nil,
-        promoteOfflineToConnecting: Bool = false
+        promoteOfflineToConnecting: Bool = false,
+        delayedProbe: Bool = false
     ) {
         let maxAttempts = maxAttempts ?? presenceRecoveryMaxAttempts
         let retryInterval = retryInterval ?? presenceRecoveryRetryInterval
+        if !delayedProbe {
+            presenceDelayedRecoveryProbeFailures = 0
+        }
         cancelPresenceRecoveryProbe(reason: "start_new_probe")
+        clearSharedFilesLANReachabilityOnPresenceRecoveryStart()
         if bindingConnectionState != .offline || promoteOfflineToConnecting {
             updateBindingConnectionState(.connecting, reason: "presence_recovery_started")
         } else {
@@ -2189,7 +2207,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             attempt: 1,
             maxAttempts: maxAttempts,
             retryInterval: retryInterval,
-            token: token
+            token: token,
+            delayedProbe: delayedProbe
         )
     }
 
@@ -2198,7 +2217,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         attempt: Int,
         maxAttempts: Int,
         retryInterval: TimeInterval,
-        token: UUID
+        token: UUID,
+        delayedProbe: Bool
     ) {
         guard token == currentPresenceRecoveryToken() else { return }
 
@@ -2220,6 +2240,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // and that transition cancels the recovery probe/token. Treat
                 // the success callback as authoritative so recovery can resume
                 // pending uploads after desktop relaunch.
+                self.presenceDelayedRecoveryProbeFailures = 0
                 self.cancelPresenceRecoveryProbe(reason: "heartbeat_succeeded")
                 self.resumeSyncAfterConnectionRecovery(reason: "presence_recovery_succeeded")
                 return
@@ -2228,6 +2249,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             guard token == self.currentPresenceRecoveryToken() else { return }
 
             guard attempt < maxAttempts else {
+                if delayedProbe {
+                    self.presenceDelayedRecoveryProbeFailures += 1
+                }
                 self.cancelPresenceRecoveryProbe(reason: "exhausted")
                 self.updateBindingConnectionState(.offline, reason: "presence_recovery_exhausted")
                 self.restartDiscoveryAfterPresenceRecoveryExhausted()
@@ -2240,7 +2264,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     attempt: attempt + 1,
                     maxAttempts: maxAttempts,
                     retryInterval: retryInterval,
-                    token: token
+                    token: token,
+                    delayedProbe: delayedProbe
                 )
             }
             self.setPresenceRecoveryWorkItem(workItem)
@@ -2285,6 +2310,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 "DiscoveryService",
                 "presence recovery exhausted; discovery already browsing deviceId=\(binding.deviceId)"
             )
+            scheduleDelayedPresenceRecoveryProbeAfterExhaustion(binding: binding)
             return
         }
 
@@ -2292,6 +2318,75 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         syncDiagnosticsLog(
             "DiscoveryService",
             "presence recovery exhausted restarted discovery deviceId=\(binding.deviceId)"
+        )
+    }
+
+    private func probeBoundDesktopIfDiscoveryAlreadyBrowsing(reason: String) -> Bool {
+        let binding = uploadStore?.getBinding()
+        let host = currentPresenceHeartbeatHost()
+        guard PresenceReconnectPolicy.shouldProbeWhenDiscoveryAlreadyBrowsing(
+            hasBinding: binding != nil,
+            isDiscoveryBrowsing: discoveryService.isBrowsing,
+            bindingState: bindingConnectionState.rawValue,
+            presenceHost: host
+        ) else {
+            return false
+        }
+
+        guard let binding else { return false }
+        syncDiagnosticsLog(
+            "SyncEngine",
+            "probing bound desktop while discovery already browsing reason=\(reason) deviceId=\(binding.deviceId) host=\(host ?? "nil")"
+        )
+        let clientId = bindingService.getOrCreateClientId()
+        startPresenceRecoveryProbe(clientId: clientId, promoteOfflineToConnecting: true)
+        return true
+    }
+
+    private func scheduleDelayedPresenceRecoveryProbeAfterExhaustion(binding: BindingRecord) {
+        let host = currentPresenceHeartbeatHost()
+        guard PresenceReconnectPolicy.shouldScheduleDelayedProbeAfterRecoveryExhausted(
+            hasBinding: true,
+            isDiscoveryBrowsing: discoveryService.isBrowsing,
+            bindingState: bindingConnectionState.rawValue,
+            presenceHost: host
+        ) else {
+            return
+        }
+
+        let clientId = bindingService.getOrCreateClientId()
+        let delay = PresenceReconnectPolicy.delayedProbeIntervalAfterRecoveryExhausted(
+            consecutiveDelayedProbeFailures: presenceDelayedRecoveryProbeFailures
+        )
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let currentBinding = self.uploadStore?.getBinding()
+            guard currentBinding?.deviceId == binding.deviceId else { return }
+            guard PresenceReconnectPolicy.shouldScheduleDelayedProbeAfterRecoveryExhausted(
+                hasBinding: currentBinding != nil,
+                isDiscoveryBrowsing: self.discoveryService.isBrowsing,
+                bindingState: self.bindingConnectionState.rawValue,
+                presenceHost: self.currentPresenceHeartbeatHost()
+            ) else {
+                return
+            }
+            syncDiagnosticsLog(
+                "SyncEngine",
+                "presence recovery delayed LAN probe starting deviceId=\(binding.deviceId)"
+            )
+            self.startPresenceRecoveryProbe(
+                clientId: clientId,
+                maxAttempts: 1,
+                retryInterval: self.presenceRecoveryRetryInterval,
+                promoteOfflineToConnecting: false,
+                delayedProbe: true
+            )
+        }
+        setPresenceRecoveryWorkItem(workItem)
+        presenceRecoveryQueue.asyncAfter(deadline: .now() + delay, execute: workItem)
+        syncDiagnosticsLog(
+            "SyncEngine",
+            "presence recovery delayed LAN probe scheduled deviceId=\(binding.deviceId) delay=\(delay)s failures=\(presenceDelayedRecoveryProbeFailures)"
         )
     }
 
@@ -5373,6 +5468,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 "SyncEngine",
                 "startDiscovery no-op: discovery already browsing"
             )
+            _ = probeBoundDesktopIfDiscoveryAlreadyBrowsing(reason: "start_discovery_already_browsing")
             return
         }
         discoveryService.startBrowsing()
@@ -6350,23 +6446,38 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
                 completion?(false)
             } else {
-                if let httpResponse = response as? HTTPURLResponse {
-                    slog("[Presence] heartbeat succeeded: HTTP %d", httpResponse.statusCode)
-                    syncDiagnosticsLog("Presence", "heartbeat succeeded host=\(host) status=\(httpResponse.statusCode) reason=\(successReason)")
+                let statusCode = (response as? HTTPURLResponse)?.statusCode
+                let payload = data.flatMap {
+                    try? JSONSerialization.jsonObject(with: $0) as? [String: Any]
+                }
+                let responseServerId = payload?["serverId"] as? String
+                guard PresenceReconnectPolicy.presenceResponseMatchesBinding(
+                    expectedDeviceId: expectedDeviceId,
+                    responseServerId: responseServerId
+                ) else {
+                    syncDiagnosticsLog(
+                        "Presence",
+                        "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") reason=\(failureReason)_server_mismatch"
+                    )
+                    if updateStateOnFailure {
+                        self.updateBindingConnectionState(.offline, reason: "\(failureReason)_server_mismatch")
+                    }
+                    completion?(false)
+                    return
+                }
+                if let statusCode {
+                    slog("[Presence] heartbeat succeeded: HTTP %d", statusCode)
+                    syncDiagnosticsLog("Presence", "heartbeat succeeded host=\(host) status=\(statusCode) reason=\(successReason)")
                 } else {
                     slog("[Presence] heartbeat succeeded")
                     syncDiagnosticsLog("Presence", "heartbeat succeeded host=\(host) reason=\(successReason)")
                 }
-                if let data,
-                   let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                {
-                    self.refreshBoundServerMetadata(
-                        expectedDeviceId: expectedDeviceId,
-                        serverName: payload["serverName"] as? String,
-                        shareName: payload["shareName"] as? String,
-                        host: host
-                    )
-                }
+                self.refreshBoundServerMetadata(
+                    expectedDeviceId: expectedDeviceId,
+                    serverName: payload?["serverName"] as? String,
+                    shareName: payload?["shareName"] as? String,
+                    host: host
+                )
                 self.updateBindingConnectionState(.connected, reason: successReason)
                 completion?(true)
             }

@@ -317,6 +317,28 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun presenceResponseMustMatchBoundDesktopIdentity() {
+    assertTrue(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = " desktop-1 ",
+        responseServerId = "desktop-1",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "other-desktop",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = "desktop-1",
+        responseServerId = null,
+      ),
+    )
+  }
+
+  @Test
   fun failedPresenceHeartbeatStartsRecoveryOnlyForIdleConnectedBinding() {
     assertTrue(
       AndroidSyncPrimitives.shouldStartPresenceRecoveryAfterHeartbeatFailure(

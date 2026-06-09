@@ -202,6 +202,30 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
+        reachabilityState: "available",
+        reachabilityRoute: "lan"
+    ),
+    "presence recovery must clear stale LAN reachability after the LAN presence heartbeat fails"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
+        reachabilityState: "available",
+        reachabilityRoute: "tunnel"
+    ),
+    "presence recovery must not clear tunnel reachability before tunnel liveness is known"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
+        reachabilityState: "unavailable",
+        reachabilityRoute: "lan"
+    ),
+    "presence recovery must not re-emit clears for already unavailable LAN reachability"
+)
+
+expect(
     SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: true),
     "shared-file downloads that started on the tunnel must retry on a fresh tunnel instead of migrating to LAN"
 )

@@ -3273,8 +3273,20 @@ class NativeSyncEngineModule(
       if (statusCode !in 200..299) {
         throw IllegalStateException(body.ifBlank { "Sidecar returned HTTP $statusCode" })
       }
+      val payload = JSONObject(body)
+      val responseServerId = payload.optString("serverId").takeIf { it.isNotBlank() }
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId)) {
+        recordDiagnosticsLog(
+          "Presence",
+          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} reason=${failureReason}_server_mismatch",
+        )
+        if (updateStateOnFailure) {
+          updateBindingConnectionState(loadBinding(), "offline", reason = failureReason)
+        }
+        return false
+      }
 
-      refreshBindingMetadataFromPresence(binding.deviceId, binding.host, body)
+      refreshBindingMetadataFromPresence(binding.deviceId, binding.host, payload)
       val current = loadBinding()
       if (current != null && current.deviceId == binding.deviceId && current.connectionState != "connected") {
         updateBindingConnectionState(current, "connected", reason = successReason)
@@ -3422,16 +3434,8 @@ class NativeSyncEngineModule(
   private fun refreshBindingMetadataFromPresence(
     expectedDeviceId: String,
     host: String,
-    body: String,
+    payload: JSONObject,
   ) {
-    if (body.isBlank()) {
-      return
-    }
-    val payload = try {
-      JSONObject(body)
-    } catch (_: Throwable) {
-      return
-    }
     val current = loadBinding() ?: return
     if (current.deviceId != expectedDeviceId) {
       return

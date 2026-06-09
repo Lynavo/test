@@ -173,4 +173,11 @@ enum SharedFilesRoutePolicy {
         guard reachabilityRoute == "tunnel" || reachabilityRoute == "relay" else { return false }
         return isTunnelActive || isTunnelStarting
     }
+
+    static func shouldClearLANReachabilityOnPresenceRecoveryStart(
+        reachabilityState: String?,
+        reachabilityRoute: String?
+    ) -> Bool {
+        reachabilityState == "available" && reachabilityRoute == "lan"
+    }
 }
