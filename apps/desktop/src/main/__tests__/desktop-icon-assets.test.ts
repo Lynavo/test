@@ -18,7 +18,11 @@ function paethPredictor(a: number, b: number, c: number): number {
   return c;
 }
 
-function readPngAlphaExtrema(filePath: string): { min: number; max: number } {
+function readPngAlpha(filePath: string): {
+  width: number;
+  height: number;
+  getAlpha: (x: number, y: number) => number;
+} {
   const png = readFileSync(filePath);
   expect(png.subarray(0, pngSignature.length).equals(pngSignature)).toBe(true);
 
@@ -51,20 +55,25 @@ function readPngAlphaExtrema(filePath: string): { min: number; max: number } {
     offset = dataEnd + 4;
   }
 
-  if (colorType === 2) return { min: 255, max: 255 };
+  if (colorType === 2) {
+    return {
+      width,
+      height,
+      getAlpha: () => 255,
+    };
+  }
 
   const bytesPerPixel = 4;
   const rowLength = width * bytesPerPixel;
   const inflated = inflateSync(Buffer.concat(idatChunks));
-  const currentRow = Buffer.alloc(rowLength);
+  const rgba = Buffer.alloc(width * height * bytesPerPixel);
   const previousRow = Buffer.alloc(rowLength);
   let inputOffset = 0;
-  let min = 255;
-  let max = 0;
 
   for (let y = 0; y < height; y += 1) {
     const filter = inflated[inputOffset];
     inputOffset += 1;
+    const currentRow = rgba.subarray(y * rowLength, (y + 1) * rowLength);
 
     for (let x = 0; x < rowLength; x += 1) {
       const raw = inflated[inputOffset + x];
@@ -80,21 +89,19 @@ function readPngAlphaExtrema(filePath: string): { min: number; max: number } {
       else throw new Error(`Unsupported PNG filter ${filter} in ${filePath}`);
     }
 
-    for (let alphaIndex = 3; alphaIndex < rowLength; alphaIndex += bytesPerPixel) {
-      const alpha = currentRow[alphaIndex];
-      min = Math.min(min, alpha);
-      max = Math.max(max, alpha);
-    }
-
     currentRow.copy(previousRow);
     inputOffset += rowLength;
   }
 
-  return { min, max };
+  return {
+    width,
+    height,
+    getAlpha: (x: number, y: number) => rgba[y * rowLength + x * bytesPerPixel + 3],
+  };
 }
 
 describe('desktop app icon assets', () => {
-  it('keeps macOS app icons fully opaque so the Dock does not show a gray backing layer', () => {
+  it('keeps macOS app icons rounded with transparent outer corners for the Dock', () => {
     const iconFiles = [
       'icon-1024.png',
       'icon.iconset/icon_16x16.png',
@@ -110,7 +117,13 @@ describe('desktop app icon assets', () => {
     ];
 
     for (const iconFile of iconFiles) {
-      expect(readPngAlphaExtrema(join(desktopResources, iconFile))).toEqual({ min: 255, max: 255 });
+      const png = readPngAlpha(join(desktopResources, iconFile));
+
+      expect(png.getAlpha(0, 0)).toBe(0);
+      expect(png.getAlpha(png.width - 1, 0)).toBe(0);
+      expect(png.getAlpha(0, png.height - 1)).toBe(0);
+      expect(png.getAlpha(png.width - 1, png.height - 1)).toBe(0);
+      expect(png.getAlpha(Math.floor(png.width / 2), Math.floor(png.height / 2))).toBe(255);
     }
   });
 });
