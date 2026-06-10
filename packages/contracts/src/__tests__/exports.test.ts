@@ -1,4 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import {
+  ErrorCode,
+  type BlockedPairingClientDTO,
+  type ConnectionDeviceDTO,
+  type ConnectionDevicesSettingsDTO,
+  type PairingAttemptDTO,
+  type PairingErrorMetadataDTO,
+} from '../index';
 import * as contracts from '../index';
 import type {
   BindingStateDTO,
@@ -40,7 +48,58 @@ describe('@syncflow/contracts exports', () => {
   it('exports all ErrorCode values', () => {
     expect(contracts.ErrorCode.PAIR_CODE_INVALID).toBe('PAIR_CODE_INVALID');
     expect(contracts.ErrorCode.APP_VERSION_INCOMPATIBLE).toBe('APP_VERSION_INCOMPATIBLE');
-    expect(Object.keys(contracts.ErrorCode)).toHaveLength(13);
+    expect(Object.keys(contracts.ErrorCode)).toHaveLength(15);
+  });
+  it('exports connection device management DTOs and pairing error codes', () => {
+    const device: ConnectionDeviceDTO = {
+      clientId: 'phone-a',
+      displayName: 'Nick iPhone',
+      clientName: 'Nick iPhone',
+      platform: 'ios',
+      ip: '192.168.1.20',
+      status: 'authorized',
+      authorizedAt: '2026-06-10T01:00:00Z',
+      lastSeenAt: '2026-06-10T01:10:00Z',
+    };
+    const blocked: BlockedPairingClientDTO = {
+      clientId: 'phone-a',
+      displayName: 'Nick iPhone',
+      clientName: 'Nick iPhone',
+      platform: 'ios',
+      lastIp: '192.168.1.20',
+      failedAttempts: 5,
+      blockedAt: '2026-06-10T01:11:00Z',
+      lastAttemptAt: '2026-06-10T01:11:00Z',
+      reason: 'wrong_connection_code_limit',
+    };
+    const attempt: PairingAttemptDTO = {
+      id: 1,
+      clientId: 'phone-a',
+      displayName: 'Nick iPhone',
+      clientName: 'Nick iPhone',
+      platform: 'ios',
+      ip: '192.168.1.20',
+      result: 'wrong_code',
+      failureReason: 'PAIRING_CODE_INVALID',
+      createdAt: '2026-06-10T01:11:00Z',
+    };
+    const meta: PairingErrorMetadataDTO = {
+      failedAttempts: 4,
+      remainingAttempts: 1,
+      maxAttempts: 5,
+    };
+    const settings: ConnectionDevicesSettingsDTO = {
+      authorizedDevices: [device],
+      blockedClients: [blocked],
+      recentAttempts: [attempt],
+    };
+
+    expect(settings.authorizedDevices[0]?.clientId).toBe('phone-a');
+    expect(meta.remainingAttempts).toBe(1);
+    expect(ErrorCode.PAIRING_CODE_INVALID).toBe('PAIRING_CODE_INVALID');
+    expect(ErrorCode.PAIRING_CLIENT_BLOCKED).toBe('PAIRING_CLIENT_BLOCKED');
+    expect(ErrorCode.PAIR_TOKEN_INVALID).toBe('PAIR_TOKEN_INVALID');
+    expect(ErrorCode.APP_VERSION_INCOMPATIBLE).toBe('APP_VERSION_INCOMPATIBLE');
   });
   it('exports BACKOFF_RETRY_MS', () => {
     expect(contracts.BACKOFF_RETRY_MS).toEqual([5000, 15000, 30000]);

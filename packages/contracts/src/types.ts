@@ -124,6 +124,70 @@ export interface ShareStatusDTO {
   lastError?: string;
 }
 
+export type ConnectionDeviceStatus = 'authorized' | 'connected' | 'offline';
+
+export type PairingAttemptResult =
+  | 'success'
+  | 'wrong_code'
+  | 'blocked'
+  | 'incompatible'
+  | 'malformed'
+  | 'revoked_repair_required';
+
+export interface PairingErrorMetadataDTO {
+  failedAttempts?: number;
+  remainingAttempts?: number;
+  maxAttempts?: number;
+}
+
+export interface ConnectionDeviceDTO {
+  clientId: string;
+  stableDeviceId?: string;
+  displayName: string;
+  clientName: string;
+  deviceAlias?: string;
+  platform: string;
+  ip?: string;
+  status: ConnectionDeviceStatus;
+  authorizedAt: string;
+  lastSeenAt: string;
+  revokedAt?: string;
+}
+
+export interface BlockedPairingClientDTO {
+  clientId: string;
+  stableDeviceId?: string;
+  displayName: string;
+  clientName?: string;
+  deviceAlias?: string;
+  platform?: string;
+  lastIp?: string;
+  failedAttempts: number;
+  blockedAt: string;
+  lastAttemptAt: string;
+  reason: 'wrong_connection_code_limit';
+}
+
+export interface PairingAttemptDTO {
+  id: number;
+  clientId: string;
+  stableDeviceId?: string;
+  displayName: string;
+  clientName?: string;
+  deviceAlias?: string;
+  platform?: string;
+  ip?: string;
+  result: PairingAttemptResult;
+  failureReason?: string;
+  createdAt: string;
+}
+
+export interface ConnectionDevicesSettingsDTO {
+  authorizedDevices: ConnectionDeviceDTO[];
+  blockedClients: BlockedPairingClientDTO[];
+  recentAttempts: PairingAttemptDTO[];
+}
+
 // ── Mobile Sync ──
 
 export interface SyncSummaryDTO {
