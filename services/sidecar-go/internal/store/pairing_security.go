@@ -56,6 +56,10 @@ func (s *Store) RecordPairingAttempt(meta PairingClientMetadata, result PairingA
 }
 
 func (s *Store) RecordPairingFailure(meta PairingClientMetadata, maxAttempts int) (PairingFailureResult, error) {
+	if maxAttempts <= 0 {
+		return PairingFailureResult{}, fmt.Errorf("max pairing attempts must be positive")
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return PairingFailureResult{}, fmt.Errorf("begin pairing failure transaction: %w", err)
