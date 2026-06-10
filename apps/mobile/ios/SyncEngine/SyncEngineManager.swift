@@ -2573,7 +2573,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         guard serverCompatibilityVersion == syncFlowAppCompatibilityVersion else {
-            throw SyncEngineError.pairingError("手機與桌面 App 版本不相容，請同時更新兩端後再連線。")
+            throw structuredPairingError(
+                code: "APP_VERSION_INCOMPATIBLE",
+                rawMessage: "手機與桌面 App 版本不相容，請同時更新兩端後再連線。",
+                meta: nil
+            )
         }
     }
 
