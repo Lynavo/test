@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { BonjourRuntimeSection } from './BonjourRuntimeSection';
 import { ConnectionCodeSection } from './ConnectionCodeSection';
+import { ConnectionDevicesSection } from './ConnectionDevicesSection';
 import { DeviceNameSection } from './DeviceNameSection';
 import { LanguageSection } from './LanguageSection';
 import { PowerSaveSection } from './PowerSaveSection';
@@ -42,6 +43,13 @@ export function SettingsPage() {
             {t('settings.sections.connectionCodeDescription')}
           </p>
           <ConnectionCodeSection />
+        </section>
+
+        <section className="mb-8">
+          <h2 className="mb-1 text-sm font-semibold text-foreground">
+            {t('settings.connectionDevices.title')}
+          </h2>
+          <ConnectionDevicesSection />
         </section>
 
         <section className="mb-8">

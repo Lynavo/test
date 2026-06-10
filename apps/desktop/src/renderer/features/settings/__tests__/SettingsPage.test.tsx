@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import i18n from '@renderer/i18n';
 import { SettingsPage } from '../SettingsPage';
 
 vi.mock('../DeviceNameSection', () => ({
@@ -9,6 +10,12 @@ vi.mock('../DeviceNameSection', () => ({
 vi.mock('../ConnectionCodeSection', () => ({
   ConnectionCodeSection: () => (
     <div data-testid="connection-code-section">ConnectionCodeSection</div>
+  ),
+}));
+
+vi.mock('../ConnectionDevicesSection', () => ({
+  ConnectionDevicesSection: () => (
+    <div data-testid="connection-devices-section">ConnectionDevicesSection</div>
   ),
 }));
 
@@ -79,6 +86,15 @@ describe('SettingsPage', () => {
 
     expect(screen.getByText('连接码管理')).toBeInTheDocument();
     expect(screen.getByTestId('connection-code-section')).toBeInTheDocument();
+  });
+
+  it('shows the connection devices settings section', async () => {
+    await i18n.changeLanguage('zh-Hant');
+
+    render(<SettingsPage />);
+
+    expect(screen.getByText('連接設備')).toBeInTheDocument();
+    expect(screen.getByTestId('connection-devices-section')).toBeInTheDocument();
   });
 
   it('renders SupportSection', () => {
