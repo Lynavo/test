@@ -14,6 +14,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.provider.Settings
@@ -30,6 +31,7 @@ import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.modules.core.PermissionAwareActivity
+import com.vividrop.mobile.china.BuildConfig
 import mobiletunnel.Mobiletunnel
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -93,8 +95,9 @@ class NativeSyncEngineModule(
   private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
   private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
   @Volatile private var foregroundSyncStopRequested = false
+  @Volatile private var lastBackgroundStopReason: String? = null
   private val foregroundSyncStopHandler: () -> Unit = {
-    requestForegroundSyncStopInternal()
+    requestForegroundSyncStopInternal(reason = "notification_stop")
   }
   private val p2pTunnelLock = Any()
   private val p2pTunnelExecutor = Executors.newSingleThreadExecutor { runnable ->
@@ -700,6 +703,7 @@ class NativeSyncEngineModule(
             put("queueCount", queueItems.size)
             put("historyPageCount", historyPayload.optJSONArray("items")?.length() ?: 0)
             put("photoAuthorization", currentPhotoPermissionState())
+            put("backgroundKeepalive", buildAndroidBackgroundKeepaliveStatusJson())
             put("sidecarHost", binding?.host ?: JSONObject.NULL)
             put("activeSession", JSONObject.NULL)
             put("recentRetry", JSONObject.NULL)
@@ -1115,6 +1119,66 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun getAndroidBackgroundKeepaliveStatus(promise: Promise) {
+    val result = Arguments.createMap().apply {
+      val isForegroundServiceActive = synchronized(syncRunLock) { syncInProgress }
+      putString("backgroundKeepaliveStrategy", currentAndroidBackgroundKeepaliveStrategy())
+      putBoolean("foregroundServiceActive", isForegroundServiceActive)
+      putBoolean("foregroundServiceStopRequested", foregroundSyncStopRequested)
+      putBoolean("batteryOptimizationIgnored", isIgnoringBatteryOptimizationsValue())
+      putBoolean("postNotificationsGranted", arePostNotificationsGranted())
+      putString("lastBackgroundStopReason", lastBackgroundStopReason)
+    }
+    promise.resolve(result)
+  }
+
+  @ReactMethod
+  fun isIgnoringBatteryOptimizations(promise: Promise) {
+    promise.resolve(isIgnoringBatteryOptimizationsValue())
+  }
+
+  @ReactMethod
+  fun requestIgnoreBatteryOptimizations(promise: Promise) {
+    if (BuildConfig.FLAVOR == "global") {
+      recordDiagnosticsLog("Keepalive", "battery optimization request ignored for global flavor")
+      promise.resolve(false)
+      return
+    }
+    try {
+      if (isIgnoringBatteryOptimizationsValue()) {
+        promise.resolve(true)
+        return
+      }
+      val requestIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${reactApplicationContext.packageName}")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      val packageManager = reactApplicationContext.packageManager
+      val intent = if (requestIntent.resolveActivity(packageManager) != null) {
+        requestIntent
+      } else {
+        fallbackIntent
+      }
+      reactApplicationContext.startActivity(intent)
+      recordDiagnosticsLog("Keepalive", "battery optimization settings opened")
+      promise.resolve(false)
+    } catch (error: Throwable) {
+      recordDiagnosticsLog(
+        "Keepalive",
+        "battery optimization request failed: ${error.message ?: error.javaClass.simpleName}",
+      )
+      promise.reject(
+        "ANDROID_BATTERY_OPTIMIZATION_REQUEST_FAILED",
+        error.message ?: "Failed to open battery optimization settings",
+        error,
+      )
+    }
+  }
+
+  @ReactMethod
   fun saveAutoUploadConfig(params: ReadableMap, promise: Promise) {
     val currentConfig = loadAutoUploadConfig()
     val enabled = if (params.hasKey("enabled") && !params.isNull("enabled")) {
@@ -1299,9 +1363,15 @@ class NativeSyncEngineModule(
     }
   }
 
-  private fun requestForegroundSyncStopInternal() {
+  private fun requestForegroundSyncStopInternal(reason: String = "foreground_service_stop") {
     foregroundSyncStopRequested = true
-    recordDiagnosticsLog("BackgroundSync", "foreground sync stop requested")
+    lastBackgroundStopReason = reason
+    recordDiagnosticsLog("BackgroundSync", "foreground sync stop requested reason=$reason")
+  }
+
+  private fun clearForegroundSyncStopRequest() {
+    foregroundSyncStopRequested = false
+    lastBackgroundStopReason = null
   }
 
   private fun pairingTokenForKnownDevice(deviceId: String): String? {
@@ -1450,21 +1520,9 @@ class NativeSyncEngineModule(
         return
       }
       syncInProgress = true
-      foregroundSyncStopRequested = false
+      clearForegroundSyncStopRequest()
     }
-    if (!startForegroundSyncService(notificationReason)) {
-      synchronized(syncRunLock) {
-        syncInProgress = false
-      }
-      foregroundSyncStopRequested = false
-      recordDiagnosticsLog("BackgroundSync", "round aborted reason=$reason foregroundServiceAvailable=false")
-      emitError(
-        code = "ANDROID_BACKGROUND_SYNC_SERVICE_UNAVAILABLE",
-        message = "無法啟動 Android 背景同步服務，已保留佇列。",
-      )
-      emitIdleSyncState(loadBinding())
-      return
-    }
+    var foregroundServiceStarted = false
     try {
       var binding = loadBinding()
       if (binding == null) {
@@ -1490,6 +1548,17 @@ class NativeSyncEngineModule(
         emitIdleSyncState(binding)
         return
       }
+
+      if (!startForegroundSyncService(notificationReason)) {
+        recordDiagnosticsLog("BackgroundSync", "round aborted reason=$reason foregroundServiceAvailable=false")
+        emitError(
+          code = "ANDROID_BACKGROUND_SYNC_SERVICE_UNAVAILABLE",
+          message = "無法啟動 Android 背景同步服務，已保留佇列。",
+        )
+        emitIdleSyncState(binding)
+        return
+      }
+      foregroundServiceStarted = true
 
       emitSyncState(binding, "scanning")
       val clientId = getOrCreateClientId()
@@ -1649,10 +1718,41 @@ class NativeSyncEngineModule(
           sendPresenceHeartbeatAsync(it, reason = "sync_round_finished", recoverOnFailure = true)
           startPresenceHeartbeatTimer(it)
         }
-      foregroundSyncStopRequested = false
-      stopForegroundSyncService()
+      clearForegroundSyncStopRequest()
+      if (foregroundServiceStarted) {
+        stopForegroundSyncService()
+      }
     }
   }
+
+  private fun currentAndroidBackgroundKeepaliveStrategy(): String =
+    if (BuildConfig.FLAVOR == "global") {
+      "android_global_foreground_service_play_compliant"
+    } else {
+      "android_cn_foreground_service_battery_whitelist"
+    }
+
+  private fun buildAndroidBackgroundKeepaliveStatusJson(): JSONObject {
+    val isForegroundServiceActive = synchronized(syncRunLock) { syncInProgress }
+    return JSONObject().apply {
+      put("backgroundKeepaliveStrategy", currentAndroidBackgroundKeepaliveStrategy())
+      put("foregroundServiceActive", isForegroundServiceActive)
+      put("foregroundServiceStopRequested", foregroundSyncStopRequested)
+      put("batteryOptimizationIgnored", isIgnoringBatteryOptimizationsValue())
+      put("postNotificationsGranted", arePostNotificationsGranted())
+      put("lastBackgroundStopReason", lastBackgroundStopReason ?: JSONObject.NULL)
+    }
+  }
+
+  private fun isIgnoringBatteryOptimizationsValue(): Boolean {
+    val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+      ?: return false
+    return powerManager.isIgnoringBatteryOptimizations(reactApplicationContext.packageName)
+  }
+
+  private fun arePostNotificationsGranted(): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+      reactApplicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
   private fun authenticateConnection(connection: ProtocolConnection, binding: StoredBinding) {
     val helloPayload = JSONObject(

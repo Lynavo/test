@@ -202,10 +202,25 @@ const mockNativeSyncEngine = {
     currentFileConfirmedBytes: 0,
     uploadState: 'idle',
   }),
+  getAutoUploadConfig: jest.fn().mockResolvedValue({
+    enabled: true,
+    timeRangeMode: 'all',
+    state: 'active',
+  }),
   setClientDisplayName: jest.fn().mockResolvedValue(undefined),
   disconnectAndUnbind: jest.fn().mockResolvedValue(undefined),
   resetAllStatus: jest.fn().mockResolvedValue(undefined),
   getKnownDeviceIds: jest.fn().mockResolvedValue([]),
+  getAndroidBackgroundKeepaliveStatus: jest.fn().mockResolvedValue({
+    backgroundKeepaliveStrategy:
+      'android_cn_foreground_service_battery_whitelist',
+    foregroundServiceActive: false,
+    foregroundServiceStopRequested: false,
+    batteryOptimizationIgnored: false,
+    postNotificationsGranted: true,
+    lastBackgroundStopReason: null,
+  }),
+  requestIgnoreBatteryOptimizations: jest.fn().mockResolvedValue(true),
   addListener: jest.fn(),
   removeListeners: jest.fn(),
 };
@@ -235,7 +250,7 @@ describe('SettingsScreen', () => {
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
-      .mockImplementation(() => ({ remove: jest.fn() } as never));
+      .mockImplementation(() => ({ remove: jest.fn() }) as never);
   });
 
   test('subscription card prefers subscription status over stale user status', async () => {
@@ -342,6 +357,44 @@ describe('SettingsScreen', () => {
       expect(queryByText('恢復已購買訂閱')).toBeNull();
       expect(queryByText('Android 端能力說明')).toBeNull();
       expect(queryByText(/目前版本已提供 Android 殼層/)).toBeNull();
+    } finally {
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
+  });
+
+  test('shows battery optimization guidance only for China Android market', async () => {
+    await i18n.changeLanguage('zh-Hant');
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+
+    try {
+      mockIsGlobalMarket = false;
+      const { getByText, unmount } = render(<SettingsScreen />);
+
+      await waitFor(() => {
+        expect(getByText('熄屏同步保護')).toBeTruthy();
+      });
+      expect(
+        mockNativeSyncEngine.getAndroidBackgroundKeepaliveStatus,
+      ).toHaveBeenCalled();
+
+      unmount();
+      jest.clearAllMocks();
+      mockIsGlobalMarket = true;
+      const { queryByText } = render(<SettingsScreen />);
+
+      await waitFor(() => {
+        expect(queryByText('熄屏同步保護')).toBeNull();
+      });
+      expect(
+        mockNativeSyncEngine.getAndroidBackgroundKeepaliveStatus,
+      ).not.toHaveBeenCalled();
     } finally {
       Object.defineProperty(Platform, 'OS', {
         configurable: true,

@@ -45,12 +45,15 @@ import {
   redeemGiftCard,
 } from '../services/gift-card-service';
 import { getGiftCardRedeemFailureTranslationKey } from '../services/gift-card-errors';
-import { wipeSyncIdentity } from '../services/SyncEngineModule';
+import {
+  wipeSyncIdentity,
+  type AndroidBackgroundKeepaliveStatus,
+} from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { maskPhone } from '../utils/phone-validation';
 import { FEATURES } from '../constants/features';
-import { isGlobalMarket } from '../markets';
+import { isChinaMarket, isGlobalMarket } from '../markets';
 import { iapService } from '../services/iap-service';
 import { classifyIapError } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
@@ -114,6 +117,11 @@ type SettingsSyncOverviewState = {
   currentFileConfirmedBytes: number;
   uploadState: string;
 };
+type BatteryOptimizationStatus =
+  | 'checking'
+  | 'ignored'
+  | 'not_ignored'
+  | 'unavailable';
 type LanguageOption = {
   value: LanguagePreference;
   labelKey:
@@ -196,6 +204,58 @@ function resolveDeleteSubscriptionBlockCopy(language: string | undefined): {
   };
 }
 
+function resolveBatteryOptimizationCopy(language: string | undefined): {
+  title: string;
+  body: string;
+  statusChecking: string;
+  statusIgnored: string;
+  statusNotIgnored: string;
+  statusUnavailable: string;
+  confirm: string;
+  cancel: string;
+  requestFailed: string;
+} {
+  const tag = (language ?? 'zh-Hant').toLowerCase();
+  if (tag.startsWith('en')) {
+    return {
+      title: 'Screen-off sync protection',
+      body: 'For China Android builds, adding Vivi Drop to the battery optimization allowlist helps foreground data sync continue after the screen is locked. You can keep using normal sync without enabling this.',
+      statusChecking: 'Checking current status...',
+      statusIgnored: 'Allowed by system',
+      statusNotIgnored: 'Recommended for long screen-off uploads',
+      statusUnavailable: 'Available on Android devices',
+      confirm: 'Open System Settings',
+      cancel: 'Cancel',
+      requestFailed:
+        'Unable to open the battery optimization settings. Please try from Android system settings.',
+    };
+  }
+  if (tag.startsWith('zh-hans') || tag.startsWith('zh-cn')) {
+    return {
+      title: '熄屏同步保护',
+      body: '中国 Android 版本可将 Vivi Drop 加入电池优化白名单，帮助前台数据同步服务在锁屏后继续运行。不设置也不会影响普通前台同步。',
+      statusChecking: '正在检查当前状态...',
+      statusIgnored: '系统已允许',
+      statusNotIgnored: '长时间熄屏上传建议开启',
+      statusUnavailable: 'Android 设备可用',
+      confirm: '打开系统设置',
+      cancel: '取消',
+      requestFailed: '无法打开电池优化设置，请稍后从 Android 系统设置中开启。',
+    };
+  }
+  return {
+    title: '熄屏同步保護',
+    body: '中國 Android 版本可將 Vivi Drop 加入電池最佳化允許清單，協助前台資料同步服務在鎖屏後繼續執行。不設定也不會影響一般前景同步。',
+    statusChecking: '正在檢查目前狀態...',
+    statusIgnored: '系統已允許',
+    statusNotIgnored: '長時間熄屏上傳建議開啟',
+    statusUnavailable: 'Android 裝置可用',
+    confirm: '開啟系統設定',
+    cancel: '取消',
+    requestFailed: '無法開啟電池最佳化設定，請稍後從 Android 系統設定中開啟。',
+  };
+}
+
 function resolveGiftCardPlanLabel(plan: string, t: TFunction): string {
   switch (plan) {
     case 'yearly':
@@ -272,6 +332,18 @@ export function SettingsScreen() {
     useState<LanguagePreference>('system');
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
   const isResetSyncDisabled = syncOverviewState.uploadState === 'uploading';
+  const isBatteryOptimizationFeatureAvailable =
+    Platform.OS === 'android' && isChinaMarket();
+  const [
+    shouldShowBatteryOptimizationEntry,
+    setShouldShowBatteryOptimizationEntry,
+  ] = useState(false);
+  const [batteryOptimizationStatus, setBatteryOptimizationStatus] =
+    useState<BatteryOptimizationStatus>(
+      isBatteryOptimizationFeatureAvailable ? 'checking' : 'unavailable',
+    );
+  const [isRequestingBatteryOptimization, setIsRequestingBatteryOptimization] =
+    useState(false);
 
   // My iPhone display name
   const [myName, setMyName] = useState('iPhone');
@@ -347,6 +419,68 @@ export function SettingsScreen() {
         cancelled = true;
       };
     }, []),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isBatteryOptimizationFeatureAvailable) {
+        setShouldShowBatteryOptimizationEntry(false);
+        setBatteryOptimizationStatus('unavailable');
+        return undefined;
+      }
+
+      let cancelled = false;
+      setBatteryOptimizationStatus('checking');
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus) {
+        setShouldShowBatteryOptimizationEntry(false);
+        setBatteryOptimizationStatus('unavailable');
+        return undefined;
+      }
+
+      void Promise.allSettled([
+        NativeSyncEngine.getAndroidBackgroundKeepaliveStatus() as Promise<AndroidBackgroundKeepaliveStatus>,
+        (NativeSyncEngine.getAutoUploadConfig?.() ??
+          Promise.resolve(undefined)) as Promise<
+          { enabled?: boolean } | undefined
+        >,
+      ])
+        .then(([statusResult, autoUploadConfigResult]) => {
+          if (cancelled) return;
+          if (statusResult.status !== 'fulfilled') {
+            throw statusResult.reason;
+          }
+          const status = statusResult.value;
+          const autoUploadEnabled =
+            autoUploadConfigResult.status === 'fulfilled' &&
+            autoUploadConfigResult.value?.enabled === true;
+          const hasBackgroundStopDiagnostic =
+            typeof status.lastBackgroundStopReason === 'string' &&
+            status.lastBackgroundStopReason.length > 0;
+          setShouldShowBatteryOptimizationEntry(
+            autoUploadEnabled ||
+              hasBackgroundStopDiagnostic ||
+              status.batteryOptimizationIgnored,
+          );
+          setBatteryOptimizationStatus(
+            status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
+          );
+        })
+        .catch(err => {
+          console.warn(
+            '[settings] Android keepalive status refresh failed',
+            err,
+          );
+          if (!cancelled) {
+            setShouldShowBatteryOptimizationEntry(false);
+            setBatteryOptimizationStatus('unavailable');
+          }
+        });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [isBatteryOptimizationFeatureAvailable]),
   );
 
   // ---------------------------------------------------------------------------
@@ -733,6 +867,56 @@ export function SettingsScreen() {
     [i18n, isChangingLanguage, languagePreference, t],
   );
 
+  const handleBatteryOptimizationPress = useCallback(() => {
+    if (
+      !shouldShowBatteryOptimizationEntry ||
+      batteryOptimizationStatus === 'ignored' ||
+      isRequestingBatteryOptimization
+    ) {
+      return;
+    }
+
+    const copy = resolveBatteryOptimizationCopy(i18n.language);
+    Alert.alert(copy.title, copy.body, [
+      { text: copy.cancel, style: 'cancel' },
+      {
+        text: copy.confirm,
+        onPress: async () => {
+          const { NativeSyncEngine } = NativeModules;
+          if (
+            !NativeSyncEngine?.requestIgnoreBatteryOptimizations ||
+            !NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus
+          ) {
+            Alert.alert(copy.requestFailed);
+            return;
+          }
+          setIsRequestingBatteryOptimization(true);
+          try {
+            await NativeSyncEngine.requestIgnoreBatteryOptimizations();
+            const status =
+              (await NativeSyncEngine.getAndroidBackgroundKeepaliveStatus()) as AndroidBackgroundKeepaliveStatus;
+            setBatteryOptimizationStatus(
+              status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
+            );
+          } catch (err) {
+            console.warn(
+              '[settings] request battery optimization whitelist failed',
+              err,
+            );
+            Alert.alert(copy.requestFailed);
+          } finally {
+            setIsRequestingBatteryOptimization(false);
+          }
+        },
+      },
+    ]);
+  }, [
+    batteryOptimizationStatus,
+    i18n.language,
+    isRequestingBatteryOptimization,
+    shouldShowBatteryOptimizationEntry,
+  ]);
+
   // Guards against double-submission. A single full logout path runs roughly
   // sidecar-timeout + native-wipe + AsyncStorage sweep — sub-second in the
   // happy case, up to ~3s when the desktop is unreachable. We disable the
@@ -1094,8 +1278,8 @@ export function SettingsScreen() {
     isPhoneRevealed && rawPhoneIdentifier
       ? rawPhoneIdentifier
       : rawPhoneIdentifier
-      ? maskPhone(rawPhoneIdentifier)
-      : primaryIdentity?.display ?? '';
+        ? maskPhone(rawPhoneIdentifier)
+        : (primaryIdentity?.display ?? '');
 
   // Pretty-format the Apple expireAt for the "Cancelled — valid until X"
   // secondary line. Keep it lenient: bad ISO falls through to empty so
@@ -1112,6 +1296,15 @@ export function SettingsScreen() {
   const giftCardQueuedUntilDate = isGiftCardEntitlementQueued
     ? formatDate(subscriptionDisplay.entitlementExpireAt)
     : '';
+  const batteryOptimizationCopy = resolveBatteryOptimizationCopy(i18n.language);
+  const batteryOptimizationStatusText =
+    batteryOptimizationStatus === 'checking'
+      ? batteryOptimizationCopy.statusChecking
+      : batteryOptimizationStatus === 'ignored'
+        ? batteryOptimizationCopy.statusIgnored
+        : batteryOptimizationStatus === 'not_ignored'
+          ? batteryOptimizationCopy.statusNotIgnored
+          : batteryOptimizationCopy.statusUnavailable;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -1159,8 +1352,8 @@ export function SettingsScreen() {
                   isConnected
                     ? styles.wifiIconCircleOnline
                     : isConnecting
-                    ? styles.wifiIconCircleConnecting
-                    : styles.wifiIconCircleOffline,
+                      ? styles.wifiIconCircleConnecting
+                      : styles.wifiIconCircleOffline,
                 ]}
               >
                 <Icon
@@ -1170,8 +1363,8 @@ export function SettingsScreen() {
                     isConnected
                       ? ONLINE_GREEN
                       : isConnecting
-                      ? CONNECTING_TEXT
-                      : OFFLINE_TEXT
+                        ? CONNECTING_TEXT
+                        : OFFLINE_TEXT
                   }
                 />
               </View>
@@ -1193,8 +1386,8 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusDotOnline
                       : isConnecting
-                      ? styles.statusDotConnecting
-                      : styles.statusDotOffline,
+                        ? styles.statusDotConnecting
+                        : styles.statusDotOffline,
                   ]}
                 />
                 <Text
@@ -1203,15 +1396,15 @@ export function SettingsScreen() {
                     isConnected
                       ? styles.statusTextOnline
                       : isConnecting
-                      ? styles.statusTextConnecting
-                      : styles.statusTextOffline,
+                        ? styles.statusTextConnecting
+                        : styles.statusTextOffline,
                   ]}
                 >
                   {isConnected
                     ? t('settings.connection.online')
                     : isConnecting
-                    ? t('settings.connection.connecting')
-                    : t('settings.connection.offline')}
+                      ? t('settings.connection.connecting')
+                      : t('settings.connection.offline')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1261,8 +1454,8 @@ export function SettingsScreen() {
                 isSubscriptionIntroTrial
                   ? t('settings.subscription.subscribed')
                   : isAccountTrial || isTrialExpired
-                  ? t('settings.subscription.trial')
-                  : t('subscription.title')}
+                    ? t('settings.subscription.trial')
+                    : t('subscription.title')}
               </Text>
             </View>
             {isAccountTrial || isSubscriptionIntroTrial ? (
@@ -1545,6 +1738,60 @@ export function SettingsScreen() {
           {t('settings.sections.supportHelp')}
         </Text>
         <View style={styles.listCard}>
+          {shouldShowBatteryOptimizationEntry ? (
+            <>
+              <TouchableOpacity
+                style={[
+                  styles.actionRow,
+                  (batteryOptimizationStatus === 'ignored' ||
+                    isRequestingBatteryOptimization) &&
+                    styles.actionRowDisabled,
+                ]}
+                activeOpacity={0.6}
+                onPress={handleBatteryOptimizationPress}
+                disabled={
+                  batteryOptimizationStatus === 'ignored' ||
+                  isRequestingBatteryOptimization
+                }
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled:
+                    batteryOptimizationStatus === 'ignored' ||
+                    isRequestingBatteryOptimization,
+                }}
+              >
+                <View style={styles.actionRowLeft}>
+                  <Icon
+                    name="battery-charging-outline"
+                    size={18}
+                    color={BLUE}
+                  />
+                  <View style={styles.actionRowTextStack}>
+                    <Text style={styles.actionRowText}>
+                      {batteryOptimizationCopy.title}
+                    </Text>
+                    <Text style={styles.actionRowSubtext}>
+                      {batteryOptimizationStatusText}
+                    </Text>
+                  </View>
+                </View>
+                <Icon
+                  name={
+                    batteryOptimizationStatus === 'ignored'
+                      ? 'checkmark-circle-outline'
+                      : 'chevron-forward'
+                  }
+                  size={16}
+                  color={
+                    batteryOptimizationStatus === 'ignored'
+                      ? ONLINE_GREEN
+                      : ROW_CHEVRON
+                  }
+                />
+              </TouchableOpacity>
+              <View style={styles.listSep} />
+            </>
+          ) : null}
           <TouchableOpacity
             style={styles.actionRow}
             activeOpacity={0.6}
@@ -2312,11 +2559,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flexShrink: 1,
+  },
+  actionRowTextStack: {
+    flexShrink: 1,
+    gap: 2,
   },
   actionRowText: {
     fontSize: 15,
     fontWeight: '500',
     color: DARK,
+  },
+  actionRowSubtext: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: MUTED_TEXT,
   },
 
   // Danger zone

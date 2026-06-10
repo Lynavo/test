@@ -45,6 +45,17 @@ export interface ManualUploadResult {
   batchId: string;
 }
 
+export interface AndroidBackgroundKeepaliveStatus {
+  backgroundKeepaliveStrategy:
+    | 'android_cn_foreground_service_battery_whitelist'
+    | 'android_global_foreground_service_play_compliant';
+  foregroundServiceActive: boolean;
+  foregroundServiceStopRequested: boolean;
+  batteryOptimizationIgnored: boolean;
+  postNotificationsGranted: boolean;
+  lastBackgroundStopReason: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Typed wrappers for Vivi Drop native bridge methods
 // ---------------------------------------------------------------------------
@@ -155,6 +166,21 @@ export async function getAutoUploadConfig(): Promise<AutoUploadConfigDTO> {
   return result as AutoUploadConfigDTO;
 }
 
+export async function getAndroidBackgroundKeepaliveStatus(): Promise<AndroidBackgroundKeepaliveStatus> {
+  const result = await NativeSyncEngine.getAndroidBackgroundKeepaliveStatus();
+  return result as AndroidBackgroundKeepaliveStatus;
+}
+
+export async function isIgnoringBatteryOptimizations(): Promise<boolean> {
+  const result = await NativeSyncEngine.isIgnoringBatteryOptimizations();
+  return Boolean(result);
+}
+
+export async function requestIgnoreBatteryOptimizations(): Promise<boolean> {
+  const result = await NativeSyncEngine.requestIgnoreBatteryOptimizations();
+  return Boolean(result);
+}
+
 export async function saveAutoUploadConfig(config: {
   enabled: boolean;
   timeRangeMode: AutoUploadTimeRangeMode;
@@ -245,7 +271,9 @@ export async function shareFile(localPath: string): Promise<boolean> {
   return result as boolean;
 }
 
-export async function startBackgroundSyncService(reason: string): Promise<void> {
+export async function startBackgroundSyncService(
+  reason: string,
+): Promise<void> {
   if (Platform.OS !== 'android') {
     return;
   }
