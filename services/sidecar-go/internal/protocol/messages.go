@@ -79,13 +79,21 @@ type PairReq struct {
 	StableDeviceID string `json:"stableDeviceId,omitempty"`
 }
 
+type PairingErrorMetadata struct {
+	FailedAttempts    int `json:"failedAttempts,omitempty"`
+	RemainingAttempts int `json:"remainingAttempts,omitempty"`
+	MaxAttempts       int `json:"maxAttempts,omitempty"`
+}
+
 // PairRes is the server's response to PairReq.
 type PairRes struct {
-	OK           bool       `json:"ok"`
-	Error        string     `json:"error,omitempty"`
-	PairingID    string     `json:"pairingId"`
-	PairingToken string     `json:"pairingToken"`
-	ServerInfo   ServerInfo `json:"serverInfo"`
+	OK           bool                  `json:"ok"`
+	Error        string                `json:"error,omitempty"`
+	ErrorCode    string                `json:"errorCode,omitempty"`
+	ErrorMeta    *PairingErrorMetadata `json:"errorMeta,omitempty"`
+	PairingID    string                `json:"pairingId"`
+	PairingToken string                `json:"pairingToken"`
+	ServerInfo   ServerInfo            `json:"serverInfo"`
 }
 
 // ServerInfo contains identifying information about the server.
@@ -160,6 +168,7 @@ type FileEndRes struct {
 
 // ErrorMsg is sent when a protocol-level error occurs.
 type ErrorMsg struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string                `json:"code"`
+	Message string                `json:"message"`
+	Meta    *PairingErrorMetadata `json:"meta,omitempty"`
 }
