@@ -345,6 +345,8 @@ class NativeSyncEngineModule: RCTEventEmitter {
             do {
                 try await SyncEngineManager.shared.pairDevice(deviceId: deviceId, host: host, port: port, connectionCode: code)
                 resolve(nil)
+            } catch let syncError as SyncEngineError {
+                reject(syncError.nativeErrorCode ?? "PAIR_ERROR", syncError.localizedDescription, syncError.nsError)
             } catch {
                 reject("PAIR_ERROR", error.localizedDescription, error)
             }

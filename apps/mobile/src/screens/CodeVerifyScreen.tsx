@@ -22,6 +22,11 @@ import {
 } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
+import {
+  ErrorCode,
+  type ErrorCode as SyncFlowErrorCode,
+  type PairingErrorMetadataDTO,
+} from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +43,50 @@ type CodeVerifyRouteProp = RouteProp<RootStackParamList, 'CodeVerify'>;
 
 const CODE_LENGTH = 6;
 const VERIFY_DELAY_MS = 1200;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getNativeErrorCode(error: unknown): SyncFlowErrorCode | null {
+  if (!isRecord(error) || typeof error.code !== 'string') {
+    return null;
+  }
+  return Object.values(ErrorCode).includes(error.code as SyncFlowErrorCode)
+    ? (error.code as SyncFlowErrorCode)
+    : null;
+}
+
+function metadataNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function getPairingErrorMetadata(
+  error: unknown,
+): PairingErrorMetadataDTO | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+  const userInfo = isRecord(error.userInfo) ? error.userInfo : undefined;
+  const nestedMeta = userInfo && isRecord(userInfo.meta) ? userInfo.meta : undefined;
+  const directMeta = isRecord(error.meta) ? error.meta : undefined;
+  const meta = nestedMeta ?? directMeta ?? userInfo;
+  if (!meta) {
+    return undefined;
+  }
+  return {
+    failedAttempts: metadataNumber(meta.failedAttempts),
+    remainingAttempts: metadataNumber(meta.remainingAttempts),
+    maxAttempts: metadataNumber(meta.maxAttempts),
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (isRecord(error) && typeof error.message === 'string') {
+    return error.message;
+  }
+  return '';
+}
 
 // ---------------------------------------------------------------------------
 // CodeVerifyScreen
@@ -99,14 +148,41 @@ export function CodeVerifyScreen() {
           );
           return;
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Native pairing failed:', e);
         // Native module threw a pairing error — show error state
         setVerifying(false);
         setError(true);
         // Include actual error message so the user knows if it's a network timeout vs incorrect code
-        const msg = e?.message || '';
-        if (
+        const msg = getErrorMessage(e);
+        const errorCode = getNativeErrorCode(e);
+        const metadata = getPairingErrorMetadata(e);
+        if (errorCode === ErrorCode.APP_VERSION_INCOMPATIBLE) {
+          Alert.alert(
+            t('errors.pairingVersionMismatchTitle'),
+            t('errors.pairingVersionMismatchMessage'),
+            [{ text: t('common.ok') }]
+          );
+          setErrorMsg(t('errors.pairingVersionMismatchMessage'));
+        } else if (errorCode === ErrorCode.PAIRING_CODE_INVALID) {
+          if (
+            metadata?.remainingAttempts !== undefined &&
+            metadata.maxAttempts !== undefined
+          ) {
+            setErrorMsg(
+              t('errors.pairingWrongCodeWithAttempts', {
+                remainingAttempts: metadata.remainingAttempts,
+                maxAttempts: metadata.maxAttempts,
+              }),
+            );
+          } else {
+            setErrorMsg(t('errors.pairingWrongCode'));
+          }
+        } else if (errorCode === ErrorCode.PAIRING_CLIENT_BLOCKED) {
+          setErrorMsg(t('errors.pairingClientBlocked'));
+        } else if (errorCode === ErrorCode.PAIR_TOKEN_INVALID) {
+          setErrorMsg(t('errors.pairingTokenInvalid'));
+        } else if (
           msg.includes('版本不相容') ||
           msg.includes('APP_VERSION_INCOMPATIBLE') ||
           msg.includes('版本不兼容')
@@ -114,7 +190,7 @@ export function CodeVerifyScreen() {
           Alert.alert(
             t('errors.pairingVersionMismatchTitle'),
             t('errors.pairingVersionMismatchMessage'),
-            [{ text: t('common.ok') }]
+            [{ text: t('common.ok') }],
           );
           setErrorMsg(t('errors.pairingVersionMismatchMessage'));
         } else if (msg.includes('Pairing rejected')) {

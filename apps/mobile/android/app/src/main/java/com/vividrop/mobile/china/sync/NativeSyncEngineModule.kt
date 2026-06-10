@@ -63,6 +63,19 @@ import kotlin.concurrent.thread
 import org.json.JSONArray
 import org.json.JSONObject
 
+private val STRUCTURED_PAIRING_ERROR_CODES = setOf(
+  "PAIRING_CODE_INVALID",
+  "PAIRING_CLIENT_BLOCKED",
+  "PAIR_TOKEN_INVALID",
+  "APP_VERSION_INCOMPATIBLE",
+)
+
+private class NativeStructuredError(
+  val nativeCode: String,
+  message: String,
+  val userInfo: WritableMap,
+) : Exception(message)
+
 class NativeSyncEngineModule(
   reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -1312,6 +1325,9 @@ class NativeSyncEngineModule(
     thread(name = "NativeSyncEngine", isDaemon = true) {
       try {
         block()
+      } catch (error: NativeStructuredError) {
+        recordNativeLog("Bridge", "async method failed: ${error.nativeCode}: ${error.message}", Log.ERROR)
+        promise.reject(error.nativeCode, error.message, error, error.userInfo)
       } catch (error: Throwable) {
         recordNativeLog("Bridge", "async method failed: ${error.message ?: error.javaClass.simpleName}", Log.ERROR)
         promise.reject("NATIVE_SYNC_ENGINE_ERROR", error.message, error)
@@ -1445,10 +1461,14 @@ class NativeSyncEngineModule(
       val output = DataOutputStream(socket.getOutputStream())
 
       writeJsonFrame(output, TYPE_HELLO_REQ, helloPayload)
-      val helloResponse = readJsonFrame(input, TYPE_HELLO_RES)
-      AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
-        helloResponse.optInt("appCompatibilityVersion", -1),
-      )
+      val helloResponse = readJsonFrame(input, TYPE_HELLO_RES, structuredErrors = true)
+      if (helloResponse.optInt("appCompatibilityVersion", -1) != APP_COMPATIBILITY_VERSION) {
+        throw structuredNativeError(
+          code = "APP_VERSION_INCOMPATIBLE",
+          rawMessage = "手機與桌面 App 版本不相容，請同時更新兩端後再連線。",
+          meta = null,
+        )
+      }
       recordNativeLog(
         "Pairing",
         "HELLO_RES serverId=${helloResponse.optString("serverId").ifBlank { "<missing>" }} authRequired=${helloResponse.optBoolean("authRequired", true)}",
@@ -1491,8 +1511,17 @@ class NativeSyncEngineModule(
       val pairResponse = readJsonFrame(input, TYPE_PAIR_RES)
 
       if (!pairResponse.optBoolean("ok", false)) {
-        recordNativeLog("Pairing", "PAIR_RES rejected error=${pairResponse.optString("error")}", Log.WARN)
-        throw IllegalStateException(pairResponse.optString("error").ifBlank { "Pairing rejected" })
+        val errorCode = structuredErrorCode(pairResponse.optString("errorCode"))
+        val errMsg = pairResponse.optString("error").ifBlank { "Pairing rejected" }
+        recordNativeLog("Pairing", "PAIR_RES rejected code=${errorCode ?: "<none>"} error=$errMsg", Log.WARN)
+        if (errorCode != null) {
+          throw structuredNativeError(
+            code = errorCode,
+            rawMessage = errMsg,
+            meta = pairResponse.optJSONObject("errorMeta"),
+          )
+        }
+        throw IllegalStateException(errMsg)
       }
       recordNativeLog("Pairing", "PAIR_RES ok pairingId=${pairResponse.optString("pairingId")}")
 
@@ -2122,15 +2151,66 @@ class NativeSyncEngineModule(
     output.flush()
   }
 
-  private fun readJsonFrame(input: DataInputStream, expectedType: Int): JSONObject {
+  private fun readJsonFrame(
+    input: DataInputStream,
+    expectedType: Int,
+    structuredErrors: Boolean = false,
+  ): JSONObject {
     val frame = readJsonFrameAny(input)
     if (frame.type == TYPE_ERROR) {
+      val errorCode = structuredErrorCode(frame.payload.optString("code"))
+      if (structuredErrors && errorCode != null) {
+        throw structuredNativeError(
+          code = errorCode,
+          rawMessage = frame.payload.optString("message", "Desktop returned protocol error"),
+          meta = frame.payload.optJSONObject("meta"),
+        )
+      }
       throw IllegalStateException(frame.payload.optString("message", "Desktop returned protocol error"))
     }
     if (frame.type != expectedType) {
       throw IllegalStateException("Unexpected frame type: ${frame.type}")
     }
     return frame.payload
+  }
+
+  private fun structuredErrorCode(rawCode: String?): String? {
+    val code = rawCode?.trim().orEmpty()
+    return code.takeIf { it in STRUCTURED_PAIRING_ERROR_CODES }
+  }
+
+  private fun defaultStructuredErrorMessage(code: String): String = when (code) {
+    "PAIRING_CODE_INVALID" -> "連接碼錯誤，請重新輸入"
+    "PAIRING_CLIENT_BLOCKED" -> "這支手機已被此電腦封鎖，請在桌面端設定解除封鎖後再試。"
+    "PAIR_TOKEN_INVALID" -> "連線授權已失效，請重新輸入桌面端連接碼。"
+    "APP_VERSION_INCOMPATIBLE" -> "手機與桌面 App 版本不相容，請同時更新兩端後再連線。"
+    else -> "Pairing rejected"
+  }
+
+  private fun structuredNativeError(
+    code: String,
+    rawMessage: String,
+    meta: JSONObject?,
+  ): NativeStructuredError {
+    val message = rawMessage.trim().ifBlank { defaultStructuredErrorMessage(code) }
+    return NativeStructuredError(
+      nativeCode = code,
+      message = message,
+      userInfo = pairingErrorUserInfo(meta),
+    )
+  }
+
+  private fun pairingErrorUserInfo(meta: JSONObject?): WritableMap {
+    val userInfo = Arguments.createMap()
+    if (meta == null) {
+      return userInfo
+    }
+    for (key in listOf("failedAttempts", "remainingAttempts", "maxAttempts")) {
+      if (meta.has(key) && !meta.isNull(key)) {
+        userInfo.putInt(key, meta.optInt(key))
+      }
+    }
+    return userInfo
   }
 
   private fun readJsonFrameAny(input: DataInputStream): JsonFrame {
