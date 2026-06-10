@@ -2366,8 +2366,253 @@ func TestRegenerateCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPairedDevice after regenerate: %v", err)
 	}
+	if device.RevokedAt != nil {
+		t.Fatal("expected existing paired device to remain authorized after connection code regeneration")
+	}
+}
+
+func TestConnectionDevicesEndpointReturnsAuthorizedBlockedAndRecentAttempts(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+	for i := 0; i < 5; i++ {
+		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{
+			ClientID:        "phone-b",
+			DesktopDeviceID: "desktop-1",
+			ClientName:      "Blocked Phone",
+			Platform:        "android",
+			IP:              "192.168.1.30",
+		}, 5); err != nil {
+			t.Fatalf("RecordPairingFailure: %v", err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, fakeClientStates{"phone-a": "connected"})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/settings/connection-devices")
+	if err != nil {
+		t.Fatalf("GET connection devices: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var body struct {
+		AuthorizedDevices []map[string]any `json:"authorizedDevices"`
+		BlockedClients    []map[string]any `json:"blockedClients"`
+		RecentAttempts    []map[string]any `json:"recentAttempts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.AuthorizedDevices) != 1 || body.AuthorizedDevices[0]["clientId"] != "phone-a" {
+		t.Fatalf("unexpected authorized devices: %+v", body.AuthorizedDevices)
+	}
+	if body.AuthorizedDevices[0]["status"] != "connected" {
+		t.Fatalf("expected connected status, got %+v", body.AuthorizedDevices[0])
+	}
+	if body.AuthorizedDevices[0]["displayName"] != "Nick iPhone" {
+		t.Fatalf("expected displayName from clientName, got %+v", body.AuthorizedDevices[0])
+	}
+	if len(body.BlockedClients) != 1 || body.BlockedClients[0]["clientId"] != "phone-b" {
+		t.Fatalf("unexpected blocked clients: %+v", body.BlockedClients)
+	}
+	if body.BlockedClients[0]["displayName"] != "Blocked Phone" {
+		t.Fatalf("expected blocked displayName from clientName, got %+v", body.BlockedClients[0])
+	}
+	if len(body.RecentAttempts) == 0 {
+		t.Fatal("expected recent attempts")
+	}
+}
+
+func TestRevokeAuthorizedDeviceEndpointDoesNotDeleteHistory(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+	if err := st.UpsertDailyStats(store.DailyStats{
+		StatDate:             "2026-06-10",
+		ClientID:             "phone-a",
+		ClientNameSnapshot:   "Nick iPhone",
+		ClientIPSnapshot:     "192.168.1.20",
+		FileCount:            2,
+		TotalBytes:           100,
+		ActiveTransmissionMs: 50,
+		UpdatedAt:            now,
+	}); err != nil {
+		t.Fatalf("UpsertDailyStats: %v", err)
+	}
+
+	registerCh := make(chan map[string]any, 2)
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	signalingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tunnel/signaling" {
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(msg, &payload); err != nil {
+				continue
+			}
+			if payload["type"] == "register_desktop" {
+				registerCh <- payload
+			}
+		}
+	}))
+	defer signalingSrv.Close()
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	t.Cleanup(func() {
+		_, _ = http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(`{"signalingUrl":"","accessToken":"","iceServers":[]}`))
+	})
+
+	reqBody := `{"signalingUrl":"` + signalingSrv.URL + `","accessToken":"token","iceServers":[]}`
+	credentialsResp, err := http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	credentialsResp.Body.Close()
+	if credentialsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected credentials 200, got %d", credentialsResp.StatusCode)
+	}
+
+	select {
+	case payload := <-registerCh:
+		paired, ok := payload["pairedDevices"].([]any)
+		if !ok || len(paired) != 1 {
+			t.Fatalf("initial pairedDevices=%#v, want one device", payload["pairedDevices"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial desktop registration was not sent")
+	}
+
+	resp, err := http.Post(srv.URL+"/settings/connection-devices/phone-a/revoke", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST revoke: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	select {
+	case payload := <-registerCh:
+		paired, ok := payload["pairedDevices"].([]any)
+		if !ok || len(paired) != 0 {
+			t.Fatalf("refreshed pairedDevices=%#v, want no devices", payload["pairedDevices"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("refreshed desktop registration was not sent after revoke")
+	}
+
+	device, err := st.GetPairedDevice("phone-a")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
 	if device.RevokedAt == nil {
-		t.Fatal("expected existing paired device to be revoked after connection code regeneration")
+		t.Fatal("expected revoked_at to be set")
+	}
+	var statsCount int
+	if err := st.DB().QueryRow("SELECT count(*) FROM device_daily_stats WHERE client_id = ?", "phone-a").Scan(&statsCount); err != nil {
+		t.Fatalf("count daily stats: %v", err)
+	}
+	if statsCount != 1 {
+		t.Fatalf("expected daily stats to remain, got %d", statsCount)
+	}
+}
+
+func TestClearBlockedClientEndpointClearsBlockOnly(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	for i := 0; i < 5; i++ {
+		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-1"}, 5); err != nil {
+			t.Fatalf("RecordPairingFailure desktop-1: %v", err)
+		}
+		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-2"}, 5); err != nil {
+			t.Fatalf("RecordPairingFailure desktop-2: %v", err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/settings/blocked-clients/phone-a/clear?desktopDeviceId=desktop-1", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST clear block: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if block, _ := st.GetActivePairingBlock("phone-a", "desktop-1"); block != nil {
+		t.Fatal("expected desktop-1 active block to be cleared")
+	}
+	if block, err := st.GetActivePairingBlock("phone-a", "desktop-2"); err != nil || block == nil {
+		t.Fatalf("expected desktop-2 active block to remain, block=%+v err=%v", block, err)
+	}
+	if _, err := st.GetPairedDevice("phone-a"); err == nil {
+		t.Fatal("clearing block must not authorize device")
+	}
+}
+
+func TestRegenerateConnectionCodeDoesNotRevokeAuthorizedDevices(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+	oldCode, err := st.GetConnectionCode()
+	if err != nil {
+		t.Fatalf("GetConnectionCode before regenerate: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/connection-code/regenerate", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST regenerate: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	newCode := body["code"]
+	if len(newCode) != 6 || newCode == oldCode {
+		t.Fatalf("expected regenerated 6-digit code different from %q, got %q", oldCode, newCode)
+	}
+	storedCode, err := st.GetConnectionCode()
+	if err != nil {
+		t.Fatalf("GetConnectionCode after regenerate: %v", err)
+	}
+	if storedCode != newCode {
+		t.Fatalf("stored code=%q, response code=%q", storedCode, newCode)
+	}
+
+	device, err := st.GetPairedDevice("phone-a")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if device.RevokedAt != nil {
+		t.Fatal("regenerating connection code must not revoke authorized devices")
 	}
 }
 
