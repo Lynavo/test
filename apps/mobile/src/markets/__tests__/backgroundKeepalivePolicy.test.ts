@@ -21,6 +21,9 @@ describe('background keepalive policy', () => {
     expect(policy.userPrompts).toContain(
       'offer battery optimization whitelist only when auto sync is enabled',
     );
+    expect(policy.nativeRequirements).toContain(
+      'vendor-specific autostart and battery guide entry points',
+    );
   });
 
   it('keeps global Android Play-compliant and avoids battery whitelist as a default requirement', () => {

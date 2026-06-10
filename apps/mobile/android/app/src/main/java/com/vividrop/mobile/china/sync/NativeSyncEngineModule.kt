@@ -1370,8 +1370,14 @@ class NativeSyncEngineModule(
   }
 
   private fun clearForegroundSyncStopRequest() {
-    foregroundSyncStopRequested = false
-    lastBackgroundStopReason = null
+    val nextState = AndroidSyncPrimitives.clearForegroundSyncStopRequest(
+      AndroidBackgroundKeepaliveStopState(
+        foregroundStopRequested = foregroundSyncStopRequested,
+        lastStopReason = lastBackgroundStopReason,
+      ),
+    )
+    foregroundSyncStopRequested = nextState.foregroundStopRequested
+    lastBackgroundStopReason = nextState.lastStopReason
   }
 
   private fun pairingTokenForKnownDevice(deviceId: String): String? {

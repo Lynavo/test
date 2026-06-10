@@ -9,6 +9,7 @@ import {
   NativeModules,
   NativeEventEmitter,
   Alert,
+  AppState,
   Linking,
   Platform,
   Modal,
@@ -54,6 +55,7 @@ import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { maskPhone } from '../utils/phone-validation';
 import { FEATURES } from '../constants/features';
 import { isChinaMarket, isGlobalMarket } from '../markets';
+import { resolveAndroidOemKeepaliveGuide } from '../markets/androidOemKeepaliveGuide';
 import { iapService } from '../services/iap-service';
 import { classifyIapError } from '../services/iap-errors';
 import { markSubscriptionJustActivated } from '../hooks/useExpiryReminder';
@@ -256,6 +258,40 @@ function resolveBatteryOptimizationCopy(language: string | undefined): {
   };
 }
 
+function resolveBatteryOptimizationAlertBody(
+  language: string | undefined,
+): string {
+  const copy = resolveBatteryOptimizationCopy(language);
+  const platformConstants = Platform.constants as
+    | {
+        Manufacturer?: unknown;
+        Brand?: unknown;
+        manufacturer?: unknown;
+        brand?: unknown;
+      }
+    | undefined;
+  const guide = resolveAndroidOemKeepaliveGuide({
+    manufacturer:
+      typeof platformConstants?.Manufacturer === 'string'
+        ? platformConstants.Manufacturer
+        : typeof platformConstants?.manufacturer === 'string'
+          ? platformConstants.manufacturer
+          : null,
+    brand:
+      typeof platformConstants?.Brand === 'string'
+        ? platformConstants.Brand
+        : typeof platformConstants?.brand === 'string'
+          ? platformConstants.brand
+          : null,
+    language,
+  });
+  const steps = guide.steps
+    .map((step, index) => `${index + 1}. ${step}`)
+    .join('\n');
+
+  return `${copy.body}\n\n${guide.vendorLabel}\n${steps}`;
+}
+
 function resolveGiftCardPlanLabel(plan: string, t: TFunction): string {
   switch (plan) {
     case 'yearly':
@@ -345,6 +381,62 @@ export function SettingsScreen() {
   const [isRequestingBatteryOptimization, setIsRequestingBatteryOptimization] =
     useState(false);
 
+  const refreshAndroidKeepaliveStatus = useCallback(
+    async (isCancelled: () => boolean = () => false) => {
+      if (!isBatteryOptimizationFeatureAvailable) {
+        setShouldShowBatteryOptimizationEntry(false);
+        setBatteryOptimizationStatus('unavailable');
+        return;
+      }
+
+      setBatteryOptimizationStatus('checking');
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus) {
+        setShouldShowBatteryOptimizationEntry(false);
+        setBatteryOptimizationStatus('unavailable');
+        return;
+      }
+
+      try {
+        const [statusResult, autoUploadConfigResult] = await Promise.allSettled(
+          [
+            NativeSyncEngine.getAndroidBackgroundKeepaliveStatus() as Promise<AndroidBackgroundKeepaliveStatus>,
+            (NativeSyncEngine.getAutoUploadConfig?.() ??
+              Promise.resolve(undefined)) as Promise<
+              { enabled?: boolean } | undefined
+            >,
+          ],
+        );
+        if (isCancelled()) return;
+        if (statusResult.status !== 'fulfilled') {
+          throw statusResult.reason;
+        }
+        const status = statusResult.value;
+        const autoUploadEnabled =
+          autoUploadConfigResult.status === 'fulfilled' &&
+          autoUploadConfigResult.value?.enabled === true;
+        const hasBackgroundStopDiagnostic =
+          typeof status.lastBackgroundStopReason === 'string' &&
+          status.lastBackgroundStopReason.length > 0;
+        setShouldShowBatteryOptimizationEntry(
+          autoUploadEnabled ||
+            hasBackgroundStopDiagnostic ||
+            status.batteryOptimizationIgnored,
+        );
+        setBatteryOptimizationStatus(
+          status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
+        );
+      } catch (err) {
+        console.warn('[settings] Android keepalive status refresh failed', err);
+        if (!isCancelled()) {
+          setShouldShowBatteryOptimizationEntry(false);
+          setBatteryOptimizationStatus('unavailable');
+        }
+      }
+    },
+    [isBatteryOptimizationFeatureAvailable],
+  );
+
   // My iPhone display name
   const [myName, setMyName] = useState('iPhone');
   const [editingMyName, setEditingMyName] = useState(false);
@@ -423,65 +515,30 @@ export function SettingsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!isBatteryOptimizationFeatureAvailable) {
-        setShouldShowBatteryOptimizationEntry(false);
-        setBatteryOptimizationStatus('unavailable');
-        return undefined;
-      }
-
       let cancelled = false;
-      setBatteryOptimizationStatus('checking');
-      const { NativeSyncEngine } = NativeModules;
-      if (!NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus) {
-        setShouldShowBatteryOptimizationEntry(false);
-        setBatteryOptimizationStatus('unavailable');
-        return undefined;
-      }
-
-      void Promise.allSettled([
-        NativeSyncEngine.getAndroidBackgroundKeepaliveStatus() as Promise<AndroidBackgroundKeepaliveStatus>,
-        (NativeSyncEngine.getAutoUploadConfig?.() ??
-          Promise.resolve(undefined)) as Promise<
-          { enabled?: boolean } | undefined
-        >,
-      ])
-        .then(([statusResult, autoUploadConfigResult]) => {
-          if (cancelled) return;
-          if (statusResult.status !== 'fulfilled') {
-            throw statusResult.reason;
-          }
-          const status = statusResult.value;
-          const autoUploadEnabled =
-            autoUploadConfigResult.status === 'fulfilled' &&
-            autoUploadConfigResult.value?.enabled === true;
-          const hasBackgroundStopDiagnostic =
-            typeof status.lastBackgroundStopReason === 'string' &&
-            status.lastBackgroundStopReason.length > 0;
-          setShouldShowBatteryOptimizationEntry(
-            autoUploadEnabled ||
-              hasBackgroundStopDiagnostic ||
-              status.batteryOptimizationIgnored,
-          );
-          setBatteryOptimizationStatus(
-            status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
-          );
-        })
-        .catch(err => {
-          console.warn(
-            '[settings] Android keepalive status refresh failed',
-            err,
-          );
-          if (!cancelled) {
-            setShouldShowBatteryOptimizationEntry(false);
-            setBatteryOptimizationStatus('unavailable');
-          }
-        });
+      void refreshAndroidKeepaliveStatus(() => cancelled);
 
       return () => {
         cancelled = true;
       };
-    }, [isBatteryOptimizationFeatureAvailable]),
+    }, [refreshAndroidKeepaliveStatus]),
   );
+
+  useEffect(() => {
+    if (!isBatteryOptimizationFeatureAvailable) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        void refreshAndroidKeepaliveStatus();
+      }
+    });
+
+    return () => {
+      subscription?.remove?.();
+    };
+  }, [isBatteryOptimizationFeatureAvailable, refreshAndroidKeepaliveStatus]);
 
   // ---------------------------------------------------------------------------
   // Load real binding state + client display name from native module
@@ -877,39 +934,43 @@ export function SettingsScreen() {
     }
 
     const copy = resolveBatteryOptimizationCopy(i18n.language);
-    Alert.alert(copy.title, copy.body, [
-      { text: copy.cancel, style: 'cancel' },
-      {
-        text: copy.confirm,
-        onPress: async () => {
-          const { NativeSyncEngine } = NativeModules;
-          if (
-            !NativeSyncEngine?.requestIgnoreBatteryOptimizations ||
-            !NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus
-          ) {
-            Alert.alert(copy.requestFailed);
-            return;
-          }
-          setIsRequestingBatteryOptimization(true);
-          try {
-            await NativeSyncEngine.requestIgnoreBatteryOptimizations();
-            const status =
-              (await NativeSyncEngine.getAndroidBackgroundKeepaliveStatus()) as AndroidBackgroundKeepaliveStatus;
-            setBatteryOptimizationStatus(
-              status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
-            );
-          } catch (err) {
-            console.warn(
-              '[settings] request battery optimization whitelist failed',
-              err,
-            );
-            Alert.alert(copy.requestFailed);
-          } finally {
-            setIsRequestingBatteryOptimization(false);
-          }
+    Alert.alert(
+      copy.title,
+      resolveBatteryOptimizationAlertBody(i18n.language),
+      [
+        { text: copy.cancel, style: 'cancel' },
+        {
+          text: copy.confirm,
+          onPress: async () => {
+            const { NativeSyncEngine } = NativeModules;
+            if (
+              !NativeSyncEngine?.requestIgnoreBatteryOptimizations ||
+              !NativeSyncEngine?.getAndroidBackgroundKeepaliveStatus
+            ) {
+              Alert.alert(copy.requestFailed);
+              return;
+            }
+            setIsRequestingBatteryOptimization(true);
+            try {
+              await NativeSyncEngine.requestIgnoreBatteryOptimizations();
+              const status =
+                (await NativeSyncEngine.getAndroidBackgroundKeepaliveStatus()) as AndroidBackgroundKeepaliveStatus;
+              setBatteryOptimizationStatus(
+                status.batteryOptimizationIgnored ? 'ignored' : 'not_ignored',
+              );
+            } catch (err) {
+              console.warn(
+                '[settings] request battery optimization whitelist failed',
+                err,
+              );
+              Alert.alert(copy.requestFailed);
+            } finally {
+              setIsRequestingBatteryOptimization(false);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   }, [
     batteryOptimizationStatus,
     i18n.language,

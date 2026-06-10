@@ -1,6 +1,7 @@
 import React from 'react';
-import { Alert, Platform } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, AppState, Platform } from 'react-native';
+import type { AppStateStatus } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ReactTestInstance } from 'react-test-renderer';
 import type { SubscriptionInfo, UserProfile } from '../../stores/auth-store';
@@ -396,6 +397,121 @@ describe('SettingsScreen', () => {
         mockNativeSyncEngine.getAndroidBackgroundKeepaliveStatus,
       ).not.toHaveBeenCalled();
     } finally {
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
+  });
+
+  test('refreshes battery optimization status after returning from Android system settings', async () => {
+    await i18n.changeLanguage('zh-Hant');
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+
+    let appStateListener: ((state: AppStateStatus) => void) | null = null;
+    const appStateSpy = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((eventName, listener) => {
+        if (eventName === 'change') {
+          appStateListener = listener;
+        }
+        return { remove: jest.fn() };
+      });
+
+    mockNativeSyncEngine.getAndroidBackgroundKeepaliveStatus
+      .mockResolvedValueOnce({
+        backgroundKeepaliveStrategy:
+          'android_cn_foreground_service_battery_whitelist',
+        foregroundServiceActive: false,
+        foregroundServiceStopRequested: false,
+        batteryOptimizationIgnored: false,
+        postNotificationsGranted: true,
+        lastBackgroundStopReason: null,
+      })
+      .mockResolvedValueOnce({
+        backgroundKeepaliveStrategy:
+          'android_cn_foreground_service_battery_whitelist',
+        foregroundServiceActive: false,
+        foregroundServiceStopRequested: false,
+        batteryOptimizationIgnored: true,
+        postNotificationsGranted: true,
+        lastBackgroundStopReason: null,
+      });
+
+    try {
+      const { getByText } = render(<SettingsScreen />);
+
+      await waitFor(() => {
+        expect(getByText('長時間熄屏上傳建議開啟')).toBeTruthy();
+      });
+
+      expect(appStateListener).toBeTruthy();
+      await act(async () => {
+        appStateListener?.('active');
+      });
+
+      await waitFor(() => {
+        expect(
+          mockNativeSyncEngine.getAndroidBackgroundKeepaliveStatus,
+        ).toHaveBeenCalledTimes(2);
+      });
+      expect(getByText('系統已允許')).toBeTruthy();
+    } finally {
+      appStateSpy.mockRestore();
+      Object.defineProperty(Platform, 'OS', {
+        configurable: true,
+        value: originalPlatformOS,
+      });
+    }
+  });
+
+  test('shows OEM-specific keepalive guide before opening Android battery settings', async () => {
+    await i18n.changeLanguage('zh-Hant');
+    const originalPlatformOS = Platform.OS;
+    const originalPlatformConstants = Platform.constants;
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    Object.defineProperty(Platform, 'constants', {
+      configurable: true,
+      value: {
+        ...originalPlatformConstants,
+        Manufacturer: 'Xiaomi',
+        Brand: 'Redmi',
+      },
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    try {
+      const { getByText } = render(<SettingsScreen />);
+
+      await waitFor(() => {
+        expect(getByText('熄屏同步保護')).toBeTruthy();
+      });
+
+      fireEvent.press(getByText('熄屏同步保護'));
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        '熄屏同步保護',
+        expect.stringContaining('Xiaomi / Redmi / POCO'),
+        expect.any(Array),
+      );
+      expect(alertSpy).toHaveBeenCalledWith(
+        '熄屏同步保護',
+        expect.stringContaining('自啟動'),
+        expect.any(Array),
+      );
+    } finally {
+      alertSpy.mockRestore();
+      Object.defineProperty(Platform, 'constants', {
+        configurable: true,
+        value: originalPlatformConstants,
+      });
       Object.defineProperty(Platform, 'OS', {
         configurable: true,
         value: originalPlatformOS,

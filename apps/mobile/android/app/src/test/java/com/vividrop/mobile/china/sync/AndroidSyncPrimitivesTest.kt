@@ -1040,6 +1040,19 @@ class AndroidSyncPrimitivesTest {
     assertEquals("auto", fields.lastCompletedTaskSource)
   }
 
+  @Test
+  fun clearForegroundSyncStopRequestPreservesLastStopReasonDiagnostic() {
+    val next = AndroidSyncPrimitives.clearForegroundSyncStopRequest(
+      AndroidBackgroundKeepaliveStopState(
+        foregroundStopRequested = true,
+        lastStopReason = "notification_stop",
+      ),
+    )
+
+    assertFalse(next.foregroundStopRequested)
+    assertEquals("notification_stop", next.lastStopReason)
+  }
+
   private fun testUploadItem(
     fileKey: String,
     source: String,

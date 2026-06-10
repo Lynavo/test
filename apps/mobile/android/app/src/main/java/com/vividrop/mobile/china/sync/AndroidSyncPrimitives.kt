@@ -123,6 +123,11 @@ data class AndroidWakeTarget(
   val ports: List<Int>,
 )
 
+data class AndroidBackgroundKeepaliveStopState(
+  val foregroundStopRequested: Boolean,
+  val lastStopReason: String?,
+)
+
 object AndroidSyncPrimitives {
   fun decideSharedFilesRoute(
     isTunnelActive: Boolean,
@@ -158,6 +163,11 @@ object AndroidSyncPrimitives {
   }
 
   fun shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute: Boolean): Boolean = isTunnelRoute
+
+  fun clearForegroundSyncStopRequest(
+    state: AndroidBackgroundKeepaliveStopState,
+  ): AndroidBackgroundKeepaliveStopState =
+    state.copy(foregroundStopRequested = false)
 
   fun buildWakeOnLanMagicPacket(macAddress: String): ByteArray {
     val mac = parseMacAddress(macAddress)
