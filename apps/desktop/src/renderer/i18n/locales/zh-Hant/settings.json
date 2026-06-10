@@ -39,6 +39,7 @@
     "emptyAuthorized": "尚無已授權設備",
     "emptyBlocked": "尚無被封鎖設備",
     "emptyAttempts": "尚無配對嘗試",
+    "refresh": "重新整理",
     "revoke": "撤銷授權",
     "clearBlock": "解除封鎖",
     "confirmRevoke": "撤銷後，這台手機下次必須重新輸入電腦端連接碼。確定要撤銷？",

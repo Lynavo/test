@@ -60,6 +60,7 @@ describe('ConnectionDevicesSection', () => {
     expect(screen.getByText('Nick iPhone')).toBeInTheDocument();
     expect(screen.getAllByText('Blocked Phone')).toHaveLength(2);
     expect(screen.getByText('PAIRING_CODE_INVALID')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重新整理' })).toBeInTheDocument();
     expect(
       screen.queryByRole('button', {
         name: /delete|remove|skip|reorder|刪除|移除|略過|重新排序|删除|跳过|重排/i,

@@ -39,6 +39,7 @@
     "emptyAuthorized": "尚无已授权设备",
     "emptyBlocked": "尚无被封锁设备",
     "emptyAttempts": "尚无配对尝试",
+    "refresh": "刷新",
     "revoke": "撤销授权",
     "clearBlock": "解除封锁",
     "confirmRevoke": "撤销后，这台手机下次必须重新输入电脑端连接码。确定要撤销？",

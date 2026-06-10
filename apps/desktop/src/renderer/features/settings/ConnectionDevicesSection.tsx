@@ -56,7 +56,7 @@ export function ConnectionDevicesSection() {
           type="button"
           variant="outline"
           size="icon-sm"
-          aria-label={t('settings.shareAddress.refresh')}
+          aria-label={t('settings.connectionDevices.refresh')}
           disabled={loading}
           onClick={() => void fetchConnectionDevices()}
         >

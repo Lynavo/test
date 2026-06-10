@@ -39,6 +39,7 @@
     "emptyAuthorized": "No authorized devices",
     "emptyBlocked": "No blocked devices",
     "emptyAttempts": "No pairing attempts",
+    "refresh": "Refresh",
     "revoke": "Revoke",
     "clearBlock": "Clear block",
     "confirmRevoke": "After revoking, this phone must enter the desktop pairing code again next time. Revoke authorization?",
