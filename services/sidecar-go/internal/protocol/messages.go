@@ -80,9 +80,9 @@ type PairReq struct {
 }
 
 type PairingErrorMetadata struct {
-	FailedAttempts    int `json:"failedAttempts,omitempty"`
-	RemainingAttempts int `json:"remainingAttempts,omitempty"`
-	MaxAttempts       int `json:"maxAttempts,omitempty"`
+	FailedAttempts    int `json:"failedAttempts"`
+	RemainingAttempts int `json:"remainingAttempts"`
+	MaxAttempts       int `json:"maxAttempts"`
 }
 
 // PairRes is the server's response to PairReq.

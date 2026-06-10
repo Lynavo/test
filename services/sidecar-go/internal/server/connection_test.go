@@ -129,6 +129,11 @@ func sendJSON(t *testing.T, conn net.Conn, typ uint16, v any) {
 // recvJSON reads a frame, checks its type, and unmarshals the body into v.
 func recvJSON(t *testing.T, conn net.Conn, expectedType uint16, v any) {
 	t.Helper()
+	_ = recvJSONRaw(t, conn, expectedType, v)
+}
+
+func recvJSONRaw(t *testing.T, conn net.Conn, expectedType uint16, v any) []byte {
+	t.Helper()
 	conn.SetReadDeadline(time.Now().Add(testReadTimeout))
 	hdr, body, err := protocol.ReadFrame(conn)
 	if err != nil {
@@ -142,6 +147,7 @@ func recvJSON(t *testing.T, conn net.Conn, expectedType uint16, v any) {
 			t.Fatalf("unmarshal %T: %v\nbody: %s", v, err, string(body))
 		}
 	}
+	return body
 }
 
 func assertNoExtraFrame(t *testing.T, conn net.Conn) {
@@ -249,6 +255,12 @@ func sendPairingHello(t *testing.T, client net.Conn, clientID string) protocol.H
 
 func sendPairRequest(t *testing.T, client net.Conn, clientID, code string) protocol.PairRes {
 	t.Helper()
+	pairRes, _ := sendPairRequestRaw(t, client, clientID, code)
+	return pairRes
+}
+
+func sendPairRequestRaw(t *testing.T, client net.Conn, clientID, code string) (protocol.PairRes, []byte) {
+	t.Helper()
 	sendJSON(t, client, protocol.TypePairReq, protocol.PairReq{
 		ClientID:       clientID,
 		ClientName:     testClientName,
@@ -258,8 +270,8 @@ func sendPairRequest(t *testing.T, client net.Conn, clientID, code string) proto
 	})
 
 	var pairRes protocol.PairRes
-	recvJSON(t, client, protocol.TypePairRes, &pairRes)
-	return pairRes
+	body := recvJSONRaw(t, client, protocol.TypePairRes, &pairRes)
+	return pairRes, body
 }
 
 func pairClientWithCode(t *testing.T, client net.Conn, clientID, code string) protocol.PairRes {
@@ -277,6 +289,13 @@ func pairingTestMeta(clientID, desktopID string) store.PairingClientMetadata {
 		Platform:        "ios",
 		StableDeviceID:  clientID + "-stable",
 		IP:              "127.0.0.1",
+	}
+}
+
+func assertPairingMetaRemainingZeroInRawJSON(t *testing.T, body []byte) {
+	t.Helper()
+	if !bytes.Contains(body, []byte(`"remainingAttempts":0`)) {
+		t.Fatalf("raw frame is missing remainingAttempts zero metadata: %s", string(body))
 	}
 }
 
@@ -381,7 +400,8 @@ func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
 			attemptClient, attemptCleanup = setupTestConnectionWithStore(t, st, cfg)
 		}
 
-		pairRes := pairClientWithCode(t, attemptClient, "phone-a", "000000")
+		_ = sendPairingHello(t, attemptClient, "phone-a")
+		pairRes, rawPairRes := sendPairRequestRaw(t, attemptClient, "phone-a", "000000")
 		if pairRes.OK {
 			t.Fatalf("attempt %d PairRes.OK=true, want false", attempt)
 		}
@@ -404,6 +424,9 @@ func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
 		}
 		if pairRes.ErrorMeta.MaxAttempts != 5 {
 			t.Fatalf("attempt %d maxAttempts=%d, want 5", attempt, pairRes.ErrorMeta.MaxAttempts)
+		}
+		if attempt == 5 {
+			assertPairingMetaRemainingZeroInRawJSON(t, rawPairRes)
 		}
 		assertNoExtraFrame(t, attemptClient)
 
@@ -445,13 +468,14 @@ func TestBlockedClientRejectedAtHelloBeforePairReq(t *testing.T) {
 	})
 
 	var errMsg protocol.ErrorMsg
-	recvJSON(t, client, protocol.TypeError, &errMsg)
+	rawErrMsg := recvJSONRaw(t, client, protocol.TypeError, &errMsg)
 	if errMsg.Code != "PAIRING_CLIENT_BLOCKED" {
 		t.Fatalf("error code=%q, want PAIRING_CLIENT_BLOCKED", errMsg.Code)
 	}
 	if errMsg.Meta == nil {
 		t.Fatal("expected blocked error metadata")
 	}
+	assertPairingMetaRemainingZeroInRawJSON(t, rawErrMsg)
 	assertNoExtraFrame(t, client)
 
 	attempts, err := st.ListRecentPairingAttempts(1)
@@ -598,13 +622,14 @@ func TestAuthBlockedAfterNonceDoesNotSendExtraProtocolError(t *testing.T) {
 	})
 
 	var errMsg protocol.ErrorMsg
-	recvJSON(t, client2, protocol.TypeError, &errMsg)
+	rawErrMsg := recvJSONRaw(t, client2, protocol.TypeError, &errMsg)
 	if errMsg.Code != "PAIRING_CLIENT_BLOCKED" {
 		t.Fatalf("error code=%q, want PAIRING_CLIENT_BLOCKED", errMsg.Code)
 	}
 	if errMsg.Meta == nil {
 		t.Fatal("expected blocked error metadata")
 	}
+	assertPairingMetaRemainingZeroInRawJSON(t, rawErrMsg)
 	assertNoExtraFrame(t, client2)
 }
 
