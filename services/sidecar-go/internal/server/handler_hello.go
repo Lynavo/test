@@ -57,14 +57,26 @@ func (c *connection) handleHello(body []byte) error {
 	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
 	c.clientPlatform = req.ClientPlatform
 
+	// Retrieve server identity
+	serverID, _ := c.store.GetDeviceID()
+	blockState, err := c.store.GetDeviceBlockState(serverID, req.ClientID)
+	if err != nil {
+		return fmt.Errorf("get device block state: %w", err)
+	}
+	if blockState.Blocked {
+		slog.Warn("rejecting blocked device during HELLO", "clientID", req.ClientID, "serverID", serverID)
+		return c.rejectWithError(
+			"DEVICE_BLOCKED",
+			"此手機已被此電腦封鎖，請在電腦端手動解除",
+		)
+	}
+
 	slog.Info("HELLO_REQ received",
 		"clientID", req.ClientID,
 		"clientName", req.ClientName,
 		"platform", req.ClientPlatform,
 	)
 
-	// Retrieve server identity
-	serverID, _ := c.store.GetDeviceID()
 	serverName, _ := c.store.GetDeviceName()
 	shareConfig, _ := c.store.GetShareConfig()
 
@@ -354,6 +366,33 @@ func (c *connection) handlePair(body []byte) error {
 		return fmt.Errorf("parse PAIR_REQ: %w", err)
 	}
 
+	serverID, _ := c.store.GetDeviceID()
+	blockState, err := c.store.GetDeviceBlockState(serverID, req.ClientID)
+	if err != nil {
+		return fmt.Errorf("get device block state: %w", err)
+	}
+	if blockState.Blocked {
+		clientName := req.ClientName
+		reason := "blocked"
+		if _, err := c.store.RecordConnectionAttempt(store.ConnectionAttempt{
+			DesktopDeviceID: serverID,
+			ClientID:        req.ClientID,
+			ClientName:      &clientName,
+			Result:          "blocked",
+			FailureReason:   &reason,
+		}); err != nil {
+			return fmt.Errorf("record blocked connection attempt: %w", err)
+		}
+		_ = c.sendJSON(protocol.TypePairRes, protocol.PairRes{
+			OK:                false,
+			Error:             "此手機已被此電腦封鎖，請在電腦端手動解除",
+			ErrorCode:         "blocked",
+			RemainingAttempts: blockState.RemainingAttempts,
+			Blocked:           true,
+		})
+		return fmt.Errorf("blocked pairing attempt from %s", req.ClientID)
+	}
+
 	// Verify connection code
 	expectedCode, err := c.store.GetConnectionCode()
 	if err != nil {
@@ -361,8 +400,34 @@ func (c *connection) handlePair(body []byte) error {
 	}
 
 	if req.ConnectionCode != expectedCode {
-		slog.Warn("pair rejected: wrong connection code", "clientID", req.ClientID)
-		_ = c.sendJSON(protocol.TypePairRes, protocol.PairRes{OK: false, Error: "连接码错误"})
+		clientName := req.ClientName
+		reason := "wrong_code"
+		state, recordErr := c.store.RecordConnectionAttempt(store.ConnectionAttempt{
+			DesktopDeviceID: serverID,
+			ClientID:        req.ClientID,
+			ClientName:      &clientName,
+			Result:          "wrong_code",
+			FailureReason:   &reason,
+		})
+		if recordErr != nil {
+			return fmt.Errorf("record wrong connection code attempt: %w", recordErr)
+		}
+		errorCode := "wrong_code"
+		if state.Blocked {
+			errorCode = "blocked"
+		}
+		slog.Warn("pair rejected: wrong connection code",
+			"clientID", req.ClientID,
+			"remainingAttempts", state.RemainingAttempts,
+			"blocked", state.Blocked,
+		)
+		_ = c.sendJSON(protocol.TypePairRes, protocol.PairRes{
+			OK:                false,
+			Error:             "連線碼錯誤",
+			ErrorCode:         errorCode,
+			RemainingAttempts: state.RemainingAttempts,
+			Blocked:           state.Blocked,
+		})
 		return fmt.Errorf("invalid connection code from %s", req.ClientID)
 	}
 
@@ -420,11 +485,13 @@ func (c *connection) handlePair(body []byte) error {
 	c.clientID = req.ClientID
 
 	// Build server info
-	serverID, _ := c.store.GetDeviceID()
 	shareConfig, _ := c.store.GetShareConfig()
 	shareName := ""
 	if shareConfig != nil {
 		shareName = shareConfig.ShareName
+	}
+	if err := c.store.ClearConnectionAttempts(serverID, req.ClientID); err != nil {
+		return fmt.Errorf("clear connection attempts: %w", err)
 	}
 
 	res := protocol.PairRes{

@@ -214,6 +214,19 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	// Dashboard
 	mux.HandleFunc("GET /dashboard/summary", withJSON(srv.handleDashboardSummary))
 	mux.HandleFunc("GET /dashboard/devices", withJSON(srv.handleDashboardDevices))
+	// Local management
+	mux.HandleFunc("GET /management/devices", withJSON(srv.handleManagementDevices))
+	mux.HandleFunc("POST /management/devices/{clientId}/unblock", withJSON(srv.handleManagementUnblockDevice))
+	mux.HandleFunc("GET /management/records/sync", withJSON(srv.handleManagementSyncRecords))
+	mux.HandleFunc("GET /management/records/access", withJSON(srv.handleManagementAccessRecords))
+	// Shared resource management
+	mux.HandleFunc("GET /resources/shared", withJSON(srv.handleResourcesShared))
+	mux.HandleFunc("POST /resources/shared", withJSON(srv.handleResourcesAddShared))
+	mux.HandleFunc("DELETE /resources/shared/{resourceId}", withJSON(srv.handleResourcesRemoveShared))
+	mux.HandleFunc("GET /resources/received", withJSON(srv.handleResourcesReceived))
+	mux.HandleFunc("GET /resources/mobile/shared", withJSON(srv.handleMobileSharedResources))
+	mux.HandleFunc("GET /resources/mobile/received", withJSON(srv.handleMobileReceivedResources))
+	mux.HandleFunc("GET /resources/mobile/download/{resourceId}", srv.handleMobileResourceDownload)
 	// Devices
 	mux.HandleFunc("GET /devices/{deviceId}", withJSON(srv.handleDeviceDetail))
 	mux.HandleFunc("GET /devices/{deviceId}/files", withJSON(srv.handleDeviceFiles))

@@ -81,11 +81,14 @@ type PairReq struct {
 
 // PairRes is the server's response to PairReq.
 type PairRes struct {
-	OK           bool       `json:"ok"`
-	Error        string     `json:"error,omitempty"`
-	PairingID    string     `json:"pairingId"`
-	PairingToken string     `json:"pairingToken"`
-	ServerInfo   ServerInfo `json:"serverInfo"`
+	OK                bool       `json:"ok"`
+	Error             string     `json:"error,omitempty"`
+	ErrorCode         string     `json:"errorCode,omitempty"`
+	RemainingAttempts int        `json:"remainingAttempts,omitempty"`
+	Blocked           bool       `json:"blocked,omitempty"`
+	PairingID         string     `json:"pairingId"`
+	PairingToken      string     `json:"pairingToken"`
+	ServerInfo        ServerInfo `json:"serverInfo"`
 }
 
 // ServerInfo contains identifying information about the server.
