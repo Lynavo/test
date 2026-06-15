@@ -3,6 +3,7 @@ import log from 'electron-log';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { AddSharedResourcePayload } from '@syncflow/contracts';
 import {
   sidecarClient,
   supportsPairingRevocationOnCodeRotation,
@@ -607,7 +608,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_SYNC_RECORDS, () => sidecarClient.getSyncRecords());
   ipcMain.handle(IPC.SIDECAR_ACCESS_RECORDS, () => sidecarClient.getAccessRecords());
   ipcMain.handle(IPC.SIDECAR_SHARED_RESOURCES, () => sidecarClient.getSharedResources());
-  ipcMain.handle(IPC.SIDECAR_ADD_SHARED_RESOURCE, (_e, payload) =>
+  ipcMain.handle(IPC.SIDECAR_ADD_SHARED_RESOURCE, (_e, payload: AddSharedResourcePayload) =>
     sidecarClient.addSharedResource(payload),
   );
   ipcMain.handle(IPC.SIDECAR_REMOVE_SHARED_RESOURCE, (_e, resourceId: string) =>

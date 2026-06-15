@@ -12,12 +12,12 @@ import {
   VIVIDROP_REVIEW_API_BASE_URL,
 } from '@syncflow/contracts';
 import type {
+  AddSharedResourcePayload,
   DesktopAccessRecordDTO,
+  DesktopLocalListResponse,
   DesktopManagedDeviceDTO,
   DesktopSharedResourceDTO,
   DesktopSyncRecordDTO,
-  DesktopResourceKind,
-  DesktopResourceStatus,
   DeviceFileLedgerPageDTO,
   DeviceFileSortField,
   ReceivedLibraryItemDTO,
@@ -55,20 +55,6 @@ const USER_PROFILE_PATH = process.env.SYNCFLOW_USER_PROFILE_PATH ?? '/api/v1/use
 
 type GiftCardRedeemPayload = {
   code: string;
-};
-
-export type DesktopLocalListResponse<T> = {
-  items: T[];
-};
-
-export type AddSharedResourcePayload = {
-  kind: DesktopResourceKind;
-  displayName: string;
-  localPath?: string;
-  receivedFileKey?: string;
-  fileSize?: number;
-  mediaType?: string;
-  status?: DesktopResourceStatus;
 };
 
 export type PowerEventSnapshot = {

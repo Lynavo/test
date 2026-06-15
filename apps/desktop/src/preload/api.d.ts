@@ -1,10 +1,10 @@
 import type {
+  AddSharedResourcePayload,
   DashboardSummaryDTO,
   DashboardDeviceDTO,
   DesktopAccessRecordDTO,
+  DesktopLocalListResponse,
   DesktopManagedDeviceDTO,
-  DesktopResourceKind,
-  DesktopResourceStatus,
   DesktopSharedResourceDTO,
   DesktopSyncRecordDTO,
   DeviceFileLedgerPageDTO,
@@ -58,20 +58,6 @@ export type AuthSessionView = {
 export type PowerSaveState = {
   preventSleepDuringTransfer: boolean;
   blockingSleep: boolean;
-};
-
-export type DesktopLocalListResponse<T> = {
-  items: T[];
-};
-
-export type AddSharedResourcePayload = {
-  kind: DesktopResourceKind;
-  displayName: string;
-  localPath?: string;
-  receivedFileKey?: string;
-  fileSize?: number;
-  mediaType?: string;
-  status?: DesktopResourceStatus;
 };
 
 export interface ElectronAPI {

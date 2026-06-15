@@ -205,6 +205,20 @@ export interface ReceivedLibraryItemDTO {
   shareStatus: 'not_shared' | 'shared' | 'missing';
 }
 
+export interface DesktopLocalListResponse<T> {
+  items: T[];
+}
+
+export interface AddSharedResourcePayload {
+  kind: DesktopResourceKind;
+  displayName: string;
+  localPath?: string;
+  receivedFileKey?: string;
+  fileSize?: number;
+  mediaType?: string;
+  status?: DesktopResourceStatus;
+}
+
 export interface RecentDesktopDTO {
   desktopDeviceId: string;
   desktopName: string;

@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get as httpGet } from 'node:http';
 import { shell } from 'electron';
-import { APP_COMPATIBILITY_VERSION } from '@syncflow/contracts';
+import {
+  APP_COMPATIBILITY_VERSION,
+  type DesktopAccessRecordDTO,
+  type DesktopManagedDeviceDTO,
+  type DesktopSharedResourceDTO,
+  type DesktopSyncRecordDTO,
+  type ReceivedLibraryItemDTO,
+} from '@syncflow/contracts';
 import { IPC, registerIpcHandlers } from '../ipc-handlers';
 import { checkForUpdates, uploadDiagnostics } from '../diagnostics';
 import { sidecarClient, syncCredentialsToSidecar } from '../sidecar-client';
@@ -9,6 +16,75 @@ import { sidecarClient, syncCredentialsToSidecar } from '../sidecar-client';
 type IpcHandler = (...args: unknown[]) => unknown;
 
 const handlers = new Map<string, IpcHandler>();
+
+const managedDeviceFixture: DesktopManagedDeviceDTO = {
+  desktopDeviceId: 'desktop-1',
+  clientId: 'client-1',
+  clientIdShort: 'client',
+  displayName: 'iPhone 15 Pro',
+  platform: 'ios',
+  authorizationStatus: 'authorized',
+  blockStatus: 'none',
+  failedAttemptCount: 0,
+  todayFileCount: 0,
+  todayBytes: 0,
+  totalFileCount: 0,
+  totalBytes: 0,
+};
+
+const syncRecordFixture: DesktopSyncRecordDTO = {
+  recordId: 'sync-1',
+  desktopDeviceId: 'desktop-1',
+  clientId: 'client-1',
+  displayName: 'iPhone 15 Pro',
+  fileKey: 'file-1',
+  filename: 'IMG_0001.JPG',
+  mediaType: 'image/jpeg',
+  fileSize: 1024,
+  status: 'completed',
+  completedAt: '2026-06-15T00:00:00.000Z',
+};
+
+const accessRecordFixture: DesktopAccessRecordDTO = {
+  recordId: 'access-1',
+  desktopDeviceId: 'desktop-1',
+  clientId: 'client-1',
+  displayName: 'iPhone 15 Pro',
+  resourceId: 'res-1',
+  resourceKind: 'shared_folder',
+  resourceName: 'Exports',
+  action: 'list',
+  result: 'ok',
+  accessedAt: '2026-06-15T00:00:00.000Z',
+};
+
+const sharedResourceFixture: DesktopSharedResourceDTO = {
+  resourceId: 'res-1',
+  desktopDeviceId: 'desktop-1',
+  kind: 'shared_folder',
+  displayName: 'Exports',
+  status: 'available',
+  addedAt: '2026-06-15T00:00:00.000Z',
+  downloadCount: 0,
+};
+
+const addedSharedResourceFixture: DesktopSharedResourceDTO = {
+  ...sharedResourceFixture,
+  resourceId: 'res-2',
+};
+
+const receivedLibraryFixture: ReceivedLibraryItemDTO = {
+  resourceId: 'received-1',
+  desktopDeviceId: 'desktop-1',
+  clientId: 'client-1',
+  displayName: 'iPhone 15 Pro',
+  fileKey: 'file-1',
+  filename: 'IMG_0001.JPG',
+  mediaType: 'image/jpeg',
+  fileSize: 1024,
+  completedAt: '2026-06-15T00:00:00.000Z',
+  shareStatus: 'not_shared',
+};
 
 const electronMockState = vi.hoisted(() => {
   let appleBeforeRequest:
@@ -253,42 +329,40 @@ describe('registerIpcHandlers', () => {
 
   it('registers desktop-local management and resource IPC handlers', async () => {
     vi.mocked(sidecarClient.getManagedDevices).mockResolvedValue({
-      items: [{ desktopDeviceId: 'desktop-1', clientId: 'client-1' }],
-    } as never);
+      items: [managedDeviceFixture],
+    });
     vi.mocked(sidecarClient.unblockDevice).mockResolvedValue({ ok: true });
     vi.mocked(sidecarClient.getSyncRecords).mockResolvedValue({
-      items: [{ recordId: 'sync-1' }],
-    } as never);
+      items: [syncRecordFixture],
+    });
     vi.mocked(sidecarClient.getAccessRecords).mockResolvedValue({
-      items: [{ recordId: 'access-1' }],
-    } as never);
+      items: [accessRecordFixture],
+    });
     vi.mocked(sidecarClient.getSharedResources).mockResolvedValue({
-      items: [{ resourceId: 'res-1' }],
-    } as never);
-    vi.mocked(sidecarClient.addSharedResource).mockResolvedValue({
-      resourceId: 'res-2',
-    } as never);
+      items: [sharedResourceFixture],
+    });
+    vi.mocked(sidecarClient.addSharedResource).mockResolvedValue(addedSharedResourceFixture);
     vi.mocked(sidecarClient.removeSharedResource).mockResolvedValue({ ok: true });
     vi.mocked(sidecarClient.getReceivedLibrary).mockResolvedValue({
-      items: [{ resourceId: 'received-1' }],
-    } as never);
+      items: [receivedLibraryFixture],
+    });
 
     registerIpcHandlers({ retryStart: vi.fn() } as never);
 
     await expect(handlers.get(IPC.SIDECAR_MANAGED_DEVICES)?.()).resolves.toEqual({
-      items: [{ desktopDeviceId: 'desktop-1', clientId: 'client-1' }],
+      items: [managedDeviceFixture],
     });
     await expect(handlers.get(IPC.SIDECAR_UNBLOCK_DEVICE)?.(undefined, 'client-1')).resolves.toEqual(
       { ok: true },
     );
     await expect(handlers.get(IPC.SIDECAR_SYNC_RECORDS)?.()).resolves.toEqual({
-      items: [{ recordId: 'sync-1' }],
+      items: [syncRecordFixture],
     });
     await expect(handlers.get(IPC.SIDECAR_ACCESS_RECORDS)?.()).resolves.toEqual({
-      items: [{ recordId: 'access-1' }],
+      items: [accessRecordFixture],
     });
     await expect(handlers.get(IPC.SIDECAR_SHARED_RESOURCES)?.()).resolves.toEqual({
-      items: [{ resourceId: 'res-1' }],
+      items: [sharedResourceFixture],
     });
     await expect(
       handlers.get(IPC.SIDECAR_ADD_SHARED_RESOURCE)?.(undefined, {
@@ -296,12 +370,12 @@ describe('registerIpcHandlers', () => {
         displayName: 'Exports',
         localPath: '/tmp/exports',
       }),
-    ).resolves.toEqual({ resourceId: 'res-2' });
+    ).resolves.toEqual(addedSharedResourceFixture);
     await expect(
       handlers.get(IPC.SIDECAR_REMOVE_SHARED_RESOURCE)?.(undefined, 'res-1'),
     ).resolves.toEqual({ ok: true });
     await expect(handlers.get(IPC.SIDECAR_RECEIVED_LIBRARY)?.()).resolves.toEqual({
-      items: [{ resourceId: 'received-1' }],
+      items: [receivedLibraryFixture],
     });
 
     expect(sidecarClient.unblockDevice).toHaveBeenCalledWith('client-1');
