@@ -1013,4 +1013,57 @@ describe('SettingsScreen', () => {
       });
     });
   });
+
+  describe('Subscription status badge in User/Account row', () => {
+    beforeEach(async () => {
+      await i18n.changeLanguage('zh-Hant');
+    });
+
+    test('renders Pro badge for subscribed status', async () => {
+      mockAuth.subscription = {
+        status: 'subscribed',
+        plan: 'yearly',
+        expireAt: '2027-04-01T00:00:00.000Z',
+        trialEnd: null,
+      };
+      const { getByText } = render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(getByText('Pro')).toBeTruthy();
+      });
+    });
+
+    test('renders Trial badge for trialing status', async () => {
+      mockAuth.subscription = null;
+      mockAuth.user = {
+        id: 1,
+        primaryIdentity: { type: 'email', display: 'test@example.com' },
+        identities: [{ type: 'email', display: 'test@example.com' }],
+        status: 'trialing',
+        plan: 'yearly',
+        expireAt: null,
+        trialEnd: '2027-04-01T00:00:00.000Z',
+      };
+      const { getByText } = render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(getByText('試用')).toBeTruthy();
+      });
+    });
+
+    test('renders Expired badge for expired trial status', async () => {
+      mockAuth.subscription = null;
+      mockAuth.user = {
+        id: 1,
+        primaryIdentity: { type: 'email', display: 'test@example.com' },
+        identities: [{ type: 'email', display: 'test@example.com' }],
+        status: 'trial_expired',
+        plan: 'yearly',
+        expireAt: null,
+        trialEnd: '2026-04-01T00:00:00.000Z',
+      };
+      const { getByText } = render(<SettingsScreen />);
+      await waitFor(() => {
+        expect(getByText('已過期')).toBeTruthy();
+      });
+    });
+  });
 });

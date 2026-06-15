@@ -72,7 +72,11 @@ import {
   type MobileConnectionState,
 } from '../utils/effectiveConnectionState';
 import { isSyncActivityActivelyTransferring } from '../utils/syncActivityTransferState';
-import { resolveSubscriptionDisplayState } from '../utils/subscriptionStatusDisplay';
+import {
+  resolveSubscriptionDisplayState,
+  type SubscriptionDisplayKind,
+} from '../utils/subscriptionStatusDisplay';
+import { colors } from '../theme/colors';
 import {
   loadStoredLanguagePreference,
   resolveLanguagePreference,
@@ -88,9 +92,9 @@ import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
 
 const BLUE = '#3b82f6';
 const DARK = '#1c1c1e';
-const SCREEN_BG = '#dceefa';
-const CARD_BG = 'rgba(255,255,255,0.84)';
-const CARD_BORDER = 'rgba(255,255,255,0.72)';
+const SCREEN_BG = colors.background;
+const CARD_BG = colors.card;
+const CARD_BORDER = colors.border;
 const HAIRLINE = 'rgba(0,0,0,0.055)';
 const MUTED_TEXT = '#8e8e93';
 const SECTION_TEXT = '#8e8e93';
@@ -412,6 +416,30 @@ function hasConfirmedLanWakeContext(
     isPrivateLanIPv4(host) &&
     routeAllowsLanAutoConfig
   );
+}
+
+function getSubscriptionBadgeText(
+  kind: SubscriptionDisplayKind,
+  language: string | undefined,
+): string {
+  const tag = (language ?? 'zh-Hant').toLowerCase();
+  const isEn = tag.startsWith('en');
+  const isHans = tag.startsWith('zh-hans') || tag.startsWith('zh-cn');
+  switch (kind) {
+    case 'subscribed':
+    case 'gift_card_subscribed':
+    case 'gift_card_entitlement_queued':
+    case 'subscribed_cancelled':
+      return 'Pro';
+    case 'account_trial':
+    case 'subscription_intro_trial':
+      return isEn ? 'Trial' : isHans ? '试用' : '試用';
+    case 'trial_expired':
+    case 'sub_expired':
+      return isEn ? 'Expired' : isHans ? '已过期' : '已過期';
+    default:
+      return '';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1582,6 +1610,27 @@ export function SettingsScreen() {
     subscription: auth.subscription,
     user: auth.user,
   });
+  const badgeText = getSubscriptionBadgeText(
+    subscriptionDisplay.kind,
+    i18n.language,
+  );
+  let badgeBgStyle = styles.badgeBlue;
+  let badgeTextStyle = styles.badgeTextBlue;
+  if (
+    subscriptionDisplay.kind === 'subscribed' ||
+    subscriptionDisplay.kind === 'gift_card_subscribed' ||
+    subscriptionDisplay.kind === 'gift_card_entitlement_queued' ||
+    subscriptionDisplay.kind === 'subscribed_cancelled'
+  ) {
+    badgeBgStyle = styles.badgePurple;
+    badgeTextStyle = styles.badgeTextPurple;
+  } else if (
+    subscriptionDisplay.kind === 'trial_expired' ||
+    subscriptionDisplay.kind === 'sub_expired'
+  ) {
+    badgeBgStyle = styles.badgeRed;
+    badgeTextStyle = styles.badgeTextRed;
+  }
   const trialDays = subscriptionDisplay.daysRemaining;
   const isAccountTrial = subscriptionDisplay.kind === 'account_trial';
   const isSubscriptionIntroTrial =
@@ -1983,6 +2032,13 @@ export function SettingsScreen() {
               <Text style={styles.infoRowValue} numberOfLines={1}>
                 {accountDisplayValue}
               </Text>
+              {badgeText ? (
+                <View style={[styles.badge, badgeBgStyle]}>
+                  <Text style={[styles.badgeText, badgeTextStyle]}>
+                    {badgeText}
+                  </Text>
+                </View>
+              ) : null}
               {canTogglePhoneReveal ? (
                 <TouchableOpacity
                   style={styles.phoneEyeButton}
@@ -2247,19 +2303,17 @@ export function SettingsScreen() {
                     </Text>
                   </View>
                 </View>
-                <Icon
-                  name={
-                    batteryOptimizationStatus === 'ignored'
-                      ? 'checkmark-circle-outline'
-                      : 'chevron-forward'
-                  }
-                  size={16}
-                  color={
-                    batteryOptimizationStatus === 'ignored'
-                      ? ONLINE_GREEN
-                      : ROW_CHEVRON
-                  }
-                />
+                {batteryOptimizationStatus === 'ignored' ? (
+                  <Icon
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color={ONLINE_GREEN}
+                  />
+                ) : (
+                  <View style={styles.chevronCircle}>
+                    <Icon name="chevron-forward" size={12} color={BLUE} />
+                  </View>
+                )}
               </TouchableOpacity>
               <View style={styles.listSep} />
             </>
@@ -2276,7 +2330,9 @@ export function SettingsScreen() {
                 {t('settings.uploadDiagnostic.button')}
               </Text>
             </View>
-            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            <View style={styles.chevronCircle}>
+              <Icon name="chevron-forward" size={12} color={BLUE} />
+            </View>
           </TouchableOpacity>
           <View style={styles.listSep} />
           <TouchableOpacity
@@ -2290,7 +2346,9 @@ export function SettingsScreen() {
                 {t('settings.actions.help')}
               </Text>
             </View>
-            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            <View style={styles.chevronCircle}>
+              <Icon name="chevron-forward" size={12} color={BLUE} />
+            </View>
           </TouchableOpacity>
           {FEATURES.IAP_ENABLED &&
           FEATURES.IAP_RESTORE_ENABLED &&
@@ -2313,7 +2371,9 @@ export function SettingsScreen() {
                       : t('subscription.restore.action')}
                   </Text>
                 </View>
-                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+                <View style={styles.chevronCircle}>
+                  <Icon name="chevron-forward" size={12} color={BLUE} />
+                </View>
               </TouchableOpacity>
             </>
           ) : null}
@@ -2349,7 +2409,9 @@ export function SettingsScreen() {
                 {t('settings.actions.resetSyncStatus')}
               </Text>
             </View>
-            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            <View style={styles.dangerChevronCircle}>
+              <Icon name="chevron-forward" size={12} color={DANGER_RED} />
+            </View>
           </TouchableOpacity>
           <View style={styles.listSep} />
           <TouchableOpacity
@@ -2363,7 +2425,9 @@ export function SettingsScreen() {
                 {t('settings.actions.logout')}
               </Text>
             </View>
-            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            <View style={styles.dangerChevronCircle}>
+              <Icon name="chevron-forward" size={12} color={DANGER_RED} />
+            </View>
           </TouchableOpacity>
           {deviceName ? (
             <>
@@ -2380,7 +2444,9 @@ export function SettingsScreen() {
                     {t('settings.actions.forgetDesktop')}
                   </Text>
                 </View>
-                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+                <View style={styles.dangerChevronCircle}>
+                  <Icon name="chevron-forward" size={12} color={DANGER_RED} />
+                </View>
               </TouchableOpacity>
             </>
           ) : null}
@@ -2406,7 +2472,9 @@ export function SettingsScreen() {
                   : t('settings.actions.deleteAccount')}
               </Text>
             </View>
-            <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+            <View style={styles.dangerChevronCircle}>
+              <Icon name="chevron-forward" size={12} color={DANGER_RED} />
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -2429,7 +2497,9 @@ export function SettingsScreen() {
                     {t('settings.giftCard.action')}
                   </Text>
                 </View>
-                <Icon name="chevron-forward" size={16} color={ROW_CHEVRON} />
+                <View style={styles.chevronCircle}>
+                  <Icon name="chevron-forward" size={12} color={BLUE} />
+                </View>
               </TouchableOpacity>
             </View>
           </>
@@ -2670,6 +2740,50 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: SCREEN_BG,
+  },
+  chevronCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dangerChevronCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  badgePurple: {
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+  },
+  badgeTextPurple: {
+    color: '#7C3AED',
+  },
+  badgeBlue: {
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
+  },
+  badgeTextBlue: {
+    color: '#2563EB',
+  },
+  badgeRed: {
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+  },
+  badgeTextRed: {
+    color: '#DC2626',
   },
 
   // Header
@@ -3268,7 +3382,7 @@ const styles = StyleSheet.create({
   // ---------------------------------------------------------------------------
   deletingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(220,238,250,0.88)',
+    backgroundColor: 'rgba(247,249,252,0.88)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
