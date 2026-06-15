@@ -28,6 +28,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Mock NativeSyncEngine NativeModule
 NativeModules.NativeSyncEngine = {
   pairDevice: jest.fn(),
+  getReadOnlyQueue: jest.fn().mockResolvedValue([]),
   getBindingState: jest.fn().mockResolvedValue({
     deviceId: 'desktop-device-id',
     host: '192.168.1.100',

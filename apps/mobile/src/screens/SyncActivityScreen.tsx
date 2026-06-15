@@ -876,7 +876,7 @@ export function SyncActivityScreen() {
       bindingSub?.remove();
       errorSub?.remove();
     };
-  }, [loadTodayStats, navigation, t]);
+  }, [loadTodayStats, navigation, t, refreshQueue]);
 
   useEffect(() => {
     if (initialLoading || !bindingState?.deviceId || syncActivityTourChecked) {
@@ -3018,9 +3018,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingVertical: 18,
     paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: CARD_BORDER,
+    borderColor: colors.border,
     shadowColor: '#4f8fbc',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.08,
@@ -3085,7 +3085,7 @@ const styles = StyleSheet.create({
   },
   expiredCard: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderRadius: 24,
     paddingVertical: 36,
     paddingHorizontal: 28,
@@ -3142,10 +3142,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   queueList: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(187, 214, 233, 0.72)',
+    borderColor: colors.border,
     paddingHorizontal: 16,
     marginTop: 8,
   },
@@ -3156,7 +3156,7 @@ const styles = StyleSheet.create({
   },
   queueRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: colors.border,
   },
   queueRowUploading: {
     backgroundColor: 'rgba(59, 159, 216, 0.05)',
@@ -3167,7 +3167,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#eaf4fb',
+    backgroundColor: colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -3179,7 +3179,7 @@ const styles = StyleSheet.create({
   queueFileName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1a3a5c',
+    color: colors.primary,
   },
   queueFileMeta: {
     flexDirection: 'row',
@@ -3189,7 +3189,7 @@ const styles = StyleSheet.create({
   },
   queueFileSize: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: colors.mutedForeground,
   },
   uploadingBadge: {
     flexDirection: 'row',
@@ -3204,12 +3204,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#3b9fd8',
+    backgroundColor: colors.accent,
   },
   uploadingLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#3b9fd8',
+    color: colors.accent,
   },
   cloudAssetBadge: {
     flexDirection: 'row',
@@ -3218,20 +3218,20 @@ const styles = StyleSheet.create({
   },
   cloudAssetLabel: {
     fontSize: 11,
-    color: '#3b9fd8',
+    color: colors.accent,
   },
   itemProgressGroup: {
     marginTop: 8,
   },
   itemProgressTrack: {
     height: 4,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.background,
     borderRadius: 2,
     overflow: 'hidden',
   },
   itemProgressFill: {
     height: '100%',
-    backgroundColor: '#3b9fd8',
+    backgroundColor: colors.accent,
     borderRadius: 2,
   },
 });
