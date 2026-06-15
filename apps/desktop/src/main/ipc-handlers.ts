@@ -45,6 +45,7 @@ export const IPC = {
   AUTH_GET_SESSION: 'auth:get-session',
   AUTH_LOGOUT: 'auth:logout',
   AUTH_LOGIN_WITH_OAUTH: 'auth:login-with-oauth',
+  SIDECAR_SET_CONNECTION_CODE: 'sidecar:set-connection-code',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
@@ -592,6 +593,9 @@ export function registerIpcHandlers(
         });
       });
     },
+  );
+  ipcMain.handle(IPC.SIDECAR_SET_CONNECTION_CODE, (_e, code: string) =>
+    sidecarClient.setConnectionCode(code),
   );
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely(sidecarManager));
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());

@@ -2965,6 +2965,84 @@ func TestRegenerateCode(t *testing.T) {
 	}
 }
 
+func TestSetConnectionCode(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         "known-client",
+		ClientName:       "Known iPhone",
+		Platform:         "ios",
+		PairingID:        "pair-known-client",
+		PairingTokenHash: "hash-known-client",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+	}); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/connection-code",
+		"application/json",
+		strings.NewReader(`{"code":"238416"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /connection-code: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["code"] != "238416" {
+		t.Fatalf("code = %q, want 238416", body["code"])
+	}
+
+	code, err := st.GetConnectionCode()
+	if err != nil {
+		t.Fatalf("GetConnectionCode: %v", err)
+	}
+	if code != "238416" {
+		t.Fatalf("stored code = %q, want 238416", code)
+	}
+
+	device, err := st.GetPairedDevice("known-client")
+	if err != nil {
+		t.Fatalf("GetPairedDevice after set: %v", err)
+	}
+	if device.RevokedAt == nil {
+		t.Fatal("expected existing paired device to be revoked after connection code update")
+	}
+}
+
+func TestSetConnectionCodeRejectsInvalidCode(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/connection-code",
+		"application/json",
+		strings.NewReader(`{"code":"12345a"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /connection-code: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
 func TestConnectionCodeAutoRegeneration(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 

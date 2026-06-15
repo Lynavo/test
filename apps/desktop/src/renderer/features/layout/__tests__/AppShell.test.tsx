@@ -5,7 +5,9 @@ import type { AuthSessionView } from '../../../../preload/api';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import { useDirectoryStore } from '@renderer/stores/directory-store';
+import { useSettingsStore } from '@renderer/stores/settings-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
+import { mockSettings } from '@renderer/mocks/settings';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../../../../shared/sidecar-runtime';
 import { AppShell } from '../AppShell';
 
@@ -65,7 +67,20 @@ function installElectronAPI(
 
   (window as Window & { electronAPI?: unknown }).electronAPI = {
     sidecar: {
-      getRuntimeState: vi.fn().mockResolvedValue(INITIAL_SIDECAR_RUNTIME_STATE),
+      getRuntimeState: vi.fn().mockResolvedValue({
+        ...INITIAL_SIDECAR_RUNTIME_STATE,
+        status: 'healthy',
+        messageCode: null,
+      }),
+      getSettings: vi.fn().mockResolvedValue(mockSettings),
+      getDashboardSummary: vi.fn().mockResolvedValue({
+        todayUploadCount: 0,
+        todayOccupiedBytes: 0,
+        remainingBytes: 0,
+        isDiskLow: false,
+      }),
+      getDashboardDevices: vi.fn().mockResolvedValue([]),
+      setConnectionCode: vi.fn().mockResolvedValue({ code: mockSettings.connectionCode }),
     },
     events: {
       onSidecarEvent,
@@ -88,6 +103,13 @@ function installElectronAPI(
   };
 }
 
+async function completeConnectionCodeSetup() {
+  fireEvent.click(await screen.findByRole('button', { name: '保存并进入ViviDrop' }));
+  await waitFor(() => {
+    expect(screen.queryByRole('heading', { name: '设置连接码' })).not.toBeInTheDocument();
+  });
+}
+
 describe('AppShell', () => {
   beforeEach(() => {
     Reflect.deleteProperty(window, 'electronAPI');
@@ -99,6 +121,17 @@ describe('AppShell', () => {
     });
     useSidecarRuntimeStore.setState({ runtime: INITIAL_SIDECAR_RUNTIME_STATE });
     useAuthStore.setState({ session: null, loading: false });
+    useSettingsStore.setState({
+      settings: mockSettings,
+      shareStatusInfo: {
+        enabled: true,
+        smbUrl: mockSettings.shareAddress,
+        status: mockSettings.shareStatus,
+        shareName: mockSettings.shareName,
+      },
+      validatingShare: false,
+      copiedField: null,
+    });
     vi.restoreAllMocks();
   });
 
@@ -112,6 +145,46 @@ describe('AppShell', () => {
     expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
   });
 
+  it('renders the connection code setup page after authentication before the desktop shell', async () => {
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue(mockSettings.connectionCode)).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
+  });
+
+  it('saves the connection code setup before entering the dashboard', async () => {
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    fireEvent.change(await screen.findByLabelText('连接码'), {
+      target: { value: '238416' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存并进入ViviDrop' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI?.sidecar.setConnectionCode).toHaveBeenCalledWith('238416');
+    });
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
+    expect(await screen.findByText('DashboardPage')).toBeInTheDocument();
+  });
+
+  it('enters the dashboard without revoking pairings when the connection code is unchanged', async () => {
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '保存并进入ViviDrop' }));
+
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
+    expect(await screen.findByText('DashboardPage')).toBeInTheDocument();
+    expect(window.electronAPI?.sidecar.setConnectionCode).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['shared', 'SharedResourcesPage'],
     ['library', 'ReceivedLibraryPage'],
@@ -123,6 +196,7 @@ describe('AppShell', () => {
 
     render(<AppShell />);
 
+    await completeConnectionCodeSetup();
     expect(await screen.findByText(pageText)).toBeInTheDocument();
   });
 
@@ -142,12 +216,13 @@ describe('AppShell', () => {
     expect(fetchSharedFiles).not.toHaveBeenCalled();
   });
 
-  it('does not load the legacy directory page for desktop-local management views', () => {
+  it('does not load the legacy directory page for desktop-local management views', async () => {
     installElectronAPI();
     useAppStore.setState({ currentView: 'devices' });
 
     render(<AppShell />);
 
+    await completeConnectionCodeSetup();
     expect(screen.queryByTestId('legacy-directory-page')).not.toBeInTheDocument();
   });
 
@@ -157,6 +232,7 @@ describe('AppShell', () => {
 
     render(<AppShell />);
 
+    await completeConnectionCodeSetup();
     const helpButton = await screen.findByRole('button', {
       name: /帮助|幫助|layout\.nav\.help/i,
     });
@@ -170,6 +246,7 @@ describe('AppShell', () => {
 
     render(<AppShell />);
 
+    await completeConnectionCodeSetup();
     fireEvent.click(await screen.findByRole('button', { name: '下载移动端' }));
 
     expect(screen.getByText('扫码下载移动端')).toBeInTheDocument();

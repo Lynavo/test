@@ -884,6 +884,8 @@ export const sidecarClient = {
   updateSettings: (s: Partial<import('@syncflow/contracts').SettingsDTO>) =>
     request<import('@syncflow/contracts').SettingsDTO>('PUT', '/settings', s),
   resetState: () => request<{ ok: boolean }>('POST', '/settings/reset-state', {}),
+  setConnectionCode: (code: string) =>
+    request<{ code: string }>('POST', '/connection-code', { code }),
   regenerateConnectionCode: () => request<{ code: string }>('POST', '/connection-code/regenerate'),
   getShareStatus: () =>
     request<import('@syncflow/contracts').ShareStatusDTO>('GET', '/share/status'),

@@ -98,6 +98,7 @@ export interface ElectronAPI {
         | 'already_redeemed'
         | 'plan_mismatch';
     }>;
+    setConnectionCode(code: string): Promise<{ code: string }>;
     regenerateConnectionCode(): Promise<{ code: string }>;
     getRuntimeState(): Promise<SidecarRuntimeState>;
     retryStart(): Promise<void>;

@@ -175,6 +175,7 @@ vi.mock('../sidecar-client', async () => {
       updateSettings: vi.fn(),
       resetState: vi.fn(),
       regenerateConnectionCode: vi.fn(),
+      setConnectionCode: vi.fn(),
       getShareStatus: vi.fn(),
       validateShare: vi.fn(),
       getTransferActive: vi.fn(),
@@ -273,6 +274,20 @@ describe('registerIpcHandlers', () => {
     await expect(handler()).resolves.toEqual({ code: '654321' });
     expect(manager.retryStart).toHaveBeenCalledTimes(1);
     expect(sidecarClient.regenerateConnectionCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('sets the connection code through IPC', async () => {
+    vi.mocked(sidecarClient.setConnectionCode).mockResolvedValue({ code: '238416' });
+
+    const manager = { retryStart: vi.fn(), startCredentialsSyncInterval: vi.fn() };
+    registerIpcHandlers(manager as never);
+    const handler = handlers.get(IPC.SIDECAR_SET_CONNECTION_CODE);
+    if (!handler) {
+      throw new Error('missing set connection code handler');
+    }
+
+    await expect(handler({}, '238416')).resolves.toEqual({ code: '238416' });
+    expect(sidecarClient.setConnectionCode).toHaveBeenCalledWith('238416');
   });
 
   it('registers diagnostics upload IPC with description payload', async () => {

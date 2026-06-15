@@ -38,6 +38,7 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   resetState: async () => ({ ok: true }),
   getClientConfig: async () => ({ features: { giftCard: { enabled: false } } }),
   redeemGiftCard: async () => ({ ok: true }),
+  setConnectionCode: async (code: string) => ({ code }),
   regenerateConnectionCode: async () => ({ code: '000000' }),
   getRuntimeState: async () => ({
     ...INITIAL_SIDECAR_RUNTIME_STATE,

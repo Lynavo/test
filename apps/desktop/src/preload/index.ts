@@ -22,6 +22,7 @@ const IPC = {
   AUTH_GET_SESSION: 'auth:get-session',
   AUTH_LOGOUT: 'auth:logout',
   AUTH_LOGIN_WITH_OAUTH: 'auth:login-with-oauth',
+  SIDECAR_SET_CONNECTION_CODE: 'sidecar:set-connection-code',
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
@@ -74,6 +75,7 @@ const electronAPI: ElectronAPI = {
     getClientConfig: () => ipcRenderer.invoke(IPC.SIDECAR_CLIENT_CONFIG),
     redeemGiftCard: (payload: { code: string }) =>
       ipcRenderer.invoke(IPC.SIDECAR_REDEEM_GIFT_CARD, payload),
+    setConnectionCode: (code: string) => ipcRenderer.invoke(IPC.SIDECAR_SET_CONNECTION_CODE, code),
     regenerateConnectionCode: () => ipcRenderer.invoke(IPC.SIDECAR_REGENERATE_CODE),
     getRuntimeState: () => ipcRenderer.invoke(IPC.SIDECAR_RUNTIME_STATE),
     retryStart: () => ipcRenderer.invoke(IPC.SIDECAR_RETRY_START),

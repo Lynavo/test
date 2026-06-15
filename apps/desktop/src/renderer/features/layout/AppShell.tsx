@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HelpCircle, Smartphone } from 'lucide-react';
+import { Download, HelpCircle, Loader2, QrCode, RefreshCw, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Skeleton } from '@renderer/components/ui/skeleton';
 import { useAppStore } from '@renderer/stores/app-store';
@@ -58,6 +58,192 @@ function PageFallback() {
   return <Skeleton className="flex-1" />;
 }
 
+function normalizeConnectionCode(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 6);
+}
+
+type ConnectionCodeSetupPageProps = {
+  onComplete(): void;
+  onLogout(): void | Promise<void>;
+};
+
+function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPageProps) {
+  const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const [draftCode, setDraftCode] = useState(() =>
+    normalizeConnectionCode(settings.connectionCode || ''),
+  );
+  const [hasEdited, setHasEdited] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const deviceName =
+    settings.deviceName || window.electronAPI?.platform?.getHostName?.() || 'ViviDrop';
+  const setupSteps = [
+    {
+      icon: Download,
+      title: '扫码下载手机端',
+      description: '用手机扫描右侧二维码，下载并安装 ViviDrop 手机端',
+    },
+    {
+      icon: Smartphone,
+      title: '输入连接码配对',
+      description: '在手机端输入此连接码即可连接此电脑，同一局域网下自动同步手机相册和文件到此电脑',
+    },
+    {
+      icon: RefreshCw,
+      title: '远程访问电脑文件',
+      description: '连接码连接成功后，手机可远程访问这台电脑的文件',
+    },
+  ];
+
+  useEffect(() => {
+    if (!hasEdited) {
+      setDraftCode(normalizeConnectionCode(settings.connectionCode || ''));
+    }
+  }, [hasEdited, settings.connectionCode]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^\d{6}$/.test(draftCode)) {
+      setError('请输入 6 位数字连接码');
+      return;
+    }
+
+    const savedCode = normalizeConnectionCode(settings.connectionCode || '');
+    if (draftCode === savedCode) {
+      onComplete();
+      return;
+    }
+
+    const api = window.electronAPI;
+    if (!api?.sidecar.setConnectionCode) {
+      setError('连接码服务暂不可用');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await api.sidecar.setConnectionCode(draftCode);
+      updateSettings({ ...settings, connectionCode: result.code });
+      onComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存连接码失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="flex min-h-screen items-center justify-center overflow-y-auto px-6 py-10 text-[#17191c]"
+      style={{
+        backgroundColor: '#f7fbff',
+        backgroundImage:
+          'linear-gradient(135deg, rgba(255,252,247,0.98) 0%, rgba(247,252,255,0.92) 38%, rgba(239,248,255,0.92) 68%, rgba(255,248,220,0.72) 100%), repeating-linear-gradient(0deg, rgba(23,25,28,0.024) 0 1px, transparent 1px 3px)',
+        backgroundBlendMode: 'normal, overlay',
+      }}
+    >
+      <section className="w-full max-w-[560px] rounded-lg border border-white/70 bg-white/66 p-5 shadow-[0_34px_110px_rgba(70,96,138,0.18)] backdrop-blur-2xl">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#17191c] text-white shadow-[0_12px_28px_rgba(23,25,28,0.18)]">
+              <QrCode className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-[20px] font-semibold leading-6 text-[#17191c]">设置连接码</h1>
+              <p className="mt-1 truncate text-xs text-[#7d8794]">{deviceName}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onLogout()}
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-white/58 px-3 text-xs font-medium text-[#687380] transition hover:bg-white/90 hover:text-[#17191c]"
+          >
+            退出
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <label htmlFor="connection-code" className="text-xs font-medium text-[#778392]">
+            连接码
+          </label>
+          <input
+            id="connection-code"
+            inputMode="numeric"
+            autoComplete="off"
+            value={draftCode}
+            onChange={(event) => {
+              setHasEdited(true);
+              setDraftCode(normalizeConnectionCode(event.target.value));
+              setError(null);
+            }}
+            className="mt-2 h-12 w-full rounded-lg border border-white/80 bg-white/80 px-4 text-center font-mono text-2xl font-semibold text-[#17191c] shadow-inner outline-none transition focus:border-[#17191c]/30 focus:bg-white"
+            maxLength={6}
+          />
+          {error ? <p className="mt-2 text-sm font-medium text-[#d92d20]">{error}</p> : null}
+
+          <button
+            type="submit"
+            disabled={saving || draftCode.length !== 6}
+            className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#17191c] px-5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(23,25,28,0.18)] transition hover:bg-[#303740] disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            保存并进入ViviDrop
+          </button>
+        </form>
+
+        <div className="mt-4 rounded-lg border border-white/78 bg-white/58 p-5 shadow-[0_18px_54px_rgba(70,96,138,0.10)]">
+          <h2 className="text-[15px] font-semibold text-[#17191c]">使用与下载手机端</h2>
+
+          <div className="mt-4 space-y-4">
+            {setupSteps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.title} className="flex gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eaf6ff] text-[#1684e8]">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold leading-5 text-[#17191c]">{step.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-[#85909e]">{step.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex justify-center gap-8">
+            {[
+              ['iOS', 'App Store', 'https://vividrop.app/download/ios'],
+              ['Android', 'Android', 'https://vividrop.app/download/android'],
+            ].map(([platform, label, url]) => (
+              <div key={platform} className="flex w-[112px] flex-col items-center">
+                <p className="mb-2 text-xs font-semibold text-[#17191c]">{platform}</p>
+                <button
+                  type="button"
+                  aria-label={`${platform} 下载二维码`}
+                  onClick={() => void window.electronAPI?.files?.openExternal(url)}
+                  className="flex h-[112px] w-[112px] cursor-pointer items-center justify-center rounded-lg bg-white p-2 shadow-[0_16px_44px_rgba(70,96,138,0.12)] transition hover:scale-[1.015]"
+                >
+                  <QRCodeSVG
+                    value={url}
+                    size={88}
+                    bgColor="#ffffff"
+                    fgColor="#17191c"
+                    title={`${platform} 下载二维码`}
+                  />
+                </button>
+                <p className="mt-2 text-xs text-[#7d8794]">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function AppShell() {
   const { t } = useTranslation();
   const currentView = useAppStore((s) => s.currentView);
@@ -66,8 +252,10 @@ export function AppShell() {
   const sidecarStatus = useSidecarRuntimeStore((s) => s.runtime.status);
   const session = useAuthStore((s) => s.session);
   const refreshSession = useAuthStore((s) => s.refreshSession);
+  const logout = useAuthStore((s) => s.logout);
   const [downloadPanelOpen, setDownloadPanelOpen] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);
+  const [connectionSetupComplete, setConnectionSetupComplete] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -80,6 +268,12 @@ export function AppShell() {
       active = false;
     };
   }, [refreshSession]);
+
+  useEffect(() => {
+    if (!session) {
+      setConnectionSetupComplete(false);
+    }
+  }, [session]);
 
   useEffect(() => {
     if (!session) return;
@@ -192,6 +386,18 @@ export function AppShell() {
 
   if (!session) {
     return <AuthPage onAuthenticated={refreshSession} />;
+  }
+
+  if (!connectionSetupComplete) {
+    return (
+      <ConnectionCodeSetupPage
+        onComplete={() => setConnectionSetupComplete(true)}
+        onLogout={async () => {
+          setConnectionSetupComplete(false);
+          await logout();
+        }}
+      />
+    );
   }
 
   return (
