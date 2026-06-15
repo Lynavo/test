@@ -14,8 +14,23 @@ export const SIDECAR_EVENT_TYPES = {
 } as const;
 
 export type SidecarEvent =
-  | { type: 'dashboard.updated'; payload: DashboardSummaryDTO }
-  | { type: 'device.state.changed'; payload: { deviceId: string; status: DeviceDashboardStatus } }
+  | { type: typeof SIDECAR_EVENT_TYPES.DASHBOARD_UPDATED; payload: DashboardSummaryDTO }
+  | {
+      type: typeof SIDECAR_EVENT_TYPES.DEVICE_STATE_CHANGED;
+      payload: { deviceId: string; status: DeviceDashboardStatus };
+    }
+  | {
+      type: typeof SIDECAR_EVENT_TYPES.DEVICE_MANAGEMENT_UPDATED;
+      payload: { desktopDeviceId?: string; clientId?: string };
+    }
+  | {
+      type: typeof SIDECAR_EVENT_TYPES.SHARED_RESOURCES_UPDATED;
+      payload: { desktopDeviceId?: string; resourceId?: string };
+    }
+  | {
+      type: typeof SIDECAR_EVENT_TYPES.ACCESS_RECORDS_UPDATED;
+      payload: { desktopDeviceId?: string; clientId?: string; recordId?: string };
+    }
   | { type: 'upload.progress'; payload: { deviceId: string; fileKey: string; progress: number } }
   | { type: 'upload.completed'; payload: { deviceId: string; fileKey: string } }
   | { type: 'upload.failed'; payload: { deviceId: string; fileKey: string; errorCode: string } }

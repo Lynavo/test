@@ -2,12 +2,21 @@ import { describe, it, expect } from 'vitest';
 import * as contracts from '../index';
 import {
   SIDECAR_EVENT_TYPES,
+  type DesktopDeviceAuthorizationStatus,
+  type DesktopDeviceBlockStatus,
+  type DesktopResourceKind,
+  type DesktopResourceStatus,
+  type DesktopAccessAction,
+  type DesktopRecordResult,
   type DesktopManagedDeviceDTO,
+  type DesktopConnectionAttemptDTO,
+  type DesktopBlockStateDTO,
   type DesktopSharedResourceDTO,
   type DesktopAccessRecordDTO,
   type DesktopSyncRecordDTO,
   type ReceivedLibraryItemDTO,
   type RecentDesktopDTO,
+  type PairingFailureDTO,
 } from '../index';
 import type {
   BindingStateDTO,
@@ -29,12 +38,21 @@ function expectWakeTypes(
 }
 
 function assertTypeExports(
+  _authorizationStatus: DesktopDeviceAuthorizationStatus,
+  _blockStatus: DesktopDeviceBlockStatus,
+  _resourceKind: DesktopResourceKind,
+  _resourceStatus: DesktopResourceStatus,
+  _accessAction: DesktopAccessAction,
+  _recordResult: DesktopRecordResult,
   _device: DesktopManagedDeviceDTO,
+  _connectionAttempt: DesktopConnectionAttemptDTO,
+  _blockState: DesktopBlockStateDTO,
   _shared: DesktopSharedResourceDTO,
   _access: DesktopAccessRecordDTO,
   _sync: DesktopSyncRecordDTO,
   _library: ReceivedLibraryItemDTO,
   _recent: RecentDesktopDTO,
+  _pairingFailure: PairingFailureDTO,
 ) {
   return true;
 }
