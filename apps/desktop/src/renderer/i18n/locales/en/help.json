@@ -1,6 +1,27 @@
 {
   "title": "Help Center",
   "subtitle": "Guidance for understanding and using Vivi Drop",
+  "introduction": {
+    "title": "Introduction",
+    "items": [
+      {
+        "title": "What is ViviDrop",
+        "description": "ViviDrop is a LAN media incremental synchronization tool designed for creators and teams. Without internet access, you can sync media seamlessly, at high speed, and incrementally from mobile devices to computers on the same Wi-Fi."
+      },
+      {
+        "title": "How to connect to the computer",
+        "description": "Open ViviDrop on the computer to get a 6-digit pairing code. Enter the code on the mobile device to pair. Make sure both devices are on the same Wi-Fi network."
+      },
+      {
+        "title": "How to upload media",
+        "description": "Enable automatic upload in the mobile album or manually select media to upload. The system automatically performs incremental filtering, transmitting only new media to avoid duplication."
+      },
+      {
+        "title": "How to access shared folders",
+        "description": "Place computer files in the `shared` folder, and you can view, preview, and download them from the team shared folder or My Computer on the mobile device."
+      }
+    ]
+  },
   "quickStart": {
     "title": "🚀 Quick Start",
     "steps": [

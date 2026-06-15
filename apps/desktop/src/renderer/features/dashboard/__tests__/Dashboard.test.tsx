@@ -1,19 +1,29 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Dashboard } from '../Dashboard';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
-import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
-import { mockDashboardSummary } from '@renderer/mocks/dashboard';
-import { mockDevices } from '@renderer/mocks/devices';
+import { toast } from 'sonner';
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+  },
+}));
 
 describe('Dashboard', () => {
   beforeEach(() => {
-    vi.useRealTimers();
+    vi.clearAllMocks();
     useDashboardStore.setState({
-      summary: mockDashboardSummary,
-      devices: mockDevices,
-      diskWarningDismissed: false,
+      summary: {
+        isDiskLow: false,
+        remainingBytes: 71500000000, // ~66.6 GB
+        todayUploadCount: 0,
+        todayOccupiedBytes: 0,
+      },
+      devices: [],
     });
     useSettingsStore.setState({
       settings: {
@@ -28,176 +38,97 @@ describe('Dashboard', () => {
         shareName: '',
       },
     });
-    useSidecarRuntimeStore.setState({
-      runtime: {
-        status: 'healthy',
-        message: null,
-        messageCode: null,
-        messageArgs: null,
-        restartCount: 0,
-        maxRestarts: 3,
-        lastExitCode: null,
-        bonjour: {
-          status: 'native',
-          source: 'system',
-          message: null,
-          messageCode: null,
-          messageArgs: null,
-          path: null,
-          advertisedIP: '192.168.1.10',
-        },
-      },
-    });
-  });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('renders the "所有设备" heading', () => {
-    render(<Dashboard />);
-    expect(screen.getByText('所有设备')).toBeInTheDocument();
-  });
-
-  it('renders status panel with sidecar status, pairing code, and active devices', () => {
-    render(<Dashboard />);
-    // Sidecar status healthy translates to "运行中"
-    expect(screen.getByText('背景服务')).toBeInTheDocument();
-    expect(screen.getByText('运行中')).toBeInTheDocument();
-
-    // Pairing code
-    expect(screen.getByText('本机配对码')).toBeInTheDocument();
-    expect(screen.getByText('998877')).toBeInTheDocument();
-
-    // Active devices count. mockDevices has 5 devices: 3 active, 2 offline.
-    // So active should be 3, total 5.
-    expect(screen.getByText('活动中设备')).toBeInTheDocument();
-    expect(
-      screen.getByText((content, element) => {
-        const text = element?.textContent?.replace(/\s+/g, ' ').trim();
-        return text === '3 / 5';
-      }),
-    ).toBeInTheDocument();
-  });
-
-  it('triggers copy to clipboard when copy button is clicked', async () => {
-    const copyToClipboard = vi.fn().mockResolvedValue(undefined);
     (window as any).electronAPI = {
       files: {
-        copyToClipboard,
+        copyToClipboard: vi.fn().mockResolvedValue(undefined),
+        selectFolder: vi.fn().mockResolvedValue('/new/receive/path'),
+      },
+      support: {},
+      sidecar: {
+        getTransferActive: vi.fn().mockResolvedValue({ active: false }),
+        regenerateConnectionCode: vi.fn().mockResolvedValue({ code: '112233' }),
+        updateSettings: vi.fn().mockImplementation(async (updates) => ({
+          deviceName: 'Test PC',
+          connectionCode: '998877',
+          rootPath: updates.rootPath || '/tmp',
+          receivePath: updates.rootPath || '/tmp/received',
+          personalPath: '/tmp/personal',
+          sharedPath: '/tmp/shared',
+          shareAddress: '',
+          shareStatus: 'unknown',
+          shareName: '',
+        })),
+      },
+      events: {
+        onSidecarEvent: vi.fn(() => vi.fn()),
       },
     };
+  });
 
+  it('renders the 3 main cards: 连接码, 远程访问, 接收目录', () => {
     render(<Dashboard />);
+
+    expect(screen.getByText('连接码')).toBeInTheDocument();
+    expect(screen.getByText('远程访问')).toBeInTheDocument();
+    expect(screen.getByText('接收目录')).toBeInTheDocument();
+  });
+
+  it('displays masked connection code by default and toggles mask', () => {
+    render(<Dashboard />);
+
+    // Masked code is 6 dots
+    expect(screen.getByText('••••••')).toBeInTheDocument();
+
+    const toggleBtn = screen.getByRole('button', { name: '显示连接码' });
+    expect(toggleBtn).toBeInTheDocument();
+
+    fireEvent.click(toggleBtn);
+    expect(screen.getByText('998877')).toBeInTheDocument();
+  });
+
+  it('triggers copy connection code', async () => {
+    render(<Dashboard />);
+    // Reveal first to make it copyable or test copy directly
     const copyBtn = screen.getByRole('button', { name: '复制' });
     fireEvent.click(copyBtn);
 
-    expect(copyToClipboard).toHaveBeenCalledWith('998877');
+    expect(window.electronAPI?.files.copyToClipboard).toHaveBeenCalledWith('998877');
     await waitFor(() => {
-      expect(screen.getByText('复制...')).toBeInTheDocument();
+      expect(toast.success).toHaveBeenCalledWith('连接码已复制');
     });
   });
 
-  it('renders 3 stat cards', () => {
+  it('triggers regenerate connection code on double click', async () => {
     render(<Dashboard />);
-    expect(screen.getByText('今日接收媒体总数')).toBeInTheDocument();
-    expect(screen.getByText('今日占用总空间')).toBeInTheDocument();
-    expect(screen.getByText('设备剩余空间')).toBeInTheDocument();
-  });
+    // First reveal
+    fireEvent.click(screen.getByRole('button', { name: '显示连接码' }));
 
-  it('renders device cards matching mock device count', () => {
-    render(<Dashboard />);
-    const devices = useDashboardStore.getState().devices;
-    const deviceCards = screen.getAllByTestId('device-card');
-    expect(deviceCards).toHaveLength(devices.length);
-  });
+    const codeSpan = screen.getByText('998877');
+    fireEvent.doubleClick(codeSpan);
 
-  it('shows latest historical device stats when today has no files', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-04-27T12:00:00'));
-    useDashboardStore.setState({
-      devices: [
-        {
-          deviceId: 'history-device',
-          displayName: 'iPhone History',
-          clientName: 'iPhone History',
-          platform: 'ios',
-          ip: '192.168.1.9',
-          status: 'offline',
-          todayFileCount: 0,
-          todayBytes: 0,
-          latestDate: '2026-04-24',
-          latestFileCount: 3,
-          latestBytes: 12 * 1024,
-          storageLeft: '1 TB',
-          storagePath: '/tmp/received',
-          devicePath: '/tmp/received/iPhone History',
-        },
-      ],
+    expect(window.electronAPI?.sidecar.regenerateConnectionCode).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('连接码已重新生成！旧配对设备已失效');
     });
-
-    render(<Dashboard />);
-
-    const card = screen.getByTestId('device-card');
-    expect(within(card).getByText('最近 4月24日')).toBeInTheDocument();
-    expect(within(card).getByText('3')).toBeInTheDocument();
-    expect(within(card).getByText('12 KB')).toBeInTheDocument();
   });
 
-  it('keeps today stats when latest stats have no date', () => {
-    useDashboardStore.setState({
-      devices: [
-        {
-          deviceId: 'partial-history-device',
-          displayName: 'iPhone Partial History',
-          clientName: 'iPhone Partial History',
-          platform: 'ios',
-          ip: '192.168.1.10',
-          status: 'offline',
-          todayFileCount: 0,
-          todayBytes: 0,
-          latestFileCount: 3,
-          latestBytes: 12 * 1024,
-          storageLeft: '1 TB',
-          storagePath: '/tmp/received',
-          devicePath: '/tmp/received/iPhone Partial History',
-        },
-      ],
-    });
-
+  it('displays the receive path and handles modify directory action', async () => {
     render(<Dashboard />);
 
-    const card = screen.getByTestId('device-card');
-    expect(within(card).getByText('今日')).toBeInTheDocument();
-    expect(within(card).getByText('0')).toBeInTheDocument();
-    expect(within(card).getByText('0 B')).toBeInTheDocument();
-    expect(within(card).queryByText('3')).not.toBeInTheDocument();
-    expect(within(card).queryByText('12 KB')).not.toBeInTheDocument();
-  });
+    expect(screen.getByText('/tmp/received')).toBeInTheDocument();
+    // 71500000000 bytes ~ 66.6 GB
+    expect(screen.getByText(/剩余 66.6 GB/)).toBeInTheDocument();
 
-  it('shows disk warning banner when isDiskLow is true', () => {
-    useDashboardStore.setState({
-      summary: {
-        ...useDashboardStore.getState().summary,
-        isDiskLow: true,
-      },
-      diskWarningDismissed: false,
+    const modifyBtn = screen.getByRole('button', { name: '修改目录' });
+    fireEvent.click(modifyBtn);
+
+    expect(window.electronAPI?.files.selectFolder).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(window.electronAPI?.sidecar.updateSettings).toHaveBeenCalledWith({
+        rootPath: '/new/receive/path',
+      });
+      expect(toast.success).toHaveBeenCalledWith('接收目录修改成功');
     });
-
-    render(<Dashboard />);
-    expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(screen.getByText(/接收磁盘剩余空间小于 500MB，已暂停新的接收任务/)).toBeInTheDocument();
-  });
-
-  it('hides disk warning banner when isDiskLow is false', () => {
-    useDashboardStore.setState({
-      summary: {
-        ...useDashboardStore.getState().summary,
-        isDiskLow: false,
-      },
-    });
-
-    render(<Dashboard />);
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

@@ -23,8 +23,8 @@ vi.mock('@renderer/features/settings/SettingsPage', () => ({
   SettingsPage: () => <main>SettingsPage</main>,
 }));
 
-vi.mock('@renderer/features/help/HelpPage', () => ({
-  HelpPage: () => <main>HelpPage</main>,
+vi.mock('@renderer/features/help/HelpDialog', () => ({
+  HelpDialog: () => <div data-testid="help-dialog">HelpDialog</div>,
 }));
 
 vi.mock('@renderer/features/device-detail/DeviceDetailPage', () => ({
@@ -91,6 +91,7 @@ describe('AppShell', () => {
       currentView: 'dashboard',
       selectedDevice: null,
       isModalOpen: false,
+      isHelpOpen: false,
     });
     useSidecarRuntimeStore.setState({ runtime: INITIAL_SIDECAR_RUNTIME_STATE });
     vi.restoreAllMocks();
@@ -133,5 +134,17 @@ describe('AppShell', () => {
     render(<AppShell />);
 
     expect(screen.queryByTestId('legacy-directory-page')).not.toBeInTheDocument();
+  });
+
+  it('opens help dialog when clicking help button', () => {
+    installElectronAPI();
+    const setHelpOpenSpy = vi.spyOn(useAppStore.getState(), 'setHelpOpen');
+
+    render(<AppShell />);
+
+    const helpButton = screen.getByRole('button', { name: /帮助|幫助|layout\.nav\.help/i });
+    helpButton.click();
+
+    expect(setHelpOpenSpy).toHaveBeenCalledWith(true);
   });
 });

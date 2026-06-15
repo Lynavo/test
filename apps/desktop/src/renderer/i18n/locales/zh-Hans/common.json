@@ -77,5 +77,8 @@
     "statusNotShared": "未共享",
     "statusMissing": "遗失",
     "noData": "暂无接收数据"
+  },
+  "toast": {
+    "copied": "已复制到剪贴板"
   }
 }

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import { HelpCircle, Smartphone } from 'lucide-react';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { Skeleton } from '@renderer/components/ui/skeleton';
 import { useAppStore } from '@renderer/stores/app-store';
@@ -21,9 +22,9 @@ const SettingsPage = lazy(() =>
     default: m.SettingsPage,
   })),
 );
-const HelpPage = lazy(() =>
-  import('@renderer/features/help/HelpPage').then((m) => ({
-    default: m.HelpPage,
+const HelpDialog = lazy(() =>
+  import('@renderer/features/help/HelpDialog').then((m) => ({
+    default: m.HelpDialog,
   })),
 );
 const DeviceDetailPage = lazy(() =>
@@ -59,6 +60,8 @@ function PageFallback() {
 export function AppShell() {
   const { t } = useTranslation();
   const currentView = useAppStore((s) => s.currentView);
+  const isHelpOpen = useAppStore((s) => s.isHelpOpen);
+  const setHelpOpen = useAppStore((s) => s.setHelpOpen);
   const sidecarStatus = useSidecarRuntimeStore((s) => s.runtime.status);
 
   useEffect(() => {
@@ -142,6 +145,10 @@ export function AppShell() {
     return () => clearInterval(interval);
   }, [sidecarStatus]);
 
+  const handleDownloadMobile = () => {
+    void window.electronAPI?.files.openExternal('https://vividrop.app/download');
+  };
+
   return (
     <div
       className="flex h-screen overflow-hidden text-[#17191c]"
@@ -156,11 +163,33 @@ export function AppShell() {
 
       {/* Content area */}
       <main
-        className="m-3 min-w-0 flex-1 overflow-hidden flex flex-col rounded-2xl border border-white/60 bg-white/35 shadow-[0_30px_90px_rgba(70,96,138,0.12)]"
+        className="relative m-3 min-w-0 flex-1 overflow-hidden flex flex-col rounded-2xl border border-white/60 bg-white/35 shadow-[0_30px_90px_rgba(70,96,138,0.12)] animate-in fade-in duration-300"
         style={{
           backdropFilter: 'blur(20px)',
         }}
       >
+        {/* Global top-right header */}
+        <div className="absolute top-4 right-6 z-50 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className={`flex items-center gap-1.5 rounded-full border border-white/65 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition hover:bg-white/95 hover:text-slate-900 active:scale-[0.985] ${
+              isHelpOpen ? 'border-[#746aa8] text-[#746aa8] bg-white' : ''
+            }`}
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            {t('layout.nav.help')}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadMobile}
+            className="flex items-center gap-1.5 rounded-full border border-white/65 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition hover:bg-white/95 hover:text-slate-900 active:scale-[0.985]"
+          >
+            <Smartphone className="h-3.5 w-3.5" />
+            下载移动端
+          </button>
+        </div>
+
         <div
           className="shrink-0 px-6 pt-2 pb-2"
           style={{ WebkitAppRegion: 'drag' } as CSSProperties}
@@ -174,11 +203,9 @@ export function AppShell() {
           {currentView === 'library' && <ReceivedLibraryPage />}
           {currentView === 'records' && <RecordsPage />}
           {currentView === 'settings' && <SettingsPage />}
-          {currentView === 'help' && (
-            <ErrorBoundary fallbackMessage={t('layout.errorBoundary.helpLoadFailed')}>
-              <HelpPage />
-            </ErrorBoundary>
-          )}
+        </Suspense>
+        <Suspense fallback={null}>
+          <HelpDialog />
         </Suspense>
       </main>
     </div>

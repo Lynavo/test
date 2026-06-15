@@ -75,9 +75,8 @@ describe('Sidebar', () => {
     render(<Sidebar />);
 
     await waitFor(() => {
-      expect(screen.getByText('已登录')).toBeInTheDocument();
+      expect(screen.getByText('+8613800138000')).toBeInTheDocument();
     });
-    expect(screen.getByText('+8613800138000')).toBeInTheDocument();
     expect(screen.queryByText('登录后可使用远端传输。')).not.toBeInTheDocument();
   });
 
@@ -99,21 +98,12 @@ describe('Sidebar', () => {
     expect(screen.queryByText('登录后可使用远端传输。')).not.toBeInTheDocument();
   });
 
-  it('does not repeat the signed-in label when the session has no account identifier', async () => {
-    setAuthSession({ loggedIn: true });
-
-    render(<Sidebar />);
-
-    expect(await screen.findByText('账号已连接')).toBeInTheDocument();
-    expect(screen.getAllByText('已登录')).toHaveLength(1);
-  });
-
   it('signs out from the authenticated account card', async () => {
     const { logout } = setAuthSession({ loggedIn: true, phone: '+8613800138000' });
 
     render(<Sidebar />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '登出' }));
+    fireEvent.click(await screen.findByTitle('登出'));
 
     await waitFor(() => {
       expect(logout).toHaveBeenCalledTimes(1);
@@ -125,13 +115,11 @@ describe('Sidebar', () => {
 
     render(<Sidebar />);
 
-    expect(screen.getByRole('button', { name: '首页看板' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '设备' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '共享' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '资料库' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '记录' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '全局设置' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '帮助' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '共享管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '设备管理' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '同步记录' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '访问记录' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '我的' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '目录管理' })).not.toBeInTheDocument();
   });
 
@@ -140,16 +128,16 @@ describe('Sidebar', () => {
 
     render(<Sidebar />);
 
-    fireEvent.click(screen.getByRole('button', { name: '设备' }));
+    fireEvent.click(screen.getByRole('button', { name: '设备管理' }));
     expect(useAppStore.getState().currentView).toBe('devices');
 
-    fireEvent.click(screen.getByRole('button', { name: '共享' }));
-    expect(useAppStore.getState().currentView).toBe('shared');
-
-    fireEvent.click(screen.getByRole('button', { name: '资料库' }));
+    fireEvent.click(screen.getByRole('button', { name: '同步记录' }));
     expect(useAppStore.getState().currentView).toBe('library');
 
-    fireEvent.click(screen.getByRole('button', { name: '记录' }));
+    fireEvent.click(screen.getByRole('button', { name: '访问记录' }));
     expect(useAppStore.getState().currentView).toBe('records');
+
+    fireEvent.click(screen.getByRole('button', { name: '我的' }));
+    expect(useAppStore.getState().currentView).toBe('settings');
   });
 });

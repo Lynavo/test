@@ -1,12 +1,12 @@
 {
   "nav": {
-    "dashboard": "首页看板",
+    "dashboard": "共享管理",
     "directory": "目录管理",
-    "devices": "设备",
+    "devices": "设备管理",
     "shared": "共享",
-    "library": "资料库",
-    "records": "记录",
-    "settings": "全局设置",
+    "library": "同步记录",
+    "records": "访问记录",
+    "settings": "我的",
     "help": "帮助"
   },
   "placeholders": {

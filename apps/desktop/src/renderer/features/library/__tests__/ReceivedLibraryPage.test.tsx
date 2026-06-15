@@ -1,141 +1,201 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ReceivedLibraryPage } from '../ReceivedLibraryPage';
 import { useResourcesStore } from '@renderer/stores/resources-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
+import { useManagementStore } from '@renderer/stores/management-store';
+import { useSettingsStore } from '@renderer/stores/settings-store';
+import { toast } from 'sonner';
+import type { ReceivedLibraryItemDTO } from '@syncflow/contracts';
 
-vi.mock('@renderer/stores/resources-store', () => ({
-  useResourcesStore: vi.fn(),
-}));
-
-vi.mock('@renderer/stores/dashboard-store', () => ({
-  useDashboardStore: vi.fn(),
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 describe('ReceivedLibraryPage', () => {
-  const mockStore = {
-    receivedItems: [],
-    receivedLoading: false,
-    receivedError: null,
-    loadReceivedLibrary: vi.fn(),
-    addSharedFromReceived: vi.fn(),
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    (useResourcesStore as any).mockReturnValue(mockStore);
-    (useDashboardStore as any).mockReturnValue([]);
+    useResourcesStore.setState({
+      receivedItems: [],
+      receivedLoading: false,
+      receivedError: null,
+    });
+    useDashboardStore.setState({
+      summary: {
+        isDiskLow: false,
+        remainingBytes: 5000000000,
+        todayUploadCount: 0,
+        todayOccupiedBytes: 0,
+      },
+    });
+    useManagementStore.setState({
+      devices: [],
+    });
+    useSettingsStore.setState({
+      settings: {
+        deviceName: 'Desktop-Test',
+        connectionCode: '112233',
+        rootPath: '/mock/root/path',
+        receivePath: '/mock/receive/path',
+        personalPath: '/mock/personal/path',
+        sharedPath: '/mock/shared/path',
+        shareAddress: '',
+        shareStatus: 'unknown',
+        shareName: '',
+      },
+    });
+
+    (window as any).electronAPI = {
+      files: {
+        openFolder: vi.fn().mockResolvedValue(null),
+      },
+      sidecar: {
+        getReceivedLibrary: vi.fn().mockImplementation(async () => {
+          return { items: useResourcesStore.getState().receivedItems };
+        }),
+      },
+    };
   });
 
   it('renders page layout and titles', () => {
     render(<ReceivedLibraryPage />);
-    expect(screen.getByText('资料库')).toBeInTheDocument();
+    expect(screen.getByText('同步记录')).toBeInTheDocument();
+    expect(screen.getByText('总接收文件数')).toBeInTheDocument();
+    expect(screen.getByText('占用总空间')).toBeInTheDocument();
+    expect(screen.getByText('磁盘剩余空间')).toBeInTheDocument();
   });
 
-  it('displays loading state with skeletons when empty', () => {
-    (useResourcesStore as any).mockReturnValue({
-      ...mockStore,
-      receivedLoading: true,
-      receivedItems: [],
-    });
-    const { container } = render(<ReceivedLibraryPage />);
-    expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
-  });
-
-  it('displays loading indicator when not empty', () => {
-    (useResourcesStore as any).mockReturnValue({
-      ...mockStore,
-      receivedLoading: true,
-      receivedItems: [
-        {
-          resourceId: 'rec-1',
-          desktopDeviceId: 'dev-1',
-          clientId: 'client-1',
-          displayName: 'image.png',
-          fileKey: 'key-1',
-          filename: 'image.png',
-          mediaType: 'image/png',
-          fileSize: 1024,
-          completedAt: '2026-06-15T00:00:00Z',
-          shareStatus: 'not_shared',
-        },
-      ],
-    });
+  it('displays empty state when no items', async () => {
     render(<ReceivedLibraryPage />);
-    expect(screen.getByText('加载中...')).toBeInTheDocument();
-  });
-
-  it('displays empty state when no items', () => {
-    render(<ReceivedLibraryPage />);
-    expect(screen.getByText('暂无接收数据')).toBeInTheDocument();
-  });
-
-  it('displays error state', () => {
-    (useResourcesStore as any).mockReturnValue({
-      ...mockStore,
-      receivedError: 'Something went wrong',
+    await waitFor(() => {
+      expect(screen.getByText('尚无同步记录')).toBeInTheDocument();
     });
-    render(<ReceivedLibraryPage />);
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
   });
 
-  it('renders items and resolves source device name', () => {
-    (useResourcesStore as any).mockReturnValue({
-      ...mockStore,
-      receivedItems: [
-        {
-          resourceId: 'rec-1',
-          desktopDeviceId: 'dev-1',
-          clientId: 'client-1',
-          displayName: 'image.png',
-          fileKey: 'key-1',
-          filename: 'image.png',
-          mediaType: 'image/png',
-          fileSize: 1024,
-          completedAt: '2026-06-15T00:00:00Z',
-          shareStatus: 'not_shared',
-        },
-      ],
+  it('displays error state', async () => {
+    useResourcesStore.setState({
+      receivedError: 'Error message from sidecar',
     });
+    // Override the mock to reject to test error
+    (window as any).electronAPI.sidecar.getReceivedLibrary = vi.fn().mockRejectedValue(new Error('Error message from sidecar'));
 
-    (useDashboardStore as any).mockReturnValue([
+    render(<ReceivedLibraryPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Error message from sidecar')).toBeInTheDocument();
+    });
+  });
+
+  it('renders devices list and correctly sums up their counts and sizes', async () => {
+    const mockItems: ReceivedLibraryItemDTO[] = [
       {
-        stableDeviceId: 'client-1',
-        displayName: 'My iPhone',
+        resourceId: 'rec-1',
+        desktopDeviceId: 'dev-1',
+        clientId: 'client-1',
+        displayName: 'photo.jpg',
+        fileKey: 'key-1',
+        filename: 'photo.jpg',
+        mediaType: 'image/jpeg',
+        fileSize: 1048576, // 1MB
+        completedAt: '2026-06-15T00:00:00Z',
+        shareStatus: 'not_shared',
       },
-    ]);
+      {
+        resourceId: 'rec-2',
+        desktopDeviceId: 'dev-1',
+        clientId: 'client-1',
+        displayName: 'doc.pdf',
+        fileKey: 'key-2',
+        filename: 'doc.pdf',
+        mediaType: 'application/pdf',
+        fileSize: 2097152, // 2MB
+        completedAt: '2026-06-15T00:00:00Z',
+        shareStatus: 'not_shared',
+      },
+    ];
 
-    render(<ReceivedLibraryPage />);
-    expect(screen.getByText('image.png')).toBeInTheDocument();
-    expect(screen.getByText('image/png')).toBeInTheDocument();
-    expect(screen.getByText('My iPhone')).toBeInTheDocument();
-    expect(screen.getByText('未共享')).toBeInTheDocument();
-  });
+    useResourcesStore.setState({
+      receivedItems: mockItems,
+    });
 
-  it('triggers addSharedFromReceived on button click', () => {
-    const addSharedFromReceived = vi.fn();
-    const mockItem = {
-      resourceId: 'rec-1',
-      desktopDeviceId: 'dev-1',
-      clientId: 'client-1',
-      displayName: 'image.png',
-      fileKey: 'key-1',
-      filename: 'image.png',
-      mediaType: 'image/png',
-      fileSize: 1024,
-      completedAt: '2026-06-15T00:00:00Z',
-      shareStatus: 'not_shared',
-    };
-
-    (useResourcesStore as any).mockReturnValue({
-      ...mockStore,
-      receivedItems: [mockItem],
-      addSharedFromReceived,
+    useManagementStore.setState({
+      devices: [
+        {
+          desktopDeviceId: 'dev-1',
+          clientId: 'client-1',
+          clientIdShort: 'cl-1',
+          displayName: 'My iPhone',
+          platform: 'iOS',
+          stableDeviceId: 'client-1-stable',
+          authorizationStatus: 'authorized',
+          blockStatus: 'none',
+          failedAttemptCount: 0,
+          todayFileCount: 2,
+          todayBytes: 3145728,
+          totalFileCount: 2,
+          totalBytes: 3145728,
+          lastIp: '192.168.0.10',
+          authorizedAt: '2026-06-15T00:00:00Z',
+          lastSeenAt: '2026-06-15T00:00:00Z',
+        },
+      ],
     });
 
     render(<ReceivedLibraryPage />);
-    const addBtn = screen.getByRole('button', { name: '加入共享' });
-    fireEvent.click(addBtn);
-    expect(addSharedFromReceived).toHaveBeenCalledWith(mockItem);
+
+    // Total file count card should show 2
+    await waitFor(() => {
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
+    // Total space card should show 3.0 MB
+    expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+
+    // Device card elements
+    expect(screen.getByText('My iPhone')).toBeInTheDocument();
+    expect(screen.getByText('iOS')).toBeInTheDocument();
+
+    // Stats
+    expect(screen.getByText('📷 相册上传 1')).toBeInTheDocument();
+    expect(screen.getByText('📁 文件上传 1')).toBeInTheDocument();
+    expect(screen.getByText('💾 3.0 MB')).toBeInTheDocument();
+  });
+
+  it('triggers folder opening on button click', async () => {
+    useManagementStore.setState({
+      devices: [
+        {
+          desktopDeviceId: 'dev-1',
+          clientId: 'client-1',
+          clientIdShort: 'cl-1',
+          displayName: 'My iPhone',
+          platform: 'iOS',
+          stableDeviceId: 'client-1-stable',
+          authorizationStatus: 'authorized',
+          blockStatus: 'none',
+          failedAttemptCount: 0,
+          todayFileCount: 2,
+          todayBytes: 3145728,
+          totalFileCount: 2,
+          totalBytes: 3145728,
+          lastIp: '192.168.0.10',
+          authorizedAt: '2026-06-15T00:00:00Z',
+          lastSeenAt: '2026-06-15T00:00:00Z',
+        },
+      ],
+    });
+
+    render(<ReceivedLibraryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTitle('打开目录')).toBeInTheDocument();
+    });
+
+    const openBtn = screen.getByTitle('打开目录');
+    fireEvent.click(openBtn);
+    expect(window.electronAPI?.files.openFolder).toHaveBeenCalledWith(
+      '/mock/receive/path/client-1-stable',
+    );
   });
 });

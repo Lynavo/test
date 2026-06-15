@@ -77,5 +77,8 @@
     "statusNotShared": "Not Shared",
     "statusMissing": "Missing",
     "noData": "No received items"
+  },
+  "toast": {
+    "copied": "Copied to clipboard"
   }
 }

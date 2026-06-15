@@ -1,130 +1,101 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsPage } from '../SettingsPage';
+import { useAuthStore } from '@renderer/stores/auth-store';
+import { toast } from 'sonner';
 
-vi.mock('../DeviceNameSection', () => ({
-  DeviceNameSection: () => <div data-testid="device-name-section">DeviceNameSection</div>,
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
-vi.mock('../ConnectionCodeSection', () => ({
-  ConnectionCodeSection: () => (
-    <div data-testid="connection-code-section">ConnectionCodeSection</div>
-  ),
-}));
-
-vi.mock('../BonjourRuntimeSection', () => ({
-  BonjourRuntimeSection: () => (
-    <div data-testid="bonjour-runtime-section">BonjourRuntimeSection</div>
-  ),
-}));
-
-vi.mock('../PowerSaveSection', () => ({
-  PowerSaveSection: () => <div data-testid="power-save-section">PowerSaveSection</div>,
-}));
-
-vi.mock('../ShareAddressSection', () => ({
-  ShareAddressSection: () => <div data-testid="share-address-section">ShareAddressSection</div>,
-}));
-
-vi.mock('../SupportSection', () => ({
-  SupportSection: () => <div data-testid="support-section">SupportSection</div>,
-}));
-
-function setElectronPlatform(overrides: { isMac?: boolean; isWindows?: boolean }) {
-  const isMac = overrides.isMac ?? true;
-  const isWindows = overrides.isWindows ?? false;
-
+function setElectronPlatform() {
   (window as Window & { electronAPI?: unknown }).electronAPI = {
     platform: {
-      isMac: () => isMac,
-      isWindows: () => isWindows,
-      getHostName: () => 'TestHost',
-      getLocalIPs: () => ['192.168.1.10'],
+      getLocalIPs: () => ['192.168.0.227'],
+    },
+    power: {
+      getState: vi.fn().mockResolvedValue({ preventSleepDuringTransfer: false }),
+      setPreventSleepDuringTransfer: vi.fn().mockResolvedValue({ preventSleepDuringTransfer: true }),
+    },
+    support: {
+      checkForUpdates: vi.fn().mockResolvedValue(null),
+      uploadDiagnostics: vi.fn().mockResolvedValue(null),
+    },
+    files: {
+      openExternal: vi.fn().mockResolvedValue(null),
     },
     events: {
       onSidecarEvent: vi.fn(() => vi.fn()),
       onSidecarRuntimeState: vi.fn(() => vi.fn()),
-    },
-    support: {
-      exportDiagnostics: vi.fn().mockResolvedValue(null),
-      getAppInfo: vi.fn().mockResolvedValue({
-        name: 'SyncFlow',
-        version: '0.1.0',
-        buildNumber: '5',
-      }),
     },
   } as unknown as Window['electronAPI'];
 }
 
 describe('SettingsPage', () => {
   beforeEach(() => {
-    setElectronPlatform({ isMac: true, isWindows: false });
+    vi.clearAllMocks();
+    setElectronPlatform();
+    useAuthStore.setState({
+      session: {
+        loggedIn: true,
+        email: 'test@vividrop.app',
+        phone: '',
+      },
+    });
   });
 
-  it('renders the page title "设置"', () => {
+  it('renders the page title "我的"', () => {
     render(<SettingsPage />);
-
-    expect(screen.getByText('设置')).toBeInTheDocument();
+    expect(screen.getByText('我的')).toBeInTheDocument();
   });
 
-  it('renders the "设备名称" section heading', () => {
+  it('renders the "我的账户" section with membership status', () => {
     render(<SettingsPage />);
-
-    expect(screen.getByRole('heading', { name: '设备名称' })).toBeInTheDocument();
-    expect(screen.getByTestId('device-name-section')).toBeInTheDocument();
+    expect(screen.getByText('我的账户')).toBeInTheDocument();
+    expect(screen.getByText('test@vividrop.app')).toBeInTheDocument();
+    expect(screen.getByText('会员状态')).toBeInTheDocument();
+    expect(screen.getByText('Pro')).toBeInTheDocument();
   });
 
-  it('does NOT render the legacy pairing code section', () => {
+  it('renders the prevent sleep standby option', async () => {
     render(<SettingsPage />);
+    expect(screen.getByText('防止待机')).toBeInTheDocument();
+    expect(screen.getByText('传输任务运行时保持电脑唤醒')).toBeInTheDocument();
 
-    expect(screen.queryByText('连接码管理')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('connection-code-section')).not.toBeInTheDocument();
+    const switchBtn = screen.getByRole('button', { name: '' });
+    expect(switchBtn).toBeInTheDocument();
   });
 
-  it('does NOT render SupportSection in the simplified desktop-local settings surface', () => {
+  it('renders the local IP', () => {
     render(<SettingsPage />);
-
-    expect(screen.queryByTestId('support-section')).not.toBeInTheDocument();
+    expect(screen.getByText('本机 IP')).toBeInTheDocument();
+    expect(screen.getByText('192.168.0.227')).toBeInTheDocument();
   });
 
-  it('renders power save section', () => {
+  it('renders check for updates and triggers check updates action', async () => {
     render(<SettingsPage />);
+    const updateBtn = screen.getByRole('button', { name: '检查更新' });
+    expect(updateBtn).toBeInTheDocument();
 
-    expect(screen.getByText('电源管理')).toBeInTheDocument();
-    expect(screen.getByTestId('power-save-section')).toBeInTheDocument();
+    fireEvent.click(updateBtn);
+    expect(window.electronAPI?.support.checkForUpdates).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('已是最新版本');
+    });
   });
 
-  it('does NOT render shared address status section', () => {
+  it('renders support section and handles log upload', async () => {
     render(<SettingsPage />);
+    const uploadBtn = screen.getByRole('button', { name: '上传' });
+    expect(uploadBtn).toBeInTheDocument();
 
-    expect(screen.queryByText('局域网共享')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('share-address-section')).not.toBeInTheDocument();
-  });
-
-  it('does NOT render BonjourRuntimeSection on macOS', () => {
-    setElectronPlatform({ isMac: true, isWindows: false });
-    render(<SettingsPage />);
-
-    expect(screen.queryByTestId('bonjour-runtime-section')).not.toBeInTheDocument();
-  });
-
-  it('does NOT render BonjourRuntimeSection on Windows in the simplified desktop-local settings surface', () => {
-    setElectronPlatform({ isMac: false, isWindows: true });
-    render(<SettingsPage />);
-
-    expect(screen.queryByTestId('bonjour-runtime-section')).not.toBeInTheDocument();
-    expect(screen.queryByText('Windows Bonjour 广播')).not.toBeInTheDocument();
-  });
-
-  it('does NOT render FilePathSection (removed in v2 refactor)', () => {
-    render(<SettingsPage />);
-
-    expect(screen.queryByText('文件地址配置')).not.toBeInTheDocument();
-  });
-
-  it('does NOT render SystemGuideSection (removed in v2 refactor)', () => {
-    render(<SettingsPage />);
-
-    expect(screen.queryByText('系统权限指引')).not.toBeInTheDocument();
+    fireEvent.click(uploadBtn);
+    expect(window.electronAPI?.support.uploadDiagnostics).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('诊断包上传成功！感谢您的反馈');
+    });
   });
 });

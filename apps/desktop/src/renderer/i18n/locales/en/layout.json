@@ -1,12 +1,12 @@
 {
   "nav": {
-    "dashboard": "Dashboard",
+    "dashboard": "Share Management",
     "directory": "Folders",
-    "devices": "Devices",
+    "devices": "Device Management",
     "shared": "Shared",
-    "library": "Library",
-    "records": "Records",
-    "settings": "Settings",
+    "library": "Sync Records",
+    "records": "Access Records",
+    "settings": "Me",
     "help": "Help"
   },
   "placeholders": {
