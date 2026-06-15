@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import {
   AppState,
+  NativeEventEmitter,
+  NativeModules,
   StatusBar,
   StyleSheet,
   useColorScheme,
@@ -14,6 +16,10 @@ import { AuthProvider } from './stores/auth-store';
 import { RootNavigator } from './navigation/RootNavigator';
 import { loadDebugBaseUrlOverride } from './services/config';
 import { refreshNativeAppFeatureSettings } from './services/app-config-service';
+import {
+  autoConfigurePublicWakeTargetFromBinding,
+  autoConfigurePublicWakeTargetFromNativeBinding,
+} from './services/public-wake-auto-config-service';
 import i18n from './i18n';
 import {
   loadStoredLanguagePreference,
@@ -29,32 +35,68 @@ export function App() {
   useEffect(() => {
     let isDisposed = false;
     let refreshInFlight = false;
-    const refreshFeatureSettings = async () => {
+    let bindingAutoConfigInFlight = false;
+    const refreshAppStartupSettings = async () => {
       if (refreshInFlight) return;
       refreshInFlight = true;
       try {
-        await refreshNativeAppFeatureSettings();
-      } catch (error) {
-        console.warn('[App] failed to refresh native feature settings:', error);
+        try {
+          await refreshNativeAppFeatureSettings();
+        } catch (error) {
+          console.warn('[App] failed to refresh native feature settings:', error);
+        }
+        try {
+          await autoConfigurePublicWakeTargetFromNativeBinding();
+        } catch (error) {
+          console.warn(
+            '[App] failed to auto-configure public wake target:',
+            error,
+          );
+        }
       } finally {
         refreshInFlight = false;
+      }
+    };
+    const autoConfigurePublicWakeFromBindingEvent = async (binding: unknown) => {
+      if (bindingAutoConfigInFlight) return;
+      bindingAutoConfigInFlight = true;
+      try {
+        await autoConfigurePublicWakeTargetFromBinding(binding);
+      } catch (error) {
+        console.warn(
+          '[App] failed to auto-configure public wake target from binding event:',
+          error,
+        );
+      } finally {
+        bindingAutoConfigInFlight = false;
       }
     };
 
     void (async () => {
       await loadDebugBaseUrlOverride();
       if (!isDisposed) {
-        await refreshFeatureSettings();
+        await refreshAppStartupSettings();
       }
     })();
     const appStateSubscription = AppState.addEventListener(
       'change',
       nextState => {
         if (nextState === 'active') {
-          void refreshFeatureSettings();
+          void refreshAppStartupSettings();
         }
       },
     );
+    let bindingStateSubscription: { remove: () => void } | undefined;
+    const { NativeSyncEngine } = NativeModules;
+    if (NativeSyncEngine) {
+      const nativeEmitter = new NativeEventEmitter(NativeSyncEngine);
+      bindingStateSubscription = nativeEmitter.addListener(
+        'onBindingStateChanged',
+        binding => {
+          void autoConfigurePublicWakeFromBindingEvent(binding);
+        },
+      );
+    }
     void loadStoredLanguagePreference().then(preference => {
       const language = resolveLanguagePreference(
         preference,
@@ -67,6 +109,7 @@ export function App() {
     return () => {
       isDisposed = true;
       appStateSubscription.remove();
+      bindingStateSubscription?.remove();
     };
   }, []);
 

@@ -5,6 +5,7 @@ enum SharedFilesRoutePolicy {
     static let sharedFileDownloadRequestTimeout: TimeInterval = 300
     static let sharedFileDownloadResourceTimeout: TimeInterval = 86_400
     static let sharedFileTunnelHeartbeatGracePeriod: TimeInterval = 3
+    static let sharedFileTunnelRouteWaitTimeout: TimeInterval = 4
     static let sharedFileDownloadMaxAttempts = 4
     private static let sharedFilePathSegmentAllowedCharacters: CharacterSet = {
         var allowed = CharacterSet.alphanumerics
@@ -82,6 +83,10 @@ enum SharedFilesRoutePolicy {
         return nil
     }
 
+    static func hasUsableDirectRouteHost(_ host: String?) -> Bool {
+        normalizedHost(host) != nil
+    }
+
     static func shouldInvalidateTunnelAfterRouteFailure(isTunnelRoute: Bool) -> Bool {
         isTunnelRoute
     }
@@ -119,17 +124,30 @@ enum SharedFilesRoutePolicy {
     }
 
     static func shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: Bool) -> Bool {
-        !isLocalSaveFailure
+        shouldRetrySharedFileDownloadFailure(isLocalSaveFailure: isLocalSaveFailure, httpStatusCode: nil)
+    }
+
+    static func shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure: Bool,
+        httpStatusCode: Int?
+    ) -> Bool {
+        if isLocalSaveFailure {
+            return false
+        }
+        guard let httpStatusCode else {
+            return true
+        }
+        return httpStatusCode == 408 ||
+            httpStatusCode == 429 ||
+            (500...599).contains(httpStatusCode)
     }
 
     static func encodedSharedFilePath(_ path: String) -> String {
         let normalizedPath = path
-            .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
         return normalizedPath
             .split(separator: "/", omittingEmptySubsequences: true)
-            .filter { !String($0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .map { segment in
                 String(segment).addingPercentEncoding(
                     withAllowedCharacters: sharedFilePathSegmentAllowedCharacters
@@ -145,6 +163,23 @@ enum SharedFilesRoutePolicy {
         hasTunnelCredentials && !isTunnelActive
     }
 
+    static func shouldAcceptActiveP2PTunnelRoute(
+        isTunnelActive: Bool,
+        hasTunnelPort: Bool,
+        selectedICERoute: String,
+        hasReachableLANHost: Bool
+    ) -> Bool {
+        guard isTunnelActive, hasTunnelPort else {
+            return false
+        }
+
+        let normalizedRoute = selectedICERoute.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedRoute == "turn_relay" {
+            return true
+        }
+        return hasReachableLANHost
+    }
+
     static func shouldAttemptWake(
         scope: String,
         path: String,
@@ -152,11 +187,90 @@ enum SharedFilesRoutePolicy {
     ) -> Bool {
         let normalizedScope = scope.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPath = path
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let hasTraversalSegment = normalizedPath
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .contains("..")
         return normalizedScope == "personal" &&
             normalizedOperation == "list" &&
-            normalizedPath.isEmpty
+            normalizedPath.isEmpty &&
+            !hasTraversalSegment
+    }
+
+    static func shouldAttemptWakeBeforeP2PFallback(
+        allowWake: Bool,
+        hasActiveTunnel: Bool
+    ) -> Bool {
+        allowWake && !hasActiveTunnel
+    }
+
+    static func shouldAllowPublicWake(
+        scope: String,
+        path: String,
+        operation: String,
+        trigger: String
+    ) -> Bool {
+        shouldAttemptWake(scope: scope, path: path, operation: operation) &&
+            trigger == "shared_files_root_browse"
+    }
+
+    static func peerProxySkipReasons(
+        hasMultiDesktopBindingSource: Bool,
+        hasOnlineViviDropDesktopPeer: Bool,
+        hasThirdPartyHelperConfigured: Bool
+    ) -> [String] {
+        var reasons: [String] = []
+        if !hasMultiDesktopBindingSource {
+            reasons.append("no_multi_desktop_binding_source")
+        }
+        if !hasOnlineViviDropDesktopPeer {
+            reasons.append("no_online_vividrop_desktop_peer")
+        }
+        if !hasThirdPartyHelperConfigured {
+            reasons.append("third_party_helper_not_configured")
+        }
+        return reasons
+    }
+
+    static func shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource: Bool,
+        hasOnlineViviDropDesktopPeer: Bool
+    ) -> Bool {
+        hasMultiDesktopBindingSource && hasOnlineViviDropDesktopPeer
+    }
+
+    static func wakeLANReachableReason(baseReason: String) -> String {
+        "\(baseReason)_wake_lan_reachable"
+    }
+
+    static func wakeFullResumeConfirmedReason(baseReason: String) -> String {
+        "\(baseReason)_wake_full_resume_confirmed"
+    }
+
+    static func isFullWakeConfirmed(
+        lastResumeAt: Date,
+        wakeAttemptStartedAt: Date
+    ) -> Bool {
+        lastResumeAt > wakeAttemptStartedAt
+    }
+
+    static func isFullWakeConfirmed(
+        expectedDeviceId: String,
+        responseServerId: String?,
+        lastResumeAt: Date,
+        wakeAttemptStartedAt: Date
+    ) -> Bool {
+        PresenceReconnectPolicy.presenceResponseMatchesBinding(
+            expectedDeviceId: expectedDeviceId,
+            responseServerId: responseServerId
+        ) &&
+            isFullWakeConfirmed(
+                lastResumeAt: lastResumeAt,
+                wakeAttemptStartedAt: wakeAttemptStartedAt
+            )
     }
 
     static func shouldSuppressPresenceTunnelFailure(

@@ -13,6 +13,11 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.sharedFileTunnelRouteWaitTimeout == 4,
+    "shared files P2P fallback must wait briefly because LAN/WoL is the primary route"
+)
+
+expect(
     SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
         hasTunnelCredentials: true,
         isTunnelActive: false
@@ -34,6 +39,239 @@ expect(
         isTunnelActive: false
     ),
     "shared files must fall back to direct LAN when no P2P tunnel credentials exist"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
+        isTunnelActive: true,
+        hasTunnelPort: true,
+        selectedICERoute: "direct_host",
+        hasReachableLANHost: false
+    ),
+    "shared files must not trust a direct_host tunnel as a WAN route when LAN is not reachable"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
+        isTunnelActive: true,
+        hasTunnelPort: true,
+        selectedICERoute: "turn_relay",
+        hasReachableLANHost: false
+    ),
+    "shared files may trust an active relay tunnel when LAN is not reachable"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
+        isTunnelActive: true,
+        hasTunnelPort: true,
+        selectedICERoute: "direct_host",
+        hasReachableLANHost: true
+    ),
+    "shared files may keep a direct_host tunnel only when LAN is also reachable"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
+        allowWake: true,
+        hasActiveTunnel: false
+    ),
+    "opening the personal root should attempt wake before waiting for P2P fallback when no tunnel is active"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
+        allowWake: true,
+        hasActiveTunnel: true
+    ),
+    "opening the personal root must use an active P2P tunnel directly instead of waking first"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
+        allowWake: false,
+        hasActiveTunnel: false
+    ),
+    "shared files must not wake before P2P fallback outside the scoped personal trigger"
+)
+
+let peerProxySkipReasonsWithoutSources = SharedFilesRoutePolicy.peerProxySkipReasons(
+    hasMultiDesktopBindingSource: false,
+    hasOnlineViviDropDesktopPeer: false,
+    hasThirdPartyHelperConfigured: false
+)
+
+expect(
+    peerProxySkipReasonsWithoutSources.contains("no_multi_desktop_binding_source"),
+    "peer proxy diagnostics must report when no multi-desktop binding source exists"
+)
+
+expect(
+    peerProxySkipReasonsWithoutSources.contains("no_online_vividrop_desktop_peer"),
+    "peer proxy diagnostics must report when no online Vivi Drop desktop peer exists"
+)
+
+expect(
+    peerProxySkipReasonsWithoutSources.contains("third_party_helper_not_configured"),
+    "peer proxy diagnostics must report when no explicit third-party helper is configured"
+)
+
+expect(
+    !SharedFilesRoutePolicy.peerProxySkipReasons(
+        hasMultiDesktopBindingSource: true,
+        hasOnlineViviDropDesktopPeer: false,
+        hasThirdPartyHelperConfigured: false
+    ).contains("no_multi_desktop_binding_source"),
+    "peer proxy diagnostics must not report missing multi-desktop source when the source exists"
+)
+
+expect(
+    !SharedFilesRoutePolicy.peerProxySkipReasons(
+        hasMultiDesktopBindingSource: false,
+        hasOnlineViviDropDesktopPeer: true,
+        hasThirdPartyHelperConfigured: false
+    ).contains("no_online_vividrop_desktop_peer"),
+    "peer proxy diagnostics must not report missing Vivi Drop peer when an online peer exists"
+)
+
+expect(
+    !SharedFilesRoutePolicy.peerProxySkipReasons(
+        hasMultiDesktopBindingSource: false,
+        hasOnlineViviDropDesktopPeer: false,
+        hasThirdPartyHelperConfigured: true
+    ).contains("third_party_helper_not_configured"),
+    "peer proxy diagnostics must not report missing third-party helper when one is explicitly configured"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource: false,
+        hasOnlineViviDropDesktopPeer: true
+    ),
+    "peer proxy wake must remain disabled without a durable multi-desktop binding source"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource: true,
+        hasOnlineViviDropDesktopPeer: false
+    ),
+    "peer proxy wake must remain disabled without an online authenticated Vivi Drop desktop peer"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource: true,
+        hasOnlineViviDropDesktopPeer: true
+    ),
+    "peer proxy wake may be attempted only when both durable multi-desktop source and online desktop peer exist"
+)
+
+expect(
+    SharedFilesRoutePolicy.wakeLANReachableReason(baseReason: "browse_shared_files")
+        == "browse_shared_files_wake_lan_reachable",
+    "LAN health recovery after WoL must be logged as LAN reachable, not full wake success"
+)
+
+expect(
+    SharedFilesRoutePolicy.wakeFullResumeConfirmedReason(baseReason: "browse_shared_files")
+        == "browse_shared_files_wake_full_resume_confirmed",
+    "full wake success must require an explicit desktop resume confirmation"
+)
+
+let wakeAttemptStartedAt = ISO8601DateFormatter().date(from: "2026-06-11T03:50:00Z")!
+let postWakeResumeAt = ISO8601DateFormatter().date(from: "2026-06-11T03:50:01Z")!
+let preWakeResumeAt = ISO8601DateFormatter().date(from: "2026-06-11T03:49:59Z")!
+
+expect(
+    SharedFilesRoutePolicy.isFullWakeConfirmed(
+        lastResumeAt: postWakeResumeAt,
+        wakeAttemptStartedAt: wakeAttemptStartedAt
+    ),
+    "full wake confirmation should accept resume events after the wake attempt starts"
+)
+
+expect(
+    !SharedFilesRoutePolicy.isFullWakeConfirmed(
+        lastResumeAt: preWakeResumeAt,
+        wakeAttemptStartedAt: wakeAttemptStartedAt
+    ),
+    "full wake confirmation must reject stale resume events from before the wake attempt"
+)
+
+expect(
+    SharedFilesRoutePolicy.isFullWakeConfirmed(
+        expectedDeviceId: " desktop-1 ",
+        responseServerId: "desktop-1",
+        lastResumeAt: postWakeResumeAt,
+        wakeAttemptStartedAt: wakeAttemptStartedAt
+    ),
+    "full wake confirmation should accept matching desktop identity and fresh resume events"
+)
+
+expect(
+    !SharedFilesRoutePolicy.isFullWakeConfirmed(
+        expectedDeviceId: "desktop-1",
+        responseServerId: "other-desktop",
+        lastResumeAt: postWakeResumeAt,
+        wakeAttemptStartedAt: wakeAttemptStartedAt
+    ),
+    "full wake confirmation must reject resume events from a different desktop"
+)
+
+expect(
+    !SharedFilesRoutePolicy.isFullWakeConfirmed(
+        expectedDeviceId: "desktop-1",
+        responseServerId: nil,
+        lastResumeAt: postWakeResumeAt,
+        wakeAttemptStartedAt: wakeAttemptStartedAt
+    ),
+    "full wake confirmation must reject presence responses without a serverId"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "Applications", operation: "list"),
+    "nested personal folder listings must not trigger bound desktop wake"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "Applications/Icon\r", operation: "download"),
+    "personal downloads must not trigger bound desktop wake"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAllowPublicWake(
+        scope: "personal",
+        path: "",
+        operation: "list",
+        trigger: "shared_files_root_browse"
+    ),
+    "personal root browse must be allowed to use configured Wake-on-WAN"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAllowPublicWake(
+        scope: "personal",
+        path: "",
+        operation: "list",
+        trigger: "manual_lan_reconnect"
+    ),
+    "manual reconnect must remain LAN-only and must not use configured Wake-on-WAN"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "Documents/report.pdf", operation: "preview"),
+    "personal previews must not trigger bound desktop wake"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWake(scope: "team", path: "Applications", operation: "list"),
+    "team shared files must not trigger bound desktop wake"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "../Documents", operation: "list"),
+    "path traversal attempts must not trigger wake"
 )
 
 expect(
@@ -121,6 +359,21 @@ expect(
         persistedHost: "192.168.1.8"
     ) == "10.0.0.8",
     "shared files should prefer the current binding host over persisted host when falling back"
+)
+
+expect(
+    SharedFilesRoutePolicy.hasUsableDirectRouteHost("10.0.0.8"),
+    "shared files should allow a non-empty direct route host"
+)
+
+expect(
+    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(nil),
+    "shared files must not treat a nil direct route host as usable after tunnel and LAN are unavailable"
+)
+
+expect(
+    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(" \n "),
+    "shared files must not treat a blank direct route host as usable after tunnel and LAN are unavailable"
 )
 
 expect(
@@ -303,6 +556,22 @@ expect(
 )
 
 expect(
+    !SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure: false,
+        httpStatusCode: 404
+    ),
+    "missing shared files must not restart tunnels or retry downloads"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure: false,
+        httpStatusCode: 503
+    ),
+    "server-side shared-file failures should keep bounded retries"
+)
+
+expect(
     SharedFilesRoutePolicy.encodedSharedFilePath("相簿 A/IMG #1%.jpg") == "%E7%9B%B8%E7%B0%BF%20A/IMG%20%231%25.jpg",
     "shared-file browse/download paths must be encoded per segment so spaces, hash, percent, and non-ASCII names remain valid URL path components"
 )
@@ -310,4 +579,9 @@ expect(
 expect(
     SharedFilesRoutePolicy.encodedSharedFilePath("/nested//file name.mov/") == "nested/file%20name.mov",
     "shared-file path encoding must trim wrapper slashes and ignore empty path segments"
+)
+
+expect(
+    SharedFilesRoutePolicy.encodedSharedFilePath("Applications/Chrome Apps.localized/Icon\r") == "Applications/Chrome%20Apps.localized/Icon%0D",
+    "shared-file path encoding must preserve macOS filenames with trailing carriage returns"
 )

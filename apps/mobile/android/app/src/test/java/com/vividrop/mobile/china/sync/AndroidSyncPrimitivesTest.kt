@@ -152,6 +152,204 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun wakePacketDestinationsIncludeBroadcastLimitedBroadcastAndHostIp() {
+    val target = AndroidWakeTarget(
+      interfaceName = "wlan0",
+      macAddress = "aa:bb:cc:dd:ee:ff",
+      ipv4Address = "192.168.1.20",
+      broadcastAddress = "192.168.1.255",
+      ports = listOf(9, 7, 9, 70_000),
+    )
+
+    val destinations = AndroidSyncPrimitives.wakePacketDestinations(target)
+
+    assertEquals(
+      listOf(
+        AndroidWakePacketDestination("192.168.1.255", 9),
+        AndroidWakePacketDestination("192.168.1.255", 7),
+        AndroidWakePacketDestination("255.255.255.255", 9),
+        AndroidWakePacketDestination("255.255.255.255", 7),
+        AndroidWakePacketDestination("192.168.1.20", 9),
+        AndroidWakePacketDestination("192.168.1.20", 7),
+      ),
+      destinations,
+    )
+  }
+
+  @Test
+  fun parseWakeCapabilityReadsTargetsFromServerMetadata() {
+    val capability = AndroidSyncPrimitives.parseWakeCapability(
+      mapOf(
+        "supported" to true,
+        "updatedAt" to "2026-06-09T03:00:00.000Z",
+        "targets" to listOf(
+          mapOf(
+            "interfaceName" to "wlan0",
+            "macAddress" to "aa:bb:cc:dd:ee:ff",
+            "ipv4Address" to "192.168.1.20",
+            "broadcastAddress" to "192.168.1.255",
+            "ports" to listOf(9, 7),
+          ),
+        ),
+      ),
+    )
+
+    requireNotNull(capability)
+    assertTrue(capability.supported)
+    assertTrue(capability.hasUsableTargets)
+    assertEquals("2026-06-09T03:00:00.000Z", capability.updatedAt)
+    assertEquals("192.168.1.255", capability.targets.single().broadcastAddress)
+    assertEquals(listOf(9, 7), capability.targets.single().ports)
+  }
+
+  @Test
+  fun parseWakeCapabilityReadsPublicTarget() {
+    val capability = AndroidSyncPrimitives.parseWakeCapability(
+      mapOf(
+        "supported" to true,
+        "updatedAt" to "2026-06-09T03:00:00.000Z",
+        "targets" to listOf(
+          mapOf(
+            "interfaceName" to "wlan0",
+            "macAddress" to "aa:bb:cc:dd:ee:ff",
+            "ipv4Address" to "192.168.1.20",
+            "broadcastAddress" to "192.168.1.255",
+            "ports" to listOf(9),
+          )
+        ),
+        "publicTarget" to mapOf(
+          "kind" to "router_wan_udp",
+          "host" to "my-ddns.org",
+          "port" to 9,
+          "enabled" to true,
+          "updatedAt" to "2026-06-09T03:00:00.000Z",
+        )
+      )
+    )
+    requireNotNull(capability)
+    assertTrue(capability.supported)
+    assertTrue(capability.hasUsableTargets)
+    val pt = capability.publicTarget
+    requireNotNull(pt)
+    assertEquals("my-ddns.org", pt.host)
+    assertEquals(9, pt.port)
+    assertTrue(pt.enabled)
+  }
+
+  @Test
+  fun mergeWakeCapabilityPreservesPublicTarget() {
+    val existingPT = AndroidPublicWakeTarget(
+      kind = "router_wan_udp",
+      host = "my-wan.net",
+      port = 9,
+      enabled = true,
+      updatedAt = "2026-06-11T00:00:00Z"
+    )
+    val existing = AndroidWakeCapability(
+      supported = true,
+      targets = emptyList(),
+      publicTarget = existingPT,
+      updatedAt = "2026-06-11T00:00:00Z"
+    )
+    val serverNew = AndroidWakeCapability(
+      supported = true,
+      targets = listOf(
+        AndroidWakeTarget("eth0", "00:11:22:33:44:55", "192.168.1.10", "192.168.1.255", listOf(9))
+      ),
+      publicTarget = null,
+      updatedAt = "2026-06-11T01:00:00Z"
+    )
+    val merged = AndroidSyncPrimitives.mergeWakeCapability(serverNew, existing)
+    requireNotNull(merged)
+    assertEquals("2026-06-11T01:00:00Z", merged.updatedAt)
+    assertEquals(1, merged.targets.size)
+    val pt = merged.publicTarget
+    requireNotNull(pt)
+    assertEquals("my-wan.net", pt.host)
+    assertEquals(9, pt.port)
+    assertTrue(pt.enabled)
+  }
+
+  @Test
+  fun validatePublicWakeTargetValidatesEnabledConfigurations() {
+    // Should not throw for valid enabled config
+    AndroidSyncPrimitives.validatePublicWakeTarget("my-ddns.org", 9, true)
+    AndroidSyncPrimitives.validatePublicWakeTarget("1.2.3.4", 1234, true)
+
+    // Should not throw for disabled invalid config
+    AndroidSyncPrimitives.validatePublicWakeTarget("", 0, false)
+
+    // Should throw for empty/blank host when enabled
+    assertThrows(IllegalArgumentException::class.java) {
+      AndroidSyncPrimitives.validatePublicWakeTarget("", 9, true)
+    }
+
+    assertThrows(IllegalArgumentException::class.java) {
+      AndroidSyncPrimitives.validatePublicWakeTarget("   ", 9, true)
+    }
+
+    // Should throw for invalid ports when enabled
+    assertThrows(IllegalArgumentException::class.java) {
+      AndroidSyncPrimitives.validatePublicWakeTarget("my-ddns.org", 0, true)
+    }
+
+    assertThrows(IllegalArgumentException::class.java) {
+      AndroidSyncPrimitives.validatePublicWakeTarget("my-ddns.org", 65536, true)
+    }
+  }
+
+  @Test
+  fun peerProxySkipReasonsReportMissingPeerProxyCapabilities() {
+    val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
+      hasMultiDesktopBindingSource = false,
+      hasOnlineVividropDesktopPeer = false,
+      hasThirdPartyHelperConfigured = false,
+    )
+
+    assertEquals(
+      listOf(
+        "no_multi_desktop_binding_source",
+        "no_online_vividrop_desktop_peer",
+        "third_party_helper_not_configured",
+      ),
+      reasons,
+    )
+  }
+
+  @Test
+  fun peerProxySkipReasonsDoNotReportAvailableCapabilities() {
+    val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
+      hasMultiDesktopBindingSource = true,
+      hasOnlineVividropDesktopPeer = true,
+      hasThirdPartyHelperConfigured = true,
+    )
+
+    assertTrue(reasons.isEmpty())
+  }
+
+  @Test
+  fun peerProxyWakeRequiresMultiDesktopSourceAndOnlineVividropPeer() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource = true,
+        hasOnlineVividropDesktopPeer = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource = false,
+        hasOnlineVividropDesktopPeer = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource = true,
+        hasOnlineVividropDesktopPeer = false,
+      ),
+    )
+  }
+
+  @Test
   fun wakeAttemptIsScopedToPersonalRootListingOnly() {
     assertTrue(
       AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
@@ -184,10 +382,108 @@ class AndroidSyncPrimitivesTest {
     assertFalse(
       AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
         scope = "personal",
-        path = "",
+        path = "Photos/image.jpg",
         operation = "download",
       ),
     )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
+        scope = "personal",
+        path = "Photos/image.jpg",
+        operation = "preview",
+      ),
+    )
+  }
+
+  @Test
+  fun publicWakeIsScopedToPersonalRootBrowseAndExcludesManualReconnect() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
+        scope = "personal",
+        path = "",
+        operation = "list",
+        trigger = "shared_files_root_browse",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
+        scope = "personal",
+        path = "",
+        operation = "list",
+        trigger = "manual_lan_reconnect",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
+        scope = "personal",
+        path = "Documents",
+        operation = "list",
+        trigger = "shared_files_root_browse",
+      ),
+    )
+  }
+
+  @Test
+  fun sharedFilesWakeBeforeP2PFallbackSkipsWhenTunnelIsAlreadyActive() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
+        allowWake = true,
+        hasActiveTunnel = false,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
+        allowWake = true,
+        hasActiveTunnel = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
+        allowWake = false,
+        hasActiveTunnel = false,
+      ),
+    )
+  }
+
+  @Test
+  fun fullWakeConfirmationRequiresResumeAfterWakeAttempt() {
+    assertTrue(
+      AndroidSyncPrimitives.isFullWakeConfirmed(
+        lastResumeAt = "2026-06-11T03:50:01Z",
+        wakeAttemptStartedAt = "2026-06-11T03:50:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.isFullWakeConfirmed(
+        lastResumeAt = "2026-06-11T03:49:59Z",
+        wakeAttemptStartedAt = "2026-06-11T03:50:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.isFullWakeConfirmed(
+        lastResumeAt = "",
+        wakeAttemptStartedAt = "2026-06-11T03:50:00Z",
+      ),
+    )
+  }
+
+  @Test
+  fun tunnelRouteMetadataUsesDecisionPortWhenWakeRecoversThroughTunnel() {
+    val metadata = AndroidSyncPrimitives.sharedFilesRouteMetadata(
+      decision = AndroidSharedFilesRouteDecision(
+        mode = AndroidSharedFilesRouteMode.TUNNEL,
+        host = "127.0.0.1",
+        port = 51234,
+        isTunnel = true,
+      ),
+      snapshotTunnelActive = false,
+      snapshotTunnelStarting = false,
+      snapshotTunnelPort = null,
+    )
+
+    assertTrue(metadata.tunnelActive)
+    assertFalse(metadata.tunnelStarting)
+    assertEquals(51234, metadata.activeTunnelPort)
   }
 
   @Test
@@ -433,6 +729,18 @@ class AndroidSyncPrimitivesTest {
         expectedDeviceId = "desktop-1",
         responseServerId = null,
       ),
+    )
+  }
+
+  @Test
+  fun wakeLanRecoveryReasonDoesNotClaimFullWakeSuccess() {
+    assertEquals(
+      "browse_shared_files_wake_lan_reachable",
+      AndroidSyncPrimitives.wakeLanReachableReason("browse_shared_files"),
+    )
+    assertEquals(
+      "browse_shared_files_wake_full_resume_confirmed",
+      AndroidSyncPrimitives.wakeFullResumeConfirmedReason("browse_shared_files"),
     )
   }
 

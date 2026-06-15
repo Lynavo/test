@@ -160,7 +160,7 @@
     },
     "reconnectFailed": {
       "title": "Reconnect Failed",
-      "body": "Please try again later."
+      "body": "Reconnect only retries LAN or VPN-LAN paths. If the computer is asleep, check that macOS has Wake for network access enabled, or that Windows has BIOS/UEFI and network adapter Magic Packet wake enabled."
     },
     "switchDevice": {
       "title": "Switch Device",

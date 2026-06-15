@@ -66,9 +66,14 @@ class LocalTCPProxy {
     }
 
     func stop() {
-        guard activePort != nil else { return }
-        slog("[LocalTCPProxy] Stopping P2P tunnel")
-        syncDiagnosticsLog("LocalTCPProxy", "stopping P2P tunnel")
+        let port = activePort
+        if let port {
+            slog("[LocalTCPProxy] Stopping P2P tunnel")
+            syncDiagnosticsLog("LocalTCPProxy", "stopping P2P tunnel activePort=\(port)")
+        } else {
+            slog("[LocalTCPProxy] Stopping P2P tunnel without active Swift port")
+            syncDiagnosticsLog("LocalTCPProxy", "stopping P2P tunnel without active Swift port; issuing best-effort stop")
+        }
         stopMobileTunnelDiagnosticsDrain()
         MobiletunnelStopTunnel()
         flushMobileTunnelDiagnostics(reason: "after_stop")

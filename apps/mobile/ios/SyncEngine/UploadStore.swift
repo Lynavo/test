@@ -14,6 +14,7 @@ struct BindingRecord {
     let pairingTokenKeychainRef: String
     var shareName: String?
     let lastBoundAt: String
+    var wake: WakeCapability?
 }
 
 struct StoredBinding {
@@ -160,7 +161,8 @@ class UploadStore {
           pairing_id                  TEXT NOT NULL,
           pairing_token_keychain_ref  TEXT NOT NULL,
           share_name                  TEXT,
-          last_bound_at               TEXT NOT NULL
+          last_bound_at               TEXT NOT NULL,
+          wake_metadata_json          TEXT
         );
 
         CREATE TABLE IF NOT EXISTS upload_items (
@@ -291,6 +293,7 @@ class UploadStore {
         try addColumnIfMissing(table: "upload_items", column: "background_task_server_id", definition: "TEXT")
         try addColumnIfMissing(table: "upload_items", column: "background_task_client_id", definition: "TEXT")
         try addColumnIfMissing(table: "upload_items", column: "background_task_binding_version", definition: "INTEGER")
+        try addColumnIfMissing(table: "binding", column: "wake_metadata_json", definition: "TEXT")
         try executeInternal("""
             CREATE INDEX IF NOT EXISTS idx_upload_items_transport_status
               ON upload_items(transport, status);
@@ -314,7 +317,7 @@ class UploadStore {
 
     func getBinding() -> BindingRecord? {
         return queue.sync {
-            let sql = "SELECT device_id, device_name, device_alias, device_type, host, port, pairing_id, pairing_token_keychain_ref, share_name, last_bound_at FROM binding WHERE id = 1"
+            let sql = "SELECT device_id, device_name, device_alias, device_type, host, port, pairing_id, pairing_token_keychain_ref, share_name, last_bound_at, wake_metadata_json FROM binding WHERE id = 1"
             let rows = queryInternal(sql, bind: [])
             guard let row = rows.first else { return nil }
             return BindingRecord(
@@ -327,7 +330,8 @@ class UploadStore {
                 pairingId: row["pairing_id"] as? String ?? "",
                 pairingTokenKeychainRef: row["pairing_token_keychain_ref"] as? String ?? "",
                 shareName: row["share_name"] as? String,
-                lastBoundAt: row["last_bound_at"] as? String ?? ""
+                lastBoundAt: row["last_bound_at"] as? String ?? "",
+                wake: WakeCapability.decodeJSONString(row["wake_metadata_json"] as? String)
             )
         }
     }
@@ -335,8 +339,8 @@ class UploadStore {
     func saveBinding(_ binding: BindingRecord) throws {
         try queue.sync {
             let sql = """
-            INSERT OR REPLACE INTO binding (id, device_id, device_name, device_alias, device_type, host, port, pairing_id, pairing_token_keychain_ref, share_name, last_bound_at)
-            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            INSERT OR REPLACE INTO binding (id, device_id, device_name, device_alias, device_type, host, port, pairing_id, pairing_token_keychain_ref, share_name, last_bound_at, wake_metadata_json)
+            VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             """
             try executeWithBindings(sql, bindings: [
                 .text(binding.deviceId),
@@ -348,7 +352,8 @@ class UploadStore {
                 .text(binding.pairingId),
                 .text(binding.pairingTokenKeychainRef),
                 .textOrNull(binding.shareName),
-                .text(binding.lastBoundAt)
+                .text(binding.lastBoundAt),
+                .textOrNull(binding.wake?.encodeJSONString())
             ])
         }
     }

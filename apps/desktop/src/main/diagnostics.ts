@@ -1,6 +1,6 @@
 import { app, dialog, shell } from 'electron';
 import log from 'electron-log';
-import { execFile } from 'node:child_process';
+import { execFile, type ExecFileOptions } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { hostname, networkInterfaces, release, tmpdir, type } from 'node:os';
@@ -17,6 +17,8 @@ const DIAGNOSTICS_LOG_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const DIAGNOSTICS_UPLOAD_LOG_TAIL_BYTES = 256 * 1024;
 const DIAGNOSTICS_UPLOAD_DB_MAX_BYTES = 128 * 1024;
 const DIAGNOSTICS_UPLOAD_ARCHIVE_MAX_BYTES = 900 * 1024;
+const MACOS_POWER_LOG_MAX_BUFFER_BYTES = 2 * 1024 * 1024;
+const MACOS_POWER_LOG_TIMEOUT_MS = 1_500;
 
 export { getAppInfo } from './app-info';
 
@@ -86,6 +88,7 @@ type DiagnosticSnapshot = {
   files: {
     desktopLogPath: string | null;
     desktopLogFiles: string[];
+    powerLog: PowerDiagnosticsResult | null;
     sidecarDbPath: string | null;
     sidecarDataDir: string;
     sidecarLogFiles: string[];
@@ -98,6 +101,24 @@ type DiagnosticSnapshot = {
 };
 
 type DiagnosticsBundleMode = 'export' | 'upload';
+
+type CommandRunner = (
+  file: string,
+  args?: readonly string[],
+  options?: ExecFileOptions,
+) => Promise<{ stdout: string; stderr: string }>;
+
+type PowerDiagnosticsOptions = {
+  platform?: NodeJS.Platform;
+  runCommand?: CommandRunner;
+  now?: Date;
+};
+
+export type PowerDiagnosticsResult = {
+  path: string;
+  source: string;
+  error?: string;
+};
 
 export type DiagnosticsUploadRequest = {
   description: string;
@@ -217,6 +238,78 @@ async function safeCall<T>(fn: () => Promise<T>): Promise<T | { error: string }>
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function filterMacosPowerLog(stdout: string): string {
+  return stdout
+    .split(/\r?\n/)
+    .filter((line) => /\b(?:Sleep|Wake|DarkWake|Standby|Hibernate)\b|Wake reason/i.test(line))
+    .join('\n');
+}
+
+function macosPowerLogCommand(): string {
+  return [
+    '/usr/bin/pmset -g log',
+    "/usr/bin/grep -Ei 'Sleep|Wake|DarkWake|Standby|Hibernate|Wake reason'",
+    '/usr/bin/tail -n 300',
+  ].join(' | ');
+}
+
+export async function writePowerDiagnostics(
+  filesDir: string,
+  options: PowerDiagnosticsOptions = {},
+): Promise<PowerDiagnosticsResult | null> {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'darwin') {
+    return null;
+  }
+
+  const collectedAt = (options.now ?? new Date()).toISOString();
+  const targetPath = join(filesDir, 'macos-power.log');
+  const runCommand = options.runCommand ?? execFileAsync;
+
+  try {
+    const { stdout, stderr } = await runCommand('/bin/sh', ['-c', macosPowerLogCommand()], {
+      maxBuffer: MACOS_POWER_LOG_MAX_BUFFER_BYTES,
+      timeout: MACOS_POWER_LOG_TIMEOUT_MS,
+    });
+    const filtered = filterMacosPowerLog(stdout);
+    await writeFile(
+      targetPath,
+      [
+        'Vivi Drop macOS power diagnostics',
+        `collectedAt=${collectedAt}`,
+        'source=pmset -g log',
+        '',
+        filtered || '(no sleep/wake records found in pmset output)',
+        stderr.trim() ? `\n[stderr]\n${stderr.trim()}` : '',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    return {
+      path: 'files/macos-power.log',
+      source: 'pmset -g log',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await writeFile(
+      targetPath,
+      [
+        'Vivi Drop macOS power diagnostics',
+        `collectedAt=${collectedAt}`,
+        'source=pmset -g log',
+        `error=${message}`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    return {
+      path: 'files/macos-power.log',
+      source: 'pmset -g log',
+      error: message,
     };
   }
 }
@@ -496,6 +589,7 @@ async function createDiagnosticsBundle(
   const appInfo = getAppInfo();
   const desktopLogFiles = await listDesktopLogFiles(desktopLogPath);
   const sidecarLogFiles = await listSidecarLogFiles(sidecarDataDir);
+  const powerLog = await writePowerDiagnostics(filesDir);
   const environment = await captureEnvironmentSnapshot();
   const apiBase = configuredApiBase();
   const snapshot: DiagnosticSnapshot = {
@@ -540,6 +634,7 @@ async function createDiagnosticsBundle(
     files: {
       desktopLogPath: (await exists(desktopLogPath)) ? desktopLogPath : null,
       desktopLogFiles,
+      powerLog,
       sidecarDbPath: (await exists(sidecarDbPath)) ? sidecarDbPath : null,
       sidecarDataDir,
       sidecarLogFiles,

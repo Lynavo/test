@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dialog } from 'electron';
@@ -384,6 +384,51 @@ describe('exportDiagnostics', () => {
     expect(diagnostics.api?.diagnosticsUploadUrl).toBe(
       'https://example.test/upload?api_key=redacted&keep=ok',
     );
+
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+});
+
+describe('writePowerDiagnostics', () => {
+  it('writes filtered macOS sleep and wake history into the diagnostics files directory', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-power-diagnostics-test-'));
+    const filesDir = join(tempRoot, 'files');
+    mkdirSync(filesDir, { recursive: true });
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: [
+        '2026-06-11 09:59:58 +0800 Assertions            PID 123',
+        '2026-06-11 10:00:00 +0800 Sleep                 Entering Sleep state due to Software Sleep',
+        '2026-06-11 10:01:30 +0800 Wake                  Wake from Normal Sleep [CDNVA] : due to EC.LidOpen/UserActivity',
+        '2026-06-11 10:01:31 +0800 Kernel Client Acks    Delays to Sleep notifications',
+      ].join('\n'),
+      stderr: '',
+    });
+
+    const { writePowerDiagnostics } = await import('../diagnostics');
+
+    const result = await writePowerDiagnostics(filesDir, {
+      platform: 'darwin',
+      runCommand,
+      now: new Date('2026-06-11T02:02:00.000Z'),
+    });
+
+    expect(result).toEqual({
+      path: 'files/macos-power.log',
+      source: 'pmset -g log',
+    });
+    expect(runCommand).toHaveBeenCalledWith(
+      '/bin/sh',
+      ['-c', expect.stringContaining('/usr/bin/pmset -g log')],
+      {
+        maxBuffer: 2 * 1024 * 1024,
+        timeout: 1_500,
+      },
+    );
+    const content = readFileSync(join(filesDir, 'macos-power.log'), 'utf8');
+    expect(content).toContain('collectedAt=2026-06-11T02:02:00.000Z');
+    expect(content).toContain('Entering Sleep state');
+    expect(content).toContain('Wake from Normal Sleep');
+    expect(content).not.toContain('Assertions');
 
     rmSync(tempRoot, { recursive: true, force: true });
   });

@@ -288,6 +288,11 @@ func (req syncAccountContextRequest) resolvedAccountID() string {
 }
 
 func (s *Server) handleSyncAccountContext(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		writeError(w, http.StatusForbidden, "account context sync is local only")
+		return
+	}
+
 	var req syncAccountContextRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -313,6 +318,11 @@ func (s *Server) handleSyncAccountContext(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleSyncTunnelCredentials(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		writeError(w, http.StatusForbidden, "tunnel credentials sync is local only")
+		return
+	}
+
 	var req syncTunnelCredentialsRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")

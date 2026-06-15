@@ -3,10 +3,14 @@ package com.vividrop.mobile.china.sync
 import java.io.BufferedOutputStream
 import java.io.File
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import org.json.JSONObject
 
 data class AndroidUploadItem(
   val assetLocalId: String,
@@ -115,6 +119,12 @@ data class AndroidSharedFilesRouteDecision(
   val isTunnel: Boolean,
 )
 
+data class AndroidSharedFilesRouteMetadata(
+  val tunnelActive: Boolean,
+  val tunnelStarting: Boolean,
+  val activeTunnelPort: Int?,
+)
+
 data class AndroidWakeTarget(
   val interfaceName: String,
   val macAddress: String,
@@ -123,12 +133,112 @@ data class AndroidWakeTarget(
   val ports: List<Int>,
 )
 
+data class AndroidWakePacketDestination(
+  val host: String,
+  val port: Int,
+)
+
+data class AndroidPublicWakeTarget(
+  val kind: String, // "router_wan_udp"
+  val host: String,
+  val port: Int,
+  val enabled: Boolean,
+  val updatedAt: String,
+)
+
+data class AndroidWakeCapability(
+  val supported: Boolean,
+  val targets: List<AndroidWakeTarget>,
+  val publicTarget: AndroidPublicWakeTarget?,
+  val updatedAt: String,
+) {
+  val hasUsableTargets: Boolean
+    get() = supported && AndroidSyncPrimitives.validWakeTargets(targets).isNotEmpty()
+
+  fun toJson(): JSONObject =
+    JSONObject().apply {
+      put("supported", supported)
+      put("updatedAt", updatedAt)
+      put(
+        "targets",
+        org.json.JSONArray(
+          targets.map { target ->
+            JSONObject().apply {
+              put("interfaceName", target.interfaceName)
+              put("macAddress", target.macAddress)
+              put("ipv4Address", target.ipv4Address)
+              put("broadcastAddress", target.broadcastAddress)
+              put("ports", org.json.JSONArray(target.ports))
+            }
+          },
+        ),
+      )
+      if (publicTarget != null) {
+        put(
+          "publicTarget",
+          JSONObject().apply {
+            put("kind", publicTarget.kind)
+            put("host", publicTarget.host)
+            put("port", publicTarget.port)
+            put("enabled", publicTarget.enabled)
+            put("updatedAt", publicTarget.updatedAt)
+          }
+        )
+      } else {
+        put("publicTarget", JSONObject.NULL)
+      }
+    }
+}
+
 data class AndroidBackgroundKeepaliveStopState(
   val foregroundStopRequested: Boolean,
   val lastStopReason: String?,
 )
 
 object AndroidSyncPrimitives {
+  fun validatePublicWakeTarget(host: String, port: Int, enabled: Boolean) {
+    if (enabled) {
+      if (host.trim().isEmpty()) {
+        throw IllegalArgumentException("Host cannot be empty when remote wake is enabled")
+      }
+      if (port < 1 || port > 65535) {
+        throw IllegalArgumentException("Port must be between 1 and 65535 when remote wake is enabled")
+      }
+    }
+  }
+
+  fun peerProxySkipReasons(
+    hasMultiDesktopBindingSource: Boolean,
+    hasOnlineVividropDesktopPeer: Boolean,
+    hasThirdPartyHelperConfigured: Boolean,
+  ): List<String> {
+    val reasons = mutableListOf<String>()
+    if (!hasMultiDesktopBindingSource) {
+      reasons.add("no_multi_desktop_binding_source")
+    }
+    if (!hasOnlineVividropDesktopPeer) {
+      reasons.add("no_online_vividrop_desktop_peer")
+    }
+    if (!hasThirdPartyHelperConfigured) {
+      reasons.add("third_party_helper_not_configured")
+    }
+    return reasons
+  }
+
+  fun shouldAttemptPeerProxyWake(
+    hasMultiDesktopBindingSource: Boolean,
+    hasOnlineVividropDesktopPeer: Boolean,
+  ): Boolean =
+    hasMultiDesktopBindingSource && hasOnlineVividropDesktopPeer
+
+  fun mergeWakeCapability(
+    newWake: AndroidWakeCapability?,
+    existingWake: AndroidWakeCapability?,
+  ): AndroidWakeCapability? {
+    if (newWake == null) return existingWake
+    return newWake.copy(publicTarget = existingWake?.publicTarget)
+  }
+
   fun decideSharedFilesRoute(
     isTunnelActive: Boolean,
     tunnelPort: Int?,
@@ -183,15 +293,146 @@ object AndroidSyncPrimitives {
         target.ports.any { it in 1..65_535 }
     }
 
+  fun wakePacketDestinations(target: AndroidWakeTarget): List<AndroidWakePacketDestination> {
+    val hosts = listOf(
+      target.broadcastAddress.trim(),
+      "255.255.255.255",
+      target.ipv4Address.trim(),
+    ).filter { it.isNotBlank() }.distinct()
+    val ports = target.ports.filter { it in 1..65_535 }.distinct()
+    return hosts.flatMap { host ->
+      ports.map { port -> AndroidWakePacketDestination(host, port) }
+    }
+  }
+
+  fun parseWakeCapability(raw: JSONObject?): AndroidWakeCapability? {
+    raw ?: return null
+    val targets = mutableListOf<AndroidWakeTarget>()
+    val rawTargets = raw.optJSONArray("targets")
+    if (rawTargets != null) {
+      for (index in 0 until rawTargets.length()) {
+        val target = rawTargets.optJSONObject(index) ?: continue
+        val ports = mutableListOf<Int>()
+        val rawPorts = target.optJSONArray("ports")
+        if (rawPorts != null) {
+          for (portIndex in 0 until rawPorts.length()) {
+            ports.add(rawPorts.optInt(portIndex))
+          }
+        }
+        targets.add(
+          AndroidWakeTarget(
+            interfaceName = target.optString("interfaceName"),
+            macAddress = target.optString("macAddress"),
+            ipv4Address = target.optString("ipv4Address"),
+            broadcastAddress = target.optString("broadcastAddress"),
+            ports = ports,
+          ),
+        )
+      }
+    }
+    val publicTarget = raw.optJSONObject("publicTarget")?.let { pt ->
+      AndroidPublicWakeTarget(
+        kind = pt.optString("kind", "router_wan_udp"),
+        host = pt.optString("host"),
+        port = pt.optInt("port", 9),
+        enabled = pt.optBoolean("enabled", false),
+        updatedAt = pt.optString("updatedAt").takeIf { it.isNotBlank() }.orEmpty(),
+      )
+    }
+    return AndroidWakeCapability(
+      supported = raw.optBoolean("supported", false),
+      targets = targets,
+      publicTarget = publicTarget,
+      updatedAt = raw.optString("updatedAt").takeIf { it.isNotBlank() }.orEmpty(),
+    )
+  }
+
+  fun parseWakeCapability(raw: Map<String, Any?>?): AndroidWakeCapability? {
+    raw ?: return null
+    val targets = (raw["targets"] as? Iterable<*>)
+      ?.mapNotNull { entry ->
+        val target = entry as? Map<*, *> ?: return@mapNotNull null
+        AndroidWakeTarget(
+          interfaceName = target["interfaceName"] as? String ?: "",
+          macAddress = target["macAddress"] as? String ?: "",
+          ipv4Address = target["ipv4Address"] as? String ?: "",
+          broadcastAddress = target["broadcastAddress"] as? String ?: "",
+          ports = (target["ports"] as? Iterable<*>)
+            ?.mapNotNull { port ->
+              when (port) {
+                is Number -> port.toInt()
+                is String -> port.toIntOrNull()
+                else -> null
+              }
+            }
+            .orEmpty(),
+        )
+      }
+      .orEmpty()
+    val publicTarget = (raw["publicTarget"] as? Map<*, *>)?.let { pt ->
+      AndroidPublicWakeTarget(
+        kind = pt["kind"] as? String ?: "router_wan_udp",
+        host = pt["host"] as? String ?: "",
+        port = when (val p = pt["port"]) {
+          is Number -> p.toInt()
+          is String -> p.toIntOrNull() ?: 9
+          else -> 9
+        },
+        enabled = pt["enabled"] as? Boolean ?: false,
+        updatedAt = pt["updatedAt"] as? String ?: "",
+      )
+    }
+    return AndroidWakeCapability(
+      supported = raw["supported"] as? Boolean ?: false,
+      targets = targets,
+      publicTarget = publicTarget,
+      updatedAt = raw["updatedAt"] as? String ?: "",
+    )
+  }
+
   fun shouldAttemptSharedFilesWake(
     scope: String,
     path: String,
     operation: String,
   ): Boolean {
+    val normalizedScope = scope.trim()
+    val normalizedOperation = operation.trim()
     val normalizedPath = path.trim().trim('/')
-    return scope.trim() == "personal" &&
-      operation.trim() == "list" &&
-      normalizedPath.isBlank()
+    val segments = normalizedPath.replace('\\', '/').split('/')
+    val hasTraversalSegment = segments.any { it == ".." }
+    return normalizedScope == "personal" &&
+      normalizedOperation == "list" &&
+      normalizedPath.isEmpty() &&
+      !hasTraversalSegment
+  }
+
+  fun shouldAllowSharedFilesPublicWake(
+    scope: String,
+    path: String,
+    operation: String,
+    trigger: String,
+  ): Boolean =
+    shouldAttemptSharedFilesWake(scope, path, operation) &&
+      trigger == "shared_files_root_browse"
+
+  fun sharedFilesRouteMetadata(
+    decision: AndroidSharedFilesRouteDecision,
+    snapshotTunnelActive: Boolean,
+    snapshotTunnelStarting: Boolean,
+    snapshotTunnelPort: Int?,
+  ): AndroidSharedFilesRouteMetadata {
+    if (decision.isTunnel) {
+      return AndroidSharedFilesRouteMetadata(
+        tunnelActive = true,
+        tunnelStarting = false,
+        activeTunnelPort = decision.port,
+      )
+    }
+    return AndroidSharedFilesRouteMetadata(
+      tunnelActive = snapshotTunnelActive,
+      tunnelStarting = snapshotTunnelStarting,
+      activeTunnelPort = snapshotTunnelPort,
+    )
   }
 
   fun normalizePairingConnectionCode(rawCode: String?): String {
@@ -389,6 +630,25 @@ object AndroidSyncPrimitives {
     syncInProgress: Boolean,
   ): Boolean =
     connectionState.trim() == "connected" && !syncInProgress
+
+  fun wakeLanReachableReason(baseReason: String): String = "${baseReason}_wake_lan_reachable"
+
+  fun wakeFullResumeConfirmedReason(baseReason: String): String =
+    "${baseReason}_wake_full_resume_confirmed"
+
+  fun shouldAttemptWakeBeforeP2PFallback(
+    allowWake: Boolean,
+    hasActiveTunnel: Boolean,
+  ): Boolean = allowWake && !hasActiveTunnel
+
+  fun isFullWakeConfirmed(
+    lastResumeAt: String,
+    wakeAttemptStartedAt: String,
+  ): Boolean {
+    val lastResumeAtMs = parseIsoInstantMillis(lastResumeAt) ?: return false
+    val wakeAttemptStartedAtMs = parseIsoInstantMillis(wakeAttemptStartedAt) ?: return false
+    return lastResumeAtMs > wakeAttemptStartedAtMs
+  }
 
   fun shouldResumeManualUploadAfterReachabilityRestored(
     previousConnectionState: String,
@@ -648,6 +908,26 @@ object AndroidSyncPrimitives {
 
   private fun normalizeLogMessage(message: String): String =
     message.trim().ifBlank { "<empty>" }
+
+  private fun parseIsoInstantMillis(value: String): Long? {
+    val normalized = value.trim()
+    if (normalized.isBlank()) {
+      return null
+    }
+    return try {
+      SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+      }.parse(normalized)?.time
+    } catch (_: Throwable) {
+      try {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+          timeZone = TimeZone.getTimeZone("UTC")
+        }.parse(normalized)?.time
+      } catch (_: Throwable) {
+        null
+      }
+    }
+  }
 
   private fun ipv4ToLong(ip: String): Long? {
     val parts = ip.trim().split(".")

@@ -77,7 +77,7 @@ test('builds commands and env from the selected profile', () => {
         'bash',
         ['apps/mobile/ios/scripts/testflight-release.sh', 'archive-upload', 'global'],
       ],
-      ['android', 'bash', ['-lc', 'cd apps/mobile/android && ./gradlew assembleGlobalRelease']],
+      ['android', 'bash', ['-lc', 'cd apps/mobile/android && ./gradlew assembleGlobalRelease bundleGlobalRelease']],
       ['mac', 'pnpm', ['package:desktop:signed']],
       ['win', 'pnpm', ['--filter', '@syncflow/desktop', 'package:win:global']],
     ],

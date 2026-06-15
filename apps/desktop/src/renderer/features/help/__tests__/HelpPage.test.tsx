@@ -173,6 +173,17 @@ describe('HelpPage', () => {
     expect(screen.getByText(/确保 Vivi Drop 有权限访问所选的同步根目录/)).toBeInTheDocument();
   });
 
+  it('renders platform-specific remote wake setup guidance', () => {
+    render(<HelpPage />);
+
+    expect(screen.getAllByText('远程唤醒')).toHaveLength(2);
+    expect(screen.getByText(/Wake for network access/)).toBeInTheDocument();
+    expect(screen.getByText(/不能自动替你开启 macOS 电源设置/)).toBeInTheDocument();
+    expect(screen.getByText(/BIOS\/UEFI 中开启 Wake-on-LAN/)).toBeInTheDocument();
+    expect(screen.getByText(/Wake on Magic Packet/)).toBeInTheDocument();
+    expect(screen.getByText(/不能自动替你修改 BIOS\/UEFI/)).toBeInTheDocument();
+  });
+
   it('renders upload rules', () => {
     render(<HelpPage />);
 

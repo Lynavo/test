@@ -15,6 +15,7 @@ import {
   Modal,
   ActivityIndicator,
   Clipboard,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -77,6 +78,8 @@ import {
   saveLanguagePreference,
   type LanguagePreference,
 } from '../i18n/language-preference';
+import { getSuggestedPublicWakeHost } from '../services/public-wake-service';
+import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,6 +134,13 @@ type LanguageOption = {
     | 'settings.language.traditionalChinese'
     | 'settings.language.simplifiedChinese'
     | 'settings.language.english';
+};
+type RemoteWakeSetupSummary = {
+  hasLanWakeTargets: boolean;
+  hasEnabledPublicTarget: boolean;
+  suggestedPort: string;
+  publicHost: string;
+  hasPublicTarget: boolean;
 };
 
 const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
@@ -330,6 +340,79 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
   });
 }
 
+function resolveRemoteWakeSetupSummary(
+  wake: Record<string, unknown> | null | undefined,
+): RemoteWakeSetupSummary {
+  const targets = Array.isArray(wake?.targets) ? wake?.targets : [];
+  let suggestedPort = '9';
+  for (const target of targets) {
+    if (typeof target !== 'object' || target === null) continue;
+    const ports = (target as { ports?: unknown }).ports;
+    if (!Array.isArray(ports)) continue;
+    const port = ports.find(
+      value => typeof value === 'number' && value >= 1 && value <= 65535,
+    );
+    if (typeof port === 'number') {
+      suggestedPort = String(port);
+      break;
+    }
+  }
+
+  const publicTarget =
+    typeof wake?.publicTarget === 'object' && wake.publicTarget !== null
+      ? (wake.publicTarget as Record<string, unknown>)
+      : null;
+  const publicHost =
+    typeof publicTarget?.host === 'string' ? publicTarget.host.trim() : '';
+
+  return {
+    hasLanWakeTargets: targets.length > 0,
+    hasEnabledPublicTarget: publicTarget?.enabled === true && publicHost.length > 0,
+    suggestedPort,
+    publicHost,
+    hasPublicTarget: publicTarget !== null,
+  };
+}
+
+function isPrivateLanIPv4(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const parts = value.trim().split('.');
+  if (parts.length !== 4) return false;
+  const octets = parts.map(part => {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const parsed = Number(part);
+    return parsed >= 0 && parsed <= 255 ? parsed : null;
+  });
+  if (octets.some(octet => octet === null)) return false;
+  const [a, b] = octets as [number, number, number, number];
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+function getSharedFilesRoute(state: Record<string, unknown>): string {
+  const reachability =
+    typeof state.sharedFilesReachability === 'object' &&
+    state.sharedFilesReachability !== null
+      ? (state.sharedFilesReachability as Record<string, unknown>)
+      : null;
+  return typeof reachability?.route === 'string'
+    ? reachability.route.trim()
+    : '';
+}
+
+function hasConfirmedLanWakeContext(
+  state: Record<string, unknown>,
+  connectionState: unknown,
+  host: string,
+): boolean {
+  const route = getSharedFilesRoute(state);
+  const routeAllowsLanAutoConfig = route.length === 0 || route === 'lan';
+  return (
+    connectionState === 'connected' &&
+    isPrivateLanIPv4(host) &&
+    routeAllowsLanAutoConfig
+  );
+}
+
 // ---------------------------------------------------------------------------
 // SettingsScreen
 // ---------------------------------------------------------------------------
@@ -368,6 +451,14 @@ export function SettingsScreen() {
     useState<LanguagePreference>('system');
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
   const isResetSyncDisabled = syncOverviewState.uploadState === 'uploading';
+
+  const [wowEnabled, setWowEnabled] = useState(false);
+  const [wowHost, setWowHost] = useState('');
+  const [wowPort, setWowPort] = useState('9');
+  const [isSavingWow, setIsSavingWow] = useState(false);
+  const [hasLanWakeCached, setHasLanWakeCached] = useState(false);
+  const [hasEnabledPublicWake, setHasEnabledPublicWake] = useState(false);
+  const publicWakePrefillRequestRef = useRef(0);
   const isBatteryOptimizationFeatureAvailable =
     Platform.OS === 'android' && isChinaMarket();
   const [
@@ -555,6 +646,12 @@ export function SettingsScreen() {
         setDeviceName('');
         setDeviceIp('');
         setConnectionState('offline');
+        setHasLanWakeCached(false);
+        setHasEnabledPublicWake(false);
+        setWowEnabled(false);
+        setWowHost('');
+        setWowPort('9');
+        publicWakePrefillRequestRef.current += 1;
         return;
       }
 
@@ -562,9 +659,122 @@ export function SettingsScreen() {
         (state.deviceAlias as string) || (state.deviceName as string) || '',
       );
       setDeviceIp((state.host as string) || '');
-      setConnectionState(
-        (state.connectionState as typeof connectionState) || 'bound',
+      const nextConnectionState =
+        (state.connectionState as typeof connectionState) || 'bound';
+      const nextHost = (state.host as string) || '';
+      setConnectionState(nextConnectionState);
+
+      const wake = state.wake as Record<string, unknown> | null | undefined;
+      const wakeSetup = resolveRemoteWakeSetupSummary(wake);
+      setHasLanWakeCached(wakeSetup.hasLanWakeTargets);
+      setHasEnabledPublicWake(wakeSetup.hasEnabledPublicTarget);
+
+      const publicTarget = wake?.publicTarget as Record<string, unknown> | null | undefined;
+      setWowEnabled(!!publicTarget?.enabled);
+      setWowHost(wakeSetup.publicHost);
+      setWowPort(String(publicTarget?.port ?? wakeSetup.suggestedPort));
+
+      const requestId = publicWakePrefillRequestRef.current + 1;
+      publicWakePrefillRequestRef.current = requestId;
+      const sharedFilesRoute = getSharedFilesRoute(state);
+      const hasConfirmedLanContext = hasConfirmedLanWakeContext(
+        state,
+        nextConnectionState,
+        nextHost,
       );
+      if (
+        wakeSetup.hasLanWakeTargets &&
+        !wakeSetup.hasPublicTarget &&
+        hasConfirmedLanContext
+      ) {
+        console.log(
+          `[settings] remote wake public host prefill start device=${String(
+            state.deviceId,
+          )} suggestedPort=${wakeSetup.suggestedPort}`,
+        );
+        recordDiagnosticsLog('PublicWake', 'settings prefill start', {
+          deviceId: String(state.deviceId),
+          suggestedPort: wakeSetup.suggestedPort,
+          route: sharedFilesRoute || 'nil',
+        });
+        void getSuggestedPublicWakeHost().then(host => {
+          if (publicWakePrefillRequestRef.current !== requestId) return;
+          if (!host) {
+            console.log(
+              '[settings] remote wake public host prefill unavailable',
+            );
+            recordDiagnosticsLog('PublicWake', 'settings prefill skipped', {
+              reason: 'public_host_unavailable',
+              route: sharedFilesRoute || 'nil',
+            });
+            return;
+          }
+          setWowHost(current => {
+            if (current.trim().length > 0) return current;
+            console.log(
+              `[settings] remote wake public host prefilled host=${host}`,
+            );
+            return host;
+          });
+          const port = Number.parseInt(wakeSetup.suggestedPort, 10);
+          const safePort =
+            Number.isInteger(port) && port >= 1 && port <= 65535 ? port : 9;
+          const { NativeSyncEngine } = NativeModules;
+          if (typeof NativeSyncEngine?.savePublicWakeTarget === 'function') {
+            void NativeSyncEngine.savePublicWakeTarget({
+              host,
+              port: safePort,
+              enabled: true,
+            })
+              .then(() => {
+                console.log(
+                  `[settings] remote wake public target saved enabled host=${host} port=${safePort}`,
+                );
+                recordDiagnosticsLog(
+                  'PublicWake',
+                  'settings saved enabled target',
+                  {
+                    host,
+                    port: safePort,
+                    route: sharedFilesRoute || 'nil',
+                  },
+                );
+              })
+              .catch((error: unknown) => {
+                console.warn(
+                  '[settings] remote wake public target auto-save failed',
+                  error,
+                );
+                recordDiagnosticsLog('PublicWake', 'settings save failed', {
+                  error:
+                    error instanceof Error ? error.message : String(error),
+                  route: sharedFilesRoute || 'nil',
+                });
+              });
+          } else {
+            console.log(
+              '[settings] remote wake public target auto-save skipped native bridge unavailable',
+            );
+            recordDiagnosticsLog('PublicWake', 'settings save skipped', {
+              reason: 'native_bridge_unavailable',
+              route: sharedFilesRoute || 'nil',
+            });
+          }
+        });
+      } else {
+        console.log(
+          `[settings] remote wake public host prefill skipped hasLanWakeTargets=${wakeSetup.hasLanWakeTargets} hasPublicTarget=${wakeSetup.hasPublicTarget} hasConfirmedLanContext=${hasConfirmedLanContext} route=${sharedFilesRoute || 'nil'}`,
+        );
+        recordDiagnosticsLog('PublicWake', 'settings prefill skipped', {
+          reason: 'lan_context_or_target_unavailable',
+          hasLanWakeTargets: wakeSetup.hasLanWakeTargets,
+          hasPublicTarget: wakeSetup.hasPublicTarget,
+          hasConfirmedLanContext,
+          connectionState: nextConnectionState,
+          host: nextHost || 'nil',
+          route: sharedFilesRoute || 'nil',
+        });
+      }
     };
 
     const loadState = async () => {
@@ -894,6 +1104,37 @@ export function SettingsScreen() {
       ],
     );
   }, [isResetSyncDisabled, navigation, t]);
+
+  const handleSavePublicWake = useCallback(async () => {
+    const trimmedHost = wowHost.trim();
+    if (wowEnabled && !trimmedHost) {
+      Alert.alert(t('settings.remoteWake.invalidHost'));
+      return;
+    }
+    const portInt = parseInt(wowPort, 10);
+    if (wowEnabled && (isNaN(portInt) || portInt < 1 || portInt > 65535)) {
+      Alert.alert(t('settings.remoteWake.invalidPort'));
+      return;
+    }
+
+    setIsSavingWow(true);
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      if (NativeSyncEngine?.savePublicWakeTarget) {
+        await NativeSyncEngine.savePublicWakeTarget({
+          host: trimmedHost,
+          port: isNaN(portInt) ? 9 : portInt,
+          enabled: wowEnabled,
+        });
+        Alert.alert(t('settings.remoteWake.wowSaveSuccess'));
+      }
+    } catch (err) {
+      console.warn('[settings] save public wake target failed', err);
+      Alert.alert(t('errors.title'), t('errors.unknown'));
+    } finally {
+      setIsSavingWow(false);
+    }
+  }, [wowHost, wowPort, wowEnabled, t]);
 
   const handleLanguagePreferenceChange = useCallback(
     async (preference: LanguagePreference) => {
@@ -1793,6 +2034,135 @@ export function SettingsScreen() {
         </View>
 
         {/* ============================================================= */}
+        {/* Remote Wake / Wake-on-WAN card                                 */}
+        {/* ============================================================= */}
+        {deviceName ? (
+          <>
+            <Text style={styles.sectionLabel}>
+              {t('settings.remoteWake.title')}
+            </Text>
+            <View style={styles.listCard}>
+              <View style={styles.remoteWakeSetupBox}>
+                <View style={styles.remoteWakeSetupHeader}>
+                  <Icon
+                    name={hasLanWakeCached ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                    size={18}
+                    color={hasLanWakeCached ? ONLINE_GREEN : CONNECTING_AMBER}
+                  />
+                  <Text style={styles.remoteWakeSetupTitle}>
+                    {hasLanWakeCached
+                      ? t('settings.remoteWake.autoReadyTitle')
+                      : t('settings.remoteWake.autoMissingTitle')}
+                  </Text>
+                </View>
+                <Text style={styles.remoteWakeSetupBody}>
+                  {hasLanWakeCached
+                    ? t('settings.remoteWake.autoReadyBody')
+                    : t('settings.remoteWake.autoMissingBody')}
+                </Text>
+              </View>
+
+              <View style={styles.listSep} />
+
+              <View style={styles.infoRow}>
+                <View style={styles.infoRowLeft}>
+                  <Icon name="pulse-outline" size={16} color={MUTED_TEXT} />
+                  <Text style={styles.infoRowLabel}>
+                    {t('settings.remoteWake.lanStatus')}
+                  </Text>
+                </View>
+                <Text style={[styles.infoRowValue, { color: hasLanWakeCached ? ONLINE_GREEN : MUTED_TEXT }]}>
+                  {hasLanWakeCached ? t('settings.remoteWake.lanStatusCached') : t('settings.remoteWake.lanStatusNotCached')}
+                </Text>
+              </View>
+
+              <View style={styles.listSep} />
+
+              <View style={styles.infoRow}>
+                <View style={styles.infoRowLeft}>
+                  <Icon name="globe-outline" size={16} color={BLUE} />
+                  <Text style={styles.infoRowLabel}>{t('settings.remoteWake.wowEnable')}</Text>
+                </View>
+                <Switch
+                  value={wowEnabled}
+                  onValueChange={setWowEnabled}
+                  disabled={!hasLanWakeCached}
+                  trackColor={{ false: '#e9e9ea', true: BLUE }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+
+              {hasEnabledPublicWake ? null : (
+                <Text style={styles.remoteWakeHint}>
+                  {t('settings.remoteWake.enableHint')}
+                </Text>
+              )}
+
+              <View style={styles.listSep} />
+              <Text style={styles.remoteWakeAdvancedLabel}>
+                {t('settings.remoteWake.advancedTitle')}
+              </Text>
+              <View style={styles.infoRow}>
+                <View style={styles.infoRowLeft}>
+                  <Icon name="link-outline" size={16} color={MUTED_TEXT} />
+                  <Text style={styles.infoRowLabel}>{t('settings.remoteWake.wowHostLabel')}</Text>
+                </View>
+                <TextInput
+                  style={[styles.infoRowValue, { flex: 1, padding: 0 }]}
+                  value={wowHost}
+                  onChangeText={setWowHost}
+                  placeholder={t('settings.remoteWake.wowHostPlaceholder')}
+                  placeholderTextColor={MUTED_TEXT}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textAlign="right"
+                  editable={hasLanWakeCached}
+                />
+              </View>
+
+              <View style={styles.listSep} />
+              <View style={styles.infoRow}>
+                <View style={styles.infoRowLeft}>
+                  <Icon name="options-outline" size={16} color={MUTED_TEXT} />
+                  <Text style={styles.infoRowLabel}>{t('settings.remoteWake.wowPortLabel')}</Text>
+                </View>
+                <TextInput
+                  style={[styles.infoRowValue, { flex: 1, padding: 0 }]}
+                  value={wowPort}
+                  onChangeText={setWowPort}
+                  keyboardType="number-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textAlign="right"
+                  editable={hasLanWakeCached}
+                />
+              </View>
+
+              <View style={styles.listSep} />
+              <TouchableOpacity
+                style={{
+                  backgroundColor: BLUE,
+                  borderRadius: 10,
+                  padding: 12,
+                  alignItems: 'center',
+                  marginTop: 12,
+                  marginBottom: 12,
+                  marginHorizontal: 16,
+                  opacity: isSavingWow || !hasLanWakeCached ? 0.6 : 1,
+                }}
+                activeOpacity={0.7}
+                onPress={handleSavePublicWake}
+                disabled={isSavingWow || !hasLanWakeCached}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>
+                  {isSavingWow ? t('settings.remoteWake.wowSaving') : t('settings.remoteWake.wowSave')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : null}
+
+        {/* ============================================================= */}
         {/* Support & Help section                                         */}
         {/* ============================================================= */}
         <Text style={styles.sectionLabel}>
@@ -1913,6 +2283,7 @@ export function SettingsScreen() {
         {/* ============================================================= */}
         <View style={[styles.listCard, styles.dangerCard]}>
           <TouchableOpacity
+            testID="settings-reset-sync-status-button"
             style={[
               styles.actionRow,
               isResetSyncDisabled && styles.actionRowDisabled,
@@ -2554,6 +2925,43 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     flexShrink: 1,
     textAlign: 'right',
+  },
+  remoteWakeSetupBox: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 6,
+  },
+  remoteWakeSetupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  remoteWakeSetupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK,
+    flexShrink: 1,
+  },
+  remoteWakeSetupBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: MUTED_TEXT,
+  },
+  remoteWakeHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: MUTED_TEXT,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  remoteWakeAdvancedLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: SECTION_TEXT,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
   accountValueRow: {
     flexDirection: 'row',

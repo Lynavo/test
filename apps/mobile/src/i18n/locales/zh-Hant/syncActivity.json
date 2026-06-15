@@ -160,7 +160,7 @@
     },
     "reconnectFailed": {
       "title": "重連失敗",
-      "body": "請稍後重試"
+      "body": "重新連接只會嘗試區域網路或 VPN-LAN 路徑。若電腦正在睡眠，請確認 macOS 已開啟「喚醒以供網路存取」，或 Windows 已開啟 BIOS/UEFI 與網卡 Magic Packet 喚醒。"
     },
     "switchDevice": {
       "title": "切換設備",

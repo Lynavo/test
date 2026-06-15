@@ -167,5 +167,26 @@
       "confirmAgainBody": "这是最后一次确认。删除后资料无法救回。",
       "confirmAgainButton": "确定删除"
     }
+  },
+  "remoteWake": {
+    "title": "远程唤醒 (Remote Wake)",
+    "lanStatus": "局域网唤醒状态",
+    "lanStatusCached": "已缓存局域网唤醒目标",
+    "lanStatusNotCached": "未缓存局域网唤醒目标，请在局域网连接一次以缓存",
+    "autoReadyTitle": "已自动取得电脑唤醒信息",
+    "autoReadyBody": "外网唤醒仍需要路由器 Wake-on-WAN 或 UDP 转发。Vivi Drop 会自动套用当前公网出口与建议连接端口，如果路由器设置不同可在下方调整。",
+    "autoMissingTitle": "尚未取得电脑唤醒信息",
+    "autoMissingBody": "请让手机与电脑在同一个 Wi-Fi 下成功连接一次，Vivi Drop 会自动缓存 MAC、broadcast 与建议连接端口。",
+    "enableHint": "启用后，从外部网络打开“我的电脑”时会先尝试远程唤醒。如果路由器未设置，仍可能无法唤醒。",
+    "advancedTitle": "手动高级设置",
+    "wowEnable": "启用 Wake-on-WAN 远程唤醒",
+    "wowHostLabel": "公网主机名 / IP",
+    "wowHostPlaceholder": "例如 DDNS 域名或公网 IP",
+    "wowPortLabel": "连接端口",
+    "wowSave": "保存远程唤醒设置",
+    "wowSaving": "保存中...",
+    "wowSaveSuccess": "远程唤醒设置保存成功",
+    "invalidHost": "请输入有效的公网主机名或 IP 地址",
+    "invalidPort": "请输入有效的端口号 (1-65535)"
   }
 }

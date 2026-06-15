@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -28,9 +29,17 @@ type P2PManager struct {
 	mu            sync.Mutex
 	pairedDevices []map[string]string
 	signalingConn *safeWriteConn
+	authState     SignalingAuthState
 }
 
 const DefaultSTUNServer = "stun:stun.cloudflare.com:3478"
+
+type SignalingAuthState string
+
+const (
+	SignalingAuthOK              SignalingAuthState = "ok"
+	SignalingAuthRefreshRequired SignalingAuthState = "refresh_required"
+)
 
 const (
 	writeWait  = 10 * time.Second
@@ -59,7 +68,33 @@ func NewP2PManagerWithICEServers(desktopID, serverURL, localAddress, authToken s
 		iceServers:   cloneICEServers(iceServers),
 		signalingCtx: ctx,
 		cancel:       cancel,
+		authState:    SignalingAuthOK,
 	}
+}
+
+func (m *P2PManager) SignalingAuthState() SignalingAuthState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.authState
+}
+
+func (m *P2PManager) setSignalingAuthState(state SignalingAuthState) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.authState = state
+}
+
+func isInvalidSignalingTokenResponse(resp *http.Response) bool {
+	if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		return false
+	}
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return false
+	}
+	resp.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+	body := strings.ToLower(string(bodyBytes))
+	return strings.Contains(body, "invalid signaling token")
 }
 
 func ParseICEServersJSON(raw string) []webrtc.ICEServer {
@@ -522,9 +557,13 @@ func (m *P2PManager) connectSignaling() {
 
 		slog.Info("connectSignaling calling dialer.Dial")
 		conn, resp, err := dialer.Dial(url, nil)
+		invalidSignalingToken := isInvalidSignalingTokenResponse(resp)
 		dialErr := wsdial.DescribeDialFailure(err, resp)
 		slog.Info("connectSignaling dialer.Dial completed", "err", dialErr)
 		if err != nil {
+			if invalidSignalingToken {
+				m.setSignalingAuthState(SignalingAuthRefreshRequired)
+			}
 			slog.Warn("signaling dial failed, retrying", "backoff", backoff, "err", dialErr)
 			select {
 			case <-time.After(backoff):
@@ -534,6 +573,7 @@ func (m *P2PManager) connectSignaling() {
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
+		m.setSignalingAuthState(SignalingAuthOK)
 		backoff = time.Second // reset on successful connect
 
 		sConn := &safeWriteConn{conn: conn}

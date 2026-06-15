@@ -130,6 +130,15 @@ func testWakeCapability() *protocol.WakeCapability {
 	}
 }
 
+type fixedProxyWakeTargetProvider struct {
+	targets map[string][]protocol.WakeTarget
+}
+
+func (f fixedProxyWakeTargetProvider) ProxyWakeTargets(accountID string) []protocol.WakeTarget {
+	targets := f.targets[accountID]
+	return append([]protocol.WakeTarget(nil), targets...)
+}
+
 func fakeAccountJWT(t *testing.T, accountID string) string {
 	t.Helper()
 
@@ -234,6 +243,66 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestHealthEndpointExposesTunnelCredentialRefreshRequired(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	signalingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tunnel/signaling" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, `{"error":"invalid signaling token"}`, http.StatusUnauthorized)
+	}))
+	defer signalingSrv.Close()
+
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	t.Cleanup(func() {
+		_, _ = http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(`{"signalingUrl":"","accessToken":"","iceServers":[]}`))
+	})
+
+	reqBody := `{"signalingUrl":"` + signalingSrv.URL + `","accessToken":"expired-token","iceServers":[]}`
+	resp, err := http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	deadline := time.After(2 * time.Second)
+	for {
+		resp, err := http.Get(srv.URL + "/health")
+		if err != nil {
+			t.Fatalf("GET /health: %v", err)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			resp.Body.Close()
+			t.Fatalf("decode health: %v", err)
+		}
+		resp.Body.Close()
+
+		tunnel, ok := body["tunnel"].(map[string]any)
+		if ok && tunnel["signalingAuthState"] == "refresh_required" {
+			if tunnel["credentialRefreshRequired"] != true {
+				t.Fatalf("expected credentialRefreshRequired=true, got %v", tunnel["credentialRefreshRequired"])
+			}
+			if apiSrv == nil {
+				t.Fatal("api server should remain available")
+			}
+			return
+		}
+
+		select {
+		case <-deadline:
+			t.Fatalf("expected tunnel signalingAuthState=refresh_required, got %#v", body["tunnel"])
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 func TestPresenceIncludesWakeMetadataOnlyForPairedClient(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(
@@ -295,6 +364,531 @@ func TestPresenceIncludesWakeMetadataOnlyForPairedClient(t *testing.T) {
 	}
 	if _, ok := unpairedBody["wake"]; ok {
 		t.Fatal("unpaired presence must not expose full wake metadata")
+	}
+}
+
+func TestPresenceIncludesPowerSnapshotOnlyForPairedClient(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(
+		t,
+		st,
+		"client-1",
+		"iPhone",
+		"iphone",
+		"stable-1",
+		time.Now().UTC().Format(time.RFC3339),
+	)
+	srv, handler := api.NewServer(st, cfg, hub, nil)
+	srv.UpdatePowerSnapshot(api.PowerEventSnapshot{
+		Event:        "resume",
+		State:        "awake",
+		LastResumeAt: "2026-06-11T03:50:00Z",
+		UpdatedAt:    "2026-06-11T03:50:00Z",
+	})
+	httpSrv := httptest.NewServer(handler)
+	defer httpSrv.Close()
+
+	req, err := http.NewRequest(http.MethodPost, httpSrv.URL+"/presence/client-1", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new paired request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST paired presence: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var pairedBody map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&pairedBody); err != nil {
+		t.Fatalf("decode paired presence: %v", err)
+	}
+	power, ok := pairedBody["power"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected paired presence power object, got %T", pairedBody["power"])
+	}
+	if power["lastResumeAt"] != "2026-06-11T03:50:00Z" {
+		t.Fatalf("lastResumeAt = %v, want 2026-06-11T03:50:00Z", power["lastResumeAt"])
+	}
+
+	req, err = http.NewRequest(http.MethodPost, httpSrv.URL+"/presence/unpaired", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new unpaired request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST unpaired presence: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var unpairedBody map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&unpairedBody); err != nil {
+		t.Fatalf("decode unpaired presence: %v", err)
+	}
+	if _, ok := unpairedBody["power"]; ok {
+		t.Fatal("unpaired presence must not expose power metadata")
+	}
+}
+
+func TestProxyWakeRequiresAccountAuthorization(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/wake/proxy", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+}
+
+func TestProxyWakeRejectsUnpairedClient(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"unknown-mobile","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+}
+
+func TestProxyWakeRejectsUnsafeTarget(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"8.8.8.8","ports":[53]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+}
+
+func TestProxyWakeSendsMagicPacketForPairedClient(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"192.168.1.255","ports":[9,7]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, want 200 body=%s", resp.StatusCode, string(body))
+	}
+	if got := len(sender.packets); got != 2 {
+		t.Fatalf("sent packets=%d, want 2", got)
+	}
+	if sender.packets[0].addr != "192.168.1.255:9" {
+		t.Fatalf("first addr=%q, want 192.168.1.255:9", sender.packets[0].addr)
+	}
+	if len(sender.packets[0].packet) != 102 {
+		t.Fatalf("packet length=%d, want 102", len(sender.packets[0].packet))
+	}
+}
+
+func TestProxyWakeRejectsUnknownPrivateBroadcastTarget(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"192.168.99.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+	if got := len(sender.packets); got != 0 {
+		t.Fatalf("sent packets=%d, want 0", got)
+	}
+}
+
+func TestProxyWakeRejectsInvalidMACAddress(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"not-a-mac","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+	if got := len(sender.packets); got != 0 {
+		t.Fatalf("sent packets=%d, want 0", got)
+	}
+}
+
+func TestProxyWakeRejectsDifferentSleepingTargetMAC(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"00:11:22:33:44:55","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+	if got := len(sender.packets); got != 0 {
+		t.Fatalf("sent packets=%d, want 0", got)
+	}
+}
+
+func TestProxyWakeAllowsRegisteredSameAccountSleepingTargetMAC(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	apiSrv.SetProxyWakeTargetProvider(fixedProxyWakeTargetProvider{
+		targets: map[string][]protocol.WakeTarget{
+			"acct-1": {
+				{
+					InterfaceName:    "en1",
+					MACAddress:       "00:11:22:33:44:55",
+					IPv4Address:      "192.168.1.30",
+					BroadcastAddress: "192.168.1.255",
+					Ports:            []int{9},
+				},
+			},
+		},
+	})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"00:11:22:33:44:55","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, want 200 body=%s", resp.StatusCode, string(body))
+	}
+	if got := len(sender.packets); got != 1 {
+		t.Fatalf("sent packets=%d, want 1", got)
+	}
+	if sender.packets[0].addr != "192.168.1.255:9" {
+		t.Fatalf("addr=%q, want 192.168.1.255:9", sender.packets[0].addr)
+	}
+}
+
+func TestProxyWakeRejectsRegisteredDifferentAccountSleepingTargetMAC(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: &protocol.WakeCapability{
+		Supported: true,
+		UpdatedAt: "2026-06-09T03:00:00Z",
+		Targets:   []protocol.WakeTarget{},
+	}})
+	apiSrv.SetProxyWakeTargetProvider(fixedProxyWakeTargetProvider{
+		targets: map[string][]protocol.WakeTarget{
+			"acct-2": {
+				{
+					InterfaceName:    "en1",
+					MACAddress:       "00:11:22:33:44:55",
+					IPv4Address:      "192.168.1.30",
+					BroadcastAddress: "192.168.1.255",
+					Ports:            []int{9},
+				},
+			},
+		},
+	})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"00:11:22:33:44:55","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, want 400 body=%s", resp.StatusCode, string(body))
+	}
+	if got := len(sender.packets); got != 0 {
+		t.Fatalf("sent packets=%d, want 0", got)
+	}
+}
+
+func TestProxyWakeRejectsLimitedBroadcastWhenNotInWakeTargets(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	sender := &recordingWakePacketSender{}
+	apiSrv.SetWakePacketSender(sender)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "acct-1")
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"255.255.255.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+	if got := len(sender.packets); got != 0 {
+		t.Fatalf("sent packets=%d, want 0", got)
+	}
+}
+
+type recordedWakePacket struct {
+	addr   string
+	packet []byte
+}
+
+type recordingWakePacketSender struct {
+	packets []recordedWakePacket
+}
+
+func (r *recordingWakePacketSender) SendWakePacket(addr string, packet []byte) error {
+	cloned := append([]byte(nil), packet...)
+	r.packets = append(r.packets, recordedWakePacket{addr: addr, packet: cloned})
+	return nil
+}
+
+func syncAccountContextForTest(t *testing.T, serverURL string, authBaseURL string, accountID string) {
+	t.Helper()
+	reqBody := `{"authBaseUrl":"` + authBaseURL + `","accessToken":"token","accountId":"` + accountID + `"}`
+	resp, err := http.Post(serverURL+"/account/context", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /account/context: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("account context status=%d body=%s", resp.StatusCode, string(body))
+	}
+}
+
+func TestPowerStateUpdateIsLocalOnly(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	httpSrv := httptest.NewServer(handler)
+	defer httpSrv.Close()
+
+	localReq, err := http.NewRequest(
+		http.MethodPost,
+		httpSrv.URL+"/power/state",
+		strings.NewReader(`{"event":"resume","state":"awake","lastResumeAt":"2026-06-11T03:50:00Z","updatedAt":"2026-06-11T03:50:00Z"}`),
+	)
+	if err != nil {
+		t.Fatalf("new local power request: %v", err)
+	}
+	localReq.Header.Set("Content-Type", "application/json")
+	localResp, err := http.DefaultClient.Do(localReq)
+	if err != nil {
+		t.Fatalf("POST local power update: %v", err)
+	}
+	defer localResp.Body.Close()
+
+	if localResp.StatusCode != http.StatusOK {
+		t.Fatalf("local power update status = %d, want %d", localResp.StatusCode, http.StatusOK)
+	}
+
+	remoteReq := httptest.NewRequest(
+		http.MethodPost,
+		"/power/state",
+		strings.NewReader(`{"event":"resume","state":"awake","updatedAt":"2026-06-11T03:51:00Z"}`),
+	)
+	remoteReq.RemoteAddr = "192.168.1.20:61234"
+	remoteReq.Header.Set("Content-Type", "application/json")
+	remoteResp := httptest.NewRecorder()
+
+	handler.ServeHTTP(remoteResp, remoteReq)
+
+	if remoteResp.Code != http.StatusForbidden {
+		t.Fatalf("remote power update status = %d, want %d", remoteResp.Code, http.StatusForbidden)
+	}
+}
+
+func TestAccountContextSyncIsLocalOnly(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+
+	remoteReq := httptest.NewRequest(
+		http.MethodPost,
+		"/account/context",
+		strings.NewReader(`{"authBaseUrl":"https://auth.example.test","accessToken":"token","accountId":"acct-1"}`),
+	)
+	remoteReq.RemoteAddr = "192.168.1.50:61234"
+	remoteReq.Header.Set("Content-Type", "application/json")
+	remoteResp := httptest.NewRecorder()
+
+	handler.ServeHTTP(remoteResp, remoteReq)
+
+	if remoteResp.Code != http.StatusForbidden {
+		t.Fatalf("remote account context sync status = %d, want %d", remoteResp.Code, http.StatusForbidden)
+	}
+}
+
+func TestTunnelCredentialsSyncIsLocalOnly(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+
+	remoteReq := httptest.NewRequest(
+		http.MethodPost,
+		"/tunnel/credentials",
+		strings.NewReader(`{"signalingUrl":"https://signal.example.test","accessToken":"token","accountId":"acct-1","iceServers":[]}`),
+	)
+	remoteReq.RemoteAddr = "192.168.1.50:61234"
+	remoteReq.Header.Set("Content-Type", "application/json")
+	remoteResp := httptest.NewRecorder()
+
+	handler.ServeHTTP(remoteResp, remoteReq)
+
+	if remoteResp.Code != http.StatusForbidden {
+		t.Fatalf("remote tunnel credentials sync status = %d, want %d", remoteResp.Code, http.StatusForbidden)
 	}
 }
 

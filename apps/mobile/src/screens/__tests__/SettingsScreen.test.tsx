@@ -100,6 +100,10 @@ jest.mock('../../services/gift-card-service', () => ({
   }),
 }));
 
+jest.mock('../../services/public-wake-service', () => ({
+  getSuggestedPublicWakeHost: jest.fn(),
+}));
+
 jest.mock('../../utils/shareDiagnosticsArchive', () => ({
   isDiagnosticsExportUnavailable: jest.fn().mockReturnValue(false),
   shareDiagnosticsArchive: jest.fn().mockResolvedValue('mock.zip'),
@@ -188,6 +192,7 @@ import {
   getGiftCardConfig,
   redeemGiftCard,
 } from '../../services/gift-card-service';
+import { getSuggestedPublicWakeHost } from '../../services/public-wake-service';
 import { iapService } from '../../services/iap-service';
 import { LANGUAGE_PREFERENCE_STORAGE_KEY } from '../../i18n/language-preference';
 
@@ -211,6 +216,7 @@ const mockNativeSyncEngine = {
   setClientDisplayName: jest.fn().mockResolvedValue(undefined),
   disconnectAndUnbind: jest.fn().mockResolvedValue(undefined),
   resetAllStatus: jest.fn().mockResolvedValue(undefined),
+  savePublicWakeTarget: jest.fn().mockResolvedValue(undefined),
   getKnownDeviceIds: jest.fn().mockResolvedValue([]),
   getAndroidBackgroundKeepaliveStatus: jest.fn().mockResolvedValue({
     backgroundKeepaliveStrategy:
@@ -237,6 +243,7 @@ describe('SettingsScreen', () => {
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (AsyncStorage.setItem as jest.Mock).mockResolvedValue(undefined);
     (AsyncStorage.removeItem as jest.Mock).mockResolvedValue(undefined);
+    (getSuggestedPublicWakeHost as jest.Mock).mockResolvedValue(null);
     (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: false });
     (redeemGiftCard as jest.Mock).mockResolvedValue({
       plan: 'monthly',
@@ -578,6 +585,151 @@ describe('SettingsScreen', () => {
     expect(queryByPlaceholderText('輸入禮品卡代碼')).toBeNull();
   });
 
+  test('shows automatic remote wake setup guidance when LAN wake metadata is cached', async () => {
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'desktop-1',
+      deviceName: 'Mac Studio',
+      host: '192.168.1.20',
+      connectionState: 'connected',
+      wake: {
+        supported: true,
+        updatedAt: '2026-06-12T02:00:00Z',
+        targets: [
+          {
+            macAddress: 'aa:bb:cc:dd:ee:ff',
+            broadcastAddress: '192.168.1.255',
+            ports: [9, 7],
+          },
+        ],
+        publicTarget: null,
+      },
+    });
+
+    const { getByText, getByDisplayValue } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByText('已自動取得電腦喚醒資訊')).toBeTruthy();
+    });
+    expect(
+      getByText('外網喚醒仍需要路由器 Wake-on-WAN 或 UDP 轉發。Vivi Drop 會自動套用目前公網出口與建議連接埠，若路由器設定不同可在下方調整。'),
+    ).toBeTruthy();
+    expect(getByDisplayValue('9')).toBeTruthy();
+    expect(getByText('手動進階設定')).toBeTruthy();
+  });
+
+  test('prefills and saves an enabled Wake-on-WAN target from the backend caller IP', async () => {
+    (getSuggestedPublicWakeHost as jest.Mock).mockResolvedValueOnce(
+      '8.8.8.8',
+    );
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'desktop-1',
+      deviceName: 'Mac Studio',
+      host: '192.168.1.20',
+      connectionState: 'connected',
+      wake: {
+        supported: true,
+        updatedAt: '2026-06-12T02:00:00Z',
+        targets: [
+          {
+            macAddress: 'aa:bb:cc:dd:ee:ff',
+            broadcastAddress: '192.168.1.255',
+            ports: [9],
+          },
+        ],
+        publicTarget: null,
+      },
+    });
+
+    const { getByDisplayValue } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByDisplayValue('8.8.8.8')).toBeTruthy();
+    });
+    expect(getByDisplayValue('9')).toBeTruthy();
+    await waitFor(() => {
+      expect(mockNativeSyncEngine.savePublicWakeTarget).toHaveBeenCalledWith({
+        host: '8.8.8.8',
+        port: 9,
+        enabled: true,
+      });
+    });
+  });
+
+  test('does not overwrite an existing Wake-on-WAN target with caller IP', async () => {
+    (getSuggestedPublicWakeHost as jest.Mock).mockResolvedValueOnce(
+      '8.8.8.8',
+    );
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'desktop-1',
+      deviceName: 'Mac Studio',
+      host: '192.168.1.20',
+      connectionState: 'connected',
+      wake: {
+        supported: true,
+        updatedAt: '2026-06-12T02:00:00Z',
+        targets: [
+          {
+            macAddress: 'aa:bb:cc:dd:ee:ff',
+            broadcastAddress: '192.168.1.255',
+            ports: [9],
+          },
+        ],
+        publicTarget: {
+          kind: 'router_wan_udp',
+          host: 'home.example.net',
+          port: 40009,
+          enabled: true,
+          updatedAt: '2026-06-12T03:00:00Z',
+        },
+      },
+    });
+
+    const { getByDisplayValue, queryByDisplayValue } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(getByDisplayValue('home.example.net')).toBeTruthy();
+    });
+    expect(getByDisplayValue('40009')).toBeTruthy();
+    expect(queryByDisplayValue('8.8.8.8')).toBeNull();
+  });
+
+  test('does not prefill Wake-on-WAN target when shared files are connected through relay', async () => {
+    (getSuggestedPublicWakeHost as jest.Mock).mockResolvedValueOnce(
+      '8.8.8.8',
+    );
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'desktop-1',
+      deviceName: 'Mac Studio',
+      host: '192.168.1.20',
+      connectionState: 'connected',
+      sharedFilesReachability: {
+        state: 'available',
+        route: 'relay',
+      },
+      wake: {
+        supported: true,
+        updatedAt: '2026-06-12T02:00:00Z',
+        targets: [
+          {
+            macAddress: 'aa:bb:cc:dd:ee:ff',
+            broadcastAddress: '192.168.1.255',
+            ports: [9],
+          },
+        ],
+        publicTarget: null,
+      },
+    });
+
+    const { queryByDisplayValue } = render(<SettingsScreen />);
+
+    await waitFor(() => {
+      expect(mockNativeSyncEngine.getBindingState).toHaveBeenCalled();
+    });
+    expect(getSuggestedPublicWakeHost).not.toHaveBeenCalled();
+    expect(mockNativeSyncEngine.savePublicWakeTarget).not.toHaveBeenCalled();
+    expect(queryByDisplayValue('8.8.8.8')).toBeNull();
+  });
+
   test('localizes gift card already-redeemed errors from Settings', async () => {
     (getGiftCardConfig as jest.Mock).mockResolvedValue({ enabled: true });
     (redeemGiftCard as jest.Mock).mockRejectedValueOnce(
@@ -617,10 +769,13 @@ describe('SettingsScreen', () => {
     });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
-    const { getByText } = render(<SettingsScreen />);
+    const { getByText, getByTestId } = render(<SettingsScreen />);
 
     await waitFor(() => {
-      expect(getByText('重置同步狀態')).toBeTruthy();
+      expect(
+        getByTestId('settings-reset-sync-status-button').props
+          .accessibilityState,
+      ).toEqual({ disabled: true });
     });
 
     fireEvent.press(getByText('重置同步狀態'));

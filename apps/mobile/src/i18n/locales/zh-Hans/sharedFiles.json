@@ -39,6 +39,10 @@
     "title": "个人共享目录无法访问",
     "message": "请确认手机与电脑端已登录相同账号，并在电脑端完成个人共享目录设置"
   },
+  "remoteWakeSetupRequired": {
+    "title": "需要设置远端唤醒",
+    "message": "目前不在电脑所在网络。若电脑已睡眠，请先到设置启用远端唤醒，或切回同一个 Wi-Fi。"
+  },
   "networkError": {
     "title": "加载失败",
     "message": "请稍后重试"
@@ -53,6 +57,7 @@
     "downloadComplete": "下载完成",
     "downloadFailed": "下载失败",
     "downloadFailedMessage": "无法下载文件，请稍后重试",
+    "downloadUnavailableMessage": "文件不存在或已无法访问",
     "previewFailed": "预览失败",
     "previewFailedMessage": "无法获取文件预览",
     "savedLocationPhotos": "相册",

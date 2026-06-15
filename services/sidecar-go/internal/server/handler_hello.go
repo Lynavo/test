@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -164,6 +165,11 @@ func (c *connection) handleHello(body []byte) error {
 			c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
 		}
 
+		attrs := append(
+			[]any{"clientID", req.ClientID, "paired", true, "authRequired", false},
+			wakeCapabilityLogAttrs(caps.Wake)...,
+		)
+		slog.Info("HELLO_RES wake metadata", attrs...)
 		slog.Info("sending HELLO_RES (returning device, authRequired=false)", "clientID", req.ClientID)
 		res := protocol.HelloRes{
 			ServerID:                serverID,
@@ -187,6 +193,11 @@ func (c *connection) handleHello(body []byte) error {
 	}
 
 	// Not paired — ask client to pair
+	attrs := append(
+		[]any{"clientID", req.ClientID, "paired", false, "authRequired", true},
+		wakeCapabilityLogAttrs(caps.Wake)...,
+	)
+	slog.Info("HELLO_RES wake metadata", attrs...)
 	slog.Info("sending HELLO_RES (new device, authRequired=true)", "clientID", req.ClientID)
 	res := protocol.HelloRes{
 		ServerID:                serverID,
@@ -205,6 +216,63 @@ func (c *connection) handleHello(body []byte) error {
 	slog.Info("HELLO_RES sent, waiting for PAIR_REQ", "clientID", req.ClientID)
 	c.state = stateWaitPair
 	return nil
+}
+
+func wakeCapabilityLogAttrs(capability *protocol.WakeCapability) []any {
+	if capability == nil {
+		return []any{
+			"wakePresent", false,
+			"wakeSupported", false,
+			"wakeTargetCount", 0,
+			"wakeUsableTargetCount", 0,
+			"wakeUpdatedAt", "",
+		}
+	}
+	usableTargetCount := 0
+	for _, target := range capability.Targets {
+		if target.MACAddress != "" && target.BroadcastAddress != "" && len(target.Ports) > 0 {
+			usableTargetCount++
+		}
+	}
+	return []any{
+		"wakePresent", true,
+		"wakeSupported", capability.Supported,
+		"wakeTargetCount", len(capability.Targets),
+		"wakeUsableTargetCount", usableTargetCount,
+		"wakeUpdatedAt", capability.UpdatedAt,
+		"wakeTargets", wakeTargetLogSummary(capability.Targets),
+	}
+}
+
+func wakeTargetLogSummary(targets []protocol.WakeTarget) string {
+	parts := make([]string, 0, len(targets))
+	for _, target := range targets {
+		parts = append(parts, "interface="+target.InterfaceName+
+			" mac="+maskedWakeMACAddress(target.MACAddress)+
+			" ipv4="+target.IPv4Address+
+			" broadcast="+target.BroadcastAddress+
+			" ports="+intListLogSummary(target.Ports))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func maskedWakeMACAddress(macAddress string) string {
+	parts := strings.Split(strings.ToLower(strings.ReplaceAll(strings.TrimSpace(macAddress), "-", ":")), ":")
+	if len(parts) != 6 {
+		return "<invalid>"
+	}
+	return "**:**:**:**:" + parts[4] + ":" + parts[5]
+}
+
+func intListLogSummary(values []int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strconv.Itoa(value))
+	}
+	return strings.Join(parts, ",")
 }
 
 func desktopAppVersion() string {

@@ -38,6 +38,7 @@ export class SidecarManager extends EventEmitter {
   private healthInterval: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private credentialsSyncInterval: ReturnType<typeof setInterval> | null = null;
+  private credentialsRefreshInFlight: Promise<void> | null = null;
   private stopping = false;
   private healthFailureRecoveryScheduled = false;
   private state: SidecarRuntimeState = INITIAL_SIDECAR_RUNTIME_STATE;
@@ -417,11 +418,41 @@ export class SidecarManager extends EventEmitter {
 
   async healthCheck(): Promise<boolean> {
     const res = await this.getHealthSnapshot();
+    if (res?.tunnel?.credentialRefreshRequired) {
+      void this.refreshCredentialsForInvalidSignalingToken();
+    }
     return (
       res?.ok === true &&
       res.service === 'syncflow-sidecar' &&
       res.appCompatibilityVersion === APP_COMPATIBILITY_VERSION
     );
+  }
+
+  private async refreshCredentialsForInvalidSignalingToken(): Promise<void> {
+    if (this.credentialsRefreshInFlight) {
+      return this.credentialsRefreshInFlight;
+    }
+
+    this.credentialsRefreshInFlight = (async () => {
+      const session = sidecarClient.getAuthSession();
+      if (!session?.accessToken) {
+        log.warn(
+          '[SidecarManager] Sidecar reported invalid signaling token, but no active session is available for credentials refresh',
+        );
+        return;
+      }
+
+      log.warn(
+        '[SidecarManager] Sidecar reported invalid signaling token; refreshing tunnel credentials now',
+      );
+      await this.syncCredentialsOnce('invalid signaling token');
+    })();
+
+    try {
+      await this.credentialsRefreshInFlight;
+    } finally {
+      this.credentialsRefreshInFlight = null;
+    }
   }
 
   private async getHealthSnapshot(): Promise<SidecarHealth | null> {

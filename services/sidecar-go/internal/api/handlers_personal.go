@@ -28,29 +28,34 @@ func (s *Server) getDesktopAuthContext() (string, string) {
 }
 
 func (s *Server) authorizePersonalRequest(w http.ResponseWriter, r *http.Request) bool {
+	_, ok := s.authorizePersonalRequestAccountID(w, r)
+	return ok
+}
+
+func (s *Server) authorizePersonalRequestAccountID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	desktopAccountID, authBaseURL := s.getDesktopAuthContext()
 	if desktopAccountID == "" || authBaseURL == "" {
 		writeError(w, http.StatusUnauthorized, "desktop account identity is unavailable")
-		return false
+		return "", false
 	}
 
 	accessToken, err := requestAccessToken(r)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "account bearer token is required")
-		return false
+		return "", false
 	}
 
 	mobileAccountID, err := s.verifyAccessTokenAccountID(r.Context(), authBaseURL, accessToken)
 	if err != nil || mobileAccountID == "" {
 		writeError(w, http.StatusUnauthorized, "account bearer token is invalid")
-		return false
+		return "", false
 	}
 	if mobileAccountID != desktopAccountID {
 		writeError(w, http.StatusForbidden, "account mismatch")
-		return false
+		return "", false
 	}
 
-	return true
+	return desktopAccountID, true
 }
 
 func requestAccessToken(r *http.Request) (string, error) {

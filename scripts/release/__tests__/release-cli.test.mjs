@@ -29,7 +29,7 @@ test('prints the cn-review release plan without running build commands in dry-ru
     result.stdout,
     /bash apps\/mobile\/ios\/scripts\/testflight-release\.sh archive-upload cn/,
   );
-  assert.match(result.stdout, /bash -lc cd apps\/mobile\/android && \.\/gradlew assembleCnRelease/);
+  assert.match(result.stdout, /bash -lc cd apps\/mobile\/android && \.\/gradlew assembleCnRelease bundleCnRelease/);
   assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:win:cn/);
 });
 
@@ -51,7 +51,7 @@ test('prints the global-review release plan without running build commands in dr
   );
   assert.match(
     result.stdout,
-    /bash -lc cd apps\/mobile\/android && \.\/gradlew assembleGlobalRelease/,
+    /bash -lc cd apps\/mobile\/android && \.\/gradlew assembleGlobalRelease bundleGlobalRelease/,
   );
   assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:win:global/);
 });

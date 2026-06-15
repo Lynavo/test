@@ -39,6 +39,10 @@
     "title": "個人共享目錄無法存取",
     "message": "請確認手機與電腦端已登入相同帳號，並在電腦端完成個人共享目錄設定"
   },
+  "remoteWakeSetupRequired": {
+    "title": "需要設定遠端喚醒",
+    "message": "目前不在電腦所在網路。若電腦已睡眠，請先到設定啟用遠端喚醒，或切回同一個 Wi-Fi。"
+  },
   "networkError": {
     "title": "載入失敗",
     "message": "請稍後重試"
@@ -53,6 +57,7 @@
     "downloadComplete": "下載完成",
     "downloadFailed": "下載失敗",
     "downloadFailedMessage": "無法下載檔案，請稍後重試",
+    "downloadUnavailableMessage": "檔案不存在或已無法存取",
     "previewFailed": "預覽失敗",
     "previewFailedMessage": "無法取得檔案預覽",
     "savedLocationPhotos": "相簿",

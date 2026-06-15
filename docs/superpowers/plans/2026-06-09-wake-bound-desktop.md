@@ -4,7 +4,7 @@
 
 **Goal:** Allow mobile to attempt same-LAN Wake-on-LAN when the user opens the bound desktop's "My Computer" shared files directory or manually taps "Sync Status" -> "Reconnect" as a LAN retry while the desktop LAN sidecar is unreachable after sleep.
 
-**Architecture:** The desktop sidecar publishes wake metadata only while it is awake. Mobile persists that metadata with the bound desktop record, then sends Wake-on-LAN magic packets from iOS/Android before falling back to the current P2P/direct-route behavior. Wake attempts are scoped to explicit user actions: shared-files browsing may later use router-first public wake, while manual reconnect remains a LAN/VPN-LAN retry only. Upload queue semantics, passive presence recovery, sync state machine, and pairing identity remain unchanged.
+**Architecture:** The desktop sidecar publishes wake metadata only while it is awake. Mobile persists that metadata with the bound desktop record, then sends Wake-on-LAN magic packets from iOS/Android before falling back to the current P2P/direct-route behavior. Public wake is ordered by explicit network capability: router Wake-on-WAN or router helper first, same-LAN WoL when the phone is in the LAN, configured public wake target when the router forwards UDP, peer proxy only when another authenticated Vivi Drop desktop is already awake on the LAN/VPN, and VPN only as fallback guidance. Wake attempts are scoped to explicit user actions: shared-files browsing may later use router-first public wake, while manual reconnect remains a LAN/VPN-LAN retry only. Upload queue semantics, passive presence recovery, sync state machine, and pairing identity remain unchanged.
 
 **Tech Stack:** Go sidecar HTTP/TCP protocol, TypeScript contracts, React Native renderer, iOS Swift native SyncEngine, Android Kotlin native SyncEngine, Vitest, Go test, Android unit tests, standalone Swift policy tests.
 
@@ -14,9 +14,11 @@
 
 This plan implements Phase 1 from `docs/superpowers/specs/2026-06-09-public-wake-design.md`: same-LAN wake for explicit user actions. It must not be described as guaranteed public-internet wake, and the Sync Status reconnect button must not be described as an external-network wake control.
 
-Public wake from outside the LAN is possible only when the user has a network path that can deliver a magic packet into the desktop LAN. The preferred public path is router Wake-on-WAN, router directed broadcast forwarding, or a router-provided wake helper. VPN is fallback only when router wake cannot be configured; it must not become the primary public wake solution or default setup path. If the user has only one sleeping computer and no router wake/helper, VPN fallback, or relay support, there is no reliable way for SyncFlow or a cloud service to wake that computer from the public internet.
+Public wake from outside the LAN is possible only when the user has a network path that can deliver a magic packet into the desktop LAN. The preferred public path is router Wake-on-WAN, router directed broadcast forwarding, or a router-provided wake helper. A configured public wake target is the direct UDP form of the router Wake-on-WAN path. Peer Proxy / WOL Relay is lower priority and works only when another authenticated Vivi Drop desktop is already awake on the same LAN/VPN and can send the packet locally. A router-connected device that does not run Vivi Drop Desktop is not a peer proxy; it can participate only through an explicitly configured third-party helper/webhook/router API integration. VPN is fallback only when router wake cannot be configured; it must not become the primary public wake solution or default setup path. If the user has only one sleeping computer and no router wake/helper, configured public wake target, authenticated awake peer, explicitly configured third-party helper, or VPN fallback, there is no reliable way for SyncFlow or a cloud service to wake that computer from the public internet.
 
 Follow-up implementation should add explicit `wake_setup_required` and `wake_unavailable` states before adding any public wake settings. Public wake settings should prioritize router host/port or router helper configuration, with VPN presented only as fallback guidance. Product copy, onboarding, and diagnostics must not make VPN look like the main public wake setup. This avoids showing an endless `waking` state when the phone is outside the LAN and no wake path exists.
+
+The product must also add platform-specific Wake-on-LAN setup guidance for macOS and Windows. The app can guide, detect some local signals, and explain failure causes, but it must not claim that Vivi Drop can automatically enable BIOS/UEFI, NIC power-management, router, or OS sleep settings for the user.
 
 Opening the mobile app, returning to foreground, or rendering an offline state is not a wake trigger. Opening `我的電腦` can start the shared-files wake sequence. Manually tapping `同步狀態` -> `重新連接` can start only a LAN/VPN-LAN retry sequence.
 
@@ -29,8 +31,21 @@ The product behavior should be evaluated using this matrix:
 | Mobile and desktop are on the same LAN | Send Wake-on-LAN packets to cached LAN broadcast targets, then poll sidecar `/health`. | Yes |
 | Mobile is outside and router Wake-on-WAN is manually configured | Future public wake target sends packet to configured public host/port. | No, follow-up primary public path |
 | Mobile is outside and a router/NAS helper can send WoL | Future authenticated helper integration can request wake. | No, follow-up |
+| Mobile is outside and another Vivi Drop desktop is already awake on the target LAN/VPN | Future peer proxy can ask the awake desktop to send the target's WoL packet locally after strict account and paired-client verification. | Optional follow-up only |
+| Mobile is outside and another router-connected device is awake but does not run Vivi Drop Desktop | Do not auto-use it as a relay. It must expose an explicitly configured, authenticated helper/webhook/router API before Vivi Drop can call it. | Future third-party helper only |
 | Mobile is outside but connected to a VPN that places it inside the LAN | Treat as same-LAN if LAN health and wake traffic work. VPN is fallback only, not the main public wake setup. | Fallback only, partially through same-LAN logic |
-| Mobile is outside, only one sleeping computer exists, and there is no router wake/helper, VPN fallback, or relay support | Show setup-required or unavailable; do not attempt fake cloud wake. | No explicit state in this plan; follow-up required |
+| Mobile is outside, only one sleeping computer exists, and there is no router wake/helper, configured public wake target, authenticated awake peer, explicitly configured third-party helper, VPN fallback, or relay support | Show setup-required or unavailable; do not attempt fake cloud wake. | No explicit state in this plan; follow-up required |
+
+## Wake Path Priority
+
+Use this priority whenever public or assisted wake behavior is added. It is product policy, not just an implementation detail:
+
+1. **Router Wake-on-WAN / router helper**: preferred public wake path. This includes router-provided WoL APIs, router management helpers, or directed broadcast forwarding configured by the user.
+2. **Direct same-LAN Wake-on-LAN**: used when mobile is on the same LAN as the bound desktop, or on a VPN path that truly behaves like that LAN.
+3. **Configured public wake target**: direct UDP packet to a user-configured public host/port, normally backed by router port forwarding or directed broadcast. This is a router Wake-on-WAN transport, not a cloud wake feature.
+4. **Peer Proxy / WOL Relay**: optional assisted wake only when another authenticated Vivi Drop desktop is already awake and reachable on the same LAN/VPN. It must never be presented as a solution for the single-computer case.
+5. **VPN fallback**: guidance only. Installing Vivi Drop must not require installing VPN software, and VPN must not be the default public wake setup.
+6. **Third-party webhook / router API extensions**: future advanced integrations for NAS, OpenWrt, Home Assistant, router-specific APIs, or other always-on LAN devices that do not run Vivi Drop Desktop. These devices must be explicitly configured and authenticated; do not auto-discover arbitrary LAN devices as wake relays, and do not block the core Wake-on-WAN plan on these integrations.
 
 ## Product And Platform Constraints
 
@@ -41,6 +56,40 @@ The product behavior should be evaluated using this matrix:
 - Public-internet wake is setup-gated and must not be promised by default. A cloud relay alone cannot wake a deeply sleeping computer behind NAT without an always-online LAN participant or router support.
 - The mobile app must never depend on sidecar or mDNS responses after the desktop is asleep. It must cache wake metadata before the desktop sleeps.
 - Do not publish MAC addresses in mDNS TXT records. Publish wake targets only through protocol and paired/presence responses.
+- Setup guidance must separate prevention from wake: `同步時防止電腦睡眠` reduces interruptions while transfer is active, but it is not Wake-on-LAN setup and must not be presented as equivalent.
+
+## Platform Setup Guidance Requirements
+
+Wake setup must be visible before users rely on the feature and again when wake attempts fail.
+
+Desktop guidance should be added to the existing help/settings surfaces:
+
+- Add a "Remote Wake / Wake-on-LAN" section near system permissions or power settings.
+- Explain that Vivi Drop can send wake packets only when the computer, network adapter, router, and sleep mode allow it.
+- Make the guidance platform-specific instead of using a single generic checklist.
+- Avoid requiring VPN as the main setup path. VPN can be mentioned only as fallback when it makes the phone behave as if it is on the LAN and wake packets can pass.
+
+macOS guidance must include:
+
+- Open System Settings -> Battery or Energy Saver.
+- Enable `Wake for network access` when available.
+- Prefer Ethernet for reliable sleep wake. Wi-Fi wake varies by Mac model, power state, and router.
+- Keep Vivi Drop allowed through firewall and Local Network permissions, because wake recovery still needs `/health` and LAN reconnect after the machine wakes.
+- Clarify that the app cannot force-enable this system setting from the renderer or mobile app.
+
+Windows guidance must include:
+
+- Enable Wake-on-LAN in BIOS/UEFI if the machine exposes it.
+- Device Manager -> Network adapters -> selected adapter -> Power Management: enable `Allow this device to wake the computer` and usually `Only allow a magic packet to wake the computer`.
+- Adapter Advanced tab: enable options such as `Wake on Magic Packet`, `Wake on pattern match`, or vendor-equivalent names when present.
+- Prefer Ethernet. Wi-Fi WoL, Modern Standby, hibernate, fast startup, and shutdown behavior vary heavily by device and driver.
+- Clarify that Vivi Drop cannot modify BIOS/UEFI or all NIC driver settings automatically.
+
+Mobile failure guidance should be contextual:
+
+- If wake metadata is missing, tell the user to open Vivi Drop on the desktop while it is awake, reconnect once, then try again.
+- If wake polling times out, show platform setup guidance and keep existing P2P/direct fallback behavior.
+- If the phone is outside the LAN and no router wake/helper or VPN-LAN path is configured, say that `重新連接` is LAN retry only and cannot wake a NAT-hidden sleeping desktop from the public internet.
 
 ## File Map
 
@@ -67,6 +116,15 @@ The product behavior should be evaluated using this matrix:
 - `apps/mobile/src/i18n/locales/zh-Hant/sharedFiles.json`, `zh-Hans/sharedFiles.json`, `en/sharedFiles.json`: add concise wake status copy.
 - `apps/mobile/src/screens/SyncActivityScreen.tsx`: route the manual reconnect button through the native LAN retry method.
 - `apps/mobile/src/screens/SyncStatusScreen.tsx`: keep offline/reconnecting display passive; do not wake on render or foreground refresh.
+- `apps/desktop/src/renderer/features/help/HelpPage.tsx`: add or extend a platform-specific remote wake setup section if the current translation-driven permissions layout cannot render it cleanly.
+- `apps/desktop/src/renderer/features/help/__tests__/HelpPage.test.tsx`: verify macOS and Windows wake setup guidance is visible.
+- `apps/desktop/src/renderer/i18n/locales/zh-Hant/help.json`, `zh-Hans/help.json`, `en/help.json`: add macOS and Windows Wake-on-LAN setup copy.
+- `apps/desktop/src/renderer/features/settings/PowerSaveSection.tsx` or a sibling settings section: distinguish "prevent sleep during sync" from remote wake setup guidance.
+- `apps/desktop/src/renderer/features/settings/__tests__/PowerSaveSection.test.tsx` or a new settings test: verify the wake setup entry does not imply automatic enablement.
+- `apps/desktop/src/renderer/i18n/locales/zh-Hant/settings.json`, `zh-Hans/settings.json`, `en/settings.json`: add concise settings entry copy if guidance is surfaced from Settings.
+- `apps/mobile/src/i18n/locales/zh-Hant/sharedFiles.json`, `zh-Hans/sharedFiles.json`, `en/sharedFiles.json`: add wake setup required / wake timeout guidance.
+- `apps/mobile/src/i18n/locales/zh-Hant/syncStatus.json`, `zh-Hans/syncStatus.json`, `en/syncStatus.json`: clarify reconnect is LAN retry and add wake setup failure guidance where the offline/reconnect UI can surface it.
+- `apps/mobile/src/i18n/locales/zh-Hant/syncActivity.json`, `zh-Hans/syncActivity.json`, `en/syncActivity.json`: clarify reconnect failure is LAN/VPN-LAN scoped and points users to macOS/Windows wake setup.
 - `docs/operations/troubleshooting.md`, `docs/operations/mobile-diagnostics.md`, `docs/testing/beta-test-matrix.md`: document setup limits, diagnostics, and beta scenarios.
 
 ## Route Behavior
@@ -82,7 +140,7 @@ The native route resolver should follow this order:
 5. If it does not wake, continue the existing P2P tunnel wait and cached-direct fallback behavior.
 6. If all routes fail, keep current unavailable/network-error behavior.
 
-This route behavior assumes the phone is on the same LAN. VPN may make the phone logically same-LAN, but that is a fallback path and still depends on whether the VPN/router path carries wake traffic. If mobile is on an unrelated public network, the same-LAN wake packet may never reach the desktop. A follow-up phase should first try configured router Wake-on-WAN/router helper targets, then fall back to VPN guidance, and surface `wake_setup_required` instead of showing `waking` for the full timeout when neither path exists.
+This route behavior assumes the phone is on the same LAN. VPN may make the phone logically same-LAN, but that is a fallback path and still depends on whether the VPN/router path carries wake traffic. If mobile is on an unrelated public network, the same-LAN wake packet may never reach the desktop. A follow-up phase should first try router Wake-on-WAN/router helper targets, then configured public wake targets, then authenticated Vivi Drop Desktop peer proxy if an awake peer exists, then explicitly configured third-party helper integrations, then VPN guidance. It should surface `wake_setup_required` instead of showing `waking` for the full timeout when none of those paths exists.
 
 ## Manual Reconnect LAN Retry Behavior
 
@@ -993,7 +1051,7 @@ private func attemptWakeForSharedFilesIfNeeded(
         return false
     }
     guard let wake = binding.wake, wake.supported, !wake.targets.isEmpty else {
-        syncDiagnosticsLog("Wake", "wake metadata missing for shared files reason=\(reason)")
+        syncDiagnosticsLog("Wake", "wake skipped reason=\(reason) metadata_missing_or_unusable")
         return false
     }
 
@@ -1254,7 +1312,7 @@ private fun shouldWakeForSharedFiles(scope: String, kind: String, path: String):
 private fun attemptWakeForSharedFiles(binding: StoredBinding, reason: String): Boolean {
   val wake = binding.wake
   if (!AndroidSyncPrimitives.hasUsableWakeMetadata(wake)) {
-    recordDiagnosticsLog("Wake", "wake metadata missing for shared files reason=$reason")
+    recordDiagnosticsLog("Wake", "wake skipped reason=$reason metadata_missing_or_unusable")
     return false
   }
   updateSharedFilesReachability(
@@ -1636,7 +1694,317 @@ git add apps/mobile/ios/SyncEngine/SyncEngineManager.swift apps/mobile/android/a
 git commit -m "feat: retry LAN wake from sync status reconnect"
 ```
 
-## Task 10: Diagnostics, Docs, And Beta Matrix
+## Task 10: Platform Wake Setup Guidance
+
+**Files:**
+- Modify: `apps/desktop/src/renderer/i18n/locales/zh-Hant/help.json`
+- Modify: `apps/desktop/src/renderer/i18n/locales/zh-Hans/help.json`
+- Modify: `apps/desktop/src/renderer/i18n/locales/en/help.json`
+- Modify if needed: `apps/desktop/src/renderer/features/help/HelpPage.tsx`
+- Modify: `apps/desktop/src/renderer/features/help/__tests__/HelpPage.test.tsx`
+- Modify if surfacing from Settings: `apps/desktop/src/renderer/features/settings/PowerSaveSection.tsx` or a sibling settings component
+- Modify if surfacing from Settings: `apps/desktop/src/renderer/i18n/locales/zh-Hant/settings.json`, `zh-Hans/settings.json`, `en/settings.json`
+- Modify if mobile failure copy is implemented now: `apps/mobile/src/i18n/locales/zh-Hant/sharedFiles.json`, `zh-Hans/sharedFiles.json`, `en/sharedFiles.json`
+- Modify if Sync Status failure copy is implemented now: `apps/mobile/src/i18n/locales/zh-Hant/syncStatus.json`, `zh-Hans/syncStatus.json`, `en/syncStatus.json`
+- Modify if reconnect failure copy is implemented now: `apps/mobile/src/i18n/locales/zh-Hant/syncActivity.json`, `zh-Hans/syncActivity.json`, `en/syncActivity.json`
+
+- [ ] **Step 1: Add desktop macOS wake setup guidance**
+
+Add a visible macOS section in Help or Settings. It must say:
+
+- Enable System Settings -> Battery or Energy Saver -> `Wake for network access` when available.
+- Ethernet is recommended for reliable wake. Wi-Fi wake depends on Mac model, sleep mode, power source, and router.
+- Firewall and Local Network permissions still matter after wake because the phone must reconnect to desktop `/health` and sync endpoints.
+- Vivi Drop sends wake packets but cannot force-enable macOS power settings for the user.
+
+Suggested Traditional Chinese copy:
+
+```json
+{
+  "title": "macOS 遠端喚醒",
+  "steps": [
+    "系統設定 → 電池或節能，開啟「喚醒以供網路存取」（Wake for network access）",
+    "優先使用 Ethernet；Wi-Fi 睡眠喚醒會依 Mac 型號、供電狀態與路由器而不同",
+    "確認防火牆允許 Vivi Drop 傳入連線，且本機網路權限已開啟",
+    "Vivi Drop 可以送出喚醒封包，但不能自動替您開啟 macOS 電源設定"
+  ]
+}
+```
+
+- [ ] **Step 2: Add desktop Windows wake setup guidance**
+
+Add a visible Windows section in Help or Settings. It must say:
+
+- Enable Wake-on-LAN in BIOS/UEFI when the PC exposes it.
+- Device Manager -> Network adapters -> adapter -> Power Management: enable `Allow this device to wake the computer`; enable `Only allow a magic packet to wake the computer` when present.
+- Adapter Advanced tab: enable `Wake on Magic Packet` or the vendor-equivalent option when present.
+- Ethernet is recommended. Wi-Fi WoL, Modern Standby, hibernate, fast startup, and shutdown behavior vary by device/driver.
+- Vivi Drop cannot automatically modify BIOS/UEFI or every NIC driver setting.
+
+Suggested Traditional Chinese copy:
+
+```json
+{
+  "title": "Windows 遠端喚醒",
+  "steps": [
+    "在 BIOS/UEFI 中開啟 Wake-on-LAN（若裝置提供此選項）",
+    "裝置管理員 → 網路介面卡 → 目前使用的網卡 → 電源管理，勾選「允許這個裝置喚醒電腦」",
+    "若有「只允許 Magic Packet 喚醒電腦」，建議一併勾選",
+    "在進階分頁啟用「Wake on Magic Packet」或廠商等效選項",
+    "優先使用 Ethernet；Modern Standby、休眠、快速啟動、Wi-Fi 喚醒會依機型與驅動而不同",
+    "Vivi Drop 可以送出喚醒封包，但不能自動替您修改 BIOS/UEFI 或所有網卡驅動設定"
+  ]
+}
+```
+
+- [ ] **Step 3: Keep prevent-sleep copy separate from Wake-on-LAN**
+
+Review `PowerSaveSection` and surrounding settings copy. The UI may link to or summarize remote wake setup, but it must keep this distinction:
+
+- `同步時防止電腦睡眠`: keeps the desktop awake while an active transfer is running.
+- Wake-on-LAN setup: allows a sleeping desktop to be woken later when hardware, OS, router, and network path permit it.
+
+Do not present the prevent-sleep toggle as a replacement for platform WoL setup.
+
+- [ ] **Step 4: Add mobile failure guidance copy**
+
+When native wake returns metadata-missing, timeout, or unavailable reasons to JS in a follow-up state such as `wake_setup_required`, surface concise copy:
+
+- Metadata missing: "請先在電腦端開啟 Vivi Drop 並保持清醒，讓手機更新喚醒資訊後再試。"
+- Timeout: "已送出喚醒封包，但電腦沒有恢復連線。請檢查 macOS/Windows 的遠端喚醒設定。"
+- External network boundary: "`重新連接` 是局域網/VPN-LAN 重試；若人在外網，需先設定路由器喚醒或可傳遞喚醒封包的 VPN。"
+- Existing reconnect failure dialog may use the external-network boundary copy until native wake exposes a more precise failure reason to JS.
+
+If the current contracts do not yet expose a detailed reason, add the copy now but wire it only after `wake_setup_required` / `wake_unavailable` states exist.
+
+- [ ] **Step 5: Add UI tests**
+
+Add tests that assert:
+
+- Help page renders a macOS remote wake section with `Wake for network access`.
+- Help page renders a Windows remote wake section with BIOS/UEFI and magic packet guidance.
+- Settings copy, if added, does not say or imply that `同步時防止電腦睡眠` enables Wake-on-LAN.
+- Mobile copy, if wired now, appears only after explicit wake failure states, not on passive offline render.
+
+- [ ] **Step 6: Run desktop/mobile UI verification**
+
+Run the focused tests changed by this task, then run type checks for touched packages:
+
+```bash
+pnpm --filter @syncflow/desktop test -- HelpPage.test.tsx
+pnpm --filter @syncflow/desktop exec tsc --noEmit
+pnpm --filter @syncflow/mobile exec tsc --noEmit
+```
+
+## Task 11: Go Sidecar Peer Proxy Wake Endpoint
+
+**Files:**
+- Modify: `services/sidecar-go/internal/api/router.go`
+- Create: `services/sidecar-go/internal/api/handlers_wake.go`
+- Test: `services/sidecar-go/internal/api/router_test.go`
+
+- [ ] **Step 1: Lock peer proxy capability boundary before coding**
+
+Add this comment above the handler implementation in `services/sidecar-go/internal/api/handlers_wake.go` and keep the route out of any unauthenticated/public API surface:
+
+```go
+// Peer proxy wake is an optional assisted-wake path for multi-desktop setups.
+// It is not a general Wake-on-WAN solution and does not help when the user has
+// only one sleeping computer. The endpoint may only send Wake-on-LAN magic
+// packets for authenticated, paired clients and bounded wake targets.
+```
+
+The endpoint path should follow the existing local sidecar route style:
+
+```go
+mux.HandleFunc("POST /wake/proxy", withJSON(srv.handleProxyWake))
+```
+
+Do not use `/api/v1/wake/proxy` unless the sidecar local API is intentionally migrated to a versioned prefix in a separate plan.
+
+- [ ] **Step 2: Write proxy wake router tests**
+
+In `services/sidecar-go/internal/api/router_test.go`, add tests that use the existing `testEnv(t)`, `api.NewServer`, and `httptest.NewServer` pattern. The tests must cover all of these cases before implementation:
+
+```go
+func TestProxyWakeRequiresAccountAuthorization(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/wake/proxy", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+}
+
+func TestProxyWakeRejectsUnpairedClient(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetDesktopAuthContextForTest("acct-1", authSrv.URL)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	reqBody := `{"clientId":"unknown-mobile","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"192.168.1.255","ports":[9]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status=%d, want 403", resp.StatusCode)
+	}
+}
+
+func TestProxyWakeRejectsUnsafeTarget(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	authSrv := profileAuthServer(t, "acct-1")
+	defer authSrv.Close()
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetDesktopAuthContextForTest("acct-1", authSrv.URL)
+	insertPairedDeviceWithStableID(t, st, "mobile-1", "Phone", "phone", "stable-mobile-1", time.Now().UTC().Format(time.RFC3339Nano))
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	reqBody := `{"clientId":"mobile-1","macAddress":"aa:bb:cc:dd:ee:ff","broadcastAddress":"8.8.8.8","ports":[53]}`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/wake/proxy", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "acct-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /wake/proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+}
+```
+
+If `SetDesktopAuthContextForTest` does not exist yet, add a tiny test-only helper in the same package as existing account-context tests, or reuse the existing `/account/context` setup path. Do not weaken production authorization for the test.
+
+- [ ] **Step 3: Run tests and verify they fail**
+  Run:
+  ```bash
+  cd services/sidecar-go && go test ./internal/api
+  ```
+  Expected: FAIL because `/wake/proxy`, request validation, paired-client verification, or the injected sender does not exist.
+
+- [ ] **Step 4: Implement bounded proxy wake handler**
+
+Create `services/sidecar-go/internal/api/handlers_wake.go`. The implementation must:
+
+- Call `authorizePersonalRequest` first.
+- Require `clientId` in the JSON body and verify `store.GetPairedDevice(clientId)` exists and is not revoked.
+- Validate `macAddress` with `net.ParseMAC`.
+- Validate `broadcastAddress` is a private IPv4 subnet broadcast, limited broadcast `255.255.255.255`, or another target already present in the sidecar's own `WakeCapability`. Reject public unicast addresses such as `8.8.8.8`.
+- Validate `ports` is non-empty, contains only `7` and/or `9` for the first implementation, and contains no duplicates.
+- Send a standard 102-byte magic packet through an injectable sender interface so tests can assert destinations without opening real UDP sockets.
+- Log only masked MAC addresses.
+
+Use `strconv.Itoa(port)` when building UDP host/port strings. Do not use `string(port)`.
+
+- [ ] **Step 5: Register route in router.go**
+  In `services/sidecar-go/internal/api/router.go`, register:
+  ```go
+  mux.HandleFunc("POST /wake/proxy", withJSON(srv.handleProxyWake))
+  ```
+
+- [ ] **Step 6: Run sidecar API tests**
+  Run:
+  ```bash
+  cd services/sidecar-go && go test ./internal/api
+  ```
+  Expected: PASS.
+
+- [ ] **Step 7: Commit**
+  ```bash
+  git add services/sidecar-go/internal/api/router.go services/sidecar-go/internal/api/handlers_wake.go services/sidecar-go/internal/api/router_test.go
+  git commit -m "feat: implement sidecar proxy wake endpoint"
+  ```
+
+## Task 12: Mobile Client Peer Proxy Orchestration
+
+**Files:**
+- Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
+- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
+
+- [ ] **Step 1: Gate peer proxy behind multi-desktop peer availability**
+
+Do not run peer proxy for the normal single-bound-desktop case. Before coding orchestration, confirm mobile has a durable source for other desktop bindings or online peer sidecars that are known to be Vivi Drop Desktop sidecars. If the current mobile storage exposes only the active bound desktop, stop this task and split a prerequisite plan for multi-desktop peer discovery/storage.
+
+Do not treat arbitrary router-connected devices as peer proxy candidates. A NAS, OpenWrt box, Home Assistant node, another phone, or any other awake LAN device without Vivi Drop Desktop must be handled only by a separate third-party helper/webhook/router API integration with explicit user configuration and authentication.
+
+- [ ] **Step 2: Orchestrate peer proxy wake in iOS only after direct paths fail**
+
+In `SyncEngineManager.swift`, integrate peer proxy after these higher-priority paths have already been attempted or ruled out:
+
+1. Current reachable LAN `/health`.
+2. Direct same-LAN WoL from cached metadata.
+3. Existing P2P/direct-route fallback checks that are already active and usable.
+4. Configured router Wake-on-WAN/public target, once that follow-up exists.
+
+The peer proxy request must call:
+
+```text
+POST http://<peer-lan-host>:39394/wake/proxy
+Authorization: Bearer <mobile access token>
+Content-Type: application/json
+```
+
+with:
+
+```json
+{
+  "clientId": "<mobile-client-id>",
+  "macAddress": "<target-wake-metadata-mac>",
+  "broadcastAddress": "<target-wake-metadata-broadcast>",
+  "ports": [9]
+}
+```
+
+If any peer returns `200`, poll the original target desktop `/health`; do not mark the peer host as the target route.
+
+- [ ] **Step 3: Orchestrate peer proxy wake in Android only after direct paths fail**
+
+In `NativeSyncEngineModule.kt`, implement the same ordering and request shape as iOS. Keep the peer proxy attempt bounded to one short pass over currently online peers; do not add another 25-second delay before the existing P2P/relay route can be used.
+
+- [ ] **Step 4: Add diagnostics for skipped peer proxy**
+
+Mobile logs must distinguish:
+
+- `peer proxy skipped reason=no_online_vividrop_desktop_peer`
+- `peer proxy skipped reason=no_multi_desktop_binding_source`
+- `peer proxy skipped reason=third_party_helper_not_configured`
+- `peer proxy request sent host=<peer-host>`
+- `peer proxy request rejected status=<status>`
+- `peer proxy assisted wake polling target=<target-host>`
+
+- [ ] **Step 5: Commit**
+  ```bash
+  git add apps/mobile/ios/SyncEngine/SyncEngineManager.swift apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt
+  git commit -m "feat: orchestrate peer proxy wake on mobile"
+  ```
+
+## Task 13: Diagnostics, Docs, And Beta Matrix
 
 **Files:**
 - Modify: `docs/operations/troubleshooting.md`
@@ -1644,152 +2012,123 @@ git commit -m "feat: retry LAN wake from sync status reconnect"
 - Modify: `docs/testing/beta-test-matrix.md`
 
 - [ ] **Step 1: Add diagnostic log expectations**
+  In `docs/operations/mobile-diagnostics.md`, add a "Wake-on-LAN explicit recovery" section:
+  ```md
+  ### Wake-on-LAN explicit recovery
 
-In `docs/operations/mobile-diagnostics.md`, add a "Wake-on-LAN explicit recovery" section:
+  When the user opens My Computer or taps Sync Status -> Reconnect on the same LAN/VPN-LAN and the desktop LAN sidecar is unreachable, mobile logs these `Wake` diagnostics:
 
-```md
-### Wake-on-LAN explicit recovery
+  - `wake skipped reason=<reason> metadata_missing_or_unusable`: the requested wake path had no cached usable wake targets.
+  - `wake skipped reason=<reason> wake_not_attempted_by_policy`: the requested action was outside the allowed wake scope.
+  - `wake packets sent packets=<n>`: mobile sent magic packets to directed and limited broadcast destinations.
+  - `wake packets sent via peer proxy to host=<peer>`: mobile successfully requested another authenticated, online Vivi Drop desktop sidecar on the same LAN/VPN to send the magic packet.
+  - `peer proxy skipped reason=<reason>`: mobile did not find an eligible authenticated awake Vivi Drop Desktop peer, the current build does not have a multi-desktop binding source, or the user has not explicitly configured a third-party helper integration.
+  - `desktop woke via host=<ip>`: `/health` became reachable during wake polling.
+  - `wake probe timed out`: mobile did not observe sidecar recovery within the bounded polling window.
 
-When the user opens My Computer or taps Sync Status -> Reconnect on the same LAN/VPN-LAN and the desktop LAN sidecar is unreachable, mobile logs these `Wake` diagnostics:
-
-- `wake metadata missing for shared files`: the bound desktop has no cached wake targets.
-- `wake metadata missing for lan_reconnect`: the LAN reconnect button was tapped, but the bound desktop has no cached wake targets.
-- `wake packets sent packets=<n>`: mobile sent magic packets to directed and limited broadcast destinations.
-- `desktop woke via host=<ip>`: `/health` became reachable during wake polling.
-- `wake probe timed out`: mobile did not observe sidecar recovery within the bounded polling window.
-
-These logs do not imply upload queue changes. Wake attempts only affect shared-files route selection or explicit LAN reconnect recovery.
-```
+  These logs do not imply upload queue changes. Wake attempts only affect shared-files route selection or explicit LAN reconnect recovery.
+  ```
 
 - [ ] **Step 2: Add troubleshooting guidance**
+  In `docs/operations/troubleshooting.md`, add:
+  ```md
+  ### My Computer or LAN reconnect does not wake after desktop sleep
 
-In `docs/operations/troubleshooting.md`, add:
+  Wake-on-LAN is best effort. Check these items before treating it as an app regression:
 
-```md
-### My Computer or LAN reconnect does not wake after desktop sleep
-
-Wake-on-LAN is best effort. Check these items before treating it as an app regression:
-
-- macOS: enable Wake for network access and test on Ethernet when possible.
-- Windows: enable Wake-on-LAN in BIOS/UEFI and NIC power management, including magic-packet wake.
-- Keep phone and desktop on the same LAN. Cross-subnet wake needs router support for directed broadcast.
-- Confirm mobile diagnostics include `wake packets sent` after opening My Computer or tapping Reconnect on the same LAN/VPN-LAN. If metadata is missing, reconnect while the desktop is awake so mobile can cache wake targets.
-- Confirm `/health` reaches `http://<desktop-lan-ip>:39394/health` while the desktop is awake.
-```
+  - macOS: enable Wake for network access and test on Ethernet when possible.
+  - Windows: enable Wake-on-LAN in BIOS/UEFI and NIC power management, including magic-packet wake.
+  - Keep phone and desktop on the same LAN. Cross-subnet wake needs router support for directed broadcast, router Wake-on-WAN, or a router/helper that can send WoL inside the LAN.
+  - If you have multiple Vivi Drop desktops, Peer Proxy / WOL Relay can help only when another authenticated desktop is awake, online, and reachable on the same LAN/VPN as the sleeping target.
+  - Other router-connected devices do not count as peer proxy devices. They can help only if the user explicitly configures a supported router/NAS/helper integration or authenticated webhook.
+  - Confirm mobile diagnostics include `wake packets sent` or `wake packets sent via peer proxy`. If metadata is missing, reconnect while the desktop is awake so mobile can cache wake targets.
+  - Confirm `/health` reaches `http://<desktop-lan-ip>:39394/health` while the desktop is awake.
+  ```
 
 - [ ] **Step 3: Add beta test scenarios**
-
-In `docs/testing/beta-test-matrix.md`, add rows:
-
-```md
-| Shared files wake | macOS sleep -> mobile opens My Computer | Enable Wake for network access, bind mobile, let Mac sleep, open My Computer | Mac wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
-| Shared files wake | Windows sleep -> mobile opens My Computer | Enable BIOS/NIC WoL, bind mobile, let PC sleep, open My Computer | PC wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
-| Sync status LAN reconnect wake | macOS/Windows sleep -> mobile shows offline -> user taps Reconnect | Enable platform WoL settings, bind mobile, let desktop sleep, open Sync Status, tap Reconnect on the same LAN or VPN-LAN | Desktop wakes or mobile remains offline after bounded LAN wake attempt; diagnostics include `lan_reconnect` reason |
-| Passive offline display | macOS/Windows sleep -> mobile app opens and shows offline | Bind mobile, let desktop sleep, open mobile app without tapping Reconnect or My Computer | No wake packets are sent; desktop remains asleep until explicit user action |
-| Shared files wake | Unsupported WoL path | Disable NIC wake or use network that blocks broadcast | Mobile does not hang; existing P2P/direct fallback and unavailable UI remain usable |
-```
+  In `docs/testing/beta-test-matrix.md`, add rows:
+  ```md
+  | Shared files wake | macOS sleep -> mobile opens My Computer | Enable Wake for network access, bind mobile, let Mac sleep, open My Computer | Mac wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
+  | Shared files wake | Windows sleep -> mobile opens My Computer | Enable BIOS/NIC WoL, bind mobile, let PC sleep, open My Computer | PC wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
+  | Router Wake-on-WAN follow-up | mobile outside LAN -> router public wake target configured -> mobile opens My Computer | Configure router directed broadcast/UDP forwarding or router WoL helper before the desktop sleeps | Mobile sends configured public wake target first; diagnostics identify router/public target path before fallback guidance |
+  | Peer proxy follow-up | macOS sleep -> mobile has online authenticated Win Vivi Drop desktop peer -> mobile opens My Computer | Windows peer is online on the same LAN/VPN as the Mac, let Mac sleep, open My Computer | Mac wakes via Windows peer proxy only after higher-priority paths are unavailable; diagnostics show proxy wake request sent |
+  | Third-party helper follow-up | macOS sleep -> router-connected NAS/OpenWrt/Home Assistant exists but no helper is configured | Keep third-party device awake but do not configure a supported helper/webhook | Mobile does not treat the device as a peer proxy; diagnostics show helper not configured or no eligible Vivi Drop Desktop peer |
+  | Sync status LAN reconnect wake | macOS/Windows sleep -> mobile shows offline -> user taps Reconnect | Enable platform WoL settings, bind mobile, let desktop sleep, open Sync Status, tap Reconnect on the same LAN or VPN-LAN | Desktop wakes or mobile remains offline after bounded LAN wake attempt; diagnostics include `lan_reconnect` reason |
+  | Passive offline display | macOS/Windows sleep -> mobile app opens and shows offline | Bind mobile, let desktop sleep, open mobile app without tapping Reconnect or My Computer | No wake packets are sent; desktop remains asleep until explicit user action |
+  | Shared files wake | Unsupported WoL path | Disable NIC wake or use network that blocks broadcast | Mobile does not hang; existing P2P/direct fallback and unavailable UI remain usable |
+  ```
 
 - [ ] **Step 4: Commit docs**
+  ```bash
+  git add docs/operations/troubleshooting.md docs/operations/mobile-diagnostics.md docs/testing/beta-test-matrix.md
+  git commit -m "docs: add explicit wake recovery diagnostics"
+  ```
 
-```bash
-git add docs/operations/troubleshooting.md docs/operations/mobile-diagnostics.md docs/testing/beta-test-matrix.md
-git commit -m "docs: add explicit wake recovery diagnostics"
-```
-
-## Task 11: End-To-End Verification
+## Task 14: End-To-End Verification
 
 **Files:**
 - No new files.
 
 - [ ] **Step 1: Run full sidecar tests**
-
-Run:
-
-```bash
-cd services/sidecar-go
-go test ./...
-```
-
-Expected: PASS.
+  Run:
+  ```bash
+  cd services/sidecar-go
+  go test ./...
+  ```
+  Expected: PASS.
 
 - [ ] **Step 2: Build shared packages**
-
-Run:
-
-```bash
-pnpm build
-```
-
-Expected: contracts and design tokens build successfully.
+  Run:
+  ```bash
+  pnpm build
+  ```
+  Expected: contracts and design tokens build successfully.
 
 - [ ] **Step 3: Run mobile TypeScript verification**
-
-Run:
-
-```bash
-pnpm --filter @syncflow/mobile exec tsc --noEmit
-```
-
-Expected: PASS.
+  Run:
+  ```bash
+  pnpm --filter @syncflow/mobile exec tsc --noEmit
+  ```
+  Expected: PASS.
 
 - [ ] **Step 4: Run Android verification**
-
-Run:
-
-```bash
-cd apps/mobile/android
-./gradlew testDebugUnitTest --tests com.vividrop.mobile.china.sync.AndroidSyncPrimitivesTest
-./gradlew assembleDebug
-```
-
-Expected: PASS.
+  Run:
+  ```bash
+  cd apps/mobile/android
+  ./gradlew testDebugUnitTest --tests com.vividrop.mobile.china.sync.AndroidSyncPrimitivesTest
+  ./gradlew assembleDebug
+  ```
+  Expected: PASS.
 
 - [ ] **Step 5: Run iOS focused verification**
-
-Run:
-
-```bash
-cd apps/mobile/ios/SyncEngine
-swiftc WakeMetadata.swift SyncEngineError.swift WakeOnLanService.swift WakeOnLanServiceTests/main.swift -o /tmp/WakeOnLanServiceTests && /tmp/WakeOnLanServiceTests
-swiftc SharedFilesRoutePolicy.swift SharedFilesRoutePolicyTests/main.swift -o /tmp/SharedFilesRoutePolicyTests && /tmp/SharedFilesRoutePolicyTests
-```
-
-Expected: both standalone tests pass. Then run the normal local iOS simulator or archive build used for the target release profile.
+  Run:
+  ```bash
+  cd apps/mobile/ios/SyncEngine
+  swiftc WakeMetadata.swift SyncEngineError.swift WakeOnLanService.swift WakeOnLanServiceTests/main.swift -o /tmp/WakeOnLanServiceTests && /tmp/WakeOnLanServiceTests
+  swiftc SharedFilesRoutePolicy.swift SharedFilesRoutePolicyTests/main.swift -o /tmp/SharedFilesRoutePolicyTests && /tmp/SharedFilesRoutePolicyTests
+  ```
+  Expected: both standalone tests pass. Then run the normal local iOS simulator or archive build used for the target release profile.
 
 - [ ] **Step 6: Manual macOS wake test**
-
-1. Pair mobile with macOS desktop while both are awake.
-2. Confirm mobile diagnostics later include cached wake metadata with at least one target.
-3. Let macOS sleep.
-4. Open mobile `我的電腦`.
-5. Expected: UI shows `正在喚醒我的電腦`, desktop wakes if platform settings allow it, and files load via LAN.
-6. If the desktop does not wake, expected fallback is bounded wait followed by existing unavailable/P2P behavior.
+  1. Pair mobile with macOS desktop while both are awake.
+  2. Let macOS sleep.
+  3. Open mobile `我的電腦`.
+  4. Expected: UI shows `正在喚醒我的電腦`, desktop wakes if platform settings allow it, and files load via LAN.
 
 - [ ] **Step 7: Manual Windows wake test**
+  1. Enable BIOS/UEFI and NIC magic-packet wake.
+  2. Pair mobile with Windows desktop while both are awake.
+  3. Let Windows sleep.
+  4. Open mobile `我的電腦`.
+  5. Expected: UI shows `正在喚醒我的電腦`, Windows wakes if platform settings allow it, and files load via LAN.
 
-1. Enable BIOS/UEFI and NIC magic-packet wake.
-2. Pair mobile with Windows desktop while both are awake.
-3. Let Windows sleep.
-4. Open mobile `我的電腦`.
-5. Expected: UI shows `正在喚醒我的電腦`, Windows wakes if platform settings allow it, and files load via LAN.
-6. If the desktop does not wake, expected fallback is bounded wait followed by existing unavailable/P2P behavior.
-
-- [ ] **Step 8: Manual reconnect wake test**
-
-1. Pair mobile with macOS or Windows desktop while both are awake.
-2. Confirm mobile diagnostics later include cached wake metadata with at least one target.
-3. Let the desktop sleep.
-4. Open mobile sync status/activity while the desktop is offline.
-5. Do not tap reconnect yet.
-6. Expected: desktop remains asleep and diagnostics do not show a new wake packet sequence.
-7. Tap `重新連接`.
-8. Expected: UI enters reconnect/waking feedback, desktop wakes if platform settings allow it, and sync resumes through the existing trigger-sync path.
-9. If the desktop does not wake, expected fallback is bounded wait followed by existing offline/backoff behavior.
+- [ ] **Step 8: Manual peer proxy wake test**
+  1. Pair mobile with both macOS and Windows desktops.
+  2. Let macOS sleep while Windows PC remains awake and online.
+  3. Open mobile `我的電腦` for macOS.
+  4. Expected: Windows PC sidecar receives proxy wake request, broadcasts standard magic packet, macOS wakes up and becomes available.
 
 - [ ] **Step 9: Pollution review**
-
-Review the diff and confirm:
-
 - No renderer code directly accesses sidecar, filesystem, or SQLite.
 - No upload queue item can be deleted, reordered, skipped, or manually selected by this change.
 - No sync state machine transition changes outside shared-files route wake attempts or explicit LAN reconnect wake attempts.

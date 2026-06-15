@@ -48,8 +48,8 @@ interface ErrorCard {
   description: string;
 }
 
-const macPermissionIcons: LucideIcon[] = [Shield, Globe, FolderOpen, Apple];
-const windowsPermissionIcons: LucideIcon[] = [Shield, Globe, FolderOpen, Monitor];
+const macPermissionIcons: LucideIcon[] = [Shield, Globe, FolderOpen, Apple, Wifi];
+const windowsPermissionIcons: LucideIcon[] = [Shield, Globe, FolderOpen, Monitor, Wifi];
 const errorIcons: LucideIcon[] = [Wifi, HardDrive, AlertTriangle, UploadCloud];
 
 export function HelpPage() {

@@ -39,6 +39,10 @@
     "title": "Personal Shared Folder Unavailable",
     "message": "Make sure the phone and desktop app are signed in to the same account, then configure the personal shared folder on desktop."
   },
+  "remoteWakeSetupRequired": {
+    "title": "Remote Wake Setup Required",
+    "message": "This phone is not on the desktop network. If the desktop is asleep, enable Remote Wake in Settings or switch back to the same Wi-Fi."
+  },
   "networkError": {
     "title": "Failed to Load",
     "message": "Please try again later."
@@ -53,6 +57,7 @@
     "downloadComplete": "Download complete",
     "downloadFailed": "Download Failed",
     "downloadFailedMessage": "Could not download the file. Please try again later.",
+    "downloadUnavailableMessage": "The file does not exist or is no longer accessible.",
     "previewFailed": "Preview Failed",
     "previewFailedMessage": "Could not load file preview.",
     "savedLocationPhotos": "Photos",

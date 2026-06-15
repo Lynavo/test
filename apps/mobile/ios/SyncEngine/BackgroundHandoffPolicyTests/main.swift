@@ -24,7 +24,8 @@ let persisted = BindingRecord(
     pairingId: "pairing-id",
     pairingTokenKeychainRef: "persisted-token-ref",
     shareName: nil,
-    lastBoundAt: "2026-06-08T03:25:00Z"
+    lastBoundAt: "2026-06-08T03:25:00Z",
+    wake: nil
 )
 
 expect(
@@ -50,7 +51,8 @@ let invalid = BindingRecord(
     pairingId: "pairing-id",
     pairingTokenKeychainRef: "persisted-token-ref",
     shareName: nil,
-    lastBoundAt: "2026-06-08T03:25:00Z"
+    lastBoundAt: "2026-06-08T03:25:00Z",
+    wake: nil
 )
 expect(
     BackgroundHandoffPolicy.resolveBinding(live: nil, persisted: invalid) == nil,

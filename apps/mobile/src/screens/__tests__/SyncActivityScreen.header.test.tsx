@@ -1,5 +1,10 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@testing-library/react-native';
 import { NativeModules, NativeEventEmitter } from 'react-native';
 
 const mockNavigate = jest.fn();
@@ -58,6 +63,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   cancelAllManualUploads: jest.fn().mockResolvedValue(undefined),
   disableAutoUpload: jest.fn().mockResolvedValue(undefined),
   enableAutoUpload: jest.fn().mockResolvedValue(undefined),
+  retryLanReconnect: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../stores/auth-store', () => ({
@@ -82,6 +88,7 @@ jest.mock('../../constants/features', () => ({
 }));
 
 import { SyncActivityScreen } from '../SyncActivityScreen';
+import { retryLanReconnect } from '../../services/SyncEngineModule';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -130,6 +137,11 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
+  if (jest.isMockFunction(setTimeout)) {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  }
   consoleErrorSpy.mockRestore();
 });
 
@@ -141,6 +153,41 @@ describe('SyncActivityScreen header', () => {
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('Help');
+    });
+  });
+
+  it('uses LAN-only retry when pressing offline reconnect', async () => {
+    jest.useFakeTimers();
+    (NativeModules.NativeSyncEngine.getBindingState as jest.Mock).mockResolvedValue({
+      deviceId: 'desktop-1',
+      deviceName: 'Mini4',
+      connectionState: 'offline',
+    });
+    (NativeModules.NativeSyncEngine.getSyncOverview as jest.Mock).mockResolvedValue({
+      uploadState: 'offline',
+      progressPercent: 0,
+      currentSpeedMbps: 0,
+      completedCount: 0,
+      totalCount: 0,
+      completedBytes: 0,
+      totalBytes: 0,
+      currentFileConfirmedBytes: 0,
+      currentFileTotalBytes: 0,
+      autoUploadState: 'disabled',
+      manualPending: 0,
+      autoPending: 0,
+      lastErrorCode: 'RECONNECT_EXHAUSTED',
+    });
+
+    const screen = render(<SyncActivityScreen />);
+    await waitFor(() => {
+      expect(screen.getByText('syncActivity.offline.reconnect')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('syncActivity.offline.reconnect'));
+
+    await waitFor(() => {
+      expect(retryLanReconnect).toHaveBeenCalledWith({ allowWake: true });
     });
   });
 });

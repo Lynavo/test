@@ -61,6 +61,16 @@ function compatibleHealth(capabilities?: { revokesPairingsOnCodeRotation?: boole
   };
 }
 
+function healthWithRefreshRequired() {
+  return {
+    ...compatibleHealth({ revokesPairingsOnCodeRotation: true }),
+    tunnel: {
+      signalingAuthState: 'refresh_required',
+      credentialRefreshRequired: true,
+    },
+  };
+}
+
 function createChildProcessStub() {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter;
@@ -196,6 +206,22 @@ describe('SidecarManager', () => {
 
     expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('refreshes credentials immediately when sidecar reports invalid signaling token', async () => {
+    vi.mocked(sidecarClient.getHealth)
+      .mockResolvedValueOnce(compatibleHealth({ revokesPairingsOnCodeRotation: true }))
+      .mockResolvedValueOnce(healthWithRefreshRequired())
+      .mockResolvedValue(compatibleHealth({ revokesPairingsOnCodeRotation: true }));
+
+    const manager = new SidecarManager();
+    await manager.start();
+    expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(2);
+    expect(manager.getState().status).toBe('healthy');
   });
 
   it('does not reuse an external sidecar without pairing-revocation capability', async () => {

@@ -2,7 +2,10 @@ package api
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/nicksyncflow/sidecar/internal/config"
@@ -21,10 +24,30 @@ type WakeProvider interface {
 	WakeCapability() *protocol.WakeCapability
 }
 
+type WakePacketSender interface {
+	SendWakePacket(addr string, packet []byte) error
+}
+
+type ProxyWakeTargetProvider interface {
+	ProxyWakeTargets(accountID string) []protocol.WakeTarget
+}
+
 type defaultWakeProvider struct{}
 
 func (defaultWakeProvider) WakeCapability() *protocol.WakeCapability {
 	return wake.Metadata()
+}
+
+type udpWakePacketSender struct{}
+
+func (udpWakePacketSender) SendWakePacket(addr string, packet []byte) error {
+	conn, err := net.Dial("udp4", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Write(packet)
+	return err
 }
 
 // Server holds the dependencies for the HTTP API handlers.
@@ -35,6 +58,9 @@ type Server struct {
 	clientStates         ClientStateProvider
 	presence             *PresenceTracker
 	wakeProvider         WakeProvider
+	wakeSender           WakePacketSender
+	proxyWakeTargets     ProxyWakeTargetProvider
+	power                *PowerTracker
 	tunnelMu             sync.Mutex
 	tunnel               *protocol.P2PManager
 	accountMu            sync.RWMutex
@@ -52,11 +78,76 @@ func (s *Server) SetWakeProvider(provider WakeProvider) {
 	s.wakeProvider = provider
 }
 
+func (s *Server) SetWakePacketSender(sender WakePacketSender) {
+	s.wakeSender = sender
+}
+
+func (s *Server) SetProxyWakeTargetProvider(provider ProxyWakeTargetProvider) {
+	s.proxyWakeTargets = provider
+}
+
 func (s *Server) wakeCapability() *protocol.WakeCapability {
 	if s.wakeProvider == nil {
 		return nil
 	}
 	return s.wakeProvider.WakeCapability()
+}
+
+func wakeCapabilityLogAttrs(capability *protocol.WakeCapability) []any {
+	if capability == nil {
+		return []any{
+			"wakePresent", false,
+			"wakeSupported", false,
+			"wakeTargetCount", 0,
+			"wakeUsableTargetCount", 0,
+			"wakeUpdatedAt", "",
+		}
+	}
+	usableTargetCount := 0
+	for _, target := range capability.Targets {
+		if target.MACAddress != "" && target.BroadcastAddress != "" && len(target.Ports) > 0 {
+			usableTargetCount++
+		}
+	}
+	return []any{
+		"wakePresent", true,
+		"wakeSupported", capability.Supported,
+		"wakeTargetCount", len(capability.Targets),
+		"wakeUsableTargetCount", usableTargetCount,
+		"wakeUpdatedAt", capability.UpdatedAt,
+		"wakeTargets", wakeTargetLogSummary(capability.Targets),
+	}
+}
+
+func wakeTargetLogSummary(targets []protocol.WakeTarget) string {
+	parts := make([]string, 0, len(targets))
+	for _, target := range targets {
+		parts = append(parts, "interface="+target.InterfaceName+
+			" mac="+maskedWakeMACAddress(target.MACAddress)+
+			" ipv4="+target.IPv4Address+
+			" broadcast="+target.BroadcastAddress+
+			" ports="+intListLogSummary(target.Ports))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func maskedWakeMACAddress(macAddress string) string {
+	parts := strings.Split(strings.ToLower(strings.ReplaceAll(strings.TrimSpace(macAddress), "-", ":")), ":")
+	if len(parts) != 6 {
+		return "<invalid>"
+	}
+	return "**:**:**:**:" + parts[4] + ":" + parts[5]
+}
+
+func intListLogSummary(values []int) string {
+	if len(values) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, strconv.Itoa(value))
+	}
+	return strings.Join(parts, ",")
 }
 
 // StopTunnel stops the desktop P2P signaling listener if it is running.
@@ -91,6 +182,16 @@ func (s *Server) RefreshTunnelPairings(reason string) {
 	slog.Info("sync tunnel paired devices refreshed", "reason", reason, "pairedDevices", len(pairedDevices))
 }
 
+func (s *Server) tunnelSignalingAuthState() protocol.SignalingAuthState {
+	s.tunnelMu.Lock()
+	tunnel := s.tunnel
+	s.tunnelMu.Unlock()
+	if tunnel == nil {
+		return protocol.SignalingAuthOK
+	}
+	return tunnel.SignalingAuthState()
+}
+
 // NewServer creates a new HTTP handler with all API routes registered.
 func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientStateProvider) (*Server, http.Handler) {
 	srv := &Server{
@@ -100,11 +201,14 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 		clientStates: csp,
 		presence:     NewPresenceTracker(),
 		wakeProvider: defaultWakeProvider{},
+		wakeSender:   udpWakePacketSender{},
+		power:        NewPowerTracker(),
 	}
 	mux := http.NewServeMux()
 
 	// Presence (mobile heartbeat)
 	mux.HandleFunc("POST /presence/{clientId}", withJSON(srv.handlePresence))
+	mux.HandleFunc("POST /power/state", withJSON(srv.handlePowerState))
 	// Health
 	mux.HandleFunc("GET /health", withJSON(srv.handleHealth))
 	// Dashboard
@@ -137,6 +241,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /personal/thumbnail/{path...}", srv.handlePersonalThumbnail)
 	mux.HandleFunc("GET /personal/download/{path...}", srv.handlePersonalDownload)
 	mux.HandleFunc("GET /personal/stream/{path...}", srv.handlePersonalStream)
+	mux.HandleFunc("POST /wake/proxy", withJSON(srv.handleProxyWake))
 	// Transfer state
 	mux.HandleFunc("GET /transfer/active", withJSON(srv.handleTransferActive))
 	// Account context sync for LAN personal sharing authorization.
@@ -147,6 +252,15 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /events/stream", srv.handleEventStream)
 
 	return srv, withLogging(mux)
+}
+
+func isLocalRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // handleEventStream upgrades the connection to a WebSocket for real-time events.

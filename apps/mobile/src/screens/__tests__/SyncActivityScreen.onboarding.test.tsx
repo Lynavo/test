@@ -93,6 +93,7 @@ jest.mock('../../services/SyncEngineModule', () => ({
   cancelAllManualUploads: jest.fn().mockResolvedValue(undefined),
   disableAutoUpload: jest.fn().mockResolvedValue(undefined),
   enableAutoUpload: jest.fn().mockResolvedValue(undefined),
+  retryLanReconnect: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../../stores/auth-store', () => ({

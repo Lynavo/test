@@ -257,7 +257,7 @@ pnpm release --profile cn-review --targets ios,mac,win
 pnpm release --profile global-review --targets ios,mac,win
 ```
 
-Android APK 可加入 `android` target：
+Android APK & AAB 可加入 `android` target：
 
 ```bash
 pnpm release --profile global-review --targets android,mac,win

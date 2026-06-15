@@ -39,8 +39,11 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
 import java.io.OutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.HttpURLConnection
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
@@ -795,6 +798,15 @@ class NativeSyncEngineModule(
     }
   }
 
+  private fun wakeCapabilityLogSummary(wake: AndroidWakeCapability?): String {
+    if (wake == null) {
+      return "wake=nil"
+    }
+    val usableTargets = AndroidSyncPrimitives.validWakeTargets(wake.targets).size
+    val hasPublic = wake.publicTarget?.enabled == true && wake.publicTarget.host.isNotBlank()
+    return "wakeSupported=${wake.supported} wakeTargets=${wake.targets.size} wakeUsableTargets=$usableTargets remoteWakeEnabled=$hasPublic"
+  }
+
   @ReactMethod
   fun getClientDisplayName(promise: Promise) {
     promise.resolve(getClientDisplayNameValue())
@@ -831,6 +843,19 @@ class NativeSyncEngineModule(
     recordNativeLog("Sync", "triggerSync requested")
     startForegroundSyncRound(reason = "manual_trigger", threadName = "NativeSyncEngineSync")
     promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun retryLanReconnect(params: ReadableMap, promise: Promise) {
+    runAsync(promise) {
+      val allowWake = if (params.hasKey("allowWake") && !params.isNull("allowWake")) {
+        params.getBoolean("allowWake")
+      } else {
+        false
+      }
+      retryLanReconnectInternal(allowWake = allowWake)
+      promise.resolve(null)
+    }
   }
 
   private fun startAutoUploadSyncRound(reason: String) {
@@ -876,6 +901,51 @@ class NativeSyncEngineModule(
     saveBinding(updated)
     emitBindingStateChanged(updated)
     promise.resolve(null)
+  }
+
+  @ReactMethod
+  fun savePublicWakeTarget(params: ReadableMap, promise: Promise) {
+    try {
+      val binding = loadBinding()
+      if (binding == null) {
+        promise.reject("SAVE_PUBLIC_WAKE_TARGET_ERROR", "No active binding available")
+        return
+      }
+      val host = if (params.hasKey("host") && !params.isNull("host")) params.getString("host").orEmpty() else ""
+      val port = if (params.hasKey("port") && !params.isNull("port")) params.getInt("port") else 9
+      val enabled = if (params.hasKey("enabled") && !params.isNull("enabled")) params.getBoolean("enabled") else false
+
+      AndroidSyncPrimitives.validatePublicWakeTarget(host, port, enabled)
+
+      val existingWake = binding.wake ?: AndroidWakeCapability(
+        supported = false,
+        targets = emptyList(),
+        publicTarget = null,
+        updatedAt = isoNow(),
+      )
+      val newPublicTarget = if (host.trim().isNotEmpty()) {
+        AndroidPublicWakeTarget(
+          kind = "router_wan_udp",
+          host = host.trim(),
+          port = port,
+          enabled = enabled,
+          updatedAt = isoNow(),
+        )
+      } else {
+        null
+      }
+      val updatedWake = existingWake.copy(
+        publicTarget = newPublicTarget,
+        updatedAt = isoNow(),
+      )
+      val updatedBinding = binding.copy(wake = updatedWake)
+      saveBinding(updatedBinding)
+      emitBindingStateChanged(updatedBinding)
+      emitIdleSyncState(updatedBinding)
+      promise.resolve(null)
+    } catch (error: Throwable) {
+      promise.reject("SAVE_PUBLIC_WAKE_TARGET_ERROR", error.message ?: error.javaClass.simpleName, error)
+    }
   }
 
   @ReactMethod
@@ -1457,6 +1527,7 @@ class NativeSyncEngineModule(
       val serverCapabilities = helloResponse.optJSONObject("serverCapabilities")
       val shareName = serverCapabilities?.optString("shareName")
         ?.takeIf { it.isNotBlank() }
+      val wake = AndroidSyncPrimitives.parseWakeCapability(serverCapabilities?.optJSONObject("wake"))
       val serverId = helloResponse.optString("serverId")
         .takeIf { it.isNotBlank() }
         ?: fallbackDeviceId
@@ -1477,6 +1548,7 @@ class NativeSyncEngineModule(
           shareName = shareName,
           lastBoundAt = isoNow(),
           connectionState = "connected",
+          wake = wake,
         )
       }
 
@@ -1515,6 +1587,7 @@ class NativeSyncEngineModule(
         shareName = serverInfo?.optString("shareName")?.takeIf { it.isNotBlank() },
         lastBoundAt = isoNow(),
         connectionState = "connected",
+        wake = wake,
       )
     }
   }
@@ -1602,7 +1675,7 @@ class NativeSyncEngineModule(
       recordNativeLog("SyncPipeline", "TCP connecting to ${binding.host}:${binding.port}")
       ProtocolConnection.open(binding).use { connection ->
         recordNativeLog("SyncPipeline", "TCP connected to ${binding.host}:${binding.port}", Log.INFO)
-        authenticateConnection(connection, binding)
+        binding = authenticateConnection(connection, binding)
         binding = updateBindingConnectionState(binding, "connected") ?: binding
         val beginPayload = JSONObject().apply {
           put("sessionId", sessionId)
@@ -1760,7 +1833,7 @@ class NativeSyncEngineModule(
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
       reactApplicationContext.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-  private fun authenticateConnection(connection: ProtocolConnection, binding: StoredBinding) {
+  private fun authenticateConnection(connection: ProtocolConnection, binding: StoredBinding): StoredBinding {
     val helloPayload = JSONObject(
       AndroidSyncPrimitives.buildClientHelloPayloadFields(
         clientId = getOrCreateClientId(),
@@ -1779,12 +1852,13 @@ class NativeSyncEngineModule(
     )
     recordNativeLog(
       "SyncPipeline",
-      "HELLO_RES received serverId=${helloResponse.optString("serverId").ifBlank { binding.deviceId }} authRequired=${helloResponse.optBoolean("authRequired", false)}",
+      "HELLO_RES received serverId=${helloResponse.optString("serverId").ifBlank { binding.deviceId }} authRequired=${helloResponse.optBoolean("authRequired", false)} ${wakeCapabilityLogSummary(AndroidSyncPrimitives.parseWakeCapability(helloResponse.optJSONObject("serverCapabilities")?.optJSONObject("wake")))}",
     )
+    val refreshedBinding = refreshBindingMetadataFromHello(binding, helloResponse) ?: binding
 
     val nonce = helloResponse.optString("nonce")
     if (nonce.isNotBlank()) {
-      if (binding.pairingToken.isBlank()) {
+      if (refreshedBinding.pairingToken.isBlank()) {
         throw IllegalStateException("Desktop requires re-pairing")
       }
       writeJsonFrame(
@@ -1792,7 +1866,7 @@ class NativeSyncEngineModule(
         TYPE_AUTH_REQ,
         JSONObject().apply {
           put("clientId", getOrCreateClientId())
-          put("auth", AndroidSyncPrimitives.computeAuthHmac(binding.pairingToken, nonce))
+          put("auth", AndroidSyncPrimitives.computeAuthHmac(refreshedBinding.pairingToken, nonce))
         },
       )
       val authResponse = readJsonFrame(connection.input, TYPE_AUTH_RES)
@@ -1803,6 +1877,52 @@ class NativeSyncEngineModule(
     } else if (helloResponse.optBoolean("authRequired", false)) {
       throw IllegalStateException("Desktop requires re-pairing")
     }
+    return refreshedBinding
+  }
+
+  private fun refreshBindingMetadataFromHello(
+    binding: StoredBinding,
+    helloResponse: JSONObject,
+  ): StoredBinding? {
+    val serverId = helloResponse.optString("serverId").takeIf { it.isNotBlank() }
+    if (serverId != null && serverId != binding.deviceId) {
+      recordDiagnosticsLog(
+        "SyncEngine",
+        "HELLO metadata refresh skipped serverId=$serverId bindingDevice=${binding.deviceId}",
+      )
+      return null
+    }
+
+    val serverCapabilities = helloResponse.optJSONObject("serverCapabilities")
+    val wake = AndroidSyncPrimitives.parseWakeCapability(serverCapabilities?.optJSONObject("wake"))
+    val shareName = serverCapabilities?.optString("shareName")?.takeIf { it.isNotBlank() }
+    val serverName = helloResponse.optString("serverName").takeIf { it.isNotBlank() }
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "HELLO metadata candidate host=${binding.host} ${wakeCapabilityLogSummary(wake)} existingWakeUsable=${binding.wake?.hasUsableTargets == true}",
+    )
+
+    val updated = binding.copy(
+      deviceName = serverName ?: binding.deviceName,
+      shareEnabled = shareName != null,
+      shareName = shareName,
+      wake = AndroidSyncPrimitives.mergeWakeCapability(wake, binding.wake),
+    )
+    if (updated == binding) {
+      recordDiagnosticsLog(
+        "SyncEngine",
+        "HELLO metadata unchanged host=${binding.host} ${wakeCapabilityLogSummary(wake)}",
+      )
+      return binding
+    }
+
+    saveBinding(updated)
+    emitBindingStateChanged(updated)
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "binding metadata refreshed from HELLO host=${binding.host} ${wakeCapabilityLogSummary(updated.wake)} shareEnabled=${updated.shareEnabled}",
+    )
+    return updated
   }
 
   private fun uploadOneItem(
@@ -2574,6 +2694,82 @@ class NativeSyncEngineModule(
     waitForTunnel: Boolean = true,
   ): SharedFileRoute {
     val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
+    val shouldAttemptWake = AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
+      scope = scope,
+      path = path,
+      operation = kind,
+    )
+    recordNativeLog(
+      "SharedFiles",
+      "wake decision scope=$scope path=$path operation=$kind allowWake=$shouldAttemptWake ${wakeCapabilityLogSummary(binding.wake)}",
+    )
+    val wakeGateSnapshot = p2pTunnelRouteSnapshot()
+    if (AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
+        allowWake = shouldAttemptWake,
+        hasActiveTunnel = wakeGateSnapshot.isActive && wakeGateSnapshot.port != null,
+      )
+    ) {
+      val directSnapshot = wakeGateSnapshot
+      val directDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+        isTunnelActive = false,
+        tunnelPort = null,
+        hasTunnelCredentials = false,
+        directHost = binding.host,
+        directPort = DEFAULT_SIDECAR_HTTP_PORT,
+      )
+      if (canReachSidecarHealth(binding.host, BINDING_PROBE_TIMEOUT_MS)) {
+        return sharedFileRoute(scope, kind, path, requestAccessToken, directDecision, directSnapshot)
+      }
+
+      if (directSnapshot.hasCredentials && !directSnapshot.isActive && !directSnapshot.isStarting) {
+        recordNativeLog("SharedFiles", "starting P2P tunnel asynchronously during wake attempt reason=$reason")
+        startP2PTunnelIfNeeded(binding)
+      }
+
+      val allowPublicWake = AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
+        scope = scope,
+        path = path,
+        operation = kind,
+        trigger = "shared_files_root_browse",
+      )
+      val wokeHost = attemptSharedFilesLANWakeIfNeeded(binding, reason, allowPublicWake = allowPublicWake)
+      if (wokeHost != null) {
+        val isTunnel = wokeHost.startsWith("127.0.0.1")
+        val finalDecision = if (isTunnel) {
+          val portPart = wokeHost.substringAfterLast(":", "").toIntOrNull() ?: DEFAULT_SIDECAR_HTTP_PORT
+          AndroidSharedFilesRouteDecision(
+            mode = AndroidSharedFilesRouteMode.TUNNEL,
+            host = "127.0.0.1",
+            port = portPart,
+            isTunnel = true,
+          )
+        } else {
+          directDecision.copy(host = wokeHost)
+        }
+        return sharedFileRoute(
+          scope,
+          kind,
+          path,
+          requestAccessToken,
+          finalDecision,
+          directSnapshot,
+        )
+      }
+      recordNativeLog(
+        "SharedFiles",
+        "LAN wake did not recover shared files host reason=$reason; falling back to route selection",
+      )
+    } else if (shouldAttemptWake && wakeGateSnapshot.isActive && wakeGateSnapshot.port != null) {
+      val activeDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+        isTunnelActive = true,
+        tunnelPort = wakeGateSnapshot.port,
+        hasTunnelCredentials = wakeGateSnapshot.hasCredentials,
+        directHost = binding.host,
+        directPort = DEFAULT_SIDECAR_HTTP_PORT,
+      )
+      recordNativeLog("SharedFiles", "using active P2P tunnel directly, skipping wake decision reason=$reason")
+      return sharedFileRoute(scope, kind, path, requestAccessToken, activeDecision, wakeGateSnapshot)
+    }
     val initialSnapshot = p2pTunnelRouteSnapshot()
     val initialDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
       isTunnelActive = initialSnapshot.isActive,
@@ -2627,6 +2823,24 @@ class NativeSyncEngineModule(
     return sharedFileRoute(scope, kind, path, requestAccessToken, fallbackDecision, fallbackSnapshot)
   }
 
+  private fun logPeerProxySkipDiagnostics() {
+    val hasMultiDesktopBindingSource = false
+    val hasOnlineVividropDesktopPeer = false
+    if (!AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
+        hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
+        hasOnlineVividropDesktopPeer = hasOnlineVividropDesktopPeer,
+      )
+    ) {
+      AndroidSyncPrimitives.peerProxySkipReasons(
+        hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
+        hasOnlineVividropDesktopPeer = hasOnlineVividropDesktopPeer,
+        hasThirdPartyHelperConfigured = false,
+      ).forEach { skipReason ->
+        recordDiagnosticsLog("SharedFiles", "peer proxy skipped reason=$skipReason")
+      }
+    }
+  }
+
   private fun sharedFileRoute(
     scope: String,
     kind: String,
@@ -2638,6 +2852,12 @@ class NativeSyncEngineModule(
     val normalizedScope = normalizeSharedDirectoryScope(scope)
     val endpoint = sharedFileEndpoint(normalizedScope, kind, path)
     val displayHost = if (decision.isTunnel) "${decision.host}:${decision.port}" else decision.host
+    val metadata = AndroidSyncPrimitives.sharedFilesRouteMetadata(
+      decision = decision,
+      snapshotTunnelActive = snapshot.isActive,
+      snapshotTunnelStarting = snapshot.isStarting,
+      snapshotTunnelPort = snapshot.port,
+    )
     return SharedFileRoute(
       scope = normalizedScope,
       kind = kind,
@@ -2649,9 +2869,9 @@ class NativeSyncEngineModule(
       displayHost = displayHost,
       isTunnel = decision.isTunnel,
       reachabilityRoute = if (decision.isTunnel) currentSharedFilesTunnelReachabilityRoute() else "lan",
-      tunnelActive = snapshot.isActive,
-      tunnelStarting = snapshot.isStarting,
-      activeTunnelPort = snapshot.port,
+      tunnelActive = metadata.tunnelActive,
+      tunnelStarting = metadata.tunnelStarting,
+      activeTunnelPort = metadata.activeTunnelPort,
     )
   }
 
@@ -2785,6 +3005,275 @@ class NativeSyncEngineModule(
         "is_tunnel=${route.isTunnel} tunnel_active=${route.tunnelActive} " +
         "tunnel_starting=${route.tunnelStarting} active_port=${route.activeTunnelPort ?: "nil"}",
     )
+  }
+
+  private fun attemptSharedFilesLANWakeIfNeeded(
+    binding: StoredBinding,
+    reason: String,
+    allowPublicWake: Boolean = false,
+  ): String? {
+    val wake = binding.wake
+    recordNativeLog(
+      "SharedFiles",
+      "wake candidate reason=$reason hasMetadata=${wake != null} hasUsableTargets=${wake?.hasUsableTargets == true} ${wakeCapabilityLogSummary(wake)}",
+    )
+    if (wake?.hasUsableTargets != true) {
+      recordNativeLog(
+        "SharedFiles",
+        "wake skipped reason=$reason metadata_missing_or_unusable ${wakeCapabilityLogSummary(wake)}",
+      )
+      return null
+    }
+
+    val targets = AndroidSyncPrimitives.validWakeTargets(wake.targets)
+    recordNativeLog(
+      "SharedFiles",
+      "wake target summary reason=$reason targets=${targets.joinToString("; ") { describeWakeTarget(it) }}",
+    )
+    updateSharedFilesReachability(
+      state = "waking",
+      route = null,
+      reason = "${reason}_wake_attempt_started",
+    )
+    val wakeAttemptStartedAt = isoNow()
+    try {
+      val result = sendWakeOnLanPackets(targets, if (allowPublicWake) wake.publicTarget else null)
+      val failures = result.failures
+        .takeIf { it.isNotEmpty() }
+        ?.let { " failedDestinations=${describeWakeFailures(it)}" }
+        ?: ""
+      recordNativeLog(
+        "SharedFiles",
+        "wake packets sent reason=$reason targets=${targets.size} packets=${result.sentPackets} destinations=${describeWakeDestinations(result.destinations)}$failures",
+      )
+    } catch (error: Throwable) {
+      recordNativeLog(
+        "SharedFiles",
+        "wake packet send failed reason=$reason error=${error.message ?: error.javaClass.simpleName}",
+        Log.WARN,
+      )
+      clearSharedFilesReachability(reason = "${reason}_wake_send_failed")
+      return null
+    }
+
+    val deadline = SystemClock.elapsedRealtime() + SHARED_LAN_WAKE_POLL_TIMEOUT_MS
+    while (SystemClock.elapsedRealtime() < deadline) {
+      // Early exit if P2P tunnel becomes active
+      val snapshot = p2pTunnelRouteSnapshot()
+      if (snapshot.isActive && snapshot.port != null) {
+        val wokeHost = "127.0.0.1:${snapshot.port}"
+        recordNativeLog("SharedFiles", "wake early P2P tunnel active host=$wokeHost reason=$reason")
+        updateSharedFilesReachability(
+          state = "available",
+          route = null,
+          routeOverride = "tunnel",
+          reason = AndroidSyncPrimitives.wakeLanReachableReason(reason),
+        )
+        return wokeHost
+      }
+
+      val latestBinding = loadBinding() ?: binding
+      val probeHost = latestBinding.host.takeIf { it.isNotBlank() } ?: binding.host
+      if (canReachSidecarHealth(probeHost, SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS)) {
+        val lanReachableReason = AndroidSyncPrimitives.wakeLanReachableReason(reason)
+        val updated = updateBindingConnectionState(latestBinding, "connected", reason = lanReachableReason)
+        val recoveredHost = updated?.host?.takeIf { it.isNotBlank() } ?: probeHost
+        updateSharedFilesReachability(
+          state = "available",
+          route = null,
+          routeOverride = "lan",
+          reason = lanReachableReason,
+        )
+        recordNativeLog("SharedFiles", "wake LAN reachable host=$recoveredHost reason=$reason")
+        if (confirmDesktopFullResume(recoveredHost, latestBinding.deviceId, wakeAttemptStartedAt, reason)) {
+          val fullResumeReason = AndroidSyncPrimitives.wakeFullResumeConfirmedReason(reason)
+          recordNativeLog("SharedFiles", "wake full resume confirmed host=$recoveredHost reason=$reason")
+          updateBindingConnectionState(loadBinding() ?: updated ?: latestBinding, "connected", reason = fullResumeReason)
+        } else {
+          recordNativeLog(
+            "SharedFiles",
+            "LAN reachable but desktop full wake not confirmed host=$recoveredHost reason=$reason",
+          )
+        }
+        return recoveredHost
+      }
+
+      Thread.sleep(SHARED_LAN_WAKE_POLL_INTERVAL_MS)
+    }
+
+    recordNativeLog("SharedFiles", "wake polling exhausted reason=$reason")
+    logPeerProxySkipDiagnostics()
+    clearSharedFilesReachability(reason = "${reason}_wake_polling_exhausted")
+    return null
+  }
+
+  private fun confirmDesktopFullResume(
+    host: String,
+    expectedDeviceId: String,
+    wakeAttemptStartedAt: String,
+    reason: String,
+  ): Boolean {
+    val clientId = getOrCreateClientId()
+    val url = try {
+      URL(AndroidSyncPrimitives.buildPresenceHeartbeatUrl(host, DEFAULT_SIDECAR_HTTP_PORT, clientId))
+    } catch (error: Throwable) {
+      recordNativeLog(
+        "SharedFiles",
+        "wake full resume unconfirmed host=$host reason=$reason invalidPresenceTarget error=${error.message ?: error.javaClass.simpleName}",
+      )
+      return false
+    }
+    val connection = url.openConnection() as HttpURLConnection
+    return try {
+      connection.requestMethod = "POST"
+      connection.connectTimeout = SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS
+      connection.readTimeout = SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS
+      connection.doOutput = true
+      connection.setRequestProperty("Content-Type", "application/json")
+      connection.outputStream.use { output -> writeUtf8(output, "{}") }
+      val statusCode = connection.responseCode
+      val body = readResponseBody(connection, statusCode)
+      if (statusCode !in 200..299) {
+        recordNativeLog(
+          "SharedFiles",
+          "wake full resume unconfirmed host=$host reason=$reason status=$statusCode",
+        )
+        return false
+      }
+      val payload = JSONObject(body)
+      val responseServerId = payload.optString("serverId").takeIf { it.isNotBlank() }
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(expectedDeviceId, responseServerId)) {
+        recordNativeLog(
+          "SharedFiles",
+          "wake full resume unconfirmed host=$host reason=$reason expectedServerId=$expectedDeviceId responseServerId=${responseServerId ?: "nil"}",
+        )
+        return false
+      }
+      val power = payload.optJSONObject("power")
+      val lastResumeAt = power?.optString("lastResumeAt")?.takeIf { it.isNotBlank() }.orEmpty()
+      val confirmed = AndroidSyncPrimitives.isFullWakeConfirmed(
+        lastResumeAt = lastResumeAt,
+        wakeAttemptStartedAt = wakeAttemptStartedAt,
+      )
+      recordNativeLog(
+        "SharedFiles",
+        "wake full resume check host=$host reason=$reason confirmed=$confirmed attemptStartedAt=$wakeAttemptStartedAt lastResumeAt=${lastResumeAt.ifBlank { "nil" }}",
+      )
+      confirmed
+    } catch (error: Throwable) {
+      recordNativeLog(
+        "SharedFiles",
+        "wake full resume unconfirmed host=$host reason=$reason error=${error.message ?: error.javaClass.simpleName}",
+      )
+      false
+    } finally {
+      connection.disconnect()
+    }
+  }
+
+  private fun describeWakeTarget(target: AndroidWakeTarget): String {
+    val ports = target.ports
+      .filter { it in 1..65_535 }
+      .joinToString(",")
+    return "interface=${target.interfaceName} mac=${maskedWakeMacAddress(target.macAddress)} ipv4=${target.ipv4Address} broadcast=${target.broadcastAddress} ports=$ports"
+  }
+
+  private fun describeWakeDestinations(destinations: List<AndroidWakePacketDestination>): String =
+    destinations.joinToString(",") { "${it.host}:${it.port}" }
+
+  private fun describeWakeFailures(failures: List<WakePacketSendFailure>): String =
+    failures.joinToString(",") { "${it.destination.host}:${it.destination.port}=${it.error}" }
+
+  private fun maskedWakeMacAddress(macAddress: String): String {
+    val parts = macAddress.trim().replace("-", ":").lowercase().split(":")
+    return if (parts.size == 6) {
+      "**:**:**:**:${parts[4]}:${parts[5]}"
+    } else {
+      "<invalid>"
+    }
+  }
+
+  private data class WakeOnLanSendResult(
+    val sentPackets: Int,
+    val destinations: List<AndroidWakePacketDestination>,
+    val failures: List<WakePacketSendFailure>,
+  )
+
+  private data class WakePacketSendFailure(
+    val destination: AndroidWakePacketDestination,
+    val error: String,
+  )
+
+  private fun sendWakeOnLanPackets(
+    targets: List<AndroidWakeTarget>,
+    publicTarget: AndroidPublicWakeTarget? = null
+  ): WakeOnLanSendResult {
+    val repeatCount = 3
+    var sentPackets = 0
+    val destinations = mutableListOf<AndroidWakePacketDestination>()
+    val failures = mutableListOf<WakePacketSendFailure>()
+    val seenFailures = mutableSetOf<String>()
+    DatagramSocket().use { socket ->
+      socket.broadcast = true
+      for (target in targets) {
+        val packetBytes = AndroidSyncPrimitives.buildWakeOnLanMagicPacket(target.macAddress)
+        val targetDestinations = AndroidSyncPrimitives.wakePacketDestinations(target).toMutableList()
+        if (publicTarget != null && publicTarget.enabled && publicTarget.host.isNotBlank()) {
+          targetDestinations.add(AndroidWakePacketDestination(publicTarget.host.trim(), publicTarget.port))
+        }
+        val uniqueDestinations = targetDestinations.distinct()
+        destinations.addAll(uniqueDestinations)
+        repeat(repeatCount) { round ->
+          for (destination in uniqueDestinations) {
+            try {
+              val address = InetAddress.getByName(destination.host)
+              socket.send(DatagramPacket(packetBytes, packetBytes.size, address, destination.port))
+              sentPackets += 1
+            } catch (error: Throwable) {
+              val errorDescription = error.message ?: error.javaClass.simpleName
+              val failureKey = "${destination.host}:${destination.port}:$errorDescription"
+              if (seenFailures.add(failureKey)) {
+                failures.add(WakePacketSendFailure(destination, errorDescription))
+              }
+            }
+          }
+          if (round < repeatCount - 1) {
+            Thread.sleep(250)
+          }
+        }
+      }
+    }
+    if (sentPackets == 0) {
+      val details = failures.joinToString(",") { "${it.destination.host}:${it.destination.port}=${it.error}" }
+      throw IllegalStateException("all wake packets failed failures=$details")
+    }
+    return WakeOnLanSendResult(sentPackets, destinations, failures)
+  }
+
+  private fun canReachSidecarHealth(host: String, timeoutMs: Int): Boolean {
+    if (host.isBlank()) {
+      return false
+    }
+    val connection = try {
+      URL("http", host, DEFAULT_SIDECAR_HTTP_PORT, "/health").openConnection() as HttpURLConnection
+    } catch (_: Throwable) {
+      return false
+    }
+    return try {
+      connection.requestMethod = "GET"
+      connection.connectTimeout = timeoutMs
+      connection.readTimeout = timeoutMs
+      val status = connection.responseCode
+      if (status !in 200..299) {
+        return false
+      }
+      val json = JSONObject(readResponseBody(connection, status))
+      json.optBoolean("ok", false) && json.optString("service") == "syncflow-sidecar"
+    } catch (_: Throwable) {
+      false
+    } finally {
+      connection.disconnect()
+    }
   }
 
   private fun encodePath(path: String): String =
@@ -2950,13 +3439,14 @@ class NativeSyncEngineModule(
   private fun updateSharedFilesReachability(
     state: String,
     route: SharedFileRoute?,
+    routeOverride: String? = null,
     reason: String,
   ) {
     val binding = loadBinding() ?: return
     val next = SharedFilesReachability(
       deviceId = binding.deviceId,
       state = state,
-      route = route?.reachabilityRoute,
+      route = route?.reachabilityRoute ?: routeOverride,
       reason = reason,
       updatedAt = isoNow(),
     )
@@ -3380,6 +3870,8 @@ class NativeSyncEngineModule(
         throw IllegalStateException(body.ifBlank { "Sidecar returned HTTP $statusCode" })
       }
       val payload = JSONObject(body)
+      val responseWake = AndroidSyncPrimitives.parseWakeCapability(payload.optJSONObject("wake"))
+      val hasWakePayload = payload.has("wake") && !payload.isNull("wake")
       val responseServerId = payload.optString("serverId").takeIf { it.isNotBlank() }
       if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId)) {
         recordDiagnosticsLog(
@@ -3397,7 +3889,10 @@ class NativeSyncEngineModule(
       if (current != null && current.deviceId == binding.deviceId && current.connectionState != "connected") {
         updateBindingConnectionState(current, "connected", reason = successReason)
       }
-      recordDiagnosticsLog("Presence", "heartbeat succeeded host=${binding.host} status=$statusCode reason=$successReason")
+      recordDiagnosticsLog(
+        "Presence",
+        "heartbeat succeeded host=${binding.host} status=$statusCode reason=$successReason hasWakePayload=$hasWakePayload ${wakeCapabilityLogSummary(responseWake)}",
+      )
       true
     } catch (error: Throwable) {
       recordDiagnosticsLog(
@@ -3548,17 +4043,36 @@ class NativeSyncEngineModule(
     }
     val serverName = payload.optString("serverName").takeIf { it.isNotBlank() }
     val shareName = payload.optString("shareName").takeIf { it.isNotBlank() }
+    val hasWakePayload = payload.has("wake") && !payload.isNull("wake")
+    val wake = AndroidSyncPrimitives.parseWakeCapability(payload.optJSONObject("wake"))
+    if (hasWakePayload) {
+      recordDiagnosticsLog(
+        "SyncEngine",
+        "presence metadata candidate host=$host ${wakeCapabilityLogSummary(wake)} existingWakeUsable=${current.wake?.hasUsableTargets == true}",
+      )
+    }
     val updated = current.copy(
       host = host,
       deviceName = serverName ?: current.deviceName,
       shareEnabled = shareName != null,
       shareName = shareName,
+      wake = AndroidSyncPrimitives.mergeWakeCapability(wake, current.wake),
     )
     if (updated == current) {
+      if (hasWakePayload) {
+        recordDiagnosticsLog(
+          "SyncEngine",
+          "presence metadata unchanged host=$host ${wakeCapabilityLogSummary(wake)}",
+        )
+      }
       return
     }
     saveBinding(updated)
     emitBindingStateChanged(updated)
+    recordDiagnosticsLog(
+      "SyncEngine",
+      "binding metadata refreshed from presence host=$host ${wakeCapabilityLogSummary(updated.wake)} shareEnabled=${updated.shareEnabled}",
+    )
   }
 
   private fun refreshBindingReachability(binding: StoredBinding?): StoredBinding? {
@@ -3604,6 +4118,39 @@ class NativeSyncEngineModule(
 
   private fun isBindingConnected(binding: StoredBinding?): Boolean =
     binding?.connectionState == "connected"
+
+  private fun retryLanReconnectInternal(allowWake: Boolean) {
+    if (shouldRequestNearbyWifiPermission()) {
+      recordNativeLog(
+        "Discovery",
+        "retryLanReconnect skipped discovery because nearby wifi permission is required",
+        Log.WARN,
+      )
+    } else {
+      startDiscoveryInternal()
+    }
+
+    val binding = loadBinding()
+    if (binding == null) {
+      recordDiagnosticsLog("SyncEngine", "retryLanReconnect skipped: no binding")
+      return
+    }
+    if (canReachSidecarHealth(binding.host, BINDING_PROBE_TIMEOUT_MS)) {
+      updateBindingConnectionState(binding, "connected", reason = "manual_lan_reconnect_succeeded")
+      startForegroundSyncRound(reason = "manual_trigger", threadName = "NativeSyncEngineSync")
+      return
+    }
+    if (!allowWake) {
+      recordDiagnosticsLog("SyncEngine", "retryLanReconnect LAN host unavailable; wake disabled")
+      return
+    }
+    if (attemptSharedFilesLANWakeIfNeeded(binding, "manual_lan_reconnect", allowPublicWake = false) != null) {
+      sendPresenceHeartbeatAsync(binding, reason = "manual_lan_reconnect_presence", recoverOnFailure = false)
+      startForegroundSyncRound(reason = "manual_trigger", threadName = "NativeSyncEngineSync")
+    } else {
+      recordDiagnosticsLog("SyncEngine", "retryLanReconnect wake did not recover LAN host")
+    }
+  }
 
   private fun AndroidSyncOverviewFields.toWritableMap(): WritableMap {
     return Arguments.createMap().apply {
@@ -4851,6 +5398,7 @@ class NativeSyncEngineModule(
     val shareName: String?,
     val lastBoundAt: String,
     val connectionState: String,
+    val wake: AndroidWakeCapability? = null,
   ) {
     fun toWritableMap(): WritableMap {
       return Arguments.createMap().apply {
@@ -4868,6 +5416,53 @@ class NativeSyncEngineModule(
         }
         putString("lastBoundAt", lastBoundAt)
         putString("connectionState", connectionState)
+        if (wake == null) {
+          putNull("wake")
+        } else {
+          putMap("wake", wake.toWritableMap())
+        }
+      }
+    }
+
+    private fun AndroidWakeCapability.toWritableMap(): WritableMap {
+      return Arguments.createMap().apply {
+        putBoolean("supported", supported)
+        putString("updatedAt", updatedAt)
+        putArray(
+          "targets",
+          Arguments.createArray().apply {
+            for (target in targets) {
+              pushMap(
+                Arguments.createMap().apply {
+                  putString("interfaceName", target.interfaceName)
+                  putString("macAddress", target.macAddress)
+                  putString("ipv4Address", target.ipv4Address)
+                  putString("broadcastAddress", target.broadcastAddress)
+                  putArray(
+                    "ports",
+                    Arguments.createArray().apply {
+                      target.ports.forEach { pushInt(it) }
+                    },
+                  )
+                },
+              )
+            }
+          },
+        )
+        if (publicTarget == null) {
+          putNull("publicTarget")
+        } else {
+          putMap(
+            "publicTarget",
+            Arguments.createMap().apply {
+              putString("kind", publicTarget.kind)
+              putString("host", publicTarget.host)
+              putInt("port", publicTarget.port)
+              putBoolean("enabled", publicTarget.enabled)
+              putString("updatedAt", publicTarget.updatedAt)
+            }
+          )
+        }
       }
     }
 
@@ -4884,6 +5479,7 @@ class NativeSyncEngineModule(
         put("shareName", shareName ?: JSONObject.NULL)
         put("lastBoundAt", lastBoundAt)
         put("connectionState", connectionState)
+        put("wake", wake?.toJson() ?: JSONObject.NULL)
       }
     }
 
@@ -4899,6 +5495,8 @@ class NativeSyncEngineModule(
         put("shareName", shareName ?: JSONObject.NULL)
         put("lastBoundAt", lastBoundAt)
         put("connectionState", connectionState)
+        put("wakeSupported", wake?.supported ?: false)
+        put("wakeTargetCount", wake?.targets?.size ?: 0)
       }
     }
 
@@ -4918,6 +5516,7 @@ class NativeSyncEngineModule(
           lastBoundAt = json.optString("lastBoundAt"),
           connectionState = json.optString("connectionState")
             .ifBlank { "bound" },
+          wake = AndroidSyncPrimitives.parseWakeCapability(json.optJSONObject("wake")),
         )
       }
     }
@@ -5088,6 +5687,9 @@ class NativeSyncEngineModule(
     private const val SHARED_DOWNLOAD_TIMEOUT_MS = 300_000
     private const val SHARED_TUNNEL_ROUTE_WAIT_MS = 4_000L
     private const val SHARED_TUNNEL_ROUTE_POLL_MS = 120L
+    private const val SHARED_LAN_WAKE_POLL_TIMEOUT_MS = 25_000L
+    private const val SHARED_LAN_WAKE_POLL_INTERVAL_MS = 1_000L
+    private const val SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS = 1_000
     private const val FILE_CHUNK_SIZE = 1024 * 1024
     private const val SPEED_SAMPLE_INTERVAL_MS = 500L
     private val MAGIC_BYTES = byteArrayOf('L'.code.toByte(), 'M'.code.toByte(), 'U'.code.toByte(), 'P'.code.toByte())

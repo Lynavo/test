@@ -46,6 +46,7 @@ type ErrorKind =
   | 'device_unavailable'
   | 'directory_inaccessible'
   | 'personal_unauthorized'
+  | 'remote_wake_setup_required'
   | 'network_error';
 
 interface DeviceAvailability {
@@ -100,6 +101,25 @@ function fileTypeIcon(file: SharedFileDTO): { name: string; color: string } {
     return { name: 'videocam-outline', color: '#3b82f6' };
   if (file.type === 'image') return { name: 'image-outline', color: '#06b6d4' };
   return { name: 'document-outline', color: '#8b5cf6' };
+}
+
+function errorMessageText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === 'string' ? message : '';
+  }
+  return '';
+}
+
+function isSharedFileUnavailableError(error: unknown): boolean {
+  const message = errorMessageText(error).toLowerCase();
+  return (
+    message.includes('http 404') ||
+    message.includes('http 410') ||
+    message.includes('not found')
+  );
 }
 
 function documentMimeType(file: SharedFileDTO): string | undefined {
@@ -256,6 +276,15 @@ function sharedFilesConnectionStatusFromReachability(
   return null;
 }
 
+function isRemoteWakeSetupRequiredReachability(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { state?: unknown }).state === 'unavailable' &&
+    (value as { reason?: unknown }).reason === 'wake_setup_required'
+  );
+}
+
 function fallbackSavedLocation(
   file: SharedFileDTO,
   result: {
@@ -376,6 +405,22 @@ export function SharedFilesScreen() {
       clearTimeout(recoveryRetryTimerRef.current);
       recoveryRetryTimerRef.current = null;
     }
+  }, []);
+
+  const showRemoteWakeSetupRequired = useCallback(() => {
+    loadRequestSeqRef.current += 1;
+    activeLoadRef.current = null;
+    bindingAvailabilityRef.current = {
+      deviceId: bindingAvailabilityRef.current.deviceId,
+      available: false,
+    };
+    setSharedFilesConnectionStatus('unavailable');
+    setErrorKind('remote_wake_setup_required');
+    setFiles([]);
+    setLoading(false);
+    console.warn(
+      '[SharedFiles] remote wake setup required: public wake target not configured',
+    );
   }, []);
 
   const loadFiles = useCallback(
@@ -596,6 +641,15 @@ export function SharedFilesScreen() {
           setSharedFilesConnectionStatus(nextSharedFilesConnectionStatus);
         }
         if (
+          trustSharedFilesReachability &&
+          isRemoteWakeSetupRequiredReachability(state.sharedFilesReachability)
+        ) {
+          bindingAvailabilityRef.current = { deviceId, available: false };
+          setActiveDeviceId(deviceId);
+          showRemoteWakeSetupRequired();
+          return;
+        }
+        if (
           connState === 'connected' ||
           (trustSharedFilesReachability &&
             sharedFilesAvailable &&
@@ -639,7 +693,7 @@ export function SharedFilesScreen() {
     );
 
     return () => sub.remove();
-  }, [loadFiles, currentPath]);
+  }, [loadFiles, currentPath, showRemoteWakeSetupRequired]);
 
   useEffect(() => {
     const { NativeSyncEngine } = NativeModules;
@@ -662,6 +716,15 @@ export function SharedFilesScreen() {
         }
 
         if (!state?.deviceId) return;
+        if (isRemoteWakeSetupRequiredReachability(state)) {
+          bindingAvailabilityRef.current = {
+            deviceId: state.deviceId,
+            available: false,
+          };
+          setActiveDeviceId(state.deviceId);
+          showRemoteWakeSetupRequired();
+          return;
+        }
         if (state.state !== 'available') return;
 
         const previousAvailability = bindingAvailabilityRef.current;
@@ -683,7 +746,7 @@ export function SharedFilesScreen() {
     );
 
     return () => sub.remove();
-  }, [currentPath, errorKind, loadFiles]);
+  }, [currentPath, errorKind, loadFiles, showRemoteWakeSetupRequired]);
 
   useEffect(() => {
     const { NativeSyncEngine } = NativeModules;
@@ -821,7 +884,9 @@ export function SharedFilesScreen() {
       } catch (e) {
         Alert.alert(
           t('sharedFiles.dialogs.downloadFailed'),
-          t('sharedFiles.dialogs.downloadFailedMessage'),
+          isSharedFileUnavailableError(e)
+            ? t('sharedFiles.dialogs.downloadUnavailableMessage')
+            : t('sharedFiles.dialogs.downloadFailedMessage'),
         );
         console.warn('[SharedFiles] download error:', e);
       } finally {
@@ -1097,6 +1162,28 @@ export function SharedFilesScreen() {
         </Text>
         <Text style={styles.stateMessage}>
           {t('sharedFiles.personalUnauthorized.message')}
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          activeOpacity={0.7}
+          onPress={() => void loadFiles(currentPath)}
+        >
+          <Icon name="refresh-outline" size={16} color="#fff" />
+          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  } else if (errorKind === 'remote_wake_setup_required') {
+    content = (
+      <View style={styles.stateContainer}>
+        <View style={styles.stateIconCircle}>
+          <Icon name="alert-circle-outline" size={32} color="#9ab8cc" />
+        </View>
+        <Text style={styles.stateTitle}>
+          {t('sharedFiles.remoteWakeSetupRequired.title')}
+        </Text>
+        <Text style={styles.stateMessage}>
+          {t('sharedFiles.remoteWakeSetupRequired.message')}
         </Text>
         <TouchableOpacity
           style={styles.retryButton}

@@ -161,7 +161,7 @@ Windows 桌面包当前跟随 `docs/release/release-playbook.md` 中的 Windows 
 
 ## Release profile 打包规则
 
-AI 或人工执行 iOS TestFlight、Android APK、macOS DMG、Windows EXE/ZIP 正式打包时，必须优先使用根目录单一入口：
+AI 或人工执行 iOS TestFlight、Android APK/AAB、macOS DMG、Windows EXE/ZIP 正式打包时，必须优先使用根目录单一入口：
 
 ```bash
 pnpm release --profile <cn-prod|global-prod|cn-review|global-review> --targets ios,android,mac,win

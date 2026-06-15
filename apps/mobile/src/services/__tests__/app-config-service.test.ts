@@ -20,11 +20,29 @@ describe('app-config-service', () => {
       features: {
         gift_card: { enabled: true },
       },
+      network: {
+        caller_public_ip: '8.8.8.8',
+      },
     });
 
     await expect(getAppConfig()).resolves.toEqual({
       giftCard: { enabled: true },
       backgroundSilentAudio: { enabled: false },
+      network: { callerPublicIp: '8.8.8.8' },
+    });
+  });
+
+  it('ignores invalid caller public IP values', async () => {
+    (apiGet as jest.Mock).mockResolvedValueOnce({
+      network: {
+        caller_public_ip: '192.168.1.10',
+      },
+    });
+
+    await expect(getAppConfig()).resolves.toEqual({
+      giftCard: { enabled: false },
+      backgroundSilentAudio: { enabled: false },
+      network: { callerPublicIp: null },
     });
   });
 

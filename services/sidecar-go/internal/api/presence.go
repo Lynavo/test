@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -86,9 +87,20 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if device != nil && device.RevokedAt == nil {
-		if capability := s.wakeCapability(); capability != nil {
+		capability := s.wakeCapability()
+		if capability != nil {
 			body["wake"] = capability
 		}
+		if powerSnapshot := s.power.Snapshot(); powerSnapshot != nil {
+			body["power"] = powerSnapshot
+		}
+		attrs := append(
+			[]any{"clientID", clientID, "paired", true},
+			wakeCapabilityLogAttrs(capability)...,
+		)
+		slog.Info("presence response wake metadata", attrs...)
+	} else {
+		slog.Info("presence response omits wake metadata", "clientID", clientID, "paired", false)
 	}
 
 	writeJSON(w, http.StatusOK, body)

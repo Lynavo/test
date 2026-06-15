@@ -36,6 +36,7 @@ import {
   cancelAllManualUploads,
   disableAutoUpload,
   enableAutoUpload,
+  retryLanReconnect,
 } from '../services/SyncEngineModule';
 import {
   hasSeenSyncActivityTour,
@@ -1054,12 +1055,7 @@ export function SyncActivityScreen() {
 
   const handleReconnect = useCallback(async () => {
     try {
-      const { NativeSyncEngine } = NativeModules;
-      if (!NativeSyncEngine) return;
-      await NativeSyncEngine.startDiscovery();
-      NativeSyncEngine.triggerSync?.().catch((e: Error) => {
-        console.warn('[SyncActivity] triggerSync failed:', e);
-      });
+      await retryLanReconnect({ allowWake: true });
     } catch (e) {
       console.warn('[SyncActivity] reconnect error:', e);
       Alert.alert(

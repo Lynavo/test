@@ -50,6 +50,16 @@ type GiftCardRedeemPayload = {
   code: string;
 };
 
+export type PowerEventSnapshot = {
+  event: 'suspend' | 'resume' | 'lock-screen' | 'unlock-screen';
+  state: 'awake' | 'sleeping' | 'locked' | 'unlocked';
+  lastSuspendAt: string | null;
+  lastResumeAt: string | null;
+  lastLockAt: string | null;
+  lastUnlockAt: string | null;
+  updatedAt: string;
+};
+
 type SendSMSCodePayload = {
   phone: string;
 };
@@ -739,6 +749,10 @@ export interface SidecarHealth {
   capabilities?: {
     revokesPairingsOnCodeRotation?: boolean;
   };
+  tunnel?: {
+    signalingAuthState?: 'ok' | 'refresh_required' | string;
+    credentialRefreshRequired?: boolean;
+  };
 }
 
 export function supportsPairingRevocationOnCodeRotation(
@@ -833,6 +847,8 @@ async function request<T>(
 
 export const sidecarClient = {
   getHealth: () => request<SidecarHealth>('GET', '/health'),
+  updatePowerState: (snapshot: PowerEventSnapshot) =>
+    request<{ ok: boolean }>('POST', '/power/state', snapshot),
   getDashboardSummary: () =>
     request<import('@syncflow/contracts').DashboardSummaryDTO>('GET', '/dashboard/summary'),
   getDashboardDevices: () =>

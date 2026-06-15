@@ -310,6 +310,33 @@ func TestP2PManagerUpdatePairedDevicesRefreshesActiveRegistration(t *testing.T) 
 	}
 }
 
+func TestP2PManagerMarksRefreshRequiredOnInvalidSignalingToken(t *testing.T) {
+	signalingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tunnel/signaling" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, `{"error":"invalid signaling token"}`, http.StatusUnauthorized)
+	}))
+	defer signalingSrv.Close()
+
+	m := NewP2PManager("desktop-123", signalingSrv.URL, "127.0.0.1:39394", "expired-token")
+	m.Start(nil)
+	defer m.Stop()
+
+	deadline := time.After(2 * time.Second)
+	for {
+		if m.SignalingAuthState() == SignalingAuthRefreshRequired {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("expected signaling auth state %q, got %q", SignalingAuthRefreshRequired, m.SignalingAuthState())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
 func TestP2PManagerReplacesPeerConnectionOnRepeatedOffer(t *testing.T) {
 	mockLocalHTTPSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

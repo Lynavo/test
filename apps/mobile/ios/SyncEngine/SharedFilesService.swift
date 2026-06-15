@@ -47,6 +47,15 @@ struct SharedFileLocalSaveError: Error, LocalizedError {
     }
 }
 
+struct SharedFileHTTPStatusError: Error, LocalizedError {
+    let statusCode: Int
+    let path: String
+
+    var errorDescription: String? {
+        "Sidecar returned HTTP \(statusCode) for \(path)"
+    }
+}
+
 private struct SharedFilePartialDownloadMetadata: Codable {
     let validator: String
     let expectedBytes: Int64?
@@ -121,8 +130,9 @@ private final class SharedFileDownloadDelegate: NSObject, URLSessionDataDelegate
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
-            streamError = SyncEngineError.networkError(
-                "Sidecar returned HTTP \(httpResponse.statusCode) for shared file download"
+            streamError = SharedFileHTTPStatusError(
+                statusCode: httpResponse.statusCode,
+                path: "shared file download"
             )
             completionHandler(.cancel)
             return
@@ -695,8 +705,9 @@ class SharedFilesService {
             throw SyncEngineError.networkError("Missing HTTP response for \(path)")
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
-            throw SyncEngineError.networkError(
-                "Sidecar returned HTTP \(httpResponse.statusCode) for \(path)"
+            throw SharedFileHTTPStatusError(
+                statusCode: httpResponse.statusCode,
+                path: path
             )
         }
     }

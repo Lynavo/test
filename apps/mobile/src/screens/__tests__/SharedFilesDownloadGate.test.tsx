@@ -392,6 +392,61 @@ describe('SharedFilesScreen download progress', () => {
     expect(mockBrowseDirectory).not.toHaveBeenCalled();
   });
 
+  test('shows remote wake setup guidance when shared files require a public wake target', async () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      subscription: { status: 'trialing' },
+      loadSubscription: jest.fn(),
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    let resolveBrowse: (value: {
+      scope: string;
+      path: string;
+      files: Array<typeof FAKE_FILE>;
+    }) => void = () => undefined;
+    mockBrowseDirectory.mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolveBrowse = resolve;
+        }),
+    );
+
+    try {
+      const { getByText, queryByText } = render(<SharedFilesScreen />);
+
+      await waitFor(() => expect(mockBrowseDirectory).toHaveBeenCalledTimes(1));
+      expect(getByText('Loading...')).toBeTruthy();
+
+      await act(async () => {
+        nativeListeners.get('onSharedFilesReachabilityChanged')?.({
+          deviceId: 'device-1',
+          state: 'unavailable',
+          route: 'wan',
+          reason: 'wake_setup_required',
+        });
+      });
+
+      expect(queryByText('Loading...')).toBeNull();
+      expect(getByText('Remote Wake Setup Required')).toBeTruthy();
+      expect(
+        getByText(
+          'This phone is not on the desktop network. If the desktop is asleep, enable Remote Wake in Settings or switch back to the same Wi-Fi.',
+        ),
+      ).toBeTruthy();
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[SharedFiles] remote wake setup required: public wake target not configured',
+      );
+
+      await act(async () => {
+        resolveBrowse({ scope: 'team', path: '', files: [FAKE_FILE] });
+        await Promise.resolve();
+      });
+      expect(getByText('Remote Wake Setup Required')).toBeTruthy();
+      expect(queryByText('photo.jpg')).toBeNull();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   test('does not show LAN online for a bound binding before shared files reachability is verified', async () => {
     (useAuth as jest.Mock).mockReturnValue({
       subscription: { status: 'trialing' },

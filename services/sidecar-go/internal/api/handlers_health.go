@@ -11,6 +11,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	if capability := s.wakeCapability(); capability != nil {
 		wakeSupported = capability.Supported
 	}
+	signalingAuthState := s.tunnelSignalingAuthState()
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                      true,
@@ -20,6 +21,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		"capabilities": map[string]any{
 			"revokesPairingsOnCodeRotation": true,
 			"wakeOnLanSupported":            wakeSupported,
+		},
+		"tunnel": map[string]any{
+			"signalingAuthState":        signalingAuthState,
+			"credentialRefreshRequired": signalingAuthState == protocol.SignalingAuthRefreshRequired,
 		},
 	})
 }

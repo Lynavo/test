@@ -160,7 +160,7 @@
     },
     "reconnectFailed": {
       "title": "重连失败",
-      "body": "请稍后重试"
+      "body": "重新连接只会尝试局域网或 VPN-LAN 路径。若电脑正在睡眠，请确认 macOS 已开启\"唤醒以供网络访问\"，或 Windows 已开启 BIOS/UEFI 与网卡 Magic Packet 唤醒。"
     },
     "switchDevice": {
       "title": "切换设备",

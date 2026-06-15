@@ -1,7 +1,8 @@
-import { app, BrowserWindow, powerSaveBlocker } from 'electron';
+import { app, BrowserWindow, powerMonitor, powerSaveBlocker } from 'electron';
 import log from 'electron-log';
 import { join } from 'path';
 import { registerIpcHandlers } from './ipc-handlers';
+import { attachPowerEventLogging } from './power-event-logging';
 import { PowerSaveCoordinator } from './power-save-coordinator';
 import { PowerSaveManager } from './power-save-manager';
 import { PowerSavePreferences } from './power-save-preferences';
@@ -88,6 +89,11 @@ app.whenReady().then(async () => {
   log.info(
     `[App] ready version=${app.getVersion()} packaged=${app.isPackaged} platform=${process.platform} arch=${process.arch}`,
   );
+  attachPowerEventLogging(powerMonitor, (snapshot) => {
+    sidecarClient.updatePowerState(snapshot).catch((error) => {
+      log.warn('[power] failed to sync state to sidecar', error);
+    });
+  });
   void requestMacFilesAndFoldersPermissionsOnStartup();
   const powerSavePreferences = new PowerSavePreferences(app.getPath('userData'));
   powerSaveManager.setEnabled(powerSavePreferences.read().preventSleepDuringTransfer);

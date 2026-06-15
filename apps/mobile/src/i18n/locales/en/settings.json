@@ -167,5 +167,26 @@
       "confirmAgainBody": "This is your final confirmation. Deleted data cannot be recovered.",
       "confirmAgainButton": "Delete account"
     }
+  },
+  "remoteWake": {
+    "title": "Remote Wake",
+    "lanStatus": "LAN Wake Status",
+    "lanStatusCached": "LAN wake targets cached",
+    "lanStatusNotCached": "No LAN wake targets cached. Connect once on same LAN to cache.",
+    "autoReadyTitle": "Desktop wake details collected automatically",
+    "autoReadyBody": "Remote wake still requires router Wake-on-WAN or UDP forwarding. Vivi Drop automatically applies the current public endpoint and suggested port; adjust them below if your router uses different forwarding.",
+    "autoMissingTitle": "Desktop wake details not collected yet",
+    "autoMissingBody": "Connect the phone and desktop once on the same Wi-Fi. Vivi Drop will cache the MAC address, broadcast address, and suggested port automatically.",
+    "enableHint": "When enabled, opening My Computer from an external network will try remote wake first. If the router is not configured, the desktop may still not wake.",
+    "advancedTitle": "Advanced manual settings",
+    "wowEnable": "Enable Wake-on-WAN",
+    "wowHostLabel": "Public Host / IP",
+    "wowHostPlaceholder": "e.g., DDNS domain or public IP",
+    "wowPortLabel": "Port",
+    "wowSave": "Save Remote Wake Setting",
+    "wowSaving": "Saving...",
+    "wowSaveSuccess": "Remote wake settings saved successfully",
+    "invalidHost": "Please enter a valid host or IP address",
+    "invalidPort": "Please enter a valid port number (1-65535)"
   }
 }

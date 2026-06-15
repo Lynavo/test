@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,13 +14,15 @@ vi.mock('electron', () => {
   const { tmpdir } = require('node:os');
   const { join } = require('node:path');
   const userDataPath = join(tmpdir(), 'vividrop-test-userdata');
+  const appPath = join(tmpdir(), 'vividrop-sidecar-client-test-app');
   const { mkdirSync } = require('node:fs');
   try {
     mkdirSync(userDataPath, { recursive: true });
+    mkdirSync(appPath, { recursive: true });
   } catch {}
   return {
     app: {
-      getAppPath: () => '/tmp/vividrop-app',
+      getAppPath: () => appPath,
       getName: () => 'Vivi Drop',
       getVersion: () => '0.1.0',
       getPath: (name: string) => {
@@ -78,10 +80,14 @@ const remoteClientHeaders = {
   'X-Client-App': 'vividrop-desktop',
   'X-Client-Platform': process.platform,
   'X-Client-Version': '0.1.0',
+  'X-Client-Build': '50',
 };
 
 describe('sidecarClient', () => {
   beforeEach(() => {
+    const appPackageJson = join(tmpdir(), 'vividrop-sidecar-client-test-app', 'package.json');
+    mkdirSync(join(tmpdir(), 'vividrop-sidecar-client-test-app'), { recursive: true });
+    writeFileSync(appPackageJson, '{"syncflowBuildNumber":50}', 'utf8');
     const sessionFile = join(tmpdir(), 'vividrop-test-userdata', 'session.json');
     if (existsSync(sessionFile)) {
       try {

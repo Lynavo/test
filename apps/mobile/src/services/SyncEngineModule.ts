@@ -120,6 +120,25 @@ export async function cancelAllManualUploads(): Promise<void> {
   await NativeSyncEngine.cancelAllManualUploads();
 }
 
+export async function retryLanReconnect(params: {
+  allowWake: boolean;
+}): Promise<void> {
+  if (typeof NativeSyncEngine.retryLanReconnect === 'function') {
+    await NativeSyncEngine.retryLanReconnect(params);
+    return;
+  }
+  await NativeSyncEngine.startDiscovery?.();
+  await NativeSyncEngine.triggerSync?.();
+}
+
+export async function savePublicWakeTarget(config: {
+  host: string;
+  port: number;
+  enabled: boolean;
+}): Promise<void> {
+  await NativeSyncEngine.savePublicWakeTarget(config);
+}
+
 /** Interrupt auto upload: stops processing auto items, persists 'interrupted' state. */
 export async function interruptAutoUpload(): Promise<void> {
   await NativeSyncEngine.pauseAutoUpload();

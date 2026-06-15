@@ -64,7 +64,7 @@ pnpm check
 
 ## 發佈與 Review 打包
 
-正式發佈、Review 包、TestFlight 上傳、Android APK、Desktop DMG / EXE 都應先選 release profile，避免手動拼接 market 或 API base URL：
+正式發佈、Review 包、TestFlight 上傳、Android APK/AAB、Desktop DMG / EXE 都應先選 release profile，避免手動拼接 market 或 API base URL：
 
 ```bash
 # 檢查實際 market、Review 狀態、base URL 與會執行的命令
