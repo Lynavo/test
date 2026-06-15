@@ -85,11 +85,10 @@ func TestSharedResourceLifecycle(t *testing.T) {
 	}
 }
 
-func TestSharedResourceIgnoresCallerProvidedPathLikeResourceID(t *testing.T) {
+func TestSharedResourceGeneratedIDDoesNotLeakPathContent(t *testing.T) {
 	s := newTestStore(t)
 
 	added, err := s.AddSharedResource(SharedResourceInput{
-		ResourceID:      "/Users/test/Secret.mov",
 		DesktopDeviceID: "desktop-1",
 		Kind:            "shared_file",
 		DisplayName:     "Secret.mov",
@@ -98,9 +97,6 @@ func TestSharedResourceIgnoresCallerProvidedPathLikeResourceID(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("AddSharedResource: %v", err)
-	}
-	if added.ResourceID == "/Users/test/Secret.mov" {
-		t.Fatal("expected caller-provided path-like resource id to be ignored")
 	}
 	payload, err := json.Marshal(added)
 	if err != nil {

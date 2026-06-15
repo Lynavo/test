@@ -44,6 +44,10 @@ func TestNew_AllTablesExist(t *testing.T) {
 		"uploads",
 		"device_daily_stats",
 		"share_config",
+		"device_blocks",
+		"connection_attempts",
+		"shared_resources",
+		"access_records",
 	}
 
 	for _, table := range expectedTables {

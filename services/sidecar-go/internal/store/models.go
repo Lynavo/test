@@ -165,7 +165,6 @@ type SharedResource struct {
 }
 
 type SharedResourceInput struct {
-	ResourceID      string  `json:"resourceId,omitempty"`
 	DesktopDeviceID string  `json:"desktopDeviceId"`
 	Kind            string  `json:"kind"`
 	DisplayName     string  `json:"displayName"`
