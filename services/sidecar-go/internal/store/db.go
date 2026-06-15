@@ -20,6 +20,9 @@ var migration003SQL string
 //go:embed migrations/004_stable_device_id.sql
 var migration004SQL string
 
+//go:embed migrations/005_desktop_local_management.sql
+var migration005SQL string
+
 // Store wraps a SQLite database connection and provides CRUD operations
 // for all SyncFlow sidecar tables.
 type Store struct {
@@ -60,5 +63,8 @@ func (s *Store) migrate() error {
 	_, _ = s.db.Exec(migration003SQL)
 	// Migration 004: add stable_device_id column to paired_devices (idempotent — ignore if exists)
 	_, _ = s.db.Exec(migration004SQL)
+	if _, err := s.db.Exec(migration005SQL); err != nil {
+		return err
+	}
 	return nil
 }

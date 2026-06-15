@@ -105,3 +105,115 @@ type DashboardDeviceResult struct {
 	CurrentFileSize int64   `json:"currentFileSize,omitempty"`
 	SessionState    *string `json:"sessionState,omitempty"`
 }
+
+type ManagedDevice struct {
+	DesktopDeviceID     string  `json:"desktopDeviceId"`
+	ClientID            string  `json:"clientId"`
+	ClientIDShort       string  `json:"clientIdShort"`
+	DisplayName         string  `json:"displayName"`
+	Platform            string  `json:"platform"`
+	StableDeviceID      *string `json:"stableDeviceId,omitempty"`
+	LastIP              *string `json:"lastIp,omitempty"`
+	AuthorizedAt        *string `json:"authorizedAt,omitempty"`
+	LastSeenAt          *string `json:"lastSeenAt,omitempty"`
+	AuthorizationStatus string  `json:"authorizationStatus"`
+	BlockStatus         string  `json:"blockStatus"`
+	FailedAttemptCount  int     `json:"failedAttemptCount"`
+	BlockedAt           *string `json:"blockedAt,omitempty"`
+	BlockReason         *string `json:"blockReason,omitempty"`
+	TodayFileCount      int     `json:"todayFileCount"`
+	TodayBytes          int64   `json:"todayBytes"`
+	TotalFileCount      int     `json:"totalFileCount"`
+	TotalBytes          int64   `json:"totalBytes"`
+}
+
+type DeviceBlockState struct {
+	DesktopDeviceID     string  `json:"desktopDeviceId"`
+	ClientID            string  `json:"clientId"`
+	Blocked             bool    `json:"blocked"`
+	FailedAttemptCount  int     `json:"failedAttemptCount"`
+	RemainingAttempts   int     `json:"remainingAttempts"`
+	BlockedAt           *string `json:"blockedAt,omitempty"`
+	Reason              *string `json:"reason,omitempty"`
+	ManuallyUnblockedAt *string `json:"manuallyUnblockedAt,omitempty"`
+}
+
+type ConnectionAttempt struct {
+	ID                int64   `json:"id,omitempty"`
+	DesktopDeviceID   string  `json:"desktopDeviceId"`
+	ClientID          string  `json:"clientId"`
+	ClientName        *string `json:"displayName,omitempty"`
+	Result            string  `json:"result"`
+	FailureReason     *string `json:"failureReason,omitempty"`
+	AttemptedAt       string  `json:"attemptedAt"`
+	RemainingAttempts *int    `json:"remainingAttempts,omitempty"`
+}
+
+type SharedResource struct {
+	ResourceID      string  `json:"resourceId"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	Kind            string  `json:"kind"`
+	DisplayName     string  `json:"displayName"`
+	LocalPath       *string `json:"-"`
+	ReceivedFileKey *string `json:"receivedFileKey,omitempty"`
+	FileSize        *int64  `json:"fileSize,omitempty"`
+	MediaType       *string `json:"mediaType,omitempty"`
+	Status          string  `json:"status"`
+	AddedAt         string  `json:"addedAt"`
+	RemovedAt       *string `json:"removedAt,omitempty"`
+	LastAccessedAt  *string `json:"lastAccessedAt,omitempty"`
+	DownloadCount   int     `json:"downloadCount"`
+}
+
+type SharedResourceInput struct {
+	ResourceID      string  `json:"resourceId,omitempty"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	Kind            string  `json:"kind"`
+	DisplayName     string  `json:"displayName"`
+	LocalPath       *string `json:"-"`
+	ReceivedFileKey *string `json:"receivedFileKey,omitempty"`
+	FileSize        *int64  `json:"fileSize,omitempty"`
+	MediaType       *string `json:"mediaType,omitempty"`
+	Status          string  `json:"status"`
+}
+
+type AccessRecord struct {
+	RecordID        string  `json:"recordId"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	ClientID        string  `json:"clientId"`
+	ClientName      *string `json:"displayName,omitempty"`
+	ResourceID      string  `json:"resourceId"`
+	ResourceKind    string  `json:"resourceKind"`
+	ResourceName    string  `json:"resourceName"`
+	Action          string  `json:"action"`
+	Result          string  `json:"result"`
+	AccessedAt      string  `json:"accessedAt"`
+}
+
+type DesktopSyncRecord struct {
+	RecordID        string  `json:"recordId"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	ClientID        string  `json:"clientId"`
+	DisplayName     string  `json:"displayName"`
+	FileKey         string  `json:"fileKey"`
+	Filename        string  `json:"filename"`
+	MediaType       string  `json:"mediaType"`
+	FileSize        int64   `json:"fileSize"`
+	Status          string  `json:"status"`
+	CompletedAt     *string `json:"completedAt,omitempty"`
+	FailedAt        *string `json:"failedAt,omitempty"`
+	ErrorSummary    *string `json:"errorSummary,omitempty"`
+}
+
+type ReceivedLibraryItem struct {
+	ResourceID      string `json:"resourceId"`
+	DesktopDeviceID string `json:"desktopDeviceId"`
+	ClientID        string `json:"clientId"`
+	DisplayName     string `json:"displayName"`
+	FileKey         string `json:"fileKey"`
+	Filename        string `json:"filename"`
+	MediaType       string `json:"mediaType"`
+	FileSize        int64  `json:"fileSize"`
+	CompletedAt     string `json:"completedAt"`
+	ShareStatus     string `json:"shareStatus"`
+}
