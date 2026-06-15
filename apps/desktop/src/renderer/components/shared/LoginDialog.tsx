@@ -2,10 +2,11 @@ import React, { useState, useCallback } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import * as countryContracts from '@syncflow/contracts/countries';
 import type { CountryCodeInfo } from '@syncflow/contracts';
 import { isGlobalMarket } from '@renderer/../shared/market';
+import vividropLogo from '@renderer/assets/vividrop-logo-cutout.png';
 import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { Label } from '@renderer/components/ui/label';
@@ -75,7 +76,7 @@ type ContractsRuntime = {
 };
 
 function findCountryCodesExport(value: unknown, depth = 0): readonly CountryCodeInfo[] | null {
-  if ((!value || (typeof value !== 'object' && typeof value !== 'function')) || depth > 4) {
+  if (!value || (typeof value !== 'object' && typeof value !== 'function') || depth > 4) {
     return null;
   }
 
@@ -313,6 +314,8 @@ export function LoginDialog({
   const [smsCode, setSMSCode] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [showAgreementHint, setShowAgreementHint] = useState(false);
 
   React.useEffect(() => {
     if (open) {
@@ -326,8 +329,22 @@ export function LoginDialog({
       );
       setPhone('');
       setSMSCode('');
+      setAgreedToPrivacy(false);
+      setShowAgreementHint(false);
     }
   }, [i18n.language, i18n.resolvedLanguage, isGlobal, open]);
+
+  const termsCopy = getTermsCopy(i18n.resolvedLanguage || i18n.language);
+
+  const ensureAgreementAccepted = useCallback(() => {
+    if (agreedToPrivacy) {
+      setShowAgreementHint(false);
+      return true;
+    }
+
+    setShowAgreementHint(true);
+    return false;
+  }, [agreedToPrivacy]);
 
   const handleCountryChange = useCallback(
     (value: string) => {
@@ -401,6 +418,10 @@ export function LoginDialog({
   }, [phone, getFormattedPhone, t]);
 
   const handleSMSLogin = useCallback(async () => {
+    if (!ensureAgreementAccepted()) {
+      return;
+    }
+
     const trimmedPhone = phone.trim();
     const trimmedSMSCode = smsCode.trim();
     if (!trimmedPhone) {
@@ -439,10 +460,23 @@ export function LoginDialog({
     } finally {
       setIsLoggingIn(false);
     }
-  }, [phone, smsCode, getFormattedPhone, onOpenChange, onLoginSuccess, successMessage, t]);
+  }, [
+    ensureAgreementAccepted,
+    phone,
+    smsCode,
+    getFormattedPhone,
+    onOpenChange,
+    onLoginSuccess,
+    successMessage,
+    t,
+  ]);
 
   const handleOAuthLogin = useCallback(
     async (provider: OAuthProvider) => {
+      if (!ensureAgreementAccepted()) {
+        return;
+      }
+
       const auth = window.electronAPI?.auth;
       if (!auth?.loginWithOAuth) {
         toast.error(t('errors.settings.authUnavailable'));
@@ -470,20 +504,29 @@ export function LoginDialog({
         setIsLoggingIn(false);
       }
     },
-    [onOpenChange, onLoginSuccess, successMessage, t],
+    [ensureAgreementAccepted, onOpenChange, onLoginSuccess, successMessage, t],
   );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="border-white/70 bg-[#f7fbff]/96 p-0 text-[#17191c] shadow-[0_30px_90px_rgba(70,96,138,0.22)] backdrop-blur-2xl sm:max-w-[440px]">
+        <DialogHeader className="items-center space-y-0 px-5 pb-3 pt-5 text-center">
+          <div className="mb-4 flex items-center gap-3">
+            <img
+              src={vividropLogo}
+              alt=""
+              draggable={false}
+              className="h-9 w-auto object-contain"
+            />
+            <p className="text-[18px] font-semibold leading-none text-[#17191c]">ViviDrop</p>
+          </div>
+          <DialogTitle className="text-xl font-semibold text-[#17191c]">
             {title ||
               (isGlobal
                 ? t('settings.giftCard.phoneLogin.globalTitle')
                 : t('settings.giftCard.phoneLogin.title'))}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-2 text-xs leading-5 text-[#7b8490]">
             {description ||
               (isGlobal
                 ? t('settings.giftCard.phoneLogin.globalDescription')
@@ -491,129 +534,211 @@ export function LoginDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {isGlobal && (
-          <div className="flex flex-col gap-3 pb-2">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => void handleOAuthLogin('google')}
-              disabled={isLoggingIn || isSendingCode}
-              className="w-full flex items-center justify-center gap-2 h-10 border border-muted-foreground/20 hover:bg-muted/50"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <GoogleIcon className="h-4 w-4" />
-                  {t('settings.giftCard.phoneLogin.oauth.continueWithGoogle')}
-                </>
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => void handleOAuthLogin('apple')}
-              disabled={isLoggingIn || isSendingCode}
-              className="w-full flex items-center justify-center gap-2 h-10 border border-muted-foreground/20 hover:bg-muted/50"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <AppleIcon className="h-4 w-4" />
-                  {t('settings.giftCard.phoneLogin.oauth.continueWithApple')}
-                </>
-              )}
-            </Button>
-            <div className="flex items-center my-2">
-              <div className="flex-grow h-[1px] bg-border" />
-              <span className="mx-3 text-[11px] font-semibold text-muted-foreground">
-                {t('settings.giftCard.phoneLogin.oauth.divider')}
-              </span>
-              <div className="flex-grow h-[1px] bg-border" />
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="login-phone">{t('settings.giftCard.phoneLogin.phoneLabel')}</Label>
-            <div className="flex gap-2">
-              {isGlobal ? (
-                <Select value={selectedCountry.iso} onValueChange={handleCountryChange}>
-                  <SelectTrigger className="w-[170px] shrink-0">
-                    <SelectValue
-                      placeholder={t('settings.giftCard.phoneLogin.countryCodePlaceholder')}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COUNTRY_CODES.map((country) => (
-                      <SelectItem key={country.iso} value={country.iso}>
-                        <span>{country.flag}</span>
-                        <span className="font-medium">{country.code}</span>
-                        <span className="text-muted-foreground">{country.nameEn}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="flex items-center justify-center px-3 h-10 rounded-md border border-input bg-muted text-muted-foreground text-sm font-medium shrink-0">
-                  {getFallbackCountry().code}
-                </div>
-              )}
-              <Input
-                id="login-phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder={t('settings.giftCard.phoneLogin.phonePlaceholder')}
-                disabled={isLoggingIn}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="login-sms-code">{t('settings.giftCard.phoneLogin.codeLabel')}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="login-sms-code"
-                value={smsCode}
-                onChange={(e) => setSMSCode(e.target.value)}
-                placeholder={t('settings.giftCard.phoneLogin.codePlaceholder')}
-                disabled={isLoggingIn}
-                maxLength={12}
-              />
+        <div className="px-5 pb-5">
+          {isGlobal && (
+            <div className="flex flex-col gap-2.5 pb-4">
               <Button
+                variant="outline"
                 type="button"
-                variant="secondary"
-                onClick={() => void handleSendSMSCode()}
-                disabled={isSendingCode || isLoggingIn || phone.trim().length === 0}
-                className="shrink-0"
+                onClick={() => void handleOAuthLogin('google')}
+                disabled={isLoggingIn || isSendingCode}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/70 bg-white/58 text-sm font-semibold text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)] transition hover:bg-white/82"
               >
-                {isSendingCode ? (
+                {isLoggingIn ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  t('settings.giftCard.phoneLogin.sendCode')
+                  <>
+                    <GoogleIcon className="h-4 w-4" />
+                    {t('settings.giftCard.phoneLogin.oauth.continueWithGoogle')}
+                  </>
                 )}
               </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => void handleOAuthLogin('apple')}
+                disabled={isLoggingIn || isSendingCode}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/70 bg-white/58 text-sm font-semibold text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)] transition hover:bg-white/82"
+              >
+                {isLoggingIn ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <AppleIcon className="h-4 w-4" />
+                    {t('settings.giftCard.phoneLogin.oauth.continueWithApple')}
+                  </>
+                )}
+              </Button>
+              <div className="my-2 flex items-center">
+                <div className="h-[1px] flex-grow bg-white/70" />
+                <span className="mx-3 text-[11px] font-semibold text-[#8d96a3]">
+                  {t('settings.giftCard.phoneLogin.oauth.divider')}
+                </span>
+                <div className="h-[1px] flex-grow bg-white/70" />
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        <DialogFooter className="mt-6">
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => void handleSMSLogin()}
-            disabled={isLoggingIn || !phone.trim() || !smsCode.trim()}
-          >
-            {isLoggingIn ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              t('settings.giftCard.phoneLogin.login')
-            )}
-          </Button>
-        </DialogFooter>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login-phone" className="text-xs font-semibold text-[#7b8490]">
+                {t('settings.giftCard.phoneLogin.phoneLabel')}
+              </Label>
+              <div className="flex gap-2">
+                {isGlobal ? (
+                  <Select value={selectedCountry.iso} onValueChange={handleCountryChange}>
+                    <SelectTrigger className="h-10 w-[170px] shrink-0 rounded-lg border-white/70 bg-white/70 text-sm font-semibold text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)]">
+                      <SelectValue
+                        placeholder={t('settings.giftCard.phoneLogin.countryCodePlaceholder')}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRY_CODES.map((country) => (
+                        <SelectItem key={country.iso} value={country.iso}>
+                          <span>{country.flag}</span>
+                          <span className="font-medium">{country.code}</span>
+                          <span className="text-muted-foreground">{country.nameEn}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex h-10 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white/70 px-3 text-sm font-semibold text-[#59616d] shadow-[0_10px_30px_rgba(90,120,170,0.08)]">
+                    {getFallbackCountry().code}
+                  </div>
+                )}
+                <Input
+                  id="login-phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={t('settings.giftCard.phoneLogin.phonePlaceholder')}
+                  disabled={isLoggingIn}
+                  className="h-10 rounded-lg border-white/70 bg-white/70 text-sm text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)] placeholder:text-[#a4acb7] focus-visible:ring-[#66c6ff]/18"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="login-sms-code" className="text-xs font-semibold text-[#7b8490]">
+                {t('settings.giftCard.phoneLogin.codeLabel')}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="login-sms-code"
+                  value={smsCode}
+                  onChange={(e) => setSMSCode(e.target.value)}
+                  placeholder={t('settings.giftCard.phoneLogin.codePlaceholder')}
+                  disabled={isLoggingIn}
+                  maxLength={12}
+                  className="h-10 rounded-lg border-white/70 bg-white/70 text-sm text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)] placeholder:text-[#a4acb7] focus-visible:ring-[#66c6ff]/18"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleSendSMSCode()}
+                  disabled={isSendingCode || isLoggingIn || phone.trim().length === 0}
+                  className="h-10 shrink-0 rounded-lg border border-white/70 bg-white/58 px-3 text-xs font-semibold text-[#59616d] shadow-[0_10px_30px_rgba(90,120,170,0.08)] transition hover:bg-white/82"
+                >
+                  {isSendingCode ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    t('settings.giftCard.phoneLogin.sendCode')
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-2 text-xs leading-5 text-[#7b8490]">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={agreedToPrivacy}
+                aria-label={termsCopy.checkboxLabel}
+                onClick={() => {
+                  setAgreedToPrivacy((prev) => !prev);
+                  setShowAgreementHint(false);
+                }}
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] border transition ${
+                  agreedToPrivacy
+                    ? 'border-[#17191c] bg-[#17191c] text-white'
+                    : 'border-[#cfd6df] bg-white/70 text-transparent'
+                }`}
+              >
+                <Check className="h-3 w-3" strokeWidth={3} />
+              </button>
+              <span>
+                {termsCopy.prefix}
+                <button
+                  type="button"
+                  className="font-semibold text-[#17191c] underline-offset-2 hover:underline"
+                >
+                  {termsCopy.privacy}
+                </button>
+                {termsCopy.middle}
+                <button
+                  type="button"
+                  className="font-semibold text-[#17191c] underline-offset-2 hover:underline"
+                >
+                  {termsCopy.terms}
+                </button>
+              </span>
+            </div>
+
+            {showAgreementHint ? (
+              <p className="text-center text-xs font-medium text-[#d92d20]">{termsCopy.hint}</p>
+            ) : null}
+          </div>
+
+          <DialogFooter className="mt-5">
+            <Button
+              type="button"
+              className="h-11 w-full rounded-md bg-[#17191c] text-sm font-semibold text-white shadow-[0_16px_30px_rgba(23,25,28,0.18)] transition hover:bg-[#2b2f36] disabled:cursor-not-allowed disabled:bg-[#cfd6df]"
+              onClick={() => void handleSMSLogin()}
+              disabled={isLoggingIn || !phone.trim() || !smsCode.trim()}
+            >
+              {isLoggingIn ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                t('settings.giftCard.phoneLogin.login')
+              )}
+            </Button>
+          </DialogFooter>
+          <p className="mt-4 text-center text-xs text-[#7b8490]">未注册的账号将自动注册</p>
+        </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+function getTermsCopy(locale: string) {
+  if (locale.startsWith('zh-Hant')) {
+    return {
+      checkboxLabel: '我已閱讀並同意《隱私政策》和《用戶協議》',
+      hint: '請先勾選同意隱私政策後再登入',
+      middle: '和',
+      prefix: '我已閱讀並同意',
+      privacy: '《隱私政策》',
+      terms: '《用戶協議》',
+    };
+  }
+
+  if (locale.startsWith('en')) {
+    return {
+      checkboxLabel: 'I have read and agree to the Privacy Policy and User Agreement',
+      hint: 'Please agree to the privacy policy before logging in',
+      middle: ' and ',
+      prefix: 'I have read and agree to ',
+      privacy: 'Privacy Policy',
+      terms: 'User Agreement',
+    };
+  }
+
+  return {
+    checkboxLabel: '我已阅读并同意《隐私政策》和《用户协议》',
+    hint: '请先勾选同意隐私政策后再登录',
+    middle: '和',
+    prefix: '我已阅读并同意',
+    privacy: '《隐私政策》',
+    terms: '《用户协议》',
+  };
 }

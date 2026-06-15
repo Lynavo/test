@@ -1,17 +1,31 @@
-import { Smartphone, ShieldAlert, Ban, Unlock } from 'lucide-react';
-import type { DesktopManagedDeviceDTO } from '@syncflow/contracts';
+import { useState } from 'react';
+import { Smartphone, ShieldAlert, Unlock, Wifi } from 'lucide-react';
+import type { DashboardDeviceDTO, DesktopManagedDeviceDTO } from '@syncflow/contracts';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
-import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@renderer/components/ui/dialog';
 
 export function DeviceManagementTable({
+  dashboardDevices: dashboardDevicesOverride,
   devices,
+  onBlock,
   onUnblock,
 }: {
+  dashboardDevices?: DashboardDeviceDTO[];
   devices: DesktopManagedDeviceDTO[];
+  onBlock: (clientId: string) => void;
   onUnblock: (clientId: string) => void;
 }) {
-  const dashboardDevices = useDashboardStore((s) => s.devices);
+  const [blockTarget, setBlockTarget] = useState<DesktopManagedDeviceDTO | null>(null);
+  const storeDashboardDevices = useDashboardStore((s) => s.devices);
+  const dashboardDevices = dashboardDevicesOverride ?? storeDashboardDevices;
 
   const getDeviceStatus = (device: DesktopManagedDeviceDTO) => {
     if (device.blockStatus === 'active') {
@@ -26,90 +40,163 @@ export function DeviceManagementTable({
     return 'offline';
   };
 
-  const handleManualBlock = () => {
-    toast.info('安全限制：设备禁用需由连接密码输入错误超过 5 次自动触发。');
+  const confirmBlockDevice = () => {
+    if (!blockTarget) {
+      return;
+    }
+    onBlock(blockTarget.clientId);
+    setBlockTarget(null);
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      {devices.map((device) => {
-        const status = getDeviceStatus(device);
-        return (
-          <div
-            key={`${device.desktopDeviceId}:${device.clientId}`}
-            className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/45 p-4.5 shadow-[0_2px_12px_rgba(0,0,0,0.01)] transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.02)]"
-          >
-            {/* Device Info */}
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e6f4ff] text-[#1890ff] shadow-sm">
-                <Smartphone className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-slate-800">
-                  {device.displayName || '未命名设备'}
-                </h3>
-                <p className="mt-0.5 text-xs text-[#858b96]">
-                  {device.platform || 'iPhone'}
-                </p>
-              </div>
-            </div>
+    <>
+      <div className="flex flex-col gap-3">
+        {devices.map((device) => {
+          const status = getDeviceStatus(device);
+          const isBlocked = status === 'blocked';
+          const isConnected = status === 'connected';
+          const displayName = device.displayName || '未命名设备';
 
-            {/* Middle Section: Connection Status and Block Reasons */}
-            <div className="flex flex-1 items-center justify-center px-4 gap-4">
-              {/* Status Badge */}
-              <div className="flex items-center gap-2">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    status === 'connected'
-                      ? 'bg-[#52c41a] shadow-[0_0_8px_rgba(82,196,26,0.5)] animate-pulse'
-                      : status === 'blocked'
-                        ? 'bg-[#ff4d4f]'
-                        : 'bg-slate-300'
-                  }`}
-                />
-                <span className="text-xs font-semibold text-slate-600">
-                  {status === 'connected'
-                    ? '已连接'
-                    : status === 'blocked'
-                      ? '已禁用'
-                      : '未连接'}
-                </span>
-              </div>
-
-              {/* Disabled Warning Reason */}
-              {status === 'blocked' && (
-                <div className="flex items-center gap-1.5 text-xs text-[#ff4d4f] font-semibold bg-[#fff2f0] border border-[#ffccc7] px-2.5 py-1 rounded-lg">
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  <span>输错连接码超过 5 次，已自动禁用</span>
+          return (
+            <div
+              key={`${device.desktopDeviceId}:${device.clientId}`}
+              className={`overflow-hidden rounded-lg border shadow-[0_14px_44px_rgba(70,96,138,0.08)] transition hover:-translate-y-0.5 ${
+                isBlocked || !isConnected
+                  ? 'border-white/45 bg-white/20 opacity-70 hover:bg-white/30'
+                  : 'border-white/60 bg-white/34 hover:bg-white/58'
+              }`}
+            >
+              <div className="grid w-full grid-cols-[minmax(220px,1.35fr)_104px_minmax(220px,1fr)_minmax(220px,auto)] items-center gap-4 px-4 py-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ${
+                      isConnected ? 'bg-[#eaf6ff] text-[#1677d2]' : 'bg-white/58 text-[#8d96a3]'
+                    }`}
+                  >
+                    <Smartphone className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h3
+                        className={`truncate text-sm font-semibold ${
+                          isConnected ? 'text-[#17191c]' : 'text-[#7b8490]'
+                        }`}
+                      >
+                        {displayName}
+                      </h3>
+                      {isBlocked && (
+                        <span className="shrink-0 rounded-md bg-[#fff0eb] px-2 py-0.5 text-[11px] font-semibold text-[#b42318]">
+                          已禁用
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`mt-0.5 truncate text-xs ${
+                        isConnected ? 'text-[#626a76]' : 'text-[#9aa2ad]'
+                      }`}
+                    >
+                      {device.platform || 'iPhone'}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Actions Button */}
-            <div>
-              {status === 'blocked' ? (
-                <Button
-                  type="button"
-                  onClick={() => onUnblock(device.clientId)}
-                  className="bg-[#e6f4ff] hover:bg-[#bae7ff] text-[#0050b3] border border-[#91caff]/40 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm active:scale-[0.98]"
-                >
-                  <Unlock className="h-3.5 w-3.5" />
-                  取消禁用
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={handleManualBlock}
-                  className="bg-[#fff1f0] hover:bg-[#ffccc7] text-[#cf1322] border border-[#ffa39e]/40 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm active:scale-[0.98]"
-                >
-                  <Ban className="h-3.5 w-3.5" />
-                  禁用
-                </Button>
-              )}
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isConnected
+                        ? 'bg-[#2d8f54] shadow-[0_0_0_4px_rgba(45,143,84,0.12)]'
+                        : isBlocked
+                          ? 'bg-[#d92d20] shadow-[0_0_0_4px_rgba(217,45,32,0.12)]'
+                          : 'bg-[#b5bdc8]'
+                    }`}
+                  />
+                  <span className="text-[11px] font-semibold text-[#626a76]">
+                    {isConnected ? '已连接' : isBlocked ? '已禁用' : '未连接'}
+                  </span>
+                </div>
+
+                <span className="min-w-0">
+                  {isBlocked && device.failedAttemptCount >= 5 && (
+                    <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#b42318]">
+                      <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">输错连接码超过 5 次，已自动禁用</span>
+                    </span>
+                  )}
+                  {!isBlocked && (
+                    <span
+                      className={`mb-1 flex items-center text-[11px] ${
+                        isConnected ? 'text-[#626a76]' : 'text-[#9aa2ad]'
+                      }`}
+                    >
+                      <span className="truncate">{isConnected ? '已连接，等待同步' : ''}</span>
+                    </span>
+                  )}
+                </span>
+
+                <div className="flex min-w-0 items-center justify-end gap-2">
+                  {isBlocked ? (
+                    <Button
+                      type="button"
+                      onClick={() => onUnblock(device.clientId)}
+                      className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#eaf6ff] px-3 text-xs font-semibold text-[#1677d2] transition hover:bg-[#dcefff] active:scale-[0.98]"
+                    >
+                      <Unlock className="h-3.5 w-3.5" />
+                      取消禁用
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={() => setBlockTarget(device)}
+                      className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#fff0eb] px-3 text-xs font-semibold text-[#b42318] transition hover:bg-[#ffe2da] active:scale-[0.98]"
+                    >
+                      <Wifi className="h-3.5 w-3.5" />
+                      禁用
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
+          );
+        })}
+      </div>
+
+      <Dialog
+        open={blockTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBlockTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="border-white/70 bg-[#f7fbff]/96 p-0 text-[#17191c] shadow-[0_30px_90px_rgba(23,25,28,0.18)] sm:max-w-[420px]">
+          <div className="space-y-5 p-5">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-base font-semibold text-[#17191c]">禁用设备</DialogTitle>
+              <DialogDescription className="mt-1 text-xs leading-5 text-[#7b8490]">
+                {blockTarget
+                  ? `禁用后 ${blockTarget.displayName || '未命名设备'} 将断开连接并停止所有传输，确定要禁用该设备吗？`
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:justify-between">
+              <button
+                type="button"
+                onClick={() => setBlockTarget(null)}
+                className="h-10 rounded-md border border-white/70 bg-white/52 px-4 text-sm font-semibold text-[#59616d] transition hover:bg-white/78"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={confirmBlockDevice}
+                className="h-10 rounded-md bg-[#d92d20] px-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(217,45,32,0.22)] transition hover:bg-[#b42318]"
+              >
+                确认禁用
+              </button>
+            </DialogFooter>
           </div>
-        );
-      })}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

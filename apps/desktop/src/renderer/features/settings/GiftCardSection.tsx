@@ -3,7 +3,6 @@ import { Gift, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
-import { LoginDialog } from '@renderer/components/shared/LoginDialog';
 import { Input } from '@renderer/components/ui/input';
 import { Label } from '@renderer/components/ui/label';
 import { useAuthStore } from '@renderer/stores/auth-store';
@@ -76,11 +75,10 @@ export function GiftCardSection() {
   const [code, setCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<ResultState | null>(null);
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [pendingRedeemCode, setPendingRedeemCode] = useState('');
   const session = useAuthStore((state) => state.session);
   const refreshSession = useAuthStore((state) => state.refreshSession);
   const logout = useAuthStore((state) => state.logout);
+  const clearSession = useAuthStore((state) => state.clearSession);
 
   useEffect(() => {
     void refreshSession();
@@ -108,7 +106,7 @@ export function GiftCardSection() {
   }, [logout, t]);
 
   const performRedeem = useCallback(
-    async (trimmedCode: string, openLoginOnAuth: boolean) => {
+    async (trimmedCode: string) => {
       const api = window.electronAPI?.sidecar;
       if (!api?.redeemGiftCard) {
         toast.error(t('errors.settings.redeemGiftCardUnavailable'));
@@ -128,19 +126,15 @@ export function GiftCardSection() {
           toast.success(t('settings.giftCard.redeemSuccess'));
           return true;
         } else {
-          if (result.reason === 'auth_required' && openLoginOnAuth && window.electronAPI?.auth) {
-            setPendingRedeemCode(trimmedCode);
-            setLoginDialogOpen(true);
-            toast.message(t('settings.giftCard.phoneLogin.loginRequired'));
-            return false;
-          }
-
           const message = getRedeemErrorMessage(result, t);
           setLastResult({
             kind: 'error',
             text: message,
           });
           toast.error(message);
+          if (result.reason === 'auth_required') {
+            clearSession();
+          }
           return false;
         }
       } catch (error) {
@@ -155,7 +149,7 @@ export function GiftCardSection() {
         return false;
       }
     },
-    [t],
+    [clearSession, t],
   );
 
   const handleRedeem = useCallback(async () => {
@@ -167,125 +161,85 @@ export function GiftCardSection() {
 
     setIsSubmitting(true);
     try {
-      await performRedeem(trimmedCode, true);
+      await performRedeem(trimmedCode);
     } finally {
       setIsSubmitting(false);
     }
   }, [code, performRedeem, t]);
 
-  const openAccountLogin = useCallback(() => {
-    setPendingRedeemCode('');
-    setLoginDialogOpen(true);
-  }, []);
-
-  const handleLoginSuccess = useCallback(async () => {
-    await refreshSession();
-    if (pendingRedeemCode) {
-      setIsSubmitting(true);
-      try {
-        await performRedeem(pendingRedeemCode, false);
-      } finally {
-        setIsSubmitting(false);
-        setPendingRedeemCode('');
-      }
-    }
-  }, [pendingRedeemCode, performRedeem, refreshSession]);
-
   return (
-    <>
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="mb-4 flex items-start gap-3">
-          <div className="mt-0.5 rounded-lg bg-secondary p-2 text-muted-foreground">
-            <Gift className="h-4 w-4" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">
-              {t('settings.giftCard.title')}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t('settings.giftCard.description')}</p>
-          </div>
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <div className="mt-0.5 rounded-lg bg-secondary p-2 text-muted-foreground">
+          <Gift className="h-4 w-4" />
         </div>
-
-        {/* Account login/logout section */}
-        <div className="mb-5 flex items-center justify-between border-b border-border/50 pb-4">
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-foreground">
-              {t('settings.giftCard.phoneLogin.accountStatus', { defaultValue: '帳號狀態' })}
-            </span>
-            <span className="text-xs text-muted-foreground mt-0.5">
-              {session ? (
-                <>
-                  {t('settings.giftCard.phoneLogin.loggedInAs', { defaultValue: '已登入' })}
-                  {session.phone ? ` (${session.phone})` : session.email ? ` (${session.email})` : ''}
-                </>
-              ) : (
-                t('settings.giftCard.phoneLogin.notLoggedIn', { defaultValue: '尚未登入' })
-              )}
-            </span>
-          </div>
-          {session ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()}>
-              {t('settings.giftCard.phoneLogin.logout', { defaultValue: '登出' })}
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={openAccountLogin}
-            >
-              {t('settings.giftCard.phoneLogin.login', { defaultValue: '登入' })}
-            </Button>
-          )}
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{t('settings.giftCard.title')}</h3>
+          <p className="text-xs text-muted-foreground">{t('settings.giftCard.description')}</p>
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="gift-card-code">{t('settings.giftCard.codeLabel')}</Label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="gift-card-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              placeholder={t('settings.giftCard.placeholder')}
-              disabled={isSubmitting}
-              maxLength={64}
-            />
-            <Button
-              type="button"
-              onClick={() => void handleRedeem()}
-              disabled={isSubmitting || code.trim().length === 0}
-              className="w-full sm:w-auto"
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                t('settings.giftCard.redeem')
-              )}
-            </Button>
-          </div>
+      {/* Account login/logout section */}
+      <div className="mb-5 flex items-center justify-between border-b border-border/50 pb-4">
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold text-foreground">
+            {t('settings.giftCard.phoneLogin.accountStatus', { defaultValue: '帳號狀態' })}
+          </span>
+          <span className="text-xs text-muted-foreground mt-0.5">
+            {session ? (
+              <>
+                {t('settings.giftCard.phoneLogin.loggedInAs', { defaultValue: '已登入' })}
+                {session.phone ? ` (${session.phone})` : session.email ? ` (${session.email})` : ''}
+              </>
+            ) : (
+              t('settings.giftCard.phoneLogin.notLoggedIn', { defaultValue: '尚未登入' })
+            )}
+          </span>
         </div>
-
-        {lastResult ? (
-          <p
-            className={`mt-3 rounded-md px-3 py-2 text-sm ${
-              lastResult.kind === 'success'
-                ? 'bg-emerald-500/10 text-emerald-600'
-                : 'bg-destructive/10 text-destructive'
-            }`}
-          >
-            {lastResult.text}
-          </p>
+        {session ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()}>
+            {t('settings.giftCard.phoneLogin.logout', { defaultValue: '登出' })}
+          </Button>
         ) : null}
       </div>
 
-      <LoginDialog
-        open={loginDialogOpen}
-        onOpenChange={setLoginDialogOpen}
-        onLoginSuccess={handleLoginSuccess}
-        successMessage={
-          pendingRedeemCode ? t('settings.giftCard.phoneLogin.loginSuccess') : undefined
-        }
-      />
-    </>
+      <div className="space-y-2">
+        <Label htmlFor="gift-card-code">{t('settings.giftCard.codeLabel')}</Label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            id="gift-card-code"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder={t('settings.giftCard.placeholder')}
+            disabled={isSubmitting}
+            maxLength={64}
+          />
+          <Button
+            type="button"
+            onClick={() => void handleRedeem()}
+            disabled={isSubmitting || code.trim().length === 0}
+            className="w-full sm:w-auto"
+          >
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              t('settings.giftCard.redeem')
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {lastResult ? (
+        <p
+          className={`mt-3 rounded-md px-3 py-2 text-sm ${
+            lastResult.kind === 'success'
+              ? 'bg-emerald-500/10 text-emerald-600'
+              : 'bg-destructive/10 text-destructive'
+          }`}
+        >
+          {lastResult.text}
+        </p>
+      ) : null}
+    </div>
   );
 }

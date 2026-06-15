@@ -68,11 +68,24 @@ describe('ReceivedLibraryPage', () => {
     expect(screen.getByText('磁盘剩余空间')).toBeInTheDocument();
   });
 
-  it('displays empty state when no items', async () => {
+  it('places the device count below the stats area instead of in the page header', async () => {
+    const { container } = render(<ReceivedLibraryPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('4 台设备')).toBeInTheDocument();
+    });
+
+    const header = container.querySelector('header');
+    expect(header).not.toHaveTextContent('4 台设备');
+  });
+
+  it('displays preview sync records when no real items exist in development', async () => {
     render(<ReceivedLibraryPage />);
     await waitFor(() => {
-      expect(screen.getByText('尚无同步记录')).toBeInTheDocument();
+      expect(screen.getByText('iPhone 15 Pro')).toBeInTheDocument();
     });
+    expect(screen.getByText('Galaxy S24 Ultra')).toBeInTheDocument();
+    expect(screen.queryByText('尚无同步记录')).not.toBeInTheDocument();
   });
 
   it('displays error state', async () => {
@@ -80,7 +93,9 @@ describe('ReceivedLibraryPage', () => {
       receivedError: 'Error message from sidecar',
     });
     // Override the mock to reject to test error
-    (window as any).electronAPI.sidecar.getReceivedLibrary = vi.fn().mockRejectedValue(new Error('Error message from sidecar'));
+    (window as any).electronAPI.sidecar.getReceivedLibrary = vi
+      .fn()
+      .mockRejectedValue(new Error('Error message from sidecar'));
 
     render(<ReceivedLibraryPage />);
     await waitFor(() => {
@@ -150,16 +165,16 @@ describe('ReceivedLibraryPage', () => {
       expect(screen.getByText('2')).toBeInTheDocument();
     });
     // Total space card should show 3.0 MB
-    expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+    expect(screen.getAllByText('3.0 MB').length).toBeGreaterThan(0);
 
     // Device card elements
     expect(screen.getByText('My iPhone')).toBeInTheDocument();
     expect(screen.getByText('iOS')).toBeInTheDocument();
 
     // Stats
-    expect(screen.getByText('📷 相册上传 1')).toBeInTheDocument();
-    expect(screen.getByText('📁 文件上传 1')).toBeInTheDocument();
-    expect(screen.getByText('💾 3.0 MB')).toBeInTheDocument();
+    expect(screen.getByText('相册上传 1')).toBeInTheDocument();
+    expect(screen.getByText('文件上传 1')).toBeInTheDocument();
+    expect(screen.getAllByText('3.0 MB').length).toBeGreaterThan(0);
   });
 
   it('triggers folder opening on button click', async () => {

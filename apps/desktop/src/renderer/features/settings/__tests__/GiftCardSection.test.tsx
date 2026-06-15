@@ -167,85 +167,12 @@ describe('GiftCardSection', () => {
     expect(toastFns.error).toHaveBeenCalledWith(message);
   });
 
-  it('opens phone login and retries redeem after login succeeds', async () => {
-    const redeemGiftCard = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, reason: 'auth_required' })
-      .mockResolvedValueOnce({ ok: true, message: 'done' });
-    const sendSMSCode = vi.fn().mockResolvedValue({ ok: true });
-    const loginWithSMSCode = vi.fn().mockResolvedValue({ ok: true });
-    setElectronAPI(redeemGiftCard, { sendSMSCode, loginWithSMSCode });
-
-    render(<GiftCardSection />);
-
-    fireEvent.change(screen.getByLabelText('礼品卡编号'), {
-      target: { value: 'ABCD-EFGH-IJKL' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '兑换' }));
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('手机号'), {
-      target: { value: '13800138000' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '发送验证码' }));
-
-    await waitFor(() => {
-      expect(sendSMSCode).toHaveBeenCalledWith({ phone: '+8613800138000' });
-    });
-
-    fireEvent.change(screen.getByLabelText('验证码'), {
-      target: { value: '123456' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '登入' }));
-
-    await waitFor(() => {
-      expect(loginWithSMSCode).toHaveBeenCalledWith({
-        phone: '+8613800138000',
-        code: '123456',
-      });
-      expect(redeemGiftCard).toHaveBeenCalledTimes(2);
-    });
-    expect(redeemGiftCard).toHaveBeenLastCalledWith({ code: 'ABCD-EFGH-IJKL' });
-    expect(screen.getByText('done')).toBeInTheDocument();
-  });
-
-  it('shows localized SMS throttling guidance instead of the server message', async () => {
-    const redeemGiftCard = vi.fn().mockResolvedValue({ ok: false, reason: 'auth_required' });
-    const sendSMSCode = vi.fn().mockResolvedValue({
-      ok: false,
-      reason: 'sms_too_frequent',
-      message: '驗證碼發送過於頻繁',
-    });
-    const loginWithSMSCode = vi.fn();
-    setElectronAPI(redeemGiftCard, { sendSMSCode, loginWithSMSCode });
-
-    render(<GiftCardSection />);
-
-    fireEvent.change(screen.getByLabelText('礼品卡编号'), {
-      target: { value: 'ABCD-EFGH-IJKL' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '兑换' }));
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('手机号'), {
-      target: { value: '13800138000' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '发送验证码' }));
-
-    await waitFor(() => {
-      expect(toastFns.error).toHaveBeenCalledWith('验证码发送过于频繁，请稍后再试');
-    });
-  });
-
-  it('shows localized invalid SMS code guidance instead of the server message', async () => {
+  it('does not open a nested login flow when redeem requires auth inside the desktop shell', async () => {
     const redeemGiftCard = vi.fn().mockResolvedValue({ ok: false, reason: 'auth_required' });
     const sendSMSCode = vi.fn();
-    const loginWithSMSCode = vi.fn().mockResolvedValue({
-      ok: false,
-      reason: 'sms_code_invalid',
-      message: '驗證碼錯誤',
-    });
+    const loginWithSMSCode = vi.fn();
     setElectronAPI(redeemGiftCard, { sendSMSCode, loginWithSMSCode });
+    useAuthStore.setState({ session: { loggedIn: true, phone: '+8613800138000' } });
 
     render(<GiftCardSection />);
 
@@ -254,18 +181,25 @@ describe('GiftCardSection', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '兑换' }));
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('手机号'), {
-      target: { value: '13800138000' },
-    });
-    fireEvent.change(screen.getByLabelText('验证码'), {
-      target: { value: '123456' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '登入' }));
-
+    const message = '请先用手机号登入后继续兑换礼品卡。';
     await waitFor(() => {
-      expect(toastFns.error).toHaveBeenCalledWith('验证码错误，请重新输入');
+      expect(screen.getByText(message)).toBeInTheDocument();
     });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(sendSMSCode).not.toHaveBeenCalled();
+    expect(loginWithSMSCode).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().session).toBeNull();
+  });
+
+  it('does not render an account login button in the desktop settings surface', () => {
+    const redeemGiftCard = vi.fn().mockResolvedValue({ ok: true });
+    setElectronAPI(redeemGiftCard, {
+      getAuthSession: vi.fn().mockResolvedValue(null),
+    });
+
+    render(<GiftCardSection />);
+
+    expect(screen.queryByRole('button', { name: '登入' })).not.toBeInTheDocument();
   });
 
   it('shows the thrown error detail and fallback toast', async () => {

@@ -54,7 +54,30 @@ describe('RecordsPage', () => {
   it('renders filter search and date inputs', () => {
     render(<RecordsPage />);
     expect(screen.getByPlaceholderText('搜索用户名、设备或 IP')).toBeInTheDocument();
-    expect(screen.getAllByPlaceholderText('yyyy/mm/dd')).toHaveLength(2);
+    const startDateInput = screen.getByLabelText('开始日期') as HTMLInputElement;
+    const endDateInput = screen.getByLabelText('结束日期') as HTMLInputElement;
+    expect(startDateInput.type).toBe('date');
+    expect(endDateInput.type).toBe('date');
+    expect(screen.getAllByText('iPhone 15 Pro').length).toBeGreaterThan(0);
+    expect(screen.getByText('产品需求文档v3.pdf')).toBeInTheDocument();
+  });
+
+  it('shows date clearing and reference pagination for preview access records', () => {
+    render(<RecordsPage />);
+
+    fireEvent.change(screen.getByLabelText('开始日期'), {
+      target: { value: '2026-06-01' },
+    });
+    expect(screen.getByRole('button', { name: '清空' })).toBeInTheDocument();
+
+    const pagination = screen.getByRole('navigation', { name: '访问记录分页' });
+    expect(pagination).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '上一页' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '3' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('groups access records by device and date and displays them', () => {
@@ -122,12 +145,13 @@ describe('RecordsPage', () => {
     fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
 
     expect(screen.queryByText('Galaxy S24')).not.toBeInTheDocument();
-    expect(screen.getByText('尚无访问记录')).toBeInTheDocument();
+    expect(screen.getByText('没有匹配的访问记录')).toBeInTheDocument();
   });
 
-  it('renders empty and error states', () => {
+  it('renders preview access records for an empty real list and still renders error states', () => {
     const { rerender } = render(<RecordsPage />);
-    expect(screen.getByText('尚无访问记录')).toBeInTheDocument();
+    expect(screen.getAllByText('iPhone 15 Pro').length).toBeGreaterThan(0);
+    expect(screen.queryByText('没有匹配的访问记录')).not.toBeInTheDocument();
 
     useManagementStore.setState({ accessRecordsError: 'load failed' });
     rerender(<RecordsPage />);

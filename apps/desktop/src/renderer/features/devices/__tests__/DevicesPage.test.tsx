@@ -5,6 +5,12 @@ import { DevicesPage } from '../DevicesPage';
 import { useManagementStore } from '@renderer/stores/management-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 
+vi.mock('sonner', () => ({
+  toast: {
+    info: vi.fn(),
+  },
+}));
+
 const authorizedDevice: DesktopManagedDeviceDTO = {
   desktopDeviceId: 'desktop-1',
   clientId: 'client-1',
@@ -99,11 +105,38 @@ describe('DevicesPage', () => {
     expect(screen.getByRole('button', { name: '取消禁用' })).toBeInTheDocument();
   });
 
-  it('renders a real empty state', () => {
+  it('renders preview devices when the real device list is empty in development', () => {
     render(<DevicesPage />);
 
-    expect(screen.getByText('尚无设备')).toBeInTheDocument();
-    expect(screen.getByText('通过连接码授权后的移动端设备会显示在这里。')).toBeInTheDocument();
+    expect(screen.getByText('iPhone 15 Pro')).toBeInTheDocument();
+    expect(screen.getByText('Galaxy S24 Ultra')).toBeInTheDocument();
+    expect(screen.queryByText('尚无设备')).not.toBeInTheDocument();
+  });
+
+  it('opens a confirmation dialog before disabling an active device', () => {
+    useManagementStore.setState({ devices: [authorizedDevice] });
+
+    render(<DevicesPage />);
+    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('禁用设备')).toBeInTheDocument();
+    expect(
+      screen.getByText('禁用后 iPhone 15 Pro 将断开连接并停止所有传输，确定要禁用该设备吗？'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '确认禁用' })).toBeInTheDocument();
+  });
+
+  it('marks a device as disabled after confirming the disable dialog', () => {
+    useManagementStore.setState({ devices: [authorizedDevice] });
+
+    render(<DevicesPage />);
+    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认禁用' }));
+
+    expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
+    expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '取消禁用' })).toBeInTheDocument();
   });
 
   it('clicking unblock calls store action', async () => {

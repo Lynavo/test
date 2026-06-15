@@ -5,34 +5,15 @@ import { useAppStore } from '@renderer/stores/app-store';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import { Sidebar } from '../Sidebar';
 
-vi.mock('@renderer/components/shared/LoginDialog', () => ({
-  LoginDialog: ({
-    open,
-    title,
-    description,
-  }: {
-    open: boolean;
-    title?: string;
-    description?: string;
-  }) =>
-    open ? (
-      <div data-testid="login-dialog">
-        <p>{title}</p>
-        <p>{description}</p>
-      </div>
-    ) : null,
-}));
-
 function setAuthSession(session: AuthSessionView | null) {
-  const getAuthSession = vi.fn().mockResolvedValue(session);
   const logout = vi.fn().mockResolvedValue({ ok: true });
+  useAuthStore.setState({ session, loading: false });
   (window as Window & { electronAPI?: unknown }).electronAPI = {
     auth: {
-      getAuthSession,
       logout,
     },
   } as unknown as Window['electronAPI'];
-  return { getAuthSession, logout };
+  return { logout };
 }
 
 describe('Sidebar', () => {
@@ -46,27 +27,13 @@ describe('Sidebar', () => {
     });
   });
 
-  it('shows a sign-in entry when the desktop is not authenticated', async () => {
-    const { getAuthSession } = setAuthSession(null);
-
-    render(<Sidebar />);
-
-    await waitFor(() => {
-      expect(screen.getByText('登录后可使用远端传输。')).toBeInTheDocument();
-    });
-    expect(getAuthSession).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
-  });
-
-  it('opens the login dialog from the sign-in entry', async () => {
+  it('does not expose sign-in controls inside the desktop shell', () => {
     setAuthSession(null);
 
     render(<Sidebar />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '登录' }));
-
-    expect(screen.getByTestId('login-dialog')).toBeInTheDocument();
-    expect(screen.getAllByText('登录后可使用远端传输。')).toHaveLength(2);
+    expect(screen.queryByText('登录后可使用远端传输。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '登录' })).not.toBeInTheDocument();
   });
 
   it('shows the authenticated account instead of the sign-in prompt', async () => {
@@ -121,6 +88,18 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: '访问记录' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '我的' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '目录管理' })).not.toBeInTheDocument();
+  });
+
+  it('uses the reference navigation icon mapping', async () => {
+    setAuthSession(null);
+
+    const { container } = render(<Sidebar />);
+
+    expect(container.querySelector('button svg.lucide-hard-drive')).toBeInTheDocument();
+    expect(container.querySelector('button svg.lucide-smartphone')).toBeInTheDocument();
+    expect(container.querySelector('button svg.lucide-folder-open')).toBeInTheDocument();
+    expect(container.querySelector('button svg.lucide-history')).toBeInTheDocument();
+    expect(container.querySelector('button svg.lucide-settings')).toBeInTheDocument();
   });
 
   it('switches to each desktop-local view from the sidebar', async () => {

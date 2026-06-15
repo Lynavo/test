@@ -87,6 +87,17 @@ describe('Dashboard', () => {
     expect(screen.getByText('998877')).toBeInTheDocument();
   });
 
+  it('expands the connection QR code from the connection code card', () => {
+    render(<Dashboard />);
+
+    expect(screen.queryByText('手机扫码配对该电脑')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '显示连接二维码' }));
+
+    expect(screen.getByText('手机扫码配对该电脑')).toBeInTheDocument();
+    expect(screen.getByTitle('ViviDrop 连接二维码')).toBeInTheDocument();
+  });
+
   it('triggers copy connection code', async () => {
     render(<Dashboard />);
     // Reveal first to make it copyable or test copy directly

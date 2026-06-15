@@ -39,6 +39,10 @@ function renderLoginDialog() {
   return render(<LoginDialog open onOpenChange={vi.fn()} onLoginSuccess={vi.fn()} />);
 }
 
+function agreeToLoginTerms() {
+  fireEvent.click(screen.getByRole('checkbox', { name: /隐私政策|隱私政策/ }));
+}
+
 describe('resolveDefaultCountryCode', () => {
   it('keeps cn market fixed on +86', () => {
     expect(
@@ -101,6 +105,25 @@ describe('LoginDialog', () => {
     expect(screen.getByText('或')).toBeInTheDocument();
     expect(screen.getByLabelText('手機號碼')).toBeInTheDocument();
     expect(screen.getByLabelText('驗證碼')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /隱私政策/ })).toBeInTheDocument();
+  });
+
+  it('uses the reference login agreement gate before sending credentials', () => {
+    const loginWithSMSCode = vi.fn().mockResolvedValue({ ok: true });
+    setAuthAPI({ loginWithSMSCode });
+
+    renderLoginDialog();
+
+    fireEvent.change(screen.getByLabelText('手机号'), {
+      target: { value: '13800138000' },
+    });
+    fireEvent.change(screen.getByLabelText('验证码'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '登入' }));
+
+    expect(loginWithSMSCode).not.toHaveBeenCalled();
+    expect(screen.getByText('请先勾选同意隐私政策后再登录')).toBeInTheDocument();
   });
 
   it('uses the zh-Hant global default country code for SMS login', async () => {
@@ -110,6 +133,7 @@ describe('LoginDialog', () => {
     setAuthAPI({ loginWithSMSCode });
 
     renderLoginDialog();
+    agreeToLoginTerms();
 
     fireEvent.change(screen.getByLabelText('手機號碼'), {
       target: { value: '0912-345-678' },
@@ -134,6 +158,7 @@ describe('LoginDialog', () => {
     setAuthAPI({ loginWithSMSCode });
 
     renderLoginDialog();
+    agreeToLoginTerms();
 
     fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '9012345678' },
@@ -156,6 +181,7 @@ describe('LoginDialog', () => {
     setAuthAPI({ loginWithSMSCode });
 
     renderLoginDialog();
+    agreeToLoginTerms();
 
     fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '13800138000' },
@@ -183,6 +209,7 @@ describe('LoginDialog', () => {
         successMessage="登入成功，正在继续兑换"
       />,
     );
+    agreeToLoginTerms();
 
     fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '13800138000' },
@@ -204,6 +231,7 @@ describe('LoginDialog', () => {
     setAuthAPI({ loginWithOAuth });
 
     renderLoginDialog();
+    agreeToLoginTerms();
 
     fireEvent.click(screen.getByRole('button', { name: '使用 Google 繼續' }));
 

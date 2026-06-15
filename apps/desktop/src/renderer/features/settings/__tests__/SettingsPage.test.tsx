@@ -18,7 +18,9 @@ function setElectronPlatform() {
     },
     power: {
       getState: vi.fn().mockResolvedValue({ preventSleepDuringTransfer: false }),
-      setPreventSleepDuringTransfer: vi.fn().mockResolvedValue({ preventSleepDuringTransfer: true }),
+      setPreventSleepDuringTransfer: vi
+        .fn()
+        .mockResolvedValue({ preventSleepDuringTransfer: true }),
     },
     support: {
       checkForUpdates: vi.fn().mockResolvedValue(null),
@@ -65,8 +67,21 @@ describe('SettingsPage', () => {
     expect(screen.getByText('防止待机')).toBeInTheDocument();
     expect(screen.getByText('传输任务运行时保持电脑唤醒')).toBeInTheDocument();
 
-    const switchBtn = screen.getByRole('button', { name: '' });
+    const switchBtn = screen.getByRole('button', { name: '防止待机' });
     expect(switchBtn).toBeInTheDocument();
+  });
+
+  it('opens a searchable language picker', () => {
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /界面语言/ }));
+
+    const search = screen.getByRole('searchbox', { name: '搜索语言' });
+    expect(search).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: 'English' } });
+    expect(screen.getByRole('button', { name: /English/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /繁體中文/ })).not.toBeInTheDocument();
   });
 
   it('renders the local IP', () => {
@@ -97,5 +112,22 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('诊断包上传成功！感谢您的反馈');
     });
+  });
+
+  it('opens feedback panel and sends a composed email link', () => {
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /问题反馈/ }));
+    fireEvent.change(screen.getByPlaceholderText('请描述问题、发生步骤或希望改进的地方'), {
+      target: { value: '手机无法连接电脑' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
+      expect.stringContaining('mailto:developer@vividrop.app'),
+    );
+    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('手机无法连接电脑')),
+    );
   });
 });

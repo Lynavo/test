@@ -1,7 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SidecarEvent } from '@syncflow/contracts';
+import type { AuthSessionView } from '../../../../preload/api';
 import { useAppStore } from '@renderer/stores/app-store';
+import { useAuthStore } from '@renderer/stores/auth-store';
 import { useDirectoryStore } from '@renderer/stores/directory-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../../../../shared/sidecar-runtime';
@@ -51,7 +53,9 @@ vi.mock('@renderer/features/directory/DirectoryPage', () => ({
   DirectoryPage: () => <main data-testid="legacy-directory-page">DirectoryPage</main>,
 }));
 
-function installElectronAPI() {
+function installElectronAPI(
+  session: AuthSessionView | null = { loggedIn: true, email: 'ada@example.com' },
+) {
   let sidecarEventCallback: ((event: SidecarEvent) => void) | null = null;
   const onSidecarEvent = vi.fn((callback: (event: SidecarEvent) => void) => {
     sidecarEventCallback = callback;
@@ -68,7 +72,7 @@ function installElectronAPI() {
       onSidecarRuntimeState,
     },
     auth: {
-      getAuthSession: vi.fn().mockResolvedValue(null),
+      getAuthSession: vi.fn().mockResolvedValue(session),
       logout: vi.fn().mockResolvedValue({ ok: true }),
     },
   } as unknown as Window['electronAPI'];
@@ -94,7 +98,18 @@ describe('AppShell', () => {
       isHelpOpen: false,
     });
     useSidecarRuntimeStore.setState({ runtime: INITIAL_SIDECAR_RUNTIME_STATE });
+    useAuthStore.setState({ session: null, loading: false });
     vi.restoreAllMocks();
+  });
+
+  it('renders the full-page login screen instead of the desktop shell when not authenticated', async () => {
+    installElectronAPI(null);
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '登录' })).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -136,15 +151,29 @@ describe('AppShell', () => {
     expect(screen.queryByTestId('legacy-directory-page')).not.toBeInTheDocument();
   });
 
-  it('opens help dialog when clicking help button', () => {
+  it('opens help dialog when clicking help button', async () => {
     installElectronAPI();
     const setHelpOpenSpy = vi.spyOn(useAppStore.getState(), 'setHelpOpen');
 
     render(<AppShell />);
 
-    const helpButton = screen.getByRole('button', { name: /帮助|幫助|layout\.nav\.help/i });
+    const helpButton = await screen.findByRole('button', {
+      name: /帮助|幫助|layout\.nav\.help/i,
+    });
     helpButton.click();
 
     expect(setHelpOpenSpy).toHaveBeenCalledWith(true);
+  });
+
+  it('opens the mobile download QR panel from the top action', async () => {
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '下载移动端' }));
+
+    expect(screen.getByText('扫码下载移动端')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'App Store' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Android' })).toBeInTheDocument();
   });
 });

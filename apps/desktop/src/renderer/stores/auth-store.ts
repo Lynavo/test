@@ -9,6 +9,16 @@ type AuthState = {
   clearSession(): void;
 };
 
+const DEV_PREVIEW_AUTH_SESSION: AuthSessionView = {
+  loggedIn: true,
+  email: 'vividrop@studio.example',
+  accountLabel: 'vividrop@studio.example',
+};
+
+function getDevPreviewAuthSession(): AuthSessionView | null {
+  return import.meta.env.DEV && import.meta.env.MODE !== 'test' ? DEV_PREVIEW_AUTH_SESSION : null;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   loading: false,
@@ -16,17 +26,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   refreshSession: async () => {
     const auth = window.electronAPI?.auth;
     if (!auth?.getAuthSession) {
-      set({ session: null, loading: false });
+      set({ session: getDevPreviewAuthSession(), loading: false });
       return;
     }
 
     set({ loading: true });
     try {
       const session = await auth.getAuthSession();
-      set({ session, loading: false });
+      set({ session: session ?? getDevPreviewAuthSession(), loading: false });
     } catch (error) {
       console.error('Failed to get auth session:', error);
-      set({ session: null, loading: false });
+      set({ session: getDevPreviewAuthSession(), loading: false });
     }
   },
 
