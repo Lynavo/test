@@ -4,11 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { AddSharedResourcePayload } from '@syncflow/contracts';
-import {
-  sidecarClient,
-  supportsPairingRevocationOnCodeRotation,
-  syncCredentialsToSidecar,
-} from './sidecar-client';
+import { sidecarClient, syncCredentialsToSidecar } from './sidecar-client';
 import { resolveAppleOAuthConfig, resolveGoogleOAuthConfig } from './oauth-config';
 import {
   openFolder,
@@ -38,6 +34,9 @@ export const IPC = {
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
   SIDECAR_RESET_STATE: 'sidecar:reset-state',
+  SIDECAR_CONNECTION_DEVICES: 'sidecar:connection-devices',
+  SIDECAR_REVOKE_CONNECTION_DEVICE: 'sidecar:revoke-connection-device',
+  SIDECAR_CLEAR_BLOCKED_CLIENT: 'sidecar:clear-blocked-client',
   SIDECAR_CLIENT_CONFIG: 'sidecar:client-config',
   SIDECAR_REDEEM_GIFT_CARD: 'sidecar:redeem-gift-card',
   AUTH_SEND_SMS_CODE: 'auth:send-sms-code',
@@ -88,19 +87,7 @@ type PowerSaveController = {
   setPreventSleepDuringTransfer(enabled: boolean): PowerSaveState;
 };
 
-async function regenerateConnectionCodeSafely(
-  sidecarManager: SidecarManager,
-): Promise<{ code: string }> {
-  let health = null;
-  try {
-    health = await sidecarClient.getHealth();
-  } catch {
-    // Regeneration is a foreground user action; recover the sidecar here so
-    // the UI cannot report a fresh code from a stale or missing service.
-  }
-  if (!supportsPairingRevocationOnCodeRotation(health)) {
-    await sidecarManager.retryStart();
-  }
+async function regenerateConnectionCodeSafely(): Promise<{ code: string }> {
   return sidecarClient.regenerateConnectionCode();
 }
 
@@ -383,6 +370,13 @@ export function registerIpcHandlers(
     sidecarClient.updateSettings(partial),
   );
   ipcMain.handle(IPC.SIDECAR_RESET_STATE, () => sidecarClient.resetState());
+  ipcMain.handle(IPC.SIDECAR_CONNECTION_DEVICES, () => sidecarClient.getConnectionDevices());
+  ipcMain.handle(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE, (_e, clientId: string) =>
+    sidecarClient.revokeConnectionDevice(clientId),
+  );
+  ipcMain.handle(IPC.SIDECAR_CLEAR_BLOCKED_CLIENT, (_e, clientId: string) =>
+    sidecarClient.clearBlockedClient(clientId),
+  );
   ipcMain.handle(IPC.SIDECAR_CLIENT_CONFIG, () => sidecarClient.getClientConfig());
   ipcMain.handle(IPC.SIDECAR_REDEEM_GIFT_CARD, (_e, payload: { code: string }) =>
     sidecarClient.redeemGiftCard(payload),
@@ -612,7 +606,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_SET_CONNECTION_CODE, (_e, code: string) =>
     sidecarClient.setConnectionCode(code),
   );
-  ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely(sidecarManager));
+  ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely());
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
   ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());
   ipcMain.handle(IPC.SIDECAR_INSTALL_BONJOUR, () => installBonjourForWindows(sidecarManager));

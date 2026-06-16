@@ -18,6 +18,10 @@
   "networkCheckRetry": "网路错误，请检查连线后重试",
   "smsSendFailed": "验证码发送失败",
   "pairingWrongCode": "连接码错误，请重新输入",
+  "pairingWrongCodeWithAttempts": "连接码错误，请重新输入（剩余 {{remainingAttempts}}/{{maxAttempts}} 次）",
+  "pairingWrongCodeWithRemaining": "连接码错误，还可尝试 {{remainingAttempts}} 次",
+  "pairingClientBlocked": "这台手机已被此电脑封锁，请在电脑端解除后再试",
+  "pairingTokenInvalid": "连接已失效，请重新输入电脑端连接码",
   "pairingConnectFailed": "连接失败：{{msg}}",
   "exportDiagnosticsUnavailable": "当前版本暂不支持导出诊断包",
   "serverErrorHttp": "服务器错误 (HTTP {{status}})",
@@ -27,6 +31,5 @@
   "accountDeleteFailed": "删除帐号失败，请稍后再试",
   "pairingVersionMismatchTitle": "版本不兼容",
   "pairingVersionMismatchMessage": "手机与电脑端的版本不兼容，请将电脑端（桌面端）App 更新至最新版本后再试。",
-  "pairingBlocked": "配对已被锁定。请在电脑端“设置”中点击“解除封锁此设备”，或重新产生连接码后再试。",
-  "pairingWrongCodeWithAttempts": "连接码错误。剩余尝试次数：{{count}} 次。"
+  "pairingBlocked": "配对已被锁定。请在电脑端“设置”中点击“解除封锁此设备”，或重新产生连接码后再试。"
 }

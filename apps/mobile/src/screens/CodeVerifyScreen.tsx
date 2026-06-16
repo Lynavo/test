@@ -8,7 +8,6 @@ import {
   Platform,
   ActivityIndicator,
   Vibration,
-  NativeModules,
   Dimensions,
   Alert,
   type NativeSyntheticEvent,
@@ -22,13 +21,17 @@ import {
 } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
+import {
+  ErrorCode,
+  type ErrorCode as SyncFlowErrorCode,
+  type PairingErrorMetadataDTO,
+} from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/colors';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/Icon';
 import { pairDevice, PairingError } from '../services/SyncEngineModule';
 import { useRecentDesktops } from '../stores/recent-desktops-store';
-
 
 const DARK = '#1a3a5c';
 
@@ -41,6 +44,62 @@ type CodeVerifyRouteProp = RouteProp<RootStackParamList, 'CodeVerify'>;
 
 const CODE_LENGTH = 6;
 const VERIFY_DELAY_MS = 1200;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getNativeErrorCode(error: unknown): SyncFlowErrorCode | null {
+  if (!isRecord(error)) {
+    return null;
+  }
+  const rawCode =
+    typeof error.code === 'string'
+      ? error.code
+      : typeof error.nativeCode === 'string'
+        ? error.nativeCode
+        : null;
+  if (!rawCode) {
+    return null;
+  }
+  return Object.values(ErrorCode).includes(rawCode as SyncFlowErrorCode)
+    ? (rawCode as SyncFlowErrorCode)
+    : null;
+}
+
+function metadataNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function getPairingErrorMetadata(
+  error: unknown,
+): PairingErrorMetadataDTO | undefined {
+  if (!isRecord(error)) {
+    return undefined;
+  }
+  const userInfo = isRecord(error.userInfo) ? error.userInfo : undefined;
+  const nestedMeta =
+    userInfo && isRecord(userInfo.meta) ? userInfo.meta : undefined;
+  const directMeta = isRecord(error.meta) ? error.meta : undefined;
+  const meta = nestedMeta ?? directMeta ?? userInfo;
+  if (!meta) {
+    return undefined;
+  }
+  return {
+    failedAttempts: metadataNumber(meta.failedAttempts),
+    remainingAttempts: metadataNumber(meta.remainingAttempts),
+    maxAttempts: metadataNumber(meta.maxAttempts),
+  };
+}
+
+function getErrorMessage(error: unknown): string {
+  if (isRecord(error) && typeof error.message === 'string') {
+    return error.message;
+  }
+  return '';
+}
 
 // ---------------------------------------------------------------------------
 // CodeVerifyScreen
@@ -109,65 +168,67 @@ export function CodeVerifyScreen() {
           }),
         );
         return;
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Native pairing failed:', e);
         setVerifying(false);
         setError(true);
 
-        if (e instanceof PairingError) {
-          if (e.blocked || e.code === 'blocked') {
-            await updateAuthStatus(deviceId || '', 'blocked');
+        const msg = getErrorMessage(e);
+        const errorCode = getNativeErrorCode(e);
+        const metadata = getPairingErrorMetadata(e);
+
+        if (
+          errorCode === ErrorCode.APP_VERSION_INCOMPATIBLE ||
+          (e instanceof PairingError && e.code === 'version_incompatible')
+        ) {
+          Alert.alert(
+            t('errors.pairingVersionMismatchTitle'),
+            t('errors.pairingVersionMismatchMessage'),
+            [{ text: t('common.ok') }],
+          );
+          setErrorMsg(t('errors.pairingVersionMismatchMessage'));
+        } else if (
+          errorCode === ErrorCode.PAIRING_CODE_INVALID ||
+          errorCode === ErrorCode.PAIR_CODE_INVALID ||
+          (e instanceof PairingError && e.code === 'wrong_code')
+        ) {
+          await updateAuthStatus(deviceId || '', 'requires_code');
+          const remainingAttempts =
+            metadata?.remainingAttempts ??
+            (e instanceof PairingError ? e.remainingAttempts : undefined);
+          if (remainingAttempts !== undefined && remainingAttempts > 0) {
             setErrorMsg(
-              t('errors.pairingBlocked') ||
-                '配對已被鎖定。請在電腦端「設定」中點擊「解除封鎖此裝置」，或重新產生連接碼後再試。'
-            );
-          } else if (e.code === 'wrong_code') {
-            await updateAuthStatus(deviceId || '', 'requires_code');
-            if (e.remainingAttempts !== undefined && e.remainingAttempts > 0) {
-              setErrorMsg(
-                t('errors.pairingWrongCodeWithAttempts', {
-                  count: e.remainingAttempts,
-                }) || `連接碼錯誤。剩餘嘗試次數：${e.remainingAttempts} 次。`
-              );
-            } else {
-              setErrorMsg(t('errors.pairingWrongCode') || '連接碼錯誤，請重新確認。');
-            }
-          } else if (e.code === 'version_incompatible') {
-            Alert.alert(
-              t('errors.pairingVersionMismatchTitle') || '版本不相容',
-              t('errors.pairingVersionMismatchMessage') ||
-                '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。',
-              [{ text: t('common.ok') || '好' }]
-            );
-            setErrorMsg(
-              t('errors.pairingVersionMismatchMessage') ||
-                '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。'
+              t('errors.pairingWrongCodeWithRemaining', {
+                remainingAttempts,
+              }),
             );
           } else {
-            setErrorMsg(t('errors.pairingConnectFailed', { msg: e.message }));
+            setErrorMsg(t('errors.pairingWrongCode'));
           }
+        } else if (
+          errorCode === ErrorCode.PAIRING_CLIENT_BLOCKED ||
+          (e instanceof PairingError && (e.blocked || e.code === 'blocked'))
+        ) {
+          await updateAuthStatus(deviceId || '', 'blocked');
+          setErrorMsg(t('errors.pairingClientBlocked'));
+        } else if (errorCode === ErrorCode.PAIR_TOKEN_INVALID) {
+          setErrorMsg(t('errors.pairingTokenInvalid'));
+        } else if (
+          msg.includes('版本不相容') ||
+          msg.includes('APP_VERSION_INCOMPATIBLE') ||
+          msg.includes('版本不兼容')
+        ) {
+          Alert.alert(
+            t('errors.pairingVersionMismatchTitle'),
+            t('errors.pairingVersionMismatchMessage'),
+            [{ text: t('common.ok') }],
+          );
+          setErrorMsg(t('errors.pairingVersionMismatchMessage'));
+        } else if (msg.includes('Pairing rejected')) {
+          await updateAuthStatus(deviceId || '', 'requires_code');
+          setErrorMsg(t('errors.pairingWrongCode'));
         } else {
-          const msg = e?.message || '';
-          if (
-            msg.includes('版本不相容') ||
-            msg.includes('APP_VERSION_INCOMPATIBLE') ||
-            msg.includes('版本不兼容')
-          ) {
-            Alert.alert(
-              t('errors.pairingVersionMismatchTitle') || '版本不相容',
-              t('errors.pairingVersionMismatchMessage') ||
-                '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。',
-              [{ text: t('common.ok') || '好' }]
-            );
-            setErrorMsg(
-              t('errors.pairingVersionMismatchMessage') ||
-                '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。'
-            );
-          } else if (msg.includes('Pairing rejected')) {
-            setErrorMsg(t('errors.pairingWrongCode') || '連接碼錯誤，請重新確認。');
-          } else {
-            setErrorMsg(t('errors.pairingConnectFailed', { msg }));
-          }
+          setErrorMsg(t('errors.pairingConnectFailed', { msg }));
         }
 
         setCode(Array(CODE_LENGTH).fill(''));
@@ -187,7 +248,16 @@ export function CodeVerifyScreen() {
         );
       }, VERIFY_DELAY_MS);
     },
-    [navigation, deviceId, host, port, t],
+    [
+      navigation,
+      deviceId,
+      host,
+      port,
+      deviceName,
+      addDesktop,
+      updateAuthStatus,
+      t,
+    ],
   );
 
   // Auto-focus first input on mount (iOS autoFocus can be unreliable)

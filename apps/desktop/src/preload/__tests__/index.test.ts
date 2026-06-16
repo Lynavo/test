@@ -7,6 +7,9 @@ const exposed = vi.hoisted(() => ({
         sidecar: {
           getClientConfig(): Promise<unknown>;
           redeemGiftCard(payload: { code: string }): Promise<unknown>;
+          getConnectionDevices(): Promise<unknown>;
+          revokeConnectionDevice(clientId: string): Promise<unknown>;
+          clearBlockedClient(clientId: string): Promise<unknown>;
           getManagedDevices(): Promise<unknown>;
           unblockDevice(clientId: string): Promise<unknown>;
           getSyncRecords(): Promise<unknown>;
@@ -86,6 +89,9 @@ describe('preload electronAPI', () => {
 
     await import('../index');
 
+    await exposed.api?.sidecar.getConnectionDevices();
+    await exposed.api?.sidecar.revokeConnectionDevice('phone-a');
+    await exposed.api?.sidecar.clearBlockedClient('phone-a');
     await exposed.api?.sidecar.getManagedDevices();
     await exposed.api?.sidecar.unblockDevice('client-1');
     await exposed.api?.sidecar.getSyncRecords();
@@ -99,6 +105,9 @@ describe('preload electronAPI', () => {
     await exposed.api?.sidecar.removeSharedResource('res-1');
     await exposed.api?.sidecar.getReceivedLibrary();
 
+    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:connection-devices');
+    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:revoke-connection-device', 'phone-a');
+    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:clear-blocked-client', 'phone-a');
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:managed-devices');
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:unblock-device', 'client-1');
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:sync-records');

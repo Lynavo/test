@@ -13,6 +13,7 @@ import {
 } from '@syncflow/contracts';
 import type {
   AddSharedResourcePayload,
+  ConnectionDevicesSettingsDTO,
   DesktopAccessRecordDTO,
   DesktopLocalListResponse,
   DesktopManagedDeviceDTO,
@@ -52,7 +53,8 @@ const APP_REVIEW_PHONE =
 const AUTH_SMS_SEND_PATH = process.env.SYNCFLOW_AUTH_SMS_SEND_PATH ?? '/api/v1/auth/sms/send';
 const AUTH_SMS_LOGIN_PATH = process.env.SYNCFLOW_AUTH_SMS_LOGIN_PATH ?? '/api/v1/auth/sms/login';
 const AUTH_EMAIL_SEND_PATH = process.env.SYNCFLOW_AUTH_EMAIL_SEND_PATH ?? '/api/v1/auth/email/send';
-const AUTH_EMAIL_LOGIN_PATH = process.env.SYNCFLOW_AUTH_EMAIL_LOGIN_PATH ?? '/api/v1/auth/email/login';
+const AUTH_EMAIL_LOGIN_PATH =
+  process.env.SYNCFLOW_AUTH_EMAIL_LOGIN_PATH ?? '/api/v1/auth/email/login';
 const USER_PROFILE_PATH = process.env.SYNCFLOW_USER_PROFILE_PATH ?? '/api/v1/user/profile';
 
 type GiftCardRedeemPayload = {
@@ -765,7 +767,8 @@ export interface SidecarHealth {
   service: string;
   appCompatibilityVersion?: number;
   capabilities?: {
-    revokesPairingsOnCodeRotation?: boolean;
+    connectionDeviceManagement?: boolean;
+    wakeOnLanSupported?: boolean;
   };
   tunnel?: {
     signalingAuthState?: 'ok' | 'refresh_required' | string;
@@ -773,14 +776,14 @@ export interface SidecarHealth {
   };
 }
 
-export function supportsPairingRevocationOnCodeRotation(
+export function supportsConnectionDeviceManagement(
   health: SidecarHealth | null | undefined,
 ): boolean {
   return (
     health?.ok === true &&
     health.service === 'syncflow-sidecar' &&
     health.appCompatibilityVersion === APP_COMPATIBILITY_VERSION &&
-    health.capabilities?.revokesPairingsOnCodeRotation === true
+    health.capabilities?.connectionDeviceManagement === true
   );
 }
 
@@ -897,6 +900,20 @@ export const sidecarClient = {
   resetState: () => request<{ ok: boolean }>('POST', '/settings/reset-state', {}),
   setConnectionCode: (code: string) =>
     request<{ code: string }>('POST', '/connection-code', { code }),
+  getConnectionDevices: () =>
+    request<ConnectionDevicesSettingsDTO>('GET', '/settings/connection-devices'),
+  revokeConnectionDevice: (clientId: string) =>
+    request<{ ok: boolean }>(
+      'POST',
+      `/settings/connection-devices/${encodeURIComponent(clientId)}/revoke`,
+      {},
+    ),
+  clearBlockedClient: (clientId: string) =>
+    request<{ ok: boolean }>(
+      'POST',
+      `/settings/blocked-clients/${encodeURIComponent(clientId)}/clear`,
+      {},
+    ),
   regenerateConnectionCode: () => request<{ code: string }>('POST', '/connection-code/regenerate'),
   getShareStatus: () =>
     request<import('@syncflow/contracts').ShareStatusDTO>('GET', '/share/status'),
@@ -911,10 +928,7 @@ export const sidecarClient = {
   getManagedDevices: () =>
     request<DesktopLocalListResponse<DesktopManagedDeviceDTO>>('GET', '/management/devices'),
   unblockDevice: (clientId: string) =>
-    request<{ ok: boolean }>(
-      'POST',
-      `/management/devices/${encodeURIComponent(clientId)}/unblock`,
-    ),
+    request<{ ok: boolean }>('POST', `/management/devices/${encodeURIComponent(clientId)}/unblock`),
   getSyncRecords: () =>
     request<DesktopLocalListResponse<DesktopSyncRecordDTO>>('GET', '/management/records/sync'),
   getAccessRecords: () =>
@@ -1086,16 +1100,12 @@ export const sidecarClient = {
           throw new Error('Invalid refresh response tokens');
         }
 
-        authSession = createAuthSession(
-          authData.access_token,
-          authData.refresh_token,
-          {
-            baseUrl: authSession.baseUrl,
-            phone: authSession.phone,
-            email: authSession.email,
-            accountLabel: authSession.accountLabel,
-          },
-        );
+        authSession = createAuthSession(authData.access_token, authData.refresh_token, {
+          baseUrl: authSession.baseUrl,
+          phone: authSession.phone,
+          email: authSession.email,
+          accountLabel: authSession.accountLabel,
+        });
         authSessionLoaded = true;
         preserveSidecarTunnelCredentialsAfterSessionLoss = false;
         saveSession(authSession);

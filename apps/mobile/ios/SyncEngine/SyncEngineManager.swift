@@ -2551,13 +2551,73 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return payload
     }
 
+    private func structuredPairingErrorCode(_ rawCode: Any?) -> String? {
+        guard let code = (rawCode as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty else {
+            return nil
+        }
+        let stableCodes: Set<String> = [
+            "PAIRING_CODE_INVALID",
+            "PAIRING_CLIENT_BLOCKED",
+            "PAIR_TOKEN_INVALID",
+            "APP_VERSION_INCOMPATIBLE",
+        ]
+        return stableCodes.contains(code) ? code : nil
+    }
+
+    private func pairingErrorMetadata(_ rawMeta: Any?) -> [String: Any]? {
+        if let meta = rawMeta as? [String: Any] {
+            return meta
+        }
+        if let meta = rawMeta as? NSDictionary {
+            var result: [String: Any] = [:]
+            for (key, value) in meta {
+                guard let key = key as? String else { continue }
+                result[key] = value
+            }
+            return result.isEmpty ? nil : result
+        }
+        return nil
+    }
+
+    private func defaultPairingErrorMessage(code: String) -> String {
+        switch code {
+        case "PAIRING_CODE_INVALID":
+            return "連接碼錯誤，請重新輸入"
+        case "PAIRING_CLIENT_BLOCKED":
+            return "這支手機已被此電腦封鎖，請在桌面端設定解除封鎖後再試。"
+        case "PAIR_TOKEN_INVALID":
+            return "連線授權已失效，請重新輸入桌面端連接碼。"
+        case "APP_VERSION_INCOMPATIBLE":
+            return "手機與桌面 App 版本不相容，請同時更新兩端後再連線。"
+        default:
+            return "Pairing rejected"
+        }
+    }
+
+    private func structuredPairingError(
+        code: String,
+        rawMessage: String,
+        meta: [String: Any]?
+    ) -> SyncEngineError {
+        let message = rawMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .structuredPairingError(
+            code: code,
+            message: message.isEmpty ? defaultPairingErrorMessage(code: code) : message,
+            meta: meta
+        )
+    }
+
     private func throwIfHelloErrorFrame(type: LMUPMessageType, payload: [String: Any]) throws {
         guard type == .error else { return }
         let rawCode = (payload["code"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let rawMessage = (payload["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let message = rawMessage.isEmpty ? "Desktop returned protocol error" : rawMessage
-        if rawCode == "APP_VERSION_INCOMPATIBLE" {
-            throw SyncEngineError.pairingError(message)
+        if let code = structuredPairingErrorCode(rawCode) {
+            throw structuredPairingError(
+                code: code,
+                rawMessage: message,
+                meta: pairingErrorMetadata(payload["meta"])
+            )
         }
         throw SyncEngineError.networkError(rawCode.isEmpty ? message : "\(rawCode): \(message)")
     }
@@ -2573,7 +2633,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         guard serverCompatibilityVersion == syncFlowAppCompatibilityVersion else {
-            throw SyncEngineError.pairingError("手機與桌面 App 版本不相容，請同時更新兩端後再連線。")
+            throw structuredPairingError(
+                code: "APP_VERSION_INCOMPATIBLE",
+                rawMessage: "手機與桌面 App 版本不相容，請同時更新兩端後再連線。",
+                meta: nil
+            )
         }
     }
 
@@ -3232,7 +3296,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             switch syncError {
             case .networkError:
                 return true
-            case .databaseError, .pairingError, .permissionError, .lowDiskPaused, .storageUnavailable, .reconnectExhausted, .bindingChanged, .autoUploadInterrupted, .manualUploadCancelled:
+            case .databaseError, .pairingError, .structuredPairingError, .permissionError, .lowDiskPaused, .storageUnavailable, .reconnectExhausted, .bindingChanged, .autoUploadInterrupted, .manualUploadCancelled:
                 return false
             }
         }
@@ -5903,6 +5967,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         guard pairOk else {
             let errMsg = pairRes["error"] as? String ?? "连接码错误或已过期"
+            if let code = structuredPairingErrorCode(pairRes["errorCode"]) {
+                throw structuredPairingError(
+                    code: code,
+                    rawMessage: errMsg,
+                    meta: pairingErrorMetadata(pairRes["errorMeta"])
+                )
+            }
             throw SyncEngineError.pairingError(errMsg)
         }
 

@@ -47,8 +47,8 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 			t.Fatal("expected PairRes.OK=false for wrong code")
 		}
 		if attempt < 5 {
-			if pairRes.ErrorCode != "wrong_code" {
-				t.Fatalf("attempt %d ErrorCode=%q, want wrong_code", attempt, pairRes.ErrorCode)
+			if pairRes.ErrorCode != "PAIRING_CODE_INVALID" {
+				t.Fatalf("attempt %d ErrorCode=%q, want PAIRING_CODE_INVALID", attempt, pairRes.ErrorCode)
 			}
 			wantRemaining := 5 - attempt
 			if pairRes.RemainingAttempts != wantRemaining {
@@ -60,8 +60,8 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 			continue
 		}
 
-		if pairRes.ErrorCode != "blocked" {
-			t.Fatalf("attempt %d ErrorCode=%q, want blocked", attempt, pairRes.ErrorCode)
+		if pairRes.ErrorCode != "PAIRING_CLIENT_BLOCKED" {
+			t.Fatalf("attempt %d ErrorCode=%q, want PAIRING_CLIENT_BLOCKED", attempt, pairRes.ErrorCode)
 		}
 		if pairRes.RemainingAttempts != 0 {
 			t.Fatalf("attempt %d RemainingAttempts=%d, want 0", attempt, pairRes.RemainingAttempts)
@@ -89,12 +89,12 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 
 	var blockedErr protocol.ErrorMsg
 	recvJSON(t, blockedClient, protocol.TypeError, &blockedErr)
-	if blockedErr.Code != "DEVICE_BLOCKED" {
-		t.Fatalf("blocked HELLO error code=%q, want DEVICE_BLOCKED", blockedErr.Code)
+	if blockedErr.Code != "PAIRING_CLIENT_BLOCKED" {
+		t.Fatalf("blocked HELLO error code=%q, want PAIRING_CLIENT_BLOCKED", blockedErr.Code)
 	}
 
-	if err := st.UnblockDevice(desktopDeviceID, clientID); err != nil {
-		t.Fatalf("UnblockDevice: %v", err)
+	if err := st.ClearPairingBlock(clientID, desktopDeviceID); err != nil {
+		t.Fatalf("ClearPairingBlock: %v", err)
 	}
 
 	unblockedClient, cleanupUnblocked := setupTestConnectionWithStore(t, st, cfg)

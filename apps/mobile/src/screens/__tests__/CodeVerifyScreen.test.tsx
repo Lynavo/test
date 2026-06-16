@@ -1,5 +1,4 @@
 import React from 'react';
-import { NativeModules } from 'react-native';
 
 jest.mock('../../services/SyncEngineModule', () => {
   class MockPairingError extends Error {
@@ -10,7 +9,7 @@ jest.mock('../../services/SyncEngineModule', () => {
       message: string,
       code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown',
       remainingAttempts?: number,
-      blocked?: boolean
+      blocked?: boolean,
     ) {
       super(message);
       this.name = 'PairingError';
@@ -27,11 +26,21 @@ jest.mock('../../services/SyncEngineModule', () => {
 });
 
 import { fireEvent, render, act } from '@testing-library/react-native';
-import { pairDevice } from '../../services/SyncEngineModule';
+import { pairDevice, PairingError } from '../../services/SyncEngineModule';
 
 const mockPairDevice = pairDevice as jest.Mock;
 
 const mockNavigate = jest.fn();
+const mockDispatch = jest.fn();
+const mockGoBack = jest.fn();
+const mockUseRoute = jest.fn();
+
+const defaultRouteParams = {
+  deviceId: 'device-1',
+  host: '192.168.1.8',
+  port: 39393,
+  deviceName: 'Studio Mac',
+};
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
@@ -51,18 +60,11 @@ jest.mock('@react-navigation/native', () => ({
   },
   useNavigation: () => ({
     canGoBack: jest.fn(() => true),
-    goBack: jest.fn(),
-    dispatch: jest.fn(),
+    goBack: mockGoBack,
+    dispatch: mockDispatch,
     navigate: mockNavigate,
   }),
-  useRoute: () => ({
-    params: {
-      deviceId: 'device-1',
-      host: '192.168.1.8',
-      port: 39393,
-      deviceName: 'Studio Mac',
-    },
-  }),
+  useRoute: () => mockUseRoute(),
 }));
 
 jest.mock('@react-navigation/stack', () => ({}));
@@ -89,13 +91,60 @@ jest.mock('../../components/Icon', () => ({
 import i18n from '../../i18n';
 import { CodeVerifyScreen } from '../CodeVerifyScreen';
 
+function pairingNativeError(
+  code: string,
+  message: string,
+  userInfo?: Record<string, unknown>,
+) {
+  return {
+    code,
+    message,
+    userInfo,
+  };
+}
+
+async function renderPrefilledPairingFailure(error: unknown) {
+  mockPairDevice.mockReset();
+  mockPairDevice.mockRejectedValueOnce(error);
+  mockUseRoute.mockReturnValue({
+    params: {
+      ...defaultRouteParams,
+      prefilledCode: '123456',
+    },
+  });
+
+  const result = render(<CodeVerifyScreen />);
+
+  await act(async () => {
+    await new Promise<void>(resolve => setTimeout(resolve, 600));
+  });
+
+  expect(mockPairDevice).toHaveBeenCalledWith({
+    deviceId: 'device-1',
+    host: '192.168.1.8',
+    port: 39393,
+    connectionCode: '123456',
+  });
+
+  return result;
+}
+
 describe('CodeVerifyScreen', () => {
   beforeAll(async () => {
     await i18n.changeLanguage('zh-Hant');
   });
 
   beforeEach(() => {
-    mockNavigate.mockClear();
+    jest.clearAllMocks();
+    mockPairDevice.mockResolvedValue(undefined);
+    mockUseRoute.mockReturnValue({
+      params: defaultRouteParams,
+    });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('renders the complete v0-style pairing-code help card', () => {
@@ -128,22 +177,64 @@ describe('CodeVerifyScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ConnectionTutorial');
   });
 
+  it('shows remaining attempts when pairDevice rejects with PAIRING_CODE_INVALID metadata', async () => {
+    const { getByText } = await renderPrefilledPairingFailure(
+      pairingNativeError('PAIRING_CODE_INVALID', 'Pairing code invalid', {
+        failedAttempts: 3,
+        remainingAttempts: 2,
+        maxAttempts: 5,
+      }),
+    );
+
+    expect(getByText('連接碼錯誤，還可嘗試 2 次')).toBeTruthy();
+  });
+
+  it('keeps legacy PairingError wrong-code handling through the service wrapper', async () => {
+    const { getByText } = await renderPrefilledPairingFailure(
+      new PairingError('Pairing rejected', 'wrong_code', 1, false),
+    );
+
+    expect(getByText('連接碼錯誤，還可嘗試 1 次')).toBeTruthy();
+  });
+
+  it('shows permanent blocked guidance when pairDevice rejects with PAIRING_CLIENT_BLOCKED', async () => {
+    const { getByText } = await renderPrefilledPairingFailure(
+      pairingNativeError('PAIRING_CLIENT_BLOCKED', 'Client blocked', {
+        failedAttempts: 5,
+        remainingAttempts: 0,
+        maxAttempts: 5,
+      }),
+    );
+
+    expect(
+      getByText('這台手機已被此電腦封鎖，請在電腦端解除後再試'),
+    ).toBeTruthy();
+  });
+
+  it('does not show remaining-attempt wrong-code copy for PAIR_TOKEN_INVALID', async () => {
+    const { getByText, queryByText } = await renderPrefilledPairingFailure(
+      pairingNativeError('PAIR_TOKEN_INVALID', 'Pairing token invalid', {
+        remainingAttempts: 2,
+        maxAttempts: 5,
+      }),
+    );
+
+    expect(getByText('連接已失效，請重新輸入電腦端連接碼')).toBeTruthy();
+    expect(queryByText('連接碼錯誤，還可嘗試 2 次')).toBeNull();
+  });
+
   it('triggers Alert.alert when pairDevice throws APP_VERSION_INCOMPATIBLE', async () => {
     const { Alert } = require('react-native');
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     mockPairDevice.mockReset();
     mockPairDevice.mockRejectedValueOnce(
-      new Error('APP_VERSION_INCOMPATIBLE: version mismatch')
+      pairingNativeError('APP_VERSION_INCOMPATIBLE', 'version mismatch'),
     );
 
-    const nav = require('@react-navigation/native');
-    jest.spyOn(nav, 'useRoute').mockReturnValue({
+    mockUseRoute.mockReturnValue({
       params: {
-        deviceId: 'device-1',
-        host: '192.168.1.8',
-        port: 39393,
-        deviceName: 'Studio Mac',
+        ...defaultRouteParams,
         prefilledCode: '123456',
       },
     });
@@ -164,9 +255,7 @@ describe('CodeVerifyScreen', () => {
     expect(alertSpy).toHaveBeenCalledWith(
       '版本不相容',
       '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。',
-      [{ text: '好' }]
+      [{ text: '好' }],
     );
-    
-    alertSpy.mockRestore();
   });
 });

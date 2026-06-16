@@ -26,6 +26,7 @@ import {
 } from '@renderer/i18n/locale-resolver';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import type { PowerSaveState } from '../../../preload/api';
+import { ConnectionDevicesSection } from './ConnectionDevicesSection';
 
 type Tone = 'blue' | 'sky' | 'green' | 'amber' | 'rose' | 'slate';
 
@@ -225,6 +226,12 @@ export function SettingsPage() {
 
             <SettingsCard title="本机">
               <SettingsItem icon={Wifi} tone="blue" title="本机 IP" caption={localIp} />
+            </SettingsCard>
+
+            <SettingsCard title="连接设备">
+              <div className="p-4">
+                <ConnectionDevicesSection />
+              </div>
             </SettingsCard>
           </div>
 

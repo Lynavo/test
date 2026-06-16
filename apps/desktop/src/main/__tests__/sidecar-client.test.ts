@@ -194,7 +194,9 @@ describe('sidecarClient', () => {
 
   it('calls desktop-local management and resource endpoints with typed sidecar APIs', async () => {
     const bodies: unknown[] = [];
+    const requests: Array<{ method: string | undefined; path: string | undefined }> = [];
     const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      requests.push({ method: options.method, path: options.path });
       const req = new EventEmitter() as EventEmitter & {
         on: typeof EventEmitter.prototype.on;
         write: ReturnType<typeof vi.fn>;
@@ -206,23 +208,29 @@ describe('sidecarClient', () => {
       req.end = vi.fn();
       const path = options.path ?? '';
       const responseBody =
-        path === '/management/devices'
-          ? { items: [{ desktopDeviceId: 'desktop-1', clientId: 'client-1' }] }
-          : path === '/management/devices/client-1/unblock'
+        path === '/settings/connection-devices'
+          ? { authorizedDevices: [], blockedClients: [], recentAttempts: [] }
+          : path === '/settings/connection-devices/phone-a/revoke'
             ? { ok: true }
-            : path === '/management/records/sync'
-              ? { items: [{ recordId: 'sync-1' }] }
-              : path === '/management/records/access'
-                ? { items: [{ recordId: 'access-1' }] }
-                : path === '/resources/shared'
-                  ? options.method === 'POST'
-                    ? { resourceId: 'res-1' }
-                    : { items: [{ resourceId: 'res-1' }] }
-                  : path === '/resources/shared/res-1'
-                    ? { ok: true }
-                    : path === '/resources/received'
-                      ? { items: [{ resourceId: 'received-1' }] }
-                      : { ok: false };
+            : path === '/settings/blocked-clients/phone-a/clear'
+              ? { ok: true }
+              : path === '/management/devices'
+                ? { items: [{ desktopDeviceId: 'desktop-1', clientId: 'client-1' }] }
+                : path === '/management/devices/client-1/unblock'
+                  ? { ok: true }
+                  : path === '/management/records/sync'
+                    ? { items: [{ recordId: 'sync-1' }] }
+                    : path === '/management/records/access'
+                      ? { items: [{ recordId: 'access-1' }] }
+                      : path === '/resources/shared'
+                        ? options.method === 'POST'
+                          ? { resourceId: 'res-1' }
+                          : { items: [{ resourceId: 'res-1' }] }
+                        : path === '/resources/shared/res-1'
+                          ? { ok: true }
+                          : path === '/resources/received'
+                            ? { items: [{ resourceId: 'received-1' }] }
+                            : { ok: false };
       callback(createResponse(200, JSON.stringify(responseBody)));
       return req;
     });
@@ -241,6 +249,13 @@ describe('sidecarClient', () => {
 
     const { sidecarClient: client } = await import('../sidecar-client');
 
+    await expect(client.getConnectionDevices()).resolves.toEqual({
+      authorizedDevices: [],
+      blockedClients: [],
+      recentAttempts: [],
+    });
+    await expect(client.revokeConnectionDevice('phone-a')).resolves.toEqual({ ok: true });
+    await expect(client.clearBlockedClient('phone-a')).resolves.toEqual({ ok: true });
     await expect(client.getManagedDevices()).resolves.toEqual({
       items: [{ desktopDeviceId: 'desktop-1', clientId: 'client-1' }],
     });
@@ -270,6 +285,9 @@ describe('sidecarClient', () => {
         path: (options as RequestOptions).path,
       })),
     ).toEqual([
+      { method: 'GET', path: '/settings/connection-devices' },
+      { method: 'POST', path: '/settings/connection-devices/phone-a/revoke' },
+      { method: 'POST', path: '/settings/blocked-clients/phone-a/clear' },
       { method: 'GET', path: '/management/devices' },
       { method: 'POST', path: '/management/devices/client-1/unblock' },
       { method: 'GET', path: '/management/records/sync' },
@@ -280,6 +298,8 @@ describe('sidecarClient', () => {
       { method: 'GET', path: '/resources/received' },
     ]);
     expect(bodies).toEqual([
+      {},
+      {},
       {
         kind: 'shared_file',
         displayName: 'photo.jpg',
@@ -884,7 +904,6 @@ describe('sidecarClient', () => {
       phone: '+8613800138000',
       accountLabel: '+8613800138000',
     });
-
   });
 
   it('uses the email login and persists session correctly', async () => {
@@ -942,9 +961,7 @@ describe('sidecarClient', () => {
 
     const { sidecarClient: client } = await import('../sidecar-client');
 
-    await expect(
-      client.sendEmailCode({ email: 'ada@example.com' }),
-    ).resolves.toEqual({
+    await expect(client.sendEmailCode({ email: 'ada@example.com' })).resolves.toEqual({
       ok: true,
     });
 
@@ -1264,10 +1281,9 @@ describe('sidecarClient', () => {
 
   it('logs the selected Google auth API target and network failure diagnostics', async () => {
     const httpRequest = vi.fn();
-    const networkError = Object.assign(
-      new Error('getaddrinfo ENOTFOUND review-api.vividrop.cn'),
-      { code: 'ENOTFOUND' },
-    );
+    const networkError = Object.assign(new Error('getaddrinfo ENOTFOUND review-api.vividrop.cn'), {
+      code: 'ENOTFOUND',
+    });
     const httpsRequest = vi.fn(() => {
       const req = new EventEmitter() as EventEmitter & {
         on: typeof EventEmitter.prototype.on;
@@ -2095,9 +2111,7 @@ describe('sidecarClient', () => {
       });
       expect(sidecarPayloads).toHaveLength(4);
       expect(
-        sidecarPayloads.filter(
-          (payload) => 'authBaseUrl' in (payload as Record<string, unknown>),
-        ),
+        sidecarPayloads.filter((payload) => 'authBaseUrl' in (payload as Record<string, unknown>)),
       ).toEqual([
         expect.objectContaining({
           authBaseUrl: 'https://review-api.vividrop.cn',
@@ -2109,9 +2123,7 @@ describe('sidecarClient', () => {
         }),
       ]);
       expect(
-        sidecarPayloads.filter(
-          (payload) => 'signalingUrl' in (payload as Record<string, unknown>),
-        ),
+        sidecarPayloads.filter((payload) => 'signalingUrl' in (payload as Record<string, unknown>)),
       ).toEqual([
         expect.objectContaining({
           signalingUrl: 'https://review-api.vividrop.cn',

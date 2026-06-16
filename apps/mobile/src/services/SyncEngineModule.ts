@@ -1,9 +1,14 @@
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import {
+  ErrorCode,
+  type ErrorCode as SyncFlowErrorCode,
+} from '@syncflow/contracts';
 import type {
   AlbumAssetDTO,
   AssetPreviewSourceDTO,
   AutoUploadConfigDTO,
   DirectoryListingDTO,
+  PairingErrorMetadataDTO,
   DirectoryScope,
   SharedDirectoryDTO,
   AutoUploadTimeRangeMode,
@@ -476,18 +481,24 @@ export class PairingError extends Error {
   code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown';
   remainingAttempts?: number;
   blocked?: boolean;
+  nativeCode?: SyncFlowErrorCode;
+  meta?: PairingErrorMetadataDTO;
 
   constructor(
     message: string,
     code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown',
     remainingAttempts?: number,
-    blocked?: boolean
+    blocked?: boolean,
+    nativeCode?: SyncFlowErrorCode,
+    meta?: PairingErrorMetadataDTO,
   ) {
     super(message);
     this.name = 'PairingError';
     this.code = code;
     this.remainingAttempts = remainingAttempts;
     this.blocked = blocked;
+    this.nativeCode = nativeCode;
+    this.meta = meta;
   }
 }
 
@@ -501,12 +512,37 @@ export async function pairDevice(params: {
     await NativeSyncEngine.pairDevice(params);
   } catch (err: any) {
     const errMsg = err?.message || 'Unknown pairing error';
-    let code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown' = 'unknown';
-    
+    let code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown' =
+      'unknown';
+
     const rawCode = err?.code || '';
+    const nativeCode = Object.values(ErrorCode).includes(
+      rawCode as SyncFlowErrorCode,
+    )
+      ? (rawCode as SyncFlowErrorCode)
+      : undefined;
+    const rawMeta = err?.meta ?? err?.userInfo?.meta ?? err?.userInfo;
+    const meta: PairingErrorMetadataDTO | undefined = rawMeta
+      ? {
+          failedAttempts:
+            typeof rawMeta.failedAttempts === 'number'
+              ? rawMeta.failedAttempts
+              : undefined,
+          remainingAttempts:
+            typeof rawMeta.remainingAttempts === 'number'
+              ? rawMeta.remainingAttempts
+              : undefined,
+          maxAttempts:
+            typeof rawMeta.maxAttempts === 'number'
+              ? rawMeta.maxAttempts
+              : undefined,
+        }
+      : undefined;
     if (
       rawCode === 'WRONG_CODE' ||
       rawCode === 'wrong_code' ||
+      rawCode === ErrorCode.PAIR_CODE_INVALID ||
+      rawCode === ErrorCode.PAIRING_CODE_INVALID ||
       errMsg.includes('wrong_code') ||
       errMsg.includes('Pairing rejected')
     ) {
@@ -514,6 +550,7 @@ export async function pairDevice(params: {
     } else if (
       rawCode === 'BLOCKED' ||
       rawCode === 'blocked' ||
+      rawCode === ErrorCode.PAIRING_CLIENT_BLOCKED ||
       errMsg.includes('blocked')
     ) {
       code = 'blocked';
@@ -527,15 +564,27 @@ export async function pairDevice(params: {
       code = 'version_incompatible';
     }
 
-    const remainingAttempts = err?.remainingAttempts !== undefined
-      ? Number(err.remainingAttempts)
-      : (err?.userInfo?.remainingAttempts !== undefined ? Number(err.userInfo.remainingAttempts) : undefined);
+    const remainingAttempts =
+      err?.remainingAttempts !== undefined
+        ? Number(err.remainingAttempts)
+        : meta?.remainingAttempts !== undefined
+          ? Number(meta.remainingAttempts)
+          : undefined;
 
-    const blocked = err?.blocked !== undefined
-      ? Boolean(err.blocked)
-      : (err?.userInfo?.blocked !== undefined ? Boolean(err.userInfo.blocked) : undefined);
+    const blocked =
+      err?.blocked !== undefined
+        ? Boolean(err.blocked)
+        : err?.userInfo?.blocked !== undefined
+          ? Boolean(err.userInfo.blocked)
+          : undefined;
 
-    throw new PairingError(errMsg, code, remainingAttempts, blocked || (code === 'blocked'));
+    throw new PairingError(
+      errMsg,
+      code,
+      remainingAttempts,
+      blocked || code === 'blocked',
+      nativeCode,
+      meta,
+    );
   }
 }
-

@@ -36,6 +36,13 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   getSettings: async () => ({ ...defaultSettings }),
   updateSettings: async (s) => ({ ...defaultSettings, ...s }) as SettingsDTO,
   resetState: async () => ({ ok: true }),
+  getConnectionDevices: async () => ({
+    authorizedDevices: [],
+    blockedClients: [],
+    recentAttempts: [],
+  }),
+  revokeConnectionDevice: async () => ({ ok: true }),
+  clearBlockedClient: async () => ({ ok: true }),
   getClientConfig: async () => ({ features: { giftCard: { enabled: false } } }),
   redeemGiftCard: async () => ({ ok: true }),
   setConnectionCode: async (code: string) => ({ code }),

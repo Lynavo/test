@@ -237,6 +237,9 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /settings", withJSON(srv.handleGetSettings))
 	mux.HandleFunc("PUT /settings", withJSON(srv.handleUpdateSettings))
 	mux.HandleFunc("POST /settings/reset-state", withJSON(srv.handleResetState))
+	mux.HandleFunc("GET /settings/connection-devices", withJSON(srv.handleGetConnectionDevices))
+	mux.HandleFunc("POST /settings/connection-devices/{clientId}/revoke", withJSON(srv.handleRevokeConnectionDevice))
+	mux.HandleFunc("POST /settings/blocked-clients/{clientId}/clear", withJSON(srv.handleClearBlockedClient))
 	// Connection code
 	mux.HandleFunc("POST /connection-code", withJSON(srv.handleSetConnectionCode))
 	mux.HandleFunc("POST /connection-code/regenerate", withJSON(srv.handleRegenerateCode))

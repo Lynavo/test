@@ -19,8 +19,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		"version":                 "0.1.0",
 		"appCompatibilityVersion": protocol.AppCompatibilityVersion,
 		"capabilities": map[string]any{
-			"revokesPairingsOnCodeRotation": true,
-			"wakeOnLanSupported":            wakeSupported,
+			"connectionDeviceManagement": true,
+			"wakeOnLanSupported":         wakeSupported,
 		},
 		"tunnel": map[string]any{
 			"signalingAuthState":        signalingAuthState,

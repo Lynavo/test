@@ -129,6 +129,11 @@ func sendJSON(t *testing.T, conn net.Conn, typ uint16, v any) {
 // recvJSON reads a frame, checks its type, and unmarshals the body into v.
 func recvJSON(t *testing.T, conn net.Conn, expectedType uint16, v any) {
 	t.Helper()
+	_ = recvJSONRaw(t, conn, expectedType, v)
+}
+
+func recvJSONRaw(t *testing.T, conn net.Conn, expectedType uint16, v any) []byte {
+	t.Helper()
 	conn.SetReadDeadline(time.Now().Add(testReadTimeout))
 	hdr, body, err := protocol.ReadFrame(conn)
 	if err != nil {
@@ -141,6 +146,15 @@ func recvJSON(t *testing.T, conn net.Conn, expectedType uint16, v any) {
 		if err := json.Unmarshal(body, v); err != nil {
 			t.Fatalf("unmarshal %T: %v\nbody: %s", v, err, string(body))
 		}
+	}
+	return body
+}
+
+func assertNoExtraFrame(t *testing.T, conn net.Conn) {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if hdr, _, err := protocol.ReadFrame(conn); err == nil {
+		t.Fatalf("unexpected extra frame type=0x%04x", hdr.Type)
 	}
 }
 
@@ -213,6 +227,76 @@ func doPairing(t *testing.T, client net.Conn) string {
 	}
 
 	return pairRes.PairingToken
+}
+
+func sendPairingHello(t *testing.T, client net.Conn, clientID string) protocol.HelloRes {
+	t.Helper()
+	sendJSON(t, client, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                clientID,
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		AppState:                "active",
+		DeviceAlias:             "Nick iPhone",
+		StableDeviceID:          clientID + "-stable",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client, protocol.TypeHelloRes, &helloRes)
+	if !helloRes.AuthRequired {
+		t.Fatal("expected authRequired=true for pairing hello")
+	}
+	if helloRes.Bound {
+		t.Fatal("expected bound=false for pairing hello")
+	}
+	return helloRes
+}
+
+func sendPairRequest(t *testing.T, client net.Conn, clientID, code string) protocol.PairRes {
+	t.Helper()
+	pairRes, _ := sendPairRequestRaw(t, client, clientID, code)
+	return pairRes
+}
+
+func sendPairRequestRaw(t *testing.T, client net.Conn, clientID, code string) (protocol.PairRes, []byte) {
+	t.Helper()
+	sendJSON(t, client, protocol.TypePairReq, protocol.PairReq{
+		ClientID:       clientID,
+		ClientName:     testClientName,
+		ConnectionCode: code,
+		DeviceAlias:    "Nick iPhone",
+		StableDeviceID: clientID + "-stable",
+	})
+
+	var pairRes protocol.PairRes
+	body := recvJSONRaw(t, client, protocol.TypePairRes, &pairRes)
+	return pairRes, body
+}
+
+func pairClientWithCode(t *testing.T, client net.Conn, clientID, code string) protocol.PairRes {
+	t.Helper()
+	_ = sendPairingHello(t, client, clientID)
+	return sendPairRequest(t, client, clientID, code)
+}
+
+func pairingTestMeta(clientID, desktopID string) store.PairingClientMetadata {
+	return store.PairingClientMetadata{
+		ClientID:        clientID,
+		DesktopDeviceID: desktopID,
+		ClientName:      testClientName,
+		DeviceAlias:     "Nick iPhone",
+		Platform:        "ios",
+		StableDeviceID:  clientID + "-stable",
+		IP:              "127.0.0.1",
+	}
+}
+
+func assertPairingMetaRemainingZeroInRawJSON(t *testing.T, body []byte) {
+	t.Helper()
+	if !bytes.Contains(body, []byte(`"remainingAttempts":0`)) {
+		t.Fatalf("raw frame is missing remainingAttempts zero metadata: %s", string(body))
+	}
 }
 
 // doSyncBegin sends SYNC_BEGIN_REQ and verifies the response.
@@ -300,6 +384,253 @@ func TestHelloRejectsIncompatibleAppVersion(t *testing.T) {
 	if errMsg.Code != "APP_VERSION_INCOMPATIBLE" {
 		t.Fatalf("error code=%q, want APP_VERSION_INCOMPATIBLE", errMsg.Code)
 	}
+}
+
+func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+	if err := st.SetSetting("device_id", "desktop-1"); err != nil {
+		t.Fatalf("SetSetting(device_id): %v", err)
+	}
+
+	for attempt := 1; attempt <= 5; attempt++ {
+		attemptClient := client
+		attemptCleanup := func() {}
+		if attempt > 1 {
+			attemptClient, attemptCleanup = setupTestConnectionWithStore(t, st, cfg)
+		}
+
+		_ = sendPairingHello(t, attemptClient, "phone-a")
+		pairRes, rawPairRes := sendPairRequestRaw(t, attemptClient, "phone-a", "000000")
+		if pairRes.OK {
+			t.Fatalf("attempt %d PairRes.OK=true, want false", attempt)
+		}
+		wantCode := "PAIRING_CODE_INVALID"
+		if attempt == 5 {
+			wantCode = "PAIRING_CLIENT_BLOCKED"
+		}
+		if pairRes.ErrorCode != wantCode {
+			t.Fatalf("attempt %d errorCode=%q, want %q", attempt, pairRes.ErrorCode, wantCode)
+		}
+		if pairRes.ErrorMeta == nil {
+			t.Fatalf("attempt %d ErrorMeta=nil", attempt)
+		}
+		if pairRes.ErrorMeta.FailedAttempts != attempt {
+			t.Fatalf("attempt %d failedAttempts=%d, want %d", attempt, pairRes.ErrorMeta.FailedAttempts, attempt)
+		}
+		wantRemaining := 5 - attempt
+		if pairRes.ErrorMeta.RemainingAttempts != wantRemaining {
+			t.Fatalf("attempt %d remainingAttempts=%d, want %d", attempt, pairRes.ErrorMeta.RemainingAttempts, wantRemaining)
+		}
+		if pairRes.ErrorMeta.MaxAttempts != 5 {
+			t.Fatalf("attempt %d maxAttempts=%d, want 5", attempt, pairRes.ErrorMeta.MaxAttempts)
+		}
+		if attempt == 5 {
+			assertPairingMetaRemainingZeroInRawJSON(t, rawPairRes)
+		}
+		assertNoExtraFrame(t, attemptClient)
+
+		attemptClient.Close()
+		attemptCleanup()
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	block, err := st.GetActivePairingBlock("phone-a", "desktop-1")
+	if err != nil {
+		t.Fatalf("GetActivePairingBlock: %v", err)
+	}
+	if block == nil {
+		t.Fatal("expected active pairing block for phone-a/desktop-1")
+	}
+}
+
+func TestBlockedClientRejectedAtHelloBeforePairReq(t *testing.T) {
+	client, st, _, cleanup := setupTestConnection(t)
+	defer cleanup()
+	if err := st.SetSetting("device_id", "desktop-1"); err != nil {
+		t.Fatalf("SetSetting(device_id): %v", err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+			t.Fatalf("RecordPairingFailure: %v", err)
+		}
+	}
+
+	sendJSON(t, client, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                "phone-a",
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		AppState:                "active",
+		DeviceAlias:             "Nick iPhone",
+		StableDeviceID:          "phone-a-stable",
+	})
+
+	var errMsg protocol.ErrorMsg
+	rawErrMsg := recvJSONRaw(t, client, protocol.TypeError, &errMsg)
+	if errMsg.Code != "PAIRING_CLIENT_BLOCKED" {
+		t.Fatalf("error code=%q, want PAIRING_CLIENT_BLOCKED", errMsg.Code)
+	}
+	if errMsg.Meta == nil {
+		t.Fatal("expected blocked error metadata")
+	}
+	assertPairingMetaRemainingZeroInRawJSON(t, rawErrMsg)
+	assertNoExtraFrame(t, client)
+
+	attempts, err := st.ListRecentPairingAttempts(1)
+	if err != nil {
+		t.Fatalf("ListRecentPairingAttempts: %v", err)
+	}
+	if len(attempts) != 1 {
+		t.Fatalf("recent attempts len=%d, want 1", len(attempts))
+	}
+	if attempts[0].Result != store.PairingAttemptBlocked {
+		t.Fatalf("latest attempt result=%q, want %q", attempts[0].Result, store.PairingAttemptBlocked)
+	}
+}
+
+func TestPairingBlockDoesNotAffectOtherDesktopOrClient(t *testing.T) {
+	client1, st1, _, cleanup1 := setupTestConnection(t)
+	defer cleanup1()
+	if err := st1.SetSetting("device_id", "desktop-1"); err != nil {
+		t.Fatalf("SetSetting(device_id desktop-1): %v", err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := st1.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+			t.Fatalf("RecordPairingFailure desktop-1: %v", err)
+		}
+	}
+
+	client2, st2, _, cleanup2 := setupTestConnection(t)
+	defer cleanup2()
+	if err := st2.SetSetting("device_id", "desktop-2"); err != nil {
+		t.Fatalf("SetSetting(device_id desktop-2): %v", err)
+	}
+
+	phoneAOnDesktop2 := pairClientWithCode(t, client2, "phone-a", testConnCode)
+	if !phoneAOnDesktop2.OK {
+		t.Fatalf("phone-a should pair on desktop-2, got errorCode=%q error=%q", phoneAOnDesktop2.ErrorCode, phoneAOnDesktop2.Error)
+	}
+
+	phoneBOnDesktop1 := pairClientWithCode(t, client1, "phone-b", testConnCode)
+	if !phoneBOnDesktop1.OK {
+		t.Fatalf("phone-b should pair on desktop-1, got errorCode=%q error=%q", phoneBOnDesktop1.ErrorCode, phoneBOnDesktop1.Error)
+	}
+}
+
+func TestRevokedDeviceCannotUseOldTokenButCanRepairWithCorrectCode(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+
+	firstPair := pairClientWithCode(t, client, "phone-a", testConnCode)
+	if !firstPair.OK {
+		t.Fatalf("initial pairing failed: errorCode=%q error=%q", firstPair.ErrorCode, firstPair.Error)
+	}
+	oldToken := firstPair.PairingToken
+	if oldToken == "" {
+		t.Fatal("old pairing token is empty")
+	}
+
+	if err := st.RevokePairedDevice("phone-a"); err != nil {
+		t.Fatalf("RevokePairedDevice: %v", err)
+	}
+	client.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanup2()
+	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                "phone-a",
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		PairingToken:            oldToken,
+		AppState:                "active",
+		DeviceAlias:             "Nick iPhone",
+		StableDeviceID:          "phone-a-stable",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
+	if !helloRes.AuthRequired {
+		t.Fatal("expected authRequired=true for revoked device with old token")
+	}
+	if helloRes.Bound {
+		t.Fatal("expected bound=false for revoked device with old token")
+	}
+
+	repairPair := sendPairRequest(t, client2, "phone-a", testConnCode)
+	if !repairPair.OK {
+		t.Fatalf("repair pairing failed: errorCode=%q error=%q", repairPair.ErrorCode, repairPair.Error)
+	}
+	if repairPair.PairingToken == "" {
+		t.Fatal("repair pairing token is empty")
+	}
+	if repairPair.PairingToken == oldToken {
+		t.Fatal("repair pairing token should differ from old token")
+	}
+}
+
+func TestAuthBlockedAfterNonceDoesNotSendExtraProtocolError(t *testing.T) {
+	client, st, cfg, cleanup := setupTestConnection(t)
+	defer cleanup()
+	if err := st.SetSetting("device_id", "desktop-1"); err != nil {
+		t.Fatalf("SetSetting(device_id): %v", err)
+	}
+
+	pairingToken := pairClientWithCode(t, client, "phone-a", testConnCode)
+	if !pairingToken.OK {
+		t.Fatalf("initial pairing failed: errorCode=%q error=%q", pairingToken.ErrorCode, pairingToken.Error)
+	}
+	client.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanup2()
+	sendJSON(t, client2, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                "phone-a",
+		ClientName:              testClientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		PairingToken:            pairingToken.PairingToken,
+		AppState:                "active",
+		DeviceAlias:             "Nick iPhone",
+		StableDeviceID:          "phone-a-stable",
+	})
+
+	var helloRes protocol.HelloRes
+	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
+	if helloRes.AuthRequired {
+		t.Fatal("expected authRequired=false before auth block race")
+	}
+	if helloRes.Nonce == "" {
+		t.Fatal("nonce is empty")
+	}
+
+	for i := 0; i < 5; i++ {
+		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+			t.Fatalf("RecordPairingFailure: %v", err)
+		}
+	}
+
+	sendJSON(t, client2, protocol.TypeAuthReq, protocol.AuthReq{
+		ClientID: "phone-a",
+		Auth:     computeHMAC(t, pairingToken.PairingToken, helloRes.Nonce),
+	})
+
+	var errMsg protocol.ErrorMsg
+	rawErrMsg := recvJSONRaw(t, client2, protocol.TypeError, &errMsg)
+	if errMsg.Code != "PAIRING_CLIENT_BLOCKED" {
+		t.Fatalf("error code=%q, want PAIRING_CLIENT_BLOCKED", errMsg.Code)
+	}
+	if errMsg.Meta == nil {
+		t.Fatal("expected blocked error metadata")
+	}
+	assertPairingMetaRemainingZeroInRawJSON(t, rawErrMsg)
+	assertNoExtraFrame(t, client2)
 }
 
 func TestHelloResponseAdvertisesWakeCapability(t *testing.T) {
@@ -694,7 +1025,7 @@ func TestReturningHelloIgnoresDesktopNameAsClientAlias(t *testing.T) {
 	}
 }
 
-func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
+func TestConnectionCodeRotationKeepsReturningDeviceAuthorized(t *testing.T) {
 	client, st, cfg, cleanup := setupTestConnection(t)
 	defer cleanup()
 
@@ -702,12 +1033,8 @@ func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
 	client.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	revokedCount, err := st.SetConnectionCodeAndRevokePairedDevices("654321")
-	if err != nil {
-		t.Fatalf("SetConnectionCodeAndRevokePairedDevices: %v", err)
-	}
-	if revokedCount != 1 {
-		t.Fatalf("expected 1 revoked device, got %d", revokedCount)
+	if err := st.SetConnectionCode("654321"); err != nil {
+		t.Fatalf("SetConnectionCode: %v", err)
 	}
 
 	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
@@ -725,11 +1052,26 @@ func TestConnectionCodeRotationForcesReturningDeviceToRePair(t *testing.T) {
 
 	var helloRes protocol.HelloRes
 	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
-	if !helloRes.AuthRequired {
-		t.Fatal("expected authRequired=true after connection code rotation revoked old token")
+	if helloRes.AuthRequired {
+		t.Fatal("expected authRequired=false after connection code rotation")
 	}
-	if helloRes.Bound {
-		t.Fatal("expected bound=false after connection code rotation revoked old token")
+	if !helloRes.Bound {
+		t.Fatal("expected bound=true after connection code rotation")
+	}
+	if helloRes.Nonce == "" {
+		t.Fatal("nonce is empty for returning device after connection code rotation")
+	}
+
+	authHMAC := computeHMAC(t, pairingToken, helloRes.Nonce)
+	sendJSON(t, client2, protocol.TypeAuthReq, protocol.AuthReq{
+		ClientID: testClientID,
+		Auth:     authHMAC,
+	})
+
+	var authRes map[string]any
+	recvJSON(t, client2, protocol.TypeAuthRes, &authRes)
+	if authRes["ok"] != true {
+		t.Fatal("expected auth to succeed after connection code rotation")
 	}
 }
 

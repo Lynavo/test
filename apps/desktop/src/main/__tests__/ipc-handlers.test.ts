@@ -180,6 +180,9 @@ vi.mock('../sidecar-client', async () => {
       validateShare: vi.fn(),
       getTransferActive: vi.fn(),
       getSharedList: vi.fn(),
+      getConnectionDevices: vi.fn(),
+      revokeConnectionDevice: vi.fn(),
+      clearBlockedClient: vi.fn(),
       getManagedDevices: vi.fn(),
       unblockDevice: vi.fn(),
       getSyncRecords: vi.fn(),
@@ -202,7 +205,7 @@ vi.mock('../sidecar-client', async () => {
   };
 });
 
-function compatibleHealth(capabilities?: { revokesPairingsOnCodeRotation?: boolean }) {
+function compatibleHealth(capabilities?: { connectionDeviceManagement?: boolean }) {
   return {
     ok: true,
     service: 'syncflow-sidecar',
@@ -254,27 +257,13 @@ describe('registerIpcHandlers', () => {
     return { handler, manager };
   }
 
-  it('regenerates the connection code directly when the sidecar supports pair revocation', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValue({
-      ...compatibleHealth({ revokesPairingsOnCodeRotation: true }),
-    });
+  it('regenerates connection code without revocation compatibility restart', async () => {
     vi.mocked(sidecarClient.regenerateConnectionCode).mockResolvedValue({ code: '123456' });
 
     const { handler, manager } = registerWithManager();
 
     await expect(handler()).resolves.toEqual({ code: '123456' });
     expect(manager.retryStart).not.toHaveBeenCalled();
-    expect(sidecarClient.regenerateConnectionCode).toHaveBeenCalledTimes(1);
-  });
-
-  it('restarts a stale sidecar before regenerating the connection code', async () => {
-    vi.mocked(sidecarClient.getHealth).mockResolvedValue(compatibleHealth());
-    vi.mocked(sidecarClient.regenerateConnectionCode).mockResolvedValue({ code: '654321' });
-
-    const { handler, manager } = registerWithManager();
-
-    await expect(handler()).resolves.toEqual({ code: '654321' });
-    expect(manager.retryStart).toHaveBeenCalledTimes(1);
     expect(sidecarClient.regenerateConnectionCode).toHaveBeenCalledTimes(1);
   });
 
@@ -345,6 +334,13 @@ describe('registerIpcHandlers', () => {
   });
 
   it('registers desktop-local management and resource IPC handlers', async () => {
+    vi.mocked(sidecarClient.getConnectionDevices).mockResolvedValue({
+      authorizedDevices: [],
+      blockedClients: [],
+      recentAttempts: [],
+    });
+    vi.mocked(sidecarClient.revokeConnectionDevice).mockResolvedValue({ ok: true });
+    vi.mocked(sidecarClient.clearBlockedClient).mockResolvedValue({ ok: true });
     vi.mocked(sidecarClient.getManagedDevices).mockResolvedValue({
       items: [managedDeviceFixture],
     });
@@ -366,12 +362,23 @@ describe('registerIpcHandlers', () => {
 
     registerIpcHandlers({ retryStart: vi.fn() } as never);
 
+    await expect(handlers.get(IPC.SIDECAR_CONNECTION_DEVICES)?.(undefined)).resolves.toEqual({
+      authorizedDevices: [],
+      blockedClients: [],
+      recentAttempts: [],
+    });
+    await expect(
+      handlers.get(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE)?.(undefined, 'phone-a'),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      handlers.get(IPC.SIDECAR_CLEAR_BLOCKED_CLIENT)?.(undefined, 'phone-a'),
+    ).resolves.toEqual({ ok: true });
     await expect(handlers.get(IPC.SIDECAR_MANAGED_DEVICES)?.()).resolves.toEqual({
       items: [managedDeviceFixture],
     });
-    await expect(handlers.get(IPC.SIDECAR_UNBLOCK_DEVICE)?.(undefined, 'client-1')).resolves.toEqual(
-      { ok: true },
-    );
+    await expect(
+      handlers.get(IPC.SIDECAR_UNBLOCK_DEVICE)?.(undefined, 'client-1'),
+    ).resolves.toEqual({ ok: true });
     await expect(handlers.get(IPC.SIDECAR_SYNC_RECORDS)?.()).resolves.toEqual({
       items: [syncRecordFixture],
     });
@@ -395,6 +402,9 @@ describe('registerIpcHandlers', () => {
       items: [receivedLibraryFixture],
     });
 
+    expect(sidecarClient.getConnectionDevices).toHaveBeenCalledTimes(1);
+    expect(sidecarClient.revokeConnectionDevice).toHaveBeenCalledWith('phone-a');
+    expect(sidecarClient.clearBlockedClient).toHaveBeenCalledWith('phone-a');
     expect(sidecarClient.unblockDevice).toHaveBeenCalledWith('client-1');
     expect(sidecarClient.addSharedResource).toHaveBeenCalledWith({
       kind: 'shared_folder',

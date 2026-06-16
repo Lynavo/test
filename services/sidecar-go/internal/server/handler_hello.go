@@ -22,6 +22,14 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
+const (
+	pairingMaxWrongCodeAttempts = 5
+	errorPairingCodeInvalid     = "PAIRING_CODE_INVALID"
+	errorPairingClientBlocked   = "PAIRING_CLIENT_BLOCKED"
+	errorPairTokenInvalid       = "PAIR_TOKEN_INVALID"
+	errorAppVersionIncompatible = "APP_VERSION_INCOMPATIBLE"
+)
+
 // handleHello processes HELLO_REQ from the client. It determines whether the
 // device is already paired (returning) or new (needs pairing) and responds
 // with the appropriate HelloRes.
@@ -35,41 +43,11 @@ func (c *connection) handleHello(body []byte) error {
 		return fmt.Errorf("parse HELLO_REQ: %w", err)
 	}
 
-	if req.AppCompatibilityVersion != protocol.AppCompatibilityVersion {
-		slog.Warn("rejecting incompatible app version",
-			"clientID", req.ClientID,
-			"clientVersion", req.AppVersion,
-			"clientCompatibilityVersion", req.AppCompatibilityVersion,
-			"serverCompatibilityVersion", protocol.AppCompatibilityVersion,
-		)
-		return c.rejectWithError(
-			"APP_VERSION_INCOMPATIBLE",
-			fmt.Sprintf(
-				"手機與桌面 App 版本不相容，請同時更新兩端後再連線。手機版本=%s 相容版本=%d，桌面相容版本=%d",
-				req.AppVersion,
-				req.AppCompatibilityVersion,
-				protocol.AppCompatibilityVersion,
-			),
-		)
-	}
-
 	c.clientID = req.ClientID
 	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
 	c.clientPlatform = req.ClientPlatform
 
-	// Retrieve server identity
 	serverID, _ := c.store.GetDeviceID()
-	blockState, err := c.store.GetDeviceBlockState(serverID, req.ClientID)
-	if err != nil {
-		return fmt.Errorf("get device block state: %w", err)
-	}
-	if blockState.Blocked {
-		slog.Warn("rejecting blocked device during HELLO", "clientID", req.ClientID, "serverID", serverID)
-		return c.rejectWithError(
-			"DEVICE_BLOCKED",
-			"此手機已被此電腦封鎖，請在電腦端手動解除",
-		)
-	}
 
 	slog.Info("HELLO_REQ received",
 		"clientID", req.ClientID,
@@ -79,6 +57,44 @@ func (c *connection) handleHello(body []byte) error {
 
 	serverName, _ := c.store.GetDeviceName()
 	shareConfig, _ := c.store.GetShareConfig()
+
+	meta := c.pairingClientMetadata(req.ClientID, req.ClientName, req.DeviceAlias, req.StableDeviceID)
+	if block, err := c.store.GetActivePairingBlock(meta.ClientID, meta.DesktopDeviceID); err != nil {
+		return fmt.Errorf("check active pairing block: %w", err)
+	} else if block != nil {
+		return c.rejectPairingBlocked(meta, block)
+	}
+
+	if req.AppCompatibilityVersion != protocol.AppCompatibilityVersion {
+		slog.Warn("rejecting incompatible app version",
+			"clientID", req.ClientID,
+			"clientVersion", req.AppVersion,
+			"clientCompatibilityVersion", req.AppCompatibilityVersion,
+			"serverCompatibilityVersion", protocol.AppCompatibilityVersion,
+		)
+		_ = c.store.RecordPairingAttempt(
+			store.PairingClientMetadata{
+				ClientID:        req.ClientID,
+				DesktopDeviceID: serverID,
+				ClientName:      req.ClientName,
+				DeviceAlias:     req.DeviceAlias,
+				Platform:        req.ClientPlatform,
+				StableDeviceID:  req.StableDeviceID,
+				IP:              preferredClientIP(req.ClientIP, c.conn),
+			},
+			store.PairingAttemptIncompatible,
+			errorAppVersionIncompatible,
+		)
+		return c.rejectWithError(
+			errorAppVersionIncompatible,
+			fmt.Sprintf(
+				"手機與桌面 App 版本不相容，請同時更新兩端後再連線。手機版本=%s 相容版本=%d，桌面相容版本=%d",
+				req.AppVersion,
+				req.AppCompatibilityVersion,
+				protocol.AppCompatibilityVersion,
+			),
+		)
+	}
 
 	caps := protocol.ServerCapabilities{
 		LowDiskPauseEnabled: true,
@@ -287,6 +303,45 @@ func intListLogSummary(values []int) string {
 	return strings.Join(parts, ",")
 }
 
+func (c *connection) pairingClientMetadata(clientID, clientName, deviceAlias, stableDeviceID string) store.PairingClientMetadata {
+	desktopDeviceID, _ := c.store.GetDeviceID()
+	serverName, _ := c.store.GetDeviceName()
+	return store.PairingClientMetadata{
+		ClientID:        clientID,
+		DesktopDeviceID: desktopDeviceID,
+		ClientName:      clientName,
+		DeviceAlias:     normalizeClientDeviceAlias(deviceAlias, serverName),
+		Platform:        c.clientPlatform,
+		StableDeviceID:  stableDeviceID,
+		IP:              c.clientIP,
+	}
+}
+
+func pairingErrorMeta(result store.PairingFailureResult) *protocol.PairingErrorMetadata {
+	return &protocol.PairingErrorMetadata{
+		FailedAttempts:    result.FailedAttempts,
+		RemainingAttempts: result.RemainingAttempts,
+		MaxAttempts:       result.MaxAttempts,
+	}
+}
+
+func (c *connection) rejectPairingBlocked(meta store.PairingClientMetadata, block *store.BlockedPairingClient) error {
+	_ = c.store.RecordPairingAttempt(meta, store.PairingAttemptBlocked, errorPairingClientBlocked)
+	_ = c.store.TouchActivePairingBlock(meta)
+	if err := c.sendJSON(protocol.TypeError, protocol.ErrorMsg{
+		Code:    errorPairingClientBlocked,
+		Message: "This mobile client is blocked on this desktop",
+		Meta: &protocol.PairingErrorMetadata{
+			FailedAttempts:    block.FailedAttempts,
+			RemainingAttempts: 0,
+			MaxAttempts:       pairingMaxWrongCodeAttempts,
+		},
+	}); err != nil {
+		return err
+	}
+	return errProtocolErrorAlreadySent
+}
+
 func desktopAppVersion() string {
 	if version := strings.TrimSpace(os.Getenv("SYNCFLOW_DESKTOP_APP_VERSION")); version != "" {
 		return version
@@ -312,6 +367,39 @@ func (c *connection) handleAuth(body []byte) error {
 		return fmt.Errorf("look up device for auth: %w", err)
 	}
 
+	desktopDeviceID, _ := c.store.GetDeviceID()
+	if block, err := c.store.GetActivePairingBlock(c.clientID, desktopDeviceID); err != nil {
+		return fmt.Errorf("check active pairing block before auth: %w", err)
+	} else if block != nil {
+		meta := store.PairingClientMetadata{
+			ClientID:        c.clientID,
+			DesktopDeviceID: desktopDeviceID,
+			ClientName:      device.ClientName,
+			Platform:        device.Platform,
+			IP:              c.clientIP,
+		}
+		if device.DeviceAlias != nil {
+			meta.DeviceAlias = *device.DeviceAlias
+		}
+		if device.StableDeviceID != nil {
+			meta.StableDeviceID = *device.StableDeviceID
+		}
+		_ = c.store.RecordPairingAttempt(meta, store.PairingAttemptBlocked, errorPairingClientBlocked)
+		_ = c.store.TouchActivePairingBlock(meta)
+		if err := c.sendJSON(protocol.TypeError, protocol.ErrorMsg{
+			Code:    errorPairingClientBlocked,
+			Message: "This mobile client is blocked on this desktop",
+			Meta: &protocol.PairingErrorMetadata{
+				FailedAttempts:    block.FailedAttempts,
+				RemainingAttempts: 0,
+				MaxAttempts:       pairingMaxWrongCodeAttempts,
+			},
+		}); err != nil {
+			return err
+		}
+		return errProtocolErrorAlreadySent
+	}
+
 	// Compute expected HMAC: HMAC-SHA256(pairing_token_hash_bytes, nonce_bytes)
 	tokenHashBytes, err := hex.DecodeString(device.PairingTokenHash)
 	if err != nil {
@@ -327,8 +415,10 @@ func (c *connection) handleAuth(body []byte) error {
 	expected := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(expected), []byte(req.Auth)) {
-		_ = c.sendError("PAIR_TOKEN_INVALID", "HMAC verification failed")
-		return fmt.Errorf("HMAC mismatch for client %s", c.clientID)
+		if err := c.sendError(errorPairTokenInvalid, "HMAC verification failed"); err != nil {
+			return err
+		}
+		return errProtocolErrorAlreadySent
 	}
 
 	slog.Info("client authenticated via HMAC", "clientID", c.clientID)
@@ -366,31 +456,30 @@ func (c *connection) handlePair(body []byte) error {
 		return fmt.Errorf("parse PAIR_REQ: %w", err)
 	}
 
-	serverID, _ := c.store.GetDeviceID()
-	blockState, err := c.store.GetDeviceBlockState(serverID, req.ClientID)
-	if err != nil {
-		return fmt.Errorf("get device block state: %w", err)
-	}
-	if blockState.Blocked {
-		clientName := req.ClientName
-		reason := "blocked"
-		if _, err := c.store.RecordConnectionAttempt(store.ConnectionAttempt{
-			DesktopDeviceID: serverID,
-			ClientID:        req.ClientID,
-			ClientName:      &clientName,
-			Result:          "blocked",
-			FailureReason:   &reason,
-		}); err != nil {
-			return fmt.Errorf("record blocked connection attempt: %w", err)
-		}
-		_ = c.sendJSON(protocol.TypePairRes, protocol.PairRes{
-			OK:                false,
-			Error:             "此手機已被此電腦封鎖，請在電腦端手動解除",
-			ErrorCode:         "blocked",
-			RemainingAttempts: blockState.RemainingAttempts,
+	c.clientID = req.ClientID
+	c.clientIP = preferredClientIP(req.ClientIP, c.conn)
+	meta := c.pairingClientMetadata(req.ClientID, req.ClientName, req.DeviceAlias, req.StableDeviceID)
+	serverID := meta.DesktopDeviceID
+	if block, err := c.store.GetActivePairingBlock(meta.ClientID, meta.DesktopDeviceID); err != nil {
+		return fmt.Errorf("check active pairing block before pair: %w", err)
+	} else if block != nil {
+		_ = c.store.RecordPairingAttempt(meta, store.PairingAttemptBlocked, errorPairingClientBlocked)
+		_ = c.store.TouchActivePairingBlock(meta)
+		if err := c.sendJSON(protocol.TypePairRes, protocol.PairRes{
+			OK:        false,
+			Error:     "client blocked",
+			ErrorCode: errorPairingClientBlocked,
+			ErrorMeta: &protocol.PairingErrorMetadata{
+				FailedAttempts:    block.FailedAttempts,
+				RemainingAttempts: 0,
+				MaxAttempts:       pairingMaxWrongCodeAttempts,
+			},
+			RemainingAttempts: 0,
 			Blocked:           true,
-		})
-		return fmt.Errorf("blocked pairing attempt from %s", req.ClientID)
+		}); err != nil {
+			return err
+		}
+		return errProtocolErrorAlreadySent
 	}
 
 	// Verify connection code
@@ -400,35 +489,28 @@ func (c *connection) handlePair(body []byte) error {
 	}
 
 	if req.ConnectionCode != expectedCode {
-		clientName := req.ClientName
-		reason := "wrong_code"
-		state, recordErr := c.store.RecordConnectionAttempt(store.ConnectionAttempt{
-			DesktopDeviceID: serverID,
-			ClientID:        req.ClientID,
-			ClientName:      &clientName,
-			Result:          "wrong_code",
-			FailureReason:   &reason,
-		})
+		slog.Warn("pair rejected: wrong connection code", "clientID", req.ClientID)
+		result, recordErr := c.store.RecordPairingFailure(meta, pairingMaxWrongCodeAttempts)
 		if recordErr != nil {
-			return fmt.Errorf("record wrong connection code attempt: %w", recordErr)
+			return fmt.Errorf("record pairing failure: %w", recordErr)
 		}
-		errorCode := "wrong_code"
-		if state.Blocked {
-			errorCode = "blocked"
+		code := errorPairingCodeInvalid
+		message := "connection code invalid"
+		if result.Blocked {
+			code = errorPairingClientBlocked
+			message = "client blocked"
 		}
-		slog.Warn("pair rejected: wrong connection code",
-			"clientID", req.ClientID,
-			"remainingAttempts", state.RemainingAttempts,
-			"blocked", state.Blocked,
-		)
-		_ = c.sendJSON(protocol.TypePairRes, protocol.PairRes{
+		if err := c.sendJSON(protocol.TypePairRes, protocol.PairRes{
 			OK:                false,
-			Error:             "連線碼錯誤",
-			ErrorCode:         errorCode,
-			RemainingAttempts: state.RemainingAttempts,
-			Blocked:           state.Blocked,
-		})
-		return fmt.Errorf("invalid connection code from %s", req.ClientID)
+			Error:             message,
+			ErrorCode:         code,
+			ErrorMeta:         pairingErrorMeta(result),
+			RemainingAttempts: result.RemainingAttempts,
+			Blocked:           result.Blocked,
+		}); err != nil {
+			return err
+		}
+		return errProtocolErrorAlreadySent
 	}
 
 	// Generate pairing credentials
@@ -448,8 +530,7 @@ func (c *connection) handlePair(body []byte) error {
 	tokenHash := hex.EncodeToString(hash[:])
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	clientIP := preferredClientIP(req.ClientIP, c.conn)
-	c.clientIP = clientIP
+	clientIP := c.clientIP
 
 	serverName, _ := c.store.GetDeviceName()
 	var alias *string
@@ -482,7 +563,12 @@ func (c *connection) handlePair(body []byte) error {
 	if _, err := PairDeviceWithDirName(c.store, c.config.ReceiveDir, device); err != nil {
 		return fmt.Errorf("pair device %q: %w", req.ClientID, err)
 	}
-	c.clientID = req.ClientID
+	if err := c.store.RecordPairingAttempt(meta, store.PairingAttemptSuccess, ""); err != nil {
+		slog.Warn("failed to record successful pairing attempt", "clientID", req.ClientID, "err", err)
+	}
+	if err := c.store.ClearPairingFailures(meta.ClientID, meta.DesktopDeviceID); err != nil {
+		slog.Warn("failed to clear pairing failures after success", "clientID", req.ClientID, "err", err)
+	}
 
 	// Build server info
 	shareConfig, _ := c.store.GetShareConfig()

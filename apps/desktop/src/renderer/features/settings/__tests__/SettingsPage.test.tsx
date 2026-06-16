@@ -11,6 +11,12 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('../ConnectionDevicesSection', () => ({
+  ConnectionDevicesSection: () => (
+    <div data-testid="connection-devices-section">ConnectionDevicesSection</div>
+  ),
+}));
+
 function setElectronPlatform() {
   (window as Window & { electronAPI?: unknown }).electronAPI = {
     platform: {
@@ -69,6 +75,13 @@ describe('SettingsPage', () => {
 
     const switchBtn = screen.getByRole('button', { name: '防止待机' });
     expect(switchBtn).toBeInTheDocument();
+  });
+
+  it('shows the connection devices settings section', async () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByText('连接设备')).toBeInTheDocument();
+    expect(screen.getByTestId('connection-devices-section')).toBeInTheDocument();
   });
 
   it('opens a searchable language picker', () => {
