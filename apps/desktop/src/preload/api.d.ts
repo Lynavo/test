@@ -131,6 +131,12 @@ export interface ElectronAPI {
       reason?: 'phone_invalid' | 'sms_too_frequent' | 'sms_send_failed';
     }>;
     loginWithSMSCode(payload: { phone: string; code: string }): Promise<AuthLoginResult>;
+    sendEmailCode(payload: { email: string }): Promise<{
+      ok: boolean;
+      message?: string;
+      reason?: 'email_invalid' | 'email_too_frequent' | 'email_send_failed';
+    }>;
+    loginWithEmailCode(payload: { email: string; code: string }): Promise<AuthLoginResult>;
     getAuthSession(): Promise<AuthSessionView | null>;
     logout(): Promise<{ ok: boolean }>;
     loginWithOAuth(payload: { provider: 'google' | 'apple' }): Promise<AuthLoginResult>;

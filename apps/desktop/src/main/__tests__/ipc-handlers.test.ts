@@ -192,6 +192,8 @@ vi.mock('../sidecar-client', async () => {
       redeemGiftCard: vi.fn(),
       sendSMSCode: vi.fn(),
       loginWithSMSCode: vi.fn(),
+      sendEmailCode: vi.fn(),
+      loginWithEmailCode: vi.fn(),
       getAuthSessionView: vi.fn(),
       logout: vi.fn(),
       loginWithGoogle: vi.fn(),
@@ -425,6 +427,36 @@ describe('registerIpcHandlers', () => {
     expect(sidecarClient.sendSMSCode).toHaveBeenCalledWith({ phone: '13800138000' });
     expect(sidecarClient.loginWithSMSCode).toHaveBeenCalledWith({
       phone: '13800138000',
+      code: '123456',
+    });
+    await Promise.resolve();
+    expect(syncCredentialsToSidecar).toHaveBeenCalledTimes(1);
+    expect(manager.startCredentialsSyncInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers email auth IPC for send and login', async () => {
+    vi.mocked(sidecarClient.sendEmailCode).mockResolvedValue({ ok: true });
+    vi.mocked(sidecarClient.loginWithEmailCode).mockResolvedValue({ ok: true });
+
+    const manager = {
+      retryStart: vi.fn(),
+      startCredentialsSyncInterval: vi.fn(),
+    };
+    registerIpcHandlers(manager as never);
+    const sendHandler = handlers.get(IPC.AUTH_SEND_EMAIL_CODE);
+    const loginHandler = handlers.get(IPC.AUTH_LOGIN_WITH_EMAIL_CODE);
+
+    await expect(sendHandler?.(undefined, { email: 'ada@example.com' })).resolves.toEqual({
+      ok: true,
+    });
+    await expect(
+      loginHandler?.(undefined, { email: 'ada@example.com', code: '123456' }),
+    ).resolves.toEqual({
+      ok: true,
+    });
+    expect(sidecarClient.sendEmailCode).toHaveBeenCalledWith({ email: 'ada@example.com' });
+    expect(sidecarClient.loginWithEmailCode).toHaveBeenCalledWith({
+      email: 'ada@example.com',
       code: '123456',
     });
     await Promise.resolve();

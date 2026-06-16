@@ -51,6 +51,8 @@ const APP_REVIEW_PHONE =
   '17000000002';
 const AUTH_SMS_SEND_PATH = process.env.SYNCFLOW_AUTH_SMS_SEND_PATH ?? '/api/v1/auth/sms/send';
 const AUTH_SMS_LOGIN_PATH = process.env.SYNCFLOW_AUTH_SMS_LOGIN_PATH ?? '/api/v1/auth/sms/login';
+const AUTH_EMAIL_SEND_PATH = process.env.SYNCFLOW_AUTH_EMAIL_SEND_PATH ?? '/api/v1/auth/email/send';
+const AUTH_EMAIL_LOGIN_PATH = process.env.SYNCFLOW_AUTH_EMAIL_LOGIN_PATH ?? '/api/v1/auth/email/login';
 const USER_PROFILE_PATH = process.env.SYNCFLOW_USER_PROFILE_PATH ?? '/api/v1/user/profile';
 
 type GiftCardRedeemPayload = {
@@ -73,6 +75,15 @@ type SendSMSCodePayload = {
 
 type PhoneLoginPayload = {
   phone: string;
+  code: string;
+};
+
+type SendEmailCodePayload = {
+  email: string;
+};
+
+type EmailLoginPayload = {
+  email: string;
   code: string;
 };
 
@@ -954,6 +965,16 @@ export const sidecarClient = {
     const authBaseUrl = resolveAuthBaseUrlForPhone(payload.phone);
     const response = await request<unknown>('POST', AUTH_SMS_LOGIN_PATH, payload, authBaseUrl);
     return persistAuthSession(response, { baseUrl: authBaseUrl, phone: payload.phone });
+  },
+  sendEmailCode: async (payload: SendEmailCodePayload) => {
+    const authBaseUrl = resolveOAuthAuthBaseUrl();
+    const response = await request<unknown>('POST', AUTH_EMAIL_SEND_PATH, payload, authBaseUrl);
+    return normalizeAuthResponse(response);
+  },
+  loginWithEmailCode: async (payload: EmailLoginPayload) => {
+    const authBaseUrl = resolveOAuthAuthBaseUrl();
+    const response = await request<unknown>('POST', AUTH_EMAIL_LOGIN_PATH, payload, authBaseUrl);
+    return persistAuthSession(response, { baseUrl: authBaseUrl, email: payload.email });
   },
   loginWithGoogle: async (payload: { identityToken: string }) => {
     const authBaseUrl = resolveOAuthAuthBaseUrl();

@@ -885,6 +885,84 @@ describe('sidecarClient', () => {
       accountLabel: '+8613800138000',
     });
 
+  });
+
+  it('uses the email login and persists session correctly', async () => {
+    const httpRequest = vi.fn();
+    const accessToken = createUnsignedJwt({ email: 'ada@example.com' });
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+
+      if (options.path === '/api/v1/auth/email/send') {
+        callback(createResponse(200, JSON.stringify({ code: 0, message: 'success' })));
+        return req;
+      }
+
+      if (options.path === '/api/v1/auth/email/login') {
+        callback(
+          createResponse(
+            200,
+            JSON.stringify({
+              code: 0,
+              message: 'success',
+              data: {
+                access_token: accessToken,
+                refresh_token: 'email-refresh-token',
+                user_id: 42,
+                is_new_user: false,
+                merged: true,
+              },
+            }),
+          ),
+        );
+        return req;
+      }
+
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success' })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_AUTH_BASE_URL', 'https://auth.example.test');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(
+      client.sendEmailCode({ email: 'ada@example.com' }),
+    ).resolves.toEqual({
+      ok: true,
+    });
+
+    await expect(
+      client.loginWithEmailCode({ email: 'ada@example.com', code: '123456' }),
+    ).resolves.toEqual({
+      ok: true,
+      userId: 42,
+      isNewUser: false,
+      merged: true,
+    });
+
+    await expect(client.getAuthSessionView()).resolves.toEqual({
+      loggedIn: true,
+      email: 'ada@example.com',
+      accountLabel: 'ada@example.com',
+    });
+
     vi.unstubAllEnvs();
     vi.resetModules();
   });

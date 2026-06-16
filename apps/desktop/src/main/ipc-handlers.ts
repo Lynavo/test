@@ -42,6 +42,8 @@ export const IPC = {
   SIDECAR_REDEEM_GIFT_CARD: 'sidecar:redeem-gift-card',
   AUTH_SEND_SMS_CODE: 'auth:send-sms-code',
   AUTH_LOGIN_WITH_SMS_CODE: 'auth:login-with-sms-code',
+  AUTH_SEND_EMAIL_CODE: 'auth:send-email-code',
+  AUTH_LOGIN_WITH_EMAIL_CODE: 'auth:login-with-email-code',
   AUTH_GET_SESSION: 'auth:get-session',
   AUTH_LOGOUT: 'auth:logout',
   AUTH_LOGIN_WITH_OAUTH: 'auth:login-with-oauth',
@@ -394,6 +396,19 @@ export function registerIpcHandlers(
       const res = await sidecarClient.loginWithSMSCode(payload);
       if (res.ok) {
         void syncLoginCredentialsAfterSuccess(sidecarManager, 'SMS');
+      }
+      return res;
+    },
+  );
+  ipcMain.handle(IPC.AUTH_SEND_EMAIL_CODE, (_e, payload: { email: string }) =>
+    sidecarClient.sendEmailCode(payload),
+  );
+  ipcMain.handle(
+    IPC.AUTH_LOGIN_WITH_EMAIL_CODE,
+    async (_e, payload: { email: string; code: string }) => {
+      const res = await sidecarClient.loginWithEmailCode(payload);
+      if (res.ok) {
+        void syncLoginCredentialsAfterSuccess(sidecarManager, 'Email');
       }
       return res;
     },
