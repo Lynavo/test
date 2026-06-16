@@ -19,6 +19,7 @@ import {
   purchaseErrorListener,
   clearTransactionIOS,
 } from 'react-native-iap';
+import { Platform } from 'react-native';
 
 jest.mock('react-native-iap', () => ({
   initConnection: jest.fn().mockResolvedValue(true),
@@ -180,6 +181,7 @@ const bootstrapProductPlans = [
 ];
 const adminMonthlySku = 'admin.catalog.alpha';
 const adminYearlySku = 'admin.catalog.yearly';
+const originalPlatformOS = Platform.OS;
 
 function mockDefaultCatalogPlanResolvers(): void {
   mockGetSubscriptionProductPlans.mockResolvedValue(bootstrapProductPlans);
@@ -189,6 +191,52 @@ function mockDefaultCatalogPlanResolvers(): void {
         ?.plan ?? null,
     ),
   );
+}
+
+function setPlatformOS(os: typeof Platform.OS): void {
+  Object.defineProperty(Platform, 'OS', {
+    configurable: true,
+    get: () => os,
+  });
+}
+
+function makeAndroidSubscriptionProduct(
+  productId: string,
+  offers: Array<{
+    basePlanId: string;
+    offerToken: string;
+    formattedPrice?: string;
+    billingPeriod?: string;
+    priceAmountMicros?: string;
+    priceCurrencyCode?: string;
+  }>,
+) {
+  return {
+    platform: 'android',
+    productType: 'subs',
+    name: productId,
+    title: productId,
+    description: '',
+    productId,
+    subscriptionOfferDetails: offers.map(offer => ({
+      basePlanId: offer.basePlanId,
+      offerId: null,
+      offerToken: offer.offerToken,
+      offerTags: [],
+      pricingPhases: {
+        pricingPhaseList: [
+          {
+            formattedPrice: offer.formattedPrice ?? '$9.99',
+            priceCurrencyCode: offer.priceCurrencyCode ?? 'USD',
+            billingPeriod: offer.billingPeriod ?? 'P1M',
+            billingCycleCount: 0,
+            priceAmountMicros: offer.priceAmountMicros ?? '9990000',
+            recurrenceMode: 1,
+          },
+        ],
+      },
+    })),
+  };
 }
 
 describe('iapService — purchase', () => {
@@ -936,6 +984,7 @@ describe('iapService — purchase product preflight', () => {
   afterEach(async () => {
     await iapService.teardown();
     updatedCb = null;
+    setPlatformOS(originalPlatformOS);
     jest.useRealTimers();
   });
 
@@ -1003,6 +1052,126 @@ describe('iapService — purchase product preflight', () => {
       productId: IAP_PRODUCTS.yearly,
     });
     expect(requestSubscription).not.toHaveBeenCalled();
+  });
+
+  test('uses the Google Play offer token for the selected monthly base plan', async () => {
+    setPlatformOS('android');
+    mockResolveSubscriptionProductPlan.mockResolvedValueOnce('monthly');
+    (getSubscriptions as jest.Mock)
+      .mockResolvedValueOnce([
+        makeAndroidSubscriptionProduct(IAP_PRODUCTS.monthly, [
+          { basePlanId: 'yearly-plan', offerToken: 'yearly-token' },
+          { basePlanId: 'monthly-plan', offerToken: 'monthly-token' },
+        ]),
+      ])
+      .mockResolvedValueOnce([
+        makeAndroidSubscriptionProduct(IAP_PRODUCTS.monthly, [
+          { basePlanId: 'yearly-plan', offerToken: 'yearly-token' },
+          { basePlanId: 'monthly-plan', offerToken: 'monthly-token' },
+        ]),
+      ]);
+
+    const pending = iapService.purchase(IAP_PRODUCTS.monthly);
+    await flushPurchasePreflight();
+
+    expect(requestSubscription).toHaveBeenCalledWith({
+      subscriptionOffers: [
+        {
+          sku: IAP_PRODUCTS.monthly,
+          offerToken: 'monthly-token',
+        },
+      ],
+    });
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'ANDROID_RECEIPT',
+      transactionId: 'android_tx_1',
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'ANDROID_RECEIPT',
+    });
+  });
+
+  test('falls back to the first Google Play offer when the tier base plan is absent', async () => {
+    setPlatformOS('android');
+    mockResolveSubscriptionProductPlan.mockResolvedValueOnce('yearly');
+    (getSubscriptions as jest.Mock)
+      .mockResolvedValueOnce([
+        makeAndroidSubscriptionProduct(adminYearlySku, [
+          { basePlanId: 'legacy-plan', offerToken: 'legacy-token' },
+        ]),
+      ])
+      .mockResolvedValueOnce([
+        makeAndroidSubscriptionProduct(adminYearlySku, [
+          { basePlanId: 'legacy-plan', offerToken: 'legacy-token' },
+        ]),
+      ]);
+
+    const pending = iapService.purchase(adminYearlySku);
+    await flushPurchasePreflight();
+
+    expect(requestSubscription).toHaveBeenCalledWith({
+      subscriptionOffers: [
+        {
+          sku: adminYearlySku,
+          offerToken: 'legacy-token',
+        },
+      ],
+    });
+
+    updatedCb?.({
+      productId: adminYearlySku,
+      transactionReceipt: 'ANDROID_RECEIPT',
+      transactionId: 'android_tx_2',
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      productId: adminYearlySku,
+      transactionReceipt: 'ANDROID_RECEIPT',
+    });
+  });
+});
+
+describe('iapService — Android product summaries', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    setPlatformOS(originalPlatformOS);
+  });
+
+  test('parses Google Play recurring pricing from the last pricing phase', async () => {
+    setPlatformOS('android');
+    (getSubscriptions as jest.Mock).mockResolvedValueOnce([
+      makeAndroidSubscriptionProduct(adminYearlySku, [
+        {
+          basePlanId: 'yearly-plan',
+          offerToken: 'yearly-token',
+          formattedPrice: '$99.00',
+          billingPeriod: 'P1Y',
+          priceAmountMicros: '99000000',
+          priceCurrencyCode: 'USD',
+        },
+      ]),
+    ]);
+
+    const result = await iapService.getProductSummaries([adminYearlySku]);
+
+    expect(result).toEqual([
+      {
+        productId: adminYearlySku,
+        displayPrice: '$99.00',
+        priceAmount: 99,
+        currency: 'USD',
+        periodUnit: 'YEAR',
+        periodCount: 1,
+        eligibleForIntroOffer: false,
+      },
+    ]);
   });
 });
 
