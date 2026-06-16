@@ -260,7 +260,12 @@ class IapServiceImpl implements IapService {
   private async initializeConnection(): Promise<void> {
     try {
       recordDiagnosticsLog('IAP', 'initialize connection start');
-      await initConnection();
+      await Promise.race([
+        initConnection(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('initConnection timed out')), 10000),
+        ),
+      ]);
       if (this.teardownRequested) {
         await endConnection().catch(() => {});
         recordDiagnosticsLog('IAP', 'initialize cancelled by teardown');
