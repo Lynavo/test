@@ -61,6 +61,19 @@ type ConnectionFlowStatus =
   | 'cameraDenied';
 type ConnectionModalStep = 'method' | 'manualPair' | 'cameraPermission' | 'code';
 type FlowStateTone = 'neutral' | 'danger' | 'warning';
+type ConnectionGuidePreviewKind =
+  | 'connect'
+  | 'autoUpload'
+  | 'uploadScope'
+  | 'syncProgress'
+  | 'records'
+  | 'remoteResources';
+type ConnectionGuideStep = {
+  title: string;
+  description: string;
+  actionLabel: string;
+  previewKind: ConnectionGuidePreviewKind;
+};
 type FlowStateContent = {
   title: string;
   description: string;
@@ -77,10 +90,64 @@ type SpotlightLayout = {
   height: number;
 };
 
+type ConnectionGuideCardPosition = {
+  position: 'absolute';
+  left: number;
+  right: number;
+  top?: number;
+  bottom?: number;
+};
+
+const GUIDE_CARD_EDGE_MARGIN = 16;
+const GUIDE_CARD_VERTICAL_GAP = 14;
+const GUIDE_CARD_TOP_MARGIN = 20;
+const GUIDE_CARD_ESTIMATED_HEIGHT = 236;
+
+export function resolveConnectionGuideCardPosition({
+  hole,
+  viewportHeight,
+  bottomInset,
+}: {
+  hole: SpotlightLayout | null;
+  viewportHeight: number;
+  bottomInset: number;
+}): ConnectionGuideCardPosition {
+  if (!hole) {
+    return {
+      position: 'absolute',
+      left: GUIDE_CARD_EDGE_MARGIN,
+      right: GUIDE_CARD_EDGE_MARGIN,
+      bottom: Math.max(bottomInset, 8),
+    };
+  }
+
+  const bottomMargin = Math.max(bottomInset, 8);
+  const preferredCardTop = hole.y + hole.height + GUIDE_CARD_VERTICAL_GAP;
+  const maxCardTop = Math.max(
+    GUIDE_CARD_TOP_MARGIN,
+    viewportHeight - bottomMargin - GUIDE_CARD_ESTIMATED_HEIGHT,
+  );
+  const shouldPlaceAbove = preferredCardTop > maxCardTop;
+  const preferredAboveTop =
+    hole.y - GUIDE_CARD_ESTIMATED_HEIGHT - GUIDE_CARD_VERTICAL_GAP;
+
+  return {
+    position: 'absolute',
+    left: GUIDE_CARD_EDGE_MARGIN,
+    right: GUIDE_CARD_EDGE_MARGIN,
+    top: shouldPlaceAbove
+      ? Math.max(
+          GUIDE_CARD_TOP_MARGIN,
+          Math.min(preferredAboveTop, maxCardTop),
+        )
+      : preferredCardTop,
+  };
+}
+
 const VISUAL_QA_LAN_DEVICES: DiscoveredDevice[] = [
   {
     deviceId: 'visual-qa-openimde-mac-mini',
-    name: 'openimdeMac-mini',
+    name: 'ViviDrop 演示 Mac Studio',
     ip: '192.168.31.21',
     type: 'mac',
     port: 39393,
@@ -89,7 +156,7 @@ const VISUAL_QA_LAN_DEVICES: DiscoveredDevice[] = [
   },
   {
     deviceId: 'visual-qa-macbook-pro',
-    name: 'MacBook Pro',
+    name: 'ViviDrop 演示 MacBook Pro',
     ip: '192.168.31.36',
     type: 'mac',
     port: 39393,
@@ -98,12 +165,57 @@ const VISUAL_QA_LAN_DEVICES: DiscoveredDevice[] = [
   },
   {
     deviceId: 'visual-qa-windows-workstation',
-    name: 'Windows Workstation',
+    name: 'ViviDrop 演示 Windows 工作站',
     ip: '192.168.31.52',
     type: 'win',
     port: 39393,
     availability: 'busy',
     deviceKind: 'desktop',
+  },
+];
+
+const CONNECTION_FEATURE_GUIDE_STEPS: ConnectionGuideStep[] = [
+  {
+    title: '先连接电脑',
+    description:
+      '选择一台电脑完成连接。后续引导只预览关键功能入口，不会跳转真实页面或创建假数据。',
+    actionLabel: '继续预览',
+    previewKind: 'connect',
+  },
+  {
+    title: '开启自动上传',
+    description:
+      '连接成功后，可以开启自动上传，让新增照片、视频和文件静默同步到电脑。',
+    actionLabel: '下一步',
+    previewKind: 'autoUpload',
+  },
+  {
+    title: '选择同步内容和范围',
+    description:
+      '可以选择相册、系统文件和上传范围，控制哪些素材会自动同步。',
+    actionLabel: '下一步',
+    previewKind: 'uploadScope',
+  },
+  {
+    title: '查看同步状态',
+    description:
+      '这里会显示自动同步开启后的上传进度、最近同步时间和异常状态。',
+    actionLabel: '下一步',
+    previewKind: 'syncProgress',
+  },
+  {
+    title: '最近下载和同步记录',
+    description:
+      '从电脑下载到本机的文件、以及完成同步的历史记录都会集中展示。',
+    actionLabel: '下一步',
+    previewKind: 'records',
+  },
+  {
+    title: '远程资源 / 访问电脑',
+    description:
+      '远程资源入口可以浏览电脑文件和手机同步空间，快速取回需要的文件。',
+    actionLabel: '完成',
+    previewKind: 'remoteResources',
   },
 ];
 
@@ -156,6 +268,7 @@ export function DeviceDiscoveryGlobalScreen() {
   const [verifying, setVerifying] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [guideStepIndex, setGuideStepIndex] = useState(0);
   const [spotlightLayout, setSpotlightLayout] =
     useState<SpotlightLayout | null>(null);
   const containerRef = useRef<React.ElementRef<typeof View>>(null);
@@ -176,6 +289,7 @@ export function DeviceDiscoveryGlobalScreen() {
     let cancelled = false;
     void hasSeenUnconnectedGuide().then(seen => {
       if (!cancelled) {
+        setGuideStepIndex(0);
         setShowGuide(!seen);
       }
     });
@@ -206,6 +320,11 @@ export function DeviceDiscoveryGlobalScreen() {
           timeoutTimer = undefined;
         }
       }, 900);
+      return () => {
+        active = false;
+        if (visualQaTimer) clearTimeout(visualQaTimer);
+        preserveCachedDevicesRef.current = false;
+      };
     }
 
     try {
@@ -333,7 +452,6 @@ export function DeviceDiscoveryGlobalScreen() {
 
   useEffect(() => {
     if (!showGuide) {
-      setSpotlightLayout(null);
       return undefined;
     }
 
@@ -355,6 +473,9 @@ export function DeviceDiscoveryGlobalScreen() {
   }, [mode, navigation]);
 
   const openMethodModal = useCallback((device: DiscoveredDevice) => {
+    if (showGuide) {
+      return;
+    }
     setSelectedDevice(device);
     setConnectionCode('');
     setCodeError(null);
@@ -364,7 +485,7 @@ export function DeviceDiscoveryGlobalScreen() {
     }
     setConnectionStatus('ready');
     setConnectionModalStep('method');
-  }, []);
+  }, [showGuide]);
 
   const openRecentDesktop = useCallback(
     (recent: RecentDesktopDTO) => {
@@ -565,18 +686,18 @@ export function DeviceDiscoveryGlobalScreen() {
   const dismissGuide = useCallback(async () => {
     await markUnconnectedGuideSeen();
     setShowGuide(false);
+    setGuideStepIndex(0);
   }, []);
 
-  const continuePreview = useCallback(async () => {
-    await markUnconnectedGuideSeen();
-    setShowGuide(false);
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'SyncActivity' }],
-      }),
-    );
-  }, [navigation]);
+  const continuePreview = useCallback(() => {
+    if (guideStepIndex < CONNECTION_FEATURE_GUIDE_STEPS.length - 1) {
+      setGuideStepIndex(index =>
+        Math.min(index + 1, CONNECTION_FEATURE_GUIDE_STEPS.length - 1),
+      );
+      return;
+    }
+    void dismissGuide();
+  }, [dismissGuide, guideStepIndex]);
 
   return (
     <GlobalGradientBackground>
@@ -588,15 +709,17 @@ export function DeviceDiscoveryGlobalScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <TouchableOpacity
-              activeOpacity={0.76}
-              accessibilityRole="button"
-              accessibilityLabel="返回"
-              onPress={goBack}
-              style={styles.backButton}
-            >
-              <Icon name="chevron-back" size={22} color="#42566E" />
-            </TouchableOpacity>
+            {mode === 'switch' ? (
+              <TouchableOpacity
+                activeOpacity={0.76}
+                accessibilityRole="button"
+                accessibilityLabel="返回"
+                onPress={goBack}
+                style={styles.backButton}
+              >
+                <Icon name="chevron-back" size={22} color="#42566E" />
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.header}>
               <Text style={styles.title}>
@@ -710,10 +833,13 @@ export function DeviceDiscoveryGlobalScreen() {
 
           {showGuide ? (
             <ConnectionGuideOverlay
-              targetLayout={spotlightLayout}
+              step={CONNECTION_FEATURE_GUIDE_STEPS[guideStepIndex]}
+              stepIndex={guideStepIndex}
+              totalSteps={CONNECTION_FEATURE_GUIDE_STEPS.length}
+              targetLayout={guideStepIndex === 0 ? spotlightLayout : null}
               bottomInset={insets.bottom}
               onSkip={() => void dismissGuide()}
-              onNext={() => void continuePreview()}
+              onNext={continuePreview}
             />
           ) : null}
 
@@ -846,19 +972,26 @@ function FlowStateCard({ state }: { state: FlowStateContent }) {
 }
 
 function ConnectionGuideOverlay({
+  step,
+  stepIndex,
+  totalSteps,
   targetLayout,
   bottomInset,
   onSkip,
   onNext,
 }: {
+  step: ConnectionGuideStep;
+  stepIndex: number;
+  totalSteps: number;
   targetLayout: SpotlightLayout | null;
   bottomInset: number;
   onSkip: () => void;
   onNext: () => void;
 }) {
   const { height: viewportHeight } = useWindowDimensions();
+  const isSpotlightStep = step.previewKind === 'connect';
   const spotlightPadding = 10;
-  const hole = targetLayout
+  const hole = isSpotlightStep && targetLayout
     ? {
         x: Math.max(8, targetLayout.x - spotlightPadding),
         y: Math.max(8, targetLayout.y - spotlightPadding),
@@ -866,28 +999,14 @@ function ConnectionGuideOverlay({
         height: targetLayout.height + spotlightPadding * 2,
       }
     : null;
-  const preferredCardTop = hole ? hole.y + hole.height + 14 : 0;
-  const shouldPlaceAbove = hole
-    ? preferredCardTop > viewportHeight - 190
-    : false;
-  const guideCardPosition = hole
-    ? {
-        position: 'absolute' as const,
-        left: 16,
-        right: 16,
-        top: shouldPlaceAbove
-          ? Math.max(20, hole.y - 178)
-          : preferredCardTop,
-      }
-    : {
-        position: 'absolute' as const,
-        left: 16,
-        right: 16,
-        bottom: Math.max(bottomInset, 8),
-      };
+  const guideCardPosition = resolveConnectionGuideCardPosition({
+    hole,
+    viewportHeight,
+    bottomInset,
+  });
 
   return (
-    <View style={styles.guideOverlay}>
+    <View pointerEvents="auto" style={styles.guideOverlay}>
       {hole ? (
         <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject}>
           <Defs>
@@ -938,24 +1057,30 @@ function ConnectionGuideOverlay({
         <View style={styles.guideCardContent}>
           <View style={styles.guideProgressRow}>
             <View style={styles.guideDots}>
-              {Array.from({ length: 8 }).map((_, index) => (
+              {Array.from({ length: totalSteps }).map((_, index) => (
                 <View
                   key={index}
                   style={[
                     styles.guideDot,
-                    index === 0 && styles.guideDotActive,
+                    index === stepIndex && styles.guideDotActive,
                   ]}
                 />
               ))}
             </View>
-            <Text style={styles.guideStep}>1/8</Text>
+            <Text style={styles.guideStep}>
+              {stepIndex + 1}/{totalSteps}
+            </Text>
           </View>
-          <Text style={styles.guideTitle}>先连接电脑</Text>
-          <Text style={styles.guideBody}>
-            这里用于选择局域网内的电脑。引导会继续预览连接后的同步入口，不会创建真实连接。
-          </Text>
+          {isSpotlightStep ? null : (
+            <GlobalConnectionFeaturePreviewCard kind={step.previewKind} />
+          )}
+          <Text style={styles.guideTitle}>{step.title}</Text>
+          <Text style={styles.guideBody}>{step.description}</Text>
           <View style={styles.guideActions}>
             <TouchableOpacity
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel="跳过引导"
               activeOpacity={0.76}
               style={styles.guideSkipButton}
               onPress={onSkip}
@@ -963,15 +1088,337 @@ function ConnectionGuideOverlay({
               <Text style={styles.guideSkip}>跳过引导</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={step.actionLabel}
               activeOpacity={0.82}
               style={styles.guideNext}
               onPress={onNext}
             >
-              <Text style={styles.guideNextText}>继续预览</Text>
+              <Text style={styles.guideNextText}>{step.actionLabel}</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
+    </View>
+  );
+}
+
+function GlobalConnectionFeaturePreviewCard({
+  kind,
+}: {
+  kind: ConnectionGuidePreviewKind;
+}) {
+  if (kind === 'autoUpload') {
+    return (
+      <GuidePreviewShell>
+        <View style={styles.guidePreviewHeader}>
+          <View style={styles.guidePreviewTitleRow}>
+            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
+              <Icon name="desktop-outline" size={16} color="#1677D2" />
+            </View>
+            <View>
+              <Text style={styles.guidePreviewStrong}>自动同步</Text>
+              <Text style={styles.guidePreviewSubtle}>未开启</Text>
+            </View>
+          </View>
+          <View style={styles.guidePreviewPrimaryPill}>
+            <Text style={styles.guidePreviewPrimaryPillText}>开启</Text>
+          </View>
+        </View>
+        <View style={styles.guidePreviewPanel}>
+          <Text style={styles.guidePreviewPanelTitle}>当前手机状态</Text>
+          <Text style={styles.guidePreviewPanelValue}>自动同步未开启</Text>
+          <Text style={styles.guidePreviewPanelMeta}>最近同步时间：暂无</Text>
+        </View>
+      </GuidePreviewShell>
+    );
+  }
+
+  if (kind === 'uploadScope') {
+    return (
+      <GuidePreviewShell>
+        <View style={styles.guidePreviewPlanRow}>
+          <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
+            <Icon name="cloud-download-outline" size={16} color="#1677D2" />
+          </View>
+          <View style={styles.guidePreviewFlex}>
+            <Text style={styles.guidePreviewStrong}>同步计划</Text>
+            <Text style={styles.guidePreviewSubtle} numberOfLines={1}>
+              相册内容和指定文件将同步到电脑。
+            </Text>
+          </View>
+        </View>
+        <View style={styles.guidePreviewStatsRow}>
+          <GuidePreviewStat label="来源" value="2" />
+          <GuidePreviewStat label="文件" value="3" />
+          <GuidePreviewStat label="范围" value="全部内容" />
+        </View>
+        <Text style={styles.guidePreviewSectionLabel}>同步来源</Text>
+        <GuidePreviewOption
+          iconName="auto-upload-image"
+          title="照片和视频"
+          description="同步系统相册中的媒体内容"
+          active
+        />
+        <Text style={styles.guidePreviewSectionLabel}>同步范围</Text>
+        <GuidePreviewOption
+          iconName="auto-upload-folder"
+          title="全部内容"
+          description="同步现有照片和视频"
+          active
+        />
+      </GuidePreviewShell>
+    );
+  }
+
+  if (kind === 'syncProgress') {
+    return (
+      <GuidePreviewShell>
+        <View style={styles.guidePreviewHeader}>
+          <View style={styles.guidePreviewTitleRow}>
+            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
+              <Icon name="desktop-outline" size={16} color="#1677D2" />
+            </View>
+            <View>
+              <Text style={styles.guidePreviewStrong}>自动同步</Text>
+              <Text style={styles.guidePreviewSubtle}>已开启</Text>
+            </View>
+          </View>
+          <View style={styles.guidePreviewPrimaryPill}>
+            <Text style={styles.guidePreviewPrimaryPillText}>调整</Text>
+          </View>
+        </View>
+        <View style={styles.guidePreviewPanel}>
+          <Text style={styles.guidePreviewPanelTitle}>当前手机状态</Text>
+          <Text style={styles.guidePreviewPanelValue}>已上传96/128</Text>
+          <View style={styles.guidePreviewUploadCard}>
+            <View style={styles.guidePreviewUploadHeader}>
+              <Text style={styles.guidePreviewUploadTitle}>
+                上传中 · 本次传输进度
+              </Text>
+              <Text style={styles.guidePreviewUploadPercent}>75%</Text>
+            </View>
+            <View style={styles.guidePreviewUploadTrack}>
+              <View style={styles.guidePreviewUploadFill} />
+            </View>
+            <View style={styles.guidePreviewUploadGrid}>
+              <GuidePreviewProgressStat label="传输速度" value="68.5 MB/s" />
+              <GuidePreviewProgressStat
+                label="传输进度"
+                value="96 / 128"
+                alignRight
+              />
+              <GuidePreviewProgressStat
+                label="文件大小"
+                value="2.4 GB / 3.6 GB"
+              />
+              <GuidePreviewProgressStat
+                label="剩余时间"
+                value="24 秒"
+                alignRight
+              />
+            </View>
+          </View>
+          <Text style={styles.guidePreviewPanelMeta}>最近同步时间：暂无</Text>
+        </View>
+      </GuidePreviewShell>
+    );
+  }
+
+  if (kind === 'records') {
+    return (
+      <GuidePreviewShell>
+        <View style={styles.guidePreviewHeader}>
+          <View style={styles.guidePreviewTitleRow}>
+            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
+              <Icon name="download-outline" size={16} color="#1677D2" />
+            </View>
+            <Text style={styles.guidePreviewStrong}>最近下载</Text>
+          </View>
+          <Text style={styles.guidePreviewLink}>查看全部</Text>
+        </View>
+        <View style={styles.guidePreviewDownloadRow}>
+          {[
+            ['image-outline', '品牌手册.pdf'],
+            ['play-circle-outline', '发布视频.mov'],
+            ['document-outline', '报价单.xlsx'],
+          ].map(([iconName, label]) => (
+            <View key={label} style={styles.guidePreviewDownloadItem}>
+              <Icon name={iconName} size={15} color="#315E8C" />
+              <Text style={styles.guidePreviewDownloadLabel} numberOfLines={1}>
+                {label}
+              </Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.guidePreviewCompactRecord}>
+          <View>
+            <Text style={styles.guidePreviewStrong}>同步记录</Text>
+            <Text style={styles.guidePreviewSubtle}>今天 · 18 个 · 18.4 GB</Text>
+          </View>
+          <View style={styles.guidePreviewCompletedPill}>
+            <Text style={styles.guidePreviewCompletedText}>已完成</Text>
+          </View>
+        </View>
+      </GuidePreviewShell>
+    );
+  }
+  if (kind === 'remoteResources') {
+    return (
+      <GuidePreviewShell>
+        <GuidePreviewResourceEntry
+          iconName="phone-portrait-outline"
+          iconStyle={styles.guidePreviewIconBlue}
+          iconColor="#3B82F6"
+          title="手机同步空间"
+          description="查看已同步至电脑的文件与上传来源"
+          badges={['今日 5 个', '保留来源']}
+        />
+        <GuidePreviewResourceEntry
+          iconName="desktop-outline"
+          iconStyle={styles.guidePreviewIconPurple}
+          iconColor="#8B5CF6"
+          title="远程访问电脑"
+          description="浏览电脑端共享目录并下载文件"
+          badges={['桌面目录', '列表/网格']}
+        />
+      </GuidePreviewShell>
+    );
+  }
+
+  return null;
+}
+
+function GuidePreviewShell({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={styles.guidePreviewCard}
+    >
+      {children}
+    </View>
+  );
+}
+
+function GuidePreviewStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.guidePreviewStat}>
+      <Text style={styles.guidePreviewStatLabel}>{label}</Text>
+      <Text style={styles.guidePreviewStatValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function GuidePreviewProgressStat({
+  label,
+  value,
+  alignRight,
+}: {
+  label: string;
+  value: string;
+  alignRight?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.guidePreviewProgressStat,
+        alignRight && styles.guidePreviewProgressStatRight,
+      ]}
+    >
+      <Text style={styles.guidePreviewProgressLabel}>{label}</Text>
+      <Text style={styles.guidePreviewProgressValue}>{value}</Text>
+    </View>
+  );
+}
+
+function GuidePreviewOption({
+  iconName,
+  title,
+  description,
+  active,
+}: {
+  iconName: string;
+  title: string;
+  description: string;
+  active?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.guidePreviewOption,
+        active && styles.guidePreviewOptionActive,
+      ]}
+    >
+      <View
+        style={[
+          styles.guidePreviewMiniIcon,
+          active
+            ? styles.guidePreviewIconBlueSolid
+            : styles.guidePreviewIconMuted,
+        ]}
+      >
+        <Icon name={iconName} size={15} color={active ? '#FFFFFF' : '#8AABBD'} />
+      </View>
+      <View style={styles.guidePreviewFlex}>
+        <Text style={styles.guidePreviewOptionTitle}>{title}</Text>
+        <Text style={styles.guidePreviewSubtle} numberOfLines={1}>
+          {description}
+        </Text>
+      </View>
+      {active ? (
+        <View style={styles.guidePreviewCheck}>
+          <Icon name="checkmark" size={9} color="#FFFFFF" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function GuidePreviewResourceEntry({
+  iconName,
+  iconStyle,
+  iconColor,
+  title,
+  description,
+  badges,
+}: {
+  iconName: string;
+  iconStyle: object;
+  iconColor: string;
+  title: string;
+  description: string;
+  badges: string[];
+}) {
+  return (
+    <View style={styles.guidePreviewResourceEntry}>
+      <View style={[styles.guidePreviewResourceIcon, iconStyle]}>
+        <Icon name={iconName} size={17} color={iconColor} />
+      </View>
+      <View style={styles.guidePreviewFlex}>
+        <Text style={styles.guidePreviewOptionTitle}>{title}</Text>
+        <Text style={styles.guidePreviewSubtle} numberOfLines={1}>
+          {description}
+        </Text>
+        <View style={styles.guidePreviewBadgeRow}>
+          {badges.map(badge => (
+            <View key={badge} style={styles.guidePreviewBadge}>
+              <Text style={styles.guidePreviewBadgeText}>{badge}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      <Icon name="chevron-forward" size={14} color="#C7C7CC" />
     </View>
   );
 }
@@ -1592,6 +2039,361 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 13,
     lineHeight: 24,
+    color: '#6E8CAD',
+  },
+  guidePreviewCard: {
+    marginTop: 12,
+    marginBottom: 2,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(247,251,255,0.72)',
+    padding: 12,
+    gap: 9,
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 3,
+  },
+  guidePreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  guidePreviewTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  guidePreviewFlex: {
+    flex: 1,
+    minWidth: 0,
+  },
+  guidePreviewMiniIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guidePreviewIconBlue: {
+    backgroundColor: '#E8F4FF',
+  },
+  guidePreviewIconBlueSolid: {
+    backgroundColor: '#3B9FD8',
+  },
+  guidePreviewIconMuted: {
+    backgroundColor: '#EEF3FA',
+  },
+  guidePreviewIconPurple: {
+    backgroundColor: '#F0EDFF',
+  },
+  guidePreviewStrong: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewSubtle: {
+    marginTop: 2,
+    fontSize: 9,
+    lineHeight: 13,
+    color: '#6E8CAD',
+  },
+  guidePreviewPrimaryPill: {
+    borderRadius: 999,
+    backgroundColor: '#DBEAFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  guidePreviewPrimaryPillText: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    color: '#357CFF',
+  },
+  guidePreviewPanel: {
+    borderRadius: 13,
+    backgroundColor: 'rgba(232,244,255,0.74)',
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  guidePreviewPanelTitle: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewPanelValue: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#1677D2',
+  },
+  guidePreviewPanelMeta: {
+    marginTop: 2,
+    fontSize: 9,
+    lineHeight: 13,
+    color: '#7D97B5',
+  },
+  guidePreviewUploadCard: {
+    marginTop: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255,255,255,0.54)',
+    paddingHorizontal: 9,
+    paddingVertical: 9,
+  },
+  guidePreviewUploadHeader: {
+    marginBottom: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  guidePreviewUploadTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '600',
+    color: '#59616D',
+  },
+  guidePreviewUploadPercent: {
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '700',
+    color: '#59616D',
+  },
+  guidePreviewUploadTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#DCE9F5',
+  },
+  guidePreviewUploadFill: {
+    width: '75%',
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#1677D2',
+  },
+  guidePreviewUploadGrid: {
+    marginTop: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 9,
+  },
+  guidePreviewProgressStat: {
+    width: '50%',
+    minWidth: 0,
+  },
+  guidePreviewProgressStatRight: {
+    alignItems: 'flex-end',
+  },
+  guidePreviewProgressLabel: {
+    fontSize: 8,
+    lineHeight: 11,
+    color: '#9AB0C6',
+  },
+  guidePreviewProgressValue: {
+    marginTop: 3,
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    color: '#17191C',
+  },
+  guidePreviewPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  guidePreviewStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  guidePreviewStat: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  guidePreviewStatLabel: {
+    fontSize: 8,
+    lineHeight: 11,
+    color: '#7D97B5',
+  },
+  guidePreviewStatValue: {
+    marginTop: 2,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewSectionLabel: {
+    marginTop: 1,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  guidePreviewOptionActive: {
+    backgroundColor: 'rgba(232,244,255,0.8)',
+  },
+  guidePreviewOptionTitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewCheck: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#3B9FD8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guidePreviewDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  guidePreviewDay: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#3E6F9E',
+  },
+  guidePreviewDayStats: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#9CB6D2',
+  },
+  guidePreviewRecordCard: {
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    padding: 10,
+  },
+  guidePreviewRecordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  guidePreviewRecordTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: '#203D63',
+  },
+  guidePreviewSyncingPill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#DBEAFF',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  guidePreviewSyncingText: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    color: '#357CFF',
+  },
+  guidePreviewCompletedPill: {
+    alignSelf: 'center',
+    borderRadius: 999,
+    backgroundColor: '#E8F7ED',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  guidePreviewCompletedText: {
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    color: '#21A453',
+  },
+  guidePreviewLink: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '700',
+    color: '#357CFF',
+  },
+  guidePreviewDownloadRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  guidePreviewDownloadItem: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  guidePreviewDownloadLabel: {
+    marginTop: 5,
+    fontSize: 8,
+    lineHeight: 11,
+    fontWeight: '700',
+    color: '#315E8C',
+    textAlign: 'center',
+  },
+  guidePreviewCompactRecord: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  guidePreviewResourceEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  guidePreviewResourceIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guidePreviewBadgeRow: {
+    marginTop: 5,
+    flexDirection: 'row',
+    gap: 5,
+  },
+  guidePreviewBadge: {
+    borderRadius: 999,
+    backgroundColor: '#EEF3FA',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  guidePreviewBadgeText: {
+    fontSize: 8,
+    lineHeight: 10,
+    fontWeight: '700',
     color: '#6E8CAD',
   },
   guideActions: {

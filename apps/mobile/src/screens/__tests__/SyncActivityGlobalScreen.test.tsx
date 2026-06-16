@@ -3,6 +3,7 @@ import { render, waitFor } from '@testing-library/react-native';
 
 import { SyncActivityGlobalScreen } from '../SyncActivityGlobalScreen';
 import { listDownloadRecords } from '../../services/download-records-service';
+import { getAutoUploadConfig } from '../../services/SyncEngineModule';
 
 const mockRecentDownloadsSection = jest.fn();
 let mockVisualQaEnabled = false;
@@ -95,6 +96,14 @@ jest.mock('../../services/download-records-service', () => ({
   listDownloadRecords: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('../../services/SyncEngineModule', () => ({
+  getAutoUploadConfig: jest.fn().mockResolvedValue({
+    enabled: false,
+    state: 'disabled',
+    timeRangeMode: 'all',
+  }),
+}));
+
 jest.mock('../../dev/visualQa', () => ({
   isVisualQaEnabled: () => mockVisualQaEnabled,
   isVisualQaHomeEmptyStateEnabled: () => false,
@@ -105,6 +114,11 @@ describe('SyncActivityGlobalScreen', () => {
     mockVisualQaEnabled = false;
     mockRecentDownloadsSection.mockClear();
     (listDownloadRecords as jest.Mock).mockResolvedValue([]);
+    (getAutoUploadConfig as jest.Mock).mockResolvedValue({
+      enabled: false,
+      state: 'disabled',
+      timeRangeMode: 'all',
+    });
   });
 
   test('does not reserve bottom safe-area inside the main tab content', async () => {
@@ -141,5 +155,33 @@ describe('SyncActivityGlobalScreen', () => {
         ]),
       }),
     );
+  });
+
+  test('shows upload progress only after auto upload is active', async () => {
+    (getAutoUploadConfig as jest.Mock).mockResolvedValueOnce({
+      enabled: true,
+      state: 'active',
+      timeRangeMode: 'all',
+    });
+
+    const { getByText, queryByText } = render(
+      <SyncActivityGlobalScreen showBottomTabBar={false} />,
+    );
+
+    expect(queryByText('上传中 · 本次传输进度')).toBeNull();
+
+    await waitFor(() => {
+      expect(getByText('上传中 · 本次传输进度')).toBeTruthy();
+    });
+
+    expect(getByText('已上传96/128')).toBeTruthy();
+    expect(getByText('75%')).toBeTruthy();
+    expect(getByText('传输速度')).toBeTruthy();
+    expect(getByText('68.5 MB/s')).toBeTruthy();
+    expect(getByText('传输进度')).toBeTruthy();
+    expect(getByText('文件大小')).toBeTruthy();
+    expect(getByText('剩余时间')).toBeTruthy();
+    expect(getByText('24 秒')).toBeTruthy();
+    expect(queryByText('自动同步未开启')).toBeNull();
   });
 });

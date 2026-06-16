@@ -29,6 +29,7 @@ import {
   listDownloadRecords,
   type DownloadRecord,
 } from '../services/download-records-service';
+import { getAutoUploadConfig } from '../services/SyncEngineModule';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SyncActivity'>;
 
@@ -156,6 +157,14 @@ const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   },
 ];
 
+const ACTIVE_UPLOAD_PROGRESS = {
+  uploaded: 96,
+  pending: 32,
+  speed: '68.5 MB/s',
+  size: '2.4 GB / 3.6 GB',
+  remaining: '24 秒',
+};
+
 export function SyncActivityGlobalScreen({
   showBottomTabBar = true,
 }: SyncActivityGlobalScreenProps) {
@@ -163,6 +172,7 @@ export function SyncActivityGlobalScreen({
   const { t } = useTranslation();
   const showHomeEmptyState = isVisualQaHomeEmptyStateEnabled();
   const [downloadRecords, setDownloadRecords] = useState<DownloadRecord[]>([]);
+  const [autoUploadActive, setAutoUploadActive] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -174,6 +184,17 @@ export function SyncActivityGlobalScreen({
           );
         }
       });
+      void getAutoUploadConfig()
+        .then(config => {
+          if (active) {
+            setAutoUploadActive(config.enabled && config.state === 'active');
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setAutoUploadActive(false);
+          }
+        });
       return () => {
         active = false;
       };
@@ -183,6 +204,12 @@ export function SyncActivityGlobalScreen({
   const recentDownloadRecords = showHomeEmptyState
     ? []
     : downloadRecords.slice(0, 4).map(toRecentDownloadRecord);
+  const uploadTotal =
+    ACTIVE_UPLOAD_PROGRESS.uploaded + ACTIVE_UPLOAD_PROGRESS.pending;
+  const uploadPercent =
+    uploadTotal > 0
+      ? Math.round((ACTIVE_UPLOAD_PROGRESS.uploaded / uploadTotal) * 100)
+      : 0;
 
   return (
     <GlobalGradientBackground>
@@ -208,7 +235,9 @@ export function SyncActivityGlobalScreen({
                   </View>
                   <View>
                     <Text style={styles.autoTitle}>自动同步</Text>
-                    <Text style={styles.autoMeta}>未开启</Text>
+                    <Text style={styles.autoMeta}>
+                      {autoUploadActive ? '已开启' : '未开启'}
+                    </Text>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -216,13 +245,75 @@ export function SyncActivityGlobalScreen({
                   activeOpacity={0.76}
                   onPress={() => navigation.navigate('AutoUploadSettings')}
                 >
-                  <Text style={styles.autoButtonText}>开启</Text>
+                  <Text style={styles.autoButtonText}>
+                    {autoUploadActive ? '调整' : '开启'}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.phonePanel}>
                 <Text style={styles.phoneTitle}>当前手机状态</Text>
-                <Text style={styles.phoneStatus}>自动同步未开启</Text>
+                <Text style={styles.phoneStatus}>
+                  {autoUploadActive
+                    ? `已上传${ACTIVE_UPLOAD_PROGRESS.uploaded}/${uploadTotal}`
+                    : '自动同步未开启'}
+                </Text>
+                {autoUploadActive ? (
+                  <View style={styles.uploadProgressCard}>
+                    <View style={styles.uploadProgressHeader}>
+                      <Text style={styles.uploadProgressTitle}>
+                        上传中 · 本次传输进度
+                      </Text>
+                      <Text style={styles.uploadProgressPercent}>
+                        {uploadPercent}%
+                      </Text>
+                    </View>
+                    <View style={styles.uploadProgressTrack}>
+                      <View
+                        style={[
+                          styles.uploadProgressFill,
+                          { width: `${uploadPercent}%` },
+                        ]}
+                      />
+                    </View>
+                    <View style={styles.uploadProgressGrid}>
+                      <View style={styles.uploadProgressStat}>
+                        <Text style={styles.uploadProgressLabel}>传输速度</Text>
+                        <Text style={styles.uploadProgressValue}>
+                          {ACTIVE_UPLOAD_PROGRESS.speed}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.uploadProgressStat,
+                          styles.uploadProgressStatRight,
+                        ]}
+                      >
+                        <Text style={styles.uploadProgressLabel}>传输进度</Text>
+                        <Text style={styles.uploadProgressValue}>
+                          {ACTIVE_UPLOAD_PROGRESS.uploaded} / {uploadTotal}
+                        </Text>
+                      </View>
+                      <View style={styles.uploadProgressStat}>
+                        <Text style={styles.uploadProgressLabel}>文件大小</Text>
+                        <Text style={styles.uploadProgressValue}>
+                          {ACTIVE_UPLOAD_PROGRESS.size}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.uploadProgressStat,
+                          styles.uploadProgressStatRight,
+                        ]}
+                      >
+                        <Text style={styles.uploadProgressLabel}>剩余时间</Text>
+                        <Text style={styles.uploadProgressValue}>
+                          {ACTIVE_UPLOAD_PROGRESS.remaining}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
                 <Text style={styles.latestSyncText}>最近同步时间：暂无</Text>
               </View>
             </View>
@@ -387,6 +478,72 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 20,
     color: '#59616D',
+  },
+  uploadProgressCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.54)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  uploadProgressHeader: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  uploadProgressTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 9,
+    lineHeight: 13,
+    fontWeight: '500',
+    color: '#59616D',
+  },
+  uploadProgressPercent: {
+    fontSize: 9,
+    lineHeight: 13,
+    fontWeight: '600',
+    color: '#59616D',
+  },
+  uploadProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#DCE9F5',
+  },
+  uploadProgressFill: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: BLUE,
+  },
+  uploadProgressGrid: {
+    marginTop: 12,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 12,
+  },
+  uploadProgressStat: {
+    width: '50%',
+    minWidth: 0,
+  },
+  uploadProgressStatRight: {
+    alignItems: 'flex-end',
+  },
+  uploadProgressLabel: {
+    fontSize: 9,
+    lineHeight: 13,
+    color: '#9AB0C6',
+  },
+  uploadProgressValue: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: '#17191C',
   },
   latestSyncText: {
     marginTop: 6,
