@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { apiGet, apiPost } from './api';
 import type { SubscriptionInfo } from '../stores/auth-store';
 import { recordDiagnosticsLog } from './diagnostics-log-service';
@@ -48,6 +49,7 @@ export async function getSubscriptionStatus(): Promise<SubscriptionInfo> {
         typeof data.auto_renewing === 'boolean' ? data.auto_renewing : null,
       paymentProvider:
         data.payment_provider === 'apple' ||
+        data.payment_provider === 'google_play' ||
         data.payment_provider === 'mainland' ||
         data.payment_provider === 'gift_card'
           ? data.payment_provider
@@ -90,6 +92,7 @@ export async function verifyIapReceipt(
       plan,
       transaction_id: transactionId || undefined,
       product_id: productId,
+      platform: Platform.OS === 'android' ? 'android' : 'ios',
     });
     recordDiagnosticsLog('SubscriptionAPI', 'verify success', { plan });
   } catch (error) {

@@ -37,6 +37,7 @@ export type AccountStatus =
 export type SubscriptionPlan = 'monthly' | 'yearly' | '';
 export type SubscriptionPaymentProvider =
   | 'apple'
+  | 'google_play'
   | 'mainland'
   | 'gift_card'
   | '';

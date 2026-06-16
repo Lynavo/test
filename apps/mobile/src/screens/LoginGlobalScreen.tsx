@@ -46,6 +46,8 @@ import * as RNLocalize from 'react-native-localize';
 type Provider = 'apple' | 'google' | 'email';
 type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
 
+const APPLE_ANDROID_CALLBACK_TIMEOUT_MS = 120000;
+
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   if (typeof err === 'object' && err !== null && 'message' in err) {
@@ -82,6 +84,17 @@ function getGoogleIdToken(
     if (typeof idToken === 'string' && idToken.length > 0) return idToken;
   }
   return null;
+}
+
+function getUrlQueryParam(url: string, name: string): string | null {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = url.match(new RegExp(`[?&]${escapedName}=([^&#]*)`));
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1].replace(/\+/g, ' '));
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -201,29 +214,61 @@ export function LoginGlobalScreen() {
           )}&response_type=code%20id_token&response_mode=form_post&scope=name%20email&state=${state}&nonce=${nonce}`;
 
           await new Promise<void>((resolvePromise, rejectPromise) => {
+            let settled = false;
+            let timeout: ReturnType<typeof setTimeout> | null = null;
+            let linkingSubscription: { remove: () => void } | null = null;
+
+            const cleanup = () => {
+              if (timeout) {
+                clearTimeout(timeout);
+                timeout = null;
+              }
+              linkingSubscription?.remove();
+              linkingSubscription = null;
+            };
+
+            const settleResolve = () => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              resolvePromise();
+            };
+
+            const settleReject = (err: Error) => {
+              if (settled) return;
+              settled = true;
+              cleanup();
+              rejectPromise(err);
+            };
+
             const handleDeepLink = async (event: { url: string }) => {
               if (event.url.includes('vividrop://auth/apple/callback')) {
-                linkingSubscription.remove();
+                if (getUrlQueryParam(event.url, 'state') !== state) {
+                  settleReject(new Error('Apple Sign-In state mismatch.'));
+                  return;
+                }
 
-                const getParam = (name: string) => {
-                  const match = event.url.match(
-                    new RegExp('[?&]' + name + '=([^&]*)'),
-                  );
-                  return match ? decodeURIComponent(match[1]) : null;
-                };
-
-                const accessToken = getParam('access_token');
-                const refreshToken = getParam('refresh_token');
+                const accessToken = getUrlQueryParam(event.url, 'access_token');
+                const refreshToken = getUrlQueryParam(
+                  event.url,
+                  'refresh_token',
+                );
 
                 if (accessToken && refreshToken) {
                   try {
                     login(accessToken, refreshToken);
-                    resolvePromise();
+                    settleResolve();
                   } catch (err) {
-                    rejectPromise(err);
+                    settleReject(
+                      err instanceof Error
+                        ? err
+                        : new Error(
+                            getErrorMessage(err, 'Apple Sign-In failed.'),
+                          ),
+                    );
                   }
                 } else {
-                  rejectPromise(
+                  settleReject(
                     new Error(
                       'Login failed: Did not receive tokens from server.',
                     ),
@@ -232,14 +277,17 @@ export function LoginGlobalScreen() {
               }
             };
 
-            const linkingSubscription = Linking.addEventListener(
+            linkingSubscription = Linking.addEventListener(
               'url',
               handleDeepLink,
             );
 
+            timeout = setTimeout(() => {
+              settleReject(new Error('Apple Sign-In timed out.'));
+            }, APPLE_ANDROID_CALLBACK_TIMEOUT_MS);
+
             Linking.openURL(appleAuthUrl).catch((err: unknown) => {
-              linkingSubscription.remove();
-              rejectPromise(
+              settleReject(
                 new Error(
                   `Failed to open Apple Sign-In browser: ${getErrorMessage(
                     err,

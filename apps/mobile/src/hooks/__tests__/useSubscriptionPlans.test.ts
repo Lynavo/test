@@ -8,6 +8,7 @@ jest.mock('../../markets', () => ({
 }));
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { Platform } from 'react-native';
 import type {
   SubscriptionPlanDto,
   SubscriptionPlanPlatform,
@@ -158,8 +159,17 @@ const formatSavings = (savingsDisplay: string): string =>
   `save ${savingsDisplay}`;
 
 describe('useSubscriptionPlans', () => {
+  const originalPlatformOS = Platform.OS;
+
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: originalPlatformOS,
+    });
   });
 
   test('merges server catalog with StoreKit products and computes yearly savings', async () => {
@@ -336,6 +346,90 @@ describe('useSubscriptionPlans', () => {
     expect(
       result.current.plans.map(entry => entry.product?.displayPrice),
     ).toEqual(['CNY 9.99', 'CNY 104.00']);
+  });
+
+  test('keeps Android IAP catalog unpurchasable when Google Play returns no products', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    const androidMonthlyPlan = makePlan({
+      id: 31,
+      product_id: 'com.vividrop.mobile.global.monthly.999',
+      platform: 'android',
+      plan: 'monthly',
+      amount_cents: 1000,
+      currency: 'HKD',
+    });
+    const androidYearlyPlan = makePlan({
+      id: 32,
+      product_id: 'com.vividrop.mobile.global.yearly.9900',
+      platform: 'android',
+      plan: 'yearly',
+      amount_cents: 9900,
+      currency: 'HKD',
+    });
+    (subscriptionPlansService.fetchPlans as jest.Mock).mockResolvedValueOnce({
+      plans: [androidMonthlyPlan, androidYearlyPlan],
+      source: 'network',
+    });
+    (iapService.getProductSummaries as jest.Mock).mockResolvedValueOnce([]);
+
+    const { result } = renderHook(() =>
+      useSubscriptionPlans({
+        formatPrice,
+        formatSavings,
+        platform: 'android',
+        useIapProducts: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.productsLoading).toBe(false));
+    expect(iapService.getProductSummaries).toHaveBeenCalledWith([
+      'com.vividrop.mobile.global.monthly.999',
+      'com.vividrop.mobile.global.yearly.9900',
+    ]);
+    expect(result.current.plans.map(entry => entry.product)).toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  test('keeps Android IAP catalog unpurchasable when Google Play product fetch fails', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    const androidMonthlyPlan = makePlan({
+      id: 33,
+      product_id: 'com.vividrop.mobile.global.monthly.999',
+      platform: 'android',
+      plan: 'monthly',
+      amount_cents: 1000,
+      currency: 'HKD',
+    });
+    (subscriptionPlansService.fetchPlans as jest.Mock).mockResolvedValueOnce({
+      plans: [androidMonthlyPlan],
+      source: 'network',
+    });
+    (iapService.getProductSummaries as jest.Mock).mockRejectedValueOnce(
+      new Error('Google Play unavailable'),
+    );
+
+    const { result } = renderHook(() =>
+      useSubscriptionPlans({
+        formatPrice,
+        formatSavings,
+        platform: 'android',
+        useIapProducts: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.productsLoading).toBe(false));
+    expect(result.current.plans).toHaveLength(1);
+    expect(result.current.plans[0]?.product).toBeNull();
   });
 
   test('keeps the server catalog when Apple returns no products', async () => {

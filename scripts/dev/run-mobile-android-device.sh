@@ -7,6 +7,10 @@ METRO_PORT="${METRO_PORT:-${RCT_METRO_PORT:-8081}}"
 METRO_READY_TIMEOUT_SECONDS="${SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS:-20}"
 APP_ID="${SYNCFLOW_ANDROID_APP_ID:-com.vividrop.mobile.china}"
 MAIN_ACTIVITY="${SYNCFLOW_ANDROID_MAIN_ACTIVITY:-.MainActivity}"
+if [[ "$MAIN_ACTIVITY" == .* ]]; then
+  # The Android namespace is com.vividrop.mobile.china, so relative activities are under that package
+  MAIN_ACTIVITY="com.vividrop.mobile.china$MAIN_ACTIVITY"
+fi
 INSTALL_TASK="${SYNCFLOW_ANDROID_INSTALL_TASK:-}"
 
 unset NODE_OPTIONS
