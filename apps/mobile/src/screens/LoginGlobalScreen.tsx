@@ -1,50 +1,43 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  type GestureResponderEvent,
+  Image,
   Linking,
   Modal,
   NativeModules,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { useNavigation } from '@react-navigation/native';
-import type { StackNavigationProp } from '@react-navigation/stack';
-import Svg, { Path } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 
 import {
-  AUTH_COLORS,
-  AuthScreenShell,
-} from '../components/auth/AuthScreenShell';
-import {
-  authCardSurfaceStyle,
-  authSingleLineInputStyle,
-  authTextScalingProps,
-} from '../components/auth/authPlatformStyles';
-import {
-  appleLogin,
-  googleLogin,
-  sendEmailCode,
-  sendSmsCode,
-} from '../services/auth-service';
+  GLOBAL_AUTH_COLORS as AUTH_COLORS,
+  GlobalAuthScreenShell,
+} from '../components/auth/GlobalAuthScreenShell';
+import { authTextScalingProps } from '../components/auth/authPlatformStyles';
+import { appleLogin, googleLogin } from '../services/auth-service';
 import { useAuth } from '../stores/auth-store';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
+import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
 import { getBaseUrl } from '../services/config';
-import type { RootStackParamList } from '../navigation/RootNavigator';
-import { Icon } from '../components/Icon';
-import { isValidChinaPhone } from '../utils/phone-validation';
-import { COUNTRY_CODES } from '../constants/countries';
-import * as RNLocalize from 'react-native-localize';
 
-type Provider = 'apple' | 'google' | 'email';
-type LoginGlobalNavProp = StackNavigationProp<RootStackParamList, 'Login'>;
+const VIVIDROP_LOGO = require('../assets/icons/vividrop-logo.png');
+
+type Provider = 'apple' | 'google';
+type MediaKind = 'photo' | 'video' | 'file';
 
 const APPLE_ANDROID_CALLBACK_TIMEOUT_MS = 120000;
 
@@ -97,94 +90,14 @@ function getUrlQueryParam(url: string, name: string): string | null {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Premium Native SVG Icons
-// ---------------------------------------------------------------------------
-
-function AppleIcon({ color = '#000000' }: { color?: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 16 16">
-      <Path
-        d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24">
-      <Path
-        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-        fill="#4285F4"
-      />
-      <Path
-        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-        fill="#34A853"
-      />
-      <Path
-        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-        fill="#FBBC05"
-      />
-      <Path
-        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-        fill="#EA4335"
-      />
-    </Svg>
-  );
-}
-
-function PhoneIcon({ color = '#1a2a3a' }: { color?: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
 export function LoginGlobalScreen() {
-  const navigation = useNavigation<LoginGlobalNavProp>();
-  const [method, setMethod] = useState<'email' | 'phone'>('phone');
-  const [inputValue, setInputValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [authProvider, setAuthProvider] = useState<Provider | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreementProvider, setAgreementProvider] = useState<Provider | null>(
+    null,
+  );
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState(() => {
-    const systemCountry = RNLocalize.getCountry()?.toUpperCase();
-    return (
-      COUNTRY_CODES.find(c => c.iso === systemCountry) ||
-      COUNTRY_CODES.find(c => c.iso === 'CN') ||
-      COUNTRY_CODES[0]
-    );
-  });
-  const [isPickerVisible, setIsPickerVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const { login } = useAuth();
-
-  const closePicker = useCallback(() => {
-    setIsPickerVisible(false);
-    setSearchQuery('');
-  }, []);
-
-  const filteredCountries = COUNTRY_CODES.filter(country => {
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) return true;
-    return (
-      country.nameEn.toLowerCase().includes(query) ||
-      country.code.includes(query) ||
-      country.iso.toLowerCase().includes(query)
-    );
-  });
-
-  const isPhoneMode = method === 'phone';
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isButtonEnabled = inputValue.trim().length > 0 && !pendingProvider;
 
   useEffect(() => {
     try {
@@ -197,7 +110,18 @@ export function LoginGlobalScreen() {
     }
   }, []);
 
-  const handleProviderPress = async (provider: 'apple' | 'google') => {
+  const beginProviderLogin = (provider: Provider) => {
+    if (pendingProvider) return;
+
+    if (!agreedToTerms) {
+      setAgreementProvider(provider);
+      return;
+    }
+
+    setAuthProvider(provider);
+  };
+
+  const handleProviderPress = async (provider: Provider) => {
     if (pendingProvider) return;
     setPendingProvider(provider);
     try {
@@ -326,550 +250,1002 @@ export function LoginGlobalScreen() {
       }
     } finally {
       setPendingProvider(null);
+      setAuthProvider(null);
     }
   };
 
-  const handleInputChange = useCallback(
-    (val: string) => {
-      if (isPhoneMode) {
-        // Only allow digits for phone number
-        const digits = val
-          .replace(/\D/g, '')
-          .slice(0, selectedCountry.maxLength);
-        setInputValue(digits);
-      } else {
-        setInputValue(val.trim());
-      }
-      setError(null);
-    },
-    [isPhoneMode, selectedCountry],
-  );
-
-  const handleContinue = useCallback(async () => {
-    const trimmed = inputValue.trim();
-    if (!trimmed) return;
-
-    if (isPhoneMode) {
-      const isChina = selectedCountry.code === '+86';
-      const isValid = isChina
-        ? isValidChinaPhone(trimmed)
-        : /^\d+$/.test(trimmed) &&
-          trimmed.length >= selectedCountry.minLength &&
-          trimmed.length <= selectedCountry.maxLength;
-
-      if (!isValid) {
-        setError(
-          isChina
-            ? 'Please enter a valid phone number.'
-            : `Please enter a valid ${selectedCountry.nameEn} phone number.`,
-        );
-        return;
-      }
-
-      const fullPhone = selectedCountry.code + trimmed;
-      setError(null);
-      setPendingProvider('email'); // reuse indicator state
-      try {
-        const { authBaseUrl } = await sendSmsCode(fullPhone);
-        setPendingProvider(null);
-        navigation.navigate('SmsVerify', { phone: fullPhone, authBaseUrl });
-      } catch (err: unknown) {
-        setPendingProvider(null);
-        Alert.alert(
-          'Error',
-          getErrorMessage(err, 'Failed to send SMS verification code.'),
-        );
-      }
-    } else {
-      if (!emailRegex.test(trimmed)) {
-        setError('Please enter a valid email address.');
-        return;
-      }
-      setError(null);
-      setPendingProvider('email');
-      try {
-        await sendEmailCode(trimmed);
-        setPendingProvider(null);
-        navigation.navigate('SmsVerify', { email: trimmed });
-      } catch (err: unknown) {
-        setPendingProvider(null);
-        Alert.alert(
-          'Error',
-          getErrorMessage(err, 'Failed to send email verification code.'),
-        );
-      }
-    }
-  }, [inputValue, isPhoneMode, selectedCountry, navigation]);
-
-  const handleOpenTerms = useCallback(() => {
+  const handleOpenTerms = () => {
     Linking.openURL(USER_AGREEMENT_URL);
-  }, []);
+  };
 
-  const handleOpenPrivacy = useCallback(() => {
+  const handleOpenPrivacy = () => {
     Linking.openURL(PRIVACY_POLICY_URL);
-  }, []);
+  };
 
   return (
-    <AuthScreenShell subtitle="Connect your desktop and keep media in sync.">
-      <View style={styles.card}>
-        {/* Header Title */}
-        <Text style={styles.title}>Log in or sign up</Text>
-
-        {/* Provider Buttons */}
-        <View style={styles.buttonList}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={pendingProvider !== null}
-            onPress={() => void handleProviderPress('google')}
-            style={({ pressed }) => [
-              styles.providerButton,
-              pendingProvider !== null ? styles.buttonDisabled : null,
-              pressed ? styles.buttonPressed : null,
-            ]}
-          >
-            {pendingProvider === 'google' ? (
-              <ActivityIndicator size="small" color={AUTH_COLORS.text} />
-            ) : (
-              <View style={styles.buttonContent}>
-                <GoogleIcon />
-                <Text style={styles.providerText}>Continue with Google</Text>
-              </View>
-            )}
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={pendingProvider !== null}
-            onPress={() => void handleProviderPress('apple')}
-            style={({ pressed }) => [
-              styles.providerButton,
-              pendingProvider !== null ? styles.buttonDisabled : null,
-              pressed ? styles.buttonPressed : null,
-            ]}
-          >
-            {pendingProvider === 'apple' ? (
-              <ActivityIndicator size="small" color={AUTH_COLORS.text} />
-            ) : (
-              <View style={styles.buttonContent}>
-                <AppleIcon color={AUTH_COLORS.text} />
-                <Text style={styles.providerText}>Continue with Apple</Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
-
-        {/* OR Divider */}
-        <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Dynamic Address Input (Pill styled) */}
-        <View style={styles.inputSection}>
-          <View
-            style={[
-              styles.inputContainer,
-              error ? styles.textInputError : null,
-            ]}
-          >
-            {isPhoneMode ? (
-              <>
-                <TouchableOpacity
-                  accessibilityRole="combobox"
-                  onPress={() => setIsPickerVisible(true)}
-                  style={styles.phonePrefix}
-                >
-                  <PhoneIcon color={AUTH_COLORS.textMuted} />
-                  <Text {...authTextScalingProps} style={styles.prefixText}>
-                    {selectedCountry.code}
-                  </Text>
-                  <Text style={styles.dropdownArrow}>▼</Text>
-                </TouchableOpacity>
-                <View style={styles.inputDivider} />
-              </>
-            ) : (
-              <View style={[styles.phonePrefix, { marginRight: 8 }]}>
-                <Icon
-                  name="mail-outline"
-                  size={16}
-                  color={AUTH_COLORS.textMuted}
-                />
-              </View>
-            )}
-            <TextInput
-              {...authTextScalingProps}
-              style={styles.textInput}
-              value={inputValue}
-              onChangeText={handleInputChange}
-              keyboardType={isPhoneMode ? 'phone-pad' : 'email-address'}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={isPhoneMode ? 'Phone number' : 'Email address'}
-              placeholderTextColor={AUTH_COLORS.textFaint}
-              editable={!pendingProvider}
-              returnKeyType="done"
-              selectionColor={AUTH_COLORS.primary}
-              maxLength={isPhoneMode ? selectedCountry.maxLength : 128}
-              onSubmitEditing={handleContinue}
-            />
-          </View>
-          {error && <Text style={styles.errorText}>{error}</Text>}
-        </View>
-
-        {/* Continue Action Button */}
-        <Pressable
-          accessibilityRole="button"
-          disabled={!isButtonEnabled}
-          onPress={handleContinue}
-          style={({ pressed }) => [
-            styles.continueButton,
-            !isButtonEnabled ? styles.continueButtonDisabled : null,
-            pressed ? { opacity: 0.9 } : null,
-          ]}
-        >
-          {pendingProvider === 'email' ? (
-            <ActivityIndicator size="small" color="#ffffff" />
-          ) : (
-            <Text style={styles.continueButtonText}>Continue</Text>
-          )}
-        </Pressable>
-
-        {/* Legal Footer */}
-        <View style={styles.legalFooter}>
-          <Text style={styles.legalText}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.legalLink} onPress={handleOpenTerms}>
-              Terms of Service
-            </Text>{' '}
-            and{' '}
-            <Text style={styles.legalLink} onPress={handleOpenPrivacy}>
-              Privacy Policy
-            </Text>
-            .
-          </Text>
-        </View>
-
-        {/* Country Code Picker Modal */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={isPickerVisible}
-          onRequestClose={closePicker}
-        >
-          <Pressable style={styles.modalOverlay} onPress={closePicker}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Country / Region</Text>
-                <TouchableOpacity
-                  onPress={closePicker}
-                  style={styles.modalCloseButton}
-                >
-                  <Text style={styles.modalCloseText}>Done</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Search Bar */}
-              <View style={styles.searchWrapper}>
-                <View style={styles.searchContainer}>
-                  <Icon
-                    name="search-outline"
-                    size={16}
-                    color={AUTH_COLORS.textMuted}
-                  />
-                  <TextInput
-                    style={styles.searchInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search by country or code..."
-                    placeholderTextColor={AUTH_COLORS.textFaint}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    clearButtonMode="while-editing"
-                  />
-                </View>
-              </View>
-
-              <ScrollView
-                style={styles.countryList}
-                keyboardShouldPersistTaps="handled"
-              >
-                {filteredCountries.map(country => (
-                  <TouchableOpacity
-                    key={country.iso}
-                    style={[
-                      styles.countryItem,
-                      selectedCountry.iso === country.iso
-                        ? styles.countryItemActive
-                        : null,
-                    ]}
-                    onPress={() => {
-                      setSelectedCountry(country);
-                      closePicker();
-                      setInputValue('');
-                      setError(null);
-                    }}
-                  >
-                    <Text style={styles.countryFlag}>{country.flag}</Text>
-                    <Text style={styles.countryName}>{country.nameEn}</Text>
-                    <Text style={styles.countryCodeText}>{country.code}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+    <GlobalAuthScreenShell>
+      <View style={styles.pageContent}>
+        <View style={styles.heroSection}>
+          <View style={styles.brandRow}>
+            <View style={styles.logoBox}>
+              <Image
+                source={VIVIDROP_LOGO}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
-          </Pressable>
-        </Modal>
+            <View>
+              <Text {...authTextScalingProps} style={styles.brandTitle}>
+                ViviDrop
+              </Text>
+              <Text {...authTextScalingProps} style={styles.brandSubtitle}>
+                轻量同步素材到电脑端
+              </Text>
+            </View>
+          </View>
+
+          <Text {...authTextScalingProps} style={styles.heroTitle}>
+            让手机素材同步变得更安静、更快。
+          </Text>
+          <Text {...authTextScalingProps} style={styles.heroCopy}>
+            连接同一局域网中的电脑，自动上传照片、视频和文件。
+          </Text>
+
+          <View style={styles.featureGrid}>
+            {[
+              { type: 'photo' as const, label: '照片' },
+              { type: 'video' as const, label: '视频' },
+              { type: 'file' as const, label: '文件' },
+            ].map(item => (
+              <View key={item.type} style={styles.featureCard}>
+                <MediaTypeIcon type={item.type} />
+                <Text {...authTextScalingProps} style={styles.featureLabel}>
+                  {item.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.authCard}>
+          <Text {...authTextScalingProps} style={styles.cardTitle}>
+            登录或创建账号
+          </Text>
+          <Text {...authTextScalingProps} style={styles.cardDescription}>
+            使用现有账号继续，稍后可连接电脑设备。
+          </Text>
+
+          <View style={styles.providerList}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="使用 Google 继续"
+              disabled={pendingProvider !== null}
+              onPress={() => beginProviderLogin('google')}
+              testID="global-auth-google-provider-button"
+              style={({ pressed }) => [
+                styles.providerButton,
+                pressed ? styles.providerButtonPressed : null,
+                pendingProvider !== null ? styles.providerButtonDisabled : null,
+              ]}
+            >
+              {pendingProvider === 'google' ? (
+                <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+              ) : (
+                <>
+                  <Text {...authTextScalingProps} style={styles.googleMark}>
+                    G
+                  </Text>
+                  <Text {...authTextScalingProps} style={styles.providerText}>
+                    使用 Google 继续
+                  </Text>
+                </>
+              )}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="使用 Apple 继续"
+              disabled={pendingProvider !== null}
+              onPress={() => beginProviderLogin('apple')}
+              testID="global-auth-apple-provider-button"
+              style={({ pressed }) => [
+                styles.providerButton,
+                pressed ? styles.providerButtonPressed : null,
+                pendingProvider !== null ? styles.providerButtonDisabled : null,
+              ]}
+            >
+              {pendingProvider === 'apple' ? (
+                <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+              ) : (
+                <>
+                  <Text {...authTextScalingProps} style={styles.appleMark}>
+                    
+                  </Text>
+                  <Text {...authTextScalingProps} style={styles.providerText}>
+                    使用 Apple 继续
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </View>
+
+          <View style={styles.termsRow}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreedToTerms }}
+              accessibilityLabel="Agree to terms"
+              onPress={() => setAgreedToTerms(prev => !prev)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[
+                styles.checkbox,
+                agreedToTerms ? styles.checkboxChecked : null,
+              ]}
+            >
+              {agreedToTerms ? <CheckGlyph /> : null}
+            </Pressable>
+            <Text {...authTextScalingProps} style={styles.termsText}>
+              继续即表示你同意{' '}
+              <Text style={styles.termsLink} onPress={handleOpenTerms}>
+                服务条款
+              </Text>
+              {'\n'}和{' '}
+              <Text style={styles.termsLink} onPress={handleOpenPrivacy}>
+                隐私政策
+              </Text>
+              。
+            </Text>
+          </View>
+        </View>
       </View>
-    </AuthScreenShell>
+
+      <ProviderConfirmModal
+        provider={authProvider}
+        pendingProvider={pendingProvider}
+        onCancel={() => setAuthProvider(null)}
+        onContinue={provider => void handleProviderPress(provider)}
+      />
+
+      <AgreementRequiredModal
+        provider={agreementProvider}
+        onCancel={() => setAgreementProvider(null)}
+        onContinue={provider => {
+          setAgreedToTerms(true);
+          setAgreementProvider(null);
+          setAuthProvider(provider);
+        }}
+      />
+    </GlobalAuthScreenShell>
   );
 }
 
+function MediaTypeIcon({ type }: { type: MediaKind }) {
+  if (type === 'photo') {
+    return (
+      <View style={[styles.mediaIcon, styles.photoIcon]}>
+        <MediaIconGradient type="photo" />
+        <View style={styles.photoSun} />
+        <View style={styles.photoHillLeft} />
+        <View style={styles.photoHillRight} />
+        <PhotoGlyph />
+      </View>
+    );
+  }
+
+  if (type === 'video') {
+    return (
+      <View style={[styles.mediaIcon, styles.videoIcon]}>
+        <MediaIconGradient type="video" />
+        <View style={styles.videoDotRowTop}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDot} />
+          ))}
+        </View>
+        <View style={styles.playCircle}>
+          <VideoPlayGlyph />
+        </View>
+        <View style={styles.videoDotRowBottom}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDotFaint} />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.mediaIcon, styles.fileIcon]}>
+      <MediaIconGradient type="file" />
+      <View style={styles.fileCorner} />
+      <FileGlyph />
+    </View>
+  );
+}
+
+function MediaIconGradient({ type }: { type: MediaKind }) {
+  const stops =
+    type === 'photo'
+      ? ['#F7FCFF', '#D8F0FF', '#9FD6FF']
+      : type === 'video'
+      ? ['#F8F6FF', '#E3E6FF', '#9AAEFF']
+      : ['#FFFFFF', '#EFF5FB', '#D7E2F0'];
+
+  return (
+    <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      <Defs>
+        <LinearGradient
+          id={`${type}MediaGradient`}
+          x1="0%"
+          y1="0%"
+          x2="100%"
+          y2="100%"
+        >
+          <Stop offset="0%" stopColor={stops[0]} />
+          <Stop offset="56%" stopColor={stops[1]} />
+          <Stop offset="100%" stopColor={stops[2]} />
+        </LinearGradient>
+      </Defs>
+      <Rect width="100%" height="100%" fill={`url(#${type}MediaGradient)`} />
+    </Svg>
+  );
+}
+
+function PhotoGlyph() {
+  return (
+    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x={5}
+        y={4.5}
+        width={14}
+        height={15}
+        rx={2.4}
+        stroke="#1677D2"
+        strokeWidth={2}
+      />
+      <Circle cx={15.2} cy={8.8} r={1.55} fill="#1677D2" />
+      <Path
+        d="M6.5 16.9l3.75-4.05a1.35 1.35 0 0 1 1.96-.02l1.28 1.33.62-.72a1.35 1.35 0 0 1 1.98-.05l1.4 1.42"
+        stroke="#1677D2"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function VideoPlayGlyph() {
+  return (
+    <Svg width={15} height={15} viewBox="0 0 18 18">
+      <Path d="M6.2 4.15v9.7l7.55-4.86-7.55-4.84z" fill="#746AA8" />
+    </Svg>
+  );
+}
+
+function FileGlyph() {
+  return (
+    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7 3.8h6.15L18 8.65V19a1.6 1.6 0 0 1-1.6 1.6H7A1.6 1.6 0 0 1 5.4 19V5.4A1.6 1.6 0 0 1 7 3.8z"
+        stroke="#59616D"
+        strokeWidth={1.9}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M13.1 3.9v4.75H18"
+        stroke="#59616D"
+        strokeWidth={1.9}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M8.5 12.4h7M8.5 15.7h5.4"
+        stroke="#59616D"
+        strokeWidth={1.9}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+function ShieldCheckGlyph() {
+  return (
+    <Svg width={23} height={23} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 3.15 5.35 5.62v5.2c0 4.3 2.72 8.36 6.65 9.97 3.93-1.61 6.65-5.67 6.65-9.97v-5.2L12 3.15z"
+        stroke="#1677D2"
+        strokeWidth={1.9}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="m8.7 12.1 2.15 2.1 4.55-5"
+        stroke="#1677D2"
+        strokeWidth={2.1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <Svg width={11} height={11} viewBox="0 0 12 12" fill="none">
+      <Path
+        d="m2.4 6.25 2.1 2.05 5.1-5.25"
+        stroke="#FFFFFF"
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function ProviderConfirmModal({
+  provider,
+  pendingProvider,
+  onCancel,
+  onContinue,
+}: {
+  provider: Provider | null;
+  pendingProvider: Provider | null;
+  onCancel: () => void;
+  onContinue: (provider: Provider) => void;
+}) {
+  if (!provider) return null;
+
+  const isGoogle = provider === 'google';
+
+  return (
+    <AuthModalFrame
+      backdropTestID="global-auth-provider-modal-backdrop"
+      cardTestID="global-auth-provider-modal-card"
+      onCancel={onCancel}
+    >
+      <View style={styles.modalCardContent}>
+        <View style={[styles.modalHeader, styles.providerModalHeader]}>
+          <View
+            style={[
+              styles.modalProviderIcon,
+              isGoogle ? styles.modalGoogleIcon : styles.modalAppleIcon,
+            ]}
+          >
+            <Text
+              style={[
+                styles.modalProviderMark,
+                isGoogle ? styles.modalGoogleMark : styles.modalAppleMark,
+              ]}
+            >
+              {isGoogle ? 'G' : ''}
+            </Text>
+          </View>
+          <View style={styles.modalHeaderText}>
+            <Text {...authTextScalingProps} style={styles.modalTitle}>
+              {isGoogle ? 'Google 授权登录' : 'Apple 授权登录'}
+            </Text>
+            <Text {...authTextScalingProps} style={styles.modalSubtitle}>
+              {isGoogle
+                ? '将打开 Google 完成账号授权。'
+                : '将打开 Apple 完成账号授权。'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.modalInfoBox}>
+          <Text {...authTextScalingProps} style={styles.modalInfoText}>
+            {isGoogle
+              ? '使用 Google 账号授权后，ViviDrop 只会用于识别账号和同步设备，不会读取你的密码。'
+              : '使用 Apple ID 授权后，ViviDrop 只会用于识别账号和同步设备，不会读取你的密码。'}
+          </Text>
+        </View>
+
+        <View style={styles.modalButtonRow}>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.modalSecondaryButton,
+              pressed ? styles.providerButtonPressed : null,
+            ]}
+            onPress={onCancel}
+          >
+            <Text style={styles.modalSecondaryText}>取消</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: pendingProvider !== null }}
+            style={({ pressed }) => [
+              styles.modalPrimaryButton,
+              pendingProvider !== null ? styles.modalPrimaryButtonDisabled : null,
+              pressed ? styles.providerButtonPressed : null,
+            ]}
+            onPress={() => onContinue(provider)}
+            disabled={pendingProvider !== null}
+          >
+            {pendingProvider === provider ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.modalPrimaryText}>继续授权</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </AuthModalFrame>
+  );
+}
+
+function AuthModalFrame({
+  backdropTestID,
+  cardTestID,
+  children,
+  onCancel,
+}: {
+  backdropTestID: string;
+  cardTestID: string;
+  children: React.ReactNode;
+  onCancel: () => void;
+}) {
+  const stopModalPress = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <Modal animationType="fade" transparent visible onRequestClose={onCancel}>
+      <Pressable
+        style={styles.modalBackdrop}
+        testID={backdropTestID}
+        onPress={onCancel}
+      >
+        <ModalBlurBackdrop />
+        <Pressable
+          style={styles.modalCard}
+          testID={cardTestID}
+          onPress={stopModalPress}
+        >
+          {children}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function AgreementRequiredModal({
+  provider,
+  onCancel,
+  onContinue,
+}: {
+  provider: Provider | null;
+  onCancel: () => void;
+  onContinue: (provider: Provider) => void;
+}) {
+  if (!provider) return null;
+
+  return (
+    <AuthModalFrame
+      backdropTestID="global-auth-agreement-modal-backdrop"
+      cardTestID="global-auth-agreement-modal-card"
+      onCancel={onCancel}
+    >
+      <View style={styles.modalCardContent}>
+        <View style={[styles.modalHeader, styles.agreementModalHeader]}>
+          <View style={styles.modalShieldIcon}>
+            <ShieldCheckGlyph />
+          </View>
+          <View style={styles.modalHeaderText}>
+            <Text {...authTextScalingProps} style={styles.modalTitle}>
+              请先同意服务协议
+            </Text>
+            <Text {...authTextScalingProps} style={styles.modalBodyText}>
+              登录前需要确认你已阅读并同意服务条款和隐私政策，之后可继续使用
+              {provider === 'google' ? ' Google' : ' Apple'} 授权。
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.modalInfoBox, styles.agreementModalInfoBox]}>
+          <Text
+            {...authTextScalingProps}
+            style={[styles.modalInfoText, styles.agreementModalInfoText]}
+          >
+            <Text style={styles.termsLink}>服务条款</Text>
+            <Text style={styles.modalDividerText}> / </Text>
+            <Text style={styles.termsLink}>隐私政策</Text>
+            <Text> 用于说明账号、设备连接和同步数据的处理方式。</Text>
+          </Text>
+        </View>
+
+        <View style={styles.modalButtonRow}>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.modalSecondaryButton,
+              pressed ? styles.providerButtonPressed : null,
+            ]}
+            onPress={onCancel}
+          >
+            <Text style={styles.modalSecondaryText}>稍后</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.modalPrimaryButton,
+              pressed ? styles.providerButtonPressed : null,
+            ]}
+            onPress={() => onContinue(provider)}
+          >
+            <Text style={styles.modalPrimaryText}>同意并继续</Text>
+          </Pressable>
+        </View>
+      </View>
+    </AuthModalFrame>
+  );
+}
+
+const glassShadow = {
+  shadowColor: '#46608A',
+  shadowOffset: { width: 0, height: 18 },
+  shadowOpacity: 0.12,
+  shadowRadius: 52,
+  elevation: 6,
+};
+
+const panelShadow = {
+  shadowColor: '#46608A',
+  shadowOffset: { width: 0, height: 12 },
+  shadowOpacity: 0.08,
+  shadowRadius: 34,
+  elevation: 4,
+};
+
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: AUTH_COLORS.surface,
-    borderRadius: 24,
-    borderWidth: 0,
-    borderColor: AUTH_COLORS.surfaceBorder,
-    paddingHorizontal: 24,
-    paddingTop: 28,
-    paddingBottom: 28,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    width: '100%',
-    maxWidth: 384,
-    alignSelf: 'center',
-    ...authCardSurfaceStyle,
-    gap: 16,
+  pageContent: {
+    flex: 1,
   },
-  title: {
+  heroSection: {
+    paddingTop: 4,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.12,
+    shadowRadius: 34,
+    elevation: 4,
+  },
+  logoImage: {
+    width: 36,
+    height: 36,
+  },
+  brandTitle: {
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '600',
     color: AUTH_COLORS.text,
-    fontSize: 22,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 6,
   },
-  buttonList: {
+  brandSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 20,
+    color: AUTH_COLORS.textMuted,
+  },
+  heroTitle: {
+    marginTop: 24,
+    maxWidth: 300,
+    fontSize: 26,
+    lineHeight: 29,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  heroCopy: {
+    marginTop: 12,
+    fontSize: 13,
+    lineHeight: 24,
+    color: AUTH_COLORS.textMuted,
+  },
+  featureGrid: {
+    marginTop: 20,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  featureCard: {
+    flex: 1,
+    height: 91,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.50)',
+    alignItems: 'center',
+    paddingTop: 12,
+    ...panelShadow,
+  },
+  featureLabel: {
+    marginTop: 8,
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '600',
+    color: AUTH_COLORS.textMuted,
+  },
+  mediaIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
+    elevation: 3,
+  },
+  photoIcon: {
+    backgroundColor: '#D8F0FF',
+  },
+  photoSun: {
+    position: 'absolute',
+    left: 9,
+    top: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.86)',
+  },
+  photoHillLeft: {
+    position: 'absolute',
+    left: 3,
+    bottom: -2,
+    width: 28,
+    height: 16,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    transform: [{ rotate: '-8deg' }],
+  },
+  photoHillRight: {
+    position: 'absolute',
+    right: -1,
+    bottom: -2,
+    width: 30,
+    height: 19,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: 'rgba(191,227,255,0.78)',
+    transform: [{ rotate: '10deg' }],
+  },
+  videoIcon: {
+    backgroundColor: '#E3E6FF',
+  },
+  videoDotRowTop: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDotRowBottom: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  videoDotFaint: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.54)',
+  },
+  playCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileIcon: {
+    backgroundColor: '#EFF5FB',
+  },
+  fileCorner: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderBottomLeftRadius: 8,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#C6D2DF',
+    backgroundColor: 'rgba(255,255,255,0.76)',
+  },
+  authCard: {
+    marginTop: 24,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 20,
+    ...glassShadow,
+  },
+  cardTitle: {
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  cardDescription: {
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 20,
+    color: AUTH_COLORS.textMuted,
+  },
+  providerList: {
+    marginTop: 20,
     gap: 12,
   },
   providerButton: {
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.inputBorder,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonPressed: {
-    backgroundColor: 'rgba(59,130,246,0.04)',
-  },
-  buttonDisabled: {
-    opacity: 0.4,
-  },
-  buttonContent: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 2,
+  },
+  providerButtonPressed: {
+    transform: [{ translateY: 1 }],
+  },
+  providerButtonDisabled: {
+    opacity: 0.5,
+  },
+  googleMark: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '700',
+    color: '#4285F4',
+  },
+  appleMark: {
+    fontSize: 19,
+    lineHeight: 22,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
   },
   providerText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: AUTH_COLORS.text,
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 8,
-    paddingHorizontal: 4,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
-  },
-  dividerText: {
-    color: AUTH_COLORS.textFaint,
-    fontSize: 12,
-    fontWeight: '600',
-    marginHorizontal: 16,
-  },
-  inputSection: {
-    marginBottom: 4,
-  },
-  inputContainer: {
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.inputBorder,
-    backgroundColor: AUTH_COLORS.inputBackground,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  textInput: {
-    flex: 1,
-    color: AUTH_COLORS.text,
-    fontSize: 15,
-    fontWeight: '500',
-    ...authSingleLineInputStyle,
-    paddingLeft: 4,
-  },
-  phonePrefix: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  prefixText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: AUTH_COLORS.textMuted,
-  },
-  inputDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    marginHorizontal: 10,
-  },
-  textInputError: {
-    borderColor: AUTH_COLORS.danger,
-  },
-  errorText: {
-    color: AUTH_COLORS.danger,
     fontSize: 13,
-    marginTop: 6,
-    marginLeft: 14,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
   },
-  continueButton: {
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#000000',
+  termsRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  checkbox: {
+    marginTop: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#C9D6E4',
+    backgroundColor: 'rgba(255,255,255,0.70)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 3,
   },
-  continueButtonDisabled: {
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    shadowOpacity: 0,
-    elevation: 0,
+  checkboxChecked: {
+    borderColor: AUTH_COLORS.primary,
+    backgroundColor: AUTH_COLORS.primary,
   },
-  continueButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  legalFooter: {
-    marginTop: 8,
-    paddingHorizontal: 8,
-  },
-  legalText: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: AUTH_COLORS.textFaint,
-    textAlign: 'center',
-  },
-  legalLink: {
-    color: AUTH_COLORS.link,
-    fontWeight: '600',
-  },
-  modalOverlay: {
+  termsText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'flex-end',
+    fontSize: 10,
+    lineHeight: 20,
+    color: '#7B8490',
   },
-  modalContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  termsLink: {
+    fontWeight: '600',
+    color: AUTH_COLORS.link,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 32,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.90)',
+    backgroundColor: 'rgba(248,251,255,0.98)',
+    overflow: 'hidden',
+    shadowColor: '#23344D',
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: 0.24,
+    shadowRadius: 70,
+    elevation: 12,
+  },
+  modalCardContent: {
+    paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: '60%',
+    paddingBottom: 20,
   },
   modalHeader: {
     flexDirection: 'row',
+    gap: 12,
+  },
+  providerModalHeader: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+    marginBottom: 20,
+  },
+  agreementModalHeader: {
+    alignItems: 'flex-start',
+  },
+  modalProviderIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.80)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalGoogleIcon: {
+    backgroundColor: '#EEF4FF',
+  },
+  modalAppleIcon: {
+    backgroundColor: '#F4F5F7',
+  },
+  modalProviderMark: {
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  modalGoogleMark: {
+    color: '#4285F4',
+  },
+  modalAppleMark: {
+    color: AUTH_COLORS.text,
+  },
+  modalShieldIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.80)',
+    backgroundColor: '#E4F5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalHeaderText: {
+    flex: 1,
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    lineHeight: 22,
+    fontWeight: '600',
     color: AUTH_COLORS.text,
   },
-  modalCloseButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  modalCloseText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: AUTH_COLORS.primary,
-  },
-  countryList: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-  },
-  countryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  countryItemActive: {
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
-  },
-  countryFlag: {
-    fontSize: 20,
-    marginRight: 14,
-  },
-  countryName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: AUTH_COLORS.text,
-  },
-  countryCodeText: {
-    fontSize: 15,
-    fontWeight: '600',
+  modalSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 18,
     color: AUTH_COLORS.textMuted,
   },
-  dropdownArrow: {
-    fontSize: 8,
-    color: AUTH_COLORS.textMuted,
-    marginLeft: 2,
-    marginTop: 1,
+  modalBodyText: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 24,
+    color: '#3F4A58',
   },
-  searchWrapper: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  searchContainer: {
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: AUTH_COLORS.inputBorder,
-    backgroundColor: AUTH_COLORS.inputBackground,
+  modalInfoBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#DDE8F4',
+    backgroundColor: 'rgba(255,255,255,0.96)',
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    paddingVertical: 16,
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    elevation: 2,
   },
-  searchInput: {
-    flex: 1,
-    color: AUTH_COLORS.text,
+  agreementModalInfoBox: {
+    marginTop: 16,
+  },
+  modalInfoText: {
+    fontSize: 13,
+    lineHeight: 24,
+    color: '#3F4A58',
+  },
+  agreementModalInfoText: {
+    fontSize: 12,
+    lineHeight: 20,
+  },
+  modalDividerText: {
+    color: '#C5CED8',
+  },
+  modalButtonRow: {
+    marginTop: 20,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalSecondaryButton: {
+    flex: 0.78,
+    height: 46,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DDE8F4',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 2,
+  },
+  modalSecondaryText: {
     fontSize: 14,
-    fontWeight: '500',
-    padding: 0,
+    fontWeight: '600',
+    color: '#3F4A58',
+  },
+  modalPrimaryButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 8,
+    backgroundColor: AUTH_COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: AUTH_COLORS.primary,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 3,
+  },
+  modalPrimaryButtonDisabled: {
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  modalPrimaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });

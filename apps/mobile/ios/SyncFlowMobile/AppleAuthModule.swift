@@ -12,10 +12,35 @@ class AppleAuthModule: NSObject, ASAuthorizationControllerDelegate, ASAuthorizat
     return true
   }
   
+  private func exportedConstants() -> [AnyHashable: Any] {
+    let market = Bundle.main.object(forInfoDictionaryKey: "SyncFlowMarket") as? String ?? "cn"
+    var constants: [AnyHashable: Any] = ["SYNCFLOW_MARKET": market]
+    guard market == "global" else {
+      return constants
+    }
+    let environment = ProcessInfo.processInfo.environment
+    [
+      "SYNCFLOW_VISUAL_QA",
+      "SYNCFLOW_VISUAL_QA_EMAIL",
+      "SYNCFLOW_VISUAL_QA_HOME_EMPTY",
+      "SYNCFLOW_VISUAL_QA_ROUTE",
+      "SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW",
+    ].forEach { key in
+      if let value = environment[key] {
+        constants[key] = value
+      }
+    }
+    return constants
+  }
+
   @objc
   func constantsToExport() -> [AnyHashable : Any]! {
-    let market = Bundle.main.object(forInfoDictionaryKey: "SyncFlowMarket") as? String ?? "cn"
-    return ["SYNCFLOW_MARKET": market]
+    return exportedConstants()
+  }
+
+  @objc
+  func getConstants() -> [AnyHashable : Any]! {
+    return exportedConstants()
   }
   
   @objc

@@ -22,30 +22,45 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { LoginGlobalScreen } from '../screens/LoginGlobalScreen';
 import { SmsVerifyScreen } from '../screens/SmsVerifyScreen';
 import { DeviceDiscoveryScreen } from '../screens/DeviceDiscoveryScreen';
+import { DeviceDiscoveryGlobalScreen } from '../screens/DeviceDiscoveryGlobalScreen';
 import { CodeVerifyScreen } from '../screens/CodeVerifyScreen';
 import { ConnectionTutorialScreen } from '../screens/ConnectionTutorialScreen';
 import { SyncActivityScreen } from '../screens/SyncActivityScreen';
+import { SyncActivityGlobalScreen } from '../screens/SyncActivityGlobalScreen';
 import { AlbumWorkbenchScreen } from '../screens/AlbumWorkbenchScreen';
 import { SharedFilesScreen } from '../screens/SharedFilesScreen';
+import { SharedFilesGlobalScreen } from '../screens/SharedFilesGlobalScreen';
 import { PhoneSyncSpaceScreen } from '../screens/PhoneSyncSpaceScreen';
+import { PhoneSyncSpaceGlobalScreen } from '../screens/PhoneSyncSpaceGlobalScreen';
 import { RemoteAccessScreen } from '../screens/RemoteAccessScreen';
+import { RemoteAccessGlobalScreen } from '../screens/RemoteAccessGlobalScreen';
+import { DownloadRecordsGlobalScreen } from '../screens/DownloadRecordsGlobalScreen';
 import { HistoryScreen } from '../screens/HistoryScreen';
+import { HistoryGlobalScreen } from '../screens/HistoryGlobalScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { SettingsGlobalScreen } from '../screens/SettingsGlobalScreen';
 import { HelpScreen } from '../screens/HelpScreen';
+import { HelpGlobalScreen } from '../screens/HelpGlobalScreen';
 import { QRScannerScreen } from '../screens/QRScannerScreen';
 import { SubscriptionScreen } from '../screens/SubscriptionScreen';
+import { SubscriptionGlobalScreen } from '../screens/SubscriptionGlobalScreen';
 import { AutoUploadSettingsScreen } from '../screens/AutoUploadSettingsScreen';
+import { AutoUploadSettingsGlobalScreen } from '../screens/AutoUploadSettingsGlobalScreen';
 import {
   AUTH_COLORS,
   AuthScreenShell,
 } from '../components/auth/AuthScreenShell';
+import { GlobalBottomTabBar } from '../components/GlobalBottomTabBar';
 import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
+import { resolveVisualQaInitialRoute } from '../dev/visualQa';
 
 // ---------------------------------------------------------------------------
 // Param lists
 // ---------------------------------------------------------------------------
+
+type MainTabKey = 'home' | 'files' | 'settings';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -65,6 +80,7 @@ export type RootStackParamList = {
   SharedFiles: undefined;
   PhoneSyncSpace: undefined;
   RemoteAccess: { path?: string } | undefined;
+  DownloadRecords: undefined;
   History: undefined;
   Settings: undefined;
   Help: undefined;
@@ -312,6 +328,33 @@ function AuthedStack({
   userStatus: AccountStatus;
   subscription: SubscriptionInfo | null;
 }) {
+  const globalMarket = isGlobalMarket();
+  const DeviceDiscoveryComponent = globalMarket
+    ? DeviceDiscoveryGlobalScreen
+    : DeviceDiscoveryScreen;
+  const SyncActivityComponent = globalMarket
+    ? GlobalMainTabsScreen
+    : SyncActivityScreen;
+  const SharedFilesComponent = globalMarket
+    ? GlobalMainTabsScreen
+    : SharedFilesScreen;
+  const PhoneSyncSpaceComponent = globalMarket
+    ? PhoneSyncSpaceGlobalScreen
+    : PhoneSyncSpaceScreen;
+  const RemoteAccessComponent = globalMarket
+    ? RemoteAccessGlobalScreen
+    : RemoteAccessScreen;
+  const HistoryComponent = globalMarket ? HistoryGlobalScreen : HistoryScreen;
+  const SettingsComponent = globalMarket
+    ? GlobalMainTabsScreen
+    : SettingsScreen;
+  const HelpComponent = globalMarket ? HelpGlobalScreen : HelpScreen;
+  const SubscriptionComponent = globalMarket
+    ? SubscriptionGlobalScreen
+    : SubscriptionScreen;
+  const AutoUploadSettingsComponent = globalMarket
+    ? AutoUploadSettingsGlobalScreen
+    : AutoUploadSettingsScreen;
   const [initialRoute, setInitialRoute] = useState<
     keyof RootStackParamList | null
   >(null);
@@ -328,6 +371,11 @@ function AuthedStack({
         !isFeatureAccessAllowed(effectiveStatus)
       ) {
         if (!cancelled) setInitialRoute('Subscription');
+        return;
+      }
+      const visualQaRoute = resolveVisualQaInitialRoute();
+      if (visualQaRoute) {
+        if (!cancelled) setInitialRoute(visualQaRoute);
         return;
       }
       const route = await resolveDefaultAuthedRoute();
@@ -356,7 +404,7 @@ function AuthedStack({
       >
         <Stack.Screen
           name="DeviceDiscovery"
-          component={DeviceDiscoveryScreen}
+          component={DeviceDiscoveryComponent}
         />
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
         <Stack.Screen
@@ -364,21 +412,70 @@ function AuthedStack({
           component={ConnectionTutorialScreen}
         />
         <Stack.Screen name="CodeVerify" component={CodeVerifyScreen} />
-        <Stack.Screen name="SyncActivity" component={SyncActivityScreen} />
+        <Stack.Screen name="SyncActivity" component={SyncActivityComponent} />
         <Stack.Screen name="AlbumWorkbench" component={AlbumWorkbenchScreen} />
-        <Stack.Screen name="SharedFiles" component={SharedFilesScreen} />
-        <Stack.Screen name="PhoneSyncSpace" component={PhoneSyncSpaceScreen} />
-        <Stack.Screen name="RemoteAccess" component={RemoteAccessScreen} />
-        <Stack.Screen name="History" component={HistoryScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Help" component={HelpScreen} />
-        <Stack.Screen name="Subscription" component={SubscriptionScreen} />
+        <Stack.Screen name="SharedFiles" component={SharedFilesComponent} />
+        <Stack.Screen
+          name="PhoneSyncSpace"
+          component={PhoneSyncSpaceComponent}
+        />
+        <Stack.Screen name="RemoteAccess" component={RemoteAccessComponent} />
+        {globalMarket ? (
+          <Stack.Screen
+            name="DownloadRecords"
+            component={DownloadRecordsGlobalScreen}
+          />
+        ) : null}
+        <Stack.Screen name="History" component={HistoryComponent} />
+        <Stack.Screen name="Settings" component={SettingsComponent} />
+        <Stack.Screen name="Help" component={HelpComponent} />
+        <Stack.Screen name="Subscription" component={SubscriptionComponent} />
         <Stack.Screen
           name="AutoUploadSettings"
-          component={AutoUploadSettingsScreen}
+          component={AutoUploadSettingsComponent}
         />
       </Stack.Navigator>
     </>
+  );
+}
+
+function getMainTabForRouteName(
+  routeName: keyof RootStackParamList | undefined,
+): MainTabKey {
+  if (routeName === 'SharedFiles') return 'files';
+  if (routeName === 'Settings') return 'settings';
+  return 'home';
+}
+
+function GlobalMainTabsScreen({
+  route,
+}: {
+  route: { name: keyof RootStackParamList };
+}) {
+  const [activeTab, setActiveTab] = useState<MainTabKey>(() =>
+    getMainTabForRouteName(route.name),
+  );
+
+  useEffect(() => {
+    setActiveTab(getMainTabForRouteName(route.name));
+  }, [route.name]);
+
+  return (
+    <View testID="global-main-tabs-root" style={styles.mainTabsRoot}>
+      <View style={styles.mainTabsContent}>
+        {activeTab === 'home' ? (
+          <SyncActivityGlobalScreen showBottomTabBar={false} />
+        ) : activeTab === 'files' ? (
+          <SharedFilesGlobalScreen showBottomTabBar={false} />
+        ) : (
+          <SettingsGlobalScreen showBottomTabBar={false} />
+        )}
+      </View>
+      <GlobalBottomTabBar
+        activeTab={activeTab}
+        onTabPress={setActiveTab}
+      />
+    </View>
   );
 }
 
@@ -537,6 +634,13 @@ const styles = StyleSheet.create({
     backgroundColor: AUTH_COLORS.background,
   },
   authRouteContent: {
+    flex: 1,
+  },
+  mainTabsRoot: {
+    flex: 1,
+    backgroundColor: '#F7FBFF',
+  },
+  mainTabsContent: {
     flex: 1,
   },
   loading: {

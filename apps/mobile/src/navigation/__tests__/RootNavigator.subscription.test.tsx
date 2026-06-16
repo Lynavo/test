@@ -10,8 +10,18 @@
  * the component tree to mount in a jsdom/React-Native test environment.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
-import { NativeModules } from 'react-native';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
+import { NativeModules, StyleSheet } from 'react-native';
+
+declare const process: { env: Record<string, string | undefined> };
+
+type TestGlobal = typeof globalThis & { __DEV__?: boolean };
+const testGlobal = globalThis as TestGlobal;
 
 // ---------------------------------------------------------------------------
 // react-native-gesture-handler — must be mocked before @react-navigation/stack
@@ -163,6 +173,18 @@ jest.mock('../../screens/DeviceDiscoveryScreen', () => ({
   },
 }));
 
+jest.mock('../../screens/DeviceDiscoveryGlobalScreen', () => ({
+  DeviceDiscoveryGlobalScreen: () => {
+    const R = require('react');
+    const { Text } = require('react-native');
+    return R.createElement(
+      Text,
+      { testID: 'global-device-discovery-screen' },
+      'GlobalDeviceDiscovery',
+    );
+  },
+}));
+
 jest.mock('../../screens/SyncActivityScreen', () => ({
   SyncActivityScreen: () => {
     const R = require('react');
@@ -171,6 +193,22 @@ jest.mock('../../screens/SyncActivityScreen', () => ({
       Text,
       { testID: 'sync-activity-screen' },
       'SyncActivity',
+    );
+  },
+}));
+
+jest.mock('../../screens/SyncActivityGlobalScreen', () => ({
+  SyncActivityGlobalScreen: ({
+    showBottomTabBar,
+  }: {
+    showBottomTabBar?: boolean;
+  }) => {
+    const R = require('react');
+    const { Text } = require('react-native');
+    return R.createElement(
+      Text,
+      { testID: 'global-sync-activity-screen' },
+      `GlobalSyncActivity showBottomTabBar=${String(showBottomTabBar)}`,
     );
   },
 }));
@@ -216,13 +254,29 @@ jest.mock('../../screens/AlbumWorkbenchScreen', () => ({
 }));
 
 jest.mock('../../screens/SharedFilesScreen', () => ({
-  SharedFilesScreen: () => {
+  SharedFilesScreen: ({ showBottomTabBar }: { showBottomTabBar?: boolean }) => {
     const R = require('react');
     const { Text } = require('react-native');
     return R.createElement(
       Text,
       { testID: 'shared-files-screen' },
-      'SharedFiles',
+      `SharedFiles showBottomTabBar=${String(showBottomTabBar)}`,
+    );
+  },
+}));
+
+jest.mock('../../screens/SharedFilesGlobalScreen', () => ({
+  SharedFilesGlobalScreen: ({
+    showBottomTabBar,
+  }: {
+    showBottomTabBar?: boolean;
+  }) => {
+    const R = require('react');
+    const { Text } = require('react-native');
+    return R.createElement(
+      Text,
+      { testID: 'shared-files-global-screen' },
+      `SharedFilesGlobal showBottomTabBar=${String(showBottomTabBar)}`,
     );
   },
 }));
@@ -236,10 +290,30 @@ jest.mock('../../screens/HistoryScreen', () => ({
 }));
 
 jest.mock('../../screens/SettingsScreen', () => ({
-  SettingsScreen: () => {
+  SettingsScreen: ({ showBottomTabBar }: { showBottomTabBar?: boolean }) => {
     const R = require('react');
     const { Text } = require('react-native');
-    return R.createElement(Text, { testID: 'settings-screen' }, 'Settings');
+    return R.createElement(
+      Text,
+      { testID: 'settings-screen' },
+      `Settings showBottomTabBar=${String(showBottomTabBar)}`,
+    );
+  },
+}));
+
+jest.mock('../../screens/SettingsGlobalScreen', () => ({
+  SettingsGlobalScreen: ({
+    showBottomTabBar,
+  }: {
+    showBottomTabBar?: boolean;
+  }) => {
+    const R = require('react');
+    const { Text } = require('react-native');
+    return R.createElement(
+      Text,
+      { testID: 'settings-global-screen' },
+      `SettingsGlobal showBottomTabBar=${String(showBottomTabBar)}`,
+    );
   },
 }));
 
@@ -326,8 +400,18 @@ beforeAll(async () => {
   await i18n.changeLanguage('zh-Hans');
 });
 
+const originalDev = testGlobal.__DEV__;
+const originalEnv = { ...process.env };
+
 beforeEach(() => {
   jest.clearAllMocks();
+  testGlobal.__DEV__ = true;
+  process.env = { ...originalEnv };
+  delete process.env.SYNCFLOW_VISUAL_QA;
+  delete process.env.SYNCFLOW_VISUAL_QA_ROUTE;
+  (NativeModules as Record<string, unknown>).AppleAuthModule = {
+    SYNCFLOW_MARKET: 'cn',
+  };
 
   // NativeSyncEngine.getBindingState returns null → falls through to DeviceDiscovery
   (NativeModules as Record<string, unknown>).NativeSyncEngine = {
@@ -335,6 +419,11 @@ beforeEach(() => {
     addListener: jest.fn(),
     removeListeners: jest.fn(),
   };
+});
+
+afterAll(() => {
+  testGlobal.__DEV__ = originalDev;
+  process.env = originalEnv;
 });
 
 // ---------------------------------------------------------------------------
@@ -376,5 +465,68 @@ describe('RootNavigator — SUBSCRIPTION_ENFORCEMENT', () => {
       expect(screen.getByTestId('device-discovery-screen')).toBeTruthy(),
     );
     expect(screen.queryByTestId('subscription-screen')).toBeNull();
+  });
+
+  test('uses visual QA whitelisted authed route as initial route', async () => {
+    process.env.SYNCFLOW_VISUAL_QA = '1';
+    process.env.SYNCFLOW_VISUAL_QA_ROUTE = 'History';
+
+    renderWith('subscribed');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('history-screen')).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('device-discovery-screen')).toBeNull();
+  });
+
+  test('global connected session renders home, remote resources, and settings inside the main tab shell', async () => {
+    (NativeModules as Record<string, unknown>).AppleAuthModule = {
+      SYNCFLOW_MARKET: 'global',
+    };
+    (NativeModules as Record<string, unknown>).NativeSyncEngine = {
+      getBindingState: jest.fn().mockResolvedValue({ deviceId: 'desktop-1' }),
+      addListener: jest.fn(),
+      removeListeners: jest.fn(),
+    };
+
+    renderWith('subscribed');
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('GlobalSyncActivity showBottomTabBar=false'),
+      ).toBeTruthy(),
+    );
+    expect(
+      StyleSheet.flatten(screen.getByTestId('global-main-tabs-root').props.style)
+        .backgroundColor,
+    ).toBe('#F7FBFF');
+    expect(
+      StyleSheet.flatten(
+        screen.getByTestId('global-bottom-tab-bar-outer').props.style,
+      ).position,
+    ).toBeUndefined();
+    expect(screen.queryByTestId('bottom-tab-bar-outer')).toBeNull();
+    expect(screen.getByTestId('global-bottom-tab-files')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('global-bottom-tab-files'));
+    await waitFor(() =>
+      expect(
+        screen.getByText('SharedFilesGlobal showBottomTabBar=false'),
+      ).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId('global-bottom-tab-settings'));
+    await waitFor(() =>
+      expect(
+        screen.getByText('SettingsGlobal showBottomTabBar=false'),
+      ).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId('global-bottom-tab-home'));
+    await waitFor(() =>
+      expect(
+        screen.getByText('GlobalSyncActivity showBottomTabBar=false'),
+      ).toBeTruthy(),
+    );
   });
 });

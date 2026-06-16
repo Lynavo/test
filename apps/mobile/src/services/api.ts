@@ -86,6 +86,8 @@ const CLIENT_APP_HEADER = 'X-Client-App';
 const CLIENT_PLATFORM_HEADER = 'X-Client-Platform';
 const CLIENT_VERSION_HEADER = 'X-Client-Version';
 const CLIENT_BUILD_HEADER = 'X-Client-Build';
+const DEV_SANDBOX_ACCESS_TOKEN_PREFIX = 'mock-sandbox-access-token';
+const DEV_SANDBOX_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
 
 // On iOS, the first fetch after a cold start can fail with
 // NSURLErrorCannotFindHost (-1003) when the DNS resolver hasn't warmed up.
@@ -227,10 +229,7 @@ async function request<T>(
   // return mock responses locally to prevent 401 token refresh loops or network failures.
   const accessToken = getAccessToken();
   if (
-    typeof __DEV__ !== 'undefined' &&
-    __DEV__ &&
-    accessToken &&
-    accessToken.startsWith('mock-sandbox-access-token')
+    isDevSandboxMockAccessToken(accessToken)
   ) {
     console.log(`[Sandbox Mock API] Intercepting path="${path}" method=${method}`);
     if (path === '/user/profile') {
@@ -281,11 +280,18 @@ async function request<T>(
     if (path === '/auth/refresh') {
       return {
         access_token: accessToken,
-        refresh_token: 'mock-sandbox-refresh-token',
+        refresh_token: DEV_SANDBOX_REFRESH_TOKEN,
       } as unknown as T;
     }
     if (path === '/auth/logout') {
       return {} as unknown as T;
+    }
+    if (path === '/tunnel/turn-credentials') {
+      return {
+        username: 'visual-qa',
+        credential: 'visual-qa',
+        urls: ['turn:127.0.0.1:3478?transport=udp'],
+      } as unknown as T;
     }
   }
 
@@ -390,6 +396,14 @@ async function doRefreshToken(): Promise<boolean> {
     return false;
   }
 
+  const access = getAccessToken();
+  if (
+    isDevSandboxMockAccessToken(access) &&
+    refresh === DEV_SANDBOX_REFRESH_TOKEN
+  ) {
+    return true;
+  }
+
   let res: Response;
   try {
     res = await fetchWithTimeout(
@@ -435,6 +449,15 @@ async function doRefreshToken(): Promise<boolean> {
   // refresh token itself is dead; clear local auth so the user re-authenticates.
   await clearAuthFromModule();
   return false;
+}
+
+function isDevSandboxMockAccessToken(token: string | null): token is string {
+  return (
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__ &&
+    typeof token === 'string' &&
+    token.startsWith(DEV_SANDBOX_ACCESS_TOKEN_PREFIX)
+  );
 }
 
 async function clearAuthFromModule(transition?: 'session_replaced') {

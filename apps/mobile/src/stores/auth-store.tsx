@@ -23,7 +23,13 @@ import {
 } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
+import {
+  applyVisualQaRemotePreviewFlag,
+  getVisualQaMockTokens,
+} from '../dev/visualQa';
 import { bootstrapAuthedSession } from './bootstrapAuthedSession';
+
+applyVisualQaRemotePreviewFlag();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -398,8 +404,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     loadPersistedTokens().then(({ accessToken, refreshToken }) => {
       if (cancelled) return;
-      syncTokensToModule(accessToken, refreshToken);
-      dispatch({ type: 'HYDRATE', accessToken, refreshToken });
+      const visualQaTokens =
+        accessToken || refreshToken ? null : getVisualQaMockTokens();
+      const hydratedAccessToken = visualQaTokens?.accessToken ?? accessToken;
+      const hydratedRefreshToken = visualQaTokens?.refreshToken ?? refreshToken;
+      if (visualQaTokens) {
+        persistTokens(visualQaTokens.accessToken, visualQaTokens.refreshToken);
+      }
+      syncTokensToModule(hydratedAccessToken, hydratedRefreshToken);
+      dispatch({
+        type: 'HYDRATE',
+        accessToken: hydratedAccessToken,
+        refreshToken: hydratedRefreshToken,
+      });
     });
     return () => {
       cancelled = true;

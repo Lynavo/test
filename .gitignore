@@ -43,3 +43,5 @@ AuthKey_*.p8
 # Local docs (not tracked)
 Vivi Drop-*.md
 UI/
+!apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/ui/
+!apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/ui/**

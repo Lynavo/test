@@ -123,14 +123,12 @@ jest.mock('../../services/SyncEngineModule', () => ({
   interruptAutoUpload: jest.fn(),
   enableAutoUpload: jest.fn(),
   browseAlbum: jest.fn().mockResolvedValue([]),
-  getAlbumStats: jest
-    .fn()
-    .mockResolvedValue({
-      totalCount: 0,
-      transferredCount: 0,
-      queuedCount: 0,
-      pendingCount: 0,
-    }),
+  getAlbumStats: jest.fn().mockResolvedValue({
+    totalCount: 0,
+    transferredCount: 0,
+    queuedCount: 0,
+    pendingCount: 0,
+  }),
   submitManualUpload: jest.fn(),
   getAutoUploadConfig: jest.fn().mockResolvedValue({
     enabled: false,
@@ -268,9 +266,9 @@ describe('RootNavigator — ProfileErrorScreen logout escape hatch', () => {
 
     renderProfileError(clearAuth);
 
-    // i18n is configured to zh-Hans in this test suite, so the logout
-    // label renders as "登出" (settings.actions.logout).
-    const logoutBtn = await screen.findByText('登出');
+    const logoutBtn = await screen.findByText(
+      i18n.t('settings.actions.logout'),
+    );
     fireEvent.press(logoutBtn);
 
     await waitFor(() => {
@@ -295,7 +293,9 @@ describe('RootNavigator — ProfileErrorScreen logout escape hatch', () => {
 
     renderProfileError(clearAuth);
 
-    const logoutBtn = await screen.findByText('登出');
+    const logoutBtn = await screen.findByText(
+      i18n.t('settings.actions.logout'),
+    );
     fireEvent.press(logoutBtn);
 
     await waitFor(() => {
@@ -321,7 +321,9 @@ describe('RootNavigator — ProfileErrorScreen logout escape hatch', () => {
 
     renderProfileError(clearAuth);
 
-    const logoutBtn = await screen.findByText('登出');
+    const logoutBtn = await screen.findByText(
+      i18n.t('settings.actions.logout'),
+    );
     fireEvent.press(logoutBtn);
 
     await waitFor(() => {

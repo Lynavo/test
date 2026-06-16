@@ -9,9 +9,11 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.mrousavy.camera.react.CameraPackage
+import com.vividrop.mobile.china.market.NativeMarketConfigPackage
 import com.vividrop.mobile.china.payments.NativeMainlandPaymentPackage
 import com.vividrop.mobile.china.sync.NativeSyncEngineModule
 import com.vividrop.mobile.china.sync.NativeSyncEnginePackage
+import com.vividrop.mobile.china.ui.VividropUiPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -21,8 +23,10 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(CameraPackage())
+          add(NativeMarketConfigPackage())
           add(NativeMainlandPaymentPackage())
           add(NativeSyncEnginePackage())
+          add(VividropUiPackage())
         },
     )
   }
