@@ -251,6 +251,7 @@ export interface SettingsDTO {
   shareAddress: string;
   shareStatus: ShareStatus;
   shareName: string;
+  remoteAccessEnabled?: boolean;
 }
 
 export interface ShareStatusDTO {

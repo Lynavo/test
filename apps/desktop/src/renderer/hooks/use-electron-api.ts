@@ -102,6 +102,8 @@ const mockFiles: ElectronAPI['files'] = {
   selectFile: async () => null,
   selectFolder: async () => null,
   copyToClipboard: async () => {},
+  checkFolderPermission: async () => ({ granted: true }),
+  requestFolderPermission: async () => ({ granted: true }),
 };
 
 const mockAuth: ElectronAPI['auth'] = {

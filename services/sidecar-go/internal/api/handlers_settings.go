@@ -16,26 +16,29 @@ import (
 )
 
 type settingsDTO struct {
-	DeviceName     string `json:"deviceName"`
-	ConnectionCode string `json:"connectionCode"`
-	RootPath       string `json:"rootPath"`
-	ReceivePath    string `json:"receivePath"`
-	PersonalPath   string `json:"personalPath"`
-	PersonalMode   string `json:"personalPathMode,omitempty"`
-	SharedPath     string `json:"sharedPath"`
-	ShareAddress   string `json:"shareAddress"`
-	ShareStatus    string `json:"shareStatus"`
-	ShareName      string `json:"shareName"`
+	DeviceName          string `json:"deviceName"`
+	ConnectionCode      string `json:"connectionCode"`
+	RootPath            string `json:"rootPath"`
+	ReceivePath         string `json:"receivePath"`
+	PersonalPath        string `json:"personalPath"`
+	PersonalMode        string `json:"personalPathMode,omitempty"`
+	SharedPath          string `json:"sharedPath"`
+	ShareAddress        string `json:"shareAddress"`
+	ShareStatus         string `json:"shareStatus"`
+	ShareName           string `json:"shareName"`
+	RemoteAccessEnabled bool   `json:"remoteAccessEnabled"`
 }
 
 type updateSettingsRequest struct {
-	DeviceName   *string `json:"deviceName,omitempty"`
-	RootPath     *string `json:"rootPath,omitempty"`
-	ReceivePath  *string `json:"receivePath,omitempty"`
-	PersonalPath *string `json:"personalPath,omitempty"`
+	DeviceName          *string `json:"deviceName,omitempty"`
+	RootPath            *string `json:"rootPath,omitempty"`
+	ReceivePath         *string `json:"receivePath,omitempty"`
+	PersonalPath        *string `json:"personalPath,omitempty"`
+	RemoteAccessEnabled *bool   `json:"remoteAccessEnabled,omitempty"`
 }
 
 const personalShareRootSettingKey = "personal_share_root"
+const remoteAccessEnabledSettingKey = "remote_access_enabled"
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dto, err := s.assembleSettingsDTO()
@@ -207,6 +210,19 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.RemoteAccessEnabled != nil {
+		val := "false"
+		if *req.RemoteAccessEnabled {
+			val = "true"
+		}
+		if err := s.store.SetSetting(remoteAccessEnabledSettingKey, val); err != nil {
+			slog.Error("update remote access enabled", "err", err)
+			writeError(w, http.StatusInternalServerError, "failed to update settings")
+			return
+		}
+		slog.Info("remote access setting updated", "enabled", val)
+	}
+
 	dto, err := s.assembleSettingsDTO()
 	if err != nil {
 		slog.Error("get updated settings", "err", err)
@@ -244,22 +260,30 @@ func (s *Server) assembleSettingsDTO() (*settingsDTO, error) {
 		return nil, err
 	}
 
+	remoteAccessEnabled := true
+	if val, err := s.store.GetSetting(remoteAccessEnabledSettingKey); err == nil {
+		remoteAccessEnabled = (val == "true")
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
 	personalMode := ""
 	if usesWindowsPersonalVirtualDrivesForPath(pathConfig.PersonalDir()) {
 		personalMode = personalPathModeWindowsDrives
 	}
 
 	return &settingsDTO{
-		DeviceName:     deviceName,
-		ConnectionCode: code,
-		RootPath:       pathConfig.RootDir(),
-		ReceivePath:    pathConfig.ReceiveDir,
-		PersonalPath:   pathConfig.PersonalDir(),
-		PersonalMode:   personalMode,
-		SharedPath:     pathConfig.SharedDir(),
-		ShareAddress:   shareConfig.ShareURL,
-		ShareStatus:    shareConfig.ShareStatus,
-		ShareName:      shareConfig.ShareName,
+		DeviceName:          deviceName,
+		ConnectionCode:      code,
+		RootPath:            pathConfig.RootDir(),
+		ReceivePath:         pathConfig.ReceiveDir,
+		PersonalPath:        pathConfig.PersonalDir(),
+		PersonalMode:        personalMode,
+		SharedPath:          pathConfig.SharedDir(),
+		ShareAddress:        shareConfig.ShareURL,
+		ShareStatus:         shareConfig.ShareStatus,
+		ShareName:           shareConfig.ShareName,
+		RemoteAccessEnabled: remoteAccessEnabled,
 	}, nil
 }
 

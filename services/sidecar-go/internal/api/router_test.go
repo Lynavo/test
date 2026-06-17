@@ -2119,6 +2119,36 @@ func TestSharedListRejectsWindowsPathEscapes(t *testing.T) {
 	}
 }
 
+func TestPersonalListRejectsWhenRemoteAccessDisabled(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal dir: %v", err)
+	}
+	if err := st.SetSetting("remote_access_enabled", "false"); err != nil {
+		t.Fatalf("SetSetting: %v", err)
+	}
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "account-1"))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /personal/list: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
 func TestPersonalListRequiresDesktopAccountIdentity(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {

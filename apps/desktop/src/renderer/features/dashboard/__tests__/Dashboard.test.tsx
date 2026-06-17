@@ -43,6 +43,9 @@ describe('Dashboard', () => {
       files: {
         copyToClipboard: vi.fn().mockResolvedValue(undefined),
         selectFolder: vi.fn().mockResolvedValue('/new/receive/path'),
+        checkFolderPermission: vi.fn().mockResolvedValue({ granted: true }),
+        requestFolderPermission: vi.fn().mockResolvedValue({ granted: true }),
+        openExternal: vi.fn().mockResolvedValue(undefined),
       },
       support: {},
       sidecar: {
@@ -63,7 +66,15 @@ describe('Dashboard', () => {
       events: {
         onSidecarEvent: vi.fn(() => vi.fn()),
       },
+      platform: {
+        isMac: vi.fn().mockReturnValue(false),
+        isWindows: vi.fn().mockReturnValue(false),
+        getHomeDir: vi.fn().mockReturnValue('/home/test'),
+        getHostName: vi.fn().mockReturnValue('test-host'),
+        getLocalIPs: vi.fn().mockReturnValue([]),
+      },
     };
+
   });
 
   it('renders the 3 main cards: 连接码, 远程访问, 接收目录', () => {

@@ -9,6 +9,7 @@ import {
   Smartphone,
   Copy,
   Check,
+  ShieldAlert,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
@@ -41,9 +42,10 @@ export function Dashboard() {
     }
   };
 
-  const [remoteAccess, setRemoteAccess] = useState(() => {
-    return localStorage.getItem('remoteAccessEnabled') !== 'false';
-  });
+
+
+  // macOS folder permission state (null = unknown / not mac)
+  const [folderPermissionGranted, setFolderPermissionGranted] = useState<boolean | null>(null);
 
   // Load stats on mount
   useEffect(() => {
@@ -68,11 +70,53 @@ export function Dashboard() {
     return unsub;
   }, []);
 
-  const toggleRemoteAccess = () => {
-    const next = !remoteAccess;
-    setRemoteAccess(next);
-    localStorage.setItem('remoteAccessEnabled', String(next));
-    toast.success(next ? '远端访问已开启' : '远端访问已关闭');
+  // Check macOS Files & Folders permission on mount
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api) return;
+    if (!api.platform.isMac()) {
+      setFolderPermissionGranted(null); // not applicable on non-mac
+      return;
+    }
+    void api.files.checkFolderPermission().then((r) => {
+      setFolderPermissionGranted(r.granted);
+    });
+  }, []);
+
+  const toggleRemoteAccess = async () => {
+    const next = !settings.remoteAccessEnabled;
+    try {
+      const updated = await window.electronAPI?.sidecar.updateSettings({
+        remoteAccessEnabled: next,
+      });
+      if (updated) {
+        useSettingsStore.getState().updateSettings(updated);
+        toast.success(next ? '远端访问已开启' : '远端访问已关闭');
+      }
+    } catch (err) {
+      console.error('Failed to toggle remote access:', err);
+      toast.error('修改远端访问状态失败');
+    }
+  };
+
+  const handleRequestFolderPermission = async () => {
+    const api = window.electronAPI;
+    if (!api) return;
+    try {
+      const result = await api.files.requestFolderPermission();
+      setFolderPermissionGranted(result.granted);
+      if (result.granted) {
+        toast.success('文件夹访问权限已授权');
+      } else {
+        toast.error('未获得文件夹权限，请在系统设置中手动授权');
+        // Open macOS Privacy & Security settings
+        void api.files.openExternal(
+          'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders',
+        );
+      }
+    } catch {
+      toast.error('权限请求失败');
+    }
   };
 
   const handleDoubleClickCode = async () => {
@@ -256,16 +300,34 @@ export function Dashboard() {
                 onClick={toggleRemoteAccess}
                 aria-label="远程访问开关"
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  remoteAccess ? 'bg-[#17191c]' : 'bg-slate-200'
+                  settings.remoteAccessEnabled ? 'bg-[#17191c]' : 'bg-slate-200'
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                    remoteAccess ? 'translate-x-5' : 'translate-x-0'
+                    settings.remoteAccessEnabled ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
             </div>
+
+            {/* macOS Files & Folders permission banner */}
+            {folderPermissionGranted === false && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-amber-200/80 bg-amber-50/70 px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
+                  <p className="text-xs text-amber-700">尚未获得文件夹访问权限，手机将无法浏览此电脑的文件</p>
+                </div>
+                <button
+                  id="btn-request-folder-permission"
+                  type="button"
+                  onClick={handleRequestFolderPermission}
+                  className="shrink-0 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-[0.97]"
+                >
+                  授权访问
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="rounded-lg border border-white/70 bg-white/46 p-5 shadow-[0_18px_54px_rgba(70,96,138,0.1)] backdrop-blur-xl">

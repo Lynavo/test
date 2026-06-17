@@ -37,6 +37,7 @@ const initialSettings: SettingsDTO = {
   shareAddress: '',
   shareStatus: 'unknown' as const,
   shareName: '',
+  remoteAccessEnabled: true,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

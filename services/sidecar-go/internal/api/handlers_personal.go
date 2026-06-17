@@ -33,6 +33,15 @@ func (s *Server) authorizePersonalRequest(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) authorizePersonalRequestAccountID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	remoteAccessEnabled := true
+	if val, err := s.store.GetSetting("remote_access_enabled"); err == nil {
+		remoteAccessEnabled = (val == "true")
+	}
+	if !remoteAccessEnabled {
+		writeError(w, http.StatusForbidden, "remote access is disabled")
+		return "", false
+	}
+
 	desktopAccountID, authBaseURL := s.getDesktopAuthContext()
 	if desktopAccountID == "" || authBaseURL == "" {
 		writeError(w, http.StatusUnauthorized, "desktop account identity is unavailable")
