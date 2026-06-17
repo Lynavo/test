@@ -33,7 +33,12 @@ import {
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import type { DesktopSharedResourceDTO, DirectoryFileDTO } from '@syncflow/contracts';
-import { documentMimeType, isImageFile, isVideoFile } from '../utils/file-preview';
+import {
+  documentMimeType,
+  documentPreviewUri,
+  isImageFile,
+  isVideoFile,
+} from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
 
@@ -310,7 +315,7 @@ export function RemoteAccessScreen() {
           item.displayName,
         );
         await viewDocument({
-          uri: localPath,
+          uri: documentPreviewUri(localPath),
           headerTitle: item.displayName,
           mimeType: documentMimeType(item.displayName),
         });

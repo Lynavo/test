@@ -10,6 +10,7 @@ import type {
 import {
   browseDirectory,
   downloadDirectoryFile,
+  downloadReceivedFile,
   getClientId,
   getDirectoryFileStreamUrl,
   prepareDirectoryFilePreview,
@@ -290,29 +291,6 @@ async function receivedLibraryFileUrl(
   return buildReceivedMediaUrl(desktop, kind, clientId, clientName, fileKey);
 }
 
-function isReceivedDownloadEndpointUnavailableError(error: unknown): boolean {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-  return /\b(404|405|501)\b/i.test(message) || /page not found/i.test(message);
-}
-
-function receivedLibraryMediaDownloadFallbackKind(
-  item: ReceivedLibraryItemDTO,
-): 'preview' | 'stream' | null {
-  const filename = item.filename || item.displayName || '';
-  if (isVideoMedia(item.mediaType, filename)) {
-    return 'stream';
-  }
-  if (isImageMedia(item.mediaType, filename)) {
-    return 'preview';
-  }
-  return null;
-}
-
 function normalizeLocalDownloadResult(
   result: {
     savedToPhotos?: boolean;
@@ -549,34 +527,17 @@ export async function downloadResourceForGlobal(
 }
 
 export async function downloadReceivedLibraryItem(
-  desktop: DesktopInfo,
+  _desktop: DesktopInfo,
   item: ReceivedLibraryItemDTO,
 ): Promise<ResourceDownloadResult> {
-  if (typeof NativeSyncEngine?.downloadUrlToLocal !== 'function') {
-    throw new Error('Native local download is not available');
+  const fileKey = item.fileKey?.trim();
+  if (!fileKey) {
+    throw new Error('Received file key is required');
   }
-  const url = await receivedLibraryFileUrl(desktop, item, 'download');
   const filename =
     (item.filename || item.displayName || '').trim() || 'remote-file';
   const mediaType = item.mediaType ?? null;
-  let result;
-  try {
-    result = await NativeSyncEngine.downloadUrlToLocal(url, filename, mediaType);
-  } catch (error) {
-    const fallbackKind = receivedLibraryMediaDownloadFallbackKind(item);
-    if (
-      fallbackKind === null ||
-      !isReceivedDownloadEndpointUnavailableError(error)
-    ) {
-      throw error;
-    }
-    const fallbackUrl = await receivedLibraryFileUrl(desktop, item, fallbackKind);
-    result = await NativeSyncEngine.downloadUrlToLocal(
-      fallbackUrl,
-      filename,
-      mediaType,
-    );
-  }
+  const result = await downloadReceivedFile(fileKey, filename, mediaType);
   return normalizeLocalDownloadResult(result);
 }
 

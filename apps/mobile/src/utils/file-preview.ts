@@ -44,3 +44,15 @@ export function documentMimeType(filename?: string | null): string | undefined {
       return undefined;
   }
 }
+
+export function documentPreviewUri(localPath: string): string {
+  const trimmed = localPath.trim();
+  if (
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('content://') ||
+    trimmed.startsWith('ph://')
+  ) {
+    return trimmed;
+  }
+  return `file://${trimmed}`;
+}

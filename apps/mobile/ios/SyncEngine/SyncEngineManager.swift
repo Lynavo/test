@@ -8358,6 +8358,114 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         ]
     }
 
+    func downloadReceivedFile(fileKey: String, filename: String, mediaType: String?) async throws -> [String: Any] {
+        let trimmedFileKey = fileKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedFileKey.isEmpty else {
+            throw SyncEngineError.networkError("Received file key is required")
+        }
+        let safeFilename = filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "remote-file"
+            : filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowWake = SharedFilesRoutePolicy.shouldAttemptWake(
+            scope: SharedDirectoryScope.team.rawValue,
+            path: trimmedFileKey,
+            operation: "download"
+        )
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "wake decision scope=received path=\(trimmedFileKey) operation=download allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
+        )
+        var route = try await prepareSharedFilesRoute(reason: "download_received_file", allowWake: allowWake)
+        slog("[SharedFiles] downloadReceivedFile fileKey=%@ resolved_host=%@ is_tunnel=%@", trimmedFileKey, route.host, String(route.isTunnel))
+        syncDiagnosticsLog("SharedFiles", "downloadReceivedFile fileKey=\(trimmedFileKey) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+
+        let progressHandler: SharedFileDownloadProgressHandler = { bytesWritten, totalBytes, progress in
+            NativeSyncEngineModule.shared?.emitSharedFileDownloadProgress(
+                path: trimmedFileKey,
+                bytesWritten: bytesWritten,
+                totalBytes: totalBytes,
+                progress: progress
+            )
+        }
+        var result: SharedFilesService.DownloadResult?
+        var lastError: Error?
+        for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
+            let reason = attempt == 1 ? "download_received_file" : "download_received_file_retry"
+            do {
+                result = try await withSharedFileTunnelOperation(
+                    path: trimmedFileKey,
+                    reason: reason,
+                    isTunnelRoute: route.isTunnel
+                ) {
+                    try await sharedFilesService.downloadReceivedFile(
+                        fileKey: trimmedFileKey,
+                        clientId: getClientId(),
+                        clientName: getClientDisplayName(),
+                        filename: safeFilename,
+                        mediaType: mediaType,
+                        onProgress: progressHandler
+                    )
+                }
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "downloadReceivedFile completed fileKey=\(trimmedFileKey) attempt=\(attempt) is_tunnel=\(route.isTunnel)"
+                )
+                break
+            } catch {
+                lastError = error
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "downloadReceivedFile attempt failed fileKey=\(trimmedFileKey) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) is_tunnel=\(route.isTunnel) error=\(error)"
+                )
+                guard SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+                    isLocalSaveFailure: error is SharedFileLocalSaveError,
+                    httpStatusCode: sharedFileHTTPStatusCode(from: error)
+                ) else {
+                    syncDiagnosticsLog(
+                        "SharedFiles",
+                        "downloadReceivedFile not retrying fileKey=\(trimmedFileKey) attempt=\(attempt) error=\(error)"
+                    )
+                    throw error
+                }
+                guard attempt < SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts else {
+                    throw error
+                }
+                if SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: route.isTunnel) {
+                    route = try await recoverSharedFilesDownloadTunnelAfterRouteFailure(
+                        path: trimmedFileKey,
+                        reason: reason,
+                        error: error
+                    )
+                } else {
+                    syncDiagnosticsLog(
+                        "SharedFiles",
+                        "received download direct route failed fileKey=\(trimmedFileKey) reason=\(reason) error=\(error); reselecting route for retry"
+                    )
+                    route = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
+                }
+                slog("[SharedFiles] downloadReceivedFile retry fileKey=%@ attempt=%d resolved_host=%@ is_tunnel=%@", trimmedFileKey, attempt + 1, route.host, String(route.isTunnel))
+                syncDiagnosticsLog("SharedFiles", "downloadReceivedFile retry fileKey=\(trimmedFileKey) attempt=\(attempt + 1) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+            }
+        }
+        guard let result else {
+            throw lastError ?? SyncEngineError.networkError("Received file download failed without an error")
+        }
+        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
+        updateSharedFilesReachability(
+            .available,
+            route: reachabilityRoute,
+            reason: "download_received_file_success"
+        )
+        if !route.isTunnel && bindingConnectionState != .connected {
+            updateBindingConnectionState(.connected, reason: "download_received_file_success")
+        }
+        return [
+            "savedToPhotos": result.savedToPhotos,
+            "localPath": result.localPath ?? NSNull(),
+            "savedLocation": result.savedLocation ?? NSNull(),
+        ]
+    }
+
     func getSharedFileStreamUrl(scope scopeRaw: String, path: String, accessToken: String) -> String? {
         let scope = SharedDirectoryScope(rawValue: scopeRaw) ?? .team
         return sharedFilesService.getStreamUrl(scope: scope, path: path, accessToken: accessToken)?.absoluteString

@@ -51,7 +51,12 @@ import {
   type ReceivedLibraryMediaItem,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
-import { documentMimeType, isImageFile, isVideoFile } from '../utils/file-preview';
+import {
+  documentMimeType,
+  documentPreviewUri,
+  isImageFile,
+  isVideoFile,
+} from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
 type ReceivedSection = {
@@ -432,7 +437,7 @@ export function PhoneSyncSpaceGlobalScreen() {
           item,
         );
         await viewDocument({
-          uri: localPath,
+          uri: documentPreviewUri(localPath),
           headerTitle: filename,
           mimeType: documentMimeType(filename),
         });

@@ -1545,6 +1545,13 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun downloadReceivedFile(fileKey: String, filename: String, mediaType: String?, promise: Promise) {
+    runAsync(promise) {
+      promise.resolve(downloadReceivedFileToLocalStorage(fileKey, filename, mediaType))
+    }
+  }
+
+  @ReactMethod
   fun getSharedFileStreamUrl(scope: String, path: String, accessToken: String, promise: Promise) {
     runAsync(promise) {
       val route = resolveSharedFileRoute(
@@ -2918,6 +2925,76 @@ class NativeSyncEngineModule(
     }
   }
 
+  private fun downloadReceivedFileToLocalStorage(
+    fileKey: String,
+    filename: String,
+    requestedMediaType: String?,
+  ): WritableMap {
+    val normalizedFileKey = fileKey.trim()
+    require(normalizedFileKey.isNotBlank()) { "Received file key is required" }
+    val safeFilename = safeShareCacheFilename(filename, normalizedFileKey.substringAfterLast('/').ifBlank { "remote-file" })
+    var route = resolveSharedFileRoute(
+      scope = "team",
+      kind = "download",
+      path = normalizedFileKey,
+      requestAccessToken = "",
+      reason = "download_received_file",
+    )
+    logSharedFileRoute("downloadReceivedFile", route)
+    return try {
+      downloadReceivedFileFromRoute(normalizedFileKey, safeFilename, requestedMediaType, route).also {
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "download_received_file_success",
+        )
+      }
+    } catch (err: Throwable) {
+      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        throw err
+      }
+      route = recoverSharedFileTunnelAfterRouteFailure(
+        scope = "team",
+        kind = "download",
+        path = normalizedFileKey,
+        requestAccessToken = "",
+        reason = "download_received_file",
+        error = err,
+      )
+      logSharedFileRoute("downloadReceivedFile", route, retry = true)
+      downloadReceivedFileFromRoute(normalizedFileKey, safeFilename, requestedMediaType, route).also {
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "download_received_file_success",
+        )
+      }
+    }
+  }
+
+  private fun downloadReceivedFileFromRoute(
+    fileKey: String,
+    filename: String,
+    requestedMediaType: String?,
+    route: SharedFileRoute,
+  ): WritableMap {
+    val connection = receivedFileUrlForRoute(fileKey, route).openConnection() as HttpURLConnection
+    try {
+      connection.requestMethod = "GET"
+      connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+      connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
+      return persistHttpDownloadToLocalStorage(
+        connection = connection,
+        filename = filename,
+        requestedMediaType = requestedMediaType,
+        progressKey = fileKey,
+        exposeDownloadsUri = true,
+      )
+    } finally {
+      connection.disconnect()
+    }
+  }
+
   private fun downloadSharedFileFromRoute(path: String, route: SharedFileRoute): WritableMap {
     val filename = path.substringAfterLast('/').ifBlank { "shared-file" }
     val mediaType = AndroidSyncPrimitives.classifyMediaType(
@@ -2930,99 +3007,122 @@ class NativeSyncEngineModule(
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
       connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
       applySharedDirectoryAuthorization(connection, route)
-      if (connection.responseCode !in 200..299) {
-        throw IllegalStateException("Sidecar returned HTTP ${connection.responseCode}")
-      }
-      val mimeType = connection.contentType?.substringBefore(';')
-        ?: AndroidSyncPrimitives.mimeTypeForFilename(filename)
-      val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
-      if (mediaType == "image" || mediaType == "video") {
-        val collection = if (mediaType == "video") {
-          MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        } else {
-          MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        }
-        val savedLocation = if (mediaType == "video") {
-          "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
-        } else {
-          "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
-        }
-        val values = ContentValues().apply {
-          put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-          put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(
-              MediaStore.MediaColumns.RELATIVE_PATH,
-              savedLocation,
-            )
-            put(MediaStore.MediaColumns.IS_PENDING, 1)
-          }
-        }
-        val uri = reactApplicationContext.contentResolver.insert(collection, values)
-          ?: throw IllegalStateException("Unable to create MediaStore item")
-        reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-          connection.inputStream.use { input ->
-            copySharedDownloadWithProgress(path, input, output, totalBytes)
-          }
-        } ?: throw IllegalStateException("Unable to write MediaStore item")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          values.clear()
-          values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-          reactApplicationContext.contentResolver.update(uri, values, null, null)
-        }
-        return Arguments.createMap().apply {
-          putBoolean("savedToPhotos", true)
-          putNull("localPath")
-          putString("savedLocation", savedLocation)
-        }
-      }
+      return persistHttpDownloadToLocalStorage(
+        connection = connection,
+        filename = filename,
+        requestedMediaType = mediaType,
+        progressKey = path,
+        exposeDownloadsUri = false,
+      )
+    } finally {
+      connection.disconnect()
+    }
+  }
 
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
-        val values = ContentValues().apply {
-          put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-          put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-          put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+  private fun persistHttpDownloadToLocalStorage(
+    connection: HttpURLConnection,
+    filename: String,
+    requestedMediaType: String?,
+    progressKey: String,
+    exposeDownloadsUri: Boolean,
+  ): WritableMap {
+    val safeFilename = safeShareCacheFilename(filename, "remote-file")
+    val mediaType = localDownloadMediaType(safeFilename, requestedMediaType)
+    if (connection.responseCode !in 200..299) {
+      throw IllegalStateException("Sidecar returned HTTP ${connection.responseCode}")
+    }
+    val mimeType = connection.contentType?.substringBefore(';')
+      ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
+    val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
+    if (mediaType == "image" || mediaType == "video") {
+      val collection = if (mediaType == "video") {
+        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+      } else {
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+      }
+      val savedLocation = if (mediaType == "video") {
+        "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+      } else {
+        "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+      }
+      val values = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+        put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          put(
+            MediaStore.MediaColumns.RELATIVE_PATH,
+            savedLocation,
+          )
           put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
-        val uri = reactApplicationContext.contentResolver.insert(collection, values)
-          ?: throw IllegalStateException("Unable to create MediaStore item")
-        reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-          connection.inputStream.use { input ->
-            copySharedDownloadWithProgress(path, input, output, totalBytes)
-          }
-        } ?: throw IllegalStateException("Unable to write MediaStore item")
+      }
+      val uri = reactApplicationContext.contentResolver.insert(collection, values)
+        ?: throw IllegalStateException("Unable to create MediaStore item")
+      reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+        connection.inputStream.use { input ->
+          copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
+        }
+      } ?: throw IllegalStateException("Unable to write MediaStore item")
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         values.clear()
         values.put(MediaStore.MediaColumns.IS_PENDING, 0)
         reactApplicationContext.contentResolver.update(uri, values, null, null)
-        return Arguments.createMap().apply {
-          putBoolean("savedToPhotos", false)
+      }
+      return Arguments.createMap().apply {
+        putBoolean("savedToPhotos", true)
+        putNull("localPath")
+        putString("savedLocation", savedLocation)
+      }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+      val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
+      val values = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+        put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+        put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+        put(MediaStore.MediaColumns.IS_PENDING, 1)
+      }
+      val uri = reactApplicationContext.contentResolver.insert(collection, values)
+        ?: throw IllegalStateException("Unable to create MediaStore item")
+      reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+        connection.inputStream.use { input ->
+          copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
+        }
+      } ?: throw IllegalStateException("Unable to write MediaStore item")
+      values.clear()
+      values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+      reactApplicationContext.contentResolver.update(uri, values, null, null)
+      return Arguments.createMap().apply {
+        putBoolean("savedToPhotos", false)
+        if (exposeDownloadsUri) {
+          putString("localPath", uri.toString())
+          putString("savedLocation", savedLocation)
+        } else {
           putNull("localPath")
           putNull("savedLocation")
         }
-      } else {
-        val destDir = File(
-          Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-          "Vivi Drop"
-        )
-        if (!destDir.exists()) {
-          destDir.mkdirs()
-        }
-        val destFile = File(destDir, filename)
-        destFile.outputStream().use { output ->
-          connection.inputStream.use { input ->
-            copySharedDownloadWithProgress(path, input, output, totalBytes)
-          }
-        }
-        return Arguments.createMap().apply {
-          putBoolean("savedToPhotos", false)
-          putString("localPath", destFile.absolutePath)
-          putNull("savedLocation")
-        }
       }
-    } finally {
-      connection.disconnect()
+    }
+
+    val destDir = File(
+      Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+      "Vivi Drop"
+    )
+    if (!destDir.exists()) {
+      destDir.mkdirs()
+    }
+    val destFile = uniqueShareCacheFile(destDir, safeFilename)
+    destFile.outputStream().use { output ->
+      connection.inputStream.use { input ->
+        copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
+      }
+    }
+    return Arguments.createMap().apply {
+      putBoolean("savedToPhotos", false)
+      putString("localPath", destFile.absolutePath)
+      putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop")
     }
   }
 
@@ -3392,6 +3492,22 @@ class NativeSyncEngineModule(
       URL("http", route.urlHost, route.port, sharedFileEndpoint(route.scope, kind, path)),
       route,
     )
+
+  private fun receivedFileUrlForRoute(fileKey: String, route: SharedFileRoute): URL {
+    val query = listOf(
+      "clientId" to getOrCreateClientId(),
+      "clientName" to getClientDisplayNameValue(),
+      "fileKey" to fileKey,
+    ).joinToString("&") { (name, value) ->
+      "$name=${URLEncoder.encode(value, "UTF-8")}"
+    }
+    return URL(
+      "http",
+      route.urlHost,
+      route.port,
+      "/resources/mobile/received/download?$query",
+    )
+  }
 
   private fun sharedFileEndpoint(scope: String, kind: String, path: String): String {
     val normalizedPath = path.trim().trim('/')

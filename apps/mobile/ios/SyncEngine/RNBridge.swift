@@ -829,6 +829,22 @@ class NativeSyncEngineModule: RCTEventEmitter {
     }
 
     @objc
+    func downloadReceivedFile(_ fileKey: NSString, filename: NSString, mediaType: NSString?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            do {
+                let result = try await SyncEngineManager.shared.downloadReceivedFile(
+                    fileKey: fileKey as String,
+                    filename: filename as String,
+                    mediaType: mediaType as String?
+                )
+                resolve(result)
+            } catch {
+                reject("DOWNLOAD_RECEIVED_FILE_ERROR", error.localizedDescription, error)
+            }
+        }
+    }
+
+    @objc
     func getSharedFileStreamUrl(_ scope: NSString, path: NSString, accessToken: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         let url = SyncEngineManager.shared.getSharedFileStreamUrl(scope: scope as String, path: path as String, accessToken: accessToken as String)
         resolve(url)

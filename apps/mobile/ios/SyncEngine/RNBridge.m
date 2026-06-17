@@ -51,6 +51,7 @@ RCT_EXTERN_METHOD(setBackgroundSilentAudioEnabled:(BOOL)enabled resolve:(RCTProm
 // Vivi Drop: Shared Files
 RCT_EXTERN_METHOD(browseSharedFiles:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadSharedFile:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(downloadReceivedFile:(NSString *)fileKey filename:(NSString *)filename mediaType:(NSString *)mediaType resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getSharedFileStreamUrl:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(prepareSharedFilePreview:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadUrlToShareCache:(NSString *)url filename:(NSString *)filename resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

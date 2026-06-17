@@ -180,10 +180,16 @@ jest.mock('../../services/desktop-local-service', () => ({
   shareResources: jest.fn(),
   shareGlobalRemoteAccessResources: jest.fn(),
   isDownloadSavedLocally: jest.fn(
-    (result: { savedToPhotos?: boolean; localPath?: string | null }) =>
+    (result: {
+      savedToPhotos?: boolean;
+      localPath?: string | null;
+      savedLocation?: string | null;
+    }) =>
       result.savedToPhotos === true ||
       (typeof result.localPath === 'string' &&
-        result.localPath.trim().length > 0),
+        result.localPath.trim().length > 0) ||
+      (typeof result.savedLocation === 'string' &&
+        result.savedLocation.trim().length > 0),
   ),
 }));
 
@@ -765,7 +771,7 @@ describe('RemoteAccessGlobalScreen', () => {
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({
-      uri: '/cache/manual.pdf',
+      uri: 'file:///cache/manual.pdf',
       headerTitle: 'manual.pdf',
       mimeType: 'application/pdf',
     });
@@ -1040,7 +1046,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({
-      uri: '/cache/notes.pdf',
+      uri: 'file:///cache/notes.pdf',
       headerTitle: 'notes.pdf',
       mimeType: 'application/pdf',
     });
@@ -1098,6 +1104,63 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     expect(alertSpy).toHaveBeenCalledWith(
       '下載完成',
       'alpha.jpg 已儲存至相簿',
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  it('accepts global sync-space document downloads saved to device Downloads', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: '',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'notes.txt',
+        fileKey: 'received/notes.txt',
+        filename: 'notes.txt',
+        mediaType: 'document',
+        fileSize: 128,
+        completedAt: '2026-06-16T08:10:00.000Z',
+        shareStatus: 'not_shared',
+      },
+    ]);
+    mockDownloadReceivedLibraryItem.mockResolvedValueOnce({
+      savedToPhotos: false,
+      localPath: 'content://downloads/my_downloads/42',
+      savedLocation: 'Downloads/Vivi Drop',
+    });
+    mockRecordDownloadedFile.mockResolvedValueOnce(undefined);
+
+    const { getByLabelText, getByText } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('notes.txt')).toBeTruthy();
+    });
+
+    fireEvent.press(getByLabelText('下载已同步文件'));
+
+    await waitFor(() => {
+      expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({ fileKey: 'received/notes.txt' }),
+      );
+    });
+    expect(mockRecordDownloadedFile).toHaveBeenCalledWith({
+      resourceId: 'received/notes.txt',
+      filename: 'notes.txt',
+      fileSize: 128,
+      mediaType: 'document',
+      localPath: 'content://downloads/my_downloads/42',
+      savedToPhotos: false,
+    });
+    expect(alertSpy).toHaveBeenCalledWith(
+      '下載完成',
+      'notes.txt 已保存至 Downloads/Vivi Drop',
     );
 
     alertSpy.mockRestore();
@@ -1559,7 +1622,7 @@ describe('RemoteAccessScreen', () => {
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({
-      uri: '/cache/contract.pdf',
+      uri: 'file:///cache/contract.pdf',
       headerTitle: 'contract.pdf',
       mimeType: 'application/pdf',
     });
@@ -1785,7 +1848,7 @@ describe('PhoneSyncSpaceScreen', () => {
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({
-      uri: '/cache/notes.pdf',
+      uri: 'file:///cache/notes.pdf',
       headerTitle: 'notes.pdf',
       mimeType: 'application/pdf',
     });

@@ -325,7 +325,52 @@ class SharedFilesService {
         onProgress: SharedFileDownloadProgressHandler? = nil
     ) async throws -> DownloadResult {
         let endpoint = "\(scope.endpointPrefix)/download/\(SharedFilesRoutePolicy.encodedSharedFilePath(path))"
-        let partialURL = try partialDownloadURL(path: path)
+        return try await downloadEndpointToLocalFile(
+            endpoint: endpoint,
+            partialKey: path,
+            filename: (path as NSString).lastPathComponent,
+            mediaType: nil,
+            scope: scope,
+            accessToken: accessToken,
+            onProgress: onProgress
+        )
+    }
+
+    func downloadReceivedFile(
+        fileKey: String,
+        clientId: String,
+        clientName: String,
+        filename: String,
+        mediaType: String?,
+        onProgress: SharedFileDownloadProgressHandler? = nil
+    ) async throws -> DownloadResult {
+        try await downloadEndpointToLocalFile(
+            endpoint: "/resources/mobile/received/download",
+            queryItems: [
+                URLQueryItem(name: "clientId", value: clientId),
+                URLQueryItem(name: "clientName", value: clientName),
+                URLQueryItem(name: "fileKey", value: fileKey),
+            ],
+            partialKey: "received:\(fileKey)",
+            filename: filename,
+            mediaType: mediaType,
+            scope: .team,
+            accessToken: "",
+            onProgress: onProgress
+        )
+    }
+
+    private func downloadEndpointToLocalFile(
+        endpoint: String,
+        queryItems: [URLQueryItem] = [],
+        partialKey: String,
+        filename: String,
+        mediaType: String?,
+        scope: SharedDirectoryScope,
+        accessToken: String,
+        onProgress: SharedFileDownloadProgressHandler?
+    ) async throws -> DownloadResult {
+        let partialURL = try partialDownloadURL(path: partialKey)
         let metadataURL = partialMetadataURL(for: partialURL)
         var partialMetadata = readPartialDownloadMetadata(at: metadataURL)
         var resumeOffset = SharedFilesRoutePolicy.resumeOffsetForPartialDownload(
@@ -359,6 +404,7 @@ class SharedFilesService {
                 metadataURL: metadataURL,
                 metadata: partialMetadata,
                 resumeOffset: resumeOffset,
+                queryItems: queryItems,
                 onProgress: onProgress
             )
         } catch SharedFilePartialDownloadError.invalidPartial(_) {
@@ -373,6 +419,7 @@ class SharedFilesService {
                 metadataURL: metadataURL,
                 metadata: partialMetadata,
                 resumeOffset: resumeOffset,
+                queryItems: queryItems,
                 onProgress: onProgress
             )
         }
@@ -384,33 +431,14 @@ class SharedFilesService {
         onProgress?(totalBytes, totalBytes, 1)
 
         do {
-            // Move to a stable temp location first
-            let filename = (path as NSString).lastPathComponent
-            let destDir = FileManager.default.temporaryDirectory
-                .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
-            try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-            let destURL = destDir.appendingPathComponent(filename)
-            try? FileManager.default.removeItem(at: destURL)
-            try FileManager.default.moveItem(at: downloadedURL, to: destURL)
+            let result = try await persistDownloadedFile(
+                downloadedURL: downloadedURL,
+                filename: filename,
+                mediaType: mediaType
+            )
             downloadedURLForCleanup = nil
             try? FileManager.default.removeItem(at: metadataURL)
-
-            // For images/videos: save to Camera Roll
-            let fileType = classifyLocalFileType(filename: filename)
-            if fileType == "image" || fileType == "video" {
-                try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
-                try? FileManager.default.removeItem(at: destURL)
-                slog("[SharedFilesService] saved %@ to Camera Roll", path)
-                return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
-            }
-
-            // For other files: move to NSDocumentDirectory so it is accessible via iOS Files App
-            let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            let finalURL = documentsURL.appendingPathComponent(filename)
-            try? FileManager.default.removeItem(at: finalURL)
-            try FileManager.default.moveItem(at: destURL, to: finalURL)
-
-            return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
+            return result
         } catch {
             throw SharedFileLocalSaveError(underlyingError: error)
         }
@@ -523,6 +551,47 @@ class SharedFilesService {
         }
     }
 
+    private func normalizedLocalFileType(filename: String, mediaType: String?) -> String {
+        let normalized = mediaType?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if normalized == "image" || normalized == "video" {
+            return normalized!
+        }
+        return classifyLocalFileType(filename: filename)
+    }
+
+    private func persistDownloadedFile(
+        downloadedURL: URL,
+        filename: String,
+        mediaType: String?
+    ) async throws -> DownloadResult {
+        let safeFilename = filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "remote-file"
+            : filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let destDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+        let destURL = destDir.appendingPathComponent(safeFilename)
+        try? FileManager.default.removeItem(at: destURL)
+        try FileManager.default.moveItem(at: downloadedURL, to: destURL)
+
+        let fileType = normalizedLocalFileType(filename: safeFilename, mediaType: mediaType)
+        if fileType == "image" || fileType == "video" {
+            try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
+            try? FileManager.default.removeItem(at: destURL)
+            slog("[SharedFilesService] saved %@ to Camera Roll", safeFilename)
+            return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
+        }
+
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let finalURL = documentsURL.appendingPathComponent(safeFilename)
+        try? FileManager.default.removeItem(at: finalURL)
+        try FileManager.default.moveItem(at: destURL, to: finalURL)
+
+        return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
+    }
+
     private func performDownload(
         endpoint: String,
         scope: SharedDirectoryScope,
@@ -531,9 +600,10 @@ class SharedFilesService {
         metadataURL: URL,
         metadata: SharedFilePartialDownloadMetadata?,
         resumeOffset: Int64,
+        queryItems: [URLQueryItem] = [],
         onProgress: SharedFileDownloadProgressHandler?
     ) async throws -> (URL, URLResponse) {
-        let url = try buildURL(path: endpoint)
+        let url = try buildURL(path: endpoint, queryItems: queryItems)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -650,10 +720,13 @@ class SharedFilesService {
         )
     }
 
-    private func buildURL(path: String) throws -> URL {
+    private func buildURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
         var components = URLComponents()
         components.scheme = "http"
         components.percentEncodedPath = path
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
 
         if useTunnelRoute, isTunnelActive, let port = tunnelPort {
             components.host = "127.0.0.1"

@@ -23,6 +23,7 @@ import {
 } from '../desktop-local-service';
 import {
   browseDirectory,
+  downloadReceivedFile,
   downloadDirectoryFile,
   getDirectoryFileStreamUrl,
   getClientId,
@@ -43,6 +44,7 @@ jest.mock('react-native', () => ({
 jest.mock('../SyncEngineModule', () => ({
   getClientId: jest.fn(),
   browseDirectory: jest.fn(),
+  downloadReceivedFile: jest.fn(),
   downloadDirectoryFile: jest.fn(),
   getDirectoryFileStreamUrl: jest.fn(),
   prepareDirectoryFilePreview: jest.fn(),
@@ -53,6 +55,9 @@ const mockedGetClientId = getClientId as jest.MockedFunction<
 >;
 const mockedBrowseDirectory = browseDirectory as jest.MockedFunction<
   typeof browseDirectory
+>;
+const mockedDownloadReceivedFile = downloadReceivedFile as jest.MockedFunction<
+  typeof downloadReceivedFile
 >;
 const mockedDownloadDirectoryFile = downloadDirectoryFile as jest.MockedFunction<
   typeof downloadDirectoryFile
@@ -143,7 +148,7 @@ describe('desktop-local-service', () => {
   });
 
   it('downloads a received library item by fileKey through native local persistence', async () => {
-    mockDownloadUrlToLocal.mockResolvedValueOnce({
+    mockedDownloadReceivedFile.mockResolvedValueOnce({
       savedToPhotos: true,
       localPath: 'ph://asset-001',
       savedLocation: 'Photos',
@@ -171,22 +176,21 @@ describe('desktop-local-service', () => {
       savedLocation: 'Photos',
     });
 
-    expect(mockDownloadUrlToLocal).toHaveBeenCalledWith(
-      'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
+    expect(mockedDownloadReceivedFile).toHaveBeenCalledWith(
+      '2026/06/17/client-001-photo',
       'IMG_0001.JPG',
       'image',
     );
+    expect(mockDownloadUrlToLocal).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to received preview when a legacy desktop cannot download received images', async () => {
-    mockDownloadUrlToLocal
-      .mockRejectedValueOnce(new Error('HTTP 404: page not found'))
-      .mockResolvedValueOnce({
-        savedToPhotos: true,
-        localPath: 'ph://asset-002',
-        savedLocation: 'Photos',
-      });
+  it('does not bypass the native received route for received image downloads', async () => {
+    mockedDownloadReceivedFile.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: 'ph://asset-002',
+      savedLocation: 'Photos',
+    });
 
     await expect(
       downloadReceivedLibraryItem(
@@ -210,28 +214,20 @@ describe('desktop-local-service', () => {
       savedLocation: 'Photos',
     });
 
-    expect(mockDownloadUrlToLocal).toHaveBeenNthCalledWith(
-      1,
-      'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
+    expect(mockedDownloadReceivedFile).toHaveBeenCalledWith(
+      '2026/06/17/client-001-photo',
       'IMG_0001.JPG',
       'image',
     );
-    expect(mockDownloadUrlToLocal).toHaveBeenNthCalledWith(
-      2,
-      'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
-      'IMG_0001.JPG',
-      'image',
-    );
+    expect(mockDownloadUrlToLocal).not.toHaveBeenCalled();
   });
 
-  it('falls back to received stream when a legacy desktop cannot download received videos', async () => {
-    mockDownloadUrlToLocal
-      .mockRejectedValueOnce(new Error('HTTP 404: page not found'))
-      .mockResolvedValueOnce({
-        savedToPhotos: true,
-        localPath: 'ph://asset-003',
-        savedLocation: 'Photos',
-      });
+  it('does not bypass the native received route for received video downloads', async () => {
+    mockedDownloadReceivedFile.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: 'ph://asset-003',
+      savedLocation: 'Photos',
+    });
 
     await expect(
       downloadReceivedLibraryItem(
@@ -255,23 +251,17 @@ describe('desktop-local-service', () => {
       savedLocation: 'Photos',
     });
 
-    expect(mockDownloadUrlToLocal).toHaveBeenNthCalledWith(
-      1,
-      'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-video',
+    expect(mockedDownloadReceivedFile).toHaveBeenCalledWith(
+      '2026/06/17/client-001-video',
       'VID_0001.MOV',
       'video',
     );
-    expect(mockDownloadUrlToLocal).toHaveBeenNthCalledWith(
-      2,
-      'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-video',
-      'VID_0001.MOV',
-      'video',
-    );
+    expect(mockDownloadUrlToLocal).not.toHaveBeenCalled();
   });
 
-  it('does not fall back for legacy received document downloads without a file endpoint', async () => {
-    const error = new Error('HTTP 404: page not found');
-    mockDownloadUrlToLocal.mockRejectedValueOnce(error);
+  it('propagates native received download failures for documents', async () => {
+    const error = new Error('Download failed with HTTP 404');
+    mockedDownloadReceivedFile.mockRejectedValueOnce(error);
 
     await expect(
       downloadReceivedLibraryItem(
@@ -291,7 +281,12 @@ describe('desktop-local-service', () => {
       ),
     ).rejects.toThrow(error);
 
-    expect(mockDownloadUrlToLocal).toHaveBeenCalledTimes(1);
+    expect(mockedDownloadReceivedFile).toHaveBeenCalledWith(
+      '2026/06/17/client-001-doc',
+      'notes.txt',
+      'document',
+    );
+    expect(mockDownloadUrlToLocal).not.toHaveBeenCalled();
   });
 
   it('lists a shared folder with encoded nested path segments', async () => {

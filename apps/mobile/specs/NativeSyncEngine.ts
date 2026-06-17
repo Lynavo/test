@@ -48,6 +48,15 @@ export interface Spec extends TurboModule {
     localPath: string | null;
     savedLocation?: string | null;
   }>;
+  downloadReceivedFile(
+    fileKey: string,
+    filename: string,
+    mediaType?: string | null,
+  ): Promise<{
+    savedToPhotos: boolean;
+    localPath: string | null;
+    savedLocation?: string | null;
+  }>;
   getSharedFileStreamUrl(
     scope: DirectoryScope,
     path: string,

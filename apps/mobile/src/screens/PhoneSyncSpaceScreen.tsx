@@ -30,7 +30,12 @@ import {
   prepareReceivedLibraryPreview,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
-import { documentMimeType, isImageFile, isVideoFile } from '../utils/file-preview';
+import {
+  documentMimeType,
+  documentPreviewUri,
+  isImageFile,
+  isVideoFile,
+} from '../utils/file-preview';
 import {
   SIDECAR_HTTP_PORT,
   type BindingStateDTO,
@@ -202,7 +207,7 @@ export function PhoneSyncSpaceScreen() {
           item,
         );
         await viewDocument({
-          uri: localPath,
+          uri: documentPreviewUri(localPath),
           headerTitle: filename,
           mimeType: documentMimeType(filename),
         });

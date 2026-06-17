@@ -54,7 +54,12 @@ import {
   shareGlobalRemoteAccessResources,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
-import { documentMimeType, isImageFile, isVideoFile } from '../utils/file-preview';
+import {
+  documentMimeType,
+  documentPreviewUri,
+  isImageFile,
+  isVideoFile,
+} from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
 type LayoutMode = 'list' | 'grid';
@@ -787,7 +792,7 @@ export function RemoteAccessGlobalScreen() {
           item.displayName,
         );
         await viewDocument({
-          uri: localPath,
+          uri: documentPreviewUri(localPath),
           headerTitle: item.displayName,
           mimeType: documentMimeType(item.displayName),
         });

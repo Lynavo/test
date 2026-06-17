@@ -184,4 +184,30 @@ describe('SyncEngineModule shared bridge wrappers', () => {
     );
     expect(nativeSyncEngine.getAppInfo).toHaveBeenCalledTimes(1);
   });
+
+  it('forwards received file downloads to the native bridge', async () => {
+    const downloadResult = {
+      savedToPhotos: false,
+      localPath: '/downloads/notes.txt',
+      savedLocation: '/downloads/notes.txt',
+    };
+    const nativeSyncEngine = {
+      downloadReceivedFile: jest.fn().mockResolvedValue(downloadResult),
+    };
+    const syncEngine = loadModule(nativeSyncEngine);
+
+    await expect(
+      syncEngine.downloadReceivedFile(
+        '2026/06/17/client-001-doc',
+        'notes.txt',
+        'document',
+      ),
+    ).resolves.toEqual(downloadResult);
+
+    expect(nativeSyncEngine.downloadReceivedFile).toHaveBeenCalledWith(
+      '2026/06/17/client-001-doc',
+      'notes.txt',
+      'document',
+    );
+  });
 });

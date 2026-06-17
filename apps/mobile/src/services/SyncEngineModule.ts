@@ -484,6 +484,19 @@ export async function downloadDirectoryFile(
   return result as DownloadResult;
 }
 
+export async function downloadReceivedFile(
+  fileKey: string,
+  filename: string,
+  mediaType?: string | null,
+): Promise<DownloadResult> {
+  const result = await NativeSyncEngine.downloadReceivedFile(
+    fileKey,
+    filename,
+    mediaType ?? null,
+  );
+  return result as DownloadResult;
+}
+
 export async function getDirectoryFileStreamUrl(
   scope: DirectoryScope,
   path: string,
