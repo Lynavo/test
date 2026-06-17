@@ -613,6 +613,17 @@ export async function getClientId(): Promise<string> {
   return String(result);
 }
 
+/**
+ * Ask the native layer to collect logs, snapshots, and the local SQLite
+ * database into a zip archive.  Returns the local file-system path to the
+ * generated archive, which can be passed directly to
+ * `diagnosticUploadService.upload()` or shared via the system share sheet.
+ */
+export async function exportDiagnostics(): Promise<string> {
+  const result = await NativeSyncEngine.exportDiagnostics();
+  return String(result);
+}
+
 /** Record the auth user-id now bound to the sync identity on this device.
  *  Written after a successful login + owner-check, so a later login by a
  *  different user can be detected via owner mismatch and force a wipe.

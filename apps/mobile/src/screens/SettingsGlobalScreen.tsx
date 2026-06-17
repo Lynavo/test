@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -44,13 +45,16 @@ import {
   type UserProfile,
 } from '../stores/auth-store';
 import {
+  exportDiagnostics,
   getAppInfo,
   getBindingState,
   getClientDisplayName,
+  getClientId,
   setClientDisplayName,
   wipeSyncIdentity,
   type AppInfo,
 } from '../services/SyncEngineModule';
+import { diagnosticUploadService } from '../services/diagnostic-upload-service';
 import {
   deleteAccount,
   logout as serverLogout,
@@ -296,6 +300,9 @@ export function SettingsGlobalScreen({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isRestoringPurchase, setIsRestoringPurchase] = useState(false);
+  const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
+  const [diagnosticsNote, setDiagnosticsNote] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -472,6 +479,34 @@ export function SettingsGlobalScreen({
     } catch (error) {
       console.warn('[SettingsGlobal] save language preference failed:', error);
       setLanguageError('语言设置保存失败，请稍后重试。');
+    }
+  };
+
+  const handleUploadDiagnostics = async () => {
+    if (isUploadingDiagnostics) return;
+    setIsUploadingDiagnostics(true);
+    const note = diagnosticsNote.trim();
+    const controller = new AbortController();
+    try {
+      const [zipPath, clientId] = await Promise.all([
+        exportDiagnostics(),
+        getClientId(),
+      ]);
+      await diagnosticUploadService.upload(
+        zipPath,
+        clientId,
+        controller.signal,
+        undefined,
+        note || 'Manual upload from mobile settings',
+      );
+      setShowDiagnosticsModal(false);
+      setDiagnosticsNote('');
+      Alert.alert('上传成功', '诊断包已上传，感谢您的反馈！');
+    } catch (error) {
+      console.warn('[SettingsGlobal] uploadDiagnostics failed:', error);
+      Alert.alert('上传失败', '上传诊断包时发生错误，请检查网络连接后重试。');
+    } finally {
+      setIsUploadingDiagnostics(false);
     }
   };
 
@@ -716,6 +751,10 @@ export function SettingsGlobalScreen({
               title="上传诊断包"
               subtitle="上传日志和设备状态以便排查问题"
               showChevron
+              onPress={() => {
+                setDiagnosticsNote('');
+                setShowDiagnosticsModal(true);
+              }}
             />
             <SettingsRow
               icon={LogOut}
@@ -929,6 +968,57 @@ export function SettingsGlobalScreen({
             >
               <Text style={styles.modalDangerButtonText}>
                 {isDeletingAccount ? '注销中…' : '注销'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </GlobalSettingsModalFrame>
+      ) : null}
+
+      {showDiagnosticsModal ? (
+        <GlobalSettingsModalFrame
+          title="上传诊断包"
+          description="请简要描述您遇到的问题，方便我们快速定位。"
+          icon={ArrowUpToLine}
+          tone="blue"
+          onClose={() => {
+            if (!isUploadingDiagnostics) {
+              setShowDiagnosticsModal(false);
+            }
+          }}
+        >
+          <TextInput
+            style={styles.modalNoteInput}
+            value={diagnosticsNote}
+            onChangeText={setDiagnosticsNote}
+            placeholder="例如：传输到一半会自动中断"
+            placeholderTextColor="#A4ABB6"
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            editable={!isUploadingDiagnostics}
+            returnKeyType="default"
+          />
+          <View style={styles.modalSplitActions}>
+            <TouchableOpacity
+              style={styles.modalSecondaryButton}
+              accessibilityRole="button"
+              activeOpacity={0.72}
+              disabled={isUploadingDiagnostics}
+              onPress={() => setShowDiagnosticsModal(false)}
+            >
+              <Text style={styles.modalSecondaryButtonText}>取消</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalPrimaryButton}
+              accessibilityRole="button"
+              activeOpacity={0.72}
+              disabled={isUploadingDiagnostics}
+              onPress={() => {
+                void handleUploadDiagnostics();
+              }}
+            >
+              <Text style={styles.modalPrimaryButtonText}>
+                {isUploadingDiagnostics ? '上传中…' : '上传'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1568,5 +1658,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  modalNoteInput: {
+    marginTop: 20,
+    minHeight: 82,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(23,25,28,0.08)',
+    backgroundColor: 'rgba(23,25,28,0.04)',
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 11,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#17191C',
   },
 });
