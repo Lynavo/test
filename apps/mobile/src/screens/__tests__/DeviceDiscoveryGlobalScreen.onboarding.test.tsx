@@ -430,6 +430,122 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.getAllByText('Studio Mac')).toHaveLength(1);
   });
 
+  it('does not count recent-only desktops as online devices in switch mode', async () => {
+    mockRouteParams = { mode: 'switch' };
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('切换电脑')).toBeTruthy();
+    });
+
+    expect(screen.queryByText('Studio Mac')).toBeNull();
+    expect(screen.queryByText('192.168.31.8:39393')).toBeNull();
+    expect(screen.queryByText('已发现 1 台')).toBeNull();
+  });
+
+  it('directly reconnects a known discovered desktop in switch mode', async () => {
+    mockRouteParams = { mode: 'switch' };
+    mockGetBindingState.mockResolvedValue({
+      deviceId: 'other-desktop',
+      deviceName: 'Other Desktop',
+      connectionState: 'connected',
+    });
+    mockGetKnownDeviceIds.mockResolvedValue(['studio-mac']);
+    jest
+      .spyOn(NativeEventEmitter.prototype, 'addListener')
+      .mockImplementation((_event, listener) => {
+        listener([
+          {
+            deviceId: 'studio-mac',
+            name: 'Studio Mac',
+            ip: '192.168.31.8',
+            type: 'mac',
+            port: 39393,
+          },
+        ]);
+        return { remove: jest.fn() } as any;
+      });
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('直接切换')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Studio Mac'));
+    });
+
+    await waitFor(() => {
+      expect(mockPairDevice).toHaveBeenCalledWith({
+        deviceId: 'studio-mac',
+        host: '192.168.31.8',
+        port: 39393,
+        connectionCode: '',
+      });
+    });
+    expect(mockAddDesktop).toHaveBeenCalledWith({
+      desktopDeviceId: 'studio-mac',
+      desktopName: 'Studio Mac',
+      host: '192.168.31.8',
+      port: 39393,
+      authorizationStatus: 'authorized',
+    });
+    expect(screen.queryByText('选择连接方式')).toBeNull();
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'RESET',
+      }),
+    );
+  });
+
+  it('shows a failure state when direct switch to a discovered desktop fails', async () => {
+    mockRouteParams = { mode: 'switch' };
+    mockGetBindingState.mockResolvedValue({
+      deviceId: 'other-desktop',
+      deviceName: 'Other Desktop',
+      connectionState: 'connected',
+    });
+    mockGetKnownDeviceIds.mockResolvedValue(['studio-mac']);
+    mockPairDevice.mockRejectedValueOnce(
+      new PairingError('Pair token invalid', 'unknown'),
+    );
+    jest
+      .spyOn(NativeEventEmitter.prototype, 'addListener')
+      .mockImplementation((_event, listener) => {
+        listener([
+          {
+            deviceId: 'studio-mac',
+            name: 'Studio Mac',
+            ip: '192.168.31.8',
+            type: 'mac',
+            port: 39393,
+          },
+        ]);
+        return { remove: jest.fn() } as any;
+      });
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('直接切换')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Studio Mac'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('连接失败')).toBeTruthy();
+    });
+    expect(
+      screen.getByText('连接失败，请确认电脑端在线后重试。'),
+    ).toBeTruthy();
+    expect(screen.queryByText('选择连接方式')).toBeNull();
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
   it('does not let guide touches pass through to a real device', async () => {
     const screen = render(<DeviceDiscoveryGlobalScreen />);
 

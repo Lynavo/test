@@ -2,7 +2,6 @@ package com.vividrop.mobile.china.sync
 
 import android.Manifest
 import android.app.Activity
-import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -24,9 +23,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
-import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -121,7 +118,6 @@ class NativeSyncEngineModule(
   private var lastLanNetworkKey: String? = null
   private var pendingPhotoPermissionPromise: Promise? = null
   private var pendingDiscoveryPermissionPromise: Promise? = null
-  private var pendingDocumentPickerPromise: Promise? = null
   private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
   private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
   @Volatile private var foregroundSyncStopRequested = false
@@ -141,17 +137,8 @@ class NativeSyncEngineModule(
   private var accessToken: String? = null
   private var tunnelIceServersJSON: String = ""
   @Volatile private var sharedFilesReachability: SharedFilesReachability? = null
-  private val documentPickerActivityListener: ActivityEventListener = object : BaseActivityEventListener() {
-    override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
-      if (requestCode == REQUEST_DOCUMENT_UPLOADS) {
-        handleDocumentPickerActivityResult(resultCode, data)
-      }
-    }
-  }
-
   init {
     foregroundSyncStopCallback = foregroundSyncStopHandler
-    reactContext.addActivityEventListener(documentPickerActivityListener)
     registerNetworkAvailabilityMonitor()
     resumePresenceHeartbeatFromStoredBinding(reason = "module_initialized")
   }
@@ -176,7 +163,6 @@ class NativeSyncEngineModule(
     if (foregroundSyncStopCallback === foregroundSyncStopHandler) {
       foregroundSyncStopCallback = null
     }
-    reactApplicationContext.removeActivityEventListener(documentPickerActivityListener)
     super.invalidate()
   }
 
@@ -586,6 +572,7 @@ class NativeSyncEngineModule(
         "Pairing",
         "pairDevice requested deviceId=${fallbackDeviceId.ifBlank { "<unknown>" }} host=$host port=$port codeProvided=${connectionCode.isNotBlank()}",
       )
+      val previousBinding = loadBinding()
 
       val storedPairingToken = if (AndroidSyncPrimitives.shouldUseStoredPairingToken(connectionCode)) {
         pairingTokenForKnownDevice(fallbackDeviceId)
@@ -614,6 +601,7 @@ class NativeSyncEngineModule(
         helloPayload = helloPayload,
       )
 
+      resetAutoUploadAfterPairingDeviceSwitch(previousBinding, resolvedBinding)
       saveBinding(resolvedBinding)
       recordNativeLog(
         "Pairing",
@@ -627,6 +615,26 @@ class NativeSyncEngineModule(
       startPresenceHeartbeatTimer(resolvedBinding)
       promise.resolve(null)
     }
+  }
+
+  private fun resetAutoUploadAfterPairingDeviceSwitch(
+    previousBinding: StoredBinding?,
+    nextBinding: StoredBinding,
+  ) {
+    if (!AndroidSyncPrimitives.shouldResetAutoUploadAfterPairing(previousBinding?.deviceId, nextBinding.deviceId)) {
+      return
+    }
+    recordNativeLog(
+      "AutoUpload",
+      "reset after device switch ${previousBinding?.deviceId} -> ${nextBinding.deviceId}",
+      Log.INFO,
+    )
+    persistAutoUploadDisabledState()
+    uploadStore.cancelPendingAutoItems(isoNow())
+    recordDiagnosticsLog(
+      "AutoUpload",
+      "reset after device switch previous=${previousBinding?.deviceId} next=${nextBinding.deviceId}",
+    )
   }
 
   @ReactMethod
@@ -1152,45 +1160,28 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
-  fun pickDocumentUploads(promise: Promise) {
-    val activity = getCurrentActivity()
-    if (activity == null) {
-      promise.reject("NO_ACTIVITY", "No active Activity available for document picker")
-      return
-    }
-    if (pendingDocumentPickerPromise != null) {
-      promise.reject("DOCUMENT_PICKER_BUSY", "A document picker is already active")
-      return
-    }
-
-    pendingDocumentPickerPromise = promise
-    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-      addCategory(Intent.CATEGORY_OPENABLE)
-      type = "*/*"
-      putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-    }
-    try {
-      activity.startActivityForResult(intent, REQUEST_DOCUMENT_UPLOADS)
-    } catch (error: ActivityNotFoundException) {
-      pendingDocumentPickerPromise = null
-      promise.reject("DOCUMENT_PICKER_UNAVAILABLE", "No document picker is available", error)
-    }
-  }
-
-  private fun handleDocumentPickerActivityResult(resultCode: Int, data: Intent?) {
-    val promise = pendingDocumentPickerPromise ?: return
-    pendingDocumentPickerPromise = null
-    if (resultCode != Activity.RESULT_OK || data == null) {
+  fun submitDocumentUploads(params: ReadableMap, promise: Promise) {
+    val files = params.getArray("files")
+    if (files == null || files.size() == 0) {
       promise.resolve(emptyDocumentUploadResult())
       return
     }
-    val uris = documentUrisFromIntent(data)
+
+    val uris = mutableListOf<Uri>()
+    for (index in 0 until files.size()) {
+      val file = files.getMap(index) ?: continue
+      val rawUri = file.getString("uri")?.trim().orEmpty()
+      if (rawUri.isBlank()) {
+        continue
+      }
+      uris += Uri.parse(rawUri)
+    }
+
     if (uris.isEmpty()) {
       promise.resolve(emptyDocumentUploadResult())
       return
     }
+
     runAsync(promise) {
       val result = queueDocumentUploads(uris)
       promise.resolve(result)
@@ -1201,18 +1192,6 @@ class NativeSyncEngineModule(
         )
       }
     }
-  }
-
-  private fun documentUrisFromIntent(data: Intent): List<Uri> {
-    val uris = mutableListOf<Uri>()
-    val clipData = data.clipData
-    if (clipData != null) {
-      for (index in 0 until clipData.itemCount) {
-        clipData.getItemAt(index).uri?.let(uris::add)
-      }
-    }
-    data.data?.let(uris::add)
-    return uris.distinctBy { it.toString() }
   }
 
   private fun queueDocumentUploads(uris: List<Uri>): WritableMap {
@@ -6167,7 +6146,6 @@ class NativeSyncEngineModule(
     private const val MAX_DIAGNOSTICS_LOG_LINES = 2_000
     private const val PHOTO_PERMISSION_REQUEST_CODE = 39_394
     private const val DISCOVERY_PERMISSION_REQUEST_CODE = 39_395
-    private const val REQUEST_DOCUMENT_UPLOADS = 39_396
     private const val DIAGNOSTICS_UPLOAD_TIMEOUT_MS = 30_000
     private const val ANDROID_14_API = 34
     private const val PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED =

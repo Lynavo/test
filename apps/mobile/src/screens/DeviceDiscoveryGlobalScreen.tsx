@@ -589,10 +589,17 @@ export function DeviceDiscoveryGlobalScreen() {
     };
   }, []);
 
-  const displayedRecentDesktops = recentDesktops.filter(
-    recent =>
-      !devices.some(device => device.deviceId === recent.desktopDeviceId),
-  );
+  const displayedRecentDesktops =
+    mode === 'switch'
+      ? recentDesktops.filter(
+          recent =>
+            recent.desktopDeviceId === currentDeviceId &&
+            !devices.some(device => device.deviceId === recent.desktopDeviceId),
+        )
+      : recentDesktops.filter(
+          recent =>
+            !devices.some(device => device.deviceId === recent.desktopDeviceId),
+        );
   const discoveredCount = devices.length + displayedRecentDesktops.length;
   const isShowingSkeleton = scanning && discoveredCount === 0;
   const statusLabel = isShowingSkeleton
@@ -659,7 +666,7 @@ export function DeviceDiscoveryGlobalScreen() {
   }, [mode, navigation]);
 
   const openMethodModal = useCallback(
-    (device: DiscoveredDevice) => {
+    async (device: DiscoveredDevice) => {
       if (showGuide) {
         return;
       }
@@ -675,10 +682,62 @@ export function DeviceDiscoveryGlobalScreen() {
         setConnectionStatus('timeout');
         return;
       }
+
+      if (mode === 'switch' && knownDeviceIds.has(device.deviceId)) {
+        setSelectedDevice(device);
+        setConnectionCode('');
+        setCodeError(null);
+        setConnectionFailure(null);
+        setConnectionStatus('ready');
+        setVerifying(true);
+
+        try {
+          await pairDevice({
+            deviceId: device.deviceId,
+            host: device.ip,
+            port: device.port || 39393,
+            connectionCode: '',
+          });
+          await addDesktop({
+            desktopDeviceId: device.deviceId,
+            desktopName: device.name,
+            host: device.ip,
+            port: device.port || 39393,
+            authorizationStatus: 'authorized',
+          });
+          setVerifying(false);
+          setConnectionModalStep(null);
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'SyncActivity' }],
+            }),
+          );
+        } catch (error) {
+          const failure = normalizeConnectionFailure(error);
+          console.warn(
+            '[DeviceDiscoveryGlobalScreen] known desktop reconnect failed',
+            error,
+          );
+          setVerifying(false);
+          setConnectionFailure(failure);
+          setConnectionModalStep(null);
+          setConnectionStatus('failed');
+        }
+        return;
+      }
+
       setConnectionStatus('ready');
       setConnectionModalStep('method');
     },
-    [currentDeviceId, mode, showGuide],
+    [
+      addDesktop,
+      currentDeviceId,
+      knownDeviceIds,
+      mode,
+      navigation,
+      showGuide,
+    ],
   );
 
   const openRecentDesktop = useCallback(

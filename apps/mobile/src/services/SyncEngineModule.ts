@@ -1,4 +1,5 @@
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import type { DocumentPickerResponse } from '@react-native-documents/picker';
 import {
   ErrorCode,
   type ErrorCode as SyncFlowErrorCode,
@@ -95,6 +96,10 @@ export interface EnableAutoUploadOptions {
   skipPermissionPreflight?: boolean;
 }
 
+type DocumentPickerCancelledError = Error & {
+  code: 'DOCUMENT_PICKER_CANCELLED';
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -151,6 +156,31 @@ function normalizeHistoryLedgerCard(
     totalBytes: readNumberField(item, 'totalBytes') ?? 0,
     activeTransmissionSeconds,
   };
+}
+
+function normalizePickedDocument(
+  document: DocumentPickerResponse,
+): DocumentUploadFile {
+  return {
+    name: document.name?.trim() || 'Document',
+    size: document.size ?? 0,
+    mimeType: document.type ?? null,
+    uri: document.uri,
+  };
+}
+
+function createDocumentPickerCancelledError(): DocumentPickerCancelledError {
+  const error = new Error(
+    'Document picker was cancelled',
+  ) as DocumentPickerCancelledError;
+  error.code = 'DOCUMENT_PICKER_CANCELLED';
+  return error;
+}
+
+function loadDocumentPicker(): typeof import('@react-native-documents/picker') {
+  return require(
+    '@react-native-documents/picker',
+  ) as typeof import('@react-native-documents/picker');
 }
 
 export async function getBindingState(): Promise<BindingStateDTO | null> {
@@ -269,7 +299,41 @@ export async function submitManualUpload(
 }
 
 export async function pickDocumentUploads(): Promise<DocumentUploadResult> {
-  const result = await NativeSyncEngine.pickDocumentUploads();
+  const {
+    errorCodes: documentPickerErrorCodes,
+    isErrorWithCode: isDocumentPickerErrorWithCode,
+    pick: pickDocuments,
+  } = loadDocumentPicker();
+  try {
+    const documents = await pickDocuments({
+      allowMultiSelection: true,
+      mode: 'open',
+      requestLongTermAccess: true,
+    });
+    return {
+      queuedCount: 0,
+      skippedCount: 0,
+      batchId: '',
+      files: documents.map(normalizePickedDocument),
+    };
+  } catch (error) {
+    if (
+      isDocumentPickerErrorWithCode(error) &&
+      error.code === documentPickerErrorCodes.OPERATION_CANCELED
+    ) {
+      throw createDocumentPickerCancelledError();
+    }
+    throw error;
+  }
+}
+
+export async function submitDocumentUploads(
+  files: DocumentUploadFile[],
+): Promise<DocumentUploadResult> {
+  if (files.length > 0) {
+    await requestAndroidBackgroundSyncNotificationPermission();
+  }
+  const result = await NativeSyncEngine.submitDocumentUploads({ files });
   return result as DocumentUploadResult;
 }
 

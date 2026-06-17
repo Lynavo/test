@@ -38,6 +38,7 @@ import {
   prepareAutoUploadEnable,
   pickDocumentUploads,
   saveAutoUploadConfig,
+  submitDocumentUploads,
 } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
 
@@ -342,6 +343,7 @@ export function AutoUploadSettingsGlobalScreen() {
       );
       const customTimeFrom =
         timeRangeMode === 'custom' ? customDate.toISOString() : undefined;
+      let submittedDocumentCount: number | null = null;
       if (albumEnabled) {
         await prepareAutoUploadEnable();
         await saveAutoUploadConfig({
@@ -355,6 +357,10 @@ export function AutoUploadSettingsGlobalScreen() {
         setHydratedTimeRangeMode(timeRangeMode);
         setRangeEdited(false);
       }
+      if (fileSourceSelected) {
+        const result = await submitDocumentUploads(selectedFiles);
+        submittedDocumentCount = result.queuedCount;
+      }
 
       Alert.alert(
         t('common.confirm') || '確認',
@@ -362,7 +368,7 @@ export function AutoUploadSettingsGlobalScreen() {
           ? t('syncActivity.badges.autoEnabled') || '自動上傳已開啟'
           : GLOBAL_COPY.fileQueuedMessage.replace(
               '{{count}}',
-              String(selectedFiles.length),
+              String(submittedDocumentCount ?? selectedFiles.length),
             ),
         [
           {
@@ -417,6 +423,7 @@ export function AutoUploadSettingsGlobalScreen() {
       : uploadRange === 'now'
         ? GLOBAL_COPY.rangeNowTitle
         : GLOBAL_COPY.rangeCustomTitle;
+  const planRangeLabel = albumEnabled ? activeRangeLabel : '不适用';
   const infoText = renderInfoText();
   const confirmLabel = shouldDisableAutoUpload
     ? GLOBAL_COPY.confirmDisable
@@ -486,7 +493,7 @@ export function AutoUploadSettingsGlobalScreen() {
               <View style={styles.planStatItem}>
                 <Text style={styles.planStatLabel}>范围</Text>
                 <Text style={styles.planStatValue} numberOfLines={1}>
-                  {activeRangeLabel}
+                  {planRangeLabel}
                 </Text>
               </View>
             </View>
@@ -498,7 +505,6 @@ export function AutoUploadSettingsGlobalScreen() {
               <Text style={styles.sectionTitle}>
                 {GLOBAL_COPY.sourcesTitle}
               </Text>
-              <Text style={styles.sectionMetaText}>{selectedFileSizeLabel}</Text>
             </View>
             <View style={styles.cardContainer}>
               {/* Option 1: Album */}
@@ -640,135 +646,139 @@ export function AutoUploadSettingsGlobalScreen() {
           </View>
 
           {/* Upload Range */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, styles.standaloneSectionTitle]}>
-              {GLOBAL_COPY.rangeTitle}
-            </Text>
-            <View style={styles.cardContainer}>
-              {/* Option: All */}
-              <TouchableOpacity
-                style={[
-                  styles.optionRow,
-                  uploadRange === 'all' && styles.optionRowActive,
-                ]}
-                activeOpacity={0.8}
-                testID="auto-upload-range-all"
-                accessibilityRole="button"
-                accessibilityState={{ selected: uploadRange === 'all' }}
-                onPress={() => handleRangeSelect('all')}
+          {albumEnabled ? (
+            <View style={styles.section}>
+              <Text
+                style={[styles.sectionTitle, styles.standaloneSectionTitle]}
               >
-                <View
+                {GLOBAL_COPY.rangeTitle}
+              </Text>
+              <View style={styles.cardContainer}>
+                {/* Option: All */}
+                <TouchableOpacity
                   style={[
-                    styles.rangeIconBox,
-                    uploadRange === 'all'
-                      ? styles.iconBoxActive
-                      : styles.iconBoxInactive,
+                    styles.optionRow,
+                    uploadRange === 'all' && styles.optionRowActive,
                   ]}
+                  activeOpacity={0.8}
+                  testID="auto-upload-range-all"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: uploadRange === 'all' }}
+                  onPress={() => handleRangeSelect('all')}
                 >
-                  <Folder
-                    testID="auto-upload-range-all-icon"
-                    size={18}
-                    color={uploadRange === 'all' ? '#fff' : MUTED_ICON}
-                    strokeWidth={1.9}
+                  <View
+                    style={[
+                      styles.rangeIconBox,
+                      uploadRange === 'all'
+                        ? styles.iconBoxActive
+                        : styles.iconBoxInactive,
+                    ]}
+                  >
+                    <Folder
+                      testID="auto-upload-range-all-icon"
+                      size={18}
+                      color={uploadRange === 'all' ? '#fff' : MUTED_ICON}
+                      strokeWidth={1.9}
+                    />
+                  </View>
+                  <View style={styles.optionInfo}>
+                    <Text style={styles.optionTitle}>
+                      {GLOBAL_COPY.rangeAllTitle}
+                    </Text>
+                    <Text style={styles.optionDesc}>
+                      {GLOBAL_COPY.rangeAllDesc}
+                    </Text>
+                  </View>
+                  <SelectionIndicator
+                    selected={uploadRange === 'all'}
+                    testID="auto-upload-range-all-check-icon"
                   />
-                </View>
-                <View style={styles.optionInfo}>
-                  <Text style={styles.optionTitle}>
-                    {GLOBAL_COPY.rangeAllTitle}
-                  </Text>
-                  <Text style={styles.optionDesc}>
-                    {GLOBAL_COPY.rangeAllDesc}
-                  </Text>
-                </View>
-                <SelectionIndicator
-                  selected={uploadRange === 'all'}
-                  testID="auto-upload-range-all-check-icon"
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Option: Now */}
-              <TouchableOpacity
-                style={[
-                  styles.optionRow,
-                  uploadRange === 'now' && styles.optionRowActive,
-                ]}
-                activeOpacity={0.8}
-                testID="auto-upload-range-now"
-                accessibilityRole="button"
-                accessibilityState={{ selected: uploadRange === 'now' }}
-                onPress={() => handleRangeSelect('now')}
-              >
-                <View
+                {/* Option: Now */}
+                <TouchableOpacity
                   style={[
-                    styles.rangeIconBox,
-                    uploadRange === 'now'
-                      ? styles.iconBoxActive
-                      : styles.iconBoxInactive,
+                    styles.optionRow,
+                    uploadRange === 'now' && styles.optionRowActive,
                   ]}
+                  activeOpacity={0.8}
+                  testID="auto-upload-range-now"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: uploadRange === 'now' }}
+                  onPress={() => handleRangeSelect('now')}
                 >
-                  <Clock
-                    testID="auto-upload-range-now-icon"
-                    size={18}
-                    color={uploadRange === 'now' ? '#fff' : MUTED_ICON}
-                    strokeWidth={1.9}
+                  <View
+                    style={[
+                      styles.rangeIconBox,
+                      uploadRange === 'now'
+                        ? styles.iconBoxActive
+                        : styles.iconBoxInactive,
+                    ]}
+                  >
+                    <Clock
+                      testID="auto-upload-range-now-icon"
+                      size={18}
+                      color={uploadRange === 'now' ? '#fff' : MUTED_ICON}
+                      strokeWidth={1.9}
+                    />
+                  </View>
+                  <View style={styles.optionInfo}>
+                    <Text style={styles.optionTitle}>
+                      {GLOBAL_COPY.rangeNowTitle}
+                    </Text>
+                    <Text style={styles.optionDesc}>
+                      {GLOBAL_COPY.rangeNowDesc}
+                    </Text>
+                  </View>
+                  <SelectionIndicator
+                    selected={uploadRange === 'now'}
+                    testID="auto-upload-range-now-check-icon"
                   />
-                </View>
-                <View style={styles.optionInfo}>
-                  <Text style={styles.optionTitle}>
-                    {GLOBAL_COPY.rangeNowTitle}
-                  </Text>
-                  <Text style={styles.optionDesc}>
-                    {GLOBAL_COPY.rangeNowDesc}
-                  </Text>
-                </View>
-                <SelectionIndicator
-                  selected={uploadRange === 'now'}
-                  testID="auto-upload-range-now-check-icon"
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
 
-              {/* Option: Custom */}
-              <TouchableOpacity
-                style={[
-                  styles.optionRow,
-                  uploadRange === 'custom' && styles.optionRowActive,
-                ]}
-                activeOpacity={0.8}
-                testID="auto-upload-range-custom"
-                accessibilityRole="button"
-                accessibilityState={{ selected: uploadRange === 'custom' }}
-                onPress={() => handleRangeSelect('custom')}
-              >
-                <View
+                {/* Option: Custom */}
+                <TouchableOpacity
                   style={[
-                    styles.rangeIconBox,
-                    uploadRange === 'custom'
-                      ? styles.iconBoxActive
-                      : styles.iconBoxInactive,
+                    styles.optionRow,
+                    uploadRange === 'custom' && styles.optionRowActive,
                   ]}
+                  activeOpacity={0.8}
+                  testID="auto-upload-range-custom"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: uploadRange === 'custom' }}
+                  onPress={() => handleRangeSelect('custom')}
                 >
-                  <Calendar
-                    testID="auto-upload-range-custom-icon"
-                    size={18}
-                    color={uploadRange === 'custom' ? '#fff' : MUTED_ICON}
-                    strokeWidth={1.9}
+                  <View
+                    style={[
+                      styles.rangeIconBox,
+                      uploadRange === 'custom'
+                        ? styles.iconBoxActive
+                        : styles.iconBoxInactive,
+                    ]}
+                  >
+                    <Calendar
+                      testID="auto-upload-range-custom-icon"
+                      size={18}
+                      color={uploadRange === 'custom' ? '#fff' : MUTED_ICON}
+                      strokeWidth={1.9}
+                    />
+                  </View>
+                  <View style={styles.optionInfo}>
+                    <Text style={styles.optionTitle}>
+                      {GLOBAL_COPY.rangeCustomTitle}
+                    </Text>
+                    <Text style={styles.optionDesc}>
+                      {GLOBAL_COPY.rangeCustomDesc}
+                    </Text>
+                  </View>
+                  <SelectionIndicator
+                    selected={uploadRange === 'custom'}
+                    testID="auto-upload-range-custom-check-icon"
                   />
-                </View>
-                <View style={styles.optionInfo}>
-                  <Text style={styles.optionTitle}>
-                    {GLOBAL_COPY.rangeCustomTitle}
-                  </Text>
-                  <Text style={styles.optionDesc}>
-                    {GLOBAL_COPY.rangeCustomDesc}
-                  </Text>
-                </View>
-                <SelectionIndicator
-                  selected={uploadRange === 'custom'}
-                  testID="auto-upload-range-custom-check-icon"
-                />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ) : null}
 
           {/* Info Card */}
           <View style={styles.infoCard}>
@@ -991,11 +1001,6 @@ const styles = StyleSheet.create({
   },
   standaloneSectionTitle: {
     marginBottom: 10,
-  },
-  sectionMetaText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9AA3AE',
   },
   cardContainer: {
     gap: 12,

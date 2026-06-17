@@ -8,6 +8,7 @@ import {
   pickDocumentUploads,
   prepareAutoUploadEnable,
   saveAutoUploadConfig,
+  submitDocumentUploads,
 } from '../../services/SyncEngineModule';
 
 const mockGoBack = jest.fn();
@@ -98,6 +99,12 @@ jest.mock('../../services/SyncEngineModule', () => ({
   }),
   prepareAutoUploadEnable: jest.fn().mockResolvedValue(undefined),
   saveAutoUploadConfig: jest.fn().mockResolvedValue(undefined),
+  submitDocumentUploads: jest.fn().mockResolvedValue({
+    queuedCount: 0,
+    skippedCount: 0,
+    batchId: '',
+    files: [],
+  }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -160,6 +167,7 @@ const mockedGetAutoUploadConfig = getAutoUploadConfig as jest.Mock;
 const mockedPickDocumentUploads = pickDocumentUploads as jest.Mock;
 const mockedPrepareAutoUploadEnable = prepareAutoUploadEnable as jest.Mock;
 const mockedSaveAutoUploadConfig = saveAutoUploadConfig as jest.Mock;
+const mockedSubmitDocumentUploads = submitDocumentUploads as jest.Mock;
 
 describe('AutoUploadSettingsGlobalScreen', () => {
   beforeEach(() => {
@@ -180,6 +188,13 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     });
     mockedPrepareAutoUploadEnable.mockResolvedValue(undefined);
     mockedSaveAutoUploadConfig.mockResolvedValue(undefined);
+    mockedSubmitDocumentUploads.mockResolvedValue({
+      queuedCount: 0,
+      skippedCount: 0,
+      batchId: '',
+      files: [],
+    });
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -203,6 +218,7 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(textValues).toContain('指定文件');
     expect(textValues).toContain('从系统文件中选择需要同步的内容');
     expect(textValues).toContain('添加');
+    expect(textValues).not.toContain('0 B');
     expect(textValues).toContain('同步范围');
     expect(textValues).toContain('同步现有照片和视频');
     expect(textValues).toContain('仅同步后续新增内容');
@@ -405,12 +421,20 @@ describe('AutoUploadSettingsGlobalScreen', () => {
         .accessibilityState,
     ).toMatchObject({ selected: false });
     expect(
-      tree.root.findByProps({ testID: 'auto-upload-range-custom' }).props
-        .accessibilityState,
-    ).toMatchObject({ selected: true });
+      tree.root.findAllByProps({ testID: 'auto-upload-range-custom' }),
+    ).toHaveLength(0);
     expect(
       tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.disabled,
     ).toBe(true);
+    ReactTestRenderer.act(() => {
+      tree.root
+        .findByProps({ testID: 'auto-upload-source-album' })
+        .props.onPress();
+    });
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-range-custom' }).props
+        .accessibilityState,
+    ).toMatchObject({ selected: true });
   });
 
   it('does not save or enable auto upload when native config hydration fails', async () => {
@@ -439,6 +463,46 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
   });
 
+  it('hides sync range controls when only specified files are selected', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'disabled',
+    });
+    mockedPickDocumentUploads.mockResolvedValueOnce({
+      queuedCount: 1,
+      skippedCount: 0,
+      batchId: 'document-batch-1',
+      files: [
+        {
+          name: 'Brand Guidelines.pdf',
+          size: 2 * 1024 * 1024,
+          mimeType: 'application/pdf',
+          uri: 'content://docs/brand-guidelines',
+        },
+      ],
+    });
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root
+        .findByProps({ testID: 'auto-upload-add-file' })
+        .props.onPress();
+    });
+
+    const textValues = getTextValues(tree);
+    expect(textValues).not.toContain('同步范围');
+    expect(
+      tree.root.findAllByProps({ testID: 'auto-upload-range-all' }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ testID: 'auto-upload-range-now' }),
+    ).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ testID: 'auto-upload-range-custom' }),
+    ).toHaveLength(0);
+  });
+
   it('queues selected system files from the specified-file source', async () => {
     mockedGetAutoUploadConfig.mockResolvedValueOnce({
       enabled: false,
@@ -454,13 +518,21 @@ describe('AutoUploadSettingsGlobalScreen', () => {
           name: 'Brand Guidelines.pdf',
           size: 2 * 1024 * 1024,
           mimeType: 'application/pdf',
+          uri: 'content://docs/brand-guidelines',
         },
         {
           name: 'Launch Clip.mov',
           size: 12 * 1024 * 1024,
           mimeType: 'video/quicktime',
+          uri: 'content://docs/launch-clip',
         },
       ],
+    });
+    mockedSubmitDocumentUploads.mockResolvedValueOnce({
+      queuedCount: 2,
+      skippedCount: 0,
+      batchId: 'document-batch-1',
+      files: [],
     });
     const tree = await renderScreen();
 
@@ -472,6 +544,7 @@ describe('AutoUploadSettingsGlobalScreen', () => {
 
     const textValues = getTextValues(tree);
     expect(mockedPickDocumentUploads).toHaveBeenCalledTimes(1);
+    expect(mockedSubmitDocumentUploads).not.toHaveBeenCalled();
     expect(textValues).toContain('已选文件');
     expect(textValues).toContain('Brand Guidelines.pdf');
     expect(textValues).toContain('Launch Clip.mov');
@@ -490,6 +563,20 @@ describe('AutoUploadSettingsGlobalScreen', () => {
       await confirmButton.props.onPress();
     });
 
+    expect(mockedSubmitDocumentUploads).toHaveBeenCalledWith([
+      {
+        name: 'Brand Guidelines.pdf',
+        size: 2 * 1024 * 1024,
+        mimeType: 'application/pdf',
+        uri: 'content://docs/brand-guidelines',
+      },
+      {
+        name: 'Launch Clip.mov',
+        size: 12 * 1024 * 1024,
+        mimeType: 'video/quicktime',
+        uri: 'content://docs/launch-clip',
+      },
+    ]);
     expect(mockedPrepareAutoUploadEnable).not.toHaveBeenCalled();
     expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
     expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
@@ -642,6 +729,19 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(textValues).not.toContain('Brand Guidelines.pdf');
     expect(textValues).toContain('Launch Clip.mov');
     expect(textValues).toContain('已选择 1 个文件');
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
+    });
+
+    expect(mockedSubmitDocumentUploads).toHaveBeenCalledWith([
+      {
+        name: 'Launch Clip.mov',
+        size: 12 * 1024 * 1024,
+        mimeType: 'video/quicktime',
+        uri: 'file:///source/launch-clip.mov',
+      },
+    ]);
   });
 
   it('opens the custom range picker UI when custom range is selected', async () => {

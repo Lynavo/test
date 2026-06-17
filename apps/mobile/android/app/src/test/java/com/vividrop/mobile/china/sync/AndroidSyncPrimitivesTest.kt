@@ -93,6 +93,28 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun autoUploadResetOnlyRunsWhenPairingSwitchesDesktop() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldResetAutoUploadAfterPairing(
+        previousDeviceId = "desktop-a",
+        nextDeviceId = "desktop-b",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldResetAutoUploadAfterPairing(
+        previousDeviceId = "desktop-a",
+        nextDeviceId = "desktop-a",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldResetAutoUploadAfterPairing(
+        previousDeviceId = null,
+        nextDeviceId = "desktop-b",
+      ),
+    )
+  }
+
+  @Test
   fun buildWakeOnLanMagicPacketRepeatsMacSixteenTimesAfterSyncStream() {
     val packet = AndroidSyncPrimitives.buildWakeOnLanMagicPacket("aa:bb:cc:dd:ee:ff")
 

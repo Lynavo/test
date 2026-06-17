@@ -1348,6 +1348,27 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-document-picker (12.0.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - react-native-document-viewer (4.0.0):
     - hermes-engine
     - RCTRequired
@@ -2146,6 +2167,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - "react-native-document-picker (from `../node_modules/@react-native-documents/picker`)"
   - "react-native-document-viewer (from `../node_modules/@react-native-documents/viewer`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-video (from `../node_modules/react-native-video`)
@@ -2284,6 +2306,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-document-picker:
+    :path: "../node_modules/@react-native-documents/picker"
   react-native-document-viewer:
     :path: "../node_modules/@react-native-documents/viewer"
   react-native-safe-area-context:
@@ -2391,7 +2415,7 @@ SPEC CHECKSUMS:
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
-  hermes-engine: 518a7e87b4f2eca59e5398dfe002adadffe46941
+  hermes-engine: dea2e819bde5541d246a68c98eaea7ace4313901
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RCTDeprecation: 7489702d717ceea80e271eeacb3fbca39fa3c056
   RCTRequired: 1cceac389e77dc5826c681cb782d864b0ed623fc
@@ -2428,6 +2452,7 @@ SPEC CHECKSUMS:
   React-logger: db24f470fd04e25062bba89d0f845f0bb06743f0
   React-Mapbuffer: 8016ed7590fbedc903dc2d8351f0e9ccc851dd5e
   React-microtasksnativemodule: e019e567dad322e87b49044496b1ef86ac64c41b
+  react-native-document-picker: 598c549d1cbcc8c1f73abfbb5369d2faa10da242
   react-native-document-viewer: 6ea4098b8fae2224d36282b42777d5e26f64961d
   react-native-safe-area-context: 866dbfc3292621c18abe9857bda29485bf20607a
   react-native-video: 80a6980fbbc7d1b988ff7395bf94f2a10e871df2
@@ -2464,7 +2489,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: e96e93b493d8d86eeaee3e590ba0be53f6abe46f
   ReactCodegen: 9e5d722f09ded9195a74b6af9a49e31a882311ab
   ReactCommon: 72fd7add948b85461e4af21da4451d0c6f1fea5d
-  ReactNativeDependencies: 6dbd9ef501ab7d58ab1002710a176bbdb4df2368
+  ReactNativeDependencies: 59c9862d052d1246358d6fd27491aa2c60afb86d
   RNCAsyncStorage: 446abe7f5eb8df2f00063746a953524937033299
   RNDateTimePicker: 52a5decb243f39119be9e0d62f137e9349f38bfb
   RNGestureHandler: 7e24c85e99d3aa91bfcb05a3f2bede9678a407d5

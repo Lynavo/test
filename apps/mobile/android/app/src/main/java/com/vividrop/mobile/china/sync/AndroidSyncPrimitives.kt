@@ -446,6 +446,15 @@ object AndroidSyncPrimitives {
   fun shouldUseStoredPairingToken(connectionCode: String): Boolean =
     connectionCode.trim().isEmpty()
 
+  fun shouldResetAutoUploadAfterPairing(
+    previousDeviceId: String?,
+    nextDeviceId: String,
+  ): Boolean {
+    val previous = previousDeviceId?.trim().orEmpty()
+    val next = nextDeviceId.trim()
+    return previous.isNotEmpty() && next.isNotEmpty() && previous != next
+  }
+
   fun shouldStartAutoUploadRound(
     previousEnabled: Boolean,
     previousState: String,
