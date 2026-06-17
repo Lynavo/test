@@ -34,10 +34,12 @@ import {
 import { recordDownloadedFile } from '../services/download-records-service';
 import type { DesktopSharedResourceDTO, DirectoryFileDTO } from '@syncflow/contracts';
 import {
+  canPreviewDocumentFile,
   documentMimeType,
   documentPreviewUri,
   isImageFile,
   isVideoFile,
+  openFileWithOtherApp,
 } from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
@@ -197,10 +199,17 @@ export function RemoteAccessScreen() {
           savedToPhotos: false,
         });
 
+        const isPhotoOrVideo =
+          isImageFile(item.mediaType, filename) ||
+          isVideoFile(item.mediaType, filename);
+
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
-          t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
-            `${filename} 已儲存至相簿`
+          isPhotoOrVideo
+            ? t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
+                `${filename} 已儲存至相簿`
+            : t('sharedFiles.dialogs.downloadSavedToFiles', { name: filename }) ||
+                `${filename} 已保存到文件`
         );
       } catch (err) {
         console.warn('[RemoteAccessScreen] Download failed:', err);
@@ -306,6 +315,25 @@ export function RemoteAccessScreen() {
         ) {
           const url = await getResourcePreviewUrl(desktop, item.resourceId);
           setPreview({ item, url });
+          return;
+        }
+
+        if (!canPreviewDocumentFile(item.mediaType, item.displayName)) {
+          try {
+            const localPath = await prepareResourcePreview(
+              desktop,
+              item.resourceId,
+              item.displayName,
+            );
+            await openFileWithOtherApp(localPath, item.displayName);
+          } catch (err) {
+            console.warn('[RemoteAccessScreen] Open with other app failed:', err);
+            Alert.alert(
+              t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
+              t('sharedFiles.dialogs.previewFailedMessage') ||
+                '無法取得檔案預覽',
+            );
+          }
           return;
         }
 

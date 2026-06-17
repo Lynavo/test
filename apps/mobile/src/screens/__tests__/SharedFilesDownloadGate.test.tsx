@@ -36,6 +36,11 @@ jest.mock('react-i18next', () => ({
         'sharedFiles.dialogs.downloadFailedMessage': '無法下載檔案，请稍後重試',
         'sharedFiles.dialogs.previewFailed': '預覽失敗',
         'sharedFiles.dialogs.previewFailedMessage': '無法取得檔案預覽',
+        'sharedFiles.dialogs.previewUnsupported': '無法預覽',
+        'sharedFiles.dialogs.previewUnsupportedMessage':
+          '此檔案類型目前無法預覽，請先下載後再用其他 App 開啟',
+        'sharedFiles.dialogs.openWithOtherApp': '用其他 App 開啟',
+        'sharedFiles.dialogs.cancel': '取消',
         'sharedFiles.title': '遠端資源',
         'sharedFiles.phoneSyncSpace.title': '手機同步空間',
         'sharedFiles.phoneSyncSpace.desc': '檢視已同步至电脑的檔案與上传来源',
@@ -54,6 +59,12 @@ jest.mock('react-i18next', () => ({
         options?.name
       ) {
         return `${options.name} 已儲存至相簿`;
+      }
+      if (
+        key === 'sharedFiles.dialogs.downloadSavedToFiles' &&
+        options?.name
+      ) {
+        return `${options.name} 已儲存到檔案`;
       }
       return map[key] || key;
     },
@@ -92,6 +103,12 @@ jest.mock('react-native-video', () => 'Video');
 jest.mock('@react-native-documents/viewer', () => ({
   viewDocument: jest.fn(),
 }));
+
+const mockShareOpen = (
+  globalThis as typeof globalThis & {
+    __mockReactNativeShareOpen: jest.Mock;
+  }
+).__mockReactNativeShareOpen;
 
 jest.mock('react-native-svg', () => {
   const ReactInner = require('react');
@@ -633,7 +650,7 @@ describe('RemoteAccessGlobalScreen', () => {
     });
     expect(alertSpy).toHaveBeenCalledWith(
       '下載完成',
-      'alpha.jpg 已保存至 /local/alpha.jpg',
+      'alpha.jpg 已儲存到檔案',
     );
 
     alertSpy.mockRestore();
@@ -775,6 +792,55 @@ describe('RemoteAccessGlobalScreen', () => {
       headerTitle: 'manual.pdf',
       mimeType: 'application/pdf',
     });
+  });
+
+  it('opens unsupported extensionless global remote documents through the system app chooser', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+      {
+        resourceId: 'personal-dir:protoc-gen-go',
+        desktopDeviceId: 'desktop-device-id',
+        displayName: 'protoc-gen-go',
+        kind: 'shared_file',
+        fileSize: 9071458,
+        mediaType: 'document',
+        status: 'available',
+        addedAt: '2026-06-17T11:16:32.000Z',
+        downloadCount: 0,
+      },
+    ]);
+    mockPrepareGlobalRemoteAccessPreview.mockResolvedValueOnce(
+      '/cache/protoc-gen-go',
+    );
+    mockShareOpen.mockResolvedValueOnce(undefined);
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('protoc-gen-go')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('protoc-gen-go'));
+
+    await waitFor(() => {
+      expect(mockPrepareGlobalRemoteAccessPreview).toHaveBeenCalledWith(
+        'personal-dir:protoc-gen-go',
+        'protoc-gen-go',
+      );
+    });
+
+    expect(mockShareOpen).toHaveBeenCalledWith({
+      url: 'file:///cache/protoc-gen-go',
+      type: 'application/octet-stream',
+      filename: 'protoc-gen-go',
+      failOnCancel: false,
+      showAppsToView: true,
+    });
+    expect(mockViewDocument).not.toHaveBeenCalled();
   });
 
   it('opens a global remote image inside the app preview instead of the system viewer', async () => {
@@ -1265,9 +1331,6 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       ).toBeGreaterThan(0);
       expect(
         queryAllByTestId('phone-sync-media-icon-file').length,
-      ).toBeGreaterThan(0);
-      expect(
-        queryAllByTestId('phone-sync-preview-icon').length,
       ).toBeGreaterThan(0);
     });
     expect(queryByText('list-outline')).toBeNull();

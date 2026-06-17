@@ -55,10 +55,12 @@ import {
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import {
+  canPreviewDocumentFile,
   documentMimeType,
   documentPreviewUri,
   isImageFile,
   isVideoFile,
+  openFileWithOtherApp,
 } from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
@@ -696,9 +698,9 @@ export function RemoteAccessGlobalScreen() {
             ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
                 name: item.displayName,
               }) || `${item.displayName} 已儲存至相簿`
-            : `${item.displayName} 已保存至 ${
-                result.savedLocation ?? result.localPath
-              }`,
+            : t('sharedFiles.dialogs.downloadSavedToFiles', {
+                name: item.displayName,
+              }) || `${item.displayName} 已保存到文件`,
         );
       } catch (err) {
         console.warn('[RemoteAccessScreen] Download failed:', err);
@@ -784,6 +786,24 @@ export function RemoteAccessGlobalScreen() {
         ) {
           const url = await getGlobalRemoteAccessPreviewUrl(item.resourceId);
           setResourcePreview({ item, url });
+          return;
+        }
+
+        if (!canPreviewDocumentFile(item.mediaType, item.displayName)) {
+          try {
+            const localPath = await prepareGlobalRemoteAccessPreview(
+              item.resourceId,
+              item.displayName,
+            );
+            await openFileWithOtherApp(localPath, item.displayName);
+          } catch (err) {
+            console.warn('[RemoteAccessGlobalScreen] Open with other app failed:', err);
+            Alert.alert(
+              t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
+              t('sharedFiles.dialogs.previewFailedMessage') ||
+                '無法取得檔案預覽',
+            );
+          }
           return;
         }
 
