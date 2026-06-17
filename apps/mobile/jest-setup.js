@@ -33,6 +33,15 @@ jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn().mockResolvedValue([]),
 }));
 
+global.__mockReactNativeShareOpen = jest.fn();
+jest.mock('react-native-share', () => {
+  const shareMock = {
+    open: global.__mockReactNativeShareOpen,
+  };
+  shareMock.default = shareMock;
+  return shareMock;
+});
+
 // Mock NativeSyncEngine NativeModule
 NativeModules.NativeSyncEngine = {
   pairDevice: jest.fn(),

@@ -2,6 +2,9 @@ import { ipcMain, BrowserWindow, net } from 'electron';
 import log from 'electron-log';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
+import { readdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import type { AddSharedResourcePayload } from '@syncflow/contracts';
 import { sidecarClient, syncCredentialsToSidecar } from './sidecar-client';
@@ -73,6 +76,8 @@ export const IPC = {
   FILES_SELECT_FILE: 'files:select-file',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
+  FILES_CHECK_FOLDER_PERMISSION: 'files:check-folder-permission',
+  FILES_REQUEST_FOLDER_PERMISSION: 'files:request-folder-permission',
   POWER_SAVE_GET_STATE: 'power-save:get-state',
   POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
@@ -650,4 +655,29 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.FILES_SELECT_FILE, () => selectFile());
   ipcMain.handle(IPC.FILES_SELECT_FOLDER, () => selectFolder());
   ipcMain.handle(IPC.FILES_COPY_CLIPBOARD, (_e, text: string) => copyToClipboard(text));
+
+  // Folder permission check / request (macOS TCC probe)
+  ipcMain.handle(IPC.FILES_CHECK_FOLDER_PERMISSION, async (): Promise<{ granted: boolean }> => {
+    if (process.platform !== 'darwin') return { granted: true };
+    try {
+      await readdir(join(homedir(), 'Desktop'), { withFileTypes: true });
+      return { granted: true };
+    } catch {
+      return { granted: false };
+    }
+  });
+  ipcMain.handle(
+    IPC.FILES_REQUEST_FOLDER_PERMISSION,
+    async (): Promise<{ granted: boolean }> => {
+      if (process.platform !== 'darwin') return { granted: true };
+      try {
+        // Probing a TCC-protected directory triggers the macOS permission prompt.
+        await readdir(join(homedir(), 'Desktop'), { withFileTypes: true });
+        return { granted: true };
+      } catch (err) {
+        log.warn('[Permissions] folder permission request failed', err);
+        return { granted: false };
+      }
+    },
+  );
 }

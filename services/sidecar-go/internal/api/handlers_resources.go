@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -393,21 +394,40 @@ func (s *Server) resolveMobileReceivedUploadWithClient(
 	}
 	fileKey := strings.TrimSpace(r.URL.Query().Get("fileKey"))
 	if !isValidReceivedFileKey(fileKey) {
+		slog.Warn("resolveMobileReceivedUpload: invalid fileKey", "fileKey", fileKey)
 		writeError(w, http.StatusBadRequest, "invalid fileKey")
 		return mobileAccessClient{}, nil, "", nil, false
 	}
 	upload, err := s.store.GetUpload(fileKey)
-	if err != nil || upload.ClientID != client.ClientID || upload.Status != "completed" {
+	if err != nil {
+		slog.Warn("resolveMobileReceivedUpload: GetUpload failed", "fileKey", fileKey, "err", err)
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	if upload.ClientID != client.ClientID {
+		slog.Warn("resolveMobileReceivedUpload: ClientID mismatch", "fileKey", fileKey, "dbClientID", upload.ClientID, "queryClientID", client.ClientID)
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	if upload.Status != "completed" {
+		slog.Warn("resolveMobileReceivedUpload: Status not completed", "fileKey", fileKey, "status", upload.Status)
 		writeError(w, http.StatusNotFound, "received file not found")
 		return mobileAccessClient{}, nil, "", nil, false
 	}
 	resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, upload.FinalPath)
 	if !ok {
+		slog.Warn("resolveMobileReceivedUpload: ResolveFinalPath failed", "fileKey", fileKey)
 		writeError(w, http.StatusNotFound, "received file not found")
 		return mobileAccessClient{}, nil, "", nil, false
 	}
 	info, err := os.Stat(resolvedPath)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil {
+		slog.Warn("resolveMobileReceivedUpload: os.Stat failed", "fileKey", fileKey, "resolvedPath", resolvedPath, "err", err)
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	if !info.Mode().IsRegular() {
+		slog.Warn("resolveMobileReceivedUpload: path not a regular file", "fileKey", fileKey, "resolvedPath", resolvedPath, "mode", info.Mode().String())
 		writeError(w, http.StatusNotFound, "received file not found")
 		return mobileAccessClient{}, nil, "", nil, false
 	}
@@ -616,7 +636,11 @@ func (s *Server) localPathForSharedResource(resource store.SharedResource) (stri
 	if upload.FinalPath == nil || strings.TrimSpace(*upload.FinalPath) == "" || upload.Status != "completed" {
 		return "", store.ErrNoRows
 	}
-	return strings.TrimSpace(*upload.FinalPath), nil
+	resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, upload.FinalPath)
+	if !ok {
+		return "", store.ErrNoRows
+	}
+	return resolvedPath, nil
 }
 
 type mobileAccessClient struct {

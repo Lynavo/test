@@ -2055,6 +2055,27 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNShare (12.3.1):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNSVG (15.15.4):
     - hermes-engine
     - RCTRequired
@@ -2213,6 +2234,7 @@ DEPENDENCIES:
   - RNKeychain (from `../node_modules/react-native-keychain`)
   - RNLocalize (from `../node_modules/react-native-localize`)
   - RNScreens (from `../node_modules/react-native-screens`)
+  - RNShare (from `../node_modules/react-native-share`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - SSZipArchive (~> 2.4)
@@ -2398,6 +2420,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-localize"
   RNScreens:
     :path: "../node_modules/react-native-screens"
+  RNShare:
+    :path: "../node_modules/react-native-share"
   RNSVG:
     :path: "../node_modules/react-native-svg"
   RNVectorIcons:
@@ -2415,7 +2439,7 @@ SPEC CHECKSUMS:
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
-  hermes-engine: dea2e819bde5541d246a68c98eaea7ace4313901
+  hermes-engine: 518a7e87b4f2eca59e5398dfe002adadffe46941
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RCTDeprecation: 7489702d717ceea80e271eeacb3fbca39fa3c056
   RCTRequired: 1cceac389e77dc5826c681cb782d864b0ed623fc
@@ -2489,7 +2513,7 @@ SPEC CHECKSUMS:
   ReactAppDependencyProvider: e96e93b493d8d86eeaee3e590ba0be53f6abe46f
   ReactCodegen: 9e5d722f09ded9195a74b6af9a49e31a882311ab
   ReactCommon: 72fd7add948b85461e4af21da4451d0c6f1fea5d
-  ReactNativeDependencies: 59c9862d052d1246358d6fd27491aa2c60afb86d
+  ReactNativeDependencies: 6dbd9ef501ab7d58ab1002710a176bbdb4df2368
   RNCAsyncStorage: 446abe7f5eb8df2f00063746a953524937033299
   RNDateTimePicker: 52a5decb243f39119be9e0d62f137e9349f38bfb
   RNGestureHandler: 7e24c85e99d3aa91bfcb05a3f2bede9678a407d5
@@ -2498,6 +2522,7 @@ SPEC CHECKSUMS:
   RNKeychain: 4530fe0da3b91041852ceeb935ceeffcce8b657a
   RNLocalize: c1673817770082412e9b071e11633c366d448a4a
   RNScreens: 61e55a2d1ea789ae8b234803d7a151190e0c40f4
+  RNShare: 1da7631969279a237e97875855352af8ae7d8af5
   RNSVG: 69057633bc3f2f6567c7b4b3347645bbf7c425d6
   RNVectorIcons: 081a3c63100f19eafd61807ca539a853a5c31110
   SSZipArchive: fe6a26b2a54d5a0890f2567b5cc6de5caa600aef

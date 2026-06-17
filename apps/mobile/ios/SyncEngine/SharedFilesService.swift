@@ -376,6 +376,10 @@ class SharedFilesService {
         var resumeOffset = SharedFilesRoutePolicy.resumeOffsetForPartialDownload(
             existingBytes: fileSize(at: partialURL)
         )
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "downloadEndpointToLocalFile preparing endpoint=\(endpoint) partial_key=\(partialKey) filename=\(filename) media_type=\(mediaType ?? "nil") resume_offset=\(resumeOffset) has_metadata=\(partialMetadata != nil)"
+        )
         if !SharedFilesRoutePolicy.canResumePartialDownload(
             existingBytes: resumeOffset,
             validator: partialMetadata?.validator,
@@ -436,6 +440,10 @@ class SharedFilesService {
                 filename: filename,
                 mediaType: mediaType
             )
+            syncDiagnosticsLog(
+                "SharedFiles",
+                "downloadEndpointToLocalFile persisted endpoint=\(endpoint) filename=\(filename) saved_to_photos=\(result.savedToPhotos) local_path=\(result.localPath ?? "nil") saved_location=\(result.savedLocation ?? "nil")"
+            )
             downloadedURLForCleanup = nil
             try? FileManager.default.removeItem(at: metadataURL)
             return result
@@ -457,6 +465,10 @@ class SharedFilesService {
         var partialMetadata = readPartialDownloadMetadata(at: metadataURL)
         var resumeOffset = SharedFilesRoutePolicy.resumeOffsetForPartialDownload(
             existingBytes: fileSize(at: partialURL)
+        )
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "downloadFileForPreview preparing scope=\(scope.rawValue) path=\(path) endpoint=\(endpoint) resume_offset=\(resumeOffset) has_metadata=\(partialMetadata != nil)"
         )
         if !SharedFilesRoutePolicy.canResumePartialDownload(
             existingBytes: resumeOffset,
@@ -516,6 +528,10 @@ class SharedFilesService {
         try FileManager.default.moveItem(at: downloadedURL, to: previewURL)
         downloadedURLForCleanup = nil
         try? FileManager.default.removeItem(at: metadataURL)
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "downloadFileForPreview cached scope=\(scope.rawValue) path=\(path) preview_url=\(previewURL.absoluteString) bytes=\(fileSize(at: previewURL))"
+        )
         return previewURL
     }
 
@@ -577,10 +593,18 @@ class SharedFilesService {
         try FileManager.default.moveItem(at: downloadedURL, to: destURL)
 
         let fileType = normalizedLocalFileType(filename: safeFilename, mediaType: mediaType)
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "persistDownloadedFile target filename=\(safeFilename) media_type=\(mediaType ?? "nil") normalized_type=\(fileType)"
+        )
         if fileType == "image" || fileType == "video" {
             try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
             try? FileManager.default.removeItem(at: destURL)
             slog("[SharedFilesService] saved %@ to Camera Roll", safeFilename)
+            syncDiagnosticsLog(
+                "SharedFiles",
+                "persistDownloadedFile saved_to_photos filename=\(safeFilename) normalized_type=\(fileType) saved_location=Photos"
+            )
             return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
         }
 
@@ -588,6 +612,10 @@ class SharedFilesService {
         let finalURL = documentsURL.appendingPathComponent(safeFilename)
         try? FileManager.default.removeItem(at: finalURL)
         try FileManager.default.moveItem(at: destURL, to: finalURL)
+        syncDiagnosticsLog(
+            "SharedFiles",
+            "persistDownloadedFile saved_to_documents filename=\(safeFilename) local_path=\(finalURL.path)"
+        )
 
         return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
     }
@@ -634,7 +662,16 @@ class SharedFilesService {
         let downloadSession = URLSession(configuration: config, delegate: delegate, delegateQueue: queue)
         defer { downloadSession.finishTasksAndInvalidate() }
 
-        return try await delegate.start(session: downloadSession, request: request)
+        let result = try await delegate.start(session: downloadSession, request: request)
+        if let http = result.1 as? HTTPURLResponse {
+            syncDiagnosticsLog(
+                "SharedFiles",
+                "downloadFile response endpoint=\(endpoint) status=\(http.statusCode) content_type=\(http.value(forHTTPHeaderField: "Content-Type") ?? "nil") content_length=\(http.value(forHTTPHeaderField: "Content-Length") ?? "nil")"
+            )
+        } else {
+            syncDiagnosticsLog("SharedFiles", "downloadFile response endpoint=\(endpoint) non_http_response")
+        }
+        return result
     }
 
     private func partialDownloadURL(path: String) throws -> URL {

@@ -1,3 +1,22 @@
+import Share, { type ShareOptions } from 'react-native-share';
+
+type ShareOpen = (options: ShareOptions) => Promise<unknown>;
+type ShareModuleShape = {
+  open?: ShareOpen;
+  default?: {
+    open?: ShareOpen;
+  };
+};
+
+function resolveShareOpen(): ShareOpen {
+  const shareModule = Share as unknown as ShareModuleShape;
+  const shareOpen = shareModule.open ?? shareModule.default?.open;
+  if (!shareOpen) {
+    throw new Error('react-native-share open is unavailable');
+  }
+  return shareOpen;
+}
+
 export function isImageFile(mediaType?: string | null, filename?: string | null) {
   const name = filename ?? '';
   return (
@@ -19,6 +38,18 @@ export function isVideoFile(mediaType?: string | null, filename?: string | null)
 export function documentMimeType(filename?: string | null): string | undefined {
   const ext = filename?.split('.').pop()?.toLowerCase();
   switch (ext) {
+    case 'md':
+    case 'markdown':
+      return 'text/markdown';
+    case 'json':
+      return 'application/json';
+    case 'xml':
+      return 'application/xml';
+    case 'html':
+    case 'htm':
+      return 'text/html';
+    case 'rtf':
+      return 'application/rtf';
     case 'pdf':
       return 'application/pdf';
     case 'txt':
@@ -45,6 +76,34 @@ export function documentMimeType(filename?: string | null): string | undefined {
   }
 }
 
+export function canPreviewDocumentFile(
+  mediaType?: string | null,
+  filename?: string | null,
+): boolean {
+  const normalizedMediaType = mediaType?.trim().toLowerCase();
+  const ext = filename?.split('.').pop()?.toLowerCase();
+  const hasExtension = Boolean(ext && ext !== filename?.toLowerCase());
+
+  if (hasExtension) {
+    return (
+      documentMimeType(filename) != null ||
+      [
+        'pages',
+        'numbers',
+        'key',
+        'yaml',
+        'yml',
+      ].includes(ext ?? '')
+    );
+  }
+
+  return (
+    normalizedMediaType?.startsWith('text/') === true ||
+    (normalizedMediaType?.startsWith('application/') === true &&
+      normalizedMediaType !== 'application/octet-stream')
+  );
+}
+
 export function documentPreviewUri(localPath: string): string {
   const trimmed = localPath.trim();
   if (
@@ -55,4 +114,17 @@ export function documentPreviewUri(localPath: string): string {
     return trimmed;
   }
   return `file://${trimmed}`;
+}
+
+export async function openFileWithOtherApp(
+  localPath: string,
+  filename?: string | null,
+): Promise<void> {
+  await resolveShareOpen()({
+    url: documentPreviewUri(localPath),
+    type: documentMimeType(filename) ?? 'application/octet-stream',
+    filename: filename ?? undefined,
+    failOnCancel: false,
+    showAppsToView: true,
+  });
 }

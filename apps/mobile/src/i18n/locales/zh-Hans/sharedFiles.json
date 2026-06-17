@@ -85,6 +85,10 @@
     "downloadUnavailableMessage": "文件不存在或已无法访问",
     "previewFailed": "预览失败",
     "previewFailedMessage": "无法获取文件预览",
+    "previewUnsupported": "无法预览",
+    "previewUnsupportedMessage": "此文件类型目前无法预览，请先下载后再用其他 App 打开",
+    "openWithOtherApp": "用其他 App 打开",
+    "cancel": "取消",
     "savedLocationPhotos": "相册",
     "savedLocationDocuments": "iOS“文件”App -> Vivi Drop 目录",
     "savedLocationDownloads": "系统 Downloads -> Vivi Drop 目录"

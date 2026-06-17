@@ -127,7 +127,10 @@ export interface ElectronAPI {
     selectFile(): Promise<string | null>;
     selectFolder(): Promise<string | null>;
     copyToClipboard(text: string): Promise<void>;
+    checkFolderPermission(): Promise<{ granted: boolean }>;
+    requestFolderPermission(): Promise<{ granted: boolean }>;
   };
+
   auth: {
     sendSMSCode(payload: { phone: string }): Promise<{
       ok: boolean;

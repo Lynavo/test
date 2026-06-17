@@ -1540,6 +1540,7 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun downloadSharedFile(scope: String, path: String, accessToken: String, promise: Promise) {
     runAsync(promise) {
+      recordNativeLog("SharedFiles", "downloadSharedFile requested scope=$scope path=$path")
       promise.resolve(downloadSharedFileToLocalStorage(scope, path, accessToken))
     }
   }
@@ -1547,6 +1548,10 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun downloadReceivedFile(fileKey: String, filename: String, mediaType: String?, promise: Promise) {
     runAsync(promise) {
+      recordNativeLog(
+        "SharedFiles",
+        "downloadReceivedFile requested fileKey=${fileKey.trim()} filename=$filename media_type=${mediaType ?: "nil"}",
+      )
       promise.resolve(downloadReceivedFileToLocalStorage(fileKey, filename, mediaType))
     }
   }
@@ -1562,26 +1567,96 @@ class NativeSyncEngineModule(
         reason = "stream_shared_file",
       )
       logSharedFileRoute("getSharedFileStreamUrl", route)
-      promise.resolve(sharedFileUrlForRoute("stream", path, route).toString())
+      val streamUrl = sharedFileUrlForRoute("stream", path, route)
+      recordNativeLog(
+        "SharedFiles",
+        "getSharedFileStreamUrl resolved scope=$scope path=$path url_host=${streamUrl.host} url_path=${streamUrl.path}",
+      )
+      promise.resolve(streamUrl.toString())
+    }
+  }
+
+  @ReactMethod
+  fun prepareSharedFilePreview(scope: String, path: String, accessToken: String, promise: Promise) {
+    runAsync(promise) {
+      recordNativeLog("SharedFiles", "prepareSharedFilePreview requested scope=$scope path=$path")
+      var route = resolveSharedFileRoute(
+        scope = scope,
+        kind = "download",
+        path = path,
+        requestAccessToken = accessToken,
+        reason = "preview_shared_file",
+      )
+      logSharedFileRoute("prepareSharedFilePreview", route)
+      try {
+        val localPath = downloadSharedFilePreviewFromRoute(path, route)
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "preview_shared_file_success",
+        )
+        recordNativeLog(
+          "SharedFiles",
+          "prepareSharedFilePreview completed scope=$scope path=$path is_tunnel=${route.isTunnel} local_path=$localPath",
+        )
+        promise.resolve(localPath)
+      } catch (err: Throwable) {
+        if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+          recordNativeLog(
+            "SharedFiles",
+            "prepareSharedFilePreview failed path=$path is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+            Log.WARN,
+          )
+          throw err
+        }
+        route = recoverSharedFileTunnelAfterRouteFailure(
+          scope = scope,
+          kind = "download",
+          path = path,
+          requestAccessToken = accessToken,
+          reason = "preview_shared_file",
+          error = err,
+        )
+        logSharedFileRoute("prepareSharedFilePreview", route, retry = true)
+        val localPath = downloadSharedFilePreviewFromRoute(path, route)
+        updateSharedFilesReachability(
+          state = "available",
+          route = route,
+          reason = "preview_shared_file_success",
+        )
+        recordNativeLog(
+          "SharedFiles",
+          "prepareSharedFilePreview completed scope=$scope path=$path retry=true is_tunnel=${route.isTunnel} local_path=$localPath",
+        )
+        promise.resolve(localPath)
+      }
     }
   }
 
   @ReactMethod
   fun shareFile(localPath: String, promise: Promise) {
     try {
+      recordNativeLog("SharedFiles", "shareFile requested local_path=$localPath")
       val uri = when {
         localPath.startsWith("content://") -> Uri.parse(localPath)
         localPath.startsWith("file://") -> fileProviderUri(File(Uri.parse(localPath).path ?: ""))
         else -> fileProviderUri(File(localPath))
       }
+      val resolvedType = reactApplicationContext.contentResolver.getType(uri) ?: "*/*"
       val intent = Intent(Intent.ACTION_SEND).apply {
-        type = reactApplicationContext.contentResolver.getType(uri) ?: "*/*"
+        type = resolvedType
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       reactApplicationContext.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      recordNativeLog("SharedFiles", "shareFile launched uri_scheme=${uri.scheme} mime_type=$resolvedType")
       promise.resolve(true)
     } catch (error: Throwable) {
+      recordNativeLog(
+        "SharedFiles",
+        "shareFile failed local_path=$localPath error=${error.message ?: error::class.java.simpleName}",
+        Log.WARN,
+      )
       promise.reject("ANDROID_SHARE_FAILED", error.message, error)
     }
   }
@@ -1589,25 +1664,39 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun downloadUrlToShareCache(url: String, filename: String, promise: Promise) {
     runAsync(promise) {
-      val connection = URL(url).openConnection() as HttpURLConnection
+      val remoteUrl = URL(url)
+      recordNativeLog(
+        "SharedFiles",
+        "downloadUrlToShareCache requested filename=$filename url_host=${remoteUrl.host} url_path=${remoteUrl.path}",
+      )
+      val connection = remoteUrl.openConnection() as HttpURLConnection
       try {
         connection.requestMethod = "GET"
         connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
         connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
-        if (connection.responseCode !in 200..299) {
-          throw IllegalStateException("Download failed with HTTP ${connection.responseCode}")
+        val statusCode = connection.responseCode
+        recordNativeLog(
+          "SharedFiles",
+          "downloadUrlToShareCache response filename=$filename status=$statusCode content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong}",
+        )
+        if (statusCode !in 200..299) {
+          throw IllegalStateException("Download failed with HTTP $statusCode")
         }
         val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_downloads")
         if (!destDir.exists()) {
           destDir.mkdirs()
         }
-        val fallbackName = URL(url).path.substringAfterLast('/').ifBlank { "remote-file" }
+        val fallbackName = remoteUrl.path.substringAfterLast('/').ifBlank { "remote-file" }
         val destFile = uniqueShareCacheFile(destDir, safeShareCacheFilename(filename, fallbackName))
         BufferedOutputStream(destFile.outputStream()).use { output ->
           BufferedInputStream(connection.inputStream).use { input ->
             input.copyTo(output)
           }
         }
+        recordNativeLog(
+          "SharedFiles",
+          "downloadUrlToShareCache completed filename=${destFile.name} local_path=${destFile.absolutePath} bytes=${destFile.length()}",
+        )
         promise.resolve(destFile.absolutePath)
       } finally {
         connection.disconnect()
@@ -1618,18 +1707,28 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun downloadUrlToLocal(url: String, filename: String, mediaType: String?, promise: Promise) {
     runAsync(promise) {
+      val remoteUrl = URL(url)
+      recordNativeLog(
+        "SharedFiles",
+        "downloadUrlToLocal requested filename=$filename media_type=${mediaType ?: "nil"} url_host=${remoteUrl.host} url_path=${remoteUrl.path}",
+      )
       val safeFilename = safeShareCacheFilename(
         filename,
-        URL(url).path.substringAfterLast('/').ifBlank { "remote-file" },
+        remoteUrl.path.substringAfterLast('/').ifBlank { "remote-file" },
       )
       val localMediaType = localDownloadMediaType(safeFilename, mediaType)
-      val connection = URL(url).openConnection() as HttpURLConnection
+      val connection = remoteUrl.openConnection() as HttpURLConnection
       try {
         connection.requestMethod = "GET"
         connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
         connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
-        if (connection.responseCode !in 200..299) {
-          throw IllegalStateException("Download failed with HTTP ${connection.responseCode}")
+        val statusCode = connection.responseCode
+        recordNativeLog(
+          "SharedFiles",
+          "downloadUrlToLocal response filename=$safeFilename status=$statusCode media_type=$localMediaType content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong}",
+        )
+        if (statusCode !in 200..299) {
+          throw IllegalStateException("Download failed with HTTP $statusCode")
         }
         val mimeType = connection.contentType?.substringBefore(';')
           ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
@@ -1666,6 +1765,10 @@ class NativeSyncEngineModule(
             values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             reactApplicationContext.contentResolver.update(uri, values, null, null)
           }
+          recordNativeLog(
+            "SharedFiles",
+            "downloadUrlToLocal saved_to_photos filename=$safeFilename media_type=$localMediaType saved_location=$savedLocation uri=$uri",
+          )
           promise.resolve(Arguments.createMap().apply {
             putBoolean("savedToPhotos", true)
             putNull("localPath")
@@ -1694,6 +1797,10 @@ class NativeSyncEngineModule(
           values.clear()
           values.put(MediaStore.MediaColumns.IS_PENDING, 0)
           reactApplicationContext.contentResolver.update(uri, values, null, null)
+          recordNativeLog(
+            "SharedFiles",
+            "downloadUrlToLocal saved_to_downloads filename=$safeFilename saved_location=$savedLocation local_path=$uri expose_uri=true",
+          )
           promise.resolve(Arguments.createMap().apply {
             putBoolean("savedToPhotos", false)
             putString("localPath", uri.toString())
@@ -1713,6 +1820,10 @@ class NativeSyncEngineModule(
               copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
             }
           }
+          recordNativeLog(
+            "SharedFiles",
+            "downloadUrlToLocal saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop local_path=${destFile.absolutePath}",
+          )
           promise.resolve(Arguments.createMap().apply {
             putBoolean("savedToPhotos", false)
             putString("localPath", destFile.absolutePath)
@@ -1728,6 +1839,7 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun shareFiles(localPaths: ReadableArray, promise: Promise) {
     try {
+      recordNativeLog("SharedFiles", "shareFiles requested count=${localPaths.size()}")
       val uris = arrayListOf<Uri>()
       var mimeType: String? = null
       for (index in 0 until localPaths.size()) {
@@ -1750,8 +1862,14 @@ class NativeSyncEngineModule(
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
       }
       reactApplicationContext.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      recordNativeLog("SharedFiles", "shareFiles launched count=${uris.size} mime_type=${mimeType ?: "*/*"}")
       promise.resolve(true)
     } catch (error: Throwable) {
+      recordNativeLog(
+        "SharedFiles",
+        "shareFiles failed count=${localPaths.size()} error=${error.message ?: error::class.java.simpleName}",
+        Log.WARN,
+      )
       promise.reject("ANDROID_SHARE_FAILED", error.message, error)
     }
   }
@@ -2886,6 +3004,7 @@ class NativeSyncEngineModule(
   }
 
   private fun downloadSharedFileToLocalStorage(scope: String, path: String, requestAccessToken: String): WritableMap {
+    recordNativeLog("SharedFiles", "downloadSharedFile resolving route scope=$scope path=$path")
     var route = resolveSharedFileRoute(
       scope = scope,
       kind = "download",
@@ -2896,6 +3015,7 @@ class NativeSyncEngineModule(
     logSharedFileRoute("downloadSharedFile", route)
     return try {
       downloadSharedFileFromRoute(path, route).also {
+        logSharedFileDownloadResult("downloadSharedFile", path, it, route)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -2904,6 +3024,11 @@ class NativeSyncEngineModule(
       }
     } catch (err: Throwable) {
       if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        recordNativeLog(
+          "SharedFiles",
+          "downloadSharedFile failed path=$path is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+          Log.WARN,
+        )
         throw err
       }
       route = recoverSharedFileTunnelAfterRouteFailure(
@@ -2916,6 +3041,7 @@ class NativeSyncEngineModule(
       )
       logSharedFileRoute("downloadSharedFile", route, retry = true)
       downloadSharedFileFromRoute(path, route).also {
+        logSharedFileDownloadResult("downloadSharedFile", path, it, route, retry = true)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -2933,6 +3059,10 @@ class NativeSyncEngineModule(
     val normalizedFileKey = fileKey.trim()
     require(normalizedFileKey.isNotBlank()) { "Received file key is required" }
     val safeFilename = safeShareCacheFilename(filename, normalizedFileKey.substringAfterLast('/').ifBlank { "remote-file" })
+    recordNativeLog(
+      "SharedFiles",
+      "downloadReceivedFile resolving route fileKey=$normalizedFileKey filename=$safeFilename media_type=${requestedMediaType ?: "nil"}",
+    )
     var route = resolveSharedFileRoute(
       scope = "team",
       kind = "download",
@@ -2943,6 +3073,7 @@ class NativeSyncEngineModule(
     logSharedFileRoute("downloadReceivedFile", route)
     return try {
       downloadReceivedFileFromRoute(normalizedFileKey, safeFilename, requestedMediaType, route).also {
+        logSharedFileDownloadResult("downloadReceivedFile", normalizedFileKey, it, route)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -2951,6 +3082,11 @@ class NativeSyncEngineModule(
       }
     } catch (err: Throwable) {
       if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        recordNativeLog(
+          "SharedFiles",
+          "downloadReceivedFile failed fileKey=$normalizedFileKey is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+          Log.WARN,
+        )
         throw err
       }
       route = recoverSharedFileTunnelAfterRouteFailure(
@@ -2963,6 +3099,7 @@ class NativeSyncEngineModule(
       )
       logSharedFileRoute("downloadReceivedFile", route, retry = true)
       downloadReceivedFileFromRoute(normalizedFileKey, safeFilename, requestedMediaType, route).also {
+        logSharedFileDownloadResult("downloadReceivedFile", normalizedFileKey, it, route, retry = true)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -2980,6 +3117,10 @@ class NativeSyncEngineModule(
   ): WritableMap {
     val connection = receivedFileUrlForRoute(fileKey, route).openConnection() as HttpURLConnection
     try {
+      recordNativeLog(
+        "SharedFiles",
+        "downloadReceivedFile HTTP request fileKey=$fileKey filename=$filename is_tunnel=${route.isTunnel}",
+      )
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
       connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
@@ -3003,6 +3144,10 @@ class NativeSyncEngineModule(
     )
     val connection = route.url.openConnection() as HttpURLConnection
     try {
+      recordNativeLog(
+        "SharedFiles",
+        "downloadSharedFile HTTP request path=$path filename=$filename media_type=$mediaType is_tunnel=${route.isTunnel}",
+      )
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
       connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
@@ -3019,6 +3164,48 @@ class NativeSyncEngineModule(
     }
   }
 
+  private fun downloadSharedFilePreviewFromRoute(path: String, route: SharedFileRoute): String {
+    val filename = path.substringAfterLast('/').ifBlank { "shared-file" }
+    val safeFilename = safeShareCacheFilename(filename, "shared-file")
+    val connection = route.url.openConnection() as HttpURLConnection
+    try {
+      recordNativeLog(
+        "SharedFiles",
+        "prepareSharedFilePreview HTTP request path=$path filename=$safeFilename is_tunnel=${route.isTunnel}",
+      )
+      connection.requestMethod = "GET"
+      connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+      connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
+      applySharedDirectoryAuthorization(connection, route)
+      val statusCode = connection.responseCode
+      val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
+      recordNativeLog(
+        "SharedFiles",
+        "prepareSharedFilePreview HTTP response path=$path status=$statusCode content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong}",
+      )
+      if (statusCode !in 200..299) {
+        throw IllegalStateException("Sidecar returned HTTP $statusCode")
+      }
+      val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_previews")
+      if (!destDir.exists()) {
+        destDir.mkdirs()
+      }
+      val destFile = uniqueShareCacheFile(destDir, safeFilename)
+      BufferedOutputStream(destFile.outputStream()).use { output ->
+        BufferedInputStream(connection.inputStream).use { input ->
+          copySharedDownloadWithProgress(path, input, output, totalBytes)
+        }
+      }
+      recordNativeLog(
+        "SharedFiles",
+        "prepareSharedFilePreview cached path=$path filename=${destFile.name} local_path=${destFile.absolutePath} bytes=${destFile.length()}",
+      )
+      return destFile.absolutePath
+    } finally {
+      connection.disconnect()
+    }
+  }
+
   private fun persistHttpDownloadToLocalStorage(
     connection: HttpURLConnection,
     filename: String,
@@ -3028,8 +3215,13 @@ class NativeSyncEngineModule(
   ): WritableMap {
     val safeFilename = safeShareCacheFilename(filename, "remote-file")
     val mediaType = localDownloadMediaType(safeFilename, requestedMediaType)
-    if (connection.responseCode !in 200..299) {
-      throw IllegalStateException("Sidecar returned HTTP ${connection.responseCode}")
+    val statusCode = connection.responseCode
+    recordNativeLog(
+      "SharedFiles",
+      "persistHttpDownload response filename=$safeFilename progress_key=$progressKey status=$statusCode media_type=$mediaType content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong} expose_downloads_uri=$exposeDownloadsUri",
+    )
+    if (statusCode !in 200..299) {
+      throw IllegalStateException("Sidecar returned HTTP $statusCode")
     }
     val mimeType = connection.contentType?.substringBefore(';')
       ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
@@ -3068,6 +3260,10 @@ class NativeSyncEngineModule(
         values.put(MediaStore.MediaColumns.IS_PENDING, 0)
         reactApplicationContext.contentResolver.update(uri, values, null, null)
       }
+      recordNativeLog(
+        "SharedFiles",
+        "persistHttpDownload saved_to_photos filename=$safeFilename media_type=$mediaType saved_location=$savedLocation uri=$uri",
+      )
       return Arguments.createMap().apply {
         putBoolean("savedToPhotos", true)
         putNull("localPath")
@@ -3094,6 +3290,10 @@ class NativeSyncEngineModule(
       values.clear()
       values.put(MediaStore.MediaColumns.IS_PENDING, 0)
       reactApplicationContext.contentResolver.update(uri, values, null, null)
+      recordNativeLog(
+        "SharedFiles",
+        "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=$savedLocation local_path=${if (exposeDownloadsUri) uri.toString() else "hidden"} expose_downloads_uri=$exposeDownloadsUri",
+      )
       return Arguments.createMap().apply {
         putBoolean("savedToPhotos", false)
         if (exposeDownloadsUri) {
@@ -3119,6 +3319,10 @@ class NativeSyncEngineModule(
         copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
       }
     }
+    recordNativeLog(
+      "SharedFiles",
+      "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop local_path=${destFile.absolutePath}",
+    )
     return Arguments.createMap().apply {
       putBoolean("savedToPhotos", false)
       putString("localPath", destFile.absolutePath)
@@ -3629,6 +3833,30 @@ class NativeSyncEngineModule(
       "$action$retryPrefix kind=${route.kind} path=${route.path} resolved_host=${route.displayHost} " +
         "is_tunnel=${route.isTunnel} tunnel_active=${route.tunnelActive} " +
         "tunnel_starting=${route.tunnelStarting} active_port=${route.activeTunnelPort ?: "nil"}",
+    )
+  }
+
+  private fun logSharedFileDownloadResult(
+    action: String,
+    key: String,
+    result: WritableMap,
+    route: SharedFileRoute,
+    retry: Boolean = false,
+  ) {
+    val localPath = if (result.hasKey("localPath") && !result.isNull("localPath")) {
+      result.getString("localPath")
+    } else {
+      "nil"
+    }
+    val savedLocation = if (result.hasKey("savedLocation") && !result.isNull("savedLocation")) {
+      result.getString("savedLocation")
+    } else {
+      "nil"
+    }
+    val savedToPhotos = result.hasKey("savedToPhotos") && result.getBoolean("savedToPhotos")
+    recordNativeLog(
+      "SharedFiles",
+      "$action completed key=$key retry=$retry is_tunnel=${route.isTunnel} saved_to_photos=$savedToPhotos local_path=$localPath saved_location=$savedLocation",
     )
   }
 

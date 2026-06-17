@@ -54,6 +54,8 @@ const IPC = {
   FILES_SELECT_FILE: 'files:select-file',
   FILES_SELECT_FOLDER: 'files:select-folder',
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
+  FILES_CHECK_FOLDER_PERMISSION: 'files:check-folder-permission',
+  FILES_REQUEST_FOLDER_PERMISSION: 'files:request-folder-permission',
   POWER_SAVE_GET_STATE: 'power-save:get-state',
   POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
@@ -111,6 +113,8 @@ const electronAPI: ElectronAPI = {
     selectFile: () => ipcRenderer.invoke(IPC.FILES_SELECT_FILE),
     selectFolder: () => ipcRenderer.invoke(IPC.FILES_SELECT_FOLDER),
     copyToClipboard: (text: string) => ipcRenderer.invoke(IPC.FILES_COPY_CLIPBOARD, text),
+    checkFolderPermission: () => ipcRenderer.invoke(IPC.FILES_CHECK_FOLDER_PERMISSION),
+    requestFolderPermission: () => ipcRenderer.invoke(IPC.FILES_REQUEST_FOLDER_PERMISSION),
   },
   auth: {
     sendSMSCode: (payload: { phone: string }) =>

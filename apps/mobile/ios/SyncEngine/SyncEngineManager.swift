@@ -8291,16 +8291,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "download_shared_file" : "download_shared_file_retry"
             do {
-                result = try await withSharedFileTunnelOperation(
+                let downloadResult = try await withSharedFileTunnelOperation(
                     path: path,
                     reason: reason,
                     isTunnelRoute: route.isTunnel
                 ) {
                     try await sharedFilesService.downloadFile(scope: scope, path: path, accessToken: accessToken, onProgress: progressHandler)
                 }
+                result = downloadResult
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadSharedFile completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel)"
+                    "downloadSharedFile completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
                 )
                 break
             } catch {
@@ -8392,7 +8393,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "download_received_file" : "download_received_file_retry"
             do {
-                result = try await withSharedFileTunnelOperation(
+                let downloadResult = try await withSharedFileTunnelOperation(
                     path: trimmedFileKey,
                     reason: reason,
                     isTunnelRoute: route.isTunnel
@@ -8406,9 +8407,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         onProgress: progressHandler
                     )
                 }
+                result = downloadResult
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadReceivedFile completed fileKey=\(trimmedFileKey) attempt=\(attempt) is_tunnel=\(route.isTunnel)"
+                    "downloadReceivedFile completed fileKey=\(trimmedFileKey) filename=\(safeFilename) media_type=\(mediaType ?? "nil") attempt=\(attempt) is_tunnel=\(route.isTunnel) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
                 )
                 break
             } catch {
@@ -8491,16 +8493,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "preview_shared_file" : "preview_shared_file_retry"
             do {
-                previewURL = try await withSharedFileTunnelOperation(
+                let downloadedPreviewURL = try await withSharedFileTunnelOperation(
                     path: path,
                     reason: reason,
                     isTunnelRoute: route.isTunnel
                 ) {
                     try await sharedFilesService.downloadFileForPreview(scope: scope, path: path, accessToken: accessToken)
                 }
+                previewURL = downloadedPreviewURL
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "prepareSharedFilePreview completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel)"
+                    "prepareSharedFilePreview completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel) preview_url=\(downloadedPreviewURL.absoluteString)"
                 )
                 break
             } catch {

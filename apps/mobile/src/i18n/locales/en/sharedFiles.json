@@ -85,6 +85,10 @@
     "downloadUnavailableMessage": "The file does not exist or is no longer accessible.",
     "previewFailed": "Preview Failed",
     "previewFailedMessage": "Could not load file preview.",
+    "previewUnsupported": "Cannot Preview",
+    "previewUnsupportedMessage": "This file type cannot be previewed yet. Download it first, then open it with another app.",
+    "openWithOtherApp": "Open with Another App",
+    "cancel": "Cancel",
     "savedLocationPhotos": "Photos",
     "savedLocationDocuments": "iOS Files App -> Vivi Drop folder",
     "savedLocationDownloads": "system Downloads -> Vivi Drop folder"

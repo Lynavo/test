@@ -62,6 +62,11 @@ export interface Spec extends TurboModule {
     path: string,
     accessToken: string,
   ): Promise<string>;
+  prepareSharedFilePreview(
+    scope: DirectoryScope,
+    path: string,
+    accessToken: string,
+  ): Promise<string>;
   downloadUrlToShareCache(url: string, filename: string): Promise<string>;
   downloadUrlToLocal(
     url: string,
