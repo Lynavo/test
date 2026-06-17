@@ -1226,7 +1226,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     });
     expect(alertSpy).toHaveBeenCalledWith(
       '下載完成',
-      'notes.txt 已保存至 Downloads/Vivi Drop',
+      'notes.txt 已儲存到檔案',
     );
 
     alertSpy.mockRestore();

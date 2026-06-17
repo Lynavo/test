@@ -31,10 +31,12 @@ import {
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import {
+  canPreviewDocumentFile,
   documentMimeType,
   documentPreviewUri,
   isImageFile,
   isVideoFile,
+  openFileWithOtherApp,
 } from '../utils/file-preview';
 import {
   SIDECAR_HTTP_PORT,
@@ -164,8 +166,10 @@ export function PhoneSyncSpaceScreen() {
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
           result.savedToPhotos
-            ? `${filename} 已儲存至相簿`
-            : `${filename} 已保存至 ${result.savedLocation ?? result.localPath ?? '本機'}`
+            ? t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
+                `${filename} 已儲存至相簿`
+            : t('sharedFiles.dialogs.downloadSavedToFiles', { name: filename }) ||
+                `${filename} 已保存到文件`
         );
       } catch (err) {
         console.warn('[PhoneSyncSpaceScreen] Download failed:', err);
@@ -199,6 +203,27 @@ export function PhoneSyncSpaceScreen() {
         ) {
           const url = await getReceivedLibraryPreviewUrl(desktop, item);
           setPreview({ item, url });
+          return;
+        }
+
+        if (!canPreviewDocumentFile(item.mediaType, filename)) {
+          try {
+            const localPath = await prepareReceivedLibraryPreview(
+              desktop,
+              item,
+            );
+            await openFileWithOtherApp(localPath, filename);
+          } catch (err) {
+            console.warn(
+              '[PhoneSyncSpaceScreen] Open with other app failed:',
+              err,
+            );
+            Alert.alert(
+              t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
+              t('sharedFiles.dialogs.previewFailedMessage') ||
+                '無法取得檔案預覽',
+            );
+          }
           return;
         }
 

@@ -52,10 +52,12 @@ import {
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import {
+  canPreviewDocumentFile,
   documentMimeType,
   documentPreviewUri,
   isImageFile,
   isVideoFile,
+  openFileWithOtherApp,
 } from '../utils/file-preview';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
@@ -389,10 +391,12 @@ export function PhoneSyncSpaceGlobalScreen() {
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
           result.savedToPhotos
-            ? `${item.filename || item.displayName} 已儲存至相簿`
-            : `${item.filename || item.displayName} 已保存至 ${
-                result.savedLocation ?? result.localPath
-              }`,
+            ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
+                name: item.filename || item.displayName,
+              }) || `${item.filename || item.displayName} 已儲存至相簿`
+            : t('sharedFiles.dialogs.downloadSavedToFiles', {
+                name: item.filename || item.displayName,
+              }) || `${item.filename || item.displayName} 已保存到文件`,
         );
       } catch (err) {
         console.warn('[PhoneSyncSpaceGlobalScreen] Download failed:', err);
@@ -429,6 +433,27 @@ export function PhoneSyncSpaceGlobalScreen() {
         if (image || video) {
           const url = await getReceivedLibraryPreviewUrl(desktop, item);
           setPreview({ item, url });
+          return;
+        }
+
+        if (!canPreviewDocumentFile(item.mediaType, filename)) {
+          try {
+            const localPath = await prepareReceivedLibraryPreview(
+              desktop,
+              item,
+            );
+            await openFileWithOtherApp(localPath, filename);
+          } catch (err) {
+            console.warn(
+              '[PhoneSyncSpaceGlobalScreen] Open with other app failed:',
+              err,
+            );
+            Alert.alert(
+              t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
+              t('sharedFiles.dialogs.previewFailedMessage') ||
+                '無法取得檔案預覽',
+            );
+          }
           return;
         }
 
@@ -498,6 +523,8 @@ export function PhoneSyncSpaceGlobalScreen() {
         style={styles.card}
         activeOpacity={0.75}
         onPress={() => handleOpenReceivedItem(item)}
+        accessibilityRole="button"
+        accessibilityLabel="预览已同步文件"
       >
         <ReceivedMediaThumbnail item={item} iconType={iconType} />
         <View style={styles.infoWrapper}>
@@ -508,20 +535,6 @@ export function PhoneSyncSpaceGlobalScreen() {
             {`${fileType} · ${formatBytes(item.fileSize)}${clock ? ` · ${clock}` : ''}`}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.previewButton}
-          accessibilityRole="button"
-          accessibilityLabel="预览已同步文件"
-          onPress={() => handleOpenReceivedItem(item)}
-          activeOpacity={0.72}
-        >
-          <Eye
-            testID="phone-sync-preview-icon"
-            size={16}
-            color={colors.primary}
-            strokeWidth={2}
-          />
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.downloadButton, isDownloading && styles.downloadButtonDisabled]}
           accessibilityRole="button"
