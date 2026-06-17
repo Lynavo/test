@@ -169,10 +169,13 @@ jest.mock('../../services/desktop-local-service', () => ({
   listCurrentClientReceivedLibrary: jest.fn(),
   downloadResource: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
+  downloadReceivedLibraryItem: jest.fn(),
   downloadGlobalRemoteAccessResource: jest.fn(),
   getResourcePreviewUrl: jest.fn(),
+  getReceivedLibraryPreviewUrl: jest.fn(),
   getGlobalRemoteAccessPreviewUrl: jest.fn(),
   prepareResourcePreview: jest.fn(),
+  prepareReceivedLibraryPreview: jest.fn(),
   prepareGlobalRemoteAccessPreview: jest.fn(),
   shareResources: jest.fn(),
   shareGlobalRemoteAccessResources: jest.fn(),
@@ -203,10 +206,13 @@ import {
   listCurrentClientReceivedLibrary,
   downloadResource,
   downloadResourceForGlobal,
+  downloadReceivedLibraryItem,
   downloadGlobalRemoteAccessResource,
   getResourcePreviewUrl,
+  getReceivedLibraryPreviewUrl,
   getGlobalRemoteAccessPreviewUrl,
   prepareResourcePreview,
+  prepareReceivedLibraryPreview,
   prepareGlobalRemoteAccessPreview,
   shareResources,
   shareGlobalRemoteAccessResources,
@@ -229,12 +235,15 @@ const mockListCurrentClientReceivedLibrary =
   listCurrentClientReceivedLibrary as jest.Mock;
 const mockDownloadResource = downloadResource as jest.Mock;
 const mockDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
+const mockDownloadReceivedLibraryItem = downloadReceivedLibraryItem as jest.Mock;
 const mockDownloadGlobalRemoteAccessResource =
   downloadGlobalRemoteAccessResource as jest.Mock;
 const mockGetResourcePreviewUrl = getResourcePreviewUrl as jest.Mock;
+const mockGetReceivedLibraryPreviewUrl = getReceivedLibraryPreviewUrl as jest.Mock;
 const mockGetGlobalRemoteAccessPreviewUrl =
   getGlobalRemoteAccessPreviewUrl as jest.Mock;
 const mockPrepareResourcePreview = prepareResourcePreview as jest.Mock;
+const mockPrepareReceivedLibraryPreview = prepareReceivedLibraryPreview as jest.Mock;
 const mockPrepareGlobalRemoteAccessPreview =
   prepareGlobalRemoteAccessPreview as jest.Mock;
 const mockShareResources = shareResources as jest.Mock;
@@ -868,6 +877,9 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
           'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-1',
       },
     ]);
+    mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
+      'http://192.168.1.100:39394/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
+    );
 
     const {
       getByLabelText,
@@ -893,7 +905,14 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     expect(previewButton.props.accessibilityState?.disabled).not.toBe(true);
 
     fireEvent.press(previewButton);
-    expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
+      );
+      expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
+    });
   });
 
   it('renders received video preview frame and opens the real video preview', async () => {
@@ -915,6 +934,9 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
           'http://192.168.1.100:39394/resources/mobile/received/stream?fileKey=received-video',
       },
     ]);
+    mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
+      'http://192.168.1.100:39394/resources/mobile/received/stream?clientId=client-001&fileKey=received%2Fbeta.mov',
+    );
 
     const { getByLabelText, getByTestId, getByText } = render(
       <TestErrorBoundary>
@@ -929,7 +951,14 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     expect(getByTestId('phone-sync-thumbnail-video')).toBeTruthy();
 
     fireEvent.press(getByLabelText('预览已同步文件'));
-    expect(getByTestId('phone-sync-preview-video')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({ fileKey: 'received/beta.mov' }),
+      );
+      expect(getByTestId('phone-sync-preview-video')).toBeTruthy();
+    });
   });
 
   it('opens the received image preview when the global sync-space row is pressed', async () => {
@@ -949,6 +978,9 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
           'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-image',
       },
     ]);
+    mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
+      'http://192.168.1.100:39394/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
+    );
 
     const { getByTestId, getByText } = render(
       <TestErrorBoundary>
@@ -961,7 +993,14 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     });
 
     fireEvent.press(getByText('alpha.jpg'));
-    expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
+      );
+      expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
+    });
   });
 
   it('opens received documents from global sync space with the system preview viewer', async () => {
@@ -979,7 +1018,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
         shareStatus: 'shared',
       },
     ]);
-    mockPrepareResourcePreview.mockResolvedValueOnce('/cache/notes.pdf');
+    mockPrepareReceivedLibraryPreview.mockResolvedValueOnce('/cache/notes.pdf');
     mockViewDocument.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
@@ -995,10 +1034,9 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     fireEvent.press(getByText('notes.pdf'));
 
     await waitFor(() => {
-      expect(mockPrepareResourcePreview).toHaveBeenCalledWith(
+      expect(mockPrepareReceivedLibraryPreview).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
-        'received-doc',
-        'notes.pdf',
+        expect.objectContaining({ fileKey: 'received/notes.pdf' }),
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({
@@ -1006,6 +1044,63 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       headerTitle: 'notes.pdf',
       mimeType: 'application/pdf',
     });
+  });
+
+  it('downloads a not-shared global sync-space item by fileKey', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: '',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'alpha.jpg',
+        fileKey: 'received/alpha.jpg',
+        filename: 'alpha.jpg',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-16T08:00:00.000Z',
+        shareStatus: 'not_shared',
+      },
+    ]);
+    mockDownloadReceivedLibraryItem.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: 'ph://asset-001',
+      savedLocation: 'Photos',
+    });
+    mockRecordDownloadedFile.mockResolvedValueOnce(undefined);
+
+    const { getByLabelText, getByText } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('alpha.jpg')).toBeTruthy();
+    });
+
+    fireEvent.press(getByLabelText('下载已同步文件'));
+
+    await waitFor(() => {
+      expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
+      );
+    });
+    expect(mockRecordDownloadedFile).toHaveBeenCalledWith({
+      resourceId: 'received/alpha.jpg',
+      filename: 'alpha.jpg',
+      fileSize: 1024,
+      mediaType: 'image',
+      localPath: 'ph://asset-001',
+      savedToPhotos: true,
+    });
+    expect(alertSpy).toHaveBeenCalledWith(
+      '下載完成',
+      'alpha.jpg 已儲存至相簿',
+    );
+
+    alertSpy.mockRestore();
   });
 
   it('uses received-library filename as the global sync-space row title', async () => {
@@ -1557,9 +1652,9 @@ describe('PhoneSyncSpaceScreen', () => {
 
   it('downloads a received phone-sync item and records it in recent downloads', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListReceivedLibrary.mockResolvedValueOnce([
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
-        resourceId: 'received-1',
+        resourceId: '',
         desktopDeviceId: 'desktop-device-id',
         clientId: 'client-001',
         displayName: 'alpha.jpg',
@@ -1571,7 +1666,11 @@ describe('PhoneSyncSpaceScreen', () => {
         shareStatus: 'shared',
       },
     ]);
-    mockDownloadResource.mockResolvedValueOnce(undefined);
+    mockDownloadReceivedLibraryItem.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: 'ph://asset-001',
+      savedLocation: 'Photos',
+    });
     mockRecordDownloadedFile.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
@@ -1587,19 +1686,21 @@ describe('PhoneSyncSpaceScreen', () => {
     fireEvent.press(getByText('download-outline'));
 
     await waitFor(() => {
-      expect(mockDownloadResource).toHaveBeenCalledWith(
+      expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
-        'received-1',
+        expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
     });
+    expect(mockListReceivedLibrary).not.toHaveBeenCalled();
+    expect(mockDownloadResource).not.toHaveBeenCalled();
     expect(mockDownloadResourceForGlobal).not.toHaveBeenCalled();
     expect(mockRecordDownloadedFile).toHaveBeenCalledWith({
-      resourceId: 'received-1',
+      resourceId: 'received/alpha.jpg',
       filename: 'alpha.jpg',
       fileSize: 1024,
       mediaType: 'image',
-      localPath: null,
-      savedToPhotos: false,
+      localPath: 'ph://asset-001',
+      savedToPhotos: true,
     });
     expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存至相簿');
 
@@ -1607,7 +1708,7 @@ describe('PhoneSyncSpaceScreen', () => {
   });
 
   it('opens a received image inside the app preview when a phone-sync row is pressed', async () => {
-    mockListReceivedLibrary.mockResolvedValueOnce([
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-image',
         desktopDeviceId: 'desktop-device-id',
@@ -1621,8 +1722,8 @@ describe('PhoneSyncSpaceScreen', () => {
         shareStatus: 'shared',
       },
     ]);
-    mockGetResourcePreviewUrl.mockResolvedValueOnce(
-      'http://192.168.1.100:39394/resources/mobile/download/received-image',
+    mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
+      'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received%2Falpha.jpg',
     );
 
     const { getByTestId, getByText } = render(
@@ -1638,9 +1739,9 @@ describe('PhoneSyncSpaceScreen', () => {
     fireEvent.press(getByText('alpha.jpg'));
 
     await waitFor(() => {
-      expect(mockGetResourcePreviewUrl).toHaveBeenCalledWith(
+      expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
-        'received-image',
+        expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
       expect(getByTestId('phone-sync-cn-preview-image')).toBeTruthy();
     });
@@ -1648,7 +1749,7 @@ describe('PhoneSyncSpaceScreen', () => {
   });
 
   it('opens received documents from phone sync space with the system preview viewer', async () => {
-    mockListReceivedLibrary.mockResolvedValueOnce([
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-doc',
         desktopDeviceId: 'desktop-device-id',
@@ -1662,7 +1763,7 @@ describe('PhoneSyncSpaceScreen', () => {
         shareStatus: 'shared',
       },
     ]);
-    mockPrepareResourcePreview.mockResolvedValueOnce('/cache/notes.pdf');
+    mockPrepareReceivedLibraryPreview.mockResolvedValueOnce('/cache/notes.pdf');
     mockViewDocument.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
@@ -1678,10 +1779,9 @@ describe('PhoneSyncSpaceScreen', () => {
     fireEvent.press(getByText('notes.pdf'));
 
     await waitFor(() => {
-      expect(mockPrepareResourcePreview).toHaveBeenCalledWith(
+      expect(mockPrepareReceivedLibraryPreview).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
-        'received-doc',
-        'notes.pdf',
+        expect.objectContaining({ fileKey: 'received/notes.pdf' }),
       );
     });
     expect(mockViewDocument).toHaveBeenCalledWith({

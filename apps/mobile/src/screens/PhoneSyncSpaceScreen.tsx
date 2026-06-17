@@ -24,10 +24,10 @@ import { Icon } from '../components/Icon';
 import { GradientBackground } from '../components/GradientBackground';
 import { BottomTabBar } from '../components/BottomTabBar';
 import {
-  downloadResource,
-  getResourcePreviewUrl,
-  listReceivedLibrary,
-  prepareResourcePreview,
+  downloadReceivedLibraryItem,
+  getReceivedLibraryPreviewUrl,
+  listCurrentClientReceivedLibrary,
+  prepareReceivedLibraryPreview,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import { documentMimeType, isImageFile, isVideoFile } from '../utils/file-preview';
@@ -70,7 +70,7 @@ export function PhoneSyncSpaceScreen() {
       }
 
       const desktop = { host: bindingState.host, port: SIDECAR_HTTP_PORT };
-      const result = await listReceivedLibrary(desktop);
+      const result = await listCurrentClientReceivedLibrary(desktop);
       setItems(result || []);
     } catch (e) {
       console.warn('[PhoneSyncSpaceScreen] Failed to load data:', e);
@@ -132,8 +132,9 @@ export function PhoneSyncSpaceScreen() {
 
   const handleDownload = useCallback(
     async (item: ReceivedLibraryItemDTO) => {
-      if (downloadingId) return;
-      setDownloadingId(item.resourceId);
+      if (downloadingId !== null) return;
+      const itemKey = item.fileKey || item.resourceId;
+      setDownloadingId(itemKey);
 
       try {
         const { NativeSyncEngine } = NativeModules;
@@ -145,20 +146,21 @@ export function PhoneSyncSpaceScreen() {
 
         const filename = item.filename || item.displayName;
         const desktop = { host: bindingState.host, port: SIDECAR_HTTP_PORT };
-        await downloadResource(desktop, item.resourceId);
+        const result = await downloadReceivedLibraryItem(desktop, item);
         await recordDownloadedFile({
-          resourceId: item.resourceId,
+          resourceId: itemKey,
           filename,
           fileSize: item.fileSize,
           mediaType: item.mediaType,
-          localPath: null,
-          savedToPhotos: false,
+          localPath: result.localPath,
+          savedToPhotos: result.savedToPhotos,
         });
 
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
-          t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
-            `${filename} 已儲存至相簿`
+          result.savedToPhotos
+            ? `${filename} 已儲存至相簿`
+            : `${filename} 已保存至 ${result.savedLocation ?? result.localPath ?? '本機'}`
         );
       } catch (err) {
         console.warn('[PhoneSyncSpaceScreen] Download failed:', err);
@@ -190,15 +192,14 @@ export function PhoneSyncSpaceScreen() {
           isImageFile(item.mediaType, filename) ||
           isVideoFile(item.mediaType, filename)
         ) {
-          const url = await getResourcePreviewUrl(desktop, item.resourceId);
+          const url = await getReceivedLibraryPreviewUrl(desktop, item);
           setPreview({ item, url });
           return;
         }
 
-        const localPath = await prepareResourcePreview(
+        const localPath = await prepareReceivedLibraryPreview(
           desktop,
-          item.resourceId,
-          filename,
+          item,
         );
         await viewDocument({
           uri: localPath,
@@ -227,7 +228,7 @@ export function PhoneSyncSpaceScreen() {
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const formattedTime = formatItemTime(item.completedAt);
     const displayName = item.filename || item.displayName;
-    const isDownloading = downloadingId === item.resourceId;
+    const isDownloading = downloadingId === (item.fileKey || item.resourceId);
 
     const desktopName = binding
       ? (item.desktopDeviceId === binding.deviceId || (item.desktopDeviceId && (item.desktopDeviceId.includes('-') || item.desktopDeviceId.length > 12))
@@ -328,7 +329,7 @@ export function PhoneSyncSpaceScreen() {
         ) : (
           <FlatList
             data={sortedItems}
-            keyExtractor={item => item.resourceId || item.fileKey}
+            keyExtractor={item => item.fileKey || item.resourceId}
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}

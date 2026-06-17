@@ -265,7 +265,7 @@ function absoluteDesktopUrl(desktop: DesktopInfo, value?: string): string | unde
 
 function buildReceivedMediaUrl(
   desktop: DesktopInfo,
-  kind: 'preview' | 'thumbnail' | 'stream',
+  kind: 'download' | 'preview' | 'thumbnail' | 'stream',
   clientId: string,
   clientName: string,
   fileKey: string,
@@ -274,6 +274,41 @@ function buildReceivedMediaUrl(
     clientName,
   )}&fileKey=${encodeURIComponent(fileKey)}`;
   return `http://${desktop.host}:${desktop.port}/resources/mobile/received/${kind}?${query}`;
+}
+
+async function receivedLibraryFileUrl(
+  desktop: DesktopInfo,
+  item: ReceivedLibraryItemDTO,
+  kind: 'download' | 'preview' | 'stream',
+): Promise<string> {
+  const fileKey = item.fileKey?.trim();
+  if (!fileKey) {
+    throw new Error('Received file key is required');
+  }
+  const clientId = await getClientId();
+  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  return buildReceivedMediaUrl(desktop, kind, clientId, clientName, fileKey);
+}
+
+function normalizeLocalDownloadResult(
+  result: {
+    savedToPhotos?: boolean;
+    localPath?: string | null;
+    savedLocation?: string | null;
+  },
+): ResourceDownloadResult {
+  return {
+    savedToPhotos: result.savedToPhotos === true,
+    localPath:
+      typeof result.localPath === 'string' && result.localPath.trim().length > 0
+        ? result.localPath
+        : null,
+    savedLocation:
+      typeof result.savedLocation === 'string' &&
+      result.savedLocation.trim().length > 0
+        ? result.savedLocation
+        : null,
+  };
 }
 
 function withCurrentClientReceivedMediaUrls(
@@ -287,22 +322,40 @@ function withCurrentClientReceivedMediaUrls(
     if (!fileKey || item.clientId !== clientId) {
       return item;
     }
-    const previewUrl =
-      absoluteDesktopUrl(desktop, item.previewUrl) ??
-      buildReceivedMediaUrl(desktop, 'preview', clientId, clientName, fileKey);
     const next: ReceivedLibraryMediaItem = {
       ...item,
-      previewUrl,
     };
     if (isImageMedia(item.mediaType, item.filename)) {
-      next.thumbnailUrl =
-        absoluteDesktopUrl(desktop, item.thumbnailUrl) ??
-        buildReceivedMediaUrl(desktop, 'thumbnail', clientId, clientName, fileKey);
+      next.previewUrl = buildReceivedMediaUrl(
+        desktop,
+        'preview',
+        clientId,
+        clientName,
+        fileKey,
+      );
+      next.thumbnailUrl = buildReceivedMediaUrl(
+        desktop,
+        'thumbnail',
+        clientId,
+        clientName,
+        fileKey,
+      );
     }
     if (isVideoMedia(item.mediaType, item.filename)) {
-      next.streamUrl =
-        absoluteDesktopUrl(desktop, item.streamUrl) ??
-        buildReceivedMediaUrl(desktop, 'stream', clientId, clientName, fileKey);
+      next.previewUrl = buildReceivedMediaUrl(
+        desktop,
+        'preview',
+        clientId,
+        clientName,
+        fileKey,
+      );
+      next.streamUrl = buildReceivedMediaUrl(
+        desktop,
+        'stream',
+        clientId,
+        clientName,
+        fileKey,
+      );
     }
     return next;
   });
@@ -469,18 +522,55 @@ export async function downloadResourceForGlobal(
     filename?.trim() || 'remote-file',
     mediaType ?? null,
   );
-  return {
-    savedToPhotos: result.savedToPhotos === true,
-    localPath:
-      typeof result.localPath === 'string' && result.localPath.trim().length > 0
-        ? result.localPath
-        : null,
-    savedLocation:
-      typeof result.savedLocation === 'string' &&
-      result.savedLocation.trim().length > 0
-        ? result.savedLocation
-        : null,
-  };
+  return normalizeLocalDownloadResult(result);
+}
+
+export async function downloadReceivedLibraryItem(
+  desktop: DesktopInfo,
+  item: ReceivedLibraryItemDTO,
+): Promise<ResourceDownloadResult> {
+  if (typeof NativeSyncEngine?.downloadUrlToLocal !== 'function') {
+    throw new Error('Native local download is not available');
+  }
+  const url = await receivedLibraryFileUrl(desktop, item, 'download');
+  const result = await NativeSyncEngine.downloadUrlToLocal(
+    url,
+    (item.filename || item.displayName || '').trim() || 'remote-file',
+    item.mediaType ?? null,
+  );
+  return normalizeLocalDownloadResult(result);
+}
+
+export async function getReceivedLibraryPreviewUrl(
+  desktop: DesktopInfo,
+  item: ReceivedLibraryMediaItem,
+): Promise<string> {
+  const filename = item.filename || item.displayName;
+  if (isVideoMedia(item.mediaType, filename)) {
+    return receivedLibraryFileUrl(desktop, item, 'stream');
+  }
+  if (isImageMedia(item.mediaType, filename)) {
+    return receivedLibraryFileUrl(desktop, item, 'preview');
+  }
+  return receivedLibraryFileUrl(desktop, item, 'download');
+}
+
+export async function prepareReceivedLibraryPreview(
+  desktop: DesktopInfo,
+  item: ReceivedLibraryItemDTO,
+): Promise<string> {
+  if (typeof NativeSyncEngine?.downloadUrlToShareCache !== 'function') {
+    throw new Error('System preview is not available');
+  }
+  const url = await receivedLibraryFileUrl(desktop, item, 'download');
+  const localPath = await NativeSyncEngine.downloadUrlToShareCache(
+    url,
+    (item.filename || item.displayName || '').trim() || 'remote-file',
+  );
+  if (typeof localPath !== 'string' || localPath.trim().length === 0) {
+    throw new Error('Remote file was not prepared for preview');
+  }
+  return localPath;
 }
 
 export async function downloadGlobalRemoteAccessResource(

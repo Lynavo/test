@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -575,6 +576,18 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 			CompletedAt:          &completedAt,
 			UpdatedAt:            completedAt,
 		},
+		{
+			FileKey:              "2026/06/14/client-001-notes.pdf",
+			ClientID:             "client-001",
+			OriginalFilename:     "notes.pdf",
+			MediaType:            "document",
+			FileSize:             1024,
+			Status:               "completed",
+			CommittedBytes:       1024,
+			ActiveTransmissionMs: 220,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
 	} {
 		if err := st.UpsertUpload(upload); err != nil {
 			t.Fatalf("UpsertUpload %s: %v", upload.FileKey, err)
@@ -601,7 +614,7 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	if err := resp.Body.Close(); err != nil {
 		t.Fatalf("close mobile received body: %v", err)
 	}
-	if len(receivedBody.Items) != 2 {
+	if len(receivedBody.Items) != 3 {
 		t.Fatalf("default mobile received endpoint should preserve legacy all-client library, got %+v", receivedBody.Items)
 	}
 
@@ -621,11 +634,20 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	if err := scopedResp.Body.Close(); err != nil {
 		t.Fatalf("close scoped mobile received body: %v", err)
 	}
-	if len(scopedBody.Items) != 1 {
+	if len(scopedBody.Items) != 2 {
 		t.Fatalf("scoped mobile received endpoint should include current client only, got %+v", scopedBody.Items)
 	}
-	if scopedBody.Items[0].ClientID != "client-001" || scopedBody.Items[0].Filename != "client-001.jpg" {
-		t.Fatalf("scoped mobile received endpoint returned wrong item: %+v", scopedBody.Items[0])
+	scopedByName := make(map[string]store.ReceivedLibraryItem, len(scopedBody.Items))
+	for _, item := range scopedBody.Items {
+		scopedByName[item.Filename] = item
+	}
+	if scopedByName["client-001.jpg"].ClientID != "client-001" ||
+		!strings.Contains(scopedByName["client-001.jpg"].PreviewURL, "/resources/mobile/received/preview?") {
+		t.Fatalf("scoped mobile received endpoint returned wrong image item: %+v", scopedByName["client-001.jpg"])
+	}
+	if scopedByName["notes.pdf"].ClientID != "client-001" ||
+		!strings.Contains(scopedByName["notes.pdf"].PreviewURL, "/resources/mobile/received/download?") {
+		t.Fatalf("scoped mobile received endpoint should use download url for documents: %+v", scopedByName["notes.pdf"])
 	}
 
 	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
@@ -743,6 +765,101 @@ func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T)
 	}
 	if !seenView {
 		t.Fatalf("expected received preview to create a view access record, got %+v", records)
+	}
+}
+
+func TestMobileReceivedFileDownloadByFileKeyServesDocuments(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	completedAt := "2026-06-14T09:00:00Z"
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "notes.pdf")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	if err := os.WriteFile(receivedAbsPath, []byte("document bytes"), 0o644); err != nil {
+		t.Fatalf("write received file: %v", err)
+	}
+	for _, upload := range []store.Upload{
+		{
+			FileKey:              "2026/06/14/client-001-doc.pdf",
+			ClientID:             "client-001",
+			OriginalFilename:     "notes.pdf",
+			MediaType:            "document",
+			FileSize:             14,
+			Status:               "completed",
+			FinalPath:            &receivedRelPath,
+			CommittedBytes:       14,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+		{
+			FileKey:              "2026/06/14/other-client-doc.pdf",
+			ClientID:             "other-client",
+			OriginalFilename:     "other.pdf",
+			MediaType:            "document",
+			FileSize:             14,
+			Status:               "completed",
+			FinalPath:            &receivedRelPath,
+			CommittedBytes:       14,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+	} {
+		if err := st.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", upload.FileKey, err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=" + url.QueryEscape("2026/06/14/client-001-doc.pdf"))
+	if err != nil {
+		t.Fatalf("GET received download: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("received download status=%d, want 200", resp.StatusCode)
+	}
+	if contentDisposition := resp.Header.Get("Content-Disposition"); !strings.Contains(contentDisposition, "attachment") {
+		t.Fatalf("download should be served as attachment, got %q", contentDisposition)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read download body: %v", err)
+	}
+	if string(body) != "document bytes" {
+		t.Fatalf("download body=%q, want document bytes", string(body))
+	}
+
+	otherResp, err := http.Get(srv.URL + "/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=" + url.QueryEscape("2026/06/14/other-client-doc.pdf"))
+	if err != nil {
+		t.Fatalf("GET other client received download: %v", err)
+	}
+	defer otherResp.Body.Close()
+	if otherResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("other client download status=%d, want 404", otherResp.StatusCode)
+	}
+
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	seenDownload := false
+	for _, record := range records {
+		if record.ResourceID == "2026/06/14/client-001-doc.pdf" && record.ResourceKind == "received_file" && record.Action == "download" && record.Result == "ok" {
+			seenDownload = true
+		}
+	}
+	if !seenDownload {
+		t.Fatalf("expected received download to create a download access record, got %+v", records)
 	}
 }
 

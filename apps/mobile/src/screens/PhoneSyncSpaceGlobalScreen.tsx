@@ -43,11 +43,11 @@ import { GlobalGradientBackground } from '../components/GlobalGradientBackground
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
 import {
   type DesktopInfo,
-  downloadResourceForGlobal,
-  getResourcePreviewUrl,
+  downloadReceivedLibraryItem,
+  getReceivedLibraryPreviewUrl,
   isDownloadSavedLocally,
   listCurrentClientReceivedLibrary,
-  prepareResourcePreview,
+  prepareReceivedLibraryPreview,
   type ReceivedLibraryMediaItem,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
@@ -277,8 +277,8 @@ function getReceivedFileTitle(item: ReceivedLibraryMediaItem) {
 
 function getReceivedItemKey(item: ReceivedLibraryMediaItem, index: number) {
   return (
-    item.resourceId ||
     item.fileKey ||
+    item.resourceId ||
     `${getReceivedFileTitle(item)}-${item.completedAt}-${index}`
   );
 }
@@ -351,8 +351,9 @@ export function PhoneSyncSpaceGlobalScreen() {
 
   const handleDownload = useCallback(
     async (item: ReceivedLibraryMediaItem) => {
-      if (downloadingId) return;
-      setDownloadingId(item.resourceId);
+      if (downloadingId !== null) return;
+      const itemKey = item.fileKey || item.resourceId;
+      setDownloadingId(itemKey);
       try {
         const { NativeSyncEngine } = NativeModules;
         const bindingState = await NativeSyncEngine?.getBindingState();
@@ -361,11 +362,9 @@ export function PhoneSyncSpaceGlobalScreen() {
           return;
         }
         const desktop: DesktopInfo = { host: bindingState.host, port: SIDECAR_HTTP_PORT };
-        const result = await downloadResourceForGlobal(
+        const result = await downloadReceivedLibraryItem(
           desktop,
-          item.resourceId,
-          item.filename || item.displayName,
-          item.mediaType,
+          item,
         );
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
@@ -375,7 +374,7 @@ export function PhoneSyncSpaceGlobalScreen() {
           return;
         }
         await recordDownloadedFile({
-          resourceId: item.resourceId,
+          resourceId: itemKey,
           filename: item.filename || item.displayName,
           fileSize: item.fileSize,
           mediaType: item.mediaType,
@@ -410,14 +409,6 @@ export function PhoneSyncSpaceGlobalScreen() {
       const video = isVideoFile(item.mediaType, filename);
 
       try {
-        const existingPreviewUrl = video
-          ? item.streamUrl || item.previewUrl
-          : item.previewUrl || item.thumbnailUrl;
-        if ((image || video) && existingPreviewUrl) {
-          setPreview({ item, url: existingPreviewUrl });
-          return;
-        }
-
         const { NativeSyncEngine } = NativeModules;
         const bindingState = await NativeSyncEngine?.getBindingState();
         if (!bindingState || !bindingState.host) {
@@ -431,15 +422,14 @@ export function PhoneSyncSpaceGlobalScreen() {
         };
 
         if (image || video) {
-          const url = await getResourcePreviewUrl(desktop, item.resourceId);
+          const url = await getReceivedLibraryPreviewUrl(desktop, item);
           setPreview({ item, url });
           return;
         }
 
-        const localPath = await prepareResourcePreview(
+        const localPath = await prepareReceivedLibraryPreview(
           desktop,
-          item.resourceId,
-          filename,
+          item,
         );
         await viewDocument({
           uri: localPath,
@@ -496,7 +486,7 @@ export function PhoneSyncSpaceGlobalScreen() {
     const displayName = getReceivedFileTitle(item);
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const clock = formatClock(item.completedAt);
-    const isDownloading = downloadingId === item.resourceId;
+    const isDownloading = downloadingId === (item.fileKey || item.resourceId);
 
     return (
       <TouchableOpacity

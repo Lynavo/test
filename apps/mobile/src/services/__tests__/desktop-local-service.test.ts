@@ -2,9 +2,11 @@ import { NativeModules } from 'react-native';
 
 import {
   downloadGlobalRemoteAccessResource,
+  downloadReceivedLibraryItem,
   downloadResource,
   downloadResourceForGlobal,
   getGlobalRemoteAccessPreviewUrl,
+  getReceivedLibraryPreviewUrl,
   getResourcePreviewUrl,
   isDownloadSavedLocally,
   listGlobalRemoteAccessFolderContents,
@@ -14,6 +16,7 @@ import {
   listSharedResources,
   listSharedFolderContents,
   prepareGlobalRemoteAccessPreview,
+  prepareReceivedLibraryPreview,
   prepareResourcePreview,
   shareGlobalRemoteAccessResources,
   shareResources,
@@ -135,6 +138,43 @@ describe('desktop-local-service', () => {
       'http://192.168.10.20:39394/resources/mobile/download/resource-1?clientId=client-001&clientName=Alice%20iPhone',
       'report.pdf',
       'document',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('downloads a received library item by fileKey through native local persistence', async () => {
+    mockDownloadUrlToLocal.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: 'ph://asset-001',
+      savedLocation: 'Photos',
+    });
+
+    await expect(
+      downloadReceivedLibraryItem(
+        { host: '192.168.10.20', port: 39394 },
+        {
+          resourceId: '',
+          desktopDeviceId: 'desktop-001',
+          clientId: 'client-001',
+          displayName: 'Alice iPhone',
+          fileKey: '2026/06/17/client-001-photo',
+          filename: 'IMG_0001.JPG',
+          mediaType: 'image',
+          fileSize: 2048,
+          completedAt: '2026-06-16T08:00:00.000Z',
+          shareStatus: 'not_shared',
+        },
+      ),
+    ).resolves.toEqual({
+      savedToPhotos: true,
+      localPath: 'ph://asset-001',
+      savedLocation: 'Photos',
+    });
+
+    expect(mockDownloadUrlToLocal).toHaveBeenCalledWith(
+      'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
+      'IMG_0001.JPG',
+      'image',
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -345,24 +385,28 @@ describe('desktop-local-service', () => {
             desktopDeviceId: 'desktop-001',
             clientId: 'client-001',
             displayName: 'Alice iPhone',
-            fileKey: 'image-key',
+            fileKey: '2026/06/17/image-key',
             filename: 'IMG_0001.JPG',
             mediaType: 'image',
             fileSize: 2048,
             completedAt: '2026-06-16T08:00:00.000Z',
             shareStatus: 'not_shared',
+            previewUrl: '/resources/mobile/download/legacy-image-resource',
+            thumbnailUrl: '/resources/mobile/download/legacy-image-thumb',
           },
           {
             resourceId: '',
             desktopDeviceId: 'desktop-001',
             clientId: 'client-001',
             displayName: 'Alice iPhone',
-            fileKey: 'video-key',
+            fileKey: '2026/06/17/video-key',
             filename: 'VID_0001.MOV',
             mediaType: 'video',
             fileSize: 4096,
             completedAt: '2026-06-16T08:01:00.000Z',
             shareStatus: 'not_shared',
+            previewUrl: '/resources/mobile/download/legacy-video-resource',
+            streamUrl: '/resources/mobile/download/legacy-video-stream',
           },
         ],
       }),
@@ -372,18 +416,18 @@ describe('desktop-local-service', () => {
       listCurrentClientReceivedLibrary({ host: '192.168.10.20', port: 39394 }),
     ).resolves.toMatchObject([
       {
-        fileKey: 'image-key',
+        fileKey: '2026/06/17/image-key',
         previewUrl:
-          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=image-key',
+          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fimage-key',
         thumbnailUrl:
-          'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=image-key',
+          'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fimage-key',
       },
       {
-        fileKey: 'video-key',
+        fileKey: '2026/06/17/video-key',
         previewUrl:
-          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=video-key',
+          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fvideo-key',
         streamUrl:
-          'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=video-key',
+          'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fvideo-key',
       },
     ]);
   });
@@ -437,6 +481,43 @@ describe('desktop-local-service', () => {
       'report.pdf',
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('previews received library media and documents by fileKey', async () => {
+    mockDownloadUrlToShareCache.mockResolvedValueOnce('/cache/notes.pdf');
+
+    const desktop = { host: '192.168.10.20', port: 39394 };
+    const imageItem = {
+      resourceId: '',
+      desktopDeviceId: 'desktop-001',
+      clientId: 'client-001',
+      displayName: 'Alice iPhone',
+      fileKey: '2026/06/17/client-001-photo',
+      filename: 'IMG_0001.JPG',
+      mediaType: 'image',
+      fileSize: 2048,
+      completedAt: '2026-06-16T08:00:00.000Z',
+      shareStatus: 'not_shared' as const,
+      previewUrl: '/resources/mobile/download/legacy-image-resource',
+    };
+    const docItem = {
+      ...imageItem,
+      fileKey: 'client-001-doc',
+      filename: 'notes.pdf',
+      mediaType: 'document',
+    };
+
+    await expect(getReceivedLibraryPreviewUrl(desktop, imageItem)).resolves.toBe(
+      'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
+    );
+    await expect(
+      prepareReceivedLibraryPreview(desktop, docItem),
+    ).resolves.toBe('/cache/notes.pdf');
+
+    expect(mockDownloadUrlToShareCache).toHaveBeenCalledWith(
+      'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-doc',
+      'notes.pdf',
+    );
   });
 
   it('prepares a shared-folder entry for system preview with the nested path preserved', async () => {

@@ -74,7 +74,7 @@ func (s *Server) handleResourcesAddShared(w http.ResponseWriter, r *http.Request
 	if req.ReceivedFileKey != nil {
 		trimmed := strings.TrimSpace(*req.ReceivedFileKey)
 		req.ReceivedFileKey = &trimmed
-		if !isValidAPIID(trimmed) {
+		if !isValidReceivedFileKey(trimmed) {
 			writeError(w, http.StatusBadRequest, "invalid receivedFileKey")
 			return
 		}
@@ -297,15 +297,17 @@ func enrichMobileReceivedPreviewURLs(items []store.ReceivedLibraryItem, client m
 		if items[i].ClientID != client.ClientID || strings.TrimSpace(items[i].FileKey) == "" {
 			continue
 		}
-		previewURL := mobileReceivedFileURL("preview", client, items[i].FileKey)
-		items[i].PreviewURL = previewURL
-
 		if isVideoMedia(items[i].MediaType, items[i].Filename) {
+			items[i].PreviewURL = mobileReceivedFileURL("preview", client, items[i].FileKey)
 			items[i].StreamURL = mobileReceivedFileURL("stream", client, items[i].FileKey)
+			continue
 		}
 		if isImageMedia(items[i].MediaType, items[i].Filename) {
+			items[i].PreviewURL = mobileReceivedFileURL("preview", client, items[i].FileKey)
 			items[i].ThumbnailURL = mobileReceivedFileURL("thumbnail", client, items[i].FileKey)
+			continue
 		}
+		items[i].PreviewURL = mobileReceivedFileURL("download", client, items[i].FileKey)
 	}
 }
 
@@ -361,6 +363,18 @@ func (s *Server) handleMobileReceivedFileStream(w http.ResponseWriter, r *http.R
 	serveLocalFileInline(w, r, resolvedPath, info)
 }
 
+func (s *Server) handleMobileReceivedFileDownload(w http.ResponseWriter, r *http.Request) {
+	client, upload, resolvedPath, info, ok := s.resolveMobileReceivedUploadWithClient(w, r)
+	if !ok {
+		return
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err == nil {
+		_, _ = s.recordResourceAccess(desktopDeviceID, client, upload.FileKey, "received_file", upload.OriginalFilename, "download", "ok")
+	}
+	serveLocalFileAttachment(w, r, resolvedPath, info, upload.OriginalFilename)
+}
+
 func (s *Server) resolveMobileReceivedUpload(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -378,7 +392,7 @@ func (s *Server) resolveMobileReceivedUploadWithClient(
 		return mobileAccessClient{}, nil, "", nil, false
 	}
 	fileKey := strings.TrimSpace(r.URL.Query().Get("fileKey"))
-	if !isValidAPIID(fileKey) {
+	if !isValidReceivedFileKey(fileKey) {
 		writeError(w, http.StatusBadRequest, "invalid fileKey")
 		return mobileAccessClient{}, nil, "", nil, false
 	}
@@ -400,6 +414,18 @@ func (s *Server) resolveMobileReceivedUploadWithClient(
 	return client, upload, resolvedPath, info, true
 }
 
+func isValidReceivedFileKey(value string) bool {
+	if value == "" || len(value) > 2048 {
+		return false
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
 func serveLocalFileInline(w http.ResponseWriter, r *http.Request, path string, info os.FileInfo) {
 	contentType := mime.TypeByExtension(filepath.Ext(info.Name()))
 	if contentType == "" {
@@ -416,6 +442,29 @@ func serveLocalFileInline(w http.ResponseWriter, r *http.Request, path string, i
 	}
 	defer f.Close()
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func serveLocalFileAttachment(w http.ResponseWriter, r *http.Request, path string, info os.FileInfo, filename string) {
+	contentType := mime.TypeByExtension(filepath.Ext(info.Name()))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	downloadName := strings.TrimSpace(filename)
+	if downloadName == "" {
+		downloadName = info.Name()
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", downloadName))
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	w.Header().Set("ETag", sharedFileEntityTag(info))
+
+	f, err := os.Open(path)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to open file")
+		return
+	}
+	defer f.Close()
+	http.ServeContent(w, r, downloadName, info.ModTime(), f)
 }
 
 func isImageMedia(mediaType string, filename string) bool {

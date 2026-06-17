@@ -228,6 +228,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list", withJSON(srv.handleMobileSharedResourceFolderList))
 	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list/{path...}", withJSON(srv.handleMobileSharedResourceFolderListPath))
 	mux.HandleFunc("GET /resources/mobile/received", withJSON(srv.handleMobileReceivedResources))
+	mux.HandleFunc("GET /resources/mobile/received/download", srv.handleMobileReceivedFileDownload)
 	mux.HandleFunc("GET /resources/mobile/received/thumbnail", srv.handleMobileReceivedFileThumbnail)
 	mux.HandleFunc("GET /resources/mobile/received/preview", srv.handleMobileReceivedFilePreview)
 	mux.HandleFunc("GET /resources/mobile/received/stream", srv.handleMobileReceivedFileStream)
