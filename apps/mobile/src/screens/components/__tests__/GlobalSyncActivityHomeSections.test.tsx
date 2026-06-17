@@ -18,6 +18,17 @@ jest.mock('../../../components/Icon', () => ({
   },
 }));
 
+jest.mock('lucide-react-native', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    ArrowDownCircle: ({ testID }: { testID?: string }) =>
+      React.createElement(View, {
+        testID: testID ?? 'mock-arrow-down-circle-icon',
+      }),
+  };
+});
+
 jest.mock('react-native-svg', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -81,9 +92,13 @@ describe('RecentDownloadsSection', () => {
       '开启自动上传后，同步到电脑的素材会出现在这里。',
     );
     expect(textValues).not.toContain('照片');
+    expect(textValues).not.toContain('arrow-down-circle-outline');
 
     expect(
       tree!.root.findByProps({ testID: 'recent-download-empty-state' }),
+    ).toBeTruthy();
+    expect(
+      tree!.root.findByProps({ testID: 'global-recent-download-title-icon' }),
     ).toBeTruthy();
   });
 

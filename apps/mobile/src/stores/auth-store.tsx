@@ -25,6 +25,7 @@ import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import {
   applyVisualQaRemotePreviewFlag,
+  getDevSkipAuthMockTokens,
   getVisualQaMockTokens,
 } from '../dev/visualQa';
 import { bootstrapAuthedSession } from './bootstrapAuthedSession';
@@ -405,7 +406,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadPersistedTokens().then(({ accessToken, refreshToken }) => {
       if (cancelled) return;
       const visualQaTokens =
-        accessToken || refreshToken ? null : getVisualQaMockTokens();
+        accessToken || refreshToken
+          ? null
+          : getDevSkipAuthMockTokens() ?? getVisualQaMockTokens();
       const hydratedAccessToken = visualQaTokens?.accessToken ?? accessToken;
       const hydratedRefreshToken = visualQaTokens?.refreshToken ?? refreshToken;
       if (visualQaTokens) {

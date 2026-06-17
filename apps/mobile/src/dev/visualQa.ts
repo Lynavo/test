@@ -27,6 +27,8 @@ type RemoteResourcesPreviewGlobal = typeof globalThis & {
 };
 
 type VisualQaNativeConstants = {
+  SYNCFLOW_DEV_SKIP_AUTH?: unknown;
+  SYNCFLOW_DEV_SKIP_AUTH_EMAIL?: unknown;
   SYNCFLOW_VISUAL_QA?: unknown;
   SYNCFLOW_VISUAL_QA_EMAIL?: unknown;
   SYNCFLOW_VISUAL_QA_HOME_EMPTY?: unknown;
@@ -36,6 +38,7 @@ type VisualQaNativeConstants = {
 };
 
 const DEFAULT_VISUAL_QA_EMAIL = 'qa@example.com';
+const DEFAULT_DEV_SKIP_AUTH_EMAIL = 'qa@example.com';
 const VISUAL_QA_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
 const VISUAL_QA_ROUTE_WHITELIST: ReadonlySet<string> = new Set<VisualQaRoute>([
   'DeviceDiscovery',
@@ -103,6 +106,25 @@ export function getVisualQaMockTokens(): {
   if (!isVisualQaEnabled()) return null;
   const email =
     getVisualQaValue('SYNCFLOW_VISUAL_QA_EMAIL') || DEFAULT_VISUAL_QA_EMAIL;
+  return {
+    accessToken: `mock-sandbox-access-token:${email}`,
+    refreshToken: VISUAL_QA_REFRESH_TOKEN,
+  };
+}
+
+export function isDevSkipAuthEnabled(): boolean {
+  if (!isDevRuntime()) return false;
+  return getVisualQaValue('SYNCFLOW_DEV_SKIP_AUTH') === '1';
+}
+
+export function getDevSkipAuthMockTokens(): {
+  accessToken: string;
+  refreshToken: string;
+} | null {
+  if (!isDevSkipAuthEnabled()) return null;
+  const email =
+    getVisualQaValue('SYNCFLOW_DEV_SKIP_AUTH_EMAIL') ||
+    DEFAULT_DEV_SKIP_AUTH_EMAIL;
   return {
     accessToken: `mock-sandbox-access-token:${email}`,
     refreshToken: VISUAL_QA_REFRESH_TOKEN,

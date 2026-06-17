@@ -1,0 +1,187 @@
+describe('SyncEngineModule shared bridge wrappers', () => {
+  const loadModule = (nativeSyncEngine: Record<string, unknown>) => {
+    jest.resetModules();
+    jest.doMock('react-native', () => ({
+      NativeModules: {
+        NativeSyncEngine: nativeSyncEngine,
+      },
+      Platform: {
+        OS: 'ios',
+      },
+      PermissionsAndroid: {
+        PERMISSIONS: {
+          POST_NOTIFICATIONS: 'android.permission.POST_NOTIFICATIONS',
+        },
+        RESULTS: {
+          GRANTED: 'granted',
+        },
+        check: jest.fn(),
+        request: jest.fn(),
+      },
+    }));
+    jest.doMock('@react-native-async-storage/async-storage', () => ({
+      __esModule: true,
+      default: {
+        getItem: jest.fn().mockResolvedValue(null),
+        setItem: jest.fn().mockResolvedValue(undefined),
+        removeItem: jest.fn().mockResolvedValue(undefined),
+      },
+    }));
+
+    return require('../SyncEngineModule') as typeof import('../SyncEngineModule');
+  };
+
+  afterEach(() => {
+    jest.dontMock('react-native');
+    jest.dontMock('@react-native-async-storage/async-storage');
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it('forwards required state, queue, and history bridge calls', async () => {
+    const bindingState = {
+      deviceId: 'desktop-1',
+      deviceName: 'Studio Mac',
+      deviceAlias: 'Studio Mac',
+      host: '192.168.1.20',
+      port: 39393,
+      connectionState: 'connected',
+      pairingId: 'pairing-1',
+      shareEnabled: true,
+      lastBoundAt: '2026-06-16T08:00:00.000Z',
+    };
+    const syncOverview = {
+      currentDeviceId: 'desktop-1',
+      currentDeviceName: 'Studio Mac',
+      currentSpeedMbps: 12,
+      transferredBytes: 256,
+      totalBytes: 1024,
+      progressPercent: 25,
+      uploadState: 'uploading',
+    };
+    const queue = [
+      {
+        fileKey: 'file-1',
+        filename: 'clip.mov',
+        fileSize: 1024,
+        mediaType: 'video',
+        status: 'uploading',
+        progress: 25,
+      },
+    ];
+    const historyPage = {
+      items: [
+        {
+          dateKey: '2026-06-16',
+          deviceId: 'desktop-1',
+          deviceName: 'Studio Mac',
+          deviceIp: '192.168.1.20',
+          totalFileCount: 2,
+          totalBytes: 4096,
+          activeTransmissionSeconds: 12,
+        },
+      ],
+      nextCursor: 'next',
+    };
+    const nativeSyncEngine = {
+      getBindingState: jest.fn().mockResolvedValue(bindingState),
+      getSyncOverview: jest.fn().mockResolvedValue(syncOverview),
+      getReadOnlyQueue: jest.fn().mockResolvedValue(queue),
+      getHistoryDays: jest.fn().mockResolvedValue(historyPage),
+    };
+    const syncEngine = loadModule(nativeSyncEngine);
+
+    await expect(syncEngine.getBindingState()).resolves.toEqual(bindingState);
+    await expect(syncEngine.getSyncOverview()).resolves.toEqual(syncOverview);
+    await expect(syncEngine.getReadOnlyQueue()).resolves.toEqual(queue);
+    await expect(syncEngine.getHistoryDays('cursor-1')).resolves.toEqual(
+      historyPage,
+    );
+
+    expect(nativeSyncEngine.getBindingState).toHaveBeenCalledTimes(1);
+    expect(nativeSyncEngine.getSyncOverview).toHaveBeenCalledTimes(1);
+    expect(nativeSyncEngine.getReadOnlyQueue).toHaveBeenCalledTimes(1);
+    expect(nativeSyncEngine.getHistoryDays).toHaveBeenCalledWith('cursor-1');
+  });
+
+  it('normalizes iOS legacy history ledger fields to the shared contract shape', async () => {
+    const nativeSyncEngine = {
+      getHistoryDays: jest.fn().mockResolvedValue({
+        items: [
+          {
+            ledgerDate: '2026-06-15',
+            deviceId: 'desktop-legacy',
+            deviceName: 'Studio Mac',
+            deviceIp: '192.168.1.30',
+            fileCount: 3,
+            totalBytes: 8192,
+            transmissionMs: 12345,
+            updatedAt: '2026-06-15T12:34:56.000Z',
+          },
+        ],
+        nextCursor: null,
+      }),
+    };
+    const syncEngine = loadModule(nativeSyncEngine);
+
+    await expect(syncEngine.getHistoryDays()).resolves.toEqual({
+      items: [
+        {
+          dateKey: '2026-06-15',
+          deviceId: 'desktop-legacy',
+          deviceName: 'Studio Mac',
+          deviceIp: '192.168.1.30',
+          totalFileCount: 3,
+          totalBytes: 8192,
+          activeTransmissionSeconds: 12.345,
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(nativeSyncEngine.getHistoryDays).toHaveBeenCalledWith(null);
+  });
+
+  it('returns null when the binding-state bridge method is unavailable', async () => {
+    const syncEngine = loadModule({});
+
+    await expect(syncEngine.getBindingState()).resolves.toBeNull();
+  });
+
+  it('guards optional display-name and app-info bridge methods', async () => {
+    const syncEngine = loadModule({});
+
+    await expect(syncEngine.getClientDisplayName()).resolves.toBeNull();
+    await expect(
+      syncEngine.setClientDisplayName('Field iPhone'),
+    ).resolves.toBeUndefined();
+    await expect(syncEngine.getAppInfo()).resolves.toBeNull();
+  });
+
+  it('forwards optional display-name and app-info bridge methods when available', async () => {
+    const appInfo = {
+      appName: 'Vivi Drop',
+      version: '1.0.0',
+      build: '37',
+    };
+    const nativeSyncEngine = {
+      getClientDisplayName: jest.fn().mockResolvedValue('Field iPhone'),
+      setClientDisplayName: jest.fn().mockResolvedValue(undefined),
+      getAppInfo: jest.fn().mockResolvedValue(appInfo),
+    };
+    const syncEngine = loadModule(nativeSyncEngine);
+
+    await expect(syncEngine.getClientDisplayName()).resolves.toBe(
+      'Field iPhone',
+    );
+    await expect(
+      syncEngine.setClientDisplayName('Studio iPhone'),
+    ).resolves.toBeUndefined();
+    await expect(syncEngine.getAppInfo()).resolves.toEqual(appInfo);
+
+    expect(nativeSyncEngine.getClientDisplayName).toHaveBeenCalledTimes(1);
+    expect(nativeSyncEngine.setClientDisplayName).toHaveBeenCalledWith(
+      'Studio iPhone',
+    );
+    expect(nativeSyncEngine.getAppInfo).toHaveBeenCalledTimes(1);
+  });
+});

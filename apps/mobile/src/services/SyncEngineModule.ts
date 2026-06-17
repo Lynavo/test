@@ -7,10 +7,14 @@ import type {
   AlbumAssetDTO,
   AssetPreviewSourceDTO,
   AutoUploadConfigDTO,
+  BindingStateDTO,
   DirectoryListingDTO,
+  HistoryLedgerCardDTO,
   PairingErrorMetadataDTO,
+  ReadOnlyQueueItemDTO,
   DirectoryScope,
   SharedDirectoryDTO,
+  SyncSummaryDTO,
   AutoUploadTimeRangeMode,
 } from '@syncflow/contracts';
 import {
@@ -64,6 +68,142 @@ export interface AndroidBackgroundKeepaliveStatus {
 // ---------------------------------------------------------------------------
 // Typed wrappers for Vivi Drop native bridge methods
 // ---------------------------------------------------------------------------
+
+export interface HistoryDaysResult {
+  items: HistoryLedgerCardDTO[];
+  nextCursor: string | null;
+}
+
+export interface AppInfo {
+  appName: string;
+  version: string;
+  build: string;
+}
+
+export interface EnableAutoUploadOptions {
+  skipPermissionPreflight?: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStringField(
+  record: Record<string, unknown>,
+  key: string,
+): string {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function readNumberField(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = record[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function normalizeHistoryLedgerCard(
+  item: unknown,
+): HistoryLedgerCardDTO | null {
+  if (!isRecord(item)) {
+    return null;
+  }
+
+  const activeTransmissionMs =
+    readNumberField(item, 'activeTransmissionMs') ??
+    readNumberField(item, 'transmissionMs') ??
+    0;
+  const activeTransmissionSeconds =
+    readNumberField(item, 'activeTransmissionSeconds') ??
+    activeTransmissionMs / 1000;
+
+  return {
+    dateKey:
+      readStringField(item, 'dateKey') ||
+      readStringField(item, 'ledgerDate'),
+    deviceId: readStringField(item, 'deviceId'),
+    deviceName: readStringField(item, 'deviceName'),
+    deviceIp: readStringField(item, 'deviceIp'),
+    totalFileCount:
+      readNumberField(item, 'totalFileCount') ??
+      readNumberField(item, 'fileCount') ??
+      0,
+    totalBytes: readNumberField(item, 'totalBytes') ?? 0,
+    activeTransmissionSeconds,
+  };
+}
+
+export async function getBindingState(): Promise<BindingStateDTO | null> {
+  if (typeof NativeSyncEngine?.getBindingState !== 'function') {
+    return null;
+  }
+  const result = await NativeSyncEngine.getBindingState();
+  return result as BindingStateDTO | null;
+}
+
+export async function getSyncOverview(): Promise<SyncSummaryDTO> {
+  const result = await NativeSyncEngine.getSyncOverview();
+  return result as SyncSummaryDTO;
+}
+
+export async function getReadOnlyQueue(): Promise<ReadOnlyQueueItemDTO[]> {
+  const result = await NativeSyncEngine.getReadOnlyQueue();
+  return result as ReadOnlyQueueItemDTO[];
+}
+
+export async function getHistoryDays(
+  cursor?: string | null,
+): Promise<HistoryDaysResult> {
+  const result = await NativeSyncEngine.getHistoryDays(cursor ?? null);
+  if (!isRecord(result)) {
+    return { items: [], nextCursor: null };
+  }
+  const rawItems = Array.isArray(result.items) ? result.items : [];
+  const items = rawItems.reduce<HistoryLedgerCardDTO[]>((acc, item) => {
+    const normalized = normalizeHistoryLedgerCard(item);
+    if (normalized) {
+      acc.push(normalized);
+    }
+    return acc;
+  }, []);
+  return {
+    items,
+    nextCursor:
+      typeof result.nextCursor === 'string' ? result.nextCursor : null,
+  };
+}
+
+export async function getClientDisplayName(): Promise<string | null> {
+  if (typeof NativeSyncEngine?.getClientDisplayName !== 'function') {
+    return null;
+  }
+  const result = await NativeSyncEngine.getClientDisplayName();
+  return typeof result === 'string' ? result : null;
+}
+
+export async function setClientDisplayName(name: string): Promise<void> {
+  if (typeof NativeSyncEngine?.setClientDisplayName !== 'function') {
+    return;
+  }
+  await NativeSyncEngine.setClientDisplayName(name);
+}
+
+export async function getAppInfo(): Promise<AppInfo | null> {
+  if (typeof NativeSyncEngine?.getAppInfo !== 'function') {
+    return null;
+  }
+  const result = await NativeSyncEngine.getAppInfo();
+  return result ? (result as AppInfo) : null;
+}
 
 export async function browseAlbum(
   mediaFilter: string,
@@ -155,16 +295,24 @@ export async function disableAutoUpload(): Promise<void> {
   await clearAutoUploadSessionBestEffort();
 }
 
+export async function prepareAutoUploadEnable(): Promise<void> {
+  if (Platform.OS !== 'android') {
+    return;
+  }
+
+  const status = await requestPhotoPermission();
+  if (status !== 'authorized' && status !== 'limited') {
+    throw new Error('Android photo library access is required for auto upload');
+  }
+  await requestAndroidBackgroundSyncNotificationPermission();
+}
+
 /** Re-enable auto upload from interrupted/disabled state, persists 'active' state. */
-export async function enableAutoUpload(): Promise<void> {
-  if (Platform.OS === 'android') {
-    const status = await requestPhotoPermission();
-    if (status !== 'authorized' && status !== 'limited') {
-      throw new Error(
-        'Android photo library access is required for auto upload',
-      );
-    }
-    await requestAndroidBackgroundSyncNotificationPermission();
+export async function enableAutoUpload(
+  options: EnableAutoUploadOptions = {},
+): Promise<void> {
+  if (!options.skipPermissionPreflight) {
+    await prepareAutoUploadEnable();
   }
 
   let currentConfig: AutoUploadConfigDTO | undefined;

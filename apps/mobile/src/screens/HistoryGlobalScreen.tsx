@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  NativeModules,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,11 +11,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
-import type { DesktopSyncRecordDTO } from '@syncflow/contracts';
+import type { BindingStateDTO, DesktopSyncRecordDTO } from '@syncflow/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { listHistory } from '../services/desktop-local-service';
+import { getBindingState } from '../services/SyncEngineModule';
 import { formatBytes } from '../utils/format';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'History'>;
@@ -39,13 +39,6 @@ interface HistoryDayGroup {
   transfers: DailyTransferSummary[];
 }
 
-interface NativeBindingState {
-  deviceId?: string | null;
-  deviceName?: string | null;
-  deviceAlias?: string | null;
-  host?: string | null;
-}
-
 interface DesktopHistoryIdentity {
   title?: string;
   meta?: string;
@@ -61,194 +54,13 @@ function firstNonEmptyString(...values: unknown[]) {
 }
 
 function getDesktopHistoryIdentity(
-  binding: NativeBindingState,
+  binding: Partial<BindingStateDTO>,
 ): DesktopHistoryIdentity {
   return {
     title: firstNonEmptyString(binding.deviceAlias, binding.deviceName),
     meta: firstNonEmptyString(binding.host, binding.deviceId),
   };
 }
-
-function createPreviewRecord({
-  id,
-  desktopDeviceId,
-  displayName,
-  filename,
-  mediaType,
-  fileSize,
-  dayOffset,
-  hour,
-  minute,
-}: {
-  id: string;
-  desktopDeviceId: string;
-  displayName: string;
-  filename: string;
-  mediaType: string;
-  fileSize: number;
-  dayOffset: number;
-  hour: number;
-  minute: number;
-}): DesktopSyncRecordDTO {
-  const completedAt = new Date();
-  completedAt.setDate(completedAt.getDate() - dayOffset);
-  completedAt.setHours(hour, minute, 0, 0);
-
-  return {
-    recordId: id,
-    desktopDeviceId,
-    clientId: 'iphone-15-pro',
-    displayName,
-    fileKey: `preview/${filename}`,
-    filename,
-    mediaType,
-    fileSize,
-    status: 'completed',
-    completedAt: completedAt.toISOString(),
-  };
-}
-
-const MOCK_HISTORY_ITEMS: DesktopSyncRecordDTO[] = [
-  createPreviewRecord({
-    id: 'mock-history-1',
-    desktopDeviceId: 'Mini4',
-    displayName: 'openimdeMac-mini',
-    filename: 'IMG_5198.MOV',
-    mediaType: 'video',
-    fileSize: 27787264,
-    dayOffset: 0,
-    hour: 22,
-    minute: 51,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-2',
-    desktopDeviceId: 'Mini4',
-    displayName: 'openimdeMac-mini',
-    filename: 'IMG_5203.JPG',
-    mediaType: 'image',
-    fileSize: 4194304,
-    dayOffset: 0,
-    hour: 22,
-    minute: 48,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-3',
-    desktopDeviceId: 'studio-a',
-    displayName: '剪辑工作站-A',
-    filename: 'A-CAM_0319_001.MOV',
-    mediaType: 'video',
-    fileSize: 3288490188,
-    dayOffset: 0,
-    hour: 21,
-    minute: 12,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-4',
-    desktopDeviceId: 'studio-a',
-    displayName: '剪辑工作站-A',
-    filename: 'A-CAM_0319_002.MOV',
-    mediaType: 'video',
-    fileSize: 4127195136,
-    dayOffset: 0,
-    hour: 21,
-    minute: 9,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-5',
-    desktopDeviceId: 'MacBook Pro',
-    displayName: 'MacBook Pro',
-    filename: 'ScreenRecording_0615.mp4',
-    mediaType: 'video',
-    fileSize: 130023420,
-    dayOffset: 1,
-    hour: 19,
-    minute: 40,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-6',
-    desktopDeviceId: 'MacBook Pro',
-    displayName: 'MacBook Pro',
-    filename: 'Poster_A_Final.jpg',
-    mediaType: 'image',
-    fileSize: 29360128,
-    dayOffset: 1,
-    hour: 18,
-    minute: 35,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-7',
-    desktopDeviceId: 'backup-b',
-    displayName: '备用机-B',
-    filename: 'VID_3018.MP4',
-    mediaType: 'video',
-    fileSize: 1717986918,
-    dayOffset: 2,
-    hour: 17,
-    minute: 28,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-8',
-    desktopDeviceId: 'backup-b',
-    displayName: '备用机-B',
-    filename: 'Vacation-01.JPG',
-    mediaType: 'image',
-    fileSize: 8808038,
-    dayOffset: 2,
-    hour: 17,
-    minute: 11,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-9',
-    desktopDeviceId: 'studio-a',
-    displayName: '剪辑工作站-A',
-    filename: 'Interview-Final.mp4',
-    mediaType: 'video',
-    fileSize: 195035136,
-    dayOffset: 3,
-    hour: 15,
-    minute: 42,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-10',
-    desktopDeviceId: 'MacBook Pro',
-    displayName: 'MacBook Pro',
-    filename: 'Project-Brief.pdf',
-    mediaType: 'document',
-    fileSize: 2202009,
-    dayOffset: 3,
-    hour: 10,
-    minute: 2,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-11',
-    desktopDeviceId: 'Mini4',
-    displayName: 'openimdeMac-mini',
-    filename: 'Poster-Pack.zip',
-    mediaType: 'archive',
-    fileSize: 35651584,
-    dayOffset: 4,
-    hour: 20,
-    minute: 18,
-  }),
-  createPreviewRecord({
-    id: 'mock-history-12',
-    desktopDeviceId: 'Mini4',
-    displayName: 'openimdeMac-mini',
-    filename: 'IMG_5180.HEIC',
-    mediaType: 'image',
-    fileSize: 7340032,
-    dayOffset: 4,
-    hour: 20,
-    minute: 4,
-  }),
-];
-
-const PREVIEW_DURATION_BY_DESKTOP: Record<string, string> = {
-  Mini4: '34m 14s',
-  'studio-a': '1h 12m',
-  'MacBook Pro': '16m 27s',
-  'backup-b': '48m 05s',
-};
 
 function getDayLabel(isoString?: string) {
   if (!isoString) return '未知日期';
@@ -276,7 +88,6 @@ function getRecordTime(isoString?: string) {
 function buildHistoryGroups(
   records: DesktopSyncRecordDTO[],
   options: {
-    previewMode: boolean;
     desktopIdentity?: DesktopHistoryIdentity | null;
   },
 ): HistoryDayGroup[] {
@@ -289,11 +100,9 @@ function buildHistoryGroups(
     const label = getDayLabel(record.completedAt);
     let group = groups.find(item => item.label === label);
     if (!group) {
-      const showLiveCue = options.previewMode && label === '今天';
       group = {
         id: label,
         label,
-        syncingLabel: showLiveCue ? '实时同步中' : undefined,
         transfers: [],
       };
       groups.push(group);
@@ -303,21 +112,13 @@ function buildHistoryGroups(
     const recordTime = getRecordTime(record.completedAt);
     let summary = group.transfers.find(item => item.id === summaryId);
     if (!summary) {
-      const showLiveCue = options.previewMode && label === '今天';
       summary = {
         id: summaryId,
-        deviceName: options.previewMode
-          ? record.displayName || record.desktopDeviceId
-          : options.desktopIdentity?.title || record.desktopDeviceId,
-        deviceMeta: options.previewMode
-          ? record.desktopDeviceId
-          : options.desktopIdentity?.meta || record.desktopDeviceId,
+        deviceName: options.desktopIdentity?.title || record.desktopDeviceId,
+        deviceMeta: options.desktopIdentity?.meta || record.desktopDeviceId,
         fileCount: 0,
         totalBytes: 0,
-        duration: showLiveCue
-          ? '实时'
-          : PREVIEW_DURATION_BY_DESKTOP[record.desktopDeviceId] || '--',
-        isSyncing: showLiveCue,
+        duration: '--',
         sortTime: recordTime,
       };
       group.transfers.push(summary);
@@ -415,32 +216,20 @@ export function HistoryGlobalScreen() {
   const [loading, setLoading] = useState(true);
   const [historyItems, setHistoryItems] = useState<DesktopSyncRecordDTO[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState(false);
   const [desktopIdentity, setDesktopIdentity] =
     useState<DesktopHistoryIdentity | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
       setErrorMessage(null);
-      const { NativeSyncEngine } = NativeModules;
-      if (!NativeSyncEngine) {
-        setPreviewMode(true);
-        setDesktopIdentity(null);
-        setHistoryItems(MOCK_HISTORY_ITEMS);
-        return;
-      }
-
-      const binding =
-        (await NativeSyncEngine.getBindingState()) as NativeBindingState | null;
+      const binding = await getBindingState();
       const host = firstNonEmptyString(binding?.host);
       if (!binding || !host) {
-        setPreviewMode(false);
         setDesktopIdentity(null);
         setHistoryItems([]);
         return;
       }
 
-      setPreviewMode(false);
       setDesktopIdentity(getDesktopHistoryIdentity(binding));
       const desktop = { host, port: 39394 };
       const result = await listHistory(desktop);
@@ -450,7 +239,6 @@ export function HistoryGlobalScreen() {
       setHistoryItems(completedFiles);
     } catch (e) {
       console.warn('[HistoryScreen] Failed to load history:', e);
-      setPreviewMode(false);
       setDesktopIdentity(null);
       setHistoryItems([]);
       setErrorMessage('无法加载同步历史，请稍后重试');
@@ -469,10 +257,9 @@ export function HistoryGlobalScreen() {
   const groups = useMemo(
     () =>
       buildHistoryGroups(historyItems, {
-        previewMode,
         desktopIdentity,
       }),
-    [desktopIdentity, historyItems, previewMode],
+    [desktopIdentity, historyItems],
   );
 
   const handleRetry = useCallback(() => {

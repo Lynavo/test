@@ -106,6 +106,8 @@ describe('AuthProvider visual QA bootstrap', () => {
     process.env = { ...originalEnv };
     delete process.env.SYNCFLOW_VISUAL_QA;
     delete process.env.SYNCFLOW_VISUAL_QA_EMAIL;
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH;
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL;
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(false);
   });
@@ -149,6 +151,42 @@ describe('AuthProvider visual QA bootstrap', () => {
       expect.any(Object),
     );
     expect(getUserProfile).toHaveBeenCalledTimes(1);
+  });
+
+  test('hydrates dev skip-auth tokens without enabling visual QA route mocks', async () => {
+    process.env.SYNCFLOW_DEV_SKIP_AUTH = '1';
+    process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
+    process.env.SYNCFLOW_VISUAL_QA_ROUTE = 'DeviceDiscovery';
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      const state = JSON.parse(
+        screen.getByTestId('auth-state').props.children,
+      ) as {
+        accessToken: string | null;
+        refreshToken: string | null;
+        userId: number | null;
+      };
+
+      expect(state).toEqual({
+        accessToken: 'mock-sandbox-access-token:functional@example.com',
+        refreshToken: 'mock-sandbox-refresh-token',
+        userId: 7,
+      });
+    });
+    expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
+      'tokens',
+      JSON.stringify({
+        access: 'mock-sandbox-access-token:functional@example.com',
+        refresh: 'mock-sandbox-refresh-token',
+      }),
+      expect.any(Object),
+    );
   });
 
   test('does not replace existing persisted tokens', async () => {

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { Icon } from '../components/Icon';
+import { isVisualQaEnabled } from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import {
@@ -37,9 +38,12 @@ export function DownloadRecordsGlobalScreen() {
     setLoading(true);
     try {
       const nextRecords = await listDownloadRecords();
-      setRecords(
-        nextRecords.length > 0 ? nextRecords : getVisualQaDownloadRecords(),
-      );
+      if (nextRecords.length > 0) {
+        setRecords(nextRecords);
+        return;
+      }
+
+      setRecords(isVisualQaEnabled() ? getVisualQaDownloadRecords() : []);
     } finally {
       setLoading(false);
     }

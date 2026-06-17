@@ -18,6 +18,12 @@ const envDefine = {
   'process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL': JSON.stringify(
     process.env.SYNCFLOW_CLIENT_CONFIG_BASE_URL || '',
   ),
+  'process.env.SYNCFLOW_DEV_SKIP_AUTH': JSON.stringify(
+    process.env.SYNCFLOW_DEV_SKIP_AUTH || '',
+  ),
+  'process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL': JSON.stringify(
+    process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL || '',
+  ),
 };
 
 export default defineConfig({

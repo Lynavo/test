@@ -65,13 +65,15 @@ describe('DownloadRecordsGlobalScreen', () => {
   it('renders a dedicated empty download records page', async () => {
     mockedListDownloadRecords.mockResolvedValueOnce([]);
 
-    const { getByText } = render(<DownloadRecordsGlobalScreen />);
+    const { getByText, queryByText } = render(<DownloadRecordsGlobalScreen />);
 
     await waitFor(() => {
       expect(getByText('最近下载')).toBeTruthy();
       expect(getByText('暂无最近下载')).toBeTruthy();
       expect(getByText('从电脑下载到本机的文件会出现在这里。')).toBeTruthy();
     });
+    expect(queryByText('Client-Handoff.mov')).toBeNull();
+    expect(queryByText('Campaign-Keyframes.zip')).toBeNull();
   });
 
   it('renders visual QA mock downloads when the download history is empty', async () => {

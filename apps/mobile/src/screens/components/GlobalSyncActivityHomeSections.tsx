@@ -8,6 +8,7 @@ import Svg, {
   Rect,
   Stop,
 } from 'react-native-svg';
+import { ArrowDownCircle } from 'lucide-react-native';
 import type { TFunction } from 'i18next';
 import { colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
@@ -176,11 +177,20 @@ export function RecentDownloadsSection({
     >
       <View style={styles.recentDownloadHeader}>
         <View style={styles.sectionTitleRow}>
-          <Icon
-            name={sectionIconName ?? 'download-outline'}
-            size={18}
-            color={sectionIconColor ?? DARK}
-          />
+          {isGlobalPreview ? (
+            <ArrowDownCircle
+              testID="global-recent-download-title-icon"
+              size={18}
+              color={sectionIconColor ?? BLUE}
+              strokeWidth={1.9}
+            />
+          ) : (
+            <Icon
+              name={sectionIconName ?? 'download-outline'}
+              size={18}
+              color={sectionIconColor ?? DARK}
+            />
+          )}
           <Text
             style={[
               styles.sectionTitleText,

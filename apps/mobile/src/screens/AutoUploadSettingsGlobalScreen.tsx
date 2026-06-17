@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,23 +12,36 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import {
+  Calendar,
+  Check,
+  ChevronLeft,
+  Clock,
+  CloudDownload,
+  File as FileIcon,
+  Folder,
+  Image as ImageIcon,
+  ShieldCheck,
+} from 'lucide-react-native';
 import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
+import type { AutoUploadTimeRangeMode } from '@syncflow/contracts';
 
-import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
-import { enableAutoUpload } from '../services/SyncEngineModule';
+import {
+  disableAutoUpload,
+  enableAutoUpload,
+  getAutoUploadConfig,
+  prepareAutoUploadEnable,
+  saveAutoUploadConfig,
+} from '../services/SyncEngineModule';
 
 type AutoUploadRange = 'all' | 'now' | 'custom';
 
-interface MockFile {
-  name: string;
-  size: number;
-}
-
-const BLUE = '#3B9FD8';
-const DARK = '#1A3A5C';
+const BLUE = '#1677D2';
+const DARK = '#17191C';
+const MUTED_ICON = '#7B8490';
 const GLOBAL_COPY = {
   title: '自动上传',
   subtitle: '设置手机内容同步到电脑',
@@ -39,9 +52,6 @@ const GLOBAL_COPY = {
   fileTitle: '指定文件',
   fileDescEmpty: '从系统文件中选择需要同步的内容',
   addFile: '添加',
-  addMoreFiles: '继续添加',
-  selectedFilesTitle: '已选文件',
-  clearFiles: '清空',
   rangeTitle: '同步范围',
   rangeAllTitle: '全部内容',
   rangeAllDesc: '同步现有照片和视频',
@@ -50,64 +60,117 @@ const GLOBAL_COPY = {
   rangeCustomTitle: '自定义时间',
   rangeCustomDesc: '按指定时间起点同步',
   confirmEnable: '开启自动上传',
+  confirmDisable: '关闭自动上传',
   customPickerSave: '保存',
   infoAlbum: '相册照片和视频将同步到电脑。',
   infoEmpty: '请选择至少一个同步来源。',
+  loadingConfig: '正在读取自动上传设置...',
+  loadConfigFailed: '自动上传设置读取失败，请稍后重试。',
+  fileUnsupportedTitle: '暂不可用',
+  fileUnsupportedBody: '指定文件自动上传需要原生队列支持，当前不会生成模拟文件。',
+  disabledSuccess: '自动上传已关闭',
 };
+
+function toUploadRange(mode: AutoUploadTimeRangeMode): AutoUploadRange {
+  if (mode === 'custom') return 'custom';
+  if (mode === 'from_now' || mode === 'from_today') return 'now';
+  return 'all';
+}
+
+function toTimeRangeMode(range: AutoUploadRange): AutoUploadTimeRangeMode {
+  if (range === 'now') return 'from_now';
+  return range;
+}
+
+function resolveTimeRangeMode(
+  range: AutoUploadRange,
+  hydratedMode: AutoUploadTimeRangeMode,
+  rangeEdited: boolean,
+): AutoUploadTimeRangeMode {
+  if (!rangeEdited && hydratedMode === 'from_today' && range === 'now') {
+    return 'from_today';
+  }
+  return toTimeRangeMode(range);
+}
+
+function parseConfigDate(value?: string): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
 export function AutoUploadSettingsGlobalScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
 
   const [albumEnabled, setAlbumEnabled] = useState(true);
-  const [selectedFiles, setSelectedFiles] = useState<MockFile[]>([]);
+  const [persistedAutoUploadEnabled, setPersistedAutoUploadEnabled] =
+    useState(false);
   const [uploadRange, setUploadRange] = useState<AutoUploadRange>('all');
+  const [hydratedTimeRangeMode, setHydratedTimeRangeMode] =
+    useState<AutoUploadTimeRangeMode>('all');
+  const [rangeEdited, setRangeEdited] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customDate, setCustomDate] = useState<Date>(new Date());
   const [tempDate, setTempDate] = useState<Date>(new Date());
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
 
-  const fileSourceSelected = selectedFiles.length > 0;
-  const canConfirm = albumEnabled;
+  const selectedFileSizeLabel = '0 B';
+  const selectedSourceCount = albumEnabled ? 1 : 0;
+  const shouldDisableAutoUpload =
+    persistedAutoUploadEnabled && !albumEnabled;
+  const canConfirm =
+    !configLoading && !configError && (albumEnabled || shouldDisableAutoUpload);
 
-  const handleAddMockFile = () => {
-    const mockFileNames = [
-      'ViviDrop_Readme.pdf',
-      'SyncFlow_Overview.docx',
-      'SyncFlow_Logo.png',
-      'Vacation_Photo.jpg',
-      'Project_Spec.pdf',
-    ];
-    const randomName =
-      mockFileNames[Math.floor(Math.random() * mockFileNames.length)];
-    const randomSize =
-      Math.floor(Math.random() * 10 * 1024 * 1024) + 100 * 1024; // 100KB - 10MB
-    setSelectedFiles(prev => [...prev, { name: randomName, size: randomSize }]);
-  };
+  useEffect(() => {
+    let mounted = true;
 
-  const handleClearFiles = () => {
-    setSelectedFiles([]);
-  };
+    const hydrateConfig = async () => {
+      setConfigLoading(true);
+      try {
+        const config = await getAutoUploadConfig();
+        if (!mounted) return;
 
-  const handleRemoveFile = useCallback((indexToRemove: number) => {
-    setSelectedFiles(prev =>
-      prev.filter((_, index) => index !== indexToRemove),
-    );
+        setPersistedAutoUploadEnabled(config.enabled);
+        setAlbumEnabled(config.enabled);
+        setHydratedTimeRangeMode(config.timeRangeMode);
+        setRangeEdited(false);
+        setUploadRange(toUploadRange(config.timeRangeMode));
+
+        const parsedDate = parseConfigDate(config.customTimeFrom);
+        if (parsedDate) {
+          setCustomDate(parsedDate);
+          setTempDate(parsedDate);
+        }
+        setConfigError(null);
+      } catch (e) {
+        console.warn('[AutoUploadSettings] getAutoUploadConfig failed:', e);
+        if (mounted) {
+          setConfigError(GLOBAL_COPY.loadConfigFailed);
+        }
+      } finally {
+        if (mounted) {
+          setConfigLoading(false);
+        }
+      }
+    };
+
+    void hydrateConfig();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const formatFileSize = (size: number) => {
-    if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`;
-    if (size >= 1024) return `${Math.round(size / 1024)} KB`;
-    return `${size} B`;
+  const handleAddFileSource = () => {
+    Alert.alert(
+      GLOBAL_COPY.fileUnsupportedTitle,
+      GLOBAL_COPY.fileUnsupportedBody,
+    );
   };
-  const selectedFileSize = selectedFiles.reduce((total, file) => {
-    return total + file.size;
-  }, 0);
-  const selectedFileSizeLabel =
-    selectedFiles.length > 0 ? formatFileSize(selectedFileSize) : '0 B';
-  const selectedSourceCount =
-    (albumEnabled ? 1 : 0) + (fileSourceSelected ? 1 : 0);
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -124,6 +187,7 @@ export function AutoUploadSettingsGlobalScreen() {
   }, [navigation]);
 
   const handleRangeSelect = (range: AutoUploadRange) => {
+    setRangeEdited(true);
     setUploadRange(range);
     if (range === 'custom') {
       setTempDate(customDate);
@@ -139,6 +203,7 @@ export function AutoUploadSettingsGlobalScreen() {
       setShowDatePicker(false);
       if (event.type === 'set' && selectedDate) {
         setCustomDate(selectedDate);
+        setTempDate(selectedDate);
       }
     } else if (selectedDate) {
       setTempDate(selectedDate);
@@ -155,8 +220,48 @@ export function AutoUploadSettingsGlobalScreen() {
     savingRef.current = true;
     try {
       setSaving(true);
-      // Call native auto upload activation
-      await enableAutoUpload();
+      if (shouldDisableAutoUpload) {
+        await disableAutoUpload();
+        setPersistedAutoUploadEnabled(false);
+
+        Alert.alert(
+          t('common.confirm') || '確認',
+          GLOBAL_COPY.disabledSuccess,
+          [
+            {
+              text: t('common.ok') || '好',
+              onPress: () => {
+                navigation.dispatch(
+                  CommonActions.reset({
+                    index: 0,
+                    routes: [{ name: 'SyncActivity' }],
+                  }),
+                );
+              },
+            },
+          ],
+        );
+        return;
+      }
+
+      const timeRangeMode = resolveTimeRangeMode(
+        uploadRange,
+        hydratedTimeRangeMode,
+        rangeEdited,
+      );
+      const customTimeFrom =
+        timeRangeMode === 'custom' ? customDate.toISOString() : undefined;
+      await prepareAutoUploadEnable();
+      await saveAutoUploadConfig({
+        enabled: true,
+        timeRangeMode,
+        customTimeFrom,
+      });
+      await enableAutoUpload({ skipPermissionPreflight: true });
+      setPersistedAutoUploadEnabled(true);
+      setAlbumEnabled(true);
+      setHydratedTimeRangeMode(timeRangeMode);
+      setRangeEdited(false);
 
       Alert.alert(
         t('common.confirm') || '確認',
@@ -190,13 +295,14 @@ export function AutoUploadSettingsGlobalScreen() {
 
   // Render dynamic explanation sentence
   const renderInfoText = () => {
-    const fileCount = selectedFiles.length;
-    if (albumEnabled && fileSourceSelected) {
-      return `相册内容和 ${fileCount} 个文件将同步到电脑。`;
-    } else if (albumEnabled) {
+    if (configLoading) {
+      return GLOBAL_COPY.loadingConfig;
+    }
+    if (configError) {
+      return configError;
+    }
+    if (albumEnabled) {
       return GLOBAL_COPY.infoAlbum;
-    } else if (fileSourceSelected) {
-      return `${fileCount} 个文件将同步到电脑。`;
     } else {
       return GLOBAL_COPY.infoEmpty;
     }
@@ -209,6 +315,9 @@ export function AutoUploadSettingsGlobalScreen() {
         ? GLOBAL_COPY.rangeNowTitle
         : GLOBAL_COPY.rangeCustomTitle;
   const infoText = renderInfoText();
+  const confirmLabel = shouldDisableAutoUpload
+    ? GLOBAL_COPY.confirmDisable
+    : GLOBAL_COPY.confirmEnable;
 
   return (
     <GlobalGradientBackground>
@@ -223,7 +332,12 @@ export function AutoUploadSettingsGlobalScreen() {
             accessibilityLabel="返回"
             onPress={handleBack}
           >
-            <Icon name="chevron-back" size={20} color={DARK} />
+            <ChevronLeft
+              testID="auto-upload-back-icon"
+              size={20}
+              color={DARK}
+              strokeWidth={1.9}
+            />
           </TouchableOpacity>
           <View style={styles.headerCopy}>
             <Text style={styles.headerTitle}>
@@ -243,7 +357,12 @@ export function AutoUploadSettingsGlobalScreen() {
           <View style={styles.planCard}>
             <View style={styles.planHeaderRow}>
               <View style={styles.planIconBox}>
-                <Icon name="cloud-download-outline" size={24} color={BLUE} />
+                <CloudDownload
+                  testID="auto-upload-plan-icon"
+                  size={24}
+                  color={BLUE}
+                  strokeWidth={1.9}
+                />
               </View>
               <View style={styles.planTextColumn}>
                 <Text style={styles.planTitle}>{GLOBAL_COPY.planTitle}</Text>
@@ -257,7 +376,7 @@ export function AutoUploadSettingsGlobalScreen() {
               </View>
               <View style={styles.planStatItem}>
                 <Text style={styles.planStatLabel}>文件</Text>
-                <Text style={styles.planStatValue}>{selectedFiles.length}</Text>
+                <Text style={styles.planStatValue}>0</Text>
               </View>
               <View style={styles.planStatItem}>
                 <Text style={styles.planStatLabel}>范围</Text>
@@ -291,16 +410,17 @@ export function AutoUploadSettingsGlobalScreen() {
               >
                 <View
                   style={[
-                    styles.iconBox,
+                    styles.sourceIconBox,
                     albumEnabled
                       ? styles.iconBoxActive
                       : styles.iconBoxInactive,
                   ]}
                 >
-                  <Icon
-                    name="auto-upload-image"
+                  <ImageIcon
+                    testID="auto-upload-source-album-icon"
                     size={20}
-                    color={albumEnabled ? '#fff' : '#8AABBD'}
+                    color={albumEnabled ? '#fff' : MUTED_ICON}
+                    strokeWidth={1.9}
                   />
                 </View>
                 <View style={styles.optionInfo}>
@@ -311,33 +431,21 @@ export function AutoUploadSettingsGlobalScreen() {
                     {GLOBAL_COPY.albumDesc}
                   </Text>
                 </View>
-                {albumEnabled && (
-                  <View style={styles.checkCircle}>
-                    <Icon name="checkmark" size={12} color="#fff" />
-                  </View>
-                )}
+                <SelectionIndicator
+                  selected={albumEnabled}
+                  testID="auto-upload-source-album-check-icon"
+                />
               </TouchableOpacity>
 
               {/* Option 2: Files */}
-              <View
-                style={[
-                  styles.optionContainer,
-                  fileSourceSelected && styles.optionRowActive,
-                ]}
-              >
+              <View style={styles.optionContainer}>
                 <View style={styles.optionRowHeader}>
-                  <View
-                    style={[
-                      styles.iconBox,
-                      fileSourceSelected
-                        ? styles.iconBoxFileActive
-                        : styles.iconBoxInactive,
-                    ]}
-                  >
-                    <Icon
-                      name="auto-upload-file"
+                  <View style={[styles.sourceIconBox, styles.iconBoxInactive]}>
+                    <FileIcon
+                      testID="auto-upload-source-file-icon"
                       size={20}
-                      color={fileSourceSelected ? '#fff' : '#8AABBD'}
+                      color={MUTED_ICON}
+                      strokeWidth={1.9}
                     />
                   </View>
                   <View style={styles.optionInfo}>
@@ -345,91 +453,21 @@ export function AutoUploadSettingsGlobalScreen() {
                       {GLOBAL_COPY.fileTitle}
                     </Text>
                     <Text style={styles.optionDesc}>
-                      {fileSourceSelected
-                        ? `${selectedFiles.length} 个文件 · ${selectedFileSizeLabel}`
-                        : GLOBAL_COPY.fileDescEmpty}
+                      {GLOBAL_COPY.fileDescEmpty}
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={[
-                      styles.addFileButton,
-                      fileSourceSelected && styles.addFileButtonSecondary,
-                    ]}
+                    style={styles.addFileButton}
                     activeOpacity={0.8}
                     testID="auto-upload-add-file"
                     accessibilityRole="button"
-                    onPress={handleAddMockFile}
+                    onPress={handleAddFileSource}
                   >
-                    <Text
-                      style={[
-                        styles.addFileButtonText,
-                        fileSourceSelected &&
-                          styles.addFileButtonTextSecondary,
-                      ]}
-                    >
-                      {fileSourceSelected
-                        ? GLOBAL_COPY.addMoreFiles
-                        : GLOBAL_COPY.addFile}
+                    <Text style={styles.addFileButtonText}>
+                      {GLOBAL_COPY.addFile}
                     </Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* Selected Files Preview List */}
-                {fileSourceSelected && (
-                  <View style={styles.filesPreviewCard}>
-                    <View style={styles.previewHeader}>
-                      <Text style={styles.previewHeaderTitle}>
-                        {GLOBAL_COPY.selectedFilesTitle}
-                      </Text>
-                      <TouchableOpacity
-                        activeOpacity={0.6}
-                        testID="auto-upload-clear-files"
-                        accessibilityRole="button"
-                        onPress={handleClearFiles}
-                      >
-                        <Text style={styles.clearButtonText}>
-                          {GLOBAL_COPY.clearFiles}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.previewList}>
-                      {selectedFiles.slice(0, 3).map((file, index) => (
-                        <View key={index} style={styles.previewItem}>
-                          <Icon
-                            name="document-text"
-                            size={14}
-                            color="#746AA8"
-                          />
-                          <Text
-                            style={styles.previewItemName}
-                            numberOfLines={1}
-                          >
-                            {file.name}
-                          </Text>
-                          <Text style={styles.previewItemSize}>
-                            {formatFileSize(file.size)}
-                          </Text>
-                          <TouchableOpacity
-                            activeOpacity={0.65}
-                            accessibilityRole="button"
-                            accessibilityLabel="移除文件"
-                            testID={`auto-upload-remove-file-${index}`}
-                            onPress={() => handleRemoveFile(index)}
-                            style={styles.previewRemoveButton}
-                          >
-                            <Icon name="close" size={12} color="#7B8490" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                      {selectedFiles.length > 3 && (
-                        <Text style={styles.previewMoreText}>
-                          {`另有 ${selectedFiles.length - 3} 个文件`}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                )}
               </View>
             </View>
           </View>
@@ -442,7 +480,10 @@ export function AutoUploadSettingsGlobalScreen() {
             <View style={styles.cardContainer}>
               {/* Option: All */}
               <TouchableOpacity
-                style={styles.optionRow}
+                style={[
+                  styles.optionRow,
+                  uploadRange === 'all' && styles.optionRowActive,
+                ]}
                 activeOpacity={0.8}
                 testID="auto-upload-range-all"
                 accessibilityRole="button"
@@ -451,16 +492,17 @@ export function AutoUploadSettingsGlobalScreen() {
               >
                 <View
                   style={[
-                    styles.iconBox,
+                    styles.rangeIconBox,
                     uploadRange === 'all'
                       ? styles.iconBoxActive
                       : styles.iconBoxInactive,
                   ]}
                 >
-                  <Icon
-                    name="auto-upload-folder"
+                  <Folder
+                    testID="auto-upload-range-all-icon"
                     size={18}
-                    color={uploadRange === 'all' ? '#fff' : '#8AABBD'}
+                    color={uploadRange === 'all' ? '#fff' : MUTED_ICON}
+                    strokeWidth={1.9}
                   />
                 </View>
                 <View style={styles.optionInfo}>
@@ -471,16 +513,18 @@ export function AutoUploadSettingsGlobalScreen() {
                     {GLOBAL_COPY.rangeAllDesc}
                   </Text>
                 </View>
-                {uploadRange === 'all' && (
-                  <View style={styles.checkCircle}>
-                    <Icon name="checkmark" size={12} color="#fff" />
-                  </View>
-                )}
+                <SelectionIndicator
+                  selected={uploadRange === 'all'}
+                  testID="auto-upload-range-all-check-icon"
+                />
               </TouchableOpacity>
 
               {/* Option: Now */}
               <TouchableOpacity
-                style={styles.optionRow}
+                style={[
+                  styles.optionRow,
+                  uploadRange === 'now' && styles.optionRowActive,
+                ]}
                 activeOpacity={0.8}
                 testID="auto-upload-range-now"
                 accessibilityRole="button"
@@ -489,16 +533,17 @@ export function AutoUploadSettingsGlobalScreen() {
               >
                 <View
                   style={[
-                    styles.iconBox,
+                    styles.rangeIconBox,
                     uploadRange === 'now'
                       ? styles.iconBoxActive
                       : styles.iconBoxInactive,
                   ]}
                 >
-                  <Icon
-                    name="auto-upload-clock"
+                  <Clock
+                    testID="auto-upload-range-now-icon"
                     size={18}
-                    color={uploadRange === 'now' ? '#fff' : '#8AABBD'}
+                    color={uploadRange === 'now' ? '#fff' : MUTED_ICON}
+                    strokeWidth={1.9}
                   />
                 </View>
                 <View style={styles.optionInfo}>
@@ -509,16 +554,18 @@ export function AutoUploadSettingsGlobalScreen() {
                     {GLOBAL_COPY.rangeNowDesc}
                   </Text>
                 </View>
-                {uploadRange === 'now' && (
-                  <View style={styles.checkCircle}>
-                    <Icon name="checkmark" size={12} color="#fff" />
-                  </View>
-                )}
+                <SelectionIndicator
+                  selected={uploadRange === 'now'}
+                  testID="auto-upload-range-now-check-icon"
+                />
               </TouchableOpacity>
 
               {/* Option: Custom */}
               <TouchableOpacity
-                style={styles.optionRow}
+                style={[
+                  styles.optionRow,
+                  uploadRange === 'custom' && styles.optionRowActive,
+                ]}
                 activeOpacity={0.8}
                 testID="auto-upload-range-custom"
                 accessibilityRole="button"
@@ -527,16 +574,17 @@ export function AutoUploadSettingsGlobalScreen() {
               >
                 <View
                   style={[
-                    styles.iconBox,
+                    styles.rangeIconBox,
                     uploadRange === 'custom'
                       ? styles.iconBoxActive
                       : styles.iconBoxInactive,
                   ]}
                 >
-                  <Icon
-                    name="auto-upload-calendar"
+                  <Calendar
+                    testID="auto-upload-range-custom-icon"
                     size={18}
-                    color={uploadRange === 'custom' ? '#fff' : '#8AABBD'}
+                    color={uploadRange === 'custom' ? '#fff' : MUTED_ICON}
+                    strokeWidth={1.9}
                   />
                 </View>
                 <View style={styles.optionInfo}>
@@ -547,13 +595,10 @@ export function AutoUploadSettingsGlobalScreen() {
                     {GLOBAL_COPY.rangeCustomDesc}
                   </Text>
                 </View>
-                {uploadRange === 'custom' ? (
-                  <View style={styles.checkCircle}>
-                    <Icon name="checkmark" size={12} color="#fff" />
-                  </View>
-                ) : (
-                  <Icon name="chevron-forward" size={14} color="#8aabbd" />
-                )}
+                <SelectionIndicator
+                  selected={uploadRange === 'custom'}
+                  testID="auto-upload-range-custom-check-icon"
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -561,10 +606,11 @@ export function AutoUploadSettingsGlobalScreen() {
           {/* Info Card */}
           <View style={styles.infoCard}>
             <View style={styles.infoIconBox}>
-              <Icon
-                name="shield-checkmark-outline"
+              <ShieldCheck
+                testID="auto-upload-info-icon"
                 size={18}
                 color="#AD761D"
+                strokeWidth={1.9}
               />
             </View>
             <Text style={styles.infoText}>{infoText}</Text>
@@ -589,7 +635,7 @@ export function AutoUploadSettingsGlobalScreen() {
             onPress={handleConfirmSettings}
           >
             <Text style={styles.confirmButtonText}>
-              {GLOBAL_COPY.confirmEnable}
+              {confirmLabel}
             </Text>
           </TouchableOpacity>
         </View>
@@ -806,18 +852,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.58)',
     borderColor: 'rgba(22,119,210,0.18)',
   },
-  iconBox: {
+  sourceIconBox: {
     width: 44,
     height: 44,
     borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  rangeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   iconBoxActive: {
     backgroundColor: '#1677D2',
-  },
-  iconBoxFileActive: {
-    backgroundColor: '#746AA8',
   },
   iconBoxInactive: {
     backgroundColor: 'rgba(255,255,255,0.72)',
@@ -837,13 +887,21 @@ const styles = StyleSheet.create({
     color: '#59616D',
     marginTop: 4,
   },
-  checkCircle: {
+  selectionBox: {
     width: 24,
     height: 24,
     borderRadius: 8,
-    backgroundColor: '#1677D2',
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  selectionBoxActive: {
+    borderColor: '#1677D2',
+    backgroundColor: '#1677D2',
+  },
+  selectionBoxInactive: {
+    borderColor: '#C9D6E4',
+    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   optionContainer: {
     padding: 16,
@@ -875,71 +933,10 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 2,
   },
-  addFileButtonSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    shadowOpacity: 0,
-    elevation: 0,
-  },
   addFileButtonText: {
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
-  },
-  addFileButtonTextSecondary: {
-    color: '#1677D2',
-  },
-  filesPreviewCard: {
-    marginTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.70)',
-    paddingTop: 12,
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingBottom: 2,
-  },
-  previewHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#3F4A58',
-  },
-  clearButtonText: {
-    fontSize: 11,
-    color: '#8AABBD',
-    fontWeight: '500',
-  },
-  previewList: {
-    gap: 8,
-  },
-  previewItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  previewItemName: {
-    flex: 1,
-    fontSize: 11,
-    color: '#5A7A96',
-  },
-  previewItemSize: {
-    fontSize: 11,
-    color: '#8AABBD',
-  },
-  previewRemoveButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.58)',
-  },
-  previewMoreText: {
-    fontSize: 11,
-    color: '#8AABBD',
-    marginTop: 4,
   },
   infoCard: {
     marginTop: 20,
@@ -1036,3 +1033,25 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 });
+
+function SelectionIndicator({
+  selected,
+  testID,
+}: {
+  selected: boolean;
+  testID: string;
+}) {
+  return (
+    <View
+      testID={`${testID}-box`}
+      style={[
+        styles.selectionBox,
+        selected ? styles.selectionBoxActive : styles.selectionBoxInactive,
+      ]}
+    >
+      {selected ? (
+        <Check testID={testID} size={12} color="#fff" strokeWidth={2.6} />
+      ) : null}
+    </View>
+  );
+}

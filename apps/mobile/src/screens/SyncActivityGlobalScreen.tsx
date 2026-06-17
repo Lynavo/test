@@ -1,5 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+  NativeEventEmitter,
+  NativeModules,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,12 +12,22 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import type {
+  AutoUploadState,
+  BindingStateDTO,
+  HistoryLedgerCardDTO,
+  ReadOnlyQueueItemDTO,
+  SyncSummaryDTO,
+} from '@syncflow/contracts';
 
 import { GlobalBottomTabBar } from '../components/GlobalBottomTabBar';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { Icon } from '../components/Icon';
+import {
+  isVisualQaEnabled,
+  isVisualQaHomeEmptyStateEnabled,
+} from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
-import { isVisualQaHomeEmptyStateEnabled } from '../dev/visualQa';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/globalColors';
 import {
@@ -29,7 +41,13 @@ import {
   listDownloadRecords,
   type DownloadRecord,
 } from '../services/download-records-service';
-import { getAutoUploadConfig } from '../services/SyncEngineModule';
+import {
+  getBindingState,
+  getHistoryDays,
+  getReadOnlyQueue,
+  getSyncOverview,
+} from '../services/SyncEngineModule';
+import { formatBytes, formatDuration } from '../utils/format';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SyncActivity'>;
 
@@ -39,88 +57,31 @@ interface SyncActivityGlobalScreenProps {
   showBottomTabBar?: boolean;
 }
 
-const GLOBAL_HOME_SYNC_RECORD_DAYS: GlobalSyncRecordTimelineDay[] = [
-  {
-    key: '2026-03-19',
-    label: '今天',
-    totalFiles: 18,
-    totalSize: '18.4 GB',
-    records: [
-      {
-        id: '2026-03-19-s1',
-        deviceName: '剪辑工作站-A',
-        duration: '34m 14s',
-        fileCount: 15,
-        status: 'syncing',
-        totalSize: '16.3 GB',
-      },
-      {
-        id: '2026-03-19-s2',
-        deviceName: 'MacBook Pro',
-        duration: '9m 18s',
-        fileCount: 3,
-        status: 'completed',
-        totalSize: '2.1 GB',
-      },
-    ],
-  },
-  {
-    key: '2026-03-18',
-    label: '3月18日',
-    totalFiles: 45,
-    totalSize: '86.5 GB',
-    records: [
-      {
-        id: '2026-03-18-s3',
-        deviceName: '剪辑工作站-A',
-        duration: '1h 12m',
-        fileCount: 45,
-        status: 'completed',
-        totalSize: '86.5 GB',
-      },
-    ],
-  },
-  {
-    key: '2026-03-17',
-    label: '3月17日',
-    totalFiles: 37,
-    totalSize: '63.3 GB',
-    records: [
-      {
-        id: '2026-03-17-s4',
-        deviceName: '剪辑工作站-A',
-        duration: '48m 05s',
-        fileCount: 29,
-        status: 'completed',
-        totalSize: '51.0 GB',
-      },
-      {
-        id: '2026-03-17-s5',
-        deviceName: '备用机-B',
-        duration: '16m 27s',
-        fileCount: 8,
-        status: 'completed',
-        totalSize: '12.3 GB',
-      },
-    ],
-  },
-  {
-    key: '2026-03-16',
-    label: '3月16日',
-    totalFiles: 31,
-    totalSize: '62.5 GB',
-    records: [
-      {
-        id: '2026-03-16-s6',
-        deviceName: 'MacBook Pro',
-        duration: '57m 40s',
-        fileCount: 31,
-        status: 'completed',
-        totalSize: '62.5 GB',
-      },
-    ],
-  },
-];
+type GlobalSyncOverview = Omit<SyncSummaryDTO, 'uploadState'> & {
+  autoUploadState?: AutoUploadState;
+  completedBytes: number;
+  completedCount: number;
+  currentFilename?: string;
+  lastCompletedAt?: string;
+  totalCount: number;
+  uploadState: string;
+};
+
+const EMPTY_SYNC_OVERVIEW: GlobalSyncOverview = {
+  currentDeviceId: null,
+  currentDeviceName: null,
+  currentSpeedMbps: 0,
+  transferredBytes: 0,
+  totalBytes: 0,
+  progressPercent: 0,
+  uploadState: 'idle',
+  completedBytes: 0,
+  completedCount: 0,
+  totalCount: 0,
+  autoUploadState: 'disabled',
+  manualPending: 0,
+  autoPending: 0,
+};
 
 const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   {
@@ -157,14 +118,6 @@ const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   },
 ];
 
-const ACTIVE_UPLOAD_PROGRESS = {
-  uploaded: 96,
-  pending: 32,
-  speed: '68.5 MB/s',
-  size: '2.4 GB / 3.6 GB',
-  remaining: '24 秒',
-};
-
 export function SyncActivityGlobalScreen({
   showBottomTabBar = true,
 }: SyncActivityGlobalScreenProps) {
@@ -172,31 +125,113 @@ export function SyncActivityGlobalScreen({
   const { t } = useTranslation();
   const showHomeEmptyState = isVisualQaHomeEmptyStateEnabled();
   const [downloadRecords, setDownloadRecords] = useState<DownloadRecord[]>([]);
-  const [autoUploadActive, setAutoUploadActive] = useState(false);
+  const [overview, setOverview] =
+    useState<GlobalSyncOverview>(EMPTY_SYNC_OVERVIEW);
+  const [bindingState, setBindingState] = useState<BindingStateDTO | null>(
+    null,
+  );
+  const [queueItems, setQueueItems] = useState<ReadOnlyQueueItemDTO[]>([]);
+  const [historyDays, setHistoryDays] = useState<HistoryLedgerCardDTO[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void listDownloadRecords().then(records => {
-        if (active) {
-          setDownloadRecords(
-            records.length > 0 ? records : getVisualQaDownloadRecords(),
-          );
+
+      const refreshDownloads = async () => {
+        const records = await listDownloadRecords();
+        if (!active) return;
+        setDownloadRecords(
+          records.length > 0 || !isVisualQaEnabled()
+            ? records
+            : getVisualQaDownloadRecords(),
+        );
+      };
+
+      const refreshBinding = async () => {
+        try {
+          const binding = await getBindingState();
+          if (active) {
+            setBindingState(normalizeBindingState(binding));
+          }
+        } catch {
+          if (active) {
+            setBindingState(null);
+          }
         }
-      });
-      void getAutoUploadConfig()
-        .then(config => {
+      };
+
+      const refreshOverview = async () => {
+        try {
+          const snapshot = await getSyncOverview();
           if (active) {
-            setAutoUploadActive(config.enabled && config.state === 'active');
+            setOverview(prev => normalizeSyncOverview(snapshot, prev));
           }
-        })
-        .catch(() => {
+        } catch {
           if (active) {
-            setAutoUploadActive(false);
+            setOverview(EMPTY_SYNC_OVERVIEW);
           }
-        });
+        }
+      };
+
+      const refreshQueue = async () => {
+        try {
+          const queue = await getReadOnlyQueue();
+          if (active) {
+            setQueueItems(queue);
+          }
+        } catch {
+          if (active) {
+            setQueueItems([]);
+          }
+        }
+      };
+
+      const refreshHistory = async () => {
+        try {
+          const history = await getHistoryDays();
+          if (active) {
+            setHistoryDays(history.items);
+          }
+        } catch {
+          if (active) {
+            setHistoryDays([]);
+          }
+        }
+      };
+
+      void Promise.all([
+        refreshDownloads(),
+        refreshBinding(),
+        refreshOverview(),
+        refreshQueue(),
+        refreshHistory(),
+      ]);
+
+      const nativeSyncEngine = NativeModules.NativeSyncEngine;
+      const subscriptions: Array<{ remove: () => void }> = [];
+      if (nativeSyncEngine) {
+        const emitter = new NativeEventEmitter(nativeSyncEngine);
+        subscriptions.push(
+          emitter.addListener('onSyncStateChanged', payload => {
+            setOverview(prev => normalizeSyncOverview(payload, prev));
+          }),
+          emitter.addListener('onQueueUpdated', () => {
+            void refreshQueue();
+          }),
+          emitter.addListener('onHistoryUpdated', () => {
+            void refreshHistory();
+          }),
+          emitter.addListener('onBindingStateChanged', payload => {
+            setBindingState(normalizeBindingState(payload));
+          }),
+        );
+      }
+
       return () => {
         active = false;
+        subscriptions.forEach(subscription => {
+          subscription.remove();
+        });
       };
     }, []),
   );
@@ -204,12 +239,36 @@ export function SyncActivityGlobalScreen({
   const recentDownloadRecords = showHomeEmptyState
     ? []
     : downloadRecords.slice(0, 4).map(toRecentDownloadRecord);
-  const uploadTotal =
-    ACTIVE_UPLOAD_PROGRESS.uploaded + ACTIVE_UPLOAD_PROGRESS.pending;
-  const uploadPercent =
-    uploadTotal > 0
-      ? Math.round((ACTIVE_UPLOAD_PROGRESS.uploaded / uploadTotal) * 100)
-      : 0;
+  const uploadProgress = useMemo(
+    () => buildUploadProgress(overview, queueItems.length),
+    [overview, queueItems.length],
+  );
+  const autoUploadActive = overview.autoUploadState === 'active';
+  const shouldShowUploadProgress =
+    autoUploadActive &&
+    (isActiveUploadState(overview.uploadState) ||
+      uploadProgress.totalCount > 0 ||
+      uploadProgress.totalBytes > 0);
+  const connectionMeta = formatConnectionMeta(bindingState, overview);
+  const timelineDays = useMemo(
+    () =>
+      showHomeEmptyState
+        ? []
+        : [...historyDays]
+            .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+            .map(toGlobalSyncRecordTimelineDay),
+    [historyDays, showHomeEmptyState],
+  );
+  const totalSyncedSize = useMemo(
+    () =>
+      formatBytes(
+        showHomeEmptyState
+          ? 0
+          : historyDays.reduce((sum, item) => sum + item.totalBytes, 0),
+      ),
+    [historyDays, showHomeEmptyState],
+  );
+  const latestSyncLabel = getLatestSyncLabel(overview, historyDays);
 
   return (
     <GlobalGradientBackground>
@@ -235,9 +294,7 @@ export function SyncActivityGlobalScreen({
                   </View>
                   <View>
                     <Text style={styles.autoTitle}>自动同步</Text>
-                    <Text style={styles.autoMeta}>
-                      {autoUploadActive ? '已开启' : '未开启'}
-                    </Text>
+                    <Text style={styles.autoMeta}>{connectionMeta}</Text>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -255,24 +312,26 @@ export function SyncActivityGlobalScreen({
                 <Text style={styles.phoneTitle}>当前手机状态</Text>
                 <Text style={styles.phoneStatus}>
                   {autoUploadActive
-                    ? `已上传${ACTIVE_UPLOAD_PROGRESS.uploaded}/${uploadTotal}`
+                    ? uploadProgress.totalCount > 0
+                      ? `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
+                      : '等待自动同步'
                     : '自动同步未开启'}
                 </Text>
-                {autoUploadActive ? (
+                {shouldShowUploadProgress ? (
                   <View style={styles.uploadProgressCard}>
                     <View style={styles.uploadProgressHeader}>
                       <Text style={styles.uploadProgressTitle}>
                         上传中 · 本次传输进度
                       </Text>
                       <Text style={styles.uploadProgressPercent}>
-                        {uploadPercent}%
+                        {uploadProgress.percent}%
                       </Text>
                     </View>
                     <View style={styles.uploadProgressTrack}>
                       <View
                         style={[
                           styles.uploadProgressFill,
-                          { width: `${uploadPercent}%` },
+                          { width: `${uploadProgress.percent}%` },
                         ]}
                       />
                     </View>
@@ -280,7 +339,7 @@ export function SyncActivityGlobalScreen({
                       <View style={styles.uploadProgressStat}>
                         <Text style={styles.uploadProgressLabel}>传输速度</Text>
                         <Text style={styles.uploadProgressValue}>
-                          {ACTIVE_UPLOAD_PROGRESS.speed}
+                          {formatSpeedMbps(uploadProgress.speedMbps)}
                         </Text>
                       </View>
                       <View
@@ -291,13 +350,15 @@ export function SyncActivityGlobalScreen({
                       >
                         <Text style={styles.uploadProgressLabel}>传输进度</Text>
                         <Text style={styles.uploadProgressValue}>
-                          {ACTIVE_UPLOAD_PROGRESS.uploaded} / {uploadTotal}
+                          {uploadProgress.completedCount} /{' '}
+                          {uploadProgress.totalCount}
                         </Text>
                       </View>
                       <View style={styles.uploadProgressStat}>
                         <Text style={styles.uploadProgressLabel}>文件大小</Text>
                         <Text style={styles.uploadProgressValue}>
-                          {ACTIVE_UPLOAD_PROGRESS.size}
+                          {formatBytes(uploadProgress.completedBytes)} /{' '}
+                          {formatBytes(uploadProgress.totalBytes)}
                         </Text>
                       </View>
                       <View
@@ -306,15 +367,17 @@ export function SyncActivityGlobalScreen({
                           styles.uploadProgressStatRight,
                         ]}
                       >
-                        <Text style={styles.uploadProgressLabel}>剩余时间</Text>
+                        <Text style={styles.uploadProgressLabel}>当前文件</Text>
                         <Text style={styles.uploadProgressValue}>
-                          {ACTIVE_UPLOAD_PROGRESS.remaining}
+                          {uploadProgress.currentFilename || '准备中'}
                         </Text>
                       </View>
                     </View>
                   </View>
                 ) : null}
-                <Text style={styles.latestSyncText}>最近同步时间：暂无</Text>
+                <Text style={styles.latestSyncText}>
+                  最近同步时间：{latestSyncLabel}
+                </Text>
               </View>
             </View>
           </View>
@@ -332,8 +395,8 @@ export function SyncActivityGlobalScreen({
           />
 
           <GlobalSyncRecordTimelineSection
-            days={showHomeEmptyState ? [] : GLOBAL_HOME_SYNC_RECORD_DAYS}
-            totalSyncedSize={showHomeEmptyState ? '0 B' : '230.7 GB'}
+            days={timelineDays}
+            totalSyncedSize={totalSyncedSize}
           />
         </ScrollView>
 
@@ -351,6 +414,322 @@ function toRecentDownloadRecord(record: DownloadRecord): RecentDownloadRecord {
     mediaType: record.mediaType,
     completedAt: record.downloadedAt,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readStringField(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function readNumberField(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = record[key];
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function isAutoUploadState(value: unknown): value is AutoUploadState {
+  return value === 'active' || value === 'disabled' || value === 'interrupted';
+}
+
+function isConnectionState(
+  value: unknown,
+): value is BindingStateDTO['connectionState'] {
+  return (
+    value === 'discovering' ||
+    value === 'bound' ||
+    value === 'connecting' ||
+    value === 'connected' ||
+    value === 'offline'
+  );
+}
+
+function normalizeBindingState(value: unknown): BindingStateDTO | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const deviceId = readStringField(value, 'deviceId');
+  if (!deviceId) {
+    return null;
+  }
+
+  const deviceName = readStringField(value, 'deviceName') ?? '';
+  const connectionStateValue = value.connectionState;
+
+  return {
+    deviceId,
+    deviceName,
+    deviceAlias: readStringField(value, 'deviceAlias') ?? deviceName,
+    host: readStringField(value, 'host') ?? '',
+    port: readNumberField(value, 'port') ?? 39393,
+    connectionState: isConnectionState(connectionStateValue)
+      ? connectionStateValue
+      : 'bound',
+    pairingId: readStringField(value, 'pairingId') ?? '',
+    shareEnabled: value.shareEnabled === true,
+    shareName: readStringField(value, 'shareName'),
+    lastBoundAt: readStringField(value, 'lastBoundAt') ?? '',
+    sharedFilesReachability: null,
+    wake: null,
+  };
+}
+
+function normalizeSyncOverview(
+  payload: unknown,
+  prev: GlobalSyncOverview,
+): GlobalSyncOverview {
+  if (!isRecord(payload)) {
+    return prev;
+  }
+
+  const uploadState = readStringField(payload, 'uploadState') ?? prev.uploadState;
+  const completedBytes =
+    readNumberField(payload, 'completedBytes') ??
+    readNumberField(payload, 'transferredBytes') ??
+    prev.completedBytes;
+  const totalBytes = readNumberField(payload, 'totalBytes') ?? prev.totalBytes;
+  const completedCount =
+    readNumberField(payload, 'completedCount') ?? prev.completedCount;
+  const totalCount =
+    readNumberField(payload, 'totalCount') ??
+    readNumberField(payload, 'queueTotalCount') ??
+    prev.totalCount;
+  const explicitPercent = readNumberField(payload, 'progressPercent');
+  const derivedPercent =
+    totalBytes > 0
+      ? (completedBytes / totalBytes) * 100
+      : totalCount > 0
+        ? (completedCount / totalCount) * 100
+        : prev.progressPercent;
+  const shouldClearCurrentFile =
+    uploadState === 'idle' ||
+    uploadState === 'completed' ||
+    uploadState === 'paused_auto_upload';
+  const hasCurrentFilename = Object.prototype.hasOwnProperty.call(
+    payload,
+    'currentFilename',
+  );
+  const autoUploadStateValue = payload.autoUploadState;
+
+  return {
+    ...prev,
+    currentDeviceId:
+      payload.currentDeviceId === null
+        ? null
+        : readStringField(payload, 'currentDeviceId') ?? prev.currentDeviceId,
+    currentDeviceName:
+      payload.currentDeviceName === null
+        ? null
+        : readStringField(payload, 'currentDeviceName') ??
+          prev.currentDeviceName,
+    currentSpeedMbps:
+      readNumberField(payload, 'currentSpeedMbps') ?? prev.currentSpeedMbps,
+    transferredBytes:
+      readNumberField(payload, 'transferredBytes') ?? completedBytes,
+    totalBytes,
+    progressPercent: clampPercent(explicitPercent ?? derivedPercent),
+    uploadState,
+    completedBytes,
+    completedCount,
+    totalCount,
+    currentFilename: shouldClearCurrentFile
+      ? undefined
+      : hasCurrentFilename
+        ? readStringField(payload, 'currentFilename')
+        : prev.currentFilename,
+    lastCompletedAt:
+      readStringField(payload, 'lastCompletedAt') ?? prev.lastCompletedAt,
+    autoUploadState: isAutoUploadState(autoUploadStateValue)
+      ? autoUploadStateValue
+      : prev.autoUploadState,
+    manualPending:
+      readNumberField(payload, 'manualPending') ?? prev.manualPending,
+    autoPending: readNumberField(payload, 'autoPending') ?? prev.autoPending,
+  };
+}
+
+function buildUploadProgress(
+  overview: GlobalSyncOverview,
+  pendingQueueCount: number,
+) {
+  const totalCount =
+    overview.totalCount > 0 ? overview.totalCount : pendingQueueCount;
+  const completedCount =
+    totalCount > 0
+      ? Math.min(Math.max(overview.completedCount, 0), totalCount)
+      : Math.max(overview.completedCount, 0);
+  const totalBytes = Math.max(overview.totalBytes, 0);
+  const completedBytes =
+    totalBytes > 0
+      ? Math.min(Math.max(overview.completedBytes, 0), totalBytes)
+      : Math.max(overview.completedBytes, 0);
+  const derivedPercent =
+    totalBytes > 0
+      ? (completedBytes / totalBytes) * 100
+      : totalCount > 0
+        ? (completedCount / totalCount) * 100
+        : overview.progressPercent;
+
+  return {
+    completedBytes,
+    completedCount,
+    currentFilename: overview.currentFilename,
+    percent: clampPercent(overview.progressPercent || derivedPercent),
+    speedMbps: Math.max(overview.currentSpeedMbps, 0),
+    totalBytes,
+    totalCount,
+  };
+}
+
+function isActiveUploadState(uploadState: string): boolean {
+  return (
+    uploadState === 'scanning' ||
+    uploadState === 'queued' ||
+    uploadState === 'uploading' ||
+    uploadState === 'retrying' ||
+    uploadState === 'preparing' ||
+    uploadState === 'reconnecting' ||
+    uploadState === 'backoff_waiting' ||
+    uploadState === 'completed'
+  );
+}
+
+function formatSpeedMbps(speedMbps: number): string {
+  if (!Number.isFinite(speedMbps) || speedMbps <= 0) {
+    return '0 MB/s';
+  }
+  return `${speedMbps.toFixed(1)} MB/s`;
+}
+
+function formatConnectionMeta(
+  binding: BindingStateDTO | null,
+  overview: GlobalSyncOverview,
+): string {
+  const deviceName =
+    binding?.deviceAlias ||
+    binding?.deviceName ||
+    overview.currentDeviceName ||
+    undefined;
+  const stateLabel = binding
+    ? formatConnectionStateLabel(binding.connectionState)
+    : overview.autoUploadState === 'active'
+      ? '已开启'
+      : '未开启';
+
+  return deviceName ? `${deviceName} · ${stateLabel}` : stateLabel;
+}
+
+function formatConnectionStateLabel(
+  connectionState: BindingStateDTO['connectionState'],
+): string {
+  switch (connectionState) {
+    case 'connected':
+      return '已连接';
+    case 'connecting':
+    case 'discovering':
+      return '连接中';
+    case 'offline':
+      return '离线';
+    case 'bound':
+    default:
+      return '已绑定';
+  }
+}
+
+function toGlobalSyncRecordTimelineDay(
+  item: HistoryLedgerCardDTO,
+): GlobalSyncRecordTimelineDay {
+  const totalSize = formatBytes(item.totalBytes);
+  return {
+    key: item.dateKey,
+    label: formatHistoryDayLabel(item.dateKey),
+    totalFiles: item.totalFileCount,
+    totalSize,
+    records: [
+      {
+        id: `${item.dateKey}-${item.deviceId}`,
+        deviceName: item.deviceName || item.deviceId || '已绑定电脑',
+        duration: formatDuration(
+          Math.max(item.activeTransmissionSeconds, 0) * 1000,
+        ),
+        fileCount: item.totalFileCount,
+        status: 'completed',
+        totalSize,
+      },
+    ],
+  };
+}
+
+function formatHistoryDayLabel(dateKey: string): string {
+  const parts = dateKey.split('-').map(part => Number(part));
+  if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) {
+    return dateKey;
+  }
+
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return '今天';
+  if (date.toDateString() === yesterday.toDateString()) return '昨天';
+  if (date.getFullYear() === today.getFullYear()) {
+    return `${month}月${day}日`;
+  }
+  return dateKey;
+}
+
+function getLatestSyncLabel(
+  overview: GlobalSyncOverview,
+  historyDays: HistoryLedgerCardDTO[],
+): string {
+  const overviewLabel = formatDateTimeLabel(overview.lastCompletedAt);
+  if (overviewLabel) {
+    return overviewLabel;
+  }
+
+  const latestDateKey = historyDays
+    .map(item => item.dateKey)
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a))[0];
+  return latestDateKey ?? '暂无';
+}
+
+function formatDateTimeLabel(isoString?: string): string | null {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(date.getDate()).padStart(2, '0')} ${String(
+    date.getHours(),
+  ).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 const styles = StyleSheet.create({

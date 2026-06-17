@@ -113,6 +113,8 @@ async function completeConnectionCodeSetup() {
 describe('AppShell', () => {
   beforeEach(() => {
     Reflect.deleteProperty(window, 'electronAPI');
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH;
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL;
     useAppStore.setState({
       currentView: 'dashboard',
       selectedDevice: null,
@@ -143,6 +145,21 @@ describe('AppShell', () => {
     expect(await screen.findByRole('heading', { name: '登录' })).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
     expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
+  });
+
+  it('uses the dev skip-auth session without calling the real auth bridge', async () => {
+    process.env.SYNCFLOW_DEV_SKIP_AUTH = '1';
+    process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
+    const { onSidecarEvent } = installElectronAPI(null);
+    const getAuthSession = window.electronAPI?.auth.getAuthSession as ReturnType<typeof vi.fn>;
+
+    render(<AppShell />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
+    });
+    expect(getAuthSession).not.toHaveBeenCalled();
+    expect(onSidecarEvent).toHaveBeenCalled();
   });
 
   it('renders the connection code setup page after authentication before the desktop shell', async () => {

@@ -58,7 +58,7 @@ export function SharedFilesGlobalScreen({
               </Text>
               <View style={styles.badgeRow}>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>今日 5 个</Text>
+                  <Text style={styles.badgeText}>同步后显示</Text>
                 </View>
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>保留来源</Text>

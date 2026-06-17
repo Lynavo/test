@@ -1,12 +1,22 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
+import { NativeEventEmitter, NativeModules } from 'react-native';
 
 import { SyncActivityGlobalScreen } from '../SyncActivityGlobalScreen';
 import { listDownloadRecords } from '../../services/download-records-service';
-import { getAutoUploadConfig } from '../../services/SyncEngineModule';
+import {
+  getBindingState,
+  getHistoryDays,
+  getReadOnlyQueue,
+  getSyncOverview,
+} from '../../services/SyncEngineModule';
 
 const mockRecentDownloadsSection = jest.fn();
+const mockTimelineSection = jest.fn();
 let mockVisualQaEnabled = false;
+const nativeEventHandlers: Partial<Record<string, (payload: unknown) => void>> =
+  {};
+const nativeEventSubscriptionRemovers: jest.Mock[] = [];
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -23,6 +33,8 @@ jest.mock('react-i18next', () => ({
     t: (key: string) => key,
   }),
 }));
+
+jest.mock('react-native/Libraries/EventEmitter/NativeEventEmitter');
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({
@@ -83,12 +95,43 @@ jest.mock('../components/GlobalSyncActivityHomeSections', () => ({
       ),
     );
   },
-  GlobalSyncRecordTimelineSection: () => {
+  GlobalSyncRecordTimelineSection: (props: {
+    days: Array<{
+      key: string;
+      label: string;
+      records: Array<{ id: string; deviceName: string; duration: string }>;
+      totalFiles: number;
+      totalSize: string;
+    }>;
+    totalSyncedSize: string;
+  }) => {
+    mockTimelineSection(props);
     const ReactInner = require('react');
-    const { View } = require('react-native');
-    return ReactInner.createElement(View, {
-      testID: 'global-sync-record-timeline-section',
-    });
+    const { Text, View } = require('react-native');
+    return ReactInner.createElement(
+      View,
+      {
+        testID: 'global-sync-record-timeline-section',
+      },
+      [
+        ReactInner.createElement(Text, { key: 'total' }, props.totalSyncedSize),
+        ...props.days.flatMap(day => [
+          ReactInner.createElement(Text, { key: `${day.key}-label` }, day.label),
+          ReactInner.createElement(
+            Text,
+            { key: `${day.key}-stats` },
+            `${day.totalFiles} 个 · ${day.totalSize}`,
+          ),
+          ...day.records.map(record =>
+            ReactInner.createElement(
+              Text,
+              { key: record.id },
+              `${record.deviceName} ${record.duration}`,
+            ),
+          ),
+        ]),
+      ],
+    );
   },
 }));
 
@@ -97,11 +140,10 @@ jest.mock('../../services/download-records-service', () => ({
 }));
 
 jest.mock('../../services/SyncEngineModule', () => ({
-  getAutoUploadConfig: jest.fn().mockResolvedValue({
-    enabled: false,
-    state: 'disabled',
-    timeRangeMode: 'all',
-  }),
+  getBindingState: jest.fn(),
+  getSyncOverview: jest.fn(),
+  getReadOnlyQueue: jest.fn(),
+  getHistoryDays: jest.fn(),
 }));
 
 jest.mock('../../dev/visualQa', () => ({
@@ -111,13 +153,57 @@ jest.mock('../../dev/visualQa', () => ({
 
 describe('SyncActivityGlobalScreen', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     mockVisualQaEnabled = false;
     mockRecentDownloadsSection.mockClear();
+    mockTimelineSection.mockClear();
+    nativeEventSubscriptionRemovers.length = 0;
+    Object.keys(nativeEventHandlers).forEach(key => {
+      delete nativeEventHandlers[key];
+    });
+    (NativeModules as Record<string, unknown>).NativeSyncEngine = {
+      addListener: jest.fn(),
+      removeListeners: jest.fn(),
+    };
+    (NativeEventEmitter as jest.Mock).mockImplementation(() => ({
+      addListener: jest.fn(
+        (eventName: string, handler: (payload: unknown) => void) => {
+          nativeEventHandlers[eventName] = handler;
+          const remove = jest.fn();
+          nativeEventSubscriptionRemovers.push(remove);
+          return { remove };
+        },
+      ),
+    }));
     (listDownloadRecords as jest.Mock).mockResolvedValue([]);
-    (getAutoUploadConfig as jest.Mock).mockResolvedValue({
-      enabled: false,
-      state: 'disabled',
-      timeRangeMode: 'all',
+    (getBindingState as jest.Mock).mockResolvedValue({
+      deviceId: 'desktop-1',
+      deviceName: 'Studio Mac',
+      deviceAlias: 'Studio Mac',
+      host: '192.168.1.20',
+      port: 39393,
+      connectionState: 'connected',
+      pairingId: 'pairing-1',
+      shareEnabled: true,
+      lastBoundAt: '2026-06-16T08:00:00.000Z',
+    });
+    (getSyncOverview as jest.Mock).mockResolvedValue({
+      currentDeviceId: 'desktop-1',
+      currentDeviceName: 'Studio Mac',
+      currentSpeedMbps: 0,
+      transferredBytes: 0,
+      totalBytes: 0,
+      progressPercent: 0,
+      uploadState: 'idle',
+      completedCount: 0,
+      totalCount: 0,
+      completedBytes: 0,
+      autoUploadState: 'disabled',
+    });
+    (getReadOnlyQueue as jest.Mock).mockResolvedValue([]);
+    (getHistoryDays as jest.Mock).mockResolvedValue({
+      items: [],
+      nextCursor: null,
     });
   });
 
@@ -157,11 +243,48 @@ describe('SyncActivityGlobalScreen', () => {
     );
   });
 
-  test('shows upload progress only after auto upload is active', async () => {
-    (getAutoUploadConfig as jest.Mock).mockResolvedValueOnce({
-      enabled: true,
-      state: 'active',
-      timeRangeMode: 'all',
+  test('does not inject visual QA recent-download mocks when visual QA is disabled', async () => {
+    const { queryByText } = render(
+      <SyncActivityGlobalScreen showBottomTabBar={false} />,
+    );
+
+    await waitFor(() => {
+      expect(mockRecentDownloadsSection).toHaveBeenLastCalledWith(
+        expect.objectContaining({ records: [] }),
+      );
+    });
+    expect(queryByText('Client-Handoff.mov')).toBeNull();
+  });
+
+  test('loads sync overview, queue, history, and binding snapshots for global home state', async () => {
+    (getSyncOverview as jest.Mock).mockResolvedValueOnce({
+      currentDeviceId: 'desktop-1',
+      currentDeviceName: 'Studio Mac',
+      currentSpeedMbps: 12.5,
+      transferredBytes: 2 * 1024 * 1024,
+      totalBytes: 5 * 1024 * 1024,
+      progressPercent: 42,
+      uploadState: 'uploading',
+      completedCount: 2,
+      totalCount: 5,
+      completedBytes: 2 * 1024 * 1024,
+      currentFilename: 'Clip-A.mov',
+      autoUploadState: 'active',
+      lastCompletedAt: '2026-06-16T17:45:00',
+    });
+    (getHistoryDays as jest.Mock).mockResolvedValueOnce({
+      items: [
+        {
+          dateKey: '2026-06-16',
+          deviceId: 'desktop-1',
+          deviceName: 'Studio Mac',
+          deviceIp: '192.168.1.20',
+          totalFileCount: 3,
+          totalBytes: 6 * 1024 * 1024,
+          activeTransmissionSeconds: 75,
+        },
+      ],
+      nextCursor: null,
     });
 
     const { getByText, queryByText } = render(
@@ -174,14 +297,116 @@ describe('SyncActivityGlobalScreen', () => {
       expect(getByText('上传中 · 本次传输进度')).toBeTruthy();
     });
 
-    expect(getByText('已上传96/128')).toBeTruthy();
-    expect(getByText('75%')).toBeTruthy();
+    expect(getBindingState).toHaveBeenCalledTimes(1);
+    expect(getSyncOverview).toHaveBeenCalledTimes(1);
+    expect(getReadOnlyQueue).toHaveBeenCalledTimes(1);
+    expect(getHistoryDays).toHaveBeenCalledTimes(1);
+    expect(getByText('Studio Mac · 已连接')).toBeTruthy();
+    expect(getByText('已上传2/5')).toBeTruthy();
+    expect(getByText('42%')).toBeTruthy();
     expect(getByText('传输速度')).toBeTruthy();
-    expect(getByText('68.5 MB/s')).toBeTruthy();
+    expect(getByText('12.5 MB/s')).toBeTruthy();
     expect(getByText('传输进度')).toBeTruthy();
     expect(getByText('文件大小')).toBeTruthy();
-    expect(getByText('剩余时间')).toBeTruthy();
-    expect(getByText('24 秒')).toBeTruthy();
+    expect(getByText('2.0 MB / 5.0 MB')).toBeTruthy();
+    expect(getByText('当前文件')).toBeTruthy();
+    expect(getByText('Clip-A.mov')).toBeTruthy();
+    expect(getByText('最近同步时间：2026-06-16 17:45')).toBeTruthy();
+    expect(getByText('Studio Mac 1m 15s')).toBeTruthy();
+    expect(getByText('6.0 MB')).toBeTruthy();
     expect(queryByText('自动同步未开启')).toBeNull();
+  });
+
+  test('subscribes to native sync events, refreshes matching snapshots, and cleans up', async () => {
+    const screen = render(<SyncActivityGlobalScreen showBottomTabBar={false} />);
+
+    await waitFor(() => {
+      expect(NativeEventEmitter).toHaveBeenCalledWith(
+        NativeModules.NativeSyncEngine,
+      );
+      expect(Object.keys(nativeEventHandlers).sort()).toEqual([
+        'onBindingStateChanged',
+        'onHistoryUpdated',
+        'onQueueUpdated',
+        'onSyncStateChanged',
+      ]);
+    });
+
+    await act(async () => {
+      nativeEventHandlers.onSyncStateChanged?.({
+        currentDeviceId: 'desktop-1',
+        currentDeviceName: 'Studio Mac',
+        currentSpeedMbps: 8,
+        transferredBytes: 4 * 1024 * 1024,
+        totalBytes: 8 * 1024 * 1024,
+        progressPercent: 80,
+        uploadState: 'uploading',
+        completedCount: 4,
+        totalCount: 5,
+        completedBytes: 4 * 1024 * 1024,
+        currentFilename: 'Clip-B.mov',
+        autoUploadState: 'active',
+      });
+    });
+
+    expect(screen.getByText('80%')).toBeTruthy();
+    expect(screen.getByText('Clip-B.mov')).toBeTruthy();
+
+    (getReadOnlyQueue as jest.Mock).mockResolvedValueOnce([
+      {
+        fileKey: 'file-1',
+        filename: 'Clip-B.mov',
+        fileSize: 1024,
+        mediaType: 'video',
+        status: 'uploading',
+      },
+    ]);
+    await act(async () => {
+      nativeEventHandlers.onQueueUpdated?.({});
+    });
+    expect(getReadOnlyQueue).toHaveBeenCalledTimes(2);
+
+    (getHistoryDays as jest.Mock).mockResolvedValueOnce({
+      items: [
+        {
+          dateKey: '2026-06-15',
+          deviceId: 'desktop-1',
+          deviceName: 'Field Mac',
+          deviceIp: '192.168.1.21',
+          totalFileCount: 1,
+          totalBytes: 1024,
+          activeTransmissionSeconds: 5,
+        },
+      ],
+      nextCursor: null,
+    });
+    await act(async () => {
+      nativeEventHandlers.onHistoryUpdated?.({});
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Field Mac 5s')).toBeTruthy();
+    });
+
+    await act(async () => {
+      nativeEventHandlers.onBindingStateChanged?.({
+        deviceId: 'desktop-1',
+        deviceName: 'Studio Mac',
+        deviceAlias: 'Studio Mac',
+        host: '192.168.1.20',
+        port: 39393,
+        connectionState: 'offline',
+        pairingId: 'pairing-1',
+        shareEnabled: true,
+        lastBoundAt: '2026-06-16T08:00:00.000Z',
+      });
+    });
+    expect(screen.getByText('Studio Mac · 离线')).toBeTruthy();
+
+    screen.unmount();
+
+    expect(nativeEventSubscriptionRemovers).toHaveLength(4);
+    nativeEventSubscriptionRemovers.forEach(remove => {
+      expect(remove).toHaveBeenCalledTimes(1);
+    });
   });
 });

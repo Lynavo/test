@@ -26,6 +26,20 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('lucide-react-native', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const createIcon =
+    (fallbackTestID: string) =>
+    ({ testID, ...props }: { testID?: string }) =>
+      React.createElement(View, { testID: testID ?? fallbackTestID, ...props });
+  return {
+    FolderOpen: createIcon('mock-folder-open-icon'),
+    Home: createIcon('mock-home-icon'),
+    User: createIcon('mock-user-icon'),
+  };
+});
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => mockInsets,
 }));
@@ -76,6 +90,20 @@ describe('GlobalBottomTabBar', () => {
     expect(activeTabStyle.backgroundColor).toBe('#FFFFFF');
     expect(activeTabStyle.shadowOpacity).toBeGreaterThan(0);
     expect(inactiveTabStyle.backgroundColor).toBeUndefined();
+  });
+
+  test('uses lucide icons that match the global reference tabbar', () => {
+    const { getByTestId } = render(<GlobalBottomTabBar activeTab="home" />);
+
+    expect(getByTestId('global-bottom-tab-home-icon')).toBeTruthy();
+    expect(getByTestId('global-bottom-tab-files-icon')).toBeTruthy();
+    expect(getByTestId('global-bottom-tab-settings-icon')).toBeTruthy();
+    expect(getByTestId('global-bottom-tab-home-icon').props.strokeWidth).toBe(
+      2.2,
+    );
+    expect(getByTestId('global-bottom-tab-files-icon').props.strokeWidth).toBe(
+      1.9,
+    );
   });
 
   test('switches tabs inside the global shell without resetting navigation', () => {

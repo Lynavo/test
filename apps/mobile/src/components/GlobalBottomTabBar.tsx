@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Icon } from './Icon';
+import { FolderOpen, Home, User } from 'lucide-react-native';
 import { colors } from '../theme/globalColors';
 
 const SIDE_INSET = 16;
@@ -59,12 +59,13 @@ export function GlobalBottomTabBar({
           onPress={() => handleTabPress('home')}
           activeOpacity={0.7}
         >
-          <Icon
-            name="home-outline"
+          <Home
+            testID="global-bottom-tab-home-icon"
             size={22}
             color={
               activeTab === 'home' ? colors.primary : colors.mutedForeground
             }
+            strokeWidth={activeTab === 'home' ? 2.2 : 1.9}
           />
           <Text
             style={[
@@ -85,12 +86,13 @@ export function GlobalBottomTabBar({
           onPress={() => handleTabPress('files')}
           activeOpacity={0.7}
         >
-          <Icon
-            name="folder-open-outline"
+          <FolderOpen
+            testID="global-bottom-tab-files-icon"
             size={22}
             color={
               activeTab === 'files' ? colors.primary : colors.mutedForeground
             }
+            strokeWidth={activeTab === 'files' ? 2.2 : 1.9}
           />
           <Text
             style={[
@@ -111,12 +113,13 @@ export function GlobalBottomTabBar({
           onPress={() => handleTabPress('settings')}
           activeOpacity={0.7}
         >
-          <Icon
-            name="person-outline"
+          <User
+            testID="global-bottom-tab-settings-icon"
             size={22}
             color={
               activeTab === 'settings' ? colors.primary : colors.mutedForeground
             }
+            strokeWidth={activeTab === 'settings' ? 2.2 : 1.9}
           />
           <Text
             style={[

@@ -1,5 +1,5 @@
 import React from 'react';
-import { NativeModules, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
@@ -59,11 +59,19 @@ jest.mock('../../services/desktop-local-service', () => ({
   listHistory: jest.fn(),
 }));
 
+jest.mock('../../services/SyncEngineModule', () => ({
+  getBindingState: jest.fn(),
+}));
+
 import { listHistory } from '../../services/desktop-local-service';
+import { getBindingState } from '../../services/SyncEngineModule';
 import { HistoryGlobalScreen } from '../HistoryGlobalScreen';
 import type { DesktopSyncRecordDTO } from '@syncflow/contracts';
 
 const mockedListHistory = listHistory as jest.MockedFunction<typeof listHistory>;
+const mockedGetBindingState = getBindingState as jest.MockedFunction<
+  typeof getBindingState
+>;
 
 describe('HistoryGlobalScreen', () => {
   let warnSpy: jest.SpyInstance<void, Parameters<typeof console.warn>>;
@@ -71,14 +79,13 @@ describe('HistoryGlobalScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    NativeModules.NativeSyncEngine = {
-      getBindingState: jest.fn().mockResolvedValue({ host: '127.0.0.1' }),
-    };
+    mockedGetBindingState.mockResolvedValue({ host: '127.0.0.1' } as Awaited<
+      ReturnType<typeof getBindingState>
+    >);
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
-    delete NativeModules.NativeSyncEngine;
   });
 
   it('keeps a real empty history response empty instead of using preview records', async () => {
@@ -118,9 +125,7 @@ describe('HistoryGlobalScreen', () => {
   it('shows an error state when the real history request fails', async () => {
     mockedListHistory.mockRejectedValueOnce(new Error('offline'));
 
-    const { getAllByText, getByText, queryByText } = render(
-      <HistoryGlobalScreen />,
-    );
+    const { getByText, queryByText } = render(<HistoryGlobalScreen />);
 
     await waitFor(() => {
       expect(mockedListHistory).toHaveBeenCalled();
@@ -133,15 +138,54 @@ describe('HistoryGlobalScreen', () => {
     expect(queryByText('openimdeMac-mini')).toBeNull();
   });
 
+  it('shows the empty state when the binding wrapper returns no binding', async () => {
+    mockedGetBindingState.mockResolvedValueOnce(null);
+
+    const { getByText, queryByText } = render(<HistoryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(getByText('暂无同步记录')).toBeTruthy();
+    });
+    expect(mockedListHistory).not.toHaveBeenCalled();
+    expect(queryByText('openimdeMac-mini')).toBeNull();
+  });
+
+  it('uses a neutral duration for real history rows without duration data', async () => {
+    mockedGetBindingState.mockResolvedValueOnce({
+      deviceId: 'Mini4',
+      deviceName: 'Studio Mini',
+      host: '192.168.10.30',
+    } as Awaited<ReturnType<typeof getBindingState>>);
+    mockedListHistory.mockResolvedValueOnce([
+      {
+        recordId: 'completed-mini',
+        desktopDeviceId: 'Mini4',
+        clientId: 'mobile-client-1',
+        displayName: 'Alice iPhone',
+        fileKey: '2026/01/02/img-0001.heic',
+        filename: 'IMG_0001.HEIC',
+        mediaType: 'image/heic',
+        fileSize: 1024,
+        status: 'completed',
+        completedAt: '2026-01-02T12:00:00.000Z',
+      },
+    ]);
+
+    const { getByText, queryByText } = render(<HistoryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(getByText('--')).toBeTruthy();
+    });
+    expect(queryByText('34m 14s')).toBeNull();
+  });
+
   it('groups real completed history by desktop completion day and uses the bound desktop name', async () => {
-    NativeModules.NativeSyncEngine = {
-      getBindingState: jest.fn().mockResolvedValue({
-        deviceId: 'desktop-bound-1',
-        deviceName: 'Studio Mac',
-        deviceAlias: 'Edit Bay Mac',
-        host: '192.168.10.20',
-      }),
-    };
+    mockedGetBindingState.mockResolvedValueOnce({
+      deviceId: 'desktop-bound-1',
+      deviceName: 'Studio Mac',
+      deviceAlias: 'Edit Bay Mac',
+      host: '192.168.10.20',
+    } as Awaited<ReturnType<typeof getBindingState>>);
     const realHistory: DesktopSyncRecordDTO[] = [
       {
         recordId: 'completed-1',

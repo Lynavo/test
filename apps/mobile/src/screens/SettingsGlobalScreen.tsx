@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,18 +10,70 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import {
+  ArrowUpToLine,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  HelpCircle,
+  Laptop,
+  Languages,
+  LogOut,
+  MessageSquare,
+  Monitor,
+  Pencil,
+  RefreshCw,
+  Smartphone,
+  Trash2,
+  User,
+} from 'lucide-react-native';
+import * as RNLocalize from 'react-native-localize';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { BindingStateDTO, ConnectionState } from '@syncflow/contracts';
 
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { GlobalBottomTabBar } from '../components/GlobalBottomTabBar';
-import { Icon } from '../components/Icon';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { useAuth } from '../stores/auth-store';
+import {
+  useAuth,
+  type SubscriptionInfo,
+  type UserProfile,
+} from '../stores/auth-store';
+import {
+  getAppInfo,
+  getBindingState,
+  getClientDisplayName,
+  setClientDisplayName,
+  wipeSyncIdentity,
+  type AppInfo,
+} from '../services/SyncEngineModule';
+import {
+  deleteAccount,
+  logout as serverLogout,
+} from '../services/auth-service';
+import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
+import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
+import {
+  loadStoredLanguagePreference,
+  resolveLanguagePreference,
+  saveLanguagePreference,
+  type LanguagePreference,
+} from '../i18n/language-preference';
+import i18n from '../i18n';
+import { iapService } from '../services/iap-service';
+import { classifyIapError, IapErrorClass } from '../services/iap-errors';
+import { FEATURES } from '../constants/features';
+import {
+  resolveSubscriptionDisplayState,
+  type SubscriptionDisplayState,
+} from '../utils/subscriptionStatusDisplay';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 type TabKey = 'home' | 'files' | 'settings';
+type LucideNativeIcon = typeof User;
 
 interface SettingsGlobalScreenProps {
   showBottomTabBar?: boolean;
@@ -29,7 +81,7 @@ interface SettingsGlobalScreenProps {
 }
 
 type SettingsRowProps = {
-  icon: string;
+  icon: LucideNativeIcon;
   iconBackground: string;
   iconColor: string;
   title: string;
@@ -45,32 +97,166 @@ type SettingsRowProps = {
 };
 
 type LanguageMode = 'system' | 'manual';
-type LanguageId =
-  | 'zh-Hans'
-  | 'zh-Hant'
-  | 'en'
-  | 'ja'
-  | 'ko'
-  | 'fr'
-  | 'es'
-  | 'ru';
+type LanguageId = Exclude<LanguagePreference, 'system'>;
 
 type ModalTone = 'blue' | 'purple' | 'red';
+type RestorePurchaseState = {
+  message: string;
+  tone: 'success' | 'neutral' | 'error';
+} | null;
 
-const MOCK_ACCOUNT = '+1 206 **** 1234';
-const MOCK_DEVICE_NAME = 'iPhone 15 Pro';
-const APP_VERSION = '2.1.0';
+const NEUTRAL_VALUE = '--';
 
 const LANGUAGE_OPTIONS: Array<{ id: LanguageId; label: string }> = [
   { id: 'zh-Hans', label: '简体中文' },
   { id: 'zh-Hant', label: '繁体中文' },
   { id: 'en', label: 'English' },
-  { id: 'ja', label: '日本語' },
-  { id: 'ko', label: '한국어' },
-  { id: 'fr', label: 'Français' },
-  { id: 'es', label: 'Español' },
-  { id: 'ru', label: 'Русский' },
 ];
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function getAccountDisplayName(user: UserProfile | null): string {
+  return (
+    firstNonEmptyString(
+      user?.primaryIdentity?.display,
+      ...(user?.identities.map(identity => identity.display) ?? []),
+    ) ?? '未登录'
+  );
+}
+
+function getPlanLabel(plan: SubscriptionInfo['plan'] | UserProfile['plan']) {
+  switch (plan) {
+    case 'yearly':
+      return '年度方案';
+    case 'monthly':
+      return '月度方案';
+    default:
+      return null;
+  }
+}
+
+function getDateLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getSubscriptionSubtitle(
+  display: SubscriptionDisplayState,
+  subscription: SubscriptionInfo | null,
+  user: UserProfile | null,
+): string {
+  switch (display.kind) {
+    case 'account_trial':
+    case 'subscription_intro_trial':
+      return display.daysRemaining > 0
+        ? `试用中 · 剩余 ${display.daysRemaining} 天`
+        : '试用中';
+    case 'subscribed': {
+      const plan = getPlanLabel(subscription?.plan ?? user?.plan ?? '');
+      return plan ? `已订阅 · ${plan}` : '已订阅';
+    }
+    case 'gift_card_subscribed':
+      return '已订阅 · 礼品卡';
+    case 'gift_card_entitlement_queued': {
+      const date = getDateLabel(display.entitlementExpireAt ?? null);
+      return date ? `已订阅 · 礼品卡权益至 ${date}` : '已订阅 · 礼品卡权益';
+    }
+    case 'subscribed_cancelled': {
+      const date = getDateLabel(subscription?.expireAt ?? user?.expireAt);
+      return date ? `已取消续订 · 可用至 ${date}` : '已取消续订';
+    }
+    case 'trial_expired':
+      return '试用已结束';
+    case 'sub_expired':
+      return '订阅已过期';
+    case 'unknown':
+    default:
+      return '状态未知';
+  }
+}
+
+function getSubscriptionBadge(
+  display: SubscriptionDisplayState,
+): SettingsRowProps['badge'] {
+  switch (display.kind) {
+    case 'account_trial':
+    case 'subscription_intro_trial':
+      return 'Trial';
+    case 'subscribed':
+    case 'gift_card_subscribed':
+    case 'gift_card_entitlement_queued':
+    case 'subscribed_cancelled':
+      return 'Pro';
+    case 'trial_expired':
+    case 'sub_expired':
+      return 'Expired';
+    case 'unknown':
+    default:
+      return undefined;
+  }
+}
+
+function getConnectionLabel(state: ConnectionState): string {
+  switch (state) {
+    case 'connected':
+      return '已连接';
+    case 'connecting':
+      return '连接中';
+    case 'discovering':
+      return '发现中';
+    case 'bound':
+      return '已绑定';
+    case 'offline':
+      return '离线';
+    default:
+      return '状态未知';
+  }
+}
+
+function getDesktopTitle(binding: BindingStateDTO | null): string {
+  if (!binding) return '未绑定电脑';
+  return (
+    firstNonEmptyString(
+      binding.deviceAlias,
+      binding.deviceName,
+      binding.host,
+    ) ?? '当前电脑'
+  );
+}
+
+function getDesktopSubtitle(binding: BindingStateDTO | null): string {
+  if (!binding) return '尚未连接任何电脑';
+  return `当前设备 · ${getConnectionLabel(binding.connectionState)}`;
+}
+
+function getLanguageLabel(preference: LanguagePreference): string {
+  if (preference === 'system') {
+    return '跟随系统语言';
+  }
+  return (
+    LANGUAGE_OPTIONS.find(option => option.id === preference)?.label ??
+    NEUTRAL_VALUE
+  );
+}
+
+function getVersionLabel(appInfo: AppInfo | null): string {
+  const version = firstNonEmptyString(appInfo?.version);
+  if (!version) return `版本 ${NEUTRAL_VALUE}`;
+  const build = firstNonEmptyString(appInfo?.build);
+  return build ? `版本 ${version} (${build})` : `版本 ${version}`;
+}
 
 export function SettingsGlobalScreen({
   showBottomTabBar = true,
@@ -81,34 +267,299 @@ export function SettingsGlobalScreen({
   const [activeView, setActiveView] = useState<'settings' | 'language'>(
     'settings',
   );
-  const [deviceName, setDeviceName] = useState(MOCK_DEVICE_NAME);
-  const [editingName, setEditingName] = useState(MOCK_DEVICE_NAME);
+  const [bindingState, setBindingState] = useState<BindingStateDTO | null>(
+    null,
+  );
+  const [deviceName, setDeviceName] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [deviceNameError, setDeviceNameError] = useState<string | null>(null);
+  const [isSavingDeviceName, setIsSavingDeviceName] = useState(false);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [languageMode, setLanguageMode] = useState<LanguageMode>('system');
   const [language, setLanguage] = useState<LanguageId>('zh-Hans');
+  const [languagePreference, setLanguagePreference] =
+    useState<LanguagePreference>('system');
+  const [languageError, setLanguageError] = useState<string | null>(null);
   const [showEditDevice, setShowEditDevice] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] =
     useState(false);
   const [showRestorePurchaseConfirm, setShowRestorePurchaseConfirm] =
     useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [deleteAccountError, setDeleteAccountError] = useState<string | null>(
+    null,
+  );
+  const [restorePurchaseState, setRestorePurchaseState] =
+    useState<RestorePurchaseState>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isRestoringPurchase, setIsRestoringPurchase] = useState(false);
 
-  const handleConfirmLogout = () => {
+  useEffect(() => {
+    let cancelled = false;
+
+    void getBindingState()
+      .then(binding => {
+        if (!cancelled) {
+          setBindingState(binding);
+        }
+      })
+      .catch(error => {
+        console.warn('[SettingsGlobal] getBindingState failed:', error);
+        if (!cancelled) {
+          setBindingState(null);
+        }
+      });
+
+    void getClientDisplayName()
+      .then(name => {
+        const trimmed = firstNonEmptyString(name);
+        if (!cancelled && trimmed) {
+          setDeviceName(trimmed);
+        }
+      })
+      .catch(error => {
+        console.warn('[SettingsGlobal] getClientDisplayName failed:', error);
+      });
+
+    void getAppInfo()
+      .then(info => {
+        if (!cancelled) {
+          setAppInfo(info);
+        }
+      })
+      .catch(error => {
+        console.warn('[SettingsGlobal] getAppInfo failed:', error);
+        if (!cancelled) {
+          setAppInfo(null);
+        }
+      });
+
+    void loadStoredLanguagePreference()
+      .then(preference => {
+        if (cancelled) return;
+        setLanguagePreference(preference);
+        if (preference === 'system') {
+          setLanguageMode('system');
+          setLanguage(
+            resolveLanguagePreference('system', RNLocalize.getLocales()),
+          );
+          return;
+        }
+        setLanguageMode('manual');
+        setLanguage(preference);
+      })
+      .catch(error => {
+        console.warn(
+          '[SettingsGlobal] load language preference failed:',
+          error,
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const subscriptionDisplay = useMemo(
+    () =>
+      resolveSubscriptionDisplayState({
+        subscription: auth.subscription,
+        user: auth.user,
+      }),
+    [auth.subscription, auth.user],
+  );
+
+  const accountDisplayName = getAccountDisplayName(auth.user);
+  const subscriptionSubtitle = getSubscriptionSubtitle(
+    subscriptionDisplay,
+    auth.subscription,
+    auth.user,
+  );
+  const subscriptionBadge = getSubscriptionBadge(subscriptionDisplay);
+  const currentDeviceName = deviceName ?? NEUTRAL_VALUE;
+  const languageSubtitle = getLanguageLabel(languagePreference);
+
+  const handleConfirmLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setLogoutError(null);
+
+    try {
+      await resetCurrentDesktopSidecarIfReachable();
+    } catch (error) {
+      console.warn('[SettingsGlobal] desktop sidecar reset failed:', error);
+    }
+
+    try {
+      await wipeSyncIdentity();
+    } catch (error) {
+      console.warn('[SettingsGlobal] wipeSyncIdentity failed:', error);
+      setLogoutError('退出登录失败，请稍后重试。');
+      setIsLoggingOut(false);
+      return;
+    }
+
+    try {
+      await clearUserScopedStorage();
+    } catch (error) {
+      console.warn('[SettingsGlobal] clearUserScopedStorage failed:', error);
+    }
+
+    const refreshToken = auth.refreshToken;
+    if (refreshToken) {
+      void serverLogout(refreshToken).catch(error => {
+        console.warn('[SettingsGlobal] server logout failed:', error);
+      });
+    }
+
+    auth.setSignedOutTransition('logout');
+    try {
+      auth.clearAuth();
+    } catch (error) {
+      console.warn('[SettingsGlobal] clearAuth failed:', error);
+    }
     setShowLogoutConfirm(false);
-    auth.setSignedOutTransition?.('logout');
-    auth.clearAuth?.();
   };
 
   const handleOpenEditDevice = () => {
-    setEditingName(deviceName);
+    setEditingName(deviceName ?? '');
+    setDeviceNameError(null);
     setShowEditDevice(true);
   };
 
-  const handleSaveDeviceName = () => {
+  const handleSaveDeviceName = async () => {
     const nextName = editingName.trim();
-    if (nextName.length > 0) {
-      setDeviceName(nextName);
+    if (nextName.length === 0) {
+      setDeviceNameError('请输入设备名称');
+      return;
     }
-    setShowEditDevice(false);
+    setIsSavingDeviceName(true);
+    setDeviceNameError(null);
+    try {
+      await setClientDisplayName(nextName);
+      setDeviceName(nextName);
+      setShowEditDevice(false);
+    } catch (error) {
+      console.warn('[SettingsGlobal] setClientDisplayName failed:', error);
+      setDeviceNameError('保存失败，请稍后重试');
+    } finally {
+      setIsSavingDeviceName(false);
+    }
+  };
+
+  const handleLanguagePreferenceChange = async (
+    preference: LanguagePreference,
+  ) => {
+    setLanguageError(null);
+    try {
+      await saveLanguagePreference(preference);
+      const resolved = resolveLanguagePreference(
+        preference,
+        RNLocalize.getLocales(),
+      );
+      await i18n.changeLanguage(resolved);
+      setLanguagePreference(preference);
+      if (preference === 'system') {
+        setLanguageMode('system');
+        setLanguage(resolved);
+      } else {
+        setLanguageMode('manual');
+        setLanguage(preference);
+      }
+    } catch (error) {
+      console.warn('[SettingsGlobal] save language preference failed:', error);
+      setLanguageError('语言设置保存失败，请稍后重试。');
+    }
+  };
+
+  const handleRestorePurchase = async () => {
+    if (isRestoringPurchase) return;
+    setIsRestoringPurchase(true);
+    setRestorePurchaseState(null);
+
+    try {
+      if (FEATURES.IAP_ENABLED && FEATURES.IAP_RESTORE_ENABLED) {
+        const restored = await iapService.restore();
+        await auth.loadSubscription();
+        setRestorePurchaseState(
+          restored.length > 0
+            ? {
+                message: '已恢复订阅并刷新会员状态。',
+                tone: 'success',
+              }
+            : {
+                message: '未找到可恢复的订阅，已刷新会员状态。',
+                tone: 'neutral',
+              },
+        );
+        return;
+      }
+
+      await auth.loadSubscription();
+      setRestorePurchaseState({
+        message: '当前平台暂不支持恢复购买，已刷新会员状态。',
+        tone: 'neutral',
+      });
+    } catch (error) {
+      const classification = classifyIapError(error);
+      setRestorePurchaseState({
+        message:
+          classification.kind === IapErrorClass.Cancelled
+            ? '已取消恢复购买。'
+            : '恢复购买失败，请稍后重试。',
+        tone:
+          classification.kind === IapErrorClass.Cancelled ? 'neutral' : 'error',
+      });
+    } finally {
+      setIsRestoringPurchase(false);
+    }
+  };
+
+  const handleConfirmDeleteAccount = async () => {
+    if (isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    setDeleteAccountError(null);
+
+    try {
+      await deleteAccount();
+    } catch (error) {
+      console.warn('[SettingsGlobal] deleteAccount failed:', error);
+      setDeleteAccountError('注销账号失败，请稍后重试。');
+      setIsDeletingAccount(false);
+      return;
+    }
+
+    auth.setSignedOutTransition('account_deleted');
+
+    try {
+      await resetCurrentDesktopSidecarIfReachable();
+    } catch (error) {
+      console.warn('[SettingsGlobal] desktop sidecar reset failed:', error);
+    }
+
+    try {
+      await wipeSyncIdentity();
+    } catch (error) {
+      console.warn(
+        '[SettingsGlobal] wipeSyncIdentity failed after delete:',
+        error,
+      );
+    }
+
+    try {
+      await clearUserScopedStorage();
+    } catch (error) {
+      console.warn('[SettingsGlobal] clearUserScopedStorage failed:', error);
+    }
+
+    try {
+      auth.clearAuth();
+    } catch (error) {
+      console.warn('[SettingsGlobal] clearAuth failed after delete:', error);
+    }
+    setShowDeleteAccountConfirm(false);
   };
 
   if (activeView === 'language') {
@@ -116,9 +567,18 @@ export function SettingsGlobalScreen({
       <LanguageGlobalView
         mode={languageMode}
         language={language}
+        errorMessage={languageError}
         onBack={() => setActiveView('settings')}
-        onModeChange={setLanguageMode}
-        onLanguageChange={setLanguage}
+        onModeChange={mode => {
+          if (mode === 'system') {
+            void handleLanguagePreferenceChange('system');
+            return;
+          }
+          setLanguageMode('manual');
+        }}
+        onLanguageChange={nextLanguage => {
+          void handleLanguagePreferenceChange(nextLanguage);
+        }}
       />
     );
   }
@@ -139,38 +599,41 @@ export function SettingsGlobalScreen({
 
           <SettingsSection title="我的账户">
             <SettingsRow
-              icon="person-outline"
+              icon={User}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
-              title={MOCK_ACCOUNT}
+              title={accountDisplayName}
             />
             <SettingsRow
-              icon="crown-outline"
+              icon={Crown}
               iconBackground="#EEEAFB"
               iconColor="#746AA8"
               title="会员状态"
-              subtitle="Pro Annual · 剩余 28 天"
-              badge="Pro"
+              subtitle={subscriptionSubtitle}
+              badge={subscriptionBadge}
               badgeTone="blue"
               showChevron
               onPress={() => navigation.navigate('Subscription')}
             />
             <SettingsRow
-              icon="refresh-outline"
+              icon={RefreshCw}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="恢复已购买订阅"
               subtitle="从应用商店检查历史购买记录"
               showChevron
               testID="global-settings-restore-purchase"
-              onPress={() => setShowRestorePurchaseConfirm(true)}
+              onPress={() => {
+                setRestorePurchaseState(null);
+                setShowRestorePurchaseConfirm(true);
+              }}
             />
             <SettingsRow
-              icon="phone-portrait-outline"
+              icon={Smartphone}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="设备名称"
-              subtitle={deviceName}
+              subtitle={currentDeviceName}
               rightAccessory={
                 <TouchableOpacity
                   testID="global-settings-edit-device-name"
@@ -180,7 +643,7 @@ export function SettingsGlobalScreen({
                   activeOpacity={0.72}
                   onPress={handleOpenEditDevice}
                 >
-                  <Icon name="pencil-outline" size={16} color="#9AA6B2" />
+                  <Pencil size={16} color="#9AA6B2" strokeWidth={1.9} />
                 </TouchableOpacity>
               }
               last
@@ -189,16 +652,16 @@ export function SettingsGlobalScreen({
 
           <SettingsSection title="电脑设备">
             <SettingsRow
-              icon="laptop-outline"
+              icon={Laptop}
               iconBackground="#EEEAFB"
               iconColor="#746AA8"
-              title="MacBook Pro"
-              subtitle="当前设备"
-              badge="当前"
+              title={getDesktopTitle(bindingState)}
+              subtitle={getDesktopSubtitle(bindingState)}
+              badge={bindingState ? '当前' : undefined}
               badgeTone="green"
             />
             <SettingsRow
-              icon="desktop-outline"
+              icon={Monitor}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="切换设备"
@@ -213,17 +676,17 @@ export function SettingsGlobalScreen({
 
           <SettingsSection title="通用">
             <SettingsRow
-              icon="language-outline"
+              icon={Languages}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="语言"
-              subtitle="简体中文"
+              subtitle={languageSubtitle}
               showChevron
               testID="global-settings-language"
               onPress={() => setActiveView('language')}
             />
             <SettingsRow
-              icon="help-circle-outline"
+              icon={HelpCircle}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="常见问题"
@@ -232,11 +695,11 @@ export function SettingsGlobalScreen({
               onPress={() => navigation.navigate('Help')}
             />
             <SettingsRow
-              icon="message-square-outline"
+              icon={MessageSquare}
               iconBackground="#EEEAFB"
               iconColor="#746AA8"
               title="版本"
-              subtitle={`版本 ${APP_VERSION}`}
+              subtitle={getVersionLabel(appInfo)}
               rightAccessory={
                 <View style={styles.updateBadge}>
                   <Text style={styles.updateBadgeText}>更新</Text>
@@ -244,7 +707,7 @@ export function SettingsGlobalScreen({
               }
             />
             <SettingsRow
-              icon="cloud-upload-outline"
+              icon={ArrowUpToLine}
               iconBackground="#E4F5FF"
               iconColor="#1677D2"
               title="上传诊断包"
@@ -252,22 +715,28 @@ export function SettingsGlobalScreen({
               showChevron
             />
             <SettingsRow
-              icon="log-out-outline"
+              icon={LogOut}
               iconBackground="#FFF0F0"
               iconColor="#E24D4D"
               title="退出登录"
               danger
               testID="global-settings-logout"
-              onPress={() => setShowLogoutConfirm(true)}
+              onPress={() => {
+                setLogoutError(null);
+                setShowLogoutConfirm(true);
+              }}
             />
             <SettingsRow
-              icon="trash-outline"
+              icon={Trash2}
               iconBackground="#FFF0F0"
               iconColor="#E24D4D"
               title="注销账号"
               danger
               testID="global-settings-delete-account"
-              onPress={() => setShowDeleteAccountConfirm(true)}
+              onPress={() => {
+                setDeleteAccountError(null);
+                setShowDeleteAccountConfirm(true);
+              }}
               last
             />
           </SettingsSection>
@@ -282,7 +751,7 @@ export function SettingsGlobalScreen({
         <GlobalSettingsModalFrame
           title="编辑设备名称"
           description="修改后会用于当前设备在同步记录中的显示名称。"
-          iconName="pencil-outline"
+          icon={Pencil}
           tone="blue"
           onClose={() => setShowEditDevice(false)}
         >
@@ -292,8 +761,13 @@ export function SettingsGlobalScreen({
             onChangeText={setEditingName}
             autoFocus
             returnKeyType="done"
-            onSubmitEditing={handleSaveDeviceName}
+            onSubmitEditing={() => {
+              void handleSaveDeviceName();
+            }}
           />
+          {deviceNameError ? (
+            <Text style={styles.modalErrorText}>{deviceNameError}</Text>
+          ) : null}
           <View style={styles.modalSplitActions}>
             <TouchableOpacity
               style={styles.modalSecondaryButton}
@@ -307,9 +781,14 @@ export function SettingsGlobalScreen({
               style={styles.modalPrimaryButton}
               accessibilityRole="button"
               activeOpacity={0.72}
-              onPress={handleSaveDeviceName}
+              disabled={isSavingDeviceName}
+              onPress={() => {
+                void handleSaveDeviceName();
+              }}
             >
-              <Text style={styles.modalPrimaryButtonText}>保存</Text>
+              <Text style={styles.modalPrimaryButtonText}>
+                {isSavingDeviceName ? '保存中…' : '保存'}
+              </Text>
             </TouchableOpacity>
           </View>
         </GlobalSettingsModalFrame>
@@ -319,15 +798,23 @@ export function SettingsGlobalScreen({
         <GlobalSettingsModalFrame
           title="退出登录"
           description="确定要退出当前账号吗？"
-          iconName="log-out-outline"
+          icon={LogOut}
           tone="red"
-          onClose={() => setShowLogoutConfirm(false)}
+          onClose={() => {
+            if (!isLoggingOut) {
+              setShowLogoutConfirm(false);
+            }
+          }}
         >
+          {logoutError ? (
+            <Text style={styles.modalErrorText}>{logoutError}</Text>
+          ) : null}
           <View style={styles.modalSplitActions}>
             <TouchableOpacity
               style={styles.modalSecondaryButton}
               accessibilityRole="button"
               activeOpacity={0.72}
+              disabled={isLoggingOut}
               onPress={() => setShowLogoutConfirm(false)}
             >
               <Text style={styles.modalSecondaryButtonText}>取消</Text>
@@ -337,9 +824,14 @@ export function SettingsGlobalScreen({
               style={styles.modalDangerButton}
               accessibilityRole="button"
               activeOpacity={0.72}
-              onPress={handleConfirmLogout}
+              disabled={isLoggingOut}
+              onPress={() => {
+                void handleConfirmLogout();
+              }}
             >
-              <Text style={styles.modalDangerButtonText}>退出登录</Text>
+              <Text style={styles.modalDangerButtonText}>
+                {isLoggingOut ? '退出中…' : '退出登录'}
+              </Text>
             </TouchableOpacity>
           </View>
         </GlobalSettingsModalFrame>
@@ -349,17 +841,49 @@ export function SettingsGlobalScreen({
         <GlobalSettingsModalFrame
           title="恢复已购买订阅"
           description="正在从应用商店检查当前账号的历史购买记录。"
-          iconName="refresh-outline"
+          icon={RefreshCw}
           tone="purple"
-          onClose={() => setShowRestorePurchaseConfirm(false)}
+          onClose={() => {
+            if (!isRestoringPurchase) {
+              setShowRestorePurchaseConfirm(false);
+            }
+          }}
         >
+          {restorePurchaseState ? (
+            <Text
+              style={[
+                styles.modalResultText,
+                restorePurchaseState.tone === 'error'
+                  ? styles.modalResultError
+                  : restorePurchaseState.tone === 'success'
+                    ? styles.modalResultSuccess
+                    : styles.modalResultNeutral,
+              ]}
+            >
+              {restorePurchaseState.message}
+            </Text>
+          ) : null}
           <TouchableOpacity
             style={styles.modalFullPrimaryButton}
             accessibilityRole="button"
             activeOpacity={0.72}
-            onPress={() => setShowRestorePurchaseConfirm(false)}
+            disabled={isRestoringPurchase}
+            onPress={() => {
+              if (restorePurchaseState) {
+                setShowRestorePurchaseConfirm(false);
+                setRestorePurchaseState(null);
+                return;
+              }
+              void handleRestorePurchase();
+            }}
           >
-            <Text style={styles.modalPrimaryButtonText}>知道了</Text>
+            <Text style={styles.modalPrimaryButtonText}>
+              {isRestoringPurchase
+                ? '恢复中…'
+                : restorePurchaseState
+                  ? '知道了'
+                  : '恢复购买'}
+            </Text>
           </TouchableOpacity>
         </GlobalSettingsModalFrame>
       ) : null}
@@ -368,27 +892,41 @@ export function SettingsGlobalScreen({
         <GlobalSettingsModalFrame
           title="注销账号"
           description="确定要注销当前账号吗？此操作不可撤销。"
-          iconName="trash-outline"
+          icon={Trash2}
           tone="red"
-          onClose={() => setShowDeleteAccountConfirm(false)}
+          onClose={() => {
+            if (!isDeletingAccount) {
+              setShowDeleteAccountConfirm(false);
+            }
+          }}
         >
+          {deleteAccountError ? (
+            <Text style={styles.modalErrorText}>{deleteAccountError}</Text>
+          ) : null}
           <View style={styles.modalSplitActions}>
             <TouchableOpacity
               testID="global-settings-cancel-delete-account"
               style={styles.modalSecondaryButton}
               accessibilityRole="button"
               activeOpacity={0.72}
+              disabled={isDeletingAccount}
               onPress={() => setShowDeleteAccountConfirm(false)}
             >
               <Text style={styles.modalSecondaryButtonText}>取消</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              testID="global-settings-confirm-delete-account"
               style={styles.modalDangerButton}
               accessibilityRole="button"
               activeOpacity={0.72}
-              onPress={() => setShowDeleteAccountConfirm(false)}
+              disabled={isDeletingAccount}
+              onPress={() => {
+                void handleConfirmDeleteAccount();
+              }}
             >
-              <Text style={styles.modalDangerButtonText}>注销</Text>
+              <Text style={styles.modalDangerButtonText}>
+                {isDeletingAccount ? '注销中…' : '注销'}
+              </Text>
             </TouchableOpacity>
           </View>
         </GlobalSettingsModalFrame>
@@ -400,12 +938,14 @@ export function SettingsGlobalScreen({
 function LanguageGlobalView({
   mode,
   language,
+  errorMessage,
   onBack,
   onModeChange,
   onLanguageChange,
 }: {
   mode: LanguageMode;
   language: LanguageId;
+  errorMessage: string | null;
   onBack: () => void;
   onModeChange: (mode: LanguageMode) => void;
   onLanguageChange: (language: LanguageId) => void;
@@ -422,7 +962,7 @@ function LanguageGlobalView({
             activeOpacity={0.72}
             onPress={onBack}
           >
-            <Icon name="chevron-back" size={20} color="#17191C" />
+            <ChevronLeft size={20} color="#17191C" strokeWidth={1.9} />
           </TouchableOpacity>
           <Text style={styles.childTitle}>语言</Text>
         </View>
@@ -462,11 +1002,14 @@ function LanguageGlobalView({
                 >
                   <Text style={styles.languageOptionText}>{item.label}</Text>
                   {language === item.id ? (
-                    <Icon name="checkmark" size={18} color="#1677D2" />
+                    <Check size={18} color="#1677D2" strokeWidth={2.4} />
                   ) : null}
                 </TouchableOpacity>
               ))}
             </View>
+          ) : null}
+          {errorMessage ? (
+            <Text style={styles.languageErrorText}>{errorMessage}</Text>
           ) : null}
         </ScrollView>
       </SafeAreaView>
@@ -500,7 +1043,7 @@ function LanguageModeRow({
           selected ? styles.radioSelected : styles.radioUnselected,
         ]}
       >
-        {selected ? <Icon name="checkmark" size={14} color="#FFFFFF" /> : null}
+        {selected ? <Check size={14} color="#FFFFFF" strokeWidth={2.6} /> : null}
       </View>
     </TouchableOpacity>
   );
@@ -509,18 +1052,19 @@ function LanguageModeRow({
 function GlobalSettingsModalFrame({
   title,
   description,
-  iconName,
+  icon,
   tone,
   onClose,
   children,
 }: {
   title: string;
   description: string;
-  iconName: string;
+  icon: LucideNativeIcon;
   tone: ModalTone;
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const ModalIcon = icon;
   const toneStyle =
     tone === 'red'
       ? styles.modalIconRed
@@ -537,7 +1081,7 @@ function GlobalSettingsModalFrame({
         <Pressable style={styles.modalCard} onPress={() => undefined}>
           <View style={styles.modalHeader}>
             <View style={[styles.modalIcon, toneStyle]}>
-              <Icon name={iconName} size={22} color={iconColor} />
+              <ModalIcon size={22} color={iconColor} strokeWidth={1.9} />
             </View>
             <View style={styles.modalCopy}>
               <Text style={styles.modalTitle}>{title}</Text>
@@ -581,10 +1125,11 @@ function SettingsRow({
   testID,
   last = false,
 }: SettingsRowProps) {
+  const RowIcon = icon;
   const content = (
     <>
       <View style={[styles.iconBox, { backgroundColor: iconBackground }]}>
-        <Icon name={icon} size={18} color={iconColor} />
+        <RowIcon size={18} color={iconColor} strokeWidth={1.9} />
       </View>
       <View style={styles.rowText}>
         <Text
@@ -620,7 +1165,7 @@ function SettingsRow({
       ) : null}
       {rightAccessory}
       {showChevron ? (
-        <Icon name="chevron-forward" size={16} color="#C9D6E4" />
+        <ChevronRight size={16} color="#C9D6E4" strokeWidth={1.9} />
       ) : null}
     </>
   );
@@ -853,6 +1398,13 @@ const styles = StyleSheet.create({
   languageOptionsCard: {
     marginTop: 20,
   },
+  languageErrorText: {
+    marginTop: 14,
+    marginHorizontal: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#E24D4D',
+  },
   languageOptionRow: {
     minHeight: 54,
     flexDirection: 'row',
@@ -938,6 +1490,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     color: '#17191C',
+  },
+  modalErrorText: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#E24D4D',
+  },
+  modalResultText: {
+    marginTop: 14,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  modalResultSuccess: {
+    color: '#16803C',
+  },
+  modalResultNeutral: {
+    color: '#3F4A58',
+  },
+  modalResultError: {
+    color: '#E24D4D',
   },
   modalSplitActions: {
     marginTop: 20,

@@ -18,7 +18,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
-import { SIDECAR_HTTP_PORT, type DesktopSharedResourceDTO } from '@syncflow/contracts';
+import {
+  FileImage,
+  FileText,
+  FolderOpen,
+  Grid2X2,
+  Monitor,
+  Play,
+  Rows3,
+  Search,
+} from 'lucide-react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import {
+  SIDECAR_HTTP_PORT,
+  type BindingStateDTO,
+  type DirectoryFileDTO,
+  type DesktopSharedResourceDTO,
+} from '@syncflow/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/globalColors';
@@ -26,8 +42,13 @@ import { formatBytes } from '../utils/format';
 import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
-import { isVisualQaEnabled } from '../dev/visualQa';
-import { listSharedResources, downloadResource } from '../services/desktop-local-service';
+import {
+  type DesktopInfo,
+  downloadResourceForGlobal,
+  isDownloadSavedLocally,
+  listSharedFolderContents,
+  listSharedResources,
+} from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
@@ -37,10 +58,20 @@ type RemoteResourceItem = DesktopSharedResourceDTO & {
   countLabel?: string;
   modifiedLabel?: string;
   preview?: 'blue' | 'dark' | 'settings';
+  sharedRootResourceId?: string;
+  relativePath?: string;
 };
 type FolderCrumb = {
   id: string;
   name: string;
+  rootResourceId?: string;
+  path?: string;
+  preview?: boolean;
+};
+type RemoteResourceIconType = 'photo' | 'video' | 'file' | 'folder';
+type RemoteResourceGradientStop = {
+  offset: string;
+  color: string;
 };
 
 const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
@@ -48,6 +79,42 @@ const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
   { id: 'time', label: '时间' },
   { id: 'size', label: '文件大小' },
 ];
+
+const PREVIEW_DESKTOP_NAME = 'MacBook Pro';
+const ROOT_DIRECTORY_LABEL = '用户目录';
+const UNBOUND_REMOTE_SUBTITLE = '尚未连接电脑';
+const FALLBACK_DESKTOP_LABEL = '当前电脑';
+const LOCAL_SAVE_UNSUPPORTED_TITLE = '暂不支持保存';
+const LOCAL_SAVE_UNSUPPORTED_MESSAGE =
+  '当前版本还没有接入客户端本地保存能力，请等待后续版本。';
+const SHARE_UNSUPPORTED_TITLE = '暂不支持分享';
+const SHARE_UNSUPPORTED_MESSAGE =
+  '当前版本还没有接入客户端分享能力，请等待后续版本。';
+const REMOTE_RESOURCE_ICON_GRADIENTS: Record<
+  RemoteResourceIconType,
+  RemoteResourceGradientStop[]
+> = {
+  photo: [
+    { offset: '0%', color: '#F7FCFF' },
+    { offset: '54%', color: '#D8F0FF' },
+    { offset: '100%', color: '#9FD6FF' },
+  ],
+  video: [
+    { offset: '0%', color: '#F8F6FF' },
+    { offset: '48%', color: '#E3E6FF' },
+    { offset: '100%', color: '#9AAEFF' },
+  ],
+  folder: [
+    { offset: '0%', color: '#FFFDF4' },
+    { offset: '58%', color: '#FFE7A9' },
+    { offset: '100%', color: '#F7B955' },
+  ],
+  file: [
+    { offset: '0%', color: '#FFFFFF' },
+    { offset: '56%', color: '#EFF5FB' },
+    { offset: '100%', color: '#D7E2F0' },
+  ],
+};
 
 const now = Date.now();
 
@@ -61,7 +128,7 @@ function resource(
 ): RemoteResourceItem {
   const { addedOffsetHours = 24, ...rest } = item;
   return {
-    desktopDeviceId: rest.desktopDeviceId ?? 'MacBook Pro',
+    desktopDeviceId: rest.desktopDeviceId ?? PREVIEW_DESKTOP_NAME,
     status: rest.status ?? 'available',
     addedAt: new Date(now - addedOffsetHours * 60 * 60 * 1000).toISOString(),
     downloadCount: rest.downloadCount ?? 0,
@@ -287,7 +354,6 @@ type RemoteResourcesPreviewGlobal = typeof globalThis & {
 
 function isRemoteResourcesPreviewMode() {
   return (
-    isVisualQaEnabled() ||
     (globalThis as RemoteResourcesPreviewGlobal)
       .__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ === true
   );
@@ -312,17 +378,11 @@ function isImage(item: RemoteResourceItem) {
   );
 }
 
-function getItemIcon(item: RemoteResourceItem) {
-  if (isFolder(item)) {
-    return { name: 'folder', color: '#D6A21D', style: styles.folderIcon };
-  }
-  if (isVideo(item)) {
-    return { name: 'play', color: '#746AA8', style: styles.videoIcon };
-  }
-  if (isImage(item)) {
-    return { name: 'image', color: '#1677D2', style: styles.photoIcon };
-  }
-  return { name: 'document-text', color: '#16A34A', style: styles.fileIcon };
+function getItemIconType(item: RemoteResourceItem): RemoteResourceIconType {
+  if (isFolder(item)) return 'folder';
+  if (isVideo(item)) return 'video';
+  if (isImage(item)) return 'photo';
+  return 'file';
 }
 
 function getItemSize(item: RemoteResourceItem) {
@@ -341,12 +401,117 @@ function getItemMeta(item: RemoteResourceItem) {
   return `${size} · ${modified}`;
 }
 
+function firstNonEmptyString(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+function getBindingDesktopDisplayName(
+  binding: Partial<BindingStateDTO> | null | undefined,
+) {
+  if (!binding) return null;
+  return firstNonEmptyString(
+    binding.deviceAlias,
+    binding.deviceName,
+    binding.host,
+    binding.deviceId,
+  );
+}
+
+function getResourceDesktopDisplayName(items: RemoteResourceItem[]) {
+  for (const item of items) {
+    const desktopDisplayName = firstNonEmptyString(item.desktopDeviceId);
+    if (desktopDisplayName) {
+      return desktopDisplayName;
+    }
+  }
+  return null;
+}
+
+function getFolderKey(folder: FolderCrumb) {
+  return `${folder.rootResourceId ?? folder.id}::${folder.path ?? ''}`;
+}
+
+function getModifiedLabel(modifiedAt: string) {
+  const timestamp = new Date(modifiedAt).getTime();
+  if (Number.isNaN(timestamp)) return undefined;
+  const diffMs = Math.max(0, Date.now() - timestamp);
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (diffMs < dayMs) return '上次修改时间 今天';
+  return `上次修改时间 ${Math.floor(diffMs / dayMs)}天前`;
+}
+
+function directoryFileToResourceItem({
+  file,
+  folder,
+  desktopDisplayName,
+}: {
+  file: DirectoryFileDTO;
+  folder: FolderCrumb;
+  desktopDisplayName: string | null;
+}): RemoteResourceItem {
+  const rootResourceId = folder.rootResourceId ?? folder.id;
+  const syntheticId = `shared-folder-entry:${rootResourceId}:${file.path}`;
+  const mediaType = file.isDirectory || file.type === 'other' ? undefined : file.type;
+  return {
+    resourceId: syntheticId,
+    desktopDeviceId: desktopDisplayName ?? FALLBACK_DESKTOP_LABEL,
+    kind: file.isDirectory ? 'shared_folder' : 'shared_file',
+    displayName: file.name,
+    fileSize: file.isDirectory ? undefined : file.size,
+    mediaType,
+    status: 'available',
+    addedAt: file.modifiedAt,
+    downloadCount: 0,
+    countLabel: file.isDirectory ? '文件夹' : undefined,
+    modifiedLabel: getModifiedLabel(file.modifiedAt),
+    sharedRootResourceId: rootResourceId,
+    relativePath: file.path,
+  };
+}
+
+function getRemoteAccessSubtitle({
+  currentFolder,
+  desktopDisplayName,
+  previewMode,
+}: {
+  currentFolder: FolderCrumb | null;
+  desktopDisplayName: string | null;
+  previewMode: boolean;
+}) {
+  const directoryLabel = currentFolder?.name ?? ROOT_DIRECTORY_LABEL;
+
+  if (previewMode) {
+    return `${PREVIEW_DESKTOP_NAME} / ${directoryLabel}`;
+  }
+
+  if (desktopDisplayName) {
+    return `${desktopDisplayName} / ${directoryLabel}`;
+  }
+
+  if (currentFolder) {
+    return `${FALLBACK_DESKTOP_LABEL} / ${directoryLabel}`;
+  }
+
+  return UNBOUND_REMOTE_SUBTITLE;
+}
+
 export function RemoteAccessGlobalScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [networkDisconnected, setNetworkDisconnected] = useState(false);
   const [rootItems, setRootItems] = useState<RemoteResourceItem[]>([]);
+  const [folderItemsByKey, setFolderItemsByKey] = useState<Record<string, RemoteResourceItem[]>>({});
+  const [folderLoading, setFolderLoading] = useState(false);
+  const [folderLoadError, setFolderLoadError] = useState(false);
+  const [desktopEndpoint, setDesktopEndpoint] = useState<DesktopInfo | null>(null);
+  const [desktopDisplayName, setDesktopDisplayName] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [folderStack, setFolderStack] = useState<FolderCrumb[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -362,6 +527,11 @@ export function RemoteAccessGlobalScreen() {
 
   const loadData = useCallback(async () => {
     setNetworkDisconnected(false);
+    setFolderLoadError(false);
+    setFolderLoading(false);
+    setFolderItemsByKey({});
+    setDesktopEndpoint(null);
+    setDesktopDisplayName(null);
     try {
       const { NativeSyncEngine } = NativeModules;
       if (!NativeSyncEngine) {
@@ -381,9 +551,18 @@ export function RemoteAccessGlobalScreen() {
         return;
       }
 
+      const bindingDisplayName = getBindingDesktopDisplayName(
+        binding as Partial<BindingStateDTO>,
+      );
+      setDesktopDisplayName(bindingDisplayName);
+
       const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
+      setDesktopEndpoint(desktop);
       const result = await listSharedResources(desktop);
       const remoteItems = result ?? [];
+      setDesktopDisplayName(
+        firstNonEmptyString(bindingDisplayName, getResourceDesktopDisplayName(remoteItems)),
+      );
       const previewItems = getPreviewRootItems();
       if (remoteItems.length > 0 || previewItems.length === 0) {
         setPreviewMode(false);
@@ -407,6 +586,48 @@ export function RemoteAccessGlobalScreen() {
       setLoading(false);
     }
   }, []);
+
+  const loadFolderContents = useCallback(
+    async (folder: FolderCrumb) => {
+      if (folder.preview || previewMode) return;
+      if (!desktopEndpoint || !folder.rootResourceId) {
+        setFolderLoadError(true);
+        return;
+      }
+
+      const folderKey = getFolderKey(folder);
+      setFolderLoading(true);
+      setFolderLoadError(false);
+      try {
+        const listing = await listSharedFolderContents(
+          desktopEndpoint,
+          folder.rootResourceId,
+          folder.path,
+        );
+        const folderItems = listing.files.map(file =>
+          directoryFileToResourceItem({
+            file,
+            folder,
+            desktopDisplayName,
+          }),
+        );
+        setFolderItemsByKey(prev => ({
+          ...prev,
+          [folderKey]: folderItems,
+        }));
+      } catch (e) {
+        console.warn('[RemoteAccessScreen] Failed to load folder contents:', e);
+        setFolderItemsByKey(prev => ({
+          ...prev,
+          [folderKey]: [],
+        }));
+        setFolderLoadError(true);
+      } finally {
+        setFolderLoading(false);
+      }
+    },
+    [desktopDisplayName, desktopEndpoint, previewMode],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -435,7 +656,15 @@ export function RemoteAccessGlobalScreen() {
         }
 
         const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
-        const result = await downloadResource(desktop, item.resourceId);
+        const result = await downloadResourceForGlobal(desktop, item.resourceId);
+        if (!isDownloadSavedLocally(result)) {
+          Alert.alert(
+            LOCAL_SAVE_UNSUPPORTED_TITLE,
+            LOCAL_SAVE_UNSUPPORTED_MESSAGE,
+          );
+          return;
+        }
+
         await recordDownloadedFile({
           resourceId: item.resourceId,
           filename: item.displayName,
@@ -447,9 +676,11 @@ export function RemoteAccessGlobalScreen() {
 
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
-          t('sharedFiles.dialogs.downloadSavedToPhotos', {
-            name: item.displayName,
-          }) || `${item.displayName} 已儲存至相簿`,
+          result.savedToPhotos
+            ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
+                name: item.displayName,
+              }) || `${item.displayName} 已儲存至相簿`
+            : `${item.displayName} 已保存至 ${result.localPath}`,
         );
       } catch (err) {
         console.warn('[RemoteAccessScreen] Download failed:', err);
@@ -467,8 +698,11 @@ export function RemoteAccessGlobalScreen() {
 
   const currentItems = useMemo(() => {
     if (!currentFolder) return rootItems;
-    return previewMode ? MOCK_FOLDER_CONTENTS[currentFolder.id] ?? [] : [];
-  }, [currentFolder, previewMode, rootItems]);
+    if (previewMode || currentFolder.preview) {
+      return MOCK_FOLDER_CONTENTS[currentFolder.id] ?? [];
+    }
+    return folderItemsByKey[getFolderKey(currentFolder)] ?? [];
+  }, [currentFolder, folderItemsByKey, previewMode, rootItems]);
 
   const visibleItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -490,17 +724,31 @@ export function RemoteAccessGlobalScreen() {
     [currentItems, selectedIds],
   );
 
-  const openFolder = useCallback((item: RemoteResourceItem) => {
-    setFolderStack(stack => [...stack, { id: item.resourceId, name: item.displayName }]);
-    setLayoutMode('list');
-    setSearchQuery('');
-    resetSelection();
-  }, [resetSelection]);
+  const openFolder = useCallback(
+    (item: RemoteResourceItem) => {
+      const nextFolder: FolderCrumb = {
+        id: item.resourceId,
+        name: item.displayName,
+        rootResourceId: item.sharedRootResourceId ?? item.resourceId,
+        path: item.relativePath ?? '',
+        preview: previewMode,
+      };
+      setFolderStack(stack => [...stack, nextFolder]);
+      setLayoutMode('list');
+      setSearchQuery('');
+      setFolderLoadError(false);
+      resetSelection();
+      void loadFolderContents(nextFolder);
+    },
+    [loadFolderContents, previewMode, resetSelection],
+  );
 
   const goBack = useCallback(() => {
     if (currentFolder) {
       setFolderStack(stack => stack.slice(0, -1));
       setSearchQuery('');
+      setFolderLoadError(false);
+      setFolderLoading(false);
       resetSelection();
       return;
     }
@@ -529,14 +777,16 @@ export function RemoteAccessGlobalScreen() {
     setSelectedIds([]);
   }, [resetSelection, selectionMode]);
 
-  const handleSelectedDownload = useCallback(() => {
-    const first = selectedItems[0];
-    if (!first) return;
-    handleDownload(first);
-  }, [handleDownload, selectedItems]);
+  const handleSelectedDownload = useCallback(async () => {
+    if (selectedItems.length === 0 || downloadingId) return;
+    for (const item of selectedItems) {
+      await handleDownload(item);
+    }
+  }, [downloadingId, handleDownload, selectedItems]);
 
   const handleSelectedShare = useCallback(() => {
-    if (selectedItems.length > 0) setShowShareSheet(true);
+    if (selectedItems.length === 0) return;
+    Alert.alert(SHARE_UNSUPPORTED_TITLE, SHARE_UNSUPPORTED_MESSAGE);
   }, [selectedItems.length]);
 
   const retryLoadData = useCallback(() => {
@@ -544,12 +794,22 @@ export function RemoteAccessGlobalScreen() {
     loadData();
   }, [loadData]);
 
+  const retryLoadFolder = useCallback(() => {
+    if (currentFolder) {
+      void loadFolderContents(currentFolder);
+    }
+  }, [currentFolder, loadFolderContents]);
+
   const sortLabel = SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '名称';
   const queryActive = searchQuery.trim().length > 0;
   const title = currentFolder
     ? currentFolder.name
     : t('sharedFiles.remoteAccess.title') || '遠端訪問電腦';
-  const subtitle = currentFolder ? `MacBook Pro / ${currentFolder.name}` : 'MacBook Pro / 用户目录';
+  const subtitle = getRemoteAccessSubtitle({
+    currentFolder,
+    desktopDisplayName,
+    previewMode,
+  });
 
   const renderItem = ({ item }: { item: RemoteResourceItem }) => {
     return layoutMode === 'grid'
@@ -633,7 +893,12 @@ export function RemoteAccessGlobalScreen() {
             activeOpacity={0.7}
             onPress={() => setShowSortSheet(true)}
           >
-            <Icon name="list-outline" size={16} color={colors.primary} />
+            <Rows3
+              testID="remote-toolbar-sort-icon"
+              size={16}
+              color={colors.primary}
+              strokeWidth={2}
+            />
             <Text style={styles.sortButtonText}>{sortLabel}</Text>
           </TouchableOpacity>
 
@@ -687,10 +952,11 @@ export function RemoteAccessGlobalScreen() {
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('list')}
               >
-                <Icon
-                  name="list-outline"
+                <Rows3
+                  testID="remote-toolbar-list-icon"
                   size={17}
                   color={layoutMode === 'list' ? colors.primary : '#7B8490'}
+                  strokeWidth={2}
                 />
               </TouchableOpacity>
               <TouchableOpacity
@@ -702,10 +968,11 @@ export function RemoteAccessGlobalScreen() {
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('grid')}
               >
-                <Icon
-                  name="grid-outline"
+                <Grid2X2
+                  testID="remote-toolbar-grid-icon"
                   size={17}
                   color={layoutMode === 'grid' ? colors.primary : '#7B8490'}
+                  strokeWidth={2}
                 />
               </TouchableOpacity>
             </View>
@@ -720,6 +987,14 @@ export function RemoteAccessGlobalScreen() {
           </View>
         ) : networkDisconnected ? (
           <NetworkDisconnectedState onRetry={retryLoadData} />
+        ) : folderLoading ? (
+          <View style={styles.centeredCard}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.centeredTitle}>文件夹加载中</Text>
+            <Text style={styles.centeredSubtitle}>正在读取电脑端目录内容。</Text>
+          </View>
+        ) : folderLoadError ? (
+          <FolderLoadErrorState onRetry={retryLoadFolder} />
         ) : visibleItems.length === 0 ? (
           <EmptyState queryActive={queryActive} currentFolder={currentFolder} />
         ) : (
@@ -780,6 +1055,120 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function FolderLoadErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={styles.centeredCard}>
+      <View style={styles.disconnectedIcon}>
+        <Icon name="alert-circle-outline" size={28} color="#DC2626" />
+      </View>
+      <Text style={styles.centeredTitle}>目录加载失败</Text>
+      <Text style={styles.centeredSubtitle}>
+        无法读取这个共享文件夹，请确认电脑端文件仍然存在。
+      </Text>
+      <TouchableOpacity
+        style={styles.retryButton}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        onPress={onRetry}
+      >
+        <Text style={styles.retryButtonText}>重新加载</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RemoteResourceTypeIcon({
+  type,
+  style,
+}: {
+  type: RemoteResourceIconType;
+  style: StyleProp<ViewStyle>;
+}) {
+  const gradientId = `remoteResource${type}Gradient`;
+
+  return (
+    <View
+      testID={`remote-resource-icon-${type}`}
+      style={[styles.remoteResourceIcon, style]}
+    >
+      <Svg
+        style={StyleSheet.absoluteFillObject}
+        width="100%"
+        height="100%"
+        viewBox="0 0 46 46"
+      >
+        <Defs>
+          <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            {REMOTE_RESOURCE_ICON_GRADIENTS[type].map(stop => (
+              <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect width="46" height="46" rx="14" fill={`url(#${gradientId})`} />
+      </Svg>
+      <RemoteResourceGlyph type={type} />
+    </View>
+  );
+}
+
+function RemoteResourceGlyph({ type }: { type: RemoteResourceIconType }) {
+  if (type === 'photo') {
+    return (
+      <>
+        <View style={styles.photoIconDot} />
+        <View style={styles.photoIconHillLight} />
+        <View style={styles.photoIconHillBlue} />
+        <View style={styles.remoteResourceGlyphCenter}>
+          <FileImage size={20} color="#1677D2" strokeWidth={1.8} />
+        </View>
+      </>
+    );
+  }
+
+  if (type === 'video') {
+    return (
+      <>
+        <View style={styles.videoDotRowTop}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDotTop} />
+          ))}
+        </View>
+        <View style={styles.videoDotRowBottom}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDotBottom} />
+          ))}
+        </View>
+        <View style={styles.videoPlayCircle}>
+          <Play
+            size={14}
+            color="#746AA8"
+            fill="#746AA8"
+            strokeWidth={1.8}
+            style={styles.videoPlayIcon}
+          />
+        </View>
+      </>
+    );
+  }
+
+  if (type === 'folder') {
+    return (
+      <View style={styles.remoteResourceGlyphCenter}>
+        <FolderOpen size={22} color="#AD761D" strokeWidth={1.8} />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.fileIconCorner} />
+      <View style={styles.remoteResourceGlyphCenter}>
+        <FileText size={20} color="#59616D" strokeWidth={1.8} />
+      </View>
+    </>
+  );
+}
+
 function renderListItem({
   item,
   downloadingId,
@@ -798,7 +1187,7 @@ function renderListItem({
   selectionMode: boolean;
 }) {
   const folder = isFolder(item);
-  const iconConfig = getItemIcon(item);
+  const iconType = getItemIconType(item);
   const downloading = downloadingId === item.resourceId;
 
   return (
@@ -810,9 +1199,7 @@ function renderListItem({
         if (!folder && selectionMode) onToggleSelection(item);
       }}
     >
-      <View style={[styles.iconWrapper, iconConfig.style]}>
-        <Icon name={iconConfig.name} size={22} color={iconConfig.color} />
-      </View>
+      <RemoteResourceTypeIcon type={iconType} style={styles.iconWrapper} />
       <View style={styles.infoWrapper}>
         <Text style={styles.filename} numberOfLines={1}>
           {item.displayName}
@@ -867,7 +1254,7 @@ function renderGridItem({
   selectionMode: boolean;
 }) {
   const folder = isFolder(item);
-  const iconConfig = getItemIcon(item);
+  const iconType = getItemIconType(item);
   const downloading = downloadingId === item.resourceId;
 
   return (
@@ -880,9 +1267,7 @@ function renderGridItem({
           if (!folder && selectionMode) onToggleSelection(item);
         }}
       >
-        <View style={[styles.gridIconWrapper, iconConfig.style]}>
-          <Icon name={iconConfig.name} size={26} color={iconConfig.color} />
-        </View>
+        <RemoteResourceTypeIcon type={iconType} style={styles.gridIconWrapper} />
         {selectionMode && !folder ? (
           <SelectionMark
             selected={selected}
@@ -945,7 +1330,7 @@ function EmptyState({
   if (queryActive) {
     return (
       <View style={styles.centeredCard}>
-        <Icon name="search-outline" size={24} color="#9AA3AE" />
+        <RemoteEmptyArtwork variant="search" />
         <Text style={styles.centeredTitle}>没有匹配结果</Text>
         <Text style={styles.centeredSubtitle}>换个关键词再试一次</Text>
       </View>
@@ -955,7 +1340,7 @@ function EmptyState({
   if (currentFolder) {
     return (
       <View style={styles.centeredCard}>
-        <Icon name="folder-open-outline" size={28} color="#9AA3AE" />
+        <RemoteEmptyArtwork variant="folder" />
         <Text style={styles.centeredTitle}>空文件夹</Text>
         <Text style={styles.centeredSubtitle}>
           这个目录暂时没有可下载或分享的文件。
@@ -966,11 +1351,81 @@ function EmptyState({
 
   return (
     <View style={styles.centeredCard}>
-      <Icon name="document-outline" size={28} color="#9AA3AE" />
+      <RemoteEmptyArtwork variant="remote" />
       <Text style={styles.centeredTitle}>暂无文件</Text>
       <Text style={styles.centeredSubtitle}>
         电脑端还没有开放可访问的文件目录。
       </Text>
+    </View>
+  );
+}
+
+function RemoteEmptyArtwork({
+  variant,
+}: {
+  variant: 'folder' | 'remote' | 'search';
+}) {
+  const isFolder = variant === 'folder';
+  const isSearch = variant === 'search';
+  const gradientId = `remoteEmpty${variant}Gradient`;
+  const iconColor = isFolder ? '#AD761D' : isSearch ? '#59616D' : '#1677D2';
+  const stops = isFolder
+    ? ['#FFFDF4', '#FFEAB7', '#F7C76F']
+    : isSearch
+      ? ['#FFFFFF', '#EFF5FB', '#D7E2F0']
+      : ['#F8FCFF', '#DFF3FF', '#B6E3FF'];
+
+  return (
+    <View
+      testID={`remote-access-empty-icon-${variant}`}
+      style={styles.emptyArtwork}
+    >
+      <View style={[styles.emptyArtworkHalo, isFolder && styles.emptyArtworkHaloFolder]} />
+      <View style={styles.emptyArtworkTile}>
+        <Svg
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+          width="100%"
+          height="100%"
+          viewBox="0 0 72 72"
+        >
+          <Defs>
+            <LinearGradient
+              id={gradientId}
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor={stops[0]} />
+              <Stop offset="56%" stopColor={stops[1]} />
+              <Stop offset="100%" stopColor={stops[2]} />
+            </LinearGradient>
+          </Defs>
+          <Rect
+            x="0"
+            y="0"
+            width="72"
+            height="72"
+            rx="22"
+            fill={`url(#${gradientId})`}
+          />
+        </Svg>
+        <View style={styles.emptyArtworkCorner} />
+        <View style={styles.emptyArtworkPulse} />
+        {isFolder ? (
+          <FolderOpen size={30} color={iconColor} strokeWidth={1.9} />
+        ) : isSearch ? (
+          <Search size={29} color={iconColor} strokeWidth={1.9} />
+        ) : (
+          <>
+            <Monitor size={30} color={iconColor} strokeWidth={1.9} />
+            <View style={styles.emptyArtworkMiniFolder}>
+              <FolderOpen size={13} color="#1677D2" strokeWidth={2} />
+            </View>
+          </>
+        )}
+      </View>
     </View>
   );
 }
@@ -1294,17 +1749,109 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.75)',
   },
-  folderIcon: {
-    backgroundColor: '#FFF2C7',
+  remoteResourceIcon: {
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
+    elevation: 2,
   },
-  photoIcon: {
-    backgroundColor: '#D8F0FF',
+  remoteResourceGlyphCenter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  videoIcon: {
-    backgroundColor: '#E3E6FF',
+  photoIconDot: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.86)',
   },
-  fileIcon: {
-    backgroundColor: '#EAF8F0',
+  photoIconHillLight: {
+    position: 'absolute',
+    left: 4,
+    bottom: -3,
+    width: 32,
+    height: 20,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    transform: [{ rotate: '-8deg' }],
+  },
+  photoIconHillBlue: {
+    position: 'absolute',
+    right: -1,
+    bottom: -3,
+    width: 36,
+    height: 24,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: 'rgba(191,227,255,0.78)',
+    transform: [{ rotate: '10deg' }],
+  },
+  videoDotRowTop: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDotRowBottom: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDotTop: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  videoDotBottom: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.54)',
+  },
+  videoPlayCircle: {
+    position: 'absolute',
+    left: 9,
+    top: 9,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  videoPlayIcon: {
+    marginLeft: 2,
+  },
+  fileIconCorner: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    width: 12,
+    height: 12,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: 8,
+    borderColor: '#C6D2DF',
+    backgroundColor: 'rgba(255,255,255,0.76)',
   },
   infoWrapper: {
     flex: 1,
@@ -1381,6 +1928,68 @@ const styles = StyleSheet.create({
     paddingVertical: 34,
     alignItems: 'center',
     ...glassShadow,
+  },
+  emptyArtwork: {
+    width: 84,
+    height: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyArtworkHalo: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: 'rgba(228,245,255,0.70)',
+    transform: [{ rotate: '-8deg' }],
+  },
+  emptyArtworkHaloFolder: {
+    backgroundColor: 'rgba(255,246,216,0.76)',
+  },
+  emptyArtworkTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.82)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 30,
+    elevation: 2,
+  },
+  emptyArtworkCorner: {
+    position: 'absolute',
+    right: 13,
+    top: 13,
+    width: 14,
+    height: 14,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: 9,
+    borderColor: 'rgba(89,97,109,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+  },
+  emptyArtworkPulse: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.58)',
+  },
+  emptyArtworkMiniFolder: {
+    position: 'absolute',
+    right: 11,
+    bottom: 11,
+    width: 24,
+    height: 20,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centeredTitle: {
     marginTop: 12,

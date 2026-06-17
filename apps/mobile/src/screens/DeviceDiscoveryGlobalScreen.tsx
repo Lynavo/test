@@ -17,12 +17,32 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
+import {
+  CommonActions,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
-import type { DiscoveredDeviceDTO, RecentDesktopDTO } from '@syncflow/contracts';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import type {
+  DiscoveredDeviceDTO,
+  RecentDesktopDTO,
+} from '@syncflow/contracts';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import Svg, { Defs, Mask, Rect } from 'react-native-svg';
+import {
+  Check,
+  ChevronRight,
+  CloudDownload,
+  Download,
+  FileText,
+  FileVideo,
+  Monitor,
+  Smartphone,
+} from 'lucide-react-native';
 
 import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
@@ -35,6 +55,7 @@ import {
   markUnconnectedGuideSeen,
 } from '../utils/onboardingStorage';
 import { isVisualQaEnabled } from '../dev/visualQa';
+import { pairDevice, PairingError } from '../services/SyncEngineModule';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
 
@@ -59,7 +80,20 @@ type ConnectionFlowStatus =
   | 'failed'
   | 'timeout'
   | 'cameraDenied';
-type ConnectionModalStep = 'method' | 'manualPair' | 'cameraPermission' | 'code';
+type ConnectionFailureCode =
+  | 'wrong_code'
+  | 'blocked'
+  | 'version_incompatible'
+  | 'unknown';
+type ConnectionFailure = {
+  code: ConnectionFailureCode;
+  remainingAttempts?: number;
+};
+type ConnectionModalStep =
+  | 'method'
+  | 'manualPair'
+  | 'cameraPermission'
+  | 'code';
 type FlowStateTone = 'neutral' | 'danger' | 'warning';
 type ConnectionGuidePreviewKind =
   | 'connect'
@@ -97,11 +131,111 @@ type ConnectionGuideCardPosition = {
   top?: number;
   bottom?: number;
 };
+type GuidePreviewIconComponent = React.ComponentType<{
+  color?: string;
+  size?: number;
+  strokeWidth?: number;
+  testID?: string;
+}>;
 
 const GUIDE_CARD_EDGE_MARGIN = 16;
 const GUIDE_CARD_VERTICAL_GAP = 14;
 const GUIDE_CARD_TOP_MARGIN = 20;
 const GUIDE_CARD_ESTIMATED_HEIGHT = 236;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isConnectionFailureCode(
+  value: unknown,
+): value is ConnectionFailureCode {
+  return (
+    value === 'wrong_code' ||
+    value === 'blocked' ||
+    value === 'version_incompatible' ||
+    value === 'unknown'
+  );
+}
+
+function normalizeConnectionFailure(error: unknown): ConnectionFailure {
+  if (error instanceof PairingError) {
+    return {
+      code: error.blocked ? 'blocked' : error.code,
+      remainingAttempts: error.remainingAttempts,
+    };
+  }
+
+  if (isRecord(error)) {
+    const code = isConnectionFailureCode(error.code) ? error.code : 'unknown';
+    return {
+      code,
+      remainingAttempts:
+        typeof error.remainingAttempts === 'number'
+          ? error.remainingAttempts
+          : undefined,
+    };
+  }
+
+  return { code: 'unknown' };
+}
+
+function getConnectionCodeErrorMessage(failure: ConnectionFailure): string {
+  if (
+    failure.code === 'wrong_code' &&
+    failure.remainingAttempts !== undefined &&
+    failure.remainingAttempts > 0
+  ) {
+    return `连接码错误，还可以再试 ${failure.remainingAttempts} 次。`;
+  }
+  return '连接码错误，请重新输入电脑端显示的 6 位连接码。';
+}
+
+function getConnectionFailureCopy(failure: ConnectionFailure | null): {
+  title: string;
+  description: string;
+  actionLabel: string;
+  icon: string;
+  tone: FlowStateTone;
+} {
+  if (failure?.code === 'blocked') {
+    return {
+      title: '配对已被阻止',
+      description: '这台电脑已阻止此手机配对，请先在电脑端解除阻止后再试。',
+      actionLabel: '重新输入',
+      icon: 'alert-circle-outline',
+      tone: 'danger',
+    };
+  }
+
+  if (failure?.code === 'version_incompatible') {
+    return {
+      title: '版本不兼容',
+      description: '手机和电脑端版本不兼容，请更新两端 Vivi Drop 后再试。',
+      actionLabel: '重新扫描',
+      icon: 'alert-circle-outline',
+      tone: 'warning',
+    };
+  }
+
+  if (failure?.code === 'wrong_code') {
+    return {
+      title: '连接码错误',
+      description: getConnectionCodeErrorMessage(failure),
+      actionLabel: '重新输入',
+      icon: 'alert-circle-outline',
+      tone: 'danger',
+    };
+  }
+
+  return {
+    title: '连接失败',
+    description: '连接失败，请确认电脑端在线后重试。',
+    actionLabel: '重新输入',
+    icon: 'alert-circle-outline',
+    tone: 'danger',
+  };
+}
 
 export function resolveConnectionGuideCardPosition({
   hole,
@@ -136,10 +270,7 @@ export function resolveConnectionGuideCardPosition({
     left: GUIDE_CARD_EDGE_MARGIN,
     right: GUIDE_CARD_EDGE_MARGIN,
     top: shouldPlaceAbove
-      ? Math.max(
-          GUIDE_CARD_TOP_MARGIN,
-          Math.min(preferredAboveTop, maxCardTop),
-        )
+      ? Math.max(GUIDE_CARD_TOP_MARGIN, Math.min(preferredAboveTop, maxCardTop))
       : preferredCardTop,
   };
 }
@@ -191,22 +322,19 @@ const CONNECTION_FEATURE_GUIDE_STEPS: ConnectionGuideStep[] = [
   },
   {
     title: '选择同步内容和范围',
-    description:
-      '可以选择相册、系统文件和上传范围，控制哪些素材会自动同步。',
+    description: '可以选择相册、系统文件和上传范围，控制哪些素材会自动同步。',
     actionLabel: '下一步',
     previewKind: 'uploadScope',
   },
   {
     title: '查看同步状态',
-    description:
-      '这里会显示自动同步开启后的上传进度、最近同步时间和异常状态。',
+    description: '这里会显示自动同步开启后的上传进度、最近同步时间和异常状态。',
     actionLabel: '下一步',
     previewKind: 'syncProgress',
   },
   {
     title: '最近下载和同步记录',
-    description:
-      '从电脑下载到本机的文件、以及完成同步的历史记录都会集中展示。',
+    description: '从电脑下载到本机的文件、以及完成同步的历史记录都会集中展示。',
     actionLabel: '下一步',
     previewKind: 'records',
   },
@@ -262,6 +390,8 @@ export function DeviceDiscoveryGlobalScreen() {
   );
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionFlowStatus>('scanning');
+  const [connectionFailure, setConnectionFailure] =
+    useState<ConnectionFailure | null>(null);
   const [connectionModalStep, setConnectionModalStep] =
     useState<ConnectionModalStep | null>(null);
   const [connectionCode, setConnectionCode] = useState('');
@@ -472,33 +602,88 @@ export function DeviceDiscoveryGlobalScreen() {
     }
   }, [mode, navigation]);
 
-  const openMethodModal = useCallback((device: DiscoveredDevice) => {
-    if (showGuide) {
-      return;
-    }
-    setSelectedDevice(device);
-    setConnectionCode('');
-    setCodeError(null);
-    if (device.availability === 'busy') {
-      setConnectionStatus('timeout');
-      return;
-    }
-    setConnectionStatus('ready');
-    setConnectionModalStep('method');
-  }, [showGuide]);
+  const openMethodModal = useCallback(
+    (device: DiscoveredDevice) => {
+      if (showGuide) {
+        return;
+      }
+      setSelectedDevice(device);
+      setConnectionCode('');
+      setCodeError(null);
+      setConnectionFailure(null);
+      if (device.availability === 'busy') {
+        setConnectionStatus('timeout');
+        return;
+      }
+      setConnectionStatus('ready');
+      setConnectionModalStep('method');
+    },
+    [showGuide],
+  );
 
   const openRecentDesktop = useCallback(
-    (recent: RecentDesktopDTO) => {
+    async (recent: RecentDesktopDTO) => {
+      if (showGuide) {
+        return;
+      }
+
+      const discoveredDevice = devices.find(
+        device => device.deviceId === recent.desktopDeviceId,
+      );
       const device: DiscoveredDevice = {
         deviceId: recent.desktopDeviceId,
-        name: recent.desktopName,
-        ip: recent.host,
-        port: recent.port,
-        type: 'mac',
+        name: discoveredDevice?.name ?? recent.desktopName,
+        ip: discoveredDevice?.ip ?? recent.host,
+        port: discoveredDevice?.port ?? recent.port,
+        type: discoveredDevice?.type ?? 'mac',
+        availability: discoveredDevice?.availability,
+        deviceKind: discoveredDevice?.deviceKind,
       };
-      openMethodModal(device);
+
+      if (device.availability === 'busy') {
+        setConnectionStatus('timeout');
+        return;
+      }
+
+      setSelectedDevice(device);
+      setConnectionCode('');
+      setCodeError(null);
+      setConnectionFailure(null);
+      setConnectionStatus('ready');
+      setVerifying(true);
+
+      try {
+        await pairDevice({
+          deviceId: device.deviceId,
+          host: device.ip,
+          port: device.port || 39393,
+          connectionCode: '',
+        });
+        await addDesktop({
+          desktopDeviceId: device.deviceId,
+          desktopName: device.name,
+          host: device.ip,
+          port: device.port || 39393,
+          authorizationStatus: 'authorized',
+        });
+        setVerifying(false);
+        setConnectionModalStep(null);
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'SyncActivity' }],
+          }),
+        );
+      } catch (error) {
+        console.warn(
+          '[DeviceDiscoveryGlobalScreen] recent desktop reconnect failed, requiring pairing',
+          error,
+        );
+        setVerifying(false);
+        setConnectionModalStep('method');
+      }
     },
-    [openMethodModal],
+    [addDesktop, devices, navigation, showGuide],
   );
 
   const handleManualPair = useCallback(() => {
@@ -511,6 +696,7 @@ export function DeviceDiscoveryGlobalScreen() {
     setSelectedDevice(manualDevice);
     setConnectionCode('');
     setCodeError(null);
+    setConnectionFailure(null);
     setConnectionStatus('ready');
     setConnectionModalStep('code');
   }, [manualHost]);
@@ -526,6 +712,7 @@ export function DeviceDiscoveryGlobalScreen() {
         if (normalizedCode !== 'A8X2K9') {
           setVerifying(false);
           setConnectionModalStep(null);
+          setConnectionFailure({ code: 'wrong_code' });
           setConnectionStatus('failed');
           return;
         }
@@ -548,12 +735,7 @@ export function DeviceDiscoveryGlobalScreen() {
         return;
       }
 
-      const { NativeSyncEngine } = NativeModules;
-      if (!NativeSyncEngine) {
-        throw new Error('NativeSyncEngine unavailable');
-      }
-
-      await NativeSyncEngine.pairDevice({
+      await pairDevice({
         deviceId: selectedDevice.deviceId,
         host: selectedDevice.ip,
         port: selectedDevice.port || 39393,
@@ -575,8 +757,14 @@ export function DeviceDiscoveryGlobalScreen() {
           routes: [{ name: 'SyncActivity' }],
         }),
       );
-    } catch {
+    } catch (error: unknown) {
+      const failure = normalizeConnectionFailure(error);
       setVerifying(false);
+      setConnectionFailure(failure);
+      if (failure.code === 'wrong_code') {
+        setCodeError(getConnectionCodeErrorMessage(failure));
+        return;
+      }
       setConnectionModalStep(null);
       setConnectionStatus('failed');
     }
@@ -586,6 +774,7 @@ export function DeviceDiscoveryGlobalScreen() {
     setDevices([]);
     setScanning(true);
     setConnectionStatus('scanning');
+    setConnectionFailure(null);
     if (isVisualQaEnabled()) {
       setTimeout(() => {
         setDevices(VISUAL_QA_LAN_DEVICES);
@@ -636,15 +825,16 @@ export function DeviceDiscoveryGlobalScreen() {
         }
       : !isShowingSkeleton && connectionStatus === 'failed'
         ? {
-            title: '连接失败',
-            description:
-              '连接码错误或电脑端拒绝了本次配对，请重新输入电脑端显示的 6 位连接码。',
-            actionLabel: '重新输入',
-            icon: 'alert-circle-outline',
-            tone: 'danger',
+            ...getConnectionFailureCopy(connectionFailure),
             onAction: () => {
+              if (connectionFailure?.code === 'version_incompatible') {
+                handleRescan();
+                return;
+              }
               setConnectionCode('');
               setCodeError(null);
+              setConnectionFailure(null);
+              setConnectionStatus('ready');
               setConnectionModalStep('code');
             },
           }
@@ -792,6 +982,7 @@ export function DeviceDiscoveryGlobalScreen() {
                     onPress={() => {
                       setManualHost('');
                       setManualError(null);
+                      setConnectionFailure(null);
                       setConnectionModalStep('manualPair');
                     }}
                   >
@@ -826,7 +1017,8 @@ export function DeviceDiscoveryGlobalScreen() {
             <View style={styles.helpPanel}>
               <Text style={styles.helpTitle}>电脑端还没有准备好？</Text>
               <Text style={styles.helpBody}>
-                请先在官网 Vividrop.cn 下载并打开客户端，然后返回此页面扫码或输入连接码进行连接。
+                请先在官网 Vividrop.cn
+                下载并打开客户端，然后返回此页面扫码或输入连接码进行连接。
               </Text>
             </View>
           </ScrollView>
@@ -856,6 +1048,8 @@ export function DeviceDiscoveryGlobalScreen() {
               setConnectionModalStep('cameraPermission');
             }}
             onCode={() => {
+              setCodeError(null);
+              setConnectionFailure(null);
               setConnectionModalStep('code');
             }}
             onManualHostChange={value => {
@@ -871,7 +1065,10 @@ export function DeviceDiscoveryGlobalScreen() {
               setConnectionModalStep(null);
               navigation.navigate('QRScanner');
             }}
-            onChange={value => setConnectionCode(value.toUpperCase())}
+            onChange={value => {
+              setConnectionCode(value.toUpperCase());
+              if (codeError) setCodeError(null);
+            }}
             onSubmit={handleVerifyCode}
           />
         </View>
@@ -897,7 +1094,11 @@ function DeviceRow({
 }) {
   const isBusy = availability === 'busy';
   return (
-    <TouchableOpacity activeOpacity={0.76} style={styles.deviceRow} onPress={onPress}>
+    <TouchableOpacity
+      activeOpacity={0.76}
+      style={styles.deviceRow}
+      onPress={onPress}
+    >
       <View style={styles.rowIcon}>
         <Icon name={iconName} size={22} color="#1677D2" />
       </View>
@@ -991,14 +1192,15 @@ function ConnectionGuideOverlay({
   const { height: viewportHeight } = useWindowDimensions();
   const isSpotlightStep = step.previewKind === 'connect';
   const spotlightPadding = 10;
-  const hole = isSpotlightStep && targetLayout
-    ? {
-        x: Math.max(8, targetLayout.x - spotlightPadding),
-        y: Math.max(8, targetLayout.y - spotlightPadding),
-        width: Math.max(0, targetLayout.width + spotlightPadding * 2),
-        height: targetLayout.height + spotlightPadding * 2,
-      }
-    : null;
+  const hole =
+    isSpotlightStep && targetLayout
+      ? {
+          x: Math.max(8, targetLayout.x - spotlightPadding),
+          y: Math.max(8, targetLayout.y - spotlightPadding),
+          width: Math.max(0, targetLayout.width + spotlightPadding * 2),
+          height: targetLayout.height + spotlightPadding * 2,
+        }
+      : null;
   const guideCardPosition = resolveConnectionGuideCardPosition({
     hole,
     viewportHeight,
@@ -1114,8 +1316,15 @@ function GlobalConnectionFeaturePreviewCard({
       <GuidePreviewShell>
         <View style={styles.guidePreviewHeader}>
           <View style={styles.guidePreviewTitleRow}>
-            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
-              <Icon name="desktop-outline" size={16} color="#1677D2" />
+            <View
+              testID="guide-preview-auto-upload-icon"
+              style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
+            >
+              <Monitor
+                size={16}
+                color="#1677D2"
+                strokeWidth={2}
+              />
             </View>
             <View>
               <Text style={styles.guidePreviewStrong}>自动同步</Text>
@@ -1139,8 +1348,15 @@ function GlobalConnectionFeaturePreviewCard({
     return (
       <GuidePreviewShell>
         <View style={styles.guidePreviewPlanRow}>
-          <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
-            <Icon name="cloud-download-outline" size={16} color="#1677D2" />
+          <View
+            testID="guide-preview-sync-plan-icon"
+            style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
+          >
+            <CloudDownload
+              size={16}
+              color="#1677D2"
+              strokeWidth={2}
+            />
           </View>
           <View style={styles.guidePreviewFlex}>
             <Text style={styles.guidePreviewStrong}>同步计划</Text>
@@ -1177,8 +1393,15 @@ function GlobalConnectionFeaturePreviewCard({
       <GuidePreviewShell>
         <View style={styles.guidePreviewHeader}>
           <View style={styles.guidePreviewTitleRow}>
-            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
-              <Icon name="desktop-outline" size={16} color="#1677D2" />
+            <View
+              testID="guide-preview-sync-progress-icon"
+              style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
+            >
+              <Monitor
+                size={16}
+                color="#1677D2"
+                strokeWidth={2}
+              />
             </View>
             <View>
               <Text style={styles.guidePreviewStrong}>自动同步</Text>
@@ -1231,8 +1454,15 @@ function GlobalConnectionFeaturePreviewCard({
       <GuidePreviewShell>
         <View style={styles.guidePreviewHeader}>
           <View style={styles.guidePreviewTitleRow}>
-            <View style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}>
-              <Icon name="download-outline" size={16} color="#1677D2" />
+            <View
+              testID="guide-preview-records-download-icon"
+              style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
+            >
+              <Download
+                size={16}
+                color="#1677D2"
+                strokeWidth={2}
+              />
             </View>
             <Text style={styles.guidePreviewStrong}>最近下载</Text>
           </View>
@@ -1240,12 +1470,14 @@ function GlobalConnectionFeaturePreviewCard({
         </View>
         <View style={styles.guidePreviewDownloadRow}>
           {[
-            ['image-outline', '品牌手册.pdf'],
-            ['play-circle-outline', '发布视频.mov'],
-            ['document-outline', '报价单.xlsx'],
-          ].map(([iconName, label]) => (
+            { icon: FileText, label: '品牌手册.pdf', testID: 'file' },
+            { icon: FileVideo, label: '发布视频.mov', testID: 'video' },
+            { icon: FileText, label: '报价单.xlsx', testID: 'document' },
+          ].map(({ icon: PreviewIcon, label, testID }) => (
             <View key={label} style={styles.guidePreviewDownloadItem}>
-              <Icon name={iconName} size={15} color="#315E8C" />
+              <View testID={`guide-preview-download-${testID}-icon`}>
+                <PreviewIcon size={15} color="#315E8C" strokeWidth={2} />
+              </View>
               <Text style={styles.guidePreviewDownloadLabel} numberOfLines={1}>
                 {label}
               </Text>
@@ -1255,7 +1487,9 @@ function GlobalConnectionFeaturePreviewCard({
         <View style={styles.guidePreviewCompactRecord}>
           <View>
             <Text style={styles.guidePreviewStrong}>同步记录</Text>
-            <Text style={styles.guidePreviewSubtle}>今天 · 18 个 · 18.4 GB</Text>
+            <Text style={styles.guidePreviewSubtle}>
+              今天 · 18 个 · 18.4 GB
+            </Text>
           </View>
           <View style={styles.guidePreviewCompletedPill}>
             <Text style={styles.guidePreviewCompletedText}>已完成</Text>
@@ -1268,17 +1502,19 @@ function GlobalConnectionFeaturePreviewCard({
     return (
       <GuidePreviewShell>
         <GuidePreviewResourceEntry
-          iconName="phone-portrait-outline"
+          icon={Smartphone}
           iconStyle={styles.guidePreviewIconBlue}
           iconColor="#3B82F6"
+          testID="guide-preview-phone-sync-icon"
           title="手机同步空间"
           description="查看已同步至电脑的文件与上传来源"
           badges={['今日 5 个', '保留来源']}
         />
         <GuidePreviewResourceEntry
-          iconName="desktop-outline"
+          icon={Monitor}
           iconStyle={styles.guidePreviewIconPurple}
           iconColor="#8B5CF6"
+          testID="guide-preview-remote-access-icon"
           title="远程访问电脑"
           description="浏览电脑端共享目录并下载文件"
           badges={['桌面目录', '列表/网格']}
@@ -1303,13 +1539,7 @@ function GuidePreviewShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function GuidePreviewStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function GuidePreviewStat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.guidePreviewStat}>
       <Text style={styles.guidePreviewStatLabel}>{label}</Text>
@@ -1368,7 +1598,11 @@ function GuidePreviewOption({
             : styles.guidePreviewIconMuted,
         ]}
       >
-        <Icon name={iconName} size={15} color={active ? '#FFFFFF' : '#8AABBD'} />
+        <Icon
+          name={iconName}
+          size={15}
+          color={active ? '#FFFFFF' : '#8AABBD'}
+        />
       </View>
       <View style={styles.guidePreviewFlex}>
         <Text style={styles.guidePreviewOptionTitle}>{title}</Text>
@@ -1378,7 +1612,12 @@ function GuidePreviewOption({
       </View>
       {active ? (
         <View style={styles.guidePreviewCheck}>
-          <Icon name="checkmark" size={9} color="#FFFFFF" />
+          <Check
+            testID="guide-preview-option-check-icon"
+            size={9}
+            color="#FFFFFF"
+            strokeWidth={2.8}
+          />
         </View>
       ) : null}
     </View>
@@ -1386,24 +1625,26 @@ function GuidePreviewOption({
 }
 
 function GuidePreviewResourceEntry({
-  iconName,
+  icon: ResourceIcon,
   iconStyle,
   iconColor,
+  testID,
   title,
   description,
   badges,
 }: {
-  iconName: string;
+  icon: GuidePreviewIconComponent;
   iconStyle: object;
   iconColor: string;
+  testID: string;
   title: string;
   description: string;
   badges: string[];
 }) {
   return (
     <View style={styles.guidePreviewResourceEntry}>
-      <View style={[styles.guidePreviewResourceIcon, iconStyle]}>
-        <Icon name={iconName} size={17} color={iconColor} />
+      <View testID={testID} style={[styles.guidePreviewResourceIcon, iconStyle]}>
+        <ResourceIcon size={17} color={iconColor} strokeWidth={2} />
       </View>
       <View style={styles.guidePreviewFlex}>
         <Text style={styles.guidePreviewOptionTitle}>{title}</Text>
@@ -1418,7 +1659,12 @@ function GuidePreviewResourceEntry({
           ))}
         </View>
       </View>
-      <Icon name="chevron-forward" size={14} color="#C7C7CC" />
+      <ChevronRight
+        testID="guide-preview-resource-chevron-icon"
+        size={14}
+        color="#C7C7CC"
+        strokeWidth={2}
+      />
     </View>
   );
 }
@@ -1538,7 +1784,8 @@ function ConnectionFlowModal({
           onSubmitEditing={onManualSubmit}
         />
         <Text style={manualError ? styles.errorText : styles.inputHint}>
-          {manualError || '可在电脑端 ViviDrop 的全局设置中查看 IP 和 6 位连接码。'}
+          {manualError ||
+            '可在电脑端 ViviDrop 的全局设置中查看 IP 和 6 位连接码。'}
         </Text>
         <View style={styles.modalActions}>
           <TouchableOpacity

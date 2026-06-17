@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DOWNLOAD_RECORDS_STORAGE_KEY } from '../services/download-records-service';
 
 /**
  * Prefix used by `useExpiryReminder` for per-day, per-level "I already showed
@@ -12,9 +13,8 @@ const AUTO_UPLOAD_SESSION_KEY = '@vividrop/auto-upload-session/v1';
 
 /**
  * Remove every AsyncStorage entry that is scoped to the currently-signed-in
- * user. Today this is limited to the expiry-reminder suppression flags, but
- * the function is the canonical place to grow the list — any new UI-level
- * per-user state should be added here rather than in ad-hoc call sites.
+ * user. This function is the canonical place to grow the list — any new
+ * UI-level per-user state should be added here rather than in ad-hoc call sites.
  *
  * Preserves device-level / app-level state:
  *   - debug overrides (`@vividrop/debug/*`) — dev tooling, independent of user
@@ -33,10 +33,11 @@ export async function clearUserScopedStorage(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
   const toRemove = keys.filter(
     key =>
-      key.startsWith(REMINDER_KEY_PREFIX) || key === AUTO_UPLOAD_SESSION_KEY,
+      key.startsWith(REMINDER_KEY_PREFIX) ||
+      key === AUTO_UPLOAD_SESSION_KEY ||
+      key === DOWNLOAD_RECORDS_STORAGE_KEY,
   );
-  if (toRemove.length === 0) {
-    return;
+  if (toRemove.length > 0) {
+    await AsyncStorage.multiRemove(toRemove);
   }
-  await AsyncStorage.multiRemove(toRemove);
 }

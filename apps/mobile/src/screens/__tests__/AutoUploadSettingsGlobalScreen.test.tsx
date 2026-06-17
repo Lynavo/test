@@ -1,7 +1,13 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { Alert, Text, TouchableOpacity } from 'react-native';
-import { enableAutoUpload } from '../../services/SyncEngineModule';
+import { Alert, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import {
+  disableAutoUpload,
+  enableAutoUpload,
+  getAutoUploadConfig,
+  prepareAutoUploadEnable,
+  saveAutoUploadConfig,
+} from '../../services/SyncEngineModule';
 
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
@@ -50,15 +56,45 @@ jest.mock('../../components/Icon', () => ({
   },
 }));
 
+jest.mock('lucide-react-native', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const createIcon =
+    (fallbackTestID: string) =>
+    ({ testID, ...props }: { testID?: string }) =>
+      React.createElement(View, {
+        testID: testID ?? fallbackTestID,
+        ...props,
+      });
+  return {
+    Calendar: createIcon('mock-calendar-icon'),
+    Check: createIcon('mock-check-icon'),
+    ChevronLeft: createIcon('mock-chevron-left-icon'),
+    ChevronRight: createIcon('mock-chevron-right-icon'),
+    Clock: createIcon('mock-clock-icon'),
+    CloudDownload: createIcon('mock-cloud-download-icon'),
+    File: createIcon('mock-file-icon'),
+    Folder: createIcon('mock-folder-icon'),
+    Image: createIcon('mock-image-icon'),
+    ShieldCheck: createIcon('mock-shield-check-icon'),
+  };
+});
+
 jest.mock('../../services/SyncEngineModule', () => ({
+  disableAutoUpload: jest.fn().mockResolvedValue(undefined),
   enableAutoUpload: jest.fn().mockResolvedValue(undefined),
+  getAutoUploadConfig: jest.fn().mockResolvedValue({
+    enabled: true,
+    timeRangeMode: 'all',
+    state: 'active',
+  }),
+  prepareAutoUploadEnable: jest.fn().mockResolvedValue(undefined),
+  saveAutoUploadConfig: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, params?: Record<string, unknown>) => {
-      const count = String(params?.count ?? '');
-      const size = String(params?.size ?? '');
       const copy: Record<string, string> = {
         'syncActivity.autoUploadSettings.title': '自动上传',
         'syncActivity.autoUploadSettings.confirmEnable': '开启自动上传',
@@ -68,13 +104,8 @@ jest.mock('react-i18next', () => ({
         'syncActivity.autoUploadSettings.sourceFileTitle': '指定文件',
         'syncActivity.autoUploadSettings.sourceFileDescEmpty':
           '从系统文件中选择需要同步的内容',
-        'syncActivity.autoUploadSettings.sourceFileDescSelected': `${count} 个文件 · ${size}`,
         'syncActivity.autoUploadSettings.sourcesTitle': '同步来源',
         'syncActivity.autoUploadSettings.addFile': '添加',
-        'syncActivity.autoUploadSettings.addMoreFiles': '继续添加',
-        'syncActivity.autoUploadSettings.clearFiles': '清空',
-        'syncActivity.autoUploadSettings.addedFilesSummary': '已选文件',
-        'syncActivity.autoUploadSettings.addedFilesMore': `另有 ${count} 个文件`,
         'syncActivity.autoUploadSettings.rangeTitle': '同步范围',
         'syncActivity.autoUploadSettings.rangeAllTitle': '全部内容',
         'syncActivity.autoUploadSettings.rangeAllDesc': '同步现有照片和视频',
@@ -83,10 +114,8 @@ jest.mock('react-i18next', () => ({
         'syncActivity.autoUploadSettings.rangeCustomTitle': '自定义时间',
         'syncActivity.autoUploadSettings.rangeCustomDesc': '按指定时间起点同步',
         'syncActivity.autoUploadSettings.customPickerSave': '保存',
-        'syncActivity.autoUploadSettings.infoAlbumAndFileAll': `相册内容和 ${count} 个文件将同步到电脑。`,
         'syncActivity.autoUploadSettings.infoAlbumAll':
           '相册照片和视频将同步到电脑。',
-        'syncActivity.autoUploadSettings.infoFileAll': `${count} 个文件将同步到电脑。`,
         'syncActivity.autoUploadSettings.infoEmpty':
           '请选择至少一个同步来源。',
         common: '',
@@ -99,10 +128,11 @@ jest.mock('react-i18next', () => ({
 
 import { AutoUploadSettingsGlobalScreen } from '../AutoUploadSettingsGlobalScreen';
 
-function renderScreen() {
+async function renderScreen() {
   let tree: ReactTestRenderer.ReactTestRenderer;
-  ReactTestRenderer.act(() => {
+  await ReactTestRenderer.act(async () => {
     tree = ReactTestRenderer.create(<AutoUploadSettingsGlobalScreen />);
+    await Promise.resolve();
   });
   return tree!;
 }
@@ -116,22 +146,25 @@ function getTextValues(tree: ReactTestRenderer.ReactTestRenderer) {
   });
 }
 
-function hasTextStartingWith(
-  tree: ReactTestRenderer.ReactTestRenderer,
-  prefix: string,
-) {
-  return getTextValues(tree).some(
-    value => typeof value === 'string' && value.startsWith(prefix),
-  );
-}
-
+const mockedDisableAutoUpload = disableAutoUpload as jest.Mock;
 const mockedEnableAutoUpload = enableAutoUpload as jest.Mock;
+const mockedGetAutoUploadConfig = getAutoUploadConfig as jest.Mock;
+const mockedPrepareAutoUploadEnable = prepareAutoUploadEnable as jest.Mock;
+const mockedSaveAutoUploadConfig = saveAutoUploadConfig as jest.Mock;
 
 describe('AutoUploadSettingsGlobalScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(true);
+    mockedDisableAutoUpload.mockResolvedValue(undefined);
     mockedEnableAutoUpload.mockResolvedValue(undefined);
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: true,
+      timeRangeMode: 'all',
+      state: 'active',
+    });
+    mockedPrepareAutoUploadEnable.mockResolvedValue(undefined);
+    mockedSaveAutoUploadConfig.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -139,8 +172,8 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     jest.restoreAllMocks();
   });
 
-  it('renders the reference-style sync plan summary before source controls', () => {
-    const tree = renderScreen();
+  it('renders the reference-style sync plan summary before source controls', async () => {
+    const tree = await renderScreen();
     const textValues = getTextValues(tree);
 
     expect(textValues).toContain('同步计划');
@@ -160,12 +193,15 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(textValues).toContain('仅同步后续新增内容');
     expect(textValues).toContain('自定义时间');
     expect(textValues).toContain('按指定时间起点同步');
-    expect(textValues).toContain('shield-checkmark-outline');
+    expect(textValues).not.toContain('shield-checkmark-outline');
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-info-icon' }),
+    ).toBeTruthy();
     expect(textValues).toContain('开启自动上传');
   });
 
-  it('keeps the file add action inline with the specified-file source row', () => {
-    const tree = renderScreen();
+  it('keeps the file add action inline with the specified-file source row', async () => {
+    const tree = await renderScreen();
     const addButton = tree.root.findByProps({
       testID: 'auto-upload-add-file',
     });
@@ -176,32 +212,108 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     });
   });
 
-  it('uses reference-style source and range icons instead of generic ionicons', () => {
-    const tree = renderScreen();
+  it('uses reference-style source and range icons instead of generic ionicons', async () => {
+    const tree = await renderScreen();
     const textValues = getTextValues(tree);
+    const sourceAlbumIcon = tree.root.findByProps({
+      testID: 'auto-upload-source-album-icon',
+    });
+    const sourceFileIcon = tree.root.findByProps({
+      testID: 'auto-upload-source-file-icon',
+    });
+    const rangeAllIcon = tree.root.findByProps({
+      testID: 'auto-upload-range-all-icon',
+    });
+    const rangeNowIcon = tree.root.findByProps({
+      testID: 'auto-upload-range-now-icon',
+    });
+    const rangeCustomIcon = tree.root.findByProps({
+      testID: 'auto-upload-range-custom-icon',
+    });
 
-    expect(textValues).toContain('auto-upload-image');
-    expect(textValues).toContain('auto-upload-file');
-    expect(textValues).toContain('auto-upload-folder');
-    expect(textValues).toContain('auto-upload-clock');
-    expect(textValues).toContain('auto-upload-calendar');
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-plan-icon' }),
+    ).toBeTruthy();
+    expect(sourceAlbumIcon.props.size).toBe(20);
+    expect(sourceFileIcon.props.size).toBe(20);
+    expect(rangeAllIcon.props.size).toBe(18);
+    expect(rangeNowIcon.props.size).toBe(18);
+    expect(rangeCustomIcon.props.size).toBe(18);
+    expect(sourceAlbumIcon.props.color).toBe('#fff');
+    expect(sourceFileIcon.props.color).toBe('#7B8490');
+    expect(rangeAllIcon.props.color).toBe('#fff');
+    expect(textValues).not.toContain('auto-upload-image');
+    expect(textValues).not.toContain('auto-upload-file');
+    expect(textValues).not.toContain('auto-upload-folder');
+    expect(textValues).not.toContain('auto-upload-clock');
+    expect(textValues).not.toContain('auto-upload-calendar');
+    expect(textValues).not.toContain('cloud-download-outline');
+    expect(textValues).not.toContain('shield-checkmark-outline');
     expect(textValues).not.toContain('image-outline');
     expect(textValues).not.toContain('folder-outline');
     expect(textValues).not.toContain('time-outline');
     expect(textValues).not.toContain('calendar-outline');
   });
 
-  it('does not render the main tabbar on the auto upload child page', () => {
-    const tree = renderScreen();
+  it('keeps title and icon containers aligned with the global reference layout', async () => {
+    const tree = await renderScreen();
+    const titleNode = tree.root.findAllByType(Text).find(node => {
+      return node.props.children === '自动上传';
+    });
+    const backIcon = tree.root.findByProps({
+      testID: 'auto-upload-back-icon',
+    });
+    const albumIcon = tree.root.findByProps({
+      testID: 'auto-upload-source-album-icon',
+    });
+    const rangeAllIcon = tree.root.findByProps({
+      testID: 'auto-upload-range-all-icon',
+    });
+    const rangeCustomSelectionBox = tree.root.findByProps({
+      testID: 'auto-upload-range-custom-check-icon-box',
+    });
+
+    expect(StyleSheet.flatten(titleNode?.props.style)).toMatchObject({
+      fontSize: 17,
+      fontWeight: '600',
+      color: '#17191C',
+    });
+    expect(backIcon.props.color).toBe('#17191C');
+    expect(StyleSheet.flatten(albumIcon.parent?.props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+      borderRadius: 13,
+    });
+    expect(StyleSheet.flatten(rangeAllIcon.parent?.props.style)).toMatchObject({
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+    });
+    expect(
+      tree.root.findAllByProps({
+        testID: 'auto-upload-range-custom-chevron-icon',
+      }),
+    ).toHaveLength(0);
+    expect(StyleSheet.flatten(rangeCustomSelectionBox.props.style)).toMatchObject({
+      width: 24,
+      height: 24,
+      borderRadius: 8,
+      borderColor: '#C9D6E4',
+      backgroundColor: 'rgba(255,255,255,0.72)',
+    });
+  });
+
+  it('does not render the main tabbar on the auto upload child page', async () => {
+    const tree = await renderScreen();
 
     expect(
       tree.root.findAllByProps({ testID: 'mock-bottom-tab-bar' }),
     ).toHaveLength(0);
   });
 
-  it('falls back to the sync activity screen when there is no back stack', () => {
+  it('falls back to the sync activity screen when there is no back stack', async () => {
     mockCanGoBack.mockReturnValue(false);
-    const tree = renderScreen();
+    const tree = await renderScreen();
     const backButton = tree.root.findAllByType(TouchableOpacity)[0];
 
     ReactTestRenderer.act(() => {
@@ -218,8 +330,8 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     });
   });
 
-  it('exposes the back button for automation and accessibility', () => {
-    const tree = renderScreen();
+  it('exposes the back button for automation and accessibility', async () => {
+    const tree = await renderScreen();
 
     expect(
       tree.root.findByProps({ testID: 'auto-upload-back' }).props,
@@ -229,8 +341,8 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     });
   });
 
-  it('toggles the album source and disables confirm when no real source remains', () => {
-    const tree = renderScreen();
+  it('toggles the album source and enables closing when auto upload is currently enabled', async () => {
+    const tree = await renderScreen();
     const albumSource = tree.root.findByProps({
       testID: 'auto-upload-source-album',
     });
@@ -256,28 +368,82 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(updatedAlbumSource.props.accessibilityState).toMatchObject({
       selected: false,
     });
-    expect(updatedConfirmButton.props.disabled).toBe(true);
+    expect(updatedConfirmButton.props.disabled).toBe(false);
     expect(updatedConfirmButton.props.accessibilityState).toMatchObject({
-      disabled: true,
+      disabled: false,
     });
   });
 
-  it('keeps mock file rows UI-only and does not enable native auto upload from mock-only state', async () => {
-    const tree = renderScreen();
-
-    ReactTestRenderer.act(() => {
-      tree.root
-        .findByProps({ testID: 'auto-upload-source-album' })
-        .props.onPress();
+  it('hydrates the saved native config before users edit settings', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'custom',
+      customTimeFrom: '2026-06-16T03:04:05.000Z',
+      state: 'disabled',
     });
+
+    const tree = await renderScreen();
+
+    expect(mockedGetAutoUploadConfig).toHaveBeenCalledTimes(1);
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-source-album' }).props
+        .accessibilityState,
+    ).toMatchObject({ selected: false });
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-range-custom' }).props
+        .accessibilityState,
+    ).toMatchObject({ selected: true });
+    expect(
+      tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.disabled,
+    ).toBe(true);
+  });
+
+  it('does not save or enable auto upload when native config hydration fails', async () => {
+    mockedGetAutoUploadConfig.mockRejectedValueOnce(
+      new Error('native config unavailable'),
+    );
+    const tree = await renderScreen();
+
+    const confirmButton = tree.root.findByProps({
+      testID: 'auto-upload-confirm',
+    });
+    expect(confirmButton.props.disabled).toBe(true);
+    expect(confirmButton.props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+    expect(getTextValues(tree)).toContain(
+      '自动上传设置读取失败，请稍后重试。',
+    );
+
+    await ReactTestRenderer.act(async () => {
+      await confirmButton.props.onPress();
+    });
+
+    expect(mockedPrepareAutoUploadEnable).not.toHaveBeenCalled();
+    expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
+    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the specified-file row UI-only and does not generate mock files', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'disabled',
+    });
+    const tree = await renderScreen();
+
     ReactTestRenderer.act(() => {
       tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
     });
 
     const textValues = getTextValues(tree);
-    expect(textValues).toContain('已选文件');
-    expect(textValues).toContain('继续添加');
-    expect(hasTextStartingWith(tree, '1 个文件 · ')).toBe(true);
+    expect(textValues).not.toContain('已选文件');
+    expect(textValues).not.toContain('继续添加');
+    expect(textValues).toContain('添加');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '暂不可用',
+      '指定文件自动上传需要原生队列支持，当前不会生成模拟文件。',
+    );
 
     const confirmButton = tree.root.findByProps({
       testID: 'auto-upload-confirm',
@@ -289,55 +455,11 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     });
 
     expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
+    expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
   });
 
-  it('adds and clears mock file rows without changing the real confirm source requirement', () => {
-    const tree = renderScreen();
-
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
-    });
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
-    });
-
-    expect(getTextValues(tree)).toContain('已选文件');
-    expect(hasTextStartingWith(tree, '2 个文件 · ')).toBe(true);
-
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-clear-files' }).props.onPress();
-    });
-
-    expect(getTextValues(tree)).not.toContain('已选文件');
-    expect(
-      tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.disabled,
-    ).toBe(false);
-  });
-
-  it('removes a single selected file without clearing the rest', () => {
-    const tree = renderScreen();
-
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
-    });
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
-    });
-
-    expect(hasTextStartingWith(tree, '2 个文件 · ')).toBe(true);
-
-    ReactTestRenderer.act(() => {
-      tree.root
-        .findByProps({ testID: 'auto-upload-remove-file-0' })
-        .props.onPress();
-    });
-
-    expect(hasTextStartingWith(tree, '1 个文件 · ')).toBe(true);
-    expect(hasTextStartingWith(tree, '2 个文件 · ')).toBe(false);
-  });
-
-  it('opens the custom range picker UI when custom range is selected', () => {
-    const tree = renderScreen();
+  it('opens the custom range picker UI when custom range is selected', async () => {
+    const tree = await renderScreen();
 
     ReactTestRenderer.act(() => {
       tree.root
@@ -359,14 +481,14 @@ describe('AutoUploadSettingsGlobalScreen', () => {
   });
 
   it('guards saving against rapid double submit while enabling auto upload', async () => {
-    let resolveEnable: (() => void) | undefined;
-    mockedEnableAutoUpload.mockImplementation(
+    let resolveSave: (() => void) | undefined;
+    mockedSaveAutoUploadConfig.mockImplementation(
       () =>
         new Promise<void>(resolve => {
-          resolveEnable = resolve;
+          resolveSave = resolve;
         }),
     );
-    const tree = renderScreen();
+    const tree = await renderScreen();
     const confirmButton = tree.root.findByProps({
       testID: 'auto-upload-confirm',
     });
@@ -377,26 +499,126 @@ describe('AutoUploadSettingsGlobalScreen', () => {
       await Promise.resolve();
     });
 
-    expect(mockedEnableAutoUpload).toHaveBeenCalledTimes(1);
+    expect(mockedSaveAutoUploadConfig).toHaveBeenCalledTimes(1);
+    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
     expect(
       tree.root.findByProps({ testID: 'auto-upload-confirm' }).props
         .accessibilityState,
     ).toMatchObject({ busy: true, disabled: true });
 
     await ReactTestRenderer.act(async () => {
-      resolveEnable?.();
+      resolveSave?.();
       await Promise.resolve();
     });
   });
 
-  it('enables native auto upload with no arguments when the real album source is selected', async () => {
-    const tree = renderScreen();
+  it('saves the native config before enabling auto upload', async () => {
+    const tree = await renderScreen();
+
+    ReactTestRenderer.act(() => {
+      tree.root.findByProps({ testID: 'auto-upload-range-now' }).props.onPress();
+    });
 
     await ReactTestRenderer.act(async () => {
       await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
     });
 
+    expect(mockedPrepareAutoUploadEnable).toHaveBeenCalledTimes(1);
+    expect(mockedSaveAutoUploadConfig).toHaveBeenCalledWith({
+      enabled: true,
+      timeRangeMode: 'from_now',
+      customTimeFrom: undefined,
+    });
     expect(mockedEnableAutoUpload).toHaveBeenCalledTimes(1);
-    expect(mockedEnableAutoUpload.mock.calls[0]).toEqual([]);
+    expect(mockedEnableAutoUpload.mock.calls[0]).toEqual([
+      { skipPermissionPreflight: true },
+    ]);
+    expect(
+      mockedPrepareAutoUploadEnable.mock.invocationCallOrder[0],
+    ).toBeLessThan(mockedSaveAutoUploadConfig.mock.invocationCallOrder[0]);
+    expect(
+      mockedSaveAutoUploadConfig.mock.invocationCallOrder[0],
+    ).toBeLessThan(mockedEnableAutoUpload.mock.invocationCallOrder[0]);
+  });
+
+  it('does not save enabled config when permission preflight rejects', async () => {
+    mockedPrepareAutoUploadEnable.mockRejectedValueOnce(
+      new Error('permission denied'),
+    );
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
+    });
+
+    expect(mockedPrepareAutoUploadEnable).toHaveBeenCalledTimes(1);
+    expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
+    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
+  });
+
+  it('preserves hydrated from_today mode when the range is not edited', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: true,
+      timeRangeMode: 'from_today',
+      state: 'active',
+    });
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
+    });
+
+    expect(mockedSaveAutoUploadConfig).toHaveBeenCalledWith({
+      enabled: true,
+      timeRangeMode: 'from_today',
+      customTimeFrom: undefined,
+    });
+    expect(mockedEnableAutoUpload).toHaveBeenCalledWith({
+      skipPermissionPreflight: true,
+    });
+  });
+
+  it('saves custom time from the hydrated config when custom range stays selected', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: true,
+      timeRangeMode: 'custom',
+      customTimeFrom: '2026-06-16T03:04:05.000Z',
+      state: 'active',
+    });
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
+    });
+
+    expect(mockedSaveAutoUploadConfig).toHaveBeenCalledWith({
+      enabled: true,
+      timeRangeMode: 'custom',
+      customTimeFrom: '2026-06-16T03:04:05.000Z',
+    });
+    expect(mockedEnableAutoUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables native auto upload when the saved enabled config is turned off', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: true,
+      timeRangeMode: 'all',
+      state: 'active',
+    });
+    const tree = await renderScreen();
+
+    ReactTestRenderer.act(() => {
+      tree.root
+        .findByProps({ testID: 'auto-upload-source-album' })
+        .props.onPress();
+    });
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-confirm' }).props.onPress();
+    });
+
+    expect(mockedDisableAutoUpload).toHaveBeenCalledTimes(1);
+    expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
+    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
   });
 });

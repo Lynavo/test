@@ -14,15 +14,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
+import {
+  Check,
+  ChevronLeft,
+  CloudUpload,
+  Download,
+  FileImage,
+  FileText,
+  Play,
+  Rows3,
+} from 'lucide-react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { SIDECAR_HTTP_PORT, type ReceivedLibraryItemDTO } from '@syncflow/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/globalColors';
 import { formatBytes } from '../utils/format';
-import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
-import { isVisualQaEnabled } from '../dev/visualQa';
 import { listReceivedLibrary } from '../services/desktop-local-service';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
@@ -31,12 +40,34 @@ type ReceivedSection = {
   data: ReceivedLibraryItemDTO[];
 };
 type SortKey = 'time' | 'name' | 'size';
+type MediaTypeIconKind = 'photo' | 'video' | 'file';
+type MediaTypeGradientStop = {
+  offset: string;
+  color: string;
+};
 
 const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
   { id: 'time', label: '时间' },
   { id: 'name', label: '名称' },
   { id: 'size', label: '文件大小' },
 ];
+const MEDIA_TYPE_ICON_GRADIENTS: Record<MediaTypeIconKind, MediaTypeGradientStop[]> = {
+  photo: [
+    { offset: '0%', color: '#F7FCFF' },
+    { offset: '54%', color: '#D8F0FF' },
+    { offset: '100%', color: '#9FD6FF' },
+  ],
+  video: [
+    { offset: '0%', color: '#F8F6FF' },
+    { offset: '48%', color: '#E3E6FF' },
+    { offset: '100%', color: '#9AAEFF' },
+  ],
+  file: [
+    { offset: '0%', color: '#FFFFFF' },
+    { offset: '56%', color: '#EFF5FB' },
+    { offset: '100%', color: '#D7E2F0' },
+  ],
+};
 
 const now = Date.now();
 const MOCK_RECEIVED_ITEMS: ReceivedLibraryItemDTO[] = [
@@ -156,7 +187,6 @@ type RemoteResourcesPreviewGlobal = typeof globalThis & {
 
 function isRemoteResourcesPreviewMode() {
   return (
-    isVisualQaEnabled() ||
     (globalThis as RemoteResourcesPreviewGlobal)
       .__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ === true
   );
@@ -201,14 +231,10 @@ function getFileTypeText(mediaType: string, filename: string) {
   return '文件';
 }
 
-function getFileIcon(mediaType: string, filename: string) {
-  if (isVideo(mediaType, filename)) {
-    return { name: 'play', color: '#746AA8', style: styles.videoIcon };
-  }
-  if (isImage(mediaType, filename)) {
-    return { name: 'image', color: '#1677D2', style: styles.photoIcon };
-  }
-  return { name: 'document-text', color: '#16A34A', style: styles.fileIcon };
+function getFileIconType(mediaType: string, filename: string): MediaTypeIconKind {
+  if (isVideo(mediaType, filename)) return 'video';
+  if (isImage(mediaType, filename)) return 'photo';
+  return 'file';
 }
 
 function formatClock(isoString: string) {
@@ -307,16 +333,14 @@ export function PhoneSyncSpaceGlobalScreen() {
   const sortLabel = SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '时间';
 
   const renderItem = ({ item }: { item: ReceivedLibraryItemDTO }) => {
-    const iconConfig = getFileIcon(item.mediaType, item.filename);
+    const iconType = getFileIconType(item.mediaType, item.filename);
     const displayName = item.displayName || item.filename;
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const clock = formatClock(item.completedAt);
 
     return (
       <View style={styles.card}>
-        <View style={[styles.iconWrapper, iconConfig.style]}>
-          <Icon name={iconConfig.name} size={22} color={iconConfig.color} />
-        </View>
+        <MediaTypeIcon type={iconType} />
         <View style={styles.infoWrapper}>
           <Text style={styles.filename} numberOfLines={1}>
             {displayName}
@@ -337,8 +361,20 @@ export function PhoneSyncSpaceGlobalScreen() {
             ) : null}
           </View>
         </View>
-        <TouchableOpacity style={styles.downloadButton} activeOpacity={0.7}>
-          <Icon name="download-outline" size={18} color={colors.primary} />
+        <TouchableOpacity
+          style={[styles.downloadButton, styles.downloadButtonDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel="保存暂不可用"
+          accessibilityState={{ disabled: true }}
+          disabled
+          activeOpacity={1}
+        >
+          <Download
+            testID="phone-sync-download-icon"
+            size={16}
+            color={colors.primary}
+            strokeWidth={2}
+          />
         </TouchableOpacity>
       </View>
     );
@@ -355,7 +391,12 @@ export function PhoneSyncSpaceGlobalScreen() {
             onPress={goBack}
             activeOpacity={0.7}
           >
-            <Icon name="chevron-back" size={22} color="#59616D" />
+            <ChevronLeft
+              testID="phone-sync-back-icon"
+              size={20}
+              color="#59616D"
+              strokeWidth={2}
+            />
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.headerTitle} numberOfLines={1}>
@@ -373,7 +414,12 @@ export function PhoneSyncSpaceGlobalScreen() {
             activeOpacity={0.7}
             onPress={() => setShowSortSheet(true)}
           >
-            <Icon name="list-outline" size={16} color={colors.primary} />
+            <Rows3
+              testID="phone-sync-sort-icon"
+              size={16}
+              color={colors.primary}
+              strokeWidth={2}
+            />
             <Text style={styles.sortButtonText}>{sortLabel}</Text>
           </TouchableOpacity>
           <View style={styles.summaryBadge}>
@@ -391,7 +437,7 @@ export function PhoneSyncSpaceGlobalScreen() {
           </View>
         ) : sortedItems.length === 0 ? (
           <View style={styles.centeredCard}>
-            <Icon name="folder-open-outline" size={28} color="#9AA3AE" />
+            <PhoneSyncEmptyArtwork />
             <Text style={styles.centeredTitle}>
               {t('sharedFiles.phoneSyncSpace.empty') || '尚無同步檔案'}
             </Text>
@@ -433,6 +479,123 @@ export function PhoneSyncSpaceGlobalScreen() {
   );
 }
 
+function PhoneSyncEmptyArtwork() {
+  return (
+    <View testID="phone-sync-empty-icon" style={styles.emptyArtwork}>
+      <View style={[styles.emptyArtworkSheet, styles.emptyArtworkSheetBack]} />
+      <View style={[styles.emptyArtworkSheet, styles.emptyArtworkSheetFront]}>
+        <Svg
+          pointerEvents="none"
+          style={StyleSheet.absoluteFillObject}
+          width="100%"
+          height="100%"
+          viewBox="0 0 72 72"
+        >
+          <Defs>
+            <LinearGradient
+              id="phoneSyncEmptyGradient"
+              x1="0%"
+              y1="0%"
+              x2="100%"
+              y2="100%"
+            >
+              <Stop offset="0%" stopColor="#F8FCFF" />
+              <Stop offset="54%" stopColor="#DFF3FF" />
+              <Stop offset="100%" stopColor="#B6E3FF" />
+            </LinearGradient>
+          </Defs>
+          <Rect
+            x="0"
+            y="0"
+            width="72"
+            height="72"
+            rx="22"
+            fill="url(#phoneSyncEmptyGradient)"
+          />
+        </Svg>
+        <View style={styles.emptyArtworkCorner} />
+        <View style={styles.emptyArtworkPulse} />
+        <CloudUpload size={30} color="#1677D2" strokeWidth={1.9} />
+      </View>
+    </View>
+  );
+}
+
+function MediaTypeIcon({ type }: { type: MediaTypeIconKind }) {
+  const gradientId = `phoneSync${type}Gradient`;
+
+  return (
+    <View testID={`phone-sync-media-icon-${type}`} style={styles.mediaTypeIcon}>
+      <Svg
+        style={StyleSheet.absoluteFillObject}
+        width="100%"
+        height="100%"
+        viewBox="0 0 46 46"
+      >
+        <Defs>
+          <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+            {MEDIA_TYPE_ICON_GRADIENTS[type].map(stop => (
+              <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <Rect width="46" height="46" rx="14" fill={`url(#${gradientId})`} />
+      </Svg>
+      <MediaTypeGlyph type={type} />
+    </View>
+  );
+}
+
+function MediaTypeGlyph({ type }: { type: MediaTypeIconKind }) {
+  if (type === 'photo') {
+    return (
+      <>
+        <View style={styles.photoIconDot} />
+        <View style={styles.photoIconHillLight} />
+        <View style={styles.photoIconHillBlue} />
+        <View style={styles.mediaTypeGlyphCenter}>
+          <FileImage size={20} color="#1677D2" strokeWidth={1.8} />
+        </View>
+      </>
+    );
+  }
+
+  if (type === 'video') {
+    return (
+      <>
+        <View style={styles.videoDotRowTop}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDotTop} />
+          ))}
+        </View>
+        <View style={styles.videoDotRowBottom}>
+          {[0, 1, 2].map(item => (
+            <View key={item} style={styles.videoDotBottom} />
+          ))}
+        </View>
+        <View style={styles.videoPlayCircle}>
+          <Play
+            size={14}
+            color="#746AA8"
+            fill="#746AA8"
+            strokeWidth={1.8}
+            style={styles.videoPlayIcon}
+          />
+        </View>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.fileIconCorner} />
+      <View style={styles.mediaTypeGlyphCenter}>
+        <FileText size={20} color="#59616D" strokeWidth={1.8} />
+      </View>
+    </>
+  );
+}
+
 function SortSheet({
   visible,
   value,
@@ -471,7 +634,12 @@ function SortSheet({
               >
                 <Text style={styles.sheetOptionText}>{option.label}</Text>
                 {active ? (
-                  <Icon name="checkmark" size={18} color={colors.primary} />
+                  <Check
+                    testID="phone-sync-sort-check-icon"
+                    size={20}
+                    color={colors.primary}
+                    strokeWidth={2.4}
+                  />
                 ) : null}
               </TouchableOpacity>
             );
@@ -596,23 +764,113 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     ...glassShadow,
   },
-  iconWrapper: {
+  mediaTypeIcon: {
     width: 46,
     height: 46,
     borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.75)',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
+    elevation: 2,
   },
-  photoIcon: {
-    backgroundColor: '#D8F0FF',
+  mediaTypeGlyphCenter: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  videoIcon: {
-    backgroundColor: '#E3E6FF',
+  photoIconDot: {
+    position: 'absolute',
+    left: 8,
+    top: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.86)',
   },
-  fileIcon: {
-    backgroundColor: '#EAF8F0',
+  photoIconHillLight: {
+    position: 'absolute',
+    left: 4,
+    bottom: -4,
+    width: 32,
+    height: 20,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    transform: [{ rotate: '-8deg' }],
+  },
+  photoIconHillBlue: {
+    position: 'absolute',
+    right: 0,
+    bottom: -4,
+    width: 36,
+    height: 24,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    backgroundColor: 'rgba(191,227,255,0.78)',
+    transform: [{ rotate: '10deg' }],
+  },
+  videoDotRowTop: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    top: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDotRowBottom: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  videoDotTop: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+  },
+  videoDotBottom: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.54)',
+  },
+  videoPlayCircle: {
+    position: 'absolute',
+    left: 9,
+    top: 9,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.74)',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  videoPlayIcon: {
+    marginLeft: 2,
+  },
+  fileIconCorner: {
+    position: 'absolute',
+    right: 8,
+    top: 8,
+    width: 12,
+    height: 12,
+    borderBottomLeftRadius: 8,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#C6D2DF',
+    backgroundColor: 'rgba(255,255,255,0.76)',
   },
   infoWrapper: {
     flex: 1,
@@ -668,6 +926,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.64)',
   },
+  downloadButtonDisabled: {
+    opacity: 0.62,
+  },
   centeredCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -677,6 +938,57 @@ const styles = StyleSheet.create({
     paddingVertical: 34,
     alignItems: 'center',
     ...glassShadow,
+  },
+  emptyArtwork: {
+    width: 84,
+    height: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyArtworkSheet: {
+    position: 'absolute',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.82)',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.12,
+    shadowRadius: 30,
+    elevation: 2,
+  },
+  emptyArtworkSheetBack: {
+    width: 58,
+    height: 58,
+    left: 8,
+    top: 11,
+    backgroundColor: 'rgba(255,255,255,0.50)',
+    transform: [{ rotate: '-8deg' }],
+  },
+  emptyArtworkSheetFront: {
+    width: 72,
+    height: 72,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyArtworkCorner: {
+    position: 'absolute',
+    right: 13,
+    top: 13,
+    width: 14,
+    height: 14,
+    borderLeftWidth: 1,
+    borderBottomWidth: 1,
+    borderBottomLeftRadius: 9,
+    borderColor: 'rgba(22,119,210,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.68)',
+  },
+  emptyArtworkPulse: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.58)',
   },
   centeredTitle: {
     marginTop: 12,

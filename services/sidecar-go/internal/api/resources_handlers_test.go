@@ -261,6 +261,209 @@ func TestMobileResourcesListDownloadAndAccessRecords(t *testing.T) {
 	}
 }
 
+func TestMobileSharedFolderRootListing(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	sharedRoot := t.TempDir()
+	readmePath := filepath.Join(sharedRoot, "Readme.txt")
+	if err := os.WriteFile(readmePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write shared file: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(sharedRoot, "Designs"), 0o755); err != nil {
+		t.Fatalf("mkdir nested folder: %v", err)
+	}
+	resource, err := st.AddSharedResource(store.SharedResourceInput{
+		DesktopDeviceID: desktopDeviceID,
+		Kind:            "shared_folder",
+		DisplayName:     "Project Files",
+		LocalPath:       &sharedRoot,
+		Status:          "available",
+	})
+	if err != nil {
+		t.Fatalf("AddSharedResource folder: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/shared/" + resource.ResourceID + "/list?clientId=client-001&clientName=Alice%20iPhone")
+	if err != nil {
+		t.Fatalf("GET mobile shared folder root list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET mobile shared folder root list status=%d, want 200", resp.StatusCode)
+	}
+	var body mobileDirectoryListingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode mobile shared folder root list: %v", err)
+	}
+	if body.Path != "" || body.TotalCount != 2 {
+		t.Fatalf("unexpected root listing metadata: %+v", body)
+	}
+	files := directoryFilesByName(body.Files)
+	if files["Readme.txt"].Path != "Readme.txt" || files["Readme.txt"].Type != "document" || files["Readme.txt"].IsDirectory {
+		t.Fatalf("unexpected file entry: %+v", files["Readme.txt"])
+	}
+	if files["Designs"].Path != "Designs" || files["Designs"].Type != "other" || !files["Designs"].IsDirectory {
+		t.Fatalf("unexpected folder entry: %+v", files["Designs"])
+	}
+
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 list access record, got %d", len(records))
+	}
+	if records[0].ResourceID != resource.ResourceID || records[0].ResourceKind != "shared_folder" || records[0].ResourceName != "Project Files" || records[0].Action != "list" || records[0].Result != "ok" {
+		t.Fatalf("unexpected list access record: %+v", records[0])
+	}
+}
+
+func TestMobileSharedFolderNestedListing(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	sharedRoot := t.TempDir()
+	nestedDir := filepath.Join(sharedRoot, "Designs", "Screens")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("mkdir nested folder: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedDir, "Home.png"), []byte("png"), 0o644); err != nil {
+		t.Fatalf("write nested file: %v", err)
+	}
+	resource, err := st.AddSharedResource(store.SharedResourceInput{
+		DesktopDeviceID: desktopDeviceID,
+		Kind:            "shared_folder",
+		DisplayName:     "Project Files",
+		LocalPath:       &sharedRoot,
+		Status:          "available",
+	})
+	if err != nil {
+		t.Fatalf("AddSharedResource folder: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/shared/" + resource.ResourceID + "/list/Designs/Screens?clientId=client-001")
+	if err != nil {
+		t.Fatalf("GET mobile shared folder nested list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET mobile shared folder nested list status=%d, want 200", resp.StatusCode)
+	}
+	var body mobileDirectoryListingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode mobile shared folder nested list: %v", err)
+	}
+	if body.Path != "Designs/Screens" || body.TotalCount != 1 {
+		t.Fatalf("unexpected nested listing metadata: %+v", body)
+	}
+	files := directoryFilesByName(body.Files)
+	if files["Home.png"].Path != "Designs/Screens/Home.png" || files["Home.png"].Type != "image" || files["Home.png"].IsDirectory {
+		t.Fatalf("unexpected nested image entry: %+v", files["Home.png"])
+	}
+
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	if len(records) != 1 || records[0].ResourceID != resource.ResourceID || records[0].Action != "list" || records[0].Result != "ok" {
+		t.Fatalf("unexpected nested list access records: %+v", records)
+	}
+}
+
+func TestMobileSharedFolderListingRejectsPathTraversal(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	sharedRoot := t.TempDir()
+	resource, err := st.AddSharedResource(store.SharedResourceInput{
+		DesktopDeviceID: desktopDeviceID,
+		Kind:            "shared_folder",
+		DisplayName:     "Project Files",
+		LocalPath:       &sharedRoot,
+		Status:          "available",
+	})
+	if err != nil {
+		t.Fatalf("AddSharedResource folder: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/shared/" + resource.ResourceID + "/list/%2e%2e?clientId=client-001")
+	if err != nil {
+		t.Fatalf("GET mobile shared folder traversal list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("GET mobile shared folder traversal list status=%d, want 400", resp.StatusCode)
+	}
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("path traversal must not create access record, got %+v", records)
+	}
+}
+
+func TestMobileSharedFolderListingRejectsSharedFileResource(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	sharedPath := filepath.Join(t.TempDir(), "Manual.pdf")
+	if err := os.WriteFile(sharedPath, []byte("manual bytes"), 0o644); err != nil {
+		t.Fatalf("write shared file: %v", err)
+	}
+	resource, err := st.AddSharedResource(store.SharedResourceInput{
+		DesktopDeviceID: desktopDeviceID,
+		Kind:            "shared_file",
+		DisplayName:     "Manual.pdf",
+		LocalPath:       &sharedPath,
+		Status:          "available",
+	})
+	if err != nil {
+		t.Fatalf("AddSharedResource file: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/shared/" + resource.ResourceID + "/list?clientId=client-001")
+	if err != nil {
+		t.Fatalf("GET mobile shared file list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("GET mobile shared file list status=%d, want 400", resp.StatusCode)
+	}
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("shared_file listing must not create access record, got %+v", records)
+	}
+}
+
 func TestMobileResourceAccessNormalizesLegacyResourceKind(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	desktopDeviceID, err := st.GetDeviceID()
@@ -396,4 +599,25 @@ func isContractAccessResult(result string) bool {
 	default:
 		return false
 	}
+}
+
+type mobileDirectoryListingResponse struct {
+	Path       string                            `json:"path"`
+	Files      []mobileDirectoryListingFileEntry `json:"files"`
+	TotalCount int                               `json:"totalCount"`
+}
+
+type mobileDirectoryListingFileEntry struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Type        string `json:"type"`
+	IsDirectory bool   `json:"isDirectory,omitempty"`
+}
+
+func directoryFilesByName(files []mobileDirectoryListingFileEntry) map[string]mobileDirectoryListingFileEntry {
+	byName := make(map[string]mobileDirectoryListingFileEntry, len(files))
+	for _, file := range files {
+		byName[file.Name] = file
+	}
+	return byName
 }

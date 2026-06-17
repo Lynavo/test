@@ -20,8 +20,9 @@ interface RecordDownloadedFileInput {
   savedToPhotos?: boolean;
 }
 
-const STORAGE_KEY = 'syncflow:download-records:v1';
+export const DOWNLOAD_RECORDS_STORAGE_KEY = 'syncflow:download-records:v1';
 const MAX_RECORDS = 50;
+const LEGACY_MOCK_PATH_PREFIX = '/mock/path/';
 
 function isDownloadRecord(value: unknown): value is DownloadRecord {
   if (!value || typeof value !== 'object') return false;
@@ -34,14 +35,40 @@ function isDownloadRecord(value: unknown): value is DownloadRecord {
   );
 }
 
+function normalizeLocalPath(
+  value: DownloadRecord['localPath'],
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    trimmed === '/mock/path' ||
+    trimmed.startsWith(LEGACY_MOCK_PATH_PREFIX)
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+function normalizeDownloadRecord(record: DownloadRecord): DownloadRecord {
+  const localPath = normalizeLocalPath(record.localPath);
+  if (localPath === undefined) {
+    const { localPath: _localPath, ...rest } = record;
+    return rest;
+  }
+  return { ...record, localPath };
+}
+
 export async function listDownloadRecords(): Promise<DownloadRecord[]> {
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const raw = await AsyncStorage.getItem(DOWNLOAD_RECORDS_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter(isDownloadRecord)
+      .map(normalizeDownloadRecord)
       .sort(
         (a, b) =>
           new Date(b.downloadedAt).getTime() -
@@ -62,7 +89,7 @@ export async function recordDownloadedFile(
     fileSize: input.fileSize,
     mediaType: input.mediaType,
     downloadedAt: new Date().toISOString(),
-    localPath: input.localPath ?? null,
+    localPath: normalizeLocalPath(input.localPath) ?? null,
     savedToPhotos: input.savedToPhotos,
   };
   const records = await listDownloadRecords();
@@ -70,6 +97,13 @@ export async function recordDownloadedFile(
     record,
     ...records.filter(item => item.resourceId !== input.resourceId),
   ].slice(0, MAX_RECORDS);
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextRecords));
+  await AsyncStorage.setItem(
+    DOWNLOAD_RECORDS_STORAGE_KEY,
+    JSON.stringify(nextRecords),
+  );
   return record;
+}
+
+export async function clearDownloadRecords(): Promise<void> {
+  await AsyncStorage.removeItem(DOWNLOAD_RECORDS_STORAGE_KEY);
 }

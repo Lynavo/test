@@ -163,6 +163,105 @@ func (s *Server) handleMobileSharedResources(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"items": resources})
 }
 
+func (s *Server) handleMobileSharedResourceFolderList(w http.ResponseWriter, r *http.Request) {
+	s.listMobileSharedResourceFolder(w, r, "")
+}
+
+func (s *Server) handleMobileSharedResourceFolderListPath(w http.ResponseWriter, r *http.Request) {
+	s.listMobileSharedResourceFolder(w, r, r.PathValue("path"))
+}
+
+func (s *Server) listMobileSharedResourceFolder(w http.ResponseWriter, r *http.Request, relPath string) {
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return
+	}
+	resourceID := strings.TrimSpace(r.PathValue("resourceId"))
+	if !isValidAPIID(resourceID) {
+		writeError(w, http.StatusBadRequest, "invalid resourceId")
+		return
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
+		return
+	}
+	resource, err := s.store.ResolveSharedResource(desktopDeviceID, resourceID)
+	if err != nil {
+		if errors.Is(err, store.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "resource not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to resolve resource")
+		return
+	}
+	if resource.Kind != "shared_folder" {
+		writeError(w, http.StatusBadRequest, "resource is not a shared folder")
+		return
+	}
+	if resource.LocalPath == nil || strings.TrimSpace(*resource.LocalPath) == "" {
+		writeError(w, http.StatusNotFound, "resource folder not found")
+		return
+	}
+
+	rootPath := strings.TrimSpace(*resource.LocalPath)
+	rootInfo, err := os.Stat(rootPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "resource folder not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to read resource folder")
+		return
+	}
+	if !rootInfo.IsDir() {
+		writeError(w, http.StatusBadRequest, "resource path is not a folder")
+		return
+	}
+	resolvePath := func(path string) (string, error) {
+		return resolveDirectoryPath(rootPath, path, "shared resource")
+	}
+	if !s.ensureMobileSharedFolderListable(w, relPath, resolvePath) {
+		return
+	}
+	if _, err := s.recordResourceAccess(desktopDeviceID, client, resource.ResourceID, resource.Kind, resource.DisplayName, "list", "ok"); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to record resource access")
+		return
+	}
+	s.listDirectory(w, relPath, resolvePath, "", "")
+}
+
+func (s *Server) ensureMobileSharedFolderListable(
+	w http.ResponseWriter,
+	relPath string,
+	resolvePath func(string) (string, error),
+) bool {
+	resolved, err := resolvePath(relPath)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "directory not found")
+			return false
+		}
+		writeError(w, http.StatusInternalServerError, "failed to read directory")
+		return false
+	}
+	if !info.IsDir() {
+		writeError(w, http.StatusBadRequest, "path is not a directory")
+		return false
+	}
+	if _, err := os.ReadDir(resolved); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to read directory")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Request) {
 	client, ok := mobileAccessClientFromQuery(w, r)
 	if !ok {

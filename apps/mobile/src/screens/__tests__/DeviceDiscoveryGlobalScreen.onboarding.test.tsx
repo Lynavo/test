@@ -1,6 +1,6 @@
 import React from 'react';
 import { NativeEventEmitter, NativeModules } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockDispatch = jest.fn();
 const mockNavigate = jest.fn();
@@ -9,6 +9,9 @@ const mockCanGoBack = jest.fn(() => false);
 const mockHasSeenUnconnectedGuide = jest.fn().mockResolvedValue(false);
 const mockMarkUnconnectedGuideSeen = jest.fn().mockResolvedValue(undefined);
 const mockIsVisualQaEnabled = jest.fn(() => false);
+const mockAddDesktop = jest.fn().mockResolvedValue(undefined);
+const mockForgetDesktop = jest.fn().mockResolvedValue(undefined);
+const mockUpdateAuthStatus = jest.fn().mockResolvedValue(undefined);
 let mockRouteParams: { mode?: 'initial' | 'switch' } | undefined = {
   mode: 'initial',
 };
@@ -44,9 +47,20 @@ jest.mock('react-native-svg', () => {
   return {
     __esModule: true,
     default: createSvgMock('Svg'),
+    Svg: createSvgMock('Svg'),
+    Circle: createSvgMock('Circle'),
+    ClipPath: createSvgMock('ClipPath'),
     Defs: createSvgMock('Defs'),
+    Ellipse: createSvgMock('Ellipse'),
+    G: createSvgMock('G'),
+    Line: createSvgMock('Line'),
+    LinearGradient: createSvgMock('LinearGradient'),
     Mask: createSvgMock('Mask'),
+    Path: createSvgMock('Path'),
+    Polygon: createSvgMock('Polygon'),
+    Polyline: createSvgMock('Polyline'),
     Rect: createSvgMock('Rect'),
+    Stop: createSvgMock('Stop'),
   };
 });
 
@@ -67,7 +81,13 @@ jest.mock('../../components/Icon', () => ({
 }));
 
 jest.mock('../../components/shared/NativeModalBlurView', () => ({
-  NativeModalBlurView: ({ children, style }: { children?: React.ReactNode; style?: object }) => {
+  NativeModalBlurView: ({
+    children,
+    style,
+  }: {
+    children?: React.ReactNode;
+    style?: object;
+  }) => {
     const ReactInner = require('react');
     const { View } = require('react-native');
     return ReactInner.createElement(View, { style }, children);
@@ -99,9 +119,9 @@ jest.mock('../../stores/recent-desktops-store', () => ({
       },
     ],
     isLoading: false,
-    addDesktop: jest.fn(),
-    forgetDesktop: jest.fn(),
-    updateAuthStatus: jest.fn(),
+    addDesktop: mockAddDesktop,
+    forgetDesktop: mockForgetDesktop,
+    updateAuthStatus: mockUpdateAuthStatus,
   }),
 }));
 
@@ -109,14 +129,44 @@ jest.mock('../../dev/visualQa', () => ({
   isVisualQaEnabled: () => mockIsVisualQaEnabled(),
 }));
 
+jest.mock('../../services/SyncEngineModule', () => {
+  class MockPairingError extends Error {
+    code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown';
+    remainingAttempts?: number;
+    blocked?: boolean;
+
+    constructor(
+      message: string,
+      code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown',
+      remainingAttempts?: number,
+      blocked?: boolean,
+    ) {
+      super(message);
+      this.name = 'PairingError';
+      this.code = code;
+      this.remainingAttempts = remainingAttempts;
+      this.blocked = blocked;
+    }
+  }
+
+  return {
+    pairDevice: jest.fn(),
+    PairingError: MockPairingError,
+  };
+});
+
+import { pairDevice, PairingError } from '../../services/SyncEngineModule';
 import {
   DeviceDiscoveryGlobalScreen,
   resolveConnectionGuideCardPosition,
 } from '../DeviceDiscoveryGlobalScreen';
 
+const mockPairDevice = pairDevice as jest.Mock;
+
 const mockNativeSyncEngine = {
   startDiscovery: jest.fn().mockResolvedValue(undefined),
   stopDiscovery: jest.fn().mockResolvedValue(undefined),
+  pairDevice: jest.fn().mockResolvedValue(undefined),
   addListener: jest.fn(),
   removeListeners: jest.fn(),
 };
@@ -124,6 +174,12 @@ const mockNativeSyncEngine = {
 function expectPreviewText(screen: ReturnType<typeof render>, text: string) {
   expect(
     screen.getAllByText(text, { includeHiddenElements: true }).length,
+  ).toBeGreaterThan(0);
+}
+
+function expectPreviewTestId(screen: ReturnType<typeof render>, testID: string) {
+  expect(
+    screen.getAllByTestId(testID, { includeHiddenElements: true }).length,
   ).toBeGreaterThan(0);
 }
 
@@ -135,10 +191,19 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     mockHasSeenUnconnectedGuide.mockResolvedValue(false);
     mockMarkUnconnectedGuideSeen.mockResolvedValue(undefined);
     mockIsVisualQaEnabled.mockReturnValue(false);
+    mockPairDevice.mockResolvedValue(undefined);
+    mockAddDesktop.mockResolvedValue(undefined);
+    mockForgetDesktop.mockResolvedValue(undefined);
+    mockUpdateAuthStatus.mockResolvedValue(undefined);
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
       .mockReturnValue({ remove: jest.fn() } as any);
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('keeps the connection device card visible under the first guide step', async () => {
@@ -248,7 +313,14 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expectPreviewText(screen, '最近下载');
     expectPreviewText(screen, '查看全部');
     expectPreviewText(screen, '品牌手册.pdf');
-    expectPreviewText(screen, 'download-outline');
+    expectPreviewTestId(screen, 'guide-preview-records-download-icon');
+    expectPreviewTestId(screen, 'guide-preview-download-file-icon');
+    expectPreviewTestId(screen, 'guide-preview-download-video-icon');
+    expectPreviewTestId(screen, 'guide-preview-download-document-icon');
+    expect(screen.queryByText('download-outline')).toBeNull();
+    expect(screen.queryByText('image-outline')).toBeNull();
+    expect(screen.queryByText('play-circle-outline')).toBeNull();
+    expect(screen.queryByText('document-outline')).toBeNull();
     expect(screen.queryAllByText('arrow-down-circle-outline')).toHaveLength(0);
 
     fireEvent.press(screen.getByText('下一步'));
@@ -257,6 +329,8 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.getByText('完成')).toBeTruthy();
     expectPreviewText(screen, '手机同步空间');
     expectPreviewText(screen, '远程访问电脑');
+    expectPreviewTestId(screen, 'guide-preview-phone-sync-icon');
+    expectPreviewTestId(screen, 'guide-preview-remote-access-icon');
 
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockDispatch).not.toHaveBeenCalled();
@@ -311,7 +385,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryByText('选择连接方式')).toBeNull();
   });
 
-  it('opens the connection modal after the guide is dismissed', async () => {
+  it('opens manual pairing after the guide is dismissed', async () => {
     const screen = render(<DeviceDiscoveryGlobalScreen />);
 
     await waitFor(() => {
@@ -324,11 +398,164 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       expect(mockMarkUnconnectedGuideSeen).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.press(screen.getByText('Studio Mac'));
+    fireEvent.press(screen.getByText('手动配对'));
 
     expect(screen.queryByText('先连接电脑')).toBeNull();
-    expect(screen.getByText('选择连接方式')).toBeTruthy();
+    expect(screen.getByPlaceholderText('192.168.31.21')).toBeTruthy();
   });
+
+  it('reconnects a recent desktop with an empty token code before opening pairing options', async () => {
+    mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Studio Mac')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Studio Mac'));
+    });
+
+    await waitFor(() => {
+      expect(mockPairDevice).toHaveBeenCalledWith({
+        deviceId: 'studio-mac',
+        host: '192.168.31.8',
+        port: 39393,
+        connectionCode: '',
+      });
+    });
+    expect(mockNativeSyncEngine.pairDevice).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockDispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'RESET',
+        }),
+      );
+    });
+    expect(screen.queryByText('选择连接方式')).toBeNull();
+  });
+
+  it('falls back to global pairing options when recent desktop token reconnect fails', async () => {
+    mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+    mockPairDevice.mockRejectedValueOnce(
+      new PairingError('Pair token invalid', 'unknown'),
+    );
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Studio Mac')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Studio Mac'));
+
+    await waitFor(() => {
+      expect(mockPairDevice).toHaveBeenCalledWith({
+        deviceId: 'studio-mac',
+        host: '192.168.31.8',
+        port: 39393,
+        connectionCode: '',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByText('选择连接方式')).toBeTruthy();
+    });
+    expect(screen.getByText('扫码连接')).toBeTruthy();
+    expect(screen.getByText('输入连接码')).toBeTruthy();
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it('pairs manually through SyncEngineModule instead of the raw native module', async () => {
+    mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('手动配对')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('手动配对'));
+    fireEvent.changeText(
+      screen.getByPlaceholderText('192.168.31.21'),
+      '192.168.31.44',
+    );
+    fireEvent.press(screen.getByText('下一步'));
+    fireEvent.changeText(screen.getByPlaceholderText('例如 A8X2K9'), 'a8x2k9');
+    fireEvent.press(screen.getByText('连接'));
+
+    await waitFor(() => {
+      expect(mockPairDevice).toHaveBeenCalledWith({
+        deviceId: 'manual-192.168.31.44',
+        host: '192.168.31.44',
+        port: 39393,
+        connectionCode: 'A8X2K9',
+      });
+    });
+    expect(mockNativeSyncEngine.pairDevice).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockAddDesktop).toHaveBeenCalledWith({
+        desktopDeviceId: 'manual-192.168.31.44',
+        desktopName: '192.168.31.44',
+        host: '192.168.31.44',
+        port: 39393,
+        authorizationStatus: 'authorized',
+      });
+    });
+  });
+
+  it.each([
+    {
+      label: 'wrong_code',
+      error: new PairingError('Wrong code', 'wrong_code', 2),
+      message: '连接码错误，还可以再试 2 次。',
+    },
+    {
+      label: 'blocked',
+      error: new PairingError('Blocked', 'blocked', undefined, true),
+      message: '这台电脑已阻止此手机配对，请先在电脑端解除阻止后再试。',
+    },
+    {
+      label: 'version_incompatible',
+      error: new PairingError('Version incompatible', 'version_incompatible'),
+      message: '手机和电脑端版本不兼容，请更新两端 Vivi Drop 后再试。',
+    },
+    {
+      label: 'unknown',
+      error: new PairingError('Network failed', 'unknown'),
+      message: '连接失败，请确认电脑端在线后重试。',
+    },
+  ])(
+    'maps PairingError $label to a global connection state',
+    async ({ error, message }) => {
+      mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+      mockPairDevice.mockRejectedValueOnce(error);
+
+      const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText('手动配对')).toBeTruthy();
+      });
+
+      fireEvent.press(screen.getByText('手动配对'));
+      fireEvent.changeText(
+        screen.getByPlaceholderText('192.168.31.21'),
+        '192.168.31.44',
+      );
+      fireEvent.press(screen.getByText('下一步'));
+      fireEvent.changeText(
+        screen.getByPlaceholderText('例如 A8X2K9'),
+        'a8x2k9',
+      );
+      fireEvent.press(screen.getByText('连接'));
+
+      await waitFor(() => {
+        expect(screen.getByText(message)).toBeTruthy();
+      });
+      expect(mockNativeSyncEngine.pairDevice).not.toHaveBeenCalled();
+      expect(mockDispatch).not.toHaveBeenCalled();
+    },
+  );
 
   it('places the guide card above a tall spotlight when there is not enough room below', () => {
     const position = resolveConnectionGuideCardPosition({

@@ -225,6 +225,8 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("DELETE /resources/shared/{resourceId}", withJSON(srv.handleResourcesRemoveShared))
 	mux.HandleFunc("GET /resources/received", withJSON(srv.handleResourcesReceived))
 	mux.HandleFunc("GET /resources/mobile/shared", withJSON(srv.handleMobileSharedResources))
+	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list", withJSON(srv.handleMobileSharedResourceFolderList))
+	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list/{path...}", withJSON(srv.handleMobileSharedResourceFolderListPath))
 	mux.HandleFunc("GET /resources/mobile/received", withJSON(srv.handleMobileReceivedResources))
 	mux.HandleFunc("POST /resources/mobile/view/{resourceId}", withJSON(srv.handleMobileResourceView))
 	mux.HandleFunc("GET /resources/mobile/download/{resourceId}", srv.handleMobileResourceDownload)

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import type { AuthSessionView } from '../../preload/api';
 
+declare const process: { env?: Record<string, string | undefined> };
+
 type AuthState = {
   session: AuthSessionView | null;
   loading: boolean;
@@ -9,11 +11,29 @@ type AuthState = {
   clearSession(): void;
 };
 
+function getDevSkipAuthSession(): AuthSessionView | null {
+  if (!import.meta.env.DEV) return null;
+  if (process.env?.SYNCFLOW_DEV_SKIP_AUTH !== '1') return null;
+  const email =
+    process.env?.SYNCFLOW_DEV_SKIP_AUTH_EMAIL?.trim() || 'qa@example.com';
+  return {
+    loggedIn: true,
+    email,
+    accountLabel: email,
+  };
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   loading: false,
 
   refreshSession: async () => {
+    const devSession = getDevSkipAuthSession();
+    if (devSession) {
+      set({ session: devSession, loading: false });
+      return;
+    }
+
     const auth = window.electronAPI?.auth;
     if (!auth?.getAuthSession) {
       set({ session: null, loading: false });

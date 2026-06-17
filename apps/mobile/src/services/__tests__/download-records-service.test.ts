@@ -1,15 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
+  clearDownloadRecords,
+  DOWNLOAD_RECORDS_STORAGE_KEY,
   listDownloadRecords,
   recordDownloadedFile,
 } from '../download-records-service';
+import { clearUserScopedStorage } from '../../utils/clearUserScopedStorage';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
   default: {
     getItem: jest.fn(),
     setItem: jest.fn(),
+    removeItem: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
   },
 }));
 
@@ -74,5 +80,68 @@ describe('download-records-service', () => {
     mockedAsyncStorage.getItem.mockResolvedValueOnce('not-json');
 
     await expect(listDownloadRecords()).resolves.toEqual([]);
+  });
+
+  it('normalizes legacy mock download paths to null before persistence', async () => {
+    mockedAsyncStorage.getItem.mockResolvedValueOnce('[]');
+
+    const record = await recordDownloadedFile({
+      resourceId: 'legacy-mock-resource',
+      filename: 'Legacy Mock.pdf',
+      localPath: '/mock/path/legacy-mock-resource',
+      savedToPhotos: false,
+    });
+
+    expect(record.localPath).toBeNull();
+    expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
+      'syncflow:download-records:v1',
+      JSON.stringify([record]),
+    );
+  });
+
+  it('normalizes legacy mock download paths when reading stored records', async () => {
+    mockedAsyncStorage.getItem.mockResolvedValueOnce(
+      JSON.stringify([
+        {
+          id: 'legacy-mock-resource',
+          resourceId: 'legacy-mock-resource',
+          filename: 'Legacy Mock.pdf',
+          downloadedAt: '2026-06-16T08:30:00.000Z',
+          localPath: '/mock/path/legacy-mock-resource',
+        },
+      ]),
+    );
+
+    await expect(listDownloadRecords()).resolves.toEqual([
+      {
+        id: 'legacy-mock-resource',
+        resourceId: 'legacy-mock-resource',
+        filename: 'Legacy Mock.pdf',
+        downloadedAt: '2026-06-16T08:30:00.000Z',
+        localPath: null,
+      },
+    ]);
+  });
+
+  it('clears persisted download records', async () => {
+    await clearDownloadRecords();
+
+    expect(mockedAsyncStorage.removeItem).toHaveBeenCalledWith(
+      DOWNLOAD_RECORDS_STORAGE_KEY,
+    );
+  });
+
+  it('clears download records during user-scoped cleanup', async () => {
+    mockedAsyncStorage.getAllKeys.mockResolvedValueOnce([
+      'unrelated-key',
+      DOWNLOAD_RECORDS_STORAGE_KEY,
+    ]);
+
+    await clearUserScopedStorage();
+
+    expect(mockedAsyncStorage.multiRemove).toHaveBeenCalledWith([
+      DOWNLOAD_RECORDS_STORAGE_KEY,
+    ]);
+    expect(mockedAsyncStorage.removeItem).not.toHaveBeenCalled();
   });
 });
