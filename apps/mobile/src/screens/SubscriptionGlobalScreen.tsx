@@ -2,6 +2,8 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useRef,
+  useEffect,
 } from 'react';
 import {
   View,
@@ -17,6 +19,7 @@ import {
   Platform,
   Linking,
   Dimensions,
+  Clipboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -62,6 +65,10 @@ import { wipeSyncIdentity } from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
+import {
+  DiagnosticUploadError,
+  diagnosticUploadService,
+} from '../services/diagnostic-upload-service';
 import { FEATURES } from '../constants/features';
 import { USER_AGREEMENT_URL, PRIVACY_POLICY_URL } from '../constants/legal';
 import {
@@ -75,7 +82,8 @@ import {
   type MainlandPaymentMethod,
 } from '../utils/subscriptionPaymentRouting';
 
-const APPLE_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const APPLE_EULA_URL =
+  'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 const DARK = '#202022';
 const SCREEN_BG = '#eef7fc';
@@ -195,9 +203,7 @@ export function resolveMainlandPaymentAlertKey(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const signal = `${code ?? ''} ${message}`;
 
-  if (
-    signal.includes('MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED')
-  ) {
+  if (signal.includes('MAINLAND_PAYMENT_WECHAT_NOT_INSTALLED')) {
     return 'subscription.payment.wechatNotInstalled';
   }
   if (
@@ -288,13 +294,11 @@ const BENEFIT_KEYS = [
 function resolveStatusPresentation(
   displayState: SubscriptionDisplayState,
   t: TFunction,
-):
-  | {
-      label: string;
-      backgroundColor: string;
-      textColor: string;
-    }
-  | null {
+): {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+} | null {
   switch (displayState.kind) {
     case 'account_trial': {
       const days = displayState.daysRemaining;
@@ -436,9 +440,7 @@ function membershipDateLine({
     const date = formatExpireDate(
       subscription?.expireAt ?? displayState.entitlementExpireAt ?? null,
     );
-    return date
-      ? t('subscription.member.expiresAt' as never, { date })
-      : null;
+    return date ? t('subscription.member.expiresAt' as never, { date }) : null;
   }
 
   if (displayState.kind === 'trial_expired') {
@@ -506,7 +508,8 @@ function MembershipStatusCard({
     null;
   const daysRemaining = remainingDaysUntil(daySource);
   const isExpired =
-    displayState.kind === 'trial_expired' || displayState.kind === 'sub_expired';
+    displayState.kind === 'trial_expired' ||
+    displayState.kind === 'sub_expired';
 
   return (
     <View
@@ -1086,6 +1089,15 @@ export function SubscriptionGlobalScreen() {
   const [giftCardPromptVisible, setGiftCardPromptVisible] = useState(false);
   const [giftCardCode, setGiftCardCode] = useState('');
   const [isRedeemingGiftCard, setIsRedeemingGiftCard] = useState(false);
+  const [isUploadingDiagnostics, setIsUploadingDiagnostics] = useState(false);
+  const diagnosticAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      diagnosticAbortRef.current?.abort();
+    },
+    [],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -1319,6 +1331,88 @@ export function SubscriptionGlobalScreen() {
     selectedPlanTier === currentPlan;
   const selectedPlanIsDowngrade =
     selectedPlanTier != null && isDowngradePlan(currentPlan, selectedPlanTier);
+
+  const handleUploadDiagnostics = useCallback(() => {
+    if (isUploadingDiagnostics) return;
+    recordDiagnosticsLog('SubscriptionScreen', 'diagnostics upload start');
+
+    void (async () => {
+      const { NativeSyncEngine } = NativeModules;
+      if (!NativeSyncEngine?.exportDiagnostics) {
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics export unavailable',
+        );
+        Alert.alert(
+          t('subscription.diagnostics.unavailableTitle'),
+          t('subscription.diagnostics.unavailableBody'),
+        );
+        return;
+      }
+
+      const abortController = new AbortController();
+      diagnosticAbortRef.current = abortController;
+      setIsUploadingDiagnostics(true);
+
+      try {
+        const archivePath: string = await NativeSyncEngine.exportDiagnostics();
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics export success',
+        );
+        const archiveUrl = archivePath.startsWith('file://')
+          ? archivePath
+          : `file://${archivePath}`;
+        const clientId = String(await NativeSyncEngine.getClientId());
+        const result = await diagnosticUploadService.upload(
+          archiveUrl,
+          clientId,
+          abortController.signal,
+          undefined,
+          'subscription-screen',
+        );
+
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics upload success',
+          {
+            refId: result.refId,
+          },
+        );
+        Clipboard.setString(result.refId);
+        Alert.alert(
+          t('subscription.diagnostics.successTitle'),
+          t('subscription.diagnostics.successBody', {
+            refId: result.refId,
+          }),
+        );
+      } catch (error) {
+        recordDiagnosticsLog(
+          'SubscriptionScreen',
+          'diagnostics upload failed',
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        if (
+          error instanceof DiagnosticUploadError &&
+          error.detail.kind === 'BUNDLE_TOO_LARGE'
+        ) {
+          Alert.alert(t('subscription.diagnostics.tooLarge'));
+        } else if (
+          error instanceof DiagnosticUploadError &&
+          error.detail.kind === 'ABORTED'
+        ) {
+          Alert.alert(t('subscription.diagnostics.aborted'));
+        } else {
+          Alert.alert(t('subscription.diagnostics.failure'));
+        }
+      } finally {
+        diagnosticAbortRef.current = null;
+        setIsUploadingDiagnostics(false);
+      }
+    })();
+  }, [isUploadingDiagnostics, t]);
 
   const handleRestore = useCallback(async () => {
     if (!FEATURES.IAP_ENABLED || !FEATURES.IAP_RESTORE_ENABLED) return;
@@ -2042,12 +2136,12 @@ export function SubscriptionGlobalScreen() {
   const subscribeButtonLabel = hasQueuedGiftCardEntitlement
     ? t('subscription.actions.giftCardQueued')
     : isGiftCardSubscribed
-    ? t('subscription.actions.giftCardMember')
-    : currentPlan === 'yearly'
-    ? t('subscription.actions.currentYearly')
-    : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
-    ? t('subscription.actions.switchPlan')
-    : t('subscription.actions.subscribe');
+      ? t('subscription.actions.giftCardMember')
+      : currentPlan === 'yearly'
+        ? t('subscription.actions.currentYearly')
+        : currentPlan && selectedPlanTier && selectedPlanTier !== currentPlan
+          ? t('subscription.actions.switchPlan')
+          : t('subscription.actions.subscribe');
   const primaryActionLabel =
     subscriptionDisplay.kind === 'subscribed' ||
     subscriptionDisplay.kind === 'subscribed_cancelled'
@@ -2080,7 +2174,20 @@ export function SubscriptionGlobalScreen() {
         <Text style={styles.headerTitle}>
           {t('subscription.member.title' as never)}
         </Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={styles.diagnosticsButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          onPress={handleUploadDiagnostics}
+          disabled={isUploadingDiagnostics || isLoggingOut}
+          accessibilityLabel={t('subscription.diagnostics.button')}
+        >
+          {isUploadingDiagnostics ? (
+            <ActivityIndicator size="small" color={DARK} />
+          ) : (
+            <Icon name="cloud-upload-outline" size={20} color={DARK} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -2096,12 +2203,7 @@ export function SubscriptionGlobalScreen() {
 
         <MembershipBenefitsCard t={t} />
 
-        <View
-          style={[
-            styles.planRow,
-            plansLoading && styles.planRowLoading,
-          ]}
-        >
+        <View style={[styles.planRow, plansLoading && styles.planRowLoading]}>
           {plans.map(entry => {
             const product = entry.product;
             const tier = resolveSubscriptionPlanTier(entry.plan);
@@ -2192,9 +2294,7 @@ export function SubscriptionGlobalScreen() {
           {isLoading ? (
             <ActivityIndicator color="#ffffff" size="small" />
           ) : (
-            <Text style={styles.subscribeButtonText}>
-              {primaryActionLabel}
-            </Text>
+            <Text style={styles.subscribeButtonText}>{primaryActionLabel}</Text>
           )}
         </TouchableOpacity>
 
@@ -2412,6 +2512,14 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 36,
     height: 36,
+  },
+  diagnosticsButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollContent: {
     paddingHorizontal: 20,
