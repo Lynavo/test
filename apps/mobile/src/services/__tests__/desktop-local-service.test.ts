@@ -4,6 +4,8 @@ import {
   downloadResource,
   downloadResourceForGlobal,
   isDownloadSavedLocally,
+  listCurrentClientReceivedLibrary,
+  listReceivedLibrary,
   listSharedResources,
   listSharedFolderContents,
 } from '../desktop-local-service';
@@ -230,6 +232,92 @@ describe('desktop-local-service', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       'http://192.168.10.20:39394/shared/download/Reports/Quarterly%20Summary.pdf',
     );
+  });
+
+  it('keeps the legacy received library request unscoped for CN screens', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      statusText: 'OK',
+      json: jest.fn().mockResolvedValue({ items: [] }),
+    });
+
+    await expect(
+      listReceivedLibrary({ host: '192.168.10.20', port: 39394 }),
+    ).resolves.toEqual([]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://192.168.10.20:39394/resources/mobile/received?clientId=client-001&clientName=Alice%20iPhone',
+    );
+  });
+
+  it('scopes the global received library request to the current mobile client', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      statusText: 'OK',
+      json: jest.fn().mockResolvedValue({ items: [] }),
+    });
+
+    await expect(
+      listCurrentClientReceivedLibrary({ host: '192.168.10.20', port: 39394 }),
+    ).resolves.toEqual([]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://192.168.10.20:39394/resources/mobile/received?clientId=client-001&clientName=Alice%20iPhone&scope=client',
+    );
+  });
+
+  it('adds absolute preview and thumbnail urls for current-client received media', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      statusText: 'OK',
+      json: jest.fn().mockResolvedValue({
+        items: [
+          {
+            resourceId: '',
+            desktopDeviceId: 'desktop-001',
+            clientId: 'client-001',
+            displayName: 'Alice iPhone',
+            fileKey: 'image-key',
+            filename: 'IMG_0001.JPG',
+            mediaType: 'image',
+            fileSize: 2048,
+            completedAt: '2026-06-16T08:00:00.000Z',
+            shareStatus: 'not_shared',
+          },
+          {
+            resourceId: '',
+            desktopDeviceId: 'desktop-001',
+            clientId: 'client-001',
+            displayName: 'Alice iPhone',
+            fileKey: 'video-key',
+            filename: 'VID_0001.MOV',
+            mediaType: 'video',
+            fileSize: 4096,
+            completedAt: '2026-06-16T08:01:00.000Z',
+            shareStatus: 'not_shared',
+          },
+        ],
+      }),
+    });
+
+    await expect(
+      listCurrentClientReceivedLibrary({ host: '192.168.10.20', port: 39394 }),
+    ).resolves.toMatchObject([
+      {
+        fileKey: 'image-key',
+        previewUrl:
+          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=image-key',
+        thumbnailUrl:
+          'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=image-key',
+      },
+      {
+        fileKey: 'video-key',
+        previewUrl:
+          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=video-key',
+        streamUrl:
+          'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=video-key',
+      },
+    ]);
   });
 
   it('detects whether a download result was actually saved locally', () => {

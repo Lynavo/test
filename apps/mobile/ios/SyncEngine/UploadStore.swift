@@ -55,6 +55,9 @@ struct UploadItemRecord {
     var backgroundTaskServerId: String? = nil
     var backgroundTaskClientId: String? = nil
     var backgroundTaskBindingVersion: Int? = nil
+    var sourceKind: String = "photo"
+    var sourceFilePath: String? = nil
+    var mimeType: String? = nil
 }
 
 struct AutoUploadConfigRecord {
@@ -293,6 +296,9 @@ class UploadStore {
         try addColumnIfMissing(table: "upload_items", column: "background_task_server_id", definition: "TEXT")
         try addColumnIfMissing(table: "upload_items", column: "background_task_client_id", definition: "TEXT")
         try addColumnIfMissing(table: "upload_items", column: "background_task_binding_version", definition: "INTEGER")
+        try addColumnIfMissing(table: "upload_items", column: "source_kind", definition: "TEXT NOT NULL DEFAULT 'photo'")
+        try addColumnIfMissing(table: "upload_items", column: "source_file_path", definition: "TEXT")
+        try addColumnIfMissing(table: "upload_items", column: "mime_type", definition: "TEXT")
         try addColumnIfMissing(table: "binding", column: "wake_metadata_json", definition: "TEXT")
         try executeInternal("""
             CREATE INDEX IF NOT EXISTS idx_upload_items_transport_status
@@ -935,8 +941,8 @@ class UploadStore {
 
     private func upsertUploadItemsInternal(_ items: [UploadItemRecord]) throws {
         let sql = """
-        INSERT INTO upload_items (asset_local_id, modified_at, media_type, original_filename, file_key, file_size, status, temp_file_path, acked_offset, last_error_code, updated_at, source, batch_id, priority)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        INSERT INTO upload_items (asset_local_id, modified_at, media_type, original_filename, file_key, file_size, status, temp_file_path, acked_offset, last_error_code, updated_at, source, batch_id, priority, transport, source_kind, source_file_path, mime_type)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
         ON CONFLICT(asset_local_id) DO UPDATE SET
           media_type = excluded.media_type,
           original_filename = excluded.original_filename,
@@ -949,7 +955,11 @@ class UploadStore {
           updated_at = excluded.updated_at,
           source = excluded.source,
           batch_id = excluded.batch_id,
-          priority = excluded.priority
+          priority = excluded.priority,
+          transport = excluded.transport,
+          source_kind = excluded.source_kind,
+          source_file_path = excluded.source_file_path,
+          mime_type = excluded.mime_type
         """
 
         try executeInternal("BEGIN IMMEDIATE TRANSACTION")
@@ -969,7 +979,11 @@ class UploadStore {
                     .text(item.updatedAt),
                     .text(item.source),
                     .textOrNull(item.batchId),
-                    .int(Int64(item.priority))
+                    .int(Int64(item.priority)),
+                    .textOrNull(item.transport),
+                    .text(item.sourceKind),
+                    .textOrNull(item.sourceFilePath),
+                    .textOrNull(item.mimeType)
                 ])
             }
             try executeInternal("COMMIT")
@@ -1437,7 +1451,10 @@ class UploadStore {
             httpBodySize: row["http_body_size"] as? Int64,
             backgroundTaskServerId: row["background_task_server_id"] as? String,
             backgroundTaskClientId: row["background_task_client_id"] as? String,
-            backgroundTaskBindingVersion: (row["background_task_binding_version"] as? Int64).map(Int.init)
+            backgroundTaskBindingVersion: (row["background_task_binding_version"] as? Int64).map(Int.init),
+            sourceKind: row["source_kind"] as? String ?? "photo",
+            sourceFilePath: row["source_file_path"] as? String,
+            mimeType: row["mime_type"] as? String
         )
     }
 

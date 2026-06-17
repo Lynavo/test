@@ -240,7 +240,7 @@ class PhotoScanner: NSObject, PHPhotoLibraryChangeObserver {
 }
 
 struct ScannedAsset {
-    let asset: PHAsset
+    let asset: PHAsset?
     let fileKey: String
     let mediaType: String
     let creationDate: Date?
@@ -248,6 +248,10 @@ struct ScannedAsset {
     let estimatedSize: Int64
     var source: String = "auto"  // "auto" | "manual"
     var batchId: String? = nil
+    var sourceKind: String = "photo"  // "photo" | "document"
+    var sourceFilePath: String? = nil
+    var mimeType: String? = nil
+    var assetLocalId: String? = nil
 }
 
 extension Date {

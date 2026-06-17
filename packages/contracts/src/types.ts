@@ -203,6 +203,9 @@ export interface ReceivedLibraryItemDTO {
   fileSize: number;
   completedAt: string;
   shareStatus: 'not_shared' | 'shared' | 'missing';
+  thumbnailUrl?: string;
+  previewUrl?: string;
+  streamUrl?: string;
 }
 
 export interface DesktopLocalListResponse<T> {

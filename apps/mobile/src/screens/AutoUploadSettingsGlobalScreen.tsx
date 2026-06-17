@@ -22,6 +22,7 @@ import {
   Folder,
   Image as ImageIcon,
   ShieldCheck,
+  X,
 } from 'lucide-react-native';
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -33,9 +34,12 @@ import {
   disableAutoUpload,
   enableAutoUpload,
   getAutoUploadConfig,
+  type DocumentUploadFile,
   prepareAutoUploadEnable,
+  pickDocumentUploads,
   saveAutoUploadConfig,
 } from '../services/SyncEngineModule';
+import { formatBytes } from '../utils/format';
 
 type AutoUploadRange = 'all' | 'now' | 'custom';
 
@@ -52,6 +56,13 @@ const GLOBAL_COPY = {
   fileTitle: '指定文件',
   fileDescEmpty: '从系统文件中选择需要同步的内容',
   addFile: '添加',
+  addMoreFile: '继续添加',
+  selectedFilesTitle: '已选文件',
+  filePickCancelled: '未选择文件',
+  filePickFailedTitle: '添加失败',
+  filePickFailedBody: '无法添加指定文件，请稍后重试。',
+  fileQueuedMessage: '已加入 {{count}} 个文件到同步队列',
+  fileSkippedMessage: '已跳过 {{count}} 个已选文件',
   rangeTitle: '同步范围',
   rangeAllTitle: '全部内容',
   rangeAllDesc: '同步现有照片和视频',
@@ -66,8 +77,6 @@ const GLOBAL_COPY = {
   infoEmpty: '请选择至少一个同步来源。',
   loadingConfig: '正在读取自动上传设置...',
   loadConfigFailed: '自动上传设置读取失败，请稍后重试。',
-  fileUnsupportedTitle: '暂不可用',
-  fileUnsupportedBody: '指定文件自动上传需要原生队列支持，当前不会生成模拟文件。',
   disabledSuccess: '自动上传已关闭',
 };
 
@@ -99,6 +108,41 @@ function parseConfigDate(value?: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getDocumentUploadFileKey(file: DocumentUploadFile): string {
+  const uri = file.uri?.trim();
+  if (uri) {
+    return uri;
+  }
+  return [
+    file.name.trim().toLocaleLowerCase(),
+    Math.max(file.size || 0, 0),
+    file.mimeType?.trim().toLocaleLowerCase() ?? '',
+  ].join('|');
+}
+
+function formatFileSkippedMessage(count: number): string {
+  return GLOBAL_COPY.fileSkippedMessage.replace('{{count}}', String(count));
+}
+
+function mergeDocumentUploadFiles(
+  currentFiles: DocumentUploadFile[],
+  incomingFiles: DocumentUploadFile[],
+): { files: DocumentUploadFile[]; duplicateCount: number } {
+  const seen = new Set(currentFiles.map(getDocumentUploadFileKey));
+  const merged = [...currentFiles];
+  let duplicateCount = 0;
+  for (const file of incomingFiles) {
+    const key = getDocumentUploadFileKey(file);
+    if (seen.has(key)) {
+      duplicateCount += 1;
+      continue;
+    }
+    seen.add(key);
+    merged.push(file);
+  }
+  return { files: merged, duplicateCount };
+}
+
 export function AutoUploadSettingsGlobalScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
@@ -113,17 +157,30 @@ export function AutoUploadSettingsGlobalScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customDate, setCustomDate] = useState<Date>(new Date());
   const [tempDate, setTempDate] = useState<Date>(new Date());
+  const [selectedFiles, setSelectedFiles] = useState<DocumentUploadFile[]>([]);
   const [configLoading, setConfigLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pickingFiles, setPickingFiles] = useState(false);
+  const [lastFileSkipMessage, setLastFileSkipMessage] = useState<string | null>(
+    null,
+  );
   const savingRef = useRef(false);
 
-  const selectedFileSizeLabel = '0 B';
-  const selectedSourceCount = albumEnabled ? 1 : 0;
+  const fileSourceSelected = selectedFiles.length > 0;
+  const selectedFileSize = selectedFiles.reduce(
+    (total, file) => total + Math.max(file.size || 0, 0),
+    0,
+  );
+  const selectedFileSizeLabel = formatBytes(selectedFileSize);
+  const selectedSourceCount =
+    (albumEnabled ? 1 : 0) + (fileSourceSelected ? 1 : 0);
   const shouldDisableAutoUpload =
-    persistedAutoUploadEnabled && !albumEnabled;
+    persistedAutoUploadEnabled && !albumEnabled && !fileSourceSelected;
   const canConfirm =
-    !configLoading && !configError && (albumEnabled || shouldDisableAutoUpload);
+    !configLoading &&
+    !configError &&
+    (albumEnabled || fileSourceSelected || shouldDisableAutoUpload);
 
   useEffect(() => {
     let mounted = true;
@@ -165,11 +222,45 @@ export function AutoUploadSettingsGlobalScreen() {
     };
   }, []);
 
-  const handleAddFileSource = () => {
-    Alert.alert(
-      GLOBAL_COPY.fileUnsupportedTitle,
-      GLOBAL_COPY.fileUnsupportedBody,
+  const handleAddFileSource = async () => {
+    if (pickingFiles) return;
+    try {
+      setPickingFiles(true);
+      const result = await pickDocumentUploads();
+      const mergeResult = mergeDocumentUploadFiles(
+        selectedFiles,
+        result.files,
+      );
+      const skippedCount = Math.max(
+        result.skippedCount ?? 0,
+        mergeResult.duplicateCount,
+      );
+      if (result.files.length) {
+        setSelectedFiles(mergeResult.files);
+      }
+      setLastFileSkipMessage(
+        skippedCount > 0 ? formatFileSkippedMessage(skippedCount) : null,
+      );
+    } catch (e) {
+      const code = (e as { code?: string } | null)?.code;
+      if (code === 'DOCUMENT_PICKER_CANCELLED') {
+        return;
+      }
+      console.warn('[AutoUploadSettings] pickDocumentUploads failed:', e);
+      Alert.alert(
+        GLOBAL_COPY.filePickFailedTitle,
+        GLOBAL_COPY.filePickFailedBody,
+      );
+    } finally {
+      setPickingFiles(false);
+    }
+  };
+
+  const handleRemoveSelectedFile = (fileKey: string) => {
+    setSelectedFiles(prev =>
+      prev.filter(file => getDocumentUploadFileKey(file) !== fileKey),
     );
+    setLastFileSkipMessage(null);
   };
 
   const handleBack = useCallback(() => {
@@ -251,21 +342,28 @@ export function AutoUploadSettingsGlobalScreen() {
       );
       const customTimeFrom =
         timeRangeMode === 'custom' ? customDate.toISOString() : undefined;
-      await prepareAutoUploadEnable();
-      await saveAutoUploadConfig({
-        enabled: true,
-        timeRangeMode,
-        customTimeFrom,
-      });
-      await enableAutoUpload({ skipPermissionPreflight: true });
-      setPersistedAutoUploadEnabled(true);
-      setAlbumEnabled(true);
-      setHydratedTimeRangeMode(timeRangeMode);
-      setRangeEdited(false);
+      if (albumEnabled) {
+        await prepareAutoUploadEnable();
+        await saveAutoUploadConfig({
+          enabled: true,
+          timeRangeMode,
+          customTimeFrom,
+        });
+        await enableAutoUpload({ skipPermissionPreflight: true });
+        setPersistedAutoUploadEnabled(true);
+        setAlbumEnabled(true);
+        setHydratedTimeRangeMode(timeRangeMode);
+        setRangeEdited(false);
+      }
 
       Alert.alert(
         t('common.confirm') || '確認',
-        t('syncActivity.badges.autoEnabled') || '自動上傳已開啟',
+        albumEnabled
+          ? t('syncActivity.badges.autoEnabled') || '自動上傳已開啟'
+          : GLOBAL_COPY.fileQueuedMessage.replace(
+              '{{count}}',
+              String(selectedFiles.length),
+            ),
         [
           {
             text: t('common.ok') || '好',
@@ -303,6 +401,11 @@ export function AutoUploadSettingsGlobalScreen() {
     }
     if (albumEnabled) {
       return GLOBAL_COPY.infoAlbum;
+    } else if (fileSourceSelected) {
+      return GLOBAL_COPY.fileQueuedMessage.replace(
+        '{{count}}',
+        String(selectedFiles.length),
+      );
     } else {
       return GLOBAL_COPY.infoEmpty;
     }
@@ -317,7 +420,9 @@ export function AutoUploadSettingsGlobalScreen() {
   const infoText = renderInfoText();
   const confirmLabel = shouldDisableAutoUpload
     ? GLOBAL_COPY.confirmDisable
-    : GLOBAL_COPY.confirmEnable;
+    : albumEnabled
+      ? GLOBAL_COPY.confirmEnable
+      : '完成';
 
   return (
     <GlobalGradientBackground>
@@ -376,7 +481,7 @@ export function AutoUploadSettingsGlobalScreen() {
               </View>
               <View style={styles.planStatItem}>
                 <Text style={styles.planStatLabel}>文件</Text>
-                <Text style={styles.planStatValue}>0</Text>
+                <Text style={styles.planStatValue}>{selectedFiles.length}</Text>
               </View>
               <View style={styles.planStatItem}>
                 <Text style={styles.planStatLabel}>范围</Text>
@@ -453,21 +558,83 @@ export function AutoUploadSettingsGlobalScreen() {
                       {GLOBAL_COPY.fileTitle}
                     </Text>
                     <Text style={styles.optionDesc}>
-                      {GLOBAL_COPY.fileDescEmpty}
+                      {fileSourceSelected
+                        ? `已选择 ${selectedFiles.length} 个文件`
+                        : GLOBAL_COPY.fileDescEmpty}
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={styles.addFileButton}
+                    style={[
+                      styles.addFileButton,
+                      pickingFiles && styles.addFileButtonDisabled,
+                    ]}
                     activeOpacity={0.8}
+                    disabled={pickingFiles}
                     testID="auto-upload-add-file"
                     accessibilityRole="button"
+                    accessibilityState={{ busy: pickingFiles }}
                     onPress={handleAddFileSource}
                   >
                     <Text style={styles.addFileButtonText}>
-                      {GLOBAL_COPY.addFile}
+                      {fileSourceSelected
+                        ? GLOBAL_COPY.addMoreFile
+                        : GLOBAL_COPY.addFile}
                     </Text>
                   </TouchableOpacity>
                 </View>
+                {fileSourceSelected ? (
+                  <View style={styles.filesPreviewCard}>
+                    <View style={styles.filesPreviewHeader}>
+                      <Text style={styles.filesPreviewTitle}>
+                        {GLOBAL_COPY.selectedFilesTitle}
+                      </Text>
+                      <Text style={styles.filesPreviewMeta}>
+                        {selectedFiles.length} 个 · {selectedFileSizeLabel}
+                      </Text>
+                    </View>
+                    {lastFileSkipMessage ? (
+                      <Text
+                        style={styles.filesSkippedNotice}
+                        testID="auto-upload-file-skip-notice"
+                      >
+                        {lastFileSkipMessage}
+                      </Text>
+                    ) : null}
+                    {selectedFiles.map((file, index) => (
+                      <View
+                        key={getDocumentUploadFileKey(file)}
+                        style={styles.filePreviewRow}
+                      >
+                        <FileIcon size={14} color={BLUE} strokeWidth={1.9} />
+                        <Text style={styles.filePreviewName} numberOfLines={1}>
+                          {file.name}
+                        </Text>
+                        <Text style={styles.filePreviewSize}>
+                          {formatBytes(file.size || 0)}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.removeFileButton}
+                          activeOpacity={0.75}
+                          testID={`auto-upload-remove-file-${index}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`移除 ${file.name}`}
+                          onPress={() =>
+                            handleRemoveSelectedFile(
+                              getDocumentUploadFileKey(file),
+                            )
+                          }
+                        >
+                          <X
+                            testID={`auto-upload-remove-file-icon-${index}`}
+                            size={12}
+                            color="#7B8490"
+                            strokeWidth={2}
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -933,10 +1100,80 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 2,
   },
+  addFileButtonDisabled: {
+    opacity: 0.62,
+  },
   addFileButtonText: {
     color: '#fff',
     fontSize: 11,
     fontWeight: '600',
+  },
+  filesPreviewCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(22,119,210,0.12)',
+    backgroundColor: 'rgba(245,251,255,0.72)',
+    padding: 12,
+    gap: 8,
+  },
+  filesPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  filesPreviewTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: '#17191C',
+  },
+  filesPreviewMeta: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: '#7B8490',
+  },
+  filesSkippedNotice: {
+    borderRadius: 10,
+    backgroundColor: 'rgba(22,119,210,0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: '#1677D2',
+  },
+  filePreviewRow: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filePreviewName: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#3F4A58',
+  },
+  filePreviewSize: {
+    flexShrink: 0,
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#9AA3AE',
+  },
+  removeFileButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,214,228,0.70)',
   },
   infoCard: {
     marginTop: 20,

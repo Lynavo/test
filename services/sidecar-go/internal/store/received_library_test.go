@@ -62,6 +62,57 @@ func TestReceivedLibraryUsesCompletedUploadsAndShareState(t *testing.T) {
 	}
 }
 
+func TestReceivedLibraryForClientFiltersCompletedUploads(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	aliceUpload := sampleUpload("alice-file", "alice-phone")
+	aliceUpload.OriginalFilename = "Alice.jpg"
+	aliceUpload.Status = "completed"
+	aliceUpload.CompletedAt = &now
+	aliceUpload.UpdatedAt = now
+	if err := s.UpsertUpload(aliceUpload); err != nil {
+		t.Fatalf("UpsertUpload alice: %v", err)
+	}
+
+	bobUpload := sampleUpload("bob-file", "bob-phone")
+	bobUpload.OriginalFilename = "Bob.jpg"
+	bobUpload.Status = "completed"
+	bobUpload.CompletedAt = &now
+	bobUpload.UpdatedAt = now
+	if err := s.UpsertUpload(bobUpload); err != nil {
+		t.Fatalf("UpsertUpload bob: %v", err)
+	}
+
+	failedUpload := sampleUpload("alice-failed", "alice-phone")
+	failedUpload.OriginalFilename = "AliceFailed.jpg"
+	failedUpload.Status = "failed"
+	failedUpload.CompletedAt = nil
+	failedUpload.UpdatedAt = now
+	if err := s.UpsertUpload(failedUpload); err != nil {
+		t.Fatalf("UpsertUpload failed: %v", err)
+	}
+
+	allItems, err := s.ListReceivedLibrary("desktop-1")
+	if err != nil {
+		t.Fatalf("ListReceivedLibrary: %v", err)
+	}
+	if len(allItems) != 2 {
+		t.Fatalf("desktop received library should include both completed uploads, got %d", len(allItems))
+	}
+
+	aliceItems, err := s.ListReceivedLibraryForClient("desktop-1", "alice-phone")
+	if err != nil {
+		t.Fatalf("ListReceivedLibraryForClient: %v", err)
+	}
+	if len(aliceItems) != 1 {
+		t.Fatalf("mobile received library should include only alice completed uploads, got %d", len(aliceItems))
+	}
+	if aliceItems[0].ClientID != "alice-phone" || aliceItems[0].Filename != "Alice.jpg" {
+		t.Fatalf("unexpected alice mobile received item: %+v", aliceItems[0])
+	}
+}
+
 func TestListSyncRecordsIncludesCompletedAndFailedUploads(t *testing.T) {
 	s := newTestStore(t)
 	completedAt := "2026-06-15T10:00:00Z"

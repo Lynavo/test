@@ -54,6 +54,17 @@ export interface ManualUploadResult {
   batchId: string;
 }
 
+export interface DocumentUploadFile {
+  name: string;
+  size: number;
+  mimeType?: string | null;
+  uri?: string;
+}
+
+export interface DocumentUploadResult extends ManualUploadResult {
+  files: DocumentUploadFile[];
+}
+
 export interface AndroidBackgroundKeepaliveStatus {
   backgroundKeepaliveStrategy:
     | 'android_cn_foreground_service_battery_whitelist'
@@ -255,6 +266,11 @@ export async function submitManualUpload(
   }
   const result = await NativeSyncEngine.submitManualUpload({ assetLocalIds });
   return result as ManualUploadResult;
+}
+
+export async function pickDocumentUploads(): Promise<DocumentUploadResult> {
+  const result = await NativeSyncEngine.pickDocumentUploads();
+  return result as DocumentUploadResult;
 }
 
 export async function cancelManualBatch(batchId: string): Promise<void> {

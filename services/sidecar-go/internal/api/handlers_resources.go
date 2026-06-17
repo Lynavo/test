@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/nicksyncflow/sidecar/internal/store"
+	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
 type sharedResourceCreateRequest struct {
@@ -272,13 +274,158 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
-	items, err := s.store.ListReceivedLibrary(desktopDeviceID)
+	var items []store.ReceivedLibraryItem
+	scopedToClient := strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("scope")), "client")
+	if scopedToClient {
+		items, err = s.store.ListReceivedLibraryForClient(desktopDeviceID, client.ClientID)
+	} else {
+		items, err = s.store.ListReceivedLibrary(desktopDeviceID)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list received library")
 		return
 	}
+	if scopedToClient {
+		enrichMobileReceivedPreviewURLs(items, client)
+	}
 	_, _ = s.recordResourceAccess(desktopDeviceID, client, "received_library", "received_file", "Received Library", "list", "ok")
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func enrichMobileReceivedPreviewURLs(items []store.ReceivedLibraryItem, client mobileAccessClient) {
+	for i := range items {
+		if items[i].ClientID != client.ClientID || strings.TrimSpace(items[i].FileKey) == "" {
+			continue
+		}
+		previewURL := mobileReceivedFileURL("preview", client, items[i].FileKey)
+		items[i].PreviewURL = previewURL
+
+		if isVideoMedia(items[i].MediaType, items[i].Filename) {
+			items[i].StreamURL = mobileReceivedFileURL("stream", client, items[i].FileKey)
+		}
+		if isImageMedia(items[i].MediaType, items[i].Filename) {
+			items[i].ThumbnailURL = mobileReceivedFileURL("thumbnail", client, items[i].FileKey)
+		}
+	}
+}
+
+func mobileReceivedFileURL(kind string, client mobileAccessClient, fileKey string) string {
+	query := url.Values{}
+	query.Set("clientId", client.ClientID)
+	query.Set("clientName", client.ClientName)
+	query.Set("fileKey", fileKey)
+	return "/resources/mobile/received/" + kind + "?" + query.Encode()
+}
+
+func (s *Server) handleMobileReceivedFileThumbnail(w http.ResponseWriter, r *http.Request) {
+	upload, resolvedPath, info, ok := s.resolveMobileReceivedUpload(w, r)
+	if !ok {
+		return
+	}
+	if !isImageMedia(upload.MediaType, upload.OriginalFilename) {
+		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+		return
+	}
+	serveLocalFileInline(w, r, resolvedPath, info)
+}
+
+func (s *Server) handleMobileReceivedFilePreview(w http.ResponseWriter, r *http.Request) {
+	client, upload, resolvedPath, info, ok := s.resolveMobileReceivedUploadWithClient(w, r)
+	if !ok {
+		return
+	}
+	if !isImageMedia(upload.MediaType, upload.OriginalFilename) && !isVideoMedia(upload.MediaType, upload.OriginalFilename) {
+		writeError(w, http.StatusUnsupportedMediaType, "preview not available for this file type")
+		return
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err == nil {
+		_, _ = s.recordResourceAccess(desktopDeviceID, client, upload.FileKey, "received_file", upload.OriginalFilename, "view", "ok")
+	}
+	serveLocalFileInline(w, r, resolvedPath, info)
+}
+
+func (s *Server) handleMobileReceivedFileStream(w http.ResponseWriter, r *http.Request) {
+	client, upload, resolvedPath, info, ok := s.resolveMobileReceivedUploadWithClient(w, r)
+	if !ok {
+		return
+	}
+	if !isVideoMedia(upload.MediaType, upload.OriginalFilename) {
+		writeError(w, http.StatusNotFound, "stream not available for this file type")
+		return
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err == nil {
+		_, _ = s.recordResourceAccess(desktopDeviceID, client, upload.FileKey, "received_file", upload.OriginalFilename, "view", "ok")
+	}
+	serveLocalFileInline(w, r, resolvedPath, info)
+}
+
+func (s *Server) resolveMobileReceivedUpload(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*store.Upload, string, os.FileInfo, bool) {
+	_, upload, resolvedPath, info, ok := s.resolveMobileReceivedUploadWithClient(w, r)
+	return upload, resolvedPath, info, ok
+}
+
+func (s *Server) resolveMobileReceivedUploadWithClient(
+	w http.ResponseWriter,
+	r *http.Request,
+) (mobileAccessClient, *store.Upload, string, os.FileInfo, bool) {
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	fileKey := strings.TrimSpace(r.URL.Query().Get("fileKey"))
+	if !isValidAPIID(fileKey) {
+		writeError(w, http.StatusBadRequest, "invalid fileKey")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	upload, err := s.store.GetUpload(fileKey)
+	if err != nil || upload.ClientID != client.ClientID || upload.Status != "completed" {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, upload.FinalPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil || !info.Mode().IsRegular() {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return mobileAccessClient{}, nil, "", nil, false
+	}
+	return client, upload, resolvedPath, info, true
+}
+
+func serveLocalFileInline(w http.ResponseWriter, r *http.Request, path string, info os.FileInfo) {
+	contentType := mime.TypeByExtension(filepath.Ext(info.Name()))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", info.Name()))
+	w.Header().Set("ETag", sharedFileEntityTag(info))
+
+	f, err := os.Open(path)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to open file")
+		return
+	}
+	defer f.Close()
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+}
+
+func isImageMedia(mediaType string, filename string) bool {
+	media := strings.ToLower(strings.TrimSpace(mediaType))
+	return media == "image" || strings.HasPrefix(media, "image/") || classifyFileType(filename) == "image"
+}
+
+func isVideoMedia(mediaType string, filename string) bool {
+	media := strings.ToLower(strings.TrimSpace(mediaType))
+	return media == "video" || strings.HasPrefix(media, "video/") || classifyFileType(filename) == "video"
 }
 
 func (s *Server) handleMobileResourceView(w http.ResponseWriter, r *http.Request) {

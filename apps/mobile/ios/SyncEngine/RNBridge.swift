@@ -3,6 +3,7 @@ import Photos
 import PhotosUI
 import React
 import UIKit
+import UniformTypeIdentifiers
 
 private struct DiagnosticsUploadNativeError: LocalizedError {
     let code: String
@@ -145,10 +146,31 @@ private func performDiagnosticsArchiveUpload(
     return ["ref_id": refId, "uploaded_at": uploadedAt]
 }
 
+private final class DocumentPickerDelegateProxy: NSObject, UIDocumentPickerDelegate, UINavigationControllerDelegate {
+    private let onCancel: () -> Void
+    private let onPick: ([URL]) -> Void
+
+    init(onCancel: @escaping () -> Void, onPick: @escaping ([URL]) -> Void) {
+        self.onCancel = onCancel
+        self.onPick = onPick
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        onCancel()
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        onPick(urls)
+    }
+}
+
 @objc(NativeSyncEngine)
 class NativeSyncEngineModule: RCTEventEmitter {
 
     static var shared: NativeSyncEngineModule?
+    private var documentPickerResolve: RCTPromiseResolveBlock?
+    private var documentPickerReject: RCTPromiseRejectBlock?
+    private var documentPickerDelegate: DocumentPickerDelegateProxy?
 
     override init() {
         super.init()
@@ -176,6 +198,21 @@ class NativeSyncEngineModule: RCTEventEmitter {
 
     override static func requiresMainQueueSetup() -> Bool {
         return false
+    }
+
+    private func currentTopViewController() -> UIViewController? {
+        guard let rootVC = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController else {
+            return nil
+        }
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
+        }
+        return topVC
     }
 
     // MARK: - Event Emitters
@@ -596,6 +633,71 @@ class NativeSyncEngineModule: RCTEventEmitter {
             let result = SyncEngineManager.shared.submitManualUpload(assetLocalIds: assetLocalIds)
             resolve(result)
         }
+    }
+
+    @objc
+    func pickDocumentUploads(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        DispatchQueue.main.async {
+            guard self.documentPickerResolve == nil else {
+                reject("DOCUMENT_PICKER_BUSY", "A document picker is already active", nil)
+                return
+            }
+            guard let topVC = self.currentTopViewController() else {
+                reject("NO_VC", "No root view controller available", nil)
+                return
+            }
+
+            self.documentPickerResolve = resolve
+            self.documentPickerReject = reject
+            let delegate = DocumentPickerDelegateProxy(
+                onCancel: { [weak self] in
+                    self?.resolveDocumentPickerCancelled()
+                },
+                onPick: { [weak self] urls in
+                    self?.resolvePickedDocumentURLs(urls)
+                }
+            )
+            self.documentPickerDelegate = delegate
+            let picker = UIDocumentPickerViewController(
+                forOpeningContentTypes: [UTType.item],
+                asCopy: false
+            )
+            picker.delegate = delegate
+            picker.allowsMultipleSelection = true
+            topVC.present(picker, animated: true)
+        }
+    }
+
+    private func resolveDocumentPickerCancelled() {
+        documentPickerResolve?([
+            "queuedCount": 0,
+            "skippedCount": 0,
+            "batchId": "",
+            "files": [],
+        ])
+        clearDocumentPickerPromise()
+    }
+
+    private func resolvePickedDocumentURLs(_ urls: [URL]) {
+        let resolve = documentPickerResolve
+        let reject = documentPickerReject
+        clearDocumentPickerPromise()
+        Task {
+            let result = SyncEngineManager.shared.submitDocumentUploads(fileURLs: urls)
+            if (result["queuedCount"] as? Int ?? 0) == 0,
+               !urls.isEmpty,
+               (result["skippedCount"] as? Int ?? 0) == 0 {
+                reject?("DOCUMENT_PICKER_FAILED", "No document upload items were queued", nil)
+            } else {
+                resolve?(result)
+            }
+        }
+    }
+
+    private func clearDocumentPickerPromise() {
+        documentPickerResolve = nil
+        documentPickerReject = nil
+        documentPickerDelegate = nil
     }
 
     @objc

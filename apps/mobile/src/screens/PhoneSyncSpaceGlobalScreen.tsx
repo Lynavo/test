@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   NativeModules,
   Pressable,
@@ -14,25 +15,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
+import Video from 'react-native-video';
 import {
   Check,
   ChevronLeft,
   CloudUpload,
-  Download,
+  Eye,
   FileImage,
   FileText,
   Play,
   Rows3,
+  X,
 } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { SIDECAR_HTTP_PORT, type ReceivedLibraryItemDTO } from '@syncflow/contracts';
+import {
+  SIDECAR_HTTP_PORT,
+  type ReceivedLibraryItemDTO,
+} from '@syncflow/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/globalColors';
 import { formatBytes } from '../utils/format';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
-import { listReceivedLibrary } from '../services/desktop-local-service';
+import { listCurrentClientReceivedLibrary } from '../services/desktop-local-service';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
 type ReceivedSection = {
@@ -52,7 +58,10 @@ const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
   { id: 'name', label: '名称' },
   { id: 'size', label: '文件大小' },
 ];
-const MEDIA_TYPE_ICON_GRADIENTS: Record<MediaTypeIconKind, MediaTypeGradientStop[]> = {
+const MEDIA_TYPE_ICON_GRADIENTS: Record<
+  MediaTypeIconKind,
+  MediaTypeGradientStop[]
+> = {
   photo: [
     { offset: '0%', color: '#F7FCFF' },
     { offset: '54%', color: '#D8F0FF' },
@@ -177,7 +186,9 @@ const MOCK_RECEIVED_ITEMS: ReceivedLibraryItemDTO[] = [
     filename: 'B-roll_Studio_A.heic',
     mediaType: 'image',
     fileSize: 11240735,
-    completedAt: new Date(now - 3 * 24 * 60 * 60 * 1000 - 90 * 60 * 1000).toISOString(),
+    completedAt: new Date(
+      now - 3 * 24 * 60 * 60 * 1000 - 90 * 60 * 1000,
+    ).toISOString(),
     shareStatus: 'shared',
   },
 ];
@@ -223,7 +234,9 @@ function isVideo(mediaType: string, filename: string) {
 }
 
 function isImage(mediaType: string, filename: string) {
-  return mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
+  return (
+    mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename)
+  );
 }
 
 function getFileTypeText(mediaType: string, filename: string) {
@@ -232,10 +245,25 @@ function getFileTypeText(mediaType: string, filename: string) {
   return '文件';
 }
 
-function getFileIconType(mediaType: string, filename: string): MediaTypeIconKind {
+function getFileIconType(
+  mediaType: string,
+  filename: string,
+): MediaTypeIconKind {
   if (isVideo(mediaType, filename)) return 'video';
   if (isImage(mediaType, filename)) return 'photo';
   return 'file';
+}
+
+function getReceivedFileTitle(item: ReceivedLibraryItemDTO) {
+  return item.filename || item.displayName || item.fileKey || '未命名文件';
+}
+
+function getReceivedItemKey(item: ReceivedLibraryItemDTO, index: number) {
+  return (
+    item.resourceId ||
+    item.fileKey ||
+    `${getReceivedFileTitle(item)}-${item.completedAt}-${index}`
+  );
 }
 
 function formatClock(isoString: string) {
@@ -255,6 +283,9 @@ export function PhoneSyncSpaceGlobalScreen() {
   const [items, setItems] = useState<ReceivedLibraryItemDTO[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('time');
   const [showSortSheet, setShowSortSheet] = useState(false);
+  const [previewItem, setPreviewItem] = useState<ReceivedLibraryItemDTO | null>(
+    null,
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -273,7 +304,7 @@ export function PhoneSyncSpaceGlobalScreen() {
       }
 
       const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
-      const result = await listReceivedLibrary(desktop);
+      const result = await listCurrentClientReceivedLibrary(desktop);
       const receivedItems = result ?? [];
       const previewItems = getPreviewReceivedItems();
       setItems(receivedItems.length > 0 ? receivedItems : previewItems);
@@ -303,8 +334,8 @@ export function PhoneSyncSpaceGlobalScreen() {
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
       if (sortBy === 'name') {
-        return (a.displayName || a.filename).localeCompare(
-          b.displayName || b.filename,
+        return getReceivedFileTitle(a).localeCompare(
+          getReceivedFileTitle(b),
           'zh-CN',
         );
       }
@@ -331,17 +362,18 @@ export function PhoneSyncSpaceGlobalScreen() {
   const totalSizeLabel = formatBytes(
     items.reduce((total, item) => total + item.fileSize, 0),
   );
-  const sortLabel = SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '时间';
+  const sortLabel =
+    SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '时间';
 
   const renderItem = ({ item }: { item: ReceivedLibraryItemDTO }) => {
     const iconType = getFileIconType(item.mediaType, item.filename);
-    const displayName = item.displayName || item.filename;
+    const displayName = getReceivedFileTitle(item);
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const clock = formatClock(item.completedAt);
 
     return (
       <View style={styles.card}>
-        <MediaTypeIcon type={iconType} />
+        <ReceivedMediaThumbnail item={item} iconType={iconType} />
         <View style={styles.infoWrapper}>
           <Text style={styles.filename} numberOfLines={1}>
             {displayName}
@@ -363,15 +395,14 @@ export function PhoneSyncSpaceGlobalScreen() {
           </View>
         </View>
         <TouchableOpacity
-          style={[styles.downloadButton, styles.downloadButtonDisabled]}
+          style={styles.previewButton}
           accessibilityRole="button"
-          accessibilityLabel="保存暂不可用"
-          accessibilityState={{ disabled: true }}
-          disabled
-          activeOpacity={1}
+          accessibilityLabel="预览已同步文件"
+          onPress={() => setPreviewItem(item)}
+          activeOpacity={0.72}
         >
-          <Download
-            testID="phone-sync-download-icon"
+          <Eye
+            testID="phone-sync-preview-icon"
             size={16}
             color={colors.primary}
             strokeWidth={2}
@@ -434,7 +465,9 @@ export function PhoneSyncSpaceGlobalScreen() {
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.centeredTitle}>正在加载</Text>
-            <Text style={styles.centeredSubtitle}>同步空间列表会在这里刷新。</Text>
+            <Text style={styles.centeredSubtitle}>
+              同步空间列表会在这里刷新。
+            </Text>
           </View>
         ) : sortedItems.length === 0 ? (
           <View style={styles.centeredCard}>
@@ -449,7 +482,7 @@ export function PhoneSyncSpaceGlobalScreen() {
         ) : (
           <SectionList
             sections={sections}
-            keyExtractor={item => item.resourceId || item.fileKey}
+            keyExtractor={(item, index) => getReceivedItemKey(item, index)}
             renderItem={renderItem}
             renderSectionHeader={({ section }) => (
               <View style={styles.sectionHeader}>
@@ -475,6 +508,10 @@ export function PhoneSyncSpaceGlobalScreen() {
           setSortBy(value);
           setShowSortSheet(false);
         }}
+      />
+      <ReceivedMediaPreviewModal
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
       />
     </GlobalGradientBackground>
   );
@@ -536,7 +573,11 @@ function MediaTypeIcon({ type }: { type: MediaTypeIconKind }) {
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             {MEDIA_TYPE_ICON_GRADIENTS[type].map(stop => (
-              <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+              <Stop
+                key={stop.offset}
+                offset={stop.offset}
+                stopColor={stop.color}
+              />
             ))}
           </LinearGradient>
         </Defs>
@@ -545,6 +586,62 @@ function MediaTypeIcon({ type }: { type: MediaTypeIconKind }) {
       <MediaTypeGlyph type={type} />
     </View>
   );
+}
+
+function ReceivedMediaThumbnail({
+  item,
+  iconType,
+}: {
+  item: ReceivedLibraryItemDTO;
+  iconType: MediaTypeIconKind;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const displayName = getReceivedFileTitle(item);
+
+  if (iconType === 'photo' && item.thumbnailUrl && !imageFailed) {
+    return (
+      <View style={styles.mediaPreviewThumb}>
+        <Image
+          testID="phone-sync-thumbnail-image"
+          source={{ uri: item.thumbnailUrl }}
+          style={styles.mediaPreviewImage}
+          resizeMode="cover"
+          accessibilityLabel={`${displayName} 缩略图`}
+          onError={() => setImageFailed(true)}
+        />
+      </View>
+    );
+  }
+
+  const videoPreviewUrl = item.streamUrl || item.previewUrl;
+  if (iconType === 'video' && videoPreviewUrl && !videoFailed) {
+    return (
+      <View style={styles.mediaPreviewThumb}>
+        <Video
+          testID="phone-sync-thumbnail-video"
+          source={{ uri: videoPreviewUrl }}
+          style={styles.mediaPreviewImage}
+          resizeMode="cover"
+          paused
+          muted
+          repeat={false}
+          onError={() => setVideoFailed(true)}
+        />
+        <View style={styles.mediaPreviewPlayBadge}>
+          <Play
+            size={12}
+            color="#FFFFFF"
+            fill="#FFFFFF"
+            strokeWidth={2}
+            style={styles.videoPlayIcon}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return <MediaTypeIcon type={iconType} />;
 }
 
 function MediaTypeGlyph({ type }: { type: MediaTypeIconKind }) {
@@ -645,6 +742,82 @@ function SortSheet({
               </TouchableOpacity>
             );
           })}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ReceivedMediaPreviewModal({
+  item,
+  onClose,
+}: {
+  item: ReceivedLibraryItemDTO | null;
+  onClose: () => void;
+}) {
+  if (!item) return null;
+
+  const displayName = getReceivedFileTitle(item);
+  const imagePreview = isImage(item.mediaType, item.filename);
+  const videoPreview = isVideo(item.mediaType, item.filename);
+  const previewUri = videoPreview
+    ? item.streamUrl || item.previewUrl
+    : item.previewUrl || item.thumbnailUrl;
+
+  return (
+    <Modal
+      animationType="fade"
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      visible={item != null}
+      onRequestClose={onClose}
+    >
+      <View style={styles.mediaPreviewModalRoot}>
+        <View style={styles.mediaPreviewHeader}>
+          <Text style={styles.mediaPreviewTitle} numberOfLines={1}>
+            {displayName}
+          </Text>
+          <TouchableOpacity
+            style={styles.mediaPreviewCloseButton}
+            accessibilityRole="button"
+            accessibilityLabel="关闭预览"
+            activeOpacity={0.7}
+            onPress={onClose}
+          >
+            <X size={18} color="#FFFFFF" strokeWidth={2.2} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.mediaPreviewBody}>
+          {previewUri && imagePreview ? (
+            <Image
+              testID="phone-sync-preview-image"
+              source={{ uri: previewUri }}
+              style={styles.mediaPreviewFullMedia}
+              resizeMode="contain"
+            />
+          ) : null}
+          {previewUri && videoPreview ? (
+            <Video
+              testID="phone-sync-preview-video"
+              source={{ uri: previewUri }}
+              style={styles.mediaPreviewFullMedia}
+              resizeMode="contain"
+              controls
+              paused={false}
+              muted={false}
+              playInBackground
+              playWhenInactive
+              ignoreSilentSwitch="ignore"
+            />
+          ) : null}
+          {!previewUri || (!imagePreview && !videoPreview) ? (
+            <View style={styles.mediaPreviewErrorBox}>
+              <Text style={styles.mediaPreviewErrorText}>
+                无法加载预览，请确认电脑在线且文件仍存在。
+              </Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </Modal>
@@ -777,6 +950,35 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 28,
     elevation: 2,
+  },
+  mediaPreviewThumb: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.54)',
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 28,
+    elevation: 2,
+  },
+  mediaPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPreviewPlayBadge: {
+    position: 'absolute',
+    left: 13,
+    top: 13,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.46)',
   },
   mediaTypeGlyphCenter: {
     ...StyleSheet.absoluteFillObject,
@@ -919,16 +1121,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B7791F',
   },
-  downloadButton: {
+  previewButton: {
     width: 32,
     height: 32,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.64)',
-  },
-  downloadButtonDisabled: {
-    opacity: 0.62,
   },
   centeredCard: {
     borderRadius: 16,
@@ -1029,6 +1228,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: colors.foreground,
+  },
+  mediaPreviewModalRoot: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  mediaPreviewHeader: {
+    minHeight: 86,
+    paddingHorizontal: 16,
+    paddingTop: 48,
+    paddingBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mediaPreviewCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  mediaPreviewTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  mediaPreviewBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mediaPreviewFullMedia: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPreviewErrorBox: {
+    paddingHorizontal: 26,
+  },
+  mediaPreviewErrorText: {
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    color: 'rgba(255,255,255,0.78)',
   },
   sheetOption: {
     minHeight: 48,

@@ -1,6 +1,8 @@
 package com.vividrop.mobile.china.sync
 
 import android.Manifest
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -17,11 +19,14 @@ import android.os.Environment
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
+import com.facebook.react.bridge.ActivityEventListener
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.BaseActivityEventListener
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -79,6 +84,13 @@ private class NativeStructuredError(
   val userInfo: WritableMap,
 ) : Exception(message)
 
+private data class PickedDocumentMetadata(
+  val name: String,
+  val size: Long,
+  val mimeType: String,
+  val uri: Uri,
+)
+
 class NativeSyncEngineModule(
   reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -108,6 +120,7 @@ class NativeSyncEngineModule(
   private var lastLanNetworkKey: String? = null
   private var pendingPhotoPermissionPromise: Promise? = null
   private var pendingDiscoveryPermissionPromise: Promise? = null
+  private var pendingDocumentPickerPromise: Promise? = null
   private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
   private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
   @Volatile private var foregroundSyncStopRequested = false
@@ -127,9 +140,17 @@ class NativeSyncEngineModule(
   private var accessToken: String? = null
   private var tunnelIceServersJSON: String = ""
   @Volatile private var sharedFilesReachability: SharedFilesReachability? = null
+  private val documentPickerActivityListener: ActivityEventListener = object : BaseActivityEventListener() {
+    override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
+      if (requestCode == REQUEST_DOCUMENT_UPLOADS) {
+        handleDocumentPickerActivityResult(resultCode, data)
+      }
+    }
+  }
 
   init {
     foregroundSyncStopCallback = foregroundSyncStopHandler
+    reactContext.addActivityEventListener(documentPickerActivityListener)
     registerNetworkAvailabilityMonitor()
     resumePresenceHeartbeatFromStoredBinding(reason = "module_initialized")
   }
@@ -154,6 +175,7 @@ class NativeSyncEngineModule(
     if (foregroundSyncStopCallback === foregroundSyncStopHandler) {
       foregroundSyncStopCallback = null
     }
+    reactApplicationContext.removeActivityEventListener(documentPickerActivityListener)
     super.invalidate()
   }
 
@@ -1129,6 +1151,210 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun pickDocumentUploads(promise: Promise) {
+    val activity = getCurrentActivity()
+    if (activity == null) {
+      promise.reject("NO_ACTIVITY", "No active Activity available for document picker")
+      return
+    }
+    if (pendingDocumentPickerPromise != null) {
+      promise.reject("DOCUMENT_PICKER_BUSY", "A document picker is already active")
+      return
+    }
+
+    pendingDocumentPickerPromise = promise
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+      addCategory(Intent.CATEGORY_OPENABLE)
+      type = "*/*"
+      putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+    }
+    try {
+      activity.startActivityForResult(intent, REQUEST_DOCUMENT_UPLOADS)
+    } catch (error: ActivityNotFoundException) {
+      pendingDocumentPickerPromise = null
+      promise.reject("DOCUMENT_PICKER_UNAVAILABLE", "No document picker is available", error)
+    }
+  }
+
+  private fun handleDocumentPickerActivityResult(resultCode: Int, data: Intent?) {
+    val promise = pendingDocumentPickerPromise ?: return
+    pendingDocumentPickerPromise = null
+    if (resultCode != Activity.RESULT_OK || data == null) {
+      promise.resolve(emptyDocumentUploadResult())
+      return
+    }
+    val uris = documentUrisFromIntent(data)
+    if (uris.isEmpty()) {
+      promise.resolve(emptyDocumentUploadResult())
+      return
+    }
+    runAsync(promise) {
+      val result = queueDocumentUploads(uris)
+      promise.resolve(result)
+      if (result.getInt("queuedCount") > 0) {
+        startForegroundSyncRound(
+          reason = "manual_upload",
+          threadName = "NativeSyncEngineDocumentUpload",
+        )
+      }
+    }
+  }
+
+  private fun documentUrisFromIntent(data: Intent): List<Uri> {
+    val uris = mutableListOf<Uri>()
+    val clipData = data.clipData
+    if (clipData != null) {
+      for (index in 0 until clipData.itemCount) {
+        clipData.getItemAt(index).uri?.let(uris::add)
+      }
+    }
+    data.data?.let(uris::add)
+    return uris.distinctBy { it.toString() }
+  }
+
+  private fun queueDocumentUploads(uris: List<Uri>): WritableMap {
+    val existingItems = uploadStore.getAllItems()
+    val activeIds = existingItems
+      .filter { it.status in ACTIVE_UPLOAD_STATUSES }
+      .mapTo(mutableSetOf()) { it.assetLocalId }
+    val batchId = UUID.randomUUID().toString().lowercase(Locale.US)
+    val clientId = getOrCreateClientId()
+    val now = isoNow()
+    val queued = mutableListOf<AndroidUploadItem>()
+    val files = Arguments.createArray()
+    var skipped = 0
+
+    for (uri in uris) {
+      takePersistableDocumentPermission(uri)
+      val metadata = readPickedDocumentMetadata(uri)
+      if (metadata == null || metadata.size <= 0) {
+        skipped += 1
+        continue
+      }
+      val assetLocalId = "document:${metadata.uri}"
+      if (assetLocalId in activeIds) {
+        skipped += 1
+        continue
+      }
+
+      val mediaType = AndroidSyncPrimitives.classifyMediaType(metadata.mimeType, metadata.name)
+      val item = AndroidUploadItem(
+        assetLocalId = assetLocalId,
+        fileKey = AndroidSyncPrimitives.computeFileKey(clientId, assetLocalId, mediaType),
+        filename = metadata.name,
+        mediaType = mediaType,
+        mimeType = metadata.mimeType,
+        fileSize = metadata.size,
+        createdAt = now,
+        modifiedAt = now,
+        uri = metadata.uri.toString(),
+        status = "queued",
+        source = "manual",
+        batchId = batchId,
+        ackedOffset = 0,
+        updatedAt = now,
+      )
+      queued += item
+      files.pushMap(Arguments.createMap().apply {
+        putString("name", metadata.name)
+        putDouble("size", metadata.size.toDouble())
+        putString("mimeType", metadata.mimeType)
+        putString("uri", metadata.uri.toString())
+      })
+      activeIds += assetLocalId
+    }
+
+    if (queued.isNotEmpty()) {
+      uploadStore.upsertItems(queued)
+      emitQueueUpdated(uploadStore.queueToWritableArray(uploadStore.getPendingItems(limit = 100)))
+      emitIdleSyncState(loadBinding())
+    }
+
+    recordNativeLog(
+      "ManualUpload",
+      "document picker queued=${queued.size} skipped=$skipped selected=${uris.size} batchId=$batchId",
+    )
+    return Arguments.createMap().apply {
+      putInt("queuedCount", queued.size)
+      putInt("skippedCount", skipped)
+      putString("batchId", batchId)
+      putArray("files", files)
+    }
+  }
+
+  private fun readPickedDocumentMetadata(uri: Uri): PickedDocumentMetadata? {
+    val resolver = reactApplicationContext.contentResolver
+    var displayName: String? = null
+    var size = 0L
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+      if (cursor.moveToFirst()) {
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex >= 0) {
+          displayName = cursor.getString(nameIndex)
+        }
+        val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+        if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+          size = cursor.getLong(sizeIndex)
+        }
+      }
+    }
+    if (size <= 0) {
+      size = resolver.openAssetFileDescriptor(uri, "r")?.use { descriptor ->
+        descriptor.length.takeIf { it > 0 } ?: 0
+      } ?: 0
+    }
+    val filename = sanitizeDocumentFilename(
+      displayName?.takeIf { it.isNotBlank() }
+        ?: uri.lastPathSegment
+        ?: "Document",
+    )
+    val mimeType = resolver.getType(uri)
+      ?: AndroidSyncPrimitives.mimeTypeForFilename(filename)
+    return PickedDocumentMetadata(
+      name = filename,
+      size = size,
+      mimeType = mimeType,
+      uri = uri,
+    )
+  }
+
+  private fun takePersistableDocumentPermission(uri: Uri) {
+    try {
+      reactApplicationContext.contentResolver.takePersistableUriPermission(
+        uri,
+        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+      )
+    } catch (error: SecurityException) {
+      recordNativeLog("ManualUpload", "persistable URI permission unavailable uri=$uri", Log.WARN)
+    } catch (error: IllegalArgumentException) {
+      recordNativeLog("ManualUpload", "URI permission is not persistable uri=$uri", Log.WARN)
+    }
+  }
+
+  private fun sanitizeDocumentFilename(raw: String): String {
+    val base = raw.trim().ifBlank { "Document" }
+    val cleaned = buildString(base.length) {
+      for (char in base) {
+        when (char) {
+          '/', '\\', ':', '\u0000', '\r', '\n' -> append('_')
+          else -> append(char)
+        }
+      }
+    }
+    return cleaned.ifBlank { "Document" }
+  }
+
+  private fun emptyDocumentUploadResult(): WritableMap =
+    Arguments.createMap().apply {
+      putInt("queuedCount", 0)
+      putInt("skippedCount", 0)
+      putString("batchId", "")
+      putArray("files", Arguments.createArray())
+    }
+
+  @ReactMethod
   fun cancelManualBatch(batchId: String, promise: Promise) {
     recordNativeLog("ManualUpload", "cancel batch requested batchId=$batchId")
     uploadStore.cancelManualBatch(batchId, isoNow())
@@ -1648,12 +1874,20 @@ class NativeSyncEngineModule(
         emitError("ANDROID_SYNC_NO_BINDING", "尚未绑定桌面端，无法同步。")
         return
       }
-      val permissionState = currentPhotoPermissionState()
-      if (permissionState == "denied") {
-        recordDiagnosticsLog("Sync", "round paused reason=$reason photoPermission=denied")
-        emitSyncState(binding, "paused_no_permission")
-        emitError("ANDROID_PHOTO_PERMISSION_DENIED", "Android 相簿权限尚未开启，无法扫描同步素材。")
-        return
+      val pendingBeforePermission = uploadStore.getPendingItems(limit = 10_000)
+      val documentOnlyManualRound = reason == "manual_upload" &&
+        pendingBeforePermission.isNotEmpty() &&
+        pendingBeforePermission.all { it.source == "manual" && it.assetLocalId.startsWith("document:") }
+      if (!documentOnlyManualRound) {
+        val permissionState = currentPhotoPermissionState()
+        if (permissionState == "denied") {
+          recordDiagnosticsLog("Sync", "round paused reason=$reason photoPermission=denied")
+          emitSyncState(binding, "paused_no_permission")
+          emitError("ANDROID_PHOTO_PERMISSION_DENIED", "Android 相簿权限尚未开启，无法扫描同步素材。")
+          return
+        }
+      } else {
+        recordDiagnosticsLog("Sync", "round reason=$reason using document-only queue; skipping photo permission preflight")
       }
       val config = loadAutoUploadConfig()
       recordDiagnosticsLog(
@@ -1683,8 +1917,12 @@ class NativeSyncEngineModule(
       val existingAssetIds = existing
         .filter { it.status in ACTIVE_UPLOAD_STATUSES }
         .mapTo(mutableSetOf()) { it.assetLocalId }
-      val discovered = mediaStoreRepository.scanAssets(clientId)
-        .filter { it.assetLocalId !in existingAssetIds }
+      val discovered = if (documentOnlyManualRound) {
+        emptyList()
+      } else {
+        mediaStoreRepository.scanAssets(clientId)
+          .filter { it.assetLocalId !in existingAssetIds }
+      }
       if (discovered.isNotEmpty() && config.enabled) {
         uploadStore.upsertItems(discovered.map { it.copy(source = "auto", status = "queued", updatedAt = isoNow()) })
       }
@@ -5726,6 +5964,7 @@ class NativeSyncEngineModule(
     private const val MAX_DIAGNOSTICS_LOG_LINES = 2_000
     private const val PHOTO_PERMISSION_REQUEST_CODE = 39_394
     private const val DISCOVERY_PERMISSION_REQUEST_CODE = 39_395
+    private const val REQUEST_DOCUMENT_UPLOADS = 39_396
     private const val DIAGNOSTICS_UPLOAD_TIMEOUT_MS = 30_000
     private const val ANDROID_14_API = 34
     private const val PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED =

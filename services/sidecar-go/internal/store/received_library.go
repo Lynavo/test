@@ -48,7 +48,15 @@ func (s *Store) ListSyncRecords(desktopDeviceID string, clientID *string) ([]Des
 }
 
 func (s *Store) ListReceivedLibrary(desktopDeviceID string) ([]ReceivedLibraryItem, error) {
-	rows, err := s.db.Query(`
+	return s.listReceivedLibrary(desktopDeviceID, nil)
+}
+
+func (s *Store) ListReceivedLibraryForClient(desktopDeviceID string, clientID string) ([]ReceivedLibraryItem, error) {
+	return s.listReceivedLibrary(desktopDeviceID, &clientID)
+}
+
+func (s *Store) listReceivedLibrary(desktopDeviceID string, clientID *string) ([]ReceivedLibraryItem, error) {
+	query := `
 		SELECT
 			u.file_key,
 			u.client_id,
@@ -66,10 +74,15 @@ func (s *Store) ListReceivedLibrary(desktopDeviceID string) ([]ReceivedLibraryIt
 			AND sr.received_file_key = u.file_key
 			AND sr.kind = 'received_file'
 			AND sr.status != 'removed'
-		WHERE u.status = 'completed'
-		ORDER BY COALESCE(u.completed_at, u.updated_at) DESC, u.file_key DESC`,
-		desktopDeviceID,
-	)
+		WHERE u.status = 'completed'`
+	args := []any{desktopDeviceID}
+	if clientID != nil {
+		query += " AND u.client_id = ?"
+		args = append(args, *clientID)
+	}
+	query += " ORDER BY COALESCE(u.completed_at, u.updated_at) DESC, u.file_key DESC"
+
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list received library: %w", err)
 	}

@@ -768,8 +768,9 @@ object AndroidSyncPrimitives {
     return when {
       normalizedMime.startsWith("video/") -> "video"
       normalizedMime.startsWith("image/") -> "image"
+      ext in setOf("jpg", "jpeg", "png", "heic", "heif", "gif", "webp") -> "image"
       ext in setOf("mp4", "mov", "m4v", "avi", "mkv") -> "video"
-      else -> "image"
+      else -> "document"
     }
   }
 
@@ -784,6 +785,9 @@ object AndroidSyncPrimitives {
       "mp4" -> "video/mp4"
       "mov" -> "video/quicktime"
       "m4v" -> "video/x-m4v"
+      "pdf" -> "application/pdf"
+      "zip" -> "application/zip"
+      "txt" -> "text/plain"
       else -> fallback
     }
   }

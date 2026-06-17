@@ -244,12 +244,15 @@ export function SyncActivityGlobalScreen({
     [overview, queueItems.length],
   );
   const autoUploadActive = overview.autoUploadState === 'active';
+  const shouldShowUploadCompleted =
+    autoUploadActive && isCompletedUploadState(overview, uploadProgress);
   const shouldShowUploadProgress =
+    !shouldShowUploadCompleted &&
     autoUploadActive &&
     (isActiveUploadState(overview.uploadState) ||
       uploadProgress.totalCount > 0 ||
       uploadProgress.totalBytes > 0);
-  const connectionMeta = formatConnectionMeta(bindingState, overview);
+  const connectionMeta = formatConnectionMetaParts(bindingState, overview);
   const timelineDays = useMemo(
     () =>
       showHomeEmptyState
@@ -292,9 +295,23 @@ export function SyncActivityGlobalScreen({
                   <View style={styles.autoIconBox}>
                     <Icon name="desktop-outline" size={22} color={BLUE} />
                   </View>
-                  <View>
+                  <View style={styles.autoCopyBlock}>
                     <Text style={styles.autoTitle}>自动同步</Text>
-                    <Text style={styles.autoMeta}>{connectionMeta}</Text>
+                    <View
+                      testID="sync-activity-auto-meta-row"
+                      style={styles.autoMetaRow}
+                    >
+                      {connectionMeta.deviceName ? (
+                        <Text style={styles.autoDeviceName} numberOfLines={1}>
+                          {connectionMeta.deviceName}
+                        </Text>
+                      ) : null}
+                      <View style={styles.autoStateBadge}>
+                        <Text style={styles.autoStateText}>
+                          {connectionMeta.stateLabel}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
                 <TouchableOpacity
@@ -312,9 +329,11 @@ export function SyncActivityGlobalScreen({
                 <Text style={styles.phoneTitle}>当前手机状态</Text>
                 <Text style={styles.phoneStatus}>
                   {autoUploadActive
-                    ? uploadProgress.totalCount > 0
+                    ? shouldShowUploadCompleted
                       ? `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
-                      : '等待自动同步'
+                      : uploadProgress.totalCount > 0
+                        ? `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
+                        : '等待自动同步'
                     : '自动同步未开启'}
                 </Text>
                 {shouldShowUploadProgress ? (
@@ -373,6 +392,29 @@ export function SyncActivityGlobalScreen({
                         </Text>
                       </View>
                     </View>
+                  </View>
+                ) : shouldShowUploadCompleted ? (
+                  <View
+                    testID="sync-activity-upload-completed-card"
+                    style={styles.uploadCompletedCard}
+                  >
+                    <View style={styles.uploadCompletedPrimaryRow}>
+                      <View style={styles.uploadCompletedIcon}>
+                        <Icon name="checkmark-circle" size={18} color={BLUE} />
+                      </View>
+                      <View style={styles.uploadCompletedCopy}>
+                        <Text style={styles.uploadCompletedTitle}>
+                          本次同步已完成
+                        </Text>
+                        <Text style={styles.uploadCompletedMeta}>
+                          已同步 {uploadProgress.completedCount} 个 ·{' '}
+                          {formatBytes(uploadProgress.completedBytes)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.uploadCompletedHint}>
+                      等待新增素材自动同步
+                    </Text>
                   </View>
                 ) : null}
                 <Text style={styles.latestSyncText}>
@@ -505,7 +547,8 @@ function normalizeSyncOverview(
     return prev;
   }
 
-  const uploadState = readStringField(payload, 'uploadState') ?? prev.uploadState;
+  const uploadState =
+    readStringField(payload, 'uploadState') ?? prev.uploadState;
   const completedBytes =
     readNumberField(payload, 'completedBytes') ??
     readNumberField(payload, 'transferredBytes') ??
@@ -539,12 +582,12 @@ function normalizeSyncOverview(
     currentDeviceId:
       payload.currentDeviceId === null
         ? null
-        : readStringField(payload, 'currentDeviceId') ?? prev.currentDeviceId,
+        : (readStringField(payload, 'currentDeviceId') ?? prev.currentDeviceId),
     currentDeviceName:
       payload.currentDeviceName === null
         ? null
-        : readStringField(payload, 'currentDeviceName') ??
-          prev.currentDeviceName,
+        : (readStringField(payload, 'currentDeviceName') ??
+          prev.currentDeviceName),
     currentSpeedMbps:
       readNumberField(payload, 'currentSpeedMbps') ?? prev.currentSpeedMbps,
     transferredBytes:
@@ -612,8 +655,33 @@ function isActiveUploadState(uploadState: string): boolean {
     uploadState === 'retrying' ||
     uploadState === 'preparing' ||
     uploadState === 'reconnecting' ||
-    uploadState === 'backoff_waiting' ||
-    uploadState === 'completed'
+    uploadState === 'backoff_waiting'
+  );
+}
+
+function isCompletedUploadState(
+  overview: GlobalSyncOverview,
+  progress: ReturnType<typeof buildUploadProgress>,
+): boolean {
+  const finishedCount =
+    progress.totalCount > 0 && progress.completedCount >= progress.totalCount;
+  const finishedBytes =
+    progress.totalBytes <= 0 || progress.completedBytes >= progress.totalBytes;
+  const hasPendingQueueWork =
+    (overview.manualPending ?? 0) > 0 || (overview.autoPending ?? 0) > 0;
+
+  if (!finishedCount || !finishedBytes || hasPendingQueueWork) {
+    return false;
+  }
+
+  if (overview.uploadState === 'completed' || overview.uploadState === 'idle') {
+    return true;
+  }
+
+  return (
+    overview.uploadState === 'uploading' &&
+    !overview.currentFilename &&
+    overview.currentSpeedMbps <= 0
   );
 }
 
@@ -624,10 +692,10 @@ function formatSpeedMbps(speedMbps: number): string {
   return `${speedMbps.toFixed(1)} MB/s`;
 }
 
-function formatConnectionMeta(
+function formatConnectionMetaParts(
   binding: BindingStateDTO | null,
   overview: GlobalSyncOverview,
-): string {
+): { deviceName?: string; stateLabel: string } {
   const deviceName =
     binding?.deviceAlias ||
     binding?.deviceName ||
@@ -639,7 +707,7 @@ function formatConnectionMeta(
       ? '已开启'
       : '未开启';
 
-  return deviceName ? `${deviceName} · ${stateLabel}` : stateLabel;
+  return { deviceName, stateLabel };
 }
 
 function formatConnectionStateLabel(
@@ -672,15 +740,28 @@ function toGlobalSyncRecordTimelineDay(
       {
         id: `${item.dateKey}-${item.deviceId}`,
         deviceName: item.deviceName || item.deviceId || '已绑定电脑',
-        duration: formatDuration(
-          Math.max(item.activeTransmissionSeconds, 0) * 1000,
-        ),
+        duration: formatGlobalHistoryDuration(item.activeTransmissionSeconds),
         fileCount: item.totalFileCount,
         status: 'completed',
         totalSize,
       },
     ],
   };
+}
+
+function formatGlobalHistoryDuration(
+  activeTransmissionSeconds: number,
+): string {
+  if (
+    !Number.isFinite(activeTransmissionSeconds) ||
+    activeTransmissionSeconds <= 0
+  ) {
+    return '--';
+  }
+  if (activeTransmissionSeconds < 1) {
+    return '<1s';
+  }
+  return formatDuration(activeTransmissionSeconds * 1000);
 }
 
 function formatHistoryDayLabel(dateKey: string): string {
@@ -807,11 +888,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#17191C',
   },
-  autoMeta: {
-    marginTop: 3,
+  autoCopyBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  autoMetaRow: {
+    marginTop: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  autoDeviceName: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 11,
     lineHeight: 15,
     color: '#59616D',
+  },
+  autoStateBadge: {
+    flexShrink: 0,
+    borderRadius: 999,
+    backgroundColor: 'rgba(32,128,219,0.10)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  autoStateText: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '600',
+    color: BLUE,
   },
   autoButton: {
     minHeight: 36,
@@ -923,6 +1028,53 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '600',
     color: '#17191C',
+  },
+  uploadCompletedCard: {
+    marginTop: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(74,153,222,0.16)',
+    backgroundColor: 'rgba(245,251,255,0.72)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  uploadCompletedPrimaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  uploadCompletedIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DFF3FF',
+  },
+  uploadCompletedCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  uploadCompletedTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: '#17191C',
+  },
+  uploadCompletedMeta: {
+    marginTop: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    color: '#59616D',
+  },
+  uploadCompletedHint: {
+    marginLeft: 44,
+    fontSize: 10,
+    lineHeight: 15,
+    color: '#9AB0C6',
   },
   latestSyncText: {
     marginTop: 6,

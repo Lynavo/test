@@ -43,7 +43,10 @@ jest.mock('react-i18next', () => ({
         'sharedFiles.remoteAccess.empty': '此資料夾為空',
         'sharedFiles.remoteAccess.select': '選擇',
       };
-      if (key === 'sharedFiles.dialogs.downloadSavedToPhotos' && options?.name) {
+      if (
+        key === 'sharedFiles.dialogs.downloadSavedToPhotos' &&
+        options?.name
+      ) {
         return `${options.name} 已儲存至相簿`;
       }
       return map[key] || key;
@@ -78,32 +81,38 @@ jest.mock('../../components/shared/ModalBlurBackdrop', () => ({
   ModalBlurBackdrop: () => null,
 }));
 
+jest.mock('react-native-video', () => 'Video');
+
 jest.mock('react-native-svg', () => {
   const ReactInner = require('react');
   const { View } = require('react-native');
   const createSvgMock =
     (name: string) =>
     ({ children, testID }: { children?: React.ReactNode; testID?: string }) =>
-      ReactInner.createElement(View, { testID: testID ?? `svg-${name}` }, children);
+      ReactInner.createElement(
+        View,
+        { testID: testID ?? `svg-${name}` },
+        children,
+      );
   return {
-      __esModule: true,
-      default: createSvgMock('Svg'),
-      Svg: createSvgMock('Svg'),
-      Circle: createSvgMock('Circle'),
-      ClipPath: createSvgMock('ClipPath'),
-      Defs: createSvgMock('Defs'),
-      Ellipse: createSvgMock('Ellipse'),
-      G: createSvgMock('G'),
-      Line: createSvgMock('Line'),
-      LinearGradient: createSvgMock('LinearGradient'),
-      Mask: createSvgMock('Mask'),
-      Path: createSvgMock('Path'),
-      Polygon: createSvgMock('Polygon'),
-      Polyline: createSvgMock('Polyline'),
-      Rect: createSvgMock('Rect'),
-      Stop: createSvgMock('Stop'),
-    };
-  });
+    __esModule: true,
+    default: createSvgMock('Svg'),
+    Svg: createSvgMock('Svg'),
+    Circle: createSvgMock('Circle'),
+    ClipPath: createSvgMock('ClipPath'),
+    Defs: createSvgMock('Defs'),
+    Ellipse: createSvgMock('Ellipse'),
+    G: createSvgMock('G'),
+    Line: createSvgMock('Line'),
+    LinearGradient: createSvgMock('LinearGradient'),
+    Mask: createSvgMock('Mask'),
+    Path: createSvgMock('Path'),
+    Polygon: createSvgMock('Polygon'),
+    Polyline: createSvgMock('Polyline'),
+    Rect: createSvgMock('Rect'),
+    Stop: createSvgMock('Stop'),
+  };
+});
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   __esModule: true,
@@ -145,6 +154,7 @@ jest.mock('../../services/desktop-local-service', () => ({
   listSharedResources: jest.fn(),
   listSharedFolderContents: jest.fn(),
   listReceivedLibrary: jest.fn(),
+  listCurrentClientReceivedLibrary: jest.fn(),
   downloadResource: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
   isDownloadSavedLocally: jest.fn(
@@ -169,6 +179,7 @@ import {
   listSharedResources,
   listSharedFolderContents,
   listReceivedLibrary,
+  listCurrentClientReceivedLibrary,
   downloadResource,
   downloadResourceForGlobal,
 } from '../../services/desktop-local-service';
@@ -180,11 +191,16 @@ import { PhoneSyncSpaceGlobalScreen } from '../PhoneSyncSpaceGlobalScreen';
 const mockListSharedResources = listSharedResources as jest.Mock;
 const mockListSharedFolderContents = listSharedFolderContents as jest.Mock;
 const mockListReceivedLibrary = listReceivedLibrary as jest.Mock;
+const mockListCurrentClientReceivedLibrary =
+  listCurrentClientReceivedLibrary as jest.Mock;
 const mockDownloadResource = downloadResource as jest.Mock;
 const mockDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
 const mockRecordDownloadedFile = recordDownloadedFile as jest.Mock;
 
-class TestErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class TestErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
   state = { hasError: false };
   static getDerivedStateFromError() {
     return { hasError: true };
@@ -225,7 +241,7 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <SharedFilesScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
 
     expect(getByText('手機同步空間')).toBeTruthy();
@@ -236,7 +252,7 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <SharedFilesScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
 
     fireEvent.press(getByText('手機同步空間'));
@@ -247,7 +263,7 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <SharedFilesScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
 
     fireEvent.press(getByText('遠端訪問電腦'));
@@ -469,9 +485,15 @@ describe('RemoteAccessGlobalScreen', () => {
     );
 
     await waitFor(() => {
-      expect(queryAllByTestId('remote-toolbar-sort-icon').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('remote-toolbar-list-icon').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('remote-toolbar-grid-icon').length).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('remote-toolbar-sort-icon').length,
+      ).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('remote-toolbar-list-icon').length,
+      ).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('remote-toolbar-grid-icon').length,
+      ).toBeGreaterThan(0);
     });
     expect(queryByText('list-outline')).toBeNull();
     expect(queryByText('grid-outline')).toBeNull();
@@ -680,7 +702,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
 
   it('keeps an empty real received library empty unless the remote preview gate is explicit', async () => {
     mockVisualQaEnabled = true;
-    mockListReceivedLibrary.mockResolvedValueOnce([]);
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([]);
 
     const { getByTestId, getByText, queryByText } = render(
       <TestErrorBoundary>
@@ -689,7 +711,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockListReceivedLibrary).toHaveBeenCalledWith({
+      expect(mockListCurrentClientReceivedLibrary).toHaveBeenCalledWith({
         host: '192.168.1.100',
         port: 39394,
       });
@@ -702,8 +724,8 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     expect(queryByText('IMG_8421.JPG')).toBeNull();
   });
 
-  it('renders received-library download affordance as disabled until local save exists', async () => {
-    mockListReceivedLibrary.mockResolvedValueOnce([
+  it('renders received image thumbnail and opens the real image preview', async () => {
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-1',
         desktopDeviceId: 'desktop-device-id',
@@ -715,10 +737,20 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
         fileSize: 1024,
         completedAt: '2026-06-16T08:00:00.000Z',
         shareStatus: 'shared',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-1',
+        previewUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-1',
       },
     ]);
 
-    const { getByLabelText, getByText } = render(
+    const {
+      getByLabelText,
+      getByTestId,
+      getByText,
+      queryAllByTestId,
+      queryByLabelText,
+    } = render(
       <TestErrorBoundary>
         <PhoneSyncSpaceGlobalScreen />
       </TestErrorBoundary>,
@@ -728,14 +760,95 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       expect(getByText('alpha.jpg')).toBeTruthy();
     });
 
-    const disabledSaveButton = getByLabelText('保存暂不可用');
-    expect(disabledSaveButton.props.accessibilityState).toEqual({
-      disabled: true,
+    expect(getByTestId('phone-sync-thumbnail-image')).toBeTruthy();
+    expect(queryByLabelText('保存暂不可用')).toBeNull();
+    expect(queryAllByTestId('phone-sync-download-icon')).toHaveLength(0);
+
+    const previewButton = getByLabelText('预览已同步文件');
+    expect(previewButton.props.accessibilityState?.disabled).not.toBe(true);
+
+    fireEvent.press(previewButton);
+    expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
+  });
+
+  it('renders received video preview frame and opens the real video preview', async () => {
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: 'received-video',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'beta.mov',
+        fileKey: 'received/beta.mov',
+        filename: 'beta.mov',
+        mediaType: 'video',
+        fileSize: 2048,
+        completedAt: '2026-06-16T07:00:00.000Z',
+        shareStatus: 'shared',
+        previewUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-video',
+        streamUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/stream?fileKey=received-video',
+      },
+    ]);
+
+    const { getByLabelText, getByTestId, getByText } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('beta.mov')).toBeTruthy();
+    });
+
+    expect(getByTestId('phone-sync-thumbnail-video')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('预览已同步文件'));
+    expect(getByTestId('phone-sync-preview-video')).toBeTruthy();
+  });
+
+  it('uses received-library filename as the global sync-space row title', async () => {
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: '',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'iPhone 17 Pro',
+        fileKey: 'received/IMG_0003.JPG',
+        filename: 'IMG_0003.JPG',
+        mediaType: 'image',
+        fileSize: 2505426,
+        completedAt: '2026-06-17T02:10:27.000Z',
+        shareStatus: 'shared',
+      },
+      {
+        resourceId: '',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'iPhone 17 Pro',
+        fileKey: 'received/sync-activity-panel.png',
+        filename: 'sync-activity-panel.png',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-17T02:10:28.000Z',
+        shareStatus: 'shared',
+      },
+    ]);
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('IMG_0003.JPG')).toBeTruthy();
+      expect(getByText('sync-activity-panel.png')).toBeTruthy();
     });
   });
 
   it('uses reference lucide icons instead of Ionicons glyph mappings', async () => {
-    mockListReceivedLibrary.mockResolvedValueOnce([
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-photo',
         desktopDeviceId: 'desktop-device-id',
@@ -782,14 +895,25 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
 
     await waitFor(() => {
       expect(getByText('alpha.jpg')).toBeTruthy();
-      expect(queryAllByTestId('phone-sync-sort-icon').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('phone-sync-media-icon-photo').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('phone-sync-media-icon-video').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('phone-sync-media-icon-file').length).toBeGreaterThan(0);
-      expect(queryAllByTestId('phone-sync-download-icon').length).toBeGreaterThan(0);
+      expect(queryAllByTestId('phone-sync-sort-icon').length).toBeGreaterThan(
+        0,
+      );
+      expect(
+        queryAllByTestId('phone-sync-media-icon-photo').length,
+      ).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('phone-sync-media-icon-video').length,
+      ).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('phone-sync-media-icon-file').length,
+      ).toBeGreaterThan(0);
+      expect(
+        queryAllByTestId('phone-sync-preview-icon').length,
+      ).toBeGreaterThan(0);
     });
     expect(queryByText('list-outline')).toBeNull();
     expect(queryByText('download-outline')).toBeNull();
+    expect(queryAllByTestId('phone-sync-download-icon')).toHaveLength(0);
     expect(queryByText('folder-open-outline')).toBeNull();
     expect(queryByText('document-text')).toBeNull();
   });
@@ -820,7 +944,7 @@ describe('RemoteAccessScreen', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <RemoteAccessScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
     await waitFor(() => {
       expect(getByText('此資料夾為空')).toBeTruthy();
@@ -846,7 +970,7 @@ describe('RemoteAccessScreen', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <RemoteAccessScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
 
     await waitFor(() => {
@@ -918,7 +1042,7 @@ describe('RemoteAccessScreen', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <RemoteAccessScreen />
-      </TestErrorBoundary>
+      </TestErrorBoundary>,
     );
 
     await waitFor(() => {
@@ -931,12 +1055,15 @@ describe('RemoteAccessScreen', () => {
     await waitFor(() => {
       expect(mockDownloadResource).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
-        'res-2'
+        'res-2',
       );
     });
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('下載完成', 'photo.jpg 已儲存至相簿');
+      expect(alertSpy).toHaveBeenCalledWith(
+        '下載完成',
+        'photo.jpg 已儲存至相簿',
+      );
     });
 
     alertSpy.mockRestore();

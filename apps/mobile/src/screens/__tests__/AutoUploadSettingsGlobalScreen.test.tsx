@@ -5,6 +5,7 @@ import {
   disableAutoUpload,
   enableAutoUpload,
   getAutoUploadConfig,
+  pickDocumentUploads,
   prepareAutoUploadEnable,
   saveAutoUploadConfig,
 } from '../../services/SyncEngineModule';
@@ -77,6 +78,7 @@ jest.mock('lucide-react-native', () => {
     Folder: createIcon('mock-folder-icon'),
     Image: createIcon('mock-image-icon'),
     ShieldCheck: createIcon('mock-shield-check-icon'),
+    X: createIcon('mock-x-icon'),
   };
 });
 
@@ -87,6 +89,12 @@ jest.mock('../../services/SyncEngineModule', () => ({
     enabled: true,
     timeRangeMode: 'all',
     state: 'active',
+  }),
+  pickDocumentUploads: jest.fn().mockResolvedValue({
+    queuedCount: 0,
+    skippedCount: 0,
+    batchId: '',
+    files: [],
   }),
   prepareAutoUploadEnable: jest.fn().mockResolvedValue(undefined),
   saveAutoUploadConfig: jest.fn().mockResolvedValue(undefined),
@@ -149,6 +157,7 @@ function getTextValues(tree: ReactTestRenderer.ReactTestRenderer) {
 const mockedDisableAutoUpload = disableAutoUpload as jest.Mock;
 const mockedEnableAutoUpload = enableAutoUpload as jest.Mock;
 const mockedGetAutoUploadConfig = getAutoUploadConfig as jest.Mock;
+const mockedPickDocumentUploads = pickDocumentUploads as jest.Mock;
 const mockedPrepareAutoUploadEnable = prepareAutoUploadEnable as jest.Mock;
 const mockedSaveAutoUploadConfig = saveAutoUploadConfig as jest.Mock;
 
@@ -162,6 +171,12 @@ describe('AutoUploadSettingsGlobalScreen', () => {
       enabled: true,
       timeRangeMode: 'all',
       state: 'active',
+    });
+    mockedPickDocumentUploads.mockResolvedValue({
+      queuedCount: 0,
+      skippedCount: 0,
+      batchId: '',
+      files: [],
     });
     mockedPrepareAutoUploadEnable.mockResolvedValue(undefined);
     mockedSaveAutoUploadConfig.mockResolvedValue(undefined);
@@ -424,38 +439,209 @@ describe('AutoUploadSettingsGlobalScreen', () => {
     expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
   });
 
-  it('keeps the specified-file row UI-only and does not generate mock files', async () => {
+  it('queues selected system files from the specified-file source', async () => {
     mockedGetAutoUploadConfig.mockResolvedValueOnce({
       enabled: false,
       timeRangeMode: 'all',
       state: 'disabled',
     });
+    mockedPickDocumentUploads.mockResolvedValueOnce({
+      queuedCount: 2,
+      skippedCount: 0,
+      batchId: 'document-batch-1',
+      files: [
+        {
+          name: 'Brand Guidelines.pdf',
+          size: 2 * 1024 * 1024,
+          mimeType: 'application/pdf',
+        },
+        {
+          name: 'Launch Clip.mov',
+          size: 12 * 1024 * 1024,
+          mimeType: 'video/quicktime',
+        },
+      ],
+    });
     const tree = await renderScreen();
 
-    ReactTestRenderer.act(() => {
-      tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
+    await ReactTestRenderer.act(async () => {
+      await tree.root
+        .findByProps({ testID: 'auto-upload-add-file' })
+        .props.onPress();
     });
 
     const textValues = getTextValues(tree);
-    expect(textValues).not.toContain('已选文件');
-    expect(textValues).not.toContain('继续添加');
-    expect(textValues).toContain('添加');
-    expect(Alert.alert).toHaveBeenCalledWith(
+    expect(mockedPickDocumentUploads).toHaveBeenCalledTimes(1);
+    expect(textValues).toContain('已选文件');
+    expect(textValues).toContain('Brand Guidelines.pdf');
+    expect(textValues).toContain('Launch Clip.mov');
+    expect(textValues).toContain('继续添加');
+    expect(Alert.alert).not.toHaveBeenCalledWith(
       '暂不可用',
-      '指定文件自动上传需要原生队列支持，当前不会生成模拟文件。',
+      expect.any(String),
     );
 
     const confirmButton = tree.root.findByProps({
       testID: 'auto-upload-confirm',
     });
-    expect(confirmButton.props.disabled).toBe(true);
+    expect(confirmButton.props.disabled).toBe(false);
 
     await ReactTestRenderer.act(async () => {
       await confirmButton.props.onPress();
     });
 
-    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
+    expect(mockedPrepareAutoUploadEnable).not.toHaveBeenCalled();
     expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
+    expect(mockedEnableAutoUpload).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '确认',
+      '已加入 2 个文件到同步队列',
+      expect.any(Array),
+    );
+  });
+
+  it('deduplicates files selected across multiple document picker sessions', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'disabled',
+    });
+    mockedPickDocumentUploads
+      .mockResolvedValueOnce({
+        queuedCount: 1,
+        skippedCount: 0,
+        batchId: 'document-batch-1',
+        files: [
+          {
+            name: 'Brand Guidelines.pdf',
+            size: 2 * 1024 * 1024,
+            mimeType: 'application/pdf',
+            uri: 'file:///source/brand-guidelines.pdf',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        queuedCount: 1,
+        skippedCount: 1,
+        batchId: 'document-batch-2',
+        files: [
+          {
+            name: 'Brand Guidelines.pdf',
+            size: 2 * 1024 * 1024,
+            mimeType: 'application/pdf',
+            uri: 'file:///source/brand-guidelines.pdf',
+          },
+          {
+            name: 'Launch Clip.mov',
+            size: 12 * 1024 * 1024,
+            mimeType: 'video/quicktime',
+            uri: 'file:///source/launch-clip.mov',
+          },
+        ],
+      });
+    const tree = await renderScreen();
+    const addButton = tree.root.findByProps({
+      testID: 'auto-upload-add-file',
+    });
+
+    await ReactTestRenderer.act(async () => {
+      await addButton.props.onPress();
+    });
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
+    });
+
+    const textValues = getTextValues(tree);
+    expect(mockedPickDocumentUploads).toHaveBeenCalledTimes(2);
+    expect(
+      textValues.filter(value => value === 'Brand Guidelines.pdf'),
+    ).toHaveLength(1);
+    expect(textValues).toContain('Launch Clip.mov');
+    expect(textValues).toContain('已选择 2 个文件');
+    expect(textValues).not.toContain('另有 1 个文件');
+  });
+
+  it('shows a skipped duplicate notice when selected files are picked again', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'disabled',
+    });
+    mockedPickDocumentUploads
+      .mockResolvedValueOnce({
+        queuedCount: 1,
+        skippedCount: 0,
+        batchId: 'document-batch-1',
+        files: [
+          {
+            name: 'Brand Guidelines.pdf',
+            size: 2 * 1024 * 1024,
+            mimeType: 'application/pdf',
+            uri: 'file:///source/brand-guidelines.pdf',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        queuedCount: 0,
+        skippedCount: 1,
+        batchId: 'document-batch-2',
+        files: [],
+      });
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
+    });
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
+    });
+
+    const textValues = getTextValues(tree);
+    expect(textValues).toContain('已跳过 1 个已选文件');
+    expect(
+      textValues.filter(value => value === 'Brand Guidelines.pdf'),
+    ).toHaveLength(1);
+  });
+
+  it('removes a selected file from the in-app selected file list', async () => {
+    mockedGetAutoUploadConfig.mockResolvedValueOnce({
+      enabled: false,
+      timeRangeMode: 'all',
+      state: 'disabled',
+    });
+    mockedPickDocumentUploads.mockResolvedValueOnce({
+      queuedCount: 2,
+      skippedCount: 0,
+      batchId: 'document-batch-1',
+      files: [
+        {
+          name: 'Brand Guidelines.pdf',
+          size: 2 * 1024 * 1024,
+          mimeType: 'application/pdf',
+          uri: 'file:///source/brand-guidelines.pdf',
+        },
+        {
+          name: 'Launch Clip.mov',
+          size: 12 * 1024 * 1024,
+          mimeType: 'video/quicktime',
+          uri: 'file:///source/launch-clip.mov',
+        },
+      ],
+    });
+    const tree = await renderScreen();
+
+    await ReactTestRenderer.act(async () => {
+      await tree.root.findByProps({ testID: 'auto-upload-add-file' }).props.onPress();
+    });
+
+    ReactTestRenderer.act(() => {
+      tree.root.findByProps({ testID: 'auto-upload-remove-file-0' }).props.onPress();
+    });
+
+    const textValues = getTextValues(tree);
+    expect(textValues).not.toContain('Brand Guidelines.pdf');
+    expect(textValues).toContain('Launch Clip.mov');
+    expect(textValues).toContain('已选择 1 个文件');
   });
 
   it('opens the custom range picker UI when custom range is selected', async () => {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nicksyncflow/sidecar/internal/api"
@@ -548,6 +549,37 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
 	}
+	completedAt := "2026-06-14T09:00:00Z"
+	for _, upload := range []store.Upload{
+		{
+			FileKey:              "client-001-photo",
+			ClientID:             "client-001",
+			OriginalFilename:     "client-001.jpg",
+			MediaType:            "image",
+			FileSize:             2048,
+			Status:               "completed",
+			CommittedBytes:       2048,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+		{
+			FileKey:              "other-client-photo",
+			ClientID:             "other-client",
+			OriginalFilename:     "other-client.jpg",
+			MediaType:            "image",
+			FileSize:             4096,
+			Status:               "completed",
+			CommittedBytes:       4096,
+			ActiveTransmissionMs: 300,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+	} {
+		if err := st.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", upload.FileKey, err)
+		}
+	}
 
 	_, handler := api.NewServer(st, cfg, hub, nil)
 	srv := httptest.NewServer(handler)
@@ -557,20 +589,160 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /resources/mobile/received: %v", err)
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET mobile received status=%d, want 200", resp.StatusCode)
+	}
+	var receivedBody struct {
+		Items []store.ReceivedLibraryItem `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&receivedBody); err != nil {
+		t.Fatalf("decode mobile received: %v", err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Fatalf("close mobile received body: %v", err)
+	}
+	if len(receivedBody.Items) != 2 {
+		t.Fatalf("default mobile received endpoint should preserve legacy all-client library, got %+v", receivedBody.Items)
+	}
+
+	scopedResp, err := http.Get(srv.URL + "/resources/mobile/received?clientId=client-001&clientName=Alice%20iPhone&scope=client")
+	if err != nil {
+		t.Fatalf("GET /resources/mobile/received scoped: %v", err)
+	}
+	if scopedResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET scoped mobile received status=%d, want 200", scopedResp.StatusCode)
+	}
+	var scopedBody struct {
+		Items []store.ReceivedLibraryItem `json:"items"`
+	}
+	if err := json.NewDecoder(scopedResp.Body).Decode(&scopedBody); err != nil {
+		t.Fatalf("decode scoped mobile received: %v", err)
+	}
+	if err := scopedResp.Body.Close(); err != nil {
+		t.Fatalf("close scoped mobile received body: %v", err)
+	}
+	if len(scopedBody.Items) != 1 {
+		t.Fatalf("scoped mobile received endpoint should include current client only, got %+v", scopedBody.Items)
+	}
+	if scopedBody.Items[0].ClientID != "client-001" || scopedBody.Items[0].Filename != "client-001.jpg" {
+		t.Fatalf("scoped mobile received endpoint returned wrong item: %+v", scopedBody.Items[0])
 	}
 
 	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
 	if err != nil {
 		t.Fatalf("ListAccessRecords: %v", err)
 	}
-	if len(records) != 1 {
-		t.Fatalf("expected 1 access record, got %d", len(records))
+	if len(records) != 2 {
+		t.Fatalf("expected 2 access records, got %d", len(records))
 	}
-	if records[0].ResourceID != "received_library" || records[0].ResourceKind != "received_file" || records[0].Action != "list" || records[0].Result != "ok" {
-		t.Fatalf("unexpected access record: %+v", records[0])
+	for _, record := range records {
+		if record.ResourceID != "received_library" || record.ResourceKind != "received_file" || record.Action != "list" || record.Result != "ok" {
+			t.Fatalf("unexpected access record: %+v", record)
+		}
+	}
+}
+
+func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+	completedAt := "2026-06-14T09:00:00Z"
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "photo.jpg")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	if err := os.WriteFile(receivedAbsPath, []byte("image bytes"), 0o644); err != nil {
+		t.Fatalf("write received file: %v", err)
+	}
+	for _, upload := range []store.Upload{
+		{
+			FileKey:              "client-001-photo",
+			ClientID:             "client-001",
+			OriginalFilename:     "photo.jpg",
+			MediaType:            "image",
+			FileSize:             11,
+			Status:               "completed",
+			FinalPath:            &receivedRelPath,
+			CommittedBytes:       11,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+		{
+			FileKey:              "other-client-photo",
+			ClientID:             "other-client",
+			OriginalFilename:     "other.jpg",
+			MediaType:            "image",
+			FileSize:             11,
+			Status:               "completed",
+			FinalPath:            &receivedRelPath,
+			CommittedBytes:       11,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+	} {
+		if err := st.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", upload.FileKey, err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-photo")
+	if err != nil {
+		t.Fatalf("GET received preview: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("received preview status=%d, want 200", resp.StatusCode)
+	}
+	if contentDisposition := resp.Header.Get("Content-Disposition"); strings.Contains(contentDisposition, "attachment") {
+		t.Fatalf("preview should not be served as attachment, got %q", contentDisposition)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read preview body: %v", err)
+	}
+	if string(body) != "image bytes" {
+		t.Fatalf("preview body=%q, want image bytes", string(body))
+	}
+
+	thumbResp, err := http.Get(srv.URL + "/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-photo")
+	if err != nil {
+		t.Fatalf("GET received thumbnail: %v", err)
+	}
+	defer thumbResp.Body.Close()
+	if thumbResp.StatusCode != http.StatusOK {
+		t.Fatalf("received thumbnail status=%d, want 200", thumbResp.StatusCode)
+	}
+
+	otherResp, err := http.Get(srv.URL + "/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=other-client-photo")
+	if err != nil {
+		t.Fatalf("GET other client received preview: %v", err)
+	}
+	defer otherResp.Body.Close()
+	if otherResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("other client preview status=%d, want 404", otherResp.StatusCode)
+	}
+
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	seenView := false
+	for _, record := range records {
+		if record.ResourceID == "client-001-photo" && record.ResourceKind == "received_file" && record.Action == "view" && record.Result == "ok" {
+			seenView = true
+		}
+	}
+	if !seenView {
+		t.Fatalf("expected received preview to create a view access record, got %+v", records)
 	}
 }
 

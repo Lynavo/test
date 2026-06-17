@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, waitFor } from '@testing-library/react-native';
-import { NativeEventEmitter, NativeModules } from 'react-native';
+import { NativeEventEmitter, NativeModules, StyleSheet } from 'react-native';
 
 import { SyncActivityGlobalScreen } from '../SyncActivityGlobalScreen';
 import { listDownloadRecords } from '../../services/download-records-service';
@@ -43,7 +43,7 @@ jest.mock('react-native-safe-area-context', () => ({
   }: {
     children: React.ReactNode;
     edges?: string[];
-  }) => (
+  }) =>
     (() => {
       const ReactInner = require('react');
       const { View } = require('react-native');
@@ -52,8 +52,7 @@ jest.mock('react-native-safe-area-context', () => ({
         { testID: 'sync-activity-global-safe-area', edges },
         children,
       );
-    })()
-  ),
+    })(),
 }));
 
 jest.mock('../../components/GlobalGradientBackground', () => ({
@@ -81,9 +80,7 @@ jest.mock('../../components/Icon', () => ({
 }));
 
 jest.mock('../components/GlobalSyncActivityHomeSections', () => ({
-  RecentDownloadsSection: (props: {
-    records: Array<{ filename: string }>;
-  }) => {
+  RecentDownloadsSection: (props: { records: Array<{ filename: string }> }) => {
     mockRecentDownloadsSection(props);
     const ReactInner = require('react');
     const { Text, View } = require('react-native');
@@ -91,7 +88,11 @@ jest.mock('../components/GlobalSyncActivityHomeSections', () => ({
       View,
       { testID: 'recent-downloads-section' },
       props.records.map(record =>
-        ReactInner.createElement(Text, { key: record.filename }, record.filename),
+        ReactInner.createElement(
+          Text,
+          { key: record.filename },
+          record.filename,
+        ),
       ),
     );
   },
@@ -116,7 +117,11 @@ jest.mock('../components/GlobalSyncActivityHomeSections', () => ({
       [
         ReactInner.createElement(Text, { key: 'total' }, props.totalSyncedSize),
         ...props.days.flatMap(day => [
-          ReactInner.createElement(Text, { key: `${day.key}-label` }, day.label),
+          ReactInner.createElement(
+            Text,
+            { key: `${day.key}-label` },
+            day.label,
+          ),
           ReactInner.createElement(
             Text,
             { key: `${day.key}-stats` },
@@ -287,7 +292,7 @@ describe('SyncActivityGlobalScreen', () => {
       nextCursor: null,
     });
 
-    const { getByText, queryByText } = render(
+    const { getByText, getByTestId, queryByText } = render(
       <SyncActivityGlobalScreen showBottomTabBar={false} />,
     );
 
@@ -301,7 +306,16 @@ describe('SyncActivityGlobalScreen', () => {
     expect(getSyncOverview).toHaveBeenCalledTimes(1);
     expect(getReadOnlyQueue).toHaveBeenCalledTimes(1);
     expect(getHistoryDays).toHaveBeenCalledTimes(1);
-    expect(getByText('Studio Mac · 已连接')).toBeTruthy();
+    expect(getByText('Studio Mac')).toBeTruthy();
+    expect(getByText('已连接')).toBeTruthy();
+    expect(
+      StyleSheet.flatten(getByTestId('sync-activity-auto-meta-row').props.style),
+    ).toEqual(
+      expect.objectContaining({
+        flexDirection: 'row',
+        alignItems: 'center',
+      }),
+    );
     expect(getByText('已上传2/5')).toBeTruthy();
     expect(getByText('42%')).toBeTruthy();
     expect(getByText('传输速度')).toBeTruthy();
@@ -317,8 +331,68 @@ describe('SyncActivityGlobalScreen', () => {
     expect(queryByText('自动同步未开启')).toBeNull();
   });
 
+  test('renders completed auto-upload as a settled state instead of an active transfer', async () => {
+    (getSyncOverview as jest.Mock).mockResolvedValueOnce({
+      currentDeviceId: 'desktop-1',
+      currentDeviceName: 'Studio Mac',
+      currentSpeedMbps: 0,
+      transferredBytes: 13 * 1024 * 1024,
+      totalBytes: 13 * 1024 * 1024,
+      progressPercent: 100,
+      uploadState: 'uploading',
+      completedCount: 7,
+      totalCount: 7,
+      completedBytes: 13 * 1024 * 1024,
+      autoUploadState: 'active',
+      manualPending: 0,
+      autoPending: 0,
+      lastCompletedAt: '2026-06-17T02:10:27.000Z',
+    });
+    (getHistoryDays as jest.Mock).mockResolvedValueOnce({
+      items: [
+        {
+          dateKey: '2026-06-17',
+          deviceId: 'desktop-1',
+          deviceName: 'Studio Mac',
+          deviceIp: '192.168.1.20',
+          totalFileCount: 7,
+          totalBytes: 13 * 1024 * 1024,
+          activeTransmissionSeconds: 0.1,
+        },
+      ],
+      nextCursor: null,
+    });
+
+    const { getByText, getByTestId, queryByText } = render(
+      <SyncActivityGlobalScreen showBottomTabBar={false} />,
+    );
+
+    await waitFor(() => {
+      expect(getByText('本次同步已完成')).toBeTruthy();
+    });
+
+    expect(getByText('已同步 7 个 · 13.0 MB')).toBeTruthy();
+    expect(getByText('等待新增素材自动同步')).toBeTruthy();
+    expect(
+      StyleSheet.flatten(
+        getByTestId('sync-activity-upload-completed-card').props.style,
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        flexDirection: 'column',
+        alignItems: 'stretch',
+      }),
+    );
+    expect(queryByText('上传中 · 本次传输进度')).toBeNull();
+    expect(queryByText('0 MB/s')).toBeNull();
+    expect(queryByText('准备中')).toBeNull();
+    expect(getByText('Studio Mac <1s')).toBeTruthy();
+  });
+
   test('subscribes to native sync events, refreshes matching snapshots, and cleans up', async () => {
-    const screen = render(<SyncActivityGlobalScreen showBottomTabBar={false} />);
+    const screen = render(
+      <SyncActivityGlobalScreen showBottomTabBar={false} />,
+    );
 
     await waitFor(() => {
       expect(NativeEventEmitter).toHaveBeenCalledWith(
@@ -400,7 +474,8 @@ describe('SyncActivityGlobalScreen', () => {
         lastBoundAt: '2026-06-16T08:00:00.000Z',
       });
     });
-    expect(screen.getByText('Studio Mac · 离线')).toBeTruthy();
+    expect(screen.getByText('Studio Mac')).toBeTruthy();
+    expect(screen.getByText('离线')).toBeTruthy();
 
     screen.unmount();
 

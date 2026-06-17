@@ -870,7 +870,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         )
         guard !pendingItems.isEmpty else { return [] }
 
-        let localIdentifiers = pendingItems.map(\.assetLocalId)
+        let localIdentifiers = pendingItems
+            .filter { $0.sourceKind != "document" }
+            .map(\.assetLocalId)
         let fetchedAssets = PHAsset.fetchAssets(withLocalIdentifiers: localIdentifiers, options: nil)
         var assetsByLocalId: [String: PHAsset] = [:]
         fetchedAssets.enumerateObjects { asset, _, _ in
@@ -879,8 +881,37 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         var results: [ScannedAsset] = []
         var missingAssets = 0
+        let fileManager = FileManager.default
 
         for item in pendingItems {
+            if item.sourceKind == "document" {
+                guard let sourceFilePath = item.sourceFilePath,
+                      fileManager.fileExists(atPath: sourceFilePath) else {
+                    missingAssets += 1
+                    continue
+                }
+                let sourceURL = URL(fileURLWithPath: sourceFilePath)
+                let attrs = try? fileManager.attributesOfItem(atPath: sourceFilePath)
+                let size = item.fileSize
+                    ?? (attrs?[.size] as? NSNumber)?.int64Value
+                    ?? 0
+                results.append(ScannedAsset(
+                    asset: nil,
+                    fileKey: item.fileKey ?? item.assetLocalId,
+                    mediaType: item.mediaType.isEmpty ? "document" : item.mediaType,
+                    creationDate: nil,
+                    originalFilename: item.originalFilename ?? sourceURL.lastPathComponent,
+                    estimatedSize: size,
+                    source: item.source,
+                    batchId: item.batchId,
+                    sourceKind: "document",
+                    sourceFilePath: sourceFilePath,
+                    mimeType: item.mimeType,
+                    assetLocalId: item.assetLocalId
+                ))
+                continue
+            }
+
             guard let asset = assetsByLocalId[item.assetLocalId] else {
                 missingAssets += 1
                 continue
@@ -917,7 +948,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 originalFilename: originalFilename,
                 estimatedSize: estimatedSize,
                 source: item.source,
-                batchId: item.batchId
+                batchId: item.batchId,
+                assetLocalId: asset.localIdentifier
             ))
         }
 
@@ -1034,7 +1066,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         case .critical, .serious: return
         default:                  thermalBatchLimit = 2
         }
-        let candidates = Array(items.prefix(thermalBatchLimit))
+        let candidates = Array(items.filter { $0.sourceKind != "document" }.prefix(thermalBatchLimit))
         for item in candidates {
             let key = queueItemIdentity(item)
 
@@ -1105,6 +1137,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func exportAssetForUpload(_ asset: ScannedAsset) async throws -> ExportedFile {
+        if asset.sourceKind == "document" {
+            return try exportDocumentForUpload(asset)
+        }
+
+        guard let photoAsset = asset.asset else {
+            throw SyncEngineError.permissionError("Missing PHAsset for upload item")
+        }
+
         let maxAttempts = asset.source == "auto" ? 4 : 2
         var attempt = 1
 
@@ -1113,7 +1153,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
             var markedCloudDownload = false
             do {
-                let exported = try await exportService.exportAsset(asset.asset) { [weak self] progress in
+                let exported = try await exportService.exportAsset(photoAsset) { [weak self] progress in
                     guard progress < 1.0, !markedCloudDownload else { return }
                     markedCloudDownload = true
                     try? self?.uploadStore?.updateUploadStatus(fileKey: asset.fileKey, status: "cloud_downloading")
@@ -1145,6 +1185,40 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 attempt += 1
             }
         }
+    }
+
+    private func exportDocumentForUpload(_ asset: ScannedAsset) throws -> ExportedFile {
+        markAssetPreparing(asset: asset)
+        guard let sourceFilePath = asset.sourceFilePath else {
+            throw SyncEngineError.permissionError("Missing document source path")
+        }
+        let sourceURL = URL(fileURLWithPath: sourceFilePath)
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: sourceURL.path) else {
+            throw SyncEngineError.permissionError("Document source file not found")
+        }
+
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("syncflow_export")
+        try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let filename = asset.originalFilename.isEmpty ? sourceURL.lastPathComponent : asset.originalFilename
+        let tempURL = tempDir.appendingPathComponent(UUID().uuidString + "_" + filename)
+        if fileManager.fileExists(atPath: tempURL.path) {
+            try fileManager.removeItem(at: tempURL)
+        }
+        try fileManager.copyItem(at: sourceURL, to: tempURL)
+        let attrs = try fileManager.attributesOfItem(atPath: tempURL.path)
+        let size = (attrs[.size] as? NSNumber)?.int64Value ?? asset.estimatedSize
+        let modifiedAt = (attrs[.modificationDate] as? Date)?.iso8601String ?? ""
+
+        return ExportedFile(
+            tempURL: tempURL,
+            originalFilename: filename,
+            fileSize: size,
+            mimeType: asset.mimeType ?? "application/octet-stream",
+            mediaType: asset.mediaType.isEmpty ? "document" : asset.mediaType,
+            createdAt: "",
+            modifiedAt: modifiedAt
+        )
     }
 
     private func connectSession(
@@ -2787,11 +2861,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         if deltaResults.isEmpty { return }
         NSLog("[SyncEngine] background task: delta scan found %d new assets", deltaResults.count)
         let now = ISO8601DateFormatter().string(from: Date())
-        let queuedItems = deltaResults.map { asset -> UploadItemRecord in
-            UploadItemRecord(
+        let queuedItems = deltaResults.compactMap { asset -> UploadItemRecord? in
+            guard let photoAsset = asset.asset else { return nil }
+            return UploadItemRecord(
                 id: nil,
-                assetLocalId: asset.asset.localIdentifier,
-                modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                assetLocalId: photoAsset.localIdentifier,
+                modifiedAt: photoAsset.modificationDate?.iso8601String ?? "",
                 mediaType: asset.mediaType,
                 originalFilename: asset.originalFilename,
                 fileKey: asset.fileKey,
@@ -3455,10 +3530,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let now = ISO8601DateFormatter().string(from: Date())
         for asset in untrackedAssets {
+            guard let photoAsset = asset.asset else { continue }
             let item = UploadItemRecord(
                 id: nil,
-                assetLocalId: asset.asset.localIdentifier,
-                modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                assetLocalId: photoAsset.localIdentifier,
+                modifiedAt: photoAsset.modificationDate?.iso8601String ?? "",
                 mediaType: asset.mediaType,
                 originalFilename: asset.originalFilename,
                 fileKey: asset.fileKey,
@@ -3732,7 +3808,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard let binding = uploadStore?.getBinding() else {
             throw SyncEngineError.pairingError("No binding found — pair first")
         }
-        guard let token = resolvedPairingToken(for: binding) else {
+        guard resolvedPairingToken(for: binding) != nil else {
             slog("[SyncPipeline] pairing token missing — clearing stale binding, need re-pair")
             syncDiagnosticsLog("SyncPipeline", "pairing token missing — clearing stale binding")
             try? uploadStore?.clearBinding()
@@ -3744,17 +3820,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             return
         }
 
-        // 1. Request photo permission
-        let permStatus = await photoScanner.requestPermission()
-        guard permStatus == .authorized || permStatus == .limited else {
-            slog("[SyncEngine] photo permission denied")
-            syncDiagnosticsLog("SyncEngine", "photo permission denied")
-            stopSyncLifecycle(finalState: .pausedNoPermission)
-            return
-        }
+        // 1. Request photo permission only when this round needs PhotoKit.
+        // Document-only manual queues come from the system file picker and can
+        // upload without photo library access.
+        let pendingBeforePermission = uploadStore?.getPendingUploadItemsSorted(limit: nil) ?? []
+        let hasPhotoPending = pendingBeforePermission.contains { $0.sourceKind != "document" }
+        let needsPhotoAccess = hasPhotoPending || isAutoUploadActiveForDiscovery()
+        if needsPhotoAccess {
+            let permStatus = await photoScanner.requestPermission()
+            guard permStatus == .authorized || permStatus == .limited else {
+                slog("[SyncEngine] photo permission denied")
+                syncDiagnosticsLog("SyncEngine", "photo permission denied")
+                stopSyncLifecycle(finalState: .pausedNoPermission)
+                return
+            }
 
-        // 2. Start observing photo library for new assets
-        photoScanner.startObserving()
+            // 2. Start observing photo library for new assets
+            photoScanner.startObserving()
+        }
 
         let clientId = bindingService.getOrCreateClientId()
 
@@ -3874,11 +3957,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     if isAutoUploadActiveForDiscovery() {
                         try throwIfBindingChanged(expectedDeviceId: binding.deviceId)
                         let queuePersistStart = CFAbsoluteTimeGetCurrent()
-                        let queuedItems = newAssets.map { asset in
-                            UploadItemRecord(
+                        let queuedItems = newAssets.compactMap { asset -> UploadItemRecord? in
+                            guard let photoAsset = asset.asset else { return nil }
+                            return UploadItemRecord(
                                 id: nil,
-                                assetLocalId: asset.asset.localIdentifier,
-                                modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                                assetLocalId: photoAsset.localIdentifier,
+                                modifiedAt: photoAsset.modificationDate?.iso8601String ?? "",
                                 mediaType: asset.mediaType,
                                 originalFilename: asset.originalFilename,
                                 fileKey: asset.fileKey,
@@ -6495,11 +6579,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
 
             let now = ISO8601DateFormatter().string(from: Date())
-            let restoredItems = matchingAssets.map { asset in
-                UploadItemRecord(
+            let restoredItems = matchingAssets.compactMap { asset -> UploadItemRecord? in
+                guard let photoAsset = asset.asset else { return nil }
+                return UploadItemRecord(
                     id: nil,
-                    assetLocalId: asset.asset.localIdentifier,
-                    modifiedAt: asset.asset.modificationDate?.iso8601String ?? "",
+                    assetLocalId: photoAsset.localIdentifier,
+                    modifiedAt: photoAsset.modificationDate?.iso8601String ?? "",
                     mediaType: asset.mediaType,
                     originalFilename: asset.originalFilename,
                     fileKey: asset.fileKey,
@@ -7230,6 +7315,38 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "queuedCount": result.queuedCount,
             "skippedCount": result.skippedCount,
             "batchId": result.batchId,
+        ]
+    }
+
+    func submitDocumentUploads(fileURLs: [URL]) -> [String: Any] {
+        guard let service = manualUploadService else {
+            return ["queuedCount": 0, "skippedCount": fileURLs.count, "batchId": "", "files": []]
+        }
+
+        let result = service.submitDocumentUploads(fileURLs: fileURLs)
+        if result.queuedCount > 0 {
+            runtimeManualUploadCancelled = false
+        }
+
+        emitQueueToJS()
+        NativeSyncEngineModule.shared?.emitSyncStateChanged(runtimeSyncOverviewPayload(uploadState: "idle"))
+
+        if result.queuedCount > 0 {
+            if isSyncing {
+                photoLibraryChanged = true
+                resumeWatchLoopIfNeeded()
+            } else {
+                startSync()
+            }
+        } else if isSyncing {
+            resumeWatchLoopIfNeeded()
+        }
+
+        return [
+            "queuedCount": result.queuedCount,
+            "skippedCount": result.skippedCount,
+            "batchId": result.batchId,
+            "files": result.files,
         ]
     }
 

@@ -214,6 +214,9 @@ type ReceivedLibraryItem struct {
 	FileSize        int64  `json:"fileSize"`
 	CompletedAt     string `json:"completedAt"`
 	ShareStatus     string `json:"shareStatus"`
+	ThumbnailURL    string `json:"thumbnailUrl,omitempty"`
+	PreviewURL      string `json:"previewUrl,omitempty"`
+	StreamURL       string `json:"streamUrl,omitempty"`
 }
 
 type PairingAttemptResult string
