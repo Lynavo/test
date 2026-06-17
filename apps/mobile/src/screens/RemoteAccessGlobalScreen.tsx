@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   Modal,
@@ -132,7 +133,10 @@ const REMOTE_RESOURCE_ICON_GRADIENTS: Record<
 const now = Date.now();
 
 function resource(
-  item: Omit<RemoteResourceItem, 'desktopDeviceId' | 'status' | 'addedAt' | 'downloadCount'> & {
+  item: Omit<
+    RemoteResourceItem,
+    'desktopDeviceId' | 'status' | 'addedAt' | 'downloadCount'
+  > & {
     addedOffsetHours?: number;
     desktopDeviceId?: string;
     downloadCount?: number;
@@ -381,7 +385,10 @@ function isFolder(item: RemoteResourceItem) {
 }
 
 function isVideo(item: RemoteResourceItem) {
-  return item.mediaType === 'video' || /\.(mp4|mov|m4v|avi|mkv|webm)$/i.test(item.displayName);
+  return (
+    item.mediaType === 'video' ||
+    /\.(mp4|mov|m4v|avi|mkv|webm)$/i.test(item.displayName)
+  );
 }
 
 function isImage(item: RemoteResourceItem) {
@@ -399,7 +406,7 @@ function getItemIconType(item: RemoteResourceItem): RemoteResourceIconType {
 }
 
 function getItemSize(item: RemoteResourceItem) {
-  return isFolder(item) ? Number.POSITIVE_INFINITY : item.fileSize ?? 0;
+  return isFolder(item) ? Number.POSITIVE_INFINITY : (item.fileSize ?? 0);
 }
 
 function getItemTime(item: RemoteResourceItem) {
@@ -479,7 +486,8 @@ function directoryFileToResourceItem({
   desktopDisplayName: string | null;
 }): RemoteResourceItem {
   const resourceId = personalDirectoryResourceId(file.path);
-  const mediaType = file.isDirectory || file.type === 'other' ? undefined : file.type;
+  const mediaType =
+    file.isDirectory || file.type === 'other' ? undefined : file.type;
   return {
     resourceId,
     desktopDeviceId: desktopDisplayName ?? FALLBACK_DESKTOP_LABEL,
@@ -529,10 +537,14 @@ export function RemoteAccessGlobalScreen() {
   const [loading, setLoading] = useState(true);
   const [networkDisconnected, setNetworkDisconnected] = useState(false);
   const [rootItems, setRootItems] = useState<RemoteResourceItem[]>([]);
-  const [folderItemsByKey, setFolderItemsByKey] = useState<Record<string, RemoteResourceItem[]>>({});
+  const [folderItemsByKey, setFolderItemsByKey] = useState<
+    Record<string, RemoteResourceItem[]>
+  >({});
   const [folderLoading, setFolderLoading] = useState(false);
   const [folderLoadError, setFolderLoadError] = useState(false);
-  const [desktopDisplayName, setDesktopDisplayName] = useState<string | null>(null);
+  const [desktopDisplayName, setDesktopDisplayName] = useState<string | null>(
+    null,
+  );
   const [previewMode, setPreviewMode] = useState(false);
   const [folderStack, setFolderStack] = useState<FolderCrumb[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -582,7 +594,10 @@ export function RemoteAccessGlobalScreen() {
       const result = await listGlobalRemoteAccessResources();
       const remoteItems = result ?? [];
       setDesktopDisplayName(
-        firstNonEmptyString(bindingDisplayName, getResourceDesktopDisplayName(remoteItems)),
+        firstNonEmptyString(
+          bindingDisplayName,
+          getResourceDesktopDisplayName(remoteItems),
+        ),
       );
       const previewItems = getPreviewRootItems();
       if (remoteItems.length > 0 || previewItems.length === 0) {
@@ -674,7 +689,9 @@ export function RemoteAccessGlobalScreen() {
           return;
         }
 
-        const result = await downloadGlobalRemoteAccessResource(item.resourceId);
+        const result = await downloadGlobalRemoteAccessResource(
+          item.resourceId,
+        );
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
             LOCAL_SAVE_UNSUPPORTED_TITLE,
@@ -727,11 +744,14 @@ export function RemoteAccessGlobalScreen() {
   const visibleItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     const filtered = query
-      ? currentItems.filter(item => item.displayName.toLowerCase().includes(query))
+      ? currentItems.filter(item =>
+          item.displayName.toLowerCase().includes(query),
+        )
       : currentItems;
 
     return [...filtered].sort((a, b) => {
-      if (sortBy === 'name') return a.displayName.localeCompare(b.displayName, 'zh-CN');
+      if (sortBy === 'name')
+        return a.displayName.localeCompare(b.displayName, 'zh-CN');
       if (sortBy === 'size') return getItemSize(b) - getItemSize(a);
       if (isFolder(a) && !isFolder(b)) return -1;
       if (!isFolder(a) && isFolder(b)) return 1;
@@ -740,7 +760,10 @@ export function RemoteAccessGlobalScreen() {
   }, [currentItems, searchQuery, sortBy]);
 
   const selectedItems = useMemo(
-    () => currentItems.filter(item => selectedIds.includes(item.resourceId) && !isFolder(item)),
+    () =>
+      currentItems.filter(
+        item => selectedIds.includes(item.resourceId) && !isFolder(item),
+      ),
     [currentItems, selectedIds],
   );
 
@@ -797,7 +820,10 @@ export function RemoteAccessGlobalScreen() {
             );
             await openFileWithOtherApp(localPath, item.displayName);
           } catch (err) {
-            console.warn('[RemoteAccessGlobalScreen] Open with other app failed:', err);
+            console.warn(
+              '[RemoteAccessGlobalScreen] Open with other app failed:',
+              err,
+            );
             Alert.alert(
               t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
               t('sharedFiles.dialogs.previewFailedMessage') ||
@@ -909,7 +935,8 @@ export function RemoteAccessGlobalScreen() {
     }
   }, [currentFolder, loadFolderContents]);
 
-  const sortLabel = SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '名称';
+  const sortLabel =
+    SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '名称';
   const queryActive = searchQuery.trim().length > 0;
   const title = currentFolder
     ? currentFolder.name
@@ -979,7 +1006,9 @@ export function RemoteAccessGlobalScreen() {
                 selectionMode ? styles.selectionButtonActiveText : null,
               ]}
             >
-              {selectionMode ? '完成' : t('sharedFiles.remoteAccess.select') || '選擇'}
+              {selectionMode
+                ? '完成'
+                : t('sharedFiles.remoteAccess.select') || '選擇'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1018,7 +1047,9 @@ export function RemoteAccessGlobalScreen() {
               <TouchableOpacity
                 style={[
                   styles.actionButton,
-                  selectedItems.length === 0 ? styles.actionButtonDisabled : null,
+                  selectedItems.length === 0
+                    ? styles.actionButtonDisabled
+                    : null,
                 ]}
                 disabled={selectedItems.length === 0}
                 activeOpacity={0.7}
@@ -1027,7 +1058,9 @@ export function RemoteAccessGlobalScreen() {
                 <Text
                   style={[
                     styles.actionButtonText,
-                    selectedItems.length === 0 ? styles.actionButtonDisabledText : null,
+                    selectedItems.length === 0
+                      ? styles.actionButtonDisabledText
+                      : null,
                   ]}
                 >
                   下载
@@ -1102,7 +1135,9 @@ export function RemoteAccessGlobalScreen() {
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.centeredTitle}>远程资源加载中</Text>
-            <Text style={styles.centeredSubtitle}>正在读取电脑端共享目录。</Text>
+            <Text style={styles.centeredSubtitle}>
+              正在读取电脑端共享目录。
+            </Text>
           </View>
         ) : networkDisconnected ? (
           <NetworkDisconnectedState onRetry={retryLoadData} />
@@ -1110,7 +1145,9 @@ export function RemoteAccessGlobalScreen() {
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.centeredTitle}>文件夹加载中</Text>
-            <Text style={styles.centeredSubtitle}>正在读取电脑端目录内容。</Text>
+            <Text style={styles.centeredSubtitle}>
+              正在读取电脑端目录内容。
+            </Text>
           </View>
         ) : folderLoadError ? (
           <FolderLoadErrorState onRetry={retryLoadFolder} />
@@ -1123,7 +1160,9 @@ export function RemoteAccessGlobalScreen() {
             keyExtractor={item => item.resourceId}
             renderItem={renderItem}
             numColumns={layoutMode === 'grid' ? 3 : 1}
-            columnWrapperStyle={layoutMode === 'grid' ? styles.gridRow : undefined}
+            columnWrapperStyle={
+              layoutMode === 'grid' ? styles.gridRow : undefined
+            }
             contentContainerStyle={[
               styles.listContent,
               layoutMode === 'grid' ? styles.gridContent : null,
@@ -1223,7 +1262,11 @@ function RemoteResourceTypeIcon({
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             {REMOTE_RESOURCE_ICON_GRADIENTS[type].map(stop => (
-              <Stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+              <Stop
+                key={stop.offset}
+                offset={stop.offset}
+                stopColor={stop.color}
+              />
             ))}
           </LinearGradient>
         </Defs>
@@ -1341,7 +1384,10 @@ function renderListItem({
         </Text>
       </View>
       {selectionMode && !folder ? (
-        <SelectionMark selected={selected} onPress={() => onToggleSelection(item)} />
+        <SelectionMark
+          selected={selected}
+          onPress={() => onToggleSelection(item)}
+        />
       ) : folder ? (
         <TouchableOpacity
           style={styles.iconActionButton}
@@ -1408,7 +1454,10 @@ function renderGridItem({
           onOpenFile(item);
         }}
       >
-        <RemoteResourceTypeIcon type={iconType} style={styles.gridIconWrapper} />
+        <RemoteResourceTypeIcon
+          type={iconType}
+          style={styles.gridIconWrapper}
+        />
         {selectionMode && !folder ? (
           <SelectionMark
             selected={selected}
@@ -1511,7 +1560,11 @@ function SelectionMark({
 }) {
   return (
     <TouchableOpacity
-      style={[styles.selectionMark, selected ? styles.selectionMarkActive : null, style]}
+      style={[
+        styles.selectionMark,
+        selected ? styles.selectionMarkActive : null,
+        style,
+      ]}
       activeOpacity={0.7}
       onPress={onPress}
     >
@@ -1580,7 +1633,12 @@ function RemoteEmptyArtwork({
       testID={`remote-access-empty-icon-${variant}`}
       style={styles.emptyArtwork}
     >
-      <View style={[styles.emptyArtworkHalo, isFolder && styles.emptyArtworkHaloFolder]} />
+      <View
+        style={[
+          styles.emptyArtworkHalo,
+          isFolder && styles.emptyArtworkHaloFolder,
+        ]}
+      />
       <View style={styles.emptyArtworkTile}>
         <Svg
           pointerEvents="none"
@@ -1590,13 +1648,7 @@ function RemoteEmptyArtwork({
           viewBox="0 0 72 72"
         >
           <Defs>
-            <LinearGradient
-              id={gradientId}
-              x1="0%"
-              y1="0%"
-              x2="100%"
-              y2="100%"
-            >
+            <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
               <Stop offset="0%" stopColor={stops[0]} />
               <Stop offset="56%" stopColor={stops[1]} />
               <Stop offset="100%" stopColor={stops[2]} />
@@ -1704,7 +1756,9 @@ function ShareSheet({
         </Pressable>
         <View style={styles.shareCard}>
           <Text style={styles.shareTitle}>分享所选文件</Text>
-          <Text style={styles.shareSubtitle}>已选择 {selectedCount} 个文件</Text>
+          <Text style={styles.shareSubtitle}>
+            已选择 {selectedCount} 个文件
+          </Text>
           <View style={styles.shareTargets}>
             {targets.map(target => (
               <TouchableOpacity
@@ -1714,7 +1768,9 @@ function ShareSheet({
                 onPress={onClose}
               >
                 <View style={styles.shareTargetIcon}>
-                  <Text style={styles.shareTargetMark}>{target.slice(0, 2)}</Text>
+                  <Text style={styles.shareTargetMark}>
+                    {target.slice(0, 2)}
+                  </Text>
                 </View>
                 <Text style={styles.shareTargetText}>{target}</Text>
               </TouchableOpacity>
@@ -1725,6 +1781,14 @@ function ShareSheet({
     </Modal>
   );
 }
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const GRID_PADDING = 20;
+const GRID_COLUMN_GAP = 10;
+const GRID_COLUMNS = 3;
+const GRID_CARD_WIDTH =
+  (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_COLUMN_GAP * (GRID_COLUMNS - 1)) /
+  GRID_COLUMNS;
 
 const glassShadow = {
   shadowColor: '#46608A',
@@ -1919,6 +1983,7 @@ const styles = StyleSheet.create({
   gridCard: {
     flex: 1,
     minWidth: 0,
+    maxWidth: GRID_CARD_WIDTH,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.70)',
