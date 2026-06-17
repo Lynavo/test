@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SettingsPage } from '../SettingsPage';
 import { useAuthStore } from '@renderer/stores/auth-store';
@@ -9,12 +11,6 @@ vi.mock('sonner', () => ({
     success: vi.fn(),
     error: vi.fn(),
   },
-}));
-
-vi.mock('../ConnectionDevicesSection', () => ({
-  ConnectionDevicesSection: () => (
-    <div data-testid="connection-devices-section">ConnectionDevicesSection</div>
-  ),
 }));
 
 function setElectronPlatform() {
@@ -77,11 +73,17 @@ describe('SettingsPage', () => {
     expect(switchBtn).toBeInTheDocument();
   });
 
-  it('shows the connection devices settings section', async () => {
+  it('does not render the connection devices section in settings', async () => {
     render(<SettingsPage />);
 
-    expect(screen.getByText('连接设备')).toBeInTheDocument();
-    expect(screen.getByTestId('connection-devices-section')).toBeInTheDocument();
+    expect(screen.queryByText('连接设备')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('connection-devices-section')).not.toBeInTheDocument();
+  });
+
+  it('does not import connection device management into settings', () => {
+    const source = readFileSync(resolve(__dirname, '../SettingsPage.tsx'), 'utf8');
+
+    expect(source).not.toContain('ConnectionDevicesSection');
   });
 
   it('opens a searchable language picker', () => {

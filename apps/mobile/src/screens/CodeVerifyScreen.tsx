@@ -213,11 +213,7 @@ export function CodeVerifyScreen() {
           setErrorMsg(t('errors.pairingClientBlocked'));
         } else if (errorCode === ErrorCode.PAIR_TOKEN_INVALID) {
           setErrorMsg(t('errors.pairingTokenInvalid'));
-        } else if (
-          msg.includes('版本不相容') ||
-          msg.includes('APP_VERSION_INCOMPATIBLE') ||
-          msg.includes('版本不兼容')
-        ) {
+        } else if (msg.includes('APP_VERSION_INCOMPATIBLE')) {
           Alert.alert(
             t('errors.pairingVersionMismatchTitle'),
             t('errors.pairingVersionMismatchMessage'),

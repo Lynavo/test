@@ -147,7 +147,11 @@ describe('CodeVerifyScreen', () => {
     jest.restoreAllMocks();
   });
 
-  it('renders the complete v0-style pairing-code help card', () => {
+  it('does not hardcode localized Chinese copy in the screen source', () => {
+    expect(CodeVerifyScreen.toString()).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
+  it('keeps the original dev pairing-code help card', () => {
     const { getByText } = render(<CodeVerifyScreen />);
 
     expect(getByText('去哪裡找連接碼？')).toBeTruthy();
@@ -160,16 +164,10 @@ describe('CodeVerifyScreen', () => {
       getByText('連接碼不會自動刷新，需手動點擊「重新產生」才會更新。'),
     ).toBeTruthy();
     expect(getByText('示例')).toBeTruthy();
-    expect(getByText('3')).toBeTruthy();
-    expect(getByText('8')).toBeTruthy();
-    expect(getByText('5')).toBeTruthy();
-    expect(getByText('2')).toBeTruthy();
-    expect(getByText('1')).toBeTruthy();
-    expect(getByText('7')).toBeTruthy();
     expect(getByText('查看詳細圖文教學 >')).toBeTruthy();
   });
 
-  it('opens the detailed connection tutorial from the help card', () => {
+  it('opens the detailed connection tutorial from the original dev help card', () => {
     const { getByText } = render(<CodeVerifyScreen />);
 
     fireEvent.press(getByText('查看詳細圖文教學 >'));

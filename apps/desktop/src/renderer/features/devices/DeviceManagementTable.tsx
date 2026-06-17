@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Smartphone, ShieldAlert, Unlock, Wifi } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { DashboardDeviceDTO, DesktopManagedDeviceDTO } from '@syncflow/contracts';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { Button } from '@renderer/components/ui/button';
@@ -23,6 +24,7 @@ export function DeviceManagementTable({
   onBlock: (clientId: string) => void;
   onUnblock: (clientId: string) => void;
 }) {
+  const { t } = useTranslation();
   const [blockTarget, setBlockTarget] = useState<DesktopManagedDeviceDTO | null>(null);
   const storeDashboardDevices = useDashboardStore((s) => s.devices);
   const dashboardDevices = dashboardDevicesOverride ?? storeDashboardDevices;
@@ -55,7 +57,7 @@ export function DeviceManagementTable({
           const status = getDeviceStatus(device);
           const isBlocked = status === 'blocked';
           const isConnected = status === 'connected';
-          const displayName = device.displayName || '未命名设备';
+          const displayName = device.displayName || t('devices.table.unnamedDevice');
 
           return (
             <div
@@ -86,7 +88,7 @@ export function DeviceManagementTable({
                       </h3>
                       {isBlocked && (
                         <span className="shrink-0 rounded-md bg-[#fff0eb] px-2 py-0.5 text-[11px] font-semibold text-[#b42318]">
-                          已禁用
+                          {t('devices.status.disabled')}
                         </span>
                       )}
                     </div>
@@ -111,7 +113,11 @@ export function DeviceManagementTable({
                     }`}
                   />
                   <span className="text-[11px] font-semibold text-[#626a76]">
-                    {isConnected ? '已连接' : isBlocked ? '已禁用' : '未连接'}
+                    {isConnected
+                      ? t('devices.status.connected')
+                      : isBlocked
+                        ? t('devices.status.disabled')
+                        : t('devices.status.offline')}
                   </span>
                 </div>
 
@@ -119,7 +125,9 @@ export function DeviceManagementTable({
                   {isBlocked && device.failedAttemptCount >= 5 && (
                     <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#b42318]">
                       <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">输错连接码超过 5 次，已自动禁用</span>
+                      <span className="truncate">
+                        {t('devices.blockReason.tooManyFailedAttempts')}
+                      </span>
                     </span>
                   )}
                   {!isBlocked && (
@@ -128,7 +136,9 @@ export function DeviceManagementTable({
                         isConnected ? 'text-[#626a76]' : 'text-[#9aa2ad]'
                       }`}
                     >
-                      <span className="truncate">{isConnected ? '已连接，等待同步' : ''}</span>
+                      <span className="truncate">
+                        {isConnected ? t('devices.status.connectedWaitingSync') : ''}
+                      </span>
                     </span>
                   )}
                 </span>
@@ -141,7 +151,7 @@ export function DeviceManagementTable({
                       className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#eaf6ff] px-3 text-xs font-semibold text-[#1677d2] transition hover:bg-[#dcefff] active:scale-[0.98]"
                     >
                       <Unlock className="h-3.5 w-3.5" />
-                      取消禁用
+                      {t('devices.actions.unblock')}
                     </Button>
                   ) : (
                     <Button
@@ -150,7 +160,7 @@ export function DeviceManagementTable({
                       className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#fff0eb] px-3 text-xs font-semibold text-[#b42318] transition hover:bg-[#ffe2da] active:scale-[0.98]"
                     >
                       <Wifi className="h-3.5 w-3.5" />
-                      禁用
+                      {t('devices.actions.block')}
                     </Button>
                   )}
                 </div>
@@ -171,10 +181,15 @@ export function DeviceManagementTable({
         <DialogContent className="border-white/70 bg-[#f7fbff]/96 p-0 text-[#17191c] shadow-[0_30px_90px_rgba(23,25,28,0.18)] sm:max-w-[420px]">
           <div className="space-y-5 p-5">
             <DialogHeader className="text-left">
-              <DialogTitle className="text-base font-semibold text-[#17191c]">禁用设备</DialogTitle>
+              <DialogTitle className="text-base font-semibold text-[#17191c]">
+                {t('devices.dialog.disableTitle')}
+              </DialogTitle>
               <DialogDescription className="mt-1 text-xs leading-5 text-[#7b8490]">
                 {blockTarget
-                  ? `禁用后 ${blockTarget.displayName || '未命名设备'} 将断开连接并停止所有传输，确定要禁用该设备吗？`
+                  ? t('devices.dialog.disableDescription', {
+                      deviceName:
+                        blockTarget.displayName || t('devices.table.unnamedDevice'),
+                    })
                   : ''}
               </DialogDescription>
             </DialogHeader>
@@ -184,14 +199,14 @@ export function DeviceManagementTable({
                 onClick={() => setBlockTarget(null)}
                 className="h-10 rounded-md border border-white/70 bg-white/52 px-4 text-sm font-semibold text-[#59616d] transition hover:bg-white/78"
               >
-                取消
+                {t('devices.actions.cancel')}
               </button>
               <button
                 type="button"
                 onClick={confirmBlockDevice}
                 className="h-10 rounded-md bg-[#d92d20] px-4 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(217,45,32,0.22)] transition hover:bg-[#b42318]"
               >
-                确认禁用
+                {t('devices.actions.confirmBlock')}
               </button>
             </DialogFooter>
           </div>

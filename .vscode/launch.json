@@ -9,11 +9,25 @@
       "command": "cd \"${workspaceFolder}\" && SYNCFLOW_ANDROID_APP_ID=com.vividrop.mobile.china SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS=180 bash scripts/dev/run-mobile-android-device.sh"
     },
     {
+      "name": "Mobile: Android CN Emulator (F5)",
+      "type": "node-terminal",
+      "request": "launch",
+      "preLaunchTask": "mobile: start metro",
+      "command": "cd \"${workspaceFolder}\" && SYNCFLOW_ANDROID_DEVICE=emulator-5554 SYNCFLOW_ANDROID_APP_ID=com.vividrop.mobile.china SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS=180 bash scripts/dev/run-mobile-android-device.sh"
+    },
+    {
       "name": "Mobile: Android Global Debug (F5)",
       "type": "node-terminal",
       "request": "launch",
       "preLaunchTask": "mobile: start metro",
       "command": "cd \"${workspaceFolder}\" && SYNCFLOW_ANDROID_APP_ID=com.vividrop.mobile.global SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS=180 bash scripts/dev/run-mobile-android-device.sh"
+    },
+    {
+      "name": "Mobile: Android Global Emulator (F5)",
+      "type": "node-terminal",
+      "request": "launch",
+      "preLaunchTask": "mobile: start metro",
+      "command": "cd \"${workspaceFolder}\" && SYNCFLOW_ANDROID_DEVICE=emulator-5554 SYNCFLOW_ANDROID_APP_ID=com.vividrop.mobile.global SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS=180 bash scripts/dev/run-mobile-android-device.sh"
     },
     {
       "name": "Mobile: iOS CN (macOS)",

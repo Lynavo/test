@@ -1,0 +1,34 @@
+{
+  "title": "Device Management",
+  "stats": {
+    "total": "Total devices",
+    "disabled": "Disabled",
+    "connected": "Connected"
+  },
+  "empty": {
+    "title": "No devices",
+    "description": "Mobile devices authorized with the pairing code will appear here."
+  },
+  "table": {
+    "unnamedDevice": "Unnamed device"
+  },
+  "status": {
+    "connected": "Connected",
+    "disabled": "Disabled",
+    "offline": "Offline",
+    "connectedWaitingSync": "Connected, waiting to sync"
+  },
+  "blockReason": {
+    "tooManyFailedAttempts": "Pairing code entered incorrectly more than 5 times. Device disabled automatically."
+  },
+  "actions": {
+    "block": "Disable",
+    "unblock": "Enable",
+    "cancel": "Cancel",
+    "confirmBlock": "Confirm disable"
+  },
+  "dialog": {
+    "disableTitle": "Disable device",
+    "disableDescription": "After disabling, {{deviceName}} will disconnect and stop all transfers. Disable this device?"
+  }
+}

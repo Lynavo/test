@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { DesktopManagedDeviceDTO } from '@syncflow/contracts';
 import { DevicesPage } from '../DevicesPage';
@@ -151,5 +153,43 @@ describe('DevicesPage', () => {
     await waitFor(() => {
       expect(unblockDevice).toHaveBeenCalledWith(blockedDevice.clientId);
     });
+  });
+
+  it('keeps device status display in device management items', () => {
+    useManagementStore.setState({ devices: [authorizedDevice, blockedDevice] });
+    useDashboardStore.setState({
+      devices: [
+        {
+          deviceId: 'client-1',
+          stableDeviceId: 'client-1',
+          displayName: 'iPhone 15 Pro',
+          clientName: 'iPhone',
+          platform: 'ios',
+          ip: '192.168.1.100',
+          status: 'connected_idle',
+          todayFileCount: 0,
+          todayBytes: 0,
+          storageLeft: '10 GB',
+          storagePath: '/tmp',
+          devicePath: '/tmp/client-1',
+        },
+      ],
+    });
+
+    render(<DevicesPage />);
+
+    expect(screen.getByText('iPhone 15 Pro')).toBeInTheDocument();
+    expect(screen.getByText('Galaxy S24')).toBeInTheDocument();
+    expect(screen.getAllByText('已连接').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
+    expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
+  });
+
+  it('does not hardcode localized Chinese copy in device management source', () => {
+    const devicesPageSource = readFileSync(resolve(__dirname, '../DevicesPage.tsx'), 'utf8');
+    const tableSource = readFileSync(resolve(__dirname, '../DeviceManagementTable.tsx'), 'utf8');
+
+    expect(devicesPageSource).not.toMatch(/[\u4e00-\u9fff]/);
+    expect(tableSource).not.toMatch(/[\u4e00-\u9fff]/);
   });
 });
