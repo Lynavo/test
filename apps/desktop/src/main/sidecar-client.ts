@@ -929,6 +929,8 @@ export const sidecarClient = {
     request<DesktopLocalListResponse<DesktopManagedDeviceDTO>>('GET', '/management/devices'),
   unblockDevice: (clientId: string) =>
     request<{ ok: boolean }>('POST', `/management/devices/${encodeURIComponent(clientId)}/unblock`),
+  blockDevice: (clientId: string) =>
+    request<{ ok: boolean }>('POST', `/management/devices/${encodeURIComponent(clientId)}/block`),
   getSyncRecords: () =>
     request<DesktopLocalListResponse<DesktopSyncRecordDTO>>('GET', '/management/records/sync'),
   getAccessRecords: () =>

@@ -210,4 +210,26 @@ describe('SyncEngineModule shared bridge wrappers', () => {
       'document',
     );
   });
+
+  it('forwards preview cache filenames to the native bridge', async () => {
+    const nativeSyncEngine = {
+      prepareSharedFilePreview: jest.fn().mockResolvedValue('/cache/notes.txt'),
+    };
+    const syncEngine = loadModule(nativeSyncEngine);
+
+    await expect(
+      syncEngine.prepareDirectoryFilePreview(
+        'personal',
+        'Desktop/notes.txt',
+        'notes.txt',
+      ),
+    ).resolves.toBe('/cache/notes.txt');
+
+    expect(nativeSyncEngine.prepareSharedFilePreview).toHaveBeenCalledWith(
+      'personal',
+      'Desktop/notes.txt',
+      '',
+      'notes.txt',
+    );
+  });
 });

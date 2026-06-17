@@ -17,15 +17,13 @@ type DeviceStatusFilter = 'all' | 'blocked' | 'connected';
 export function DevicesPage() {
   const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<DeviceStatusFilter>('all');
-  const [locallyBlockedClientIds, setLocallyBlockedClientIds] = useState<Set<string>>(
-    () => new Set(),
-  );
 
   const devices = useManagementStore((state) => state.devices);
   const loading = useManagementStore((state) => state.devicesLoading);
   const error = useManagementStore((state) => state.devicesError);
   const loadDevices = useManagementStore((state) => state.loadDevices);
   const unblockDevice = useManagementStore((state) => state.unblockDevice);
+  const blockDevice = useManagementStore((state) => state.blockDevice);
 
   const dashboardDevices = useDashboardStore((state) => state.devices);
   const fetchDashboard = useDashboardStore((state) => state.fetchDashboard);
@@ -36,25 +34,7 @@ export function DevicesPage() {
   }, [loadDevices, fetchDashboard]);
 
   const usingPreviewDevices = !loading && !error && shouldUsePreviewData(devices.length > 0);
-  const baseVisibleDevices = usingPreviewDevices ? previewManagedDevices : devices;
-  const visibleDevices = useMemo(
-    () =>
-      baseVisibleDevices.map((device): DesktopManagedDeviceDTO => {
-        if (!locallyBlockedClientIds.has(device.clientId)) {
-          return device;
-        }
-
-        return {
-          ...device,
-          authorizationStatus: 'revoked',
-          blockStatus: 'active',
-          failedAttemptCount: Math.max(device.failedAttemptCount, 5),
-          blockReason: 'too_many_failed_attempts',
-          blockedAt: device.blockedAt ?? new Date().toISOString(),
-        };
-      }),
-    [baseVisibleDevices, locallyBlockedClientIds],
-  );
+  const visibleDevices = usingPreviewDevices ? previewManagedDevices : devices;
   const visibleDashboardDevices =
     usingPreviewDevices && dashboardDevices.length === 0
       ? previewDashboardDevices
@@ -93,19 +73,10 @@ export function DevicesPage() {
         : visibleDevices;
 
   const handleBlockDevice = (clientId: string) => {
-    setLocallyBlockedClientIds((current) => {
-      const next = new Set(current);
-      next.add(clientId);
-      return next;
-    });
+    void blockDevice(clientId);
   };
 
   const handleUnblockDevice = (clientId: string) => {
-    setLocallyBlockedClientIds((current) => {
-      const next = new Set(current);
-      next.delete(clientId);
-      return next;
-    });
     void unblockDevice(clientId);
   };
 

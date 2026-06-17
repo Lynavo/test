@@ -145,6 +145,7 @@ func TestResourcesReceivedLibraryList(t *testing.T) {
 
 func TestMobileResourcesListDownloadAndAccessRecords(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -183,8 +184,21 @@ func TestMobileResourcesListDownloadAndAccessRecords(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&sharedBody); err != nil {
 		t.Fatalf("decode mobile shared: %v", err)
 	}
-	if len(sharedBody.Items) != 1 || sharedBody.Items[0].ResourceID != resource.ResourceID {
-		t.Fatalf("unexpected mobile shared list: %+v", sharedBody.Items)
+	foundManual := false
+	foundVirtual := false
+	for _, item := range sharedBody.Items {
+		if item.ResourceID == resource.ResourceID {
+			foundManual = true
+		}
+		if item.ResourceID == "user_home" || strings.HasPrefix(item.ResourceID, "drive_") {
+			foundVirtual = true
+		}
+	}
+	if !foundManual {
+		t.Fatalf("manual resource not found in mobile shared list: %+v", sharedBody.Items)
+	}
+	if !foundVirtual {
+		t.Fatalf("virtual default resource (user_home or drive) not found in mobile shared list: %+v", sharedBody.Items)
 	}
 
 	resp, err = http.Get(srv.URL + "/resources/mobile/download/unknown-resource?clientId=client-001")
@@ -265,6 +279,7 @@ func TestMobileResourcesListDownloadAndAccessRecords(t *testing.T) {
 
 func TestMobileSharedFolderRootListing(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -329,6 +344,7 @@ func TestMobileSharedFolderRootListing(t *testing.T) {
 
 func TestMobileSharedFolderNestedListing(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -387,6 +403,7 @@ func TestMobileSharedFolderNestedListing(t *testing.T) {
 
 func TestMobileSharedFolderListingRejectsPathTraversal(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -426,6 +443,7 @@ func TestMobileSharedFolderListingRejectsPathTraversal(t *testing.T) {
 
 func TestMobileSharedFolderListingRejectsSharedFileResource(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -468,6 +486,8 @@ func TestMobileSharedFolderListingRejectsSharedFileResource(t *testing.T) {
 
 func TestMobileResourceAccessNormalizesLegacyResourceKind(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	insertPairedDeviceWithStableID(t, st, "legacy-client", "Legacy Client", "Legacy Client", "stable-legacy", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -505,8 +525,17 @@ func TestMobileResourceAccessNormalizesLegacyResourceKind(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&sharedBody); err != nil {
 		t.Fatalf("decode legacy mobile shared: %v", err)
 	}
-	if len(sharedBody.Items) != 1 || sharedBody.Items[0].Kind != "shared_file" {
-		t.Fatalf("expected legacy shared resource kind to normalize in response, got %+v", sharedBody.Items)
+	foundLegacy := false
+	for _, item := range sharedBody.Items {
+		if item.ResourceID == resource.ResourceID {
+			foundLegacy = true
+			if item.Kind != "shared_file" {
+				t.Fatalf("expected legacy shared resource kind to normalize to shared_file, got %q", item.Kind)
+			}
+		}
+	}
+	if !foundLegacy {
+		t.Fatalf("legacy resource not found in response, got %+v", sharedBody.Items)
 	}
 
 	resp, err = http.Post(srv.URL+"/resources/mobile/view/"+resource.ResourceID+"?clientId=legacy-client", "application/json", nil)
@@ -546,6 +575,7 @@ func TestMobileResourceAccessNormalizesLegacyResourceKind(t *testing.T) {
 
 func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -666,6 +696,8 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 
 func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	insertPairedDeviceWithStableID(t, st, "other-client", "Bob iPhone", "Bob iPhone", "stable-002", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)
@@ -770,6 +802,7 @@ func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T)
 
 func TestMobileReceivedFileDownloadByFileKeyServesDocuments(t *testing.T) {
 	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
 	if err != nil {
 		t.Fatalf("GetDeviceID: %v", err)

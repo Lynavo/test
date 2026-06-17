@@ -60,6 +60,7 @@ export const IPC = {
   SIDECAR_SHARED_LIST: 'sidecar:shared-list',
   SIDECAR_MANAGED_DEVICES: 'sidecar:managed-devices',
   SIDECAR_UNBLOCK_DEVICE: 'sidecar:unblock-device',
+  SIDECAR_BLOCK_DEVICE: 'sidecar:block-device',
   SIDECAR_SYNC_RECORDS: 'sidecar:sync-records',
   SIDECAR_ACCESS_RECORDS: 'sidecar:access-records',
   SIDECAR_SHARED_RESOURCES: 'sidecar:shared-resources',
@@ -622,6 +623,9 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_MANAGED_DEVICES, () => sidecarClient.getManagedDevices());
   ipcMain.handle(IPC.SIDECAR_UNBLOCK_DEVICE, (_e, clientId: string) =>
     sidecarClient.unblockDevice(clientId),
+  );
+  ipcMain.handle(IPC.SIDECAR_BLOCK_DEVICE, (_e, clientId: string) =>
+    sidecarClient.blockDevice(clientId),
   );
   ipcMain.handle(IPC.SIDECAR_SYNC_RECORDS, () => sidecarClient.getSyncRecords());
   ipcMain.handle(IPC.SIDECAR_ACCESS_RECORDS, () => sidecarClient.getAccessRecords());

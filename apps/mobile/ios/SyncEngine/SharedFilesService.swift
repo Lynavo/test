@@ -457,7 +457,8 @@ class SharedFilesService {
     func downloadFileForPreview(
         scope: SharedDirectoryScope = .team,
         path: String,
-        accessToken: String = ""
+        accessToken: String = "",
+        filename: String = ""
     ) async throws -> URL {
         let endpoint = "\(scope.endpointPrefix)/download/\(SharedFilesRoutePolicy.encodedSharedFilePath(path))"
         let partialURL = try partialDownloadURL(path: "preview:\(scope.rawValue):\(path)")
@@ -520,10 +521,7 @@ class SharedFilesService {
         try validateHTTPResponse(response, path: endpoint)
         try validateCompletedDownload(downloadedURL: downloadedURL, response: response)
 
-        let previewDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_shared_previews", isDirectory: true)
-        try FileManager.default.createDirectory(at: previewDir, withIntermediateDirectories: true)
-        let previewURL = previewDir.appendingPathComponent(previewFilename(scope: scope, path: path))
+        let previewURL = try previewCacheURL(scope: scope, path: path, filename: filename)
         try? FileManager.default.removeItem(at: previewURL)
         try FileManager.default.moveItem(at: downloadedURL, to: previewURL)
         downloadedURLForCleanup = nil
@@ -541,18 +539,46 @@ class SharedFilesService {
         let savedLocation: String?
     }
 
-    private func previewFilename(scope: SharedDirectoryScope, path: String) -> String {
-        let filename = (path as NSString).lastPathComponent
-        let ext = (filename as NSString).pathExtension
+    private func previewCacheURL(
+        scope: SharedDirectoryScope,
+        path: String,
+        filename: String
+    ) throws -> URL {
+        let previewDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("syncflow_shared_previews", isDirectory: true)
+            .appendingPathComponent(previewCacheToken(scope: scope, path: path), isDirectory: true)
+        try FileManager.default.createDirectory(at: previewDir, withIntermediateDirectories: true)
+        return previewDir.appendingPathComponent(previewFilename(scope: scope, path: path, filename: filename))
+    }
+
+    private func previewCacheToken(scope: SharedDirectoryScope, path: String) -> String {
+        return Data("\(scope.rawValue):\(path)".utf8)
+            .base64EncodedString()
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    private func previewFilename(scope: SharedDirectoryScope, path: String, filename: String) -> String {
+        let fallback = (path as NSString).lastPathComponent
+        let candidate = filename.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : filename
+        let invalid = CharacterSet(charactersIn: "/\\:")
+            .union(.controlCharacters)
+            .union(.newlines)
+        let sanitized = candidate
+            .components(separatedBy: invalid)
+            .filter { !$0.isEmpty }
+            .joined(separator: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !sanitized.isEmpty {
+            return sanitized
+        }
         let token = Data("\(scope.rawValue):\(path)".utf8)
             .base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "=", with: "")
-        if ext.isEmpty {
-            return token
-        }
-        return "\(token).\(ext)"
+        return token.isEmpty ? "shared-file" : token
     }
 
     private func classifyLocalFileType(filename: String) -> String {

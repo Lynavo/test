@@ -1577,7 +1577,7 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
-  fun prepareSharedFilePreview(scope: String, path: String, accessToken: String, promise: Promise) {
+  fun prepareSharedFilePreview(scope: String, path: String, accessToken: String, filename: String, promise: Promise) {
     runAsync(promise) {
       recordNativeLog("SharedFiles", "prepareSharedFilePreview requested scope=$scope path=$path")
       var route = resolveSharedFileRoute(
@@ -1589,7 +1589,7 @@ class NativeSyncEngineModule(
       )
       logSharedFileRoute("prepareSharedFilePreview", route)
       try {
-        val localPath = downloadSharedFilePreviewFromRoute(path, route)
+        val localPath = downloadSharedFilePreviewFromRoute(path, filename, route)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -1618,7 +1618,7 @@ class NativeSyncEngineModule(
           error = err,
         )
         logSharedFileRoute("prepareSharedFilePreview", route, retry = true)
-        val localPath = downloadSharedFilePreviewFromRoute(path, route)
+        val localPath = downloadSharedFilePreviewFromRoute(path, filename, route)
         updateSharedFilesReachability(
           state = "available",
           route = route,
@@ -3164,9 +3164,9 @@ class NativeSyncEngineModule(
     }
   }
 
-  private fun downloadSharedFilePreviewFromRoute(path: String, route: SharedFileRoute): String {
-    val filename = path.substringAfterLast('/').ifBlank { "shared-file" }
-    val safeFilename = safeShareCacheFilename(filename, "shared-file")
+  private fun downloadSharedFilePreviewFromRoute(path: String, filename: String, route: SharedFileRoute): String {
+    val fallbackName = path.substringAfterLast('/').ifBlank { "shared-file" }
+    val safeFilename = safeShareCacheFilename(filename, fallbackName)
     val connection = route.url.openConnection() as HttpURLConnection
     try {
       recordNativeLog(

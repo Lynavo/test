@@ -113,6 +113,7 @@ export interface ElectronAPI {
     getSharedList(path?: string): Promise<SharedDirectoryDTO>;
     getManagedDevices(): Promise<DesktopLocalListResponse<DesktopManagedDeviceDTO>>;
     unblockDevice(clientId: string): Promise<{ ok: boolean }>;
+    blockDevice(clientId: string): Promise<{ ok: boolean }>;
     getSyncRecords(): Promise<DesktopLocalListResponse<DesktopSyncRecordDTO>>;
     getAccessRecords(): Promise<DesktopLocalListResponse<DesktopAccessRecordDTO>>;
     getSharedResources(): Promise<DesktopLocalListResponse<DesktopSharedResourceDTO>>;

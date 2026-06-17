@@ -8473,7 +8473,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         return sharedFilesService.getStreamUrl(scope: scope, path: path, accessToken: accessToken)?.absoluteString
     }
 
-    func prepareSharedFilePreview(scope scopeRaw: String, path: String, accessToken: String) async throws -> String {
+    func prepareSharedFilePreview(scope scopeRaw: String, path: String, accessToken: String, filename: String) async throws -> String {
         let scope = SharedDirectoryScope(rawValue: scopeRaw) ?? .team
         let allowWake = SharedFilesRoutePolicy.shouldAttemptWake(
             scope: scope.rawValue,
@@ -8498,7 +8498,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     reason: reason,
                     isTunnelRoute: route.isTunnel
                 ) {
-                    try await sharedFilesService.downloadFileForPreview(scope: scope, path: path, accessToken: accessToken)
+                    try await sharedFilesService.downloadFileForPreview(
+                        scope: scope,
+                        path: path,
+                        accessToken: accessToken,
+                        filename: filename
+                    )
                 }
                 previewURL = downloadedPreviewURL
                 syncDiagnosticsLog(

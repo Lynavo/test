@@ -46,7 +46,9 @@ const SHARED_FOLDER_ENTRY_PREFIX = 'shared-folder-entry:';
 const PERSONAL_DIRECTORY_RESOURCE_PREFIX = 'personal-dir:';
 const PERSONAL_DIRECTORY_DESKTOP_ID = 'personal-dir';
 
-export function isDownloadSavedLocally(result: ResourceDownloadResult): boolean {
+export function isDownloadSavedLocally(
+  result: ResourceDownloadResult,
+): boolean {
   return (
     result.savedToPhotos ||
     (typeof result.localPath === 'string' &&
@@ -76,14 +78,24 @@ async function resourceDownloadUrl(
     const rootResourceId = rest.slice(0, colonIdx);
     const filePath = rest.slice(colonIdx + 1);
     const clientId = await getClientId();
-    const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
-    return `http://${desktop.host}:${desktop.port}/resources/mobile/download/${encodeURIComponent(rootResourceId)}?path=${encodeURIComponent(filePath)}&clientId=${clientId}&clientName=${encodeURIComponent(clientName)}`;
+    const clientName =
+      (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+    return `http://${desktop.host}:${
+      desktop.port
+    }/resources/mobile/download/${encodeURIComponent(
+      rootResourceId,
+    )}?path=${encodeURIComponent(
+      filePath,
+    )}&clientId=${clientId}&clientName=${encodeURIComponent(clientName)}`;
   }
 
   const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
-  return `http://${desktop.host}:${desktop.port}/resources/mobile/download/${resourceId}?clientId=${clientId}&clientName=${encodeURIComponent(
-    clientName
+  const clientName =
+    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  return `http://${desktop.host}:${
+    desktop.port
+  }/resources/mobile/download/${resourceId}?clientId=${clientId}&clientName=${encodeURIComponent(
+    clientName,
   )}`;
 }
 
@@ -183,7 +195,9 @@ function getPersonalDirectoryPathFromResourceId(resourceId: string): string {
   if (!isPersonalDirectoryResourceId(resourceId)) {
     throw new Error('Invalid personal directory resource ID');
   }
-  const encodedPath = resourceId.slice(PERSONAL_DIRECTORY_RESOURCE_PREFIX.length);
+  const encodedPath = resourceId.slice(
+    PERSONAL_DIRECTORY_RESOURCE_PREFIX.length,
+  );
   return normalizeRemotePath(decodeRemotePath(encodedPath));
 }
 
@@ -257,7 +271,10 @@ function isVideoMedia(mediaType: string, filename: string) {
   );
 }
 
-function absoluteDesktopUrl(desktop: DesktopInfo, value?: string): string | undefined {
+function absoluteDesktopUrl(
+  desktop: DesktopInfo,
+  value?: string,
+): string | undefined {
   if (!value || value.trim().length === 0) return undefined;
   if (/^https?:\/\//i.test(value)) return value;
   const normalized = value.startsWith('/') ? value : `/${value}`;
@@ -271,9 +288,11 @@ function buildReceivedMediaUrl(
   clientName: string,
   fileKey: string,
 ) {
-  const query = `clientId=${encodeURIComponent(clientId)}&clientName=${encodeURIComponent(
-    clientName,
-  )}&fileKey=${encodeURIComponent(fileKey)}`;
+  const query = `clientId=${encodeURIComponent(
+    clientId,
+  )}&clientName=${encodeURIComponent(clientName)}&fileKey=${encodeURIComponent(
+    fileKey,
+  )}`;
   return `http://${desktop.host}:${desktop.port}/resources/mobile/received/${kind}?${query}`;
 }
 
@@ -287,17 +306,16 @@ async function receivedLibraryFileUrl(
     throw new Error('Received file key is required');
   }
   const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  const clientName =
+    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
   return buildReceivedMediaUrl(desktop, kind, clientId, clientName, fileKey);
 }
 
-function normalizeLocalDownloadResult(
-  result: {
-    savedToPhotos?: boolean;
-    localPath?: string | null;
-    savedLocation?: string | null;
-  },
-): ResourceDownloadResult {
+function normalizeLocalDownloadResult(result: {
+  savedToPhotos?: boolean;
+  localPath?: string | null;
+  savedLocation?: string | null;
+}): ResourceDownloadResult {
   return {
     savedToPhotos: result.savedToPhotos === true,
     localPath:
@@ -363,12 +381,15 @@ function withCurrentClientReceivedMediaUrls(
 }
 
 export async function listSharedResources(
-  desktop: DesktopInfo
+  desktop: DesktopInfo,
 ): Promise<DesktopSharedResourceDTO[]> {
   const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
-  const url = `http://${desktop.host}:${desktop.port}/resources/mobile/shared?clientId=${clientId}&clientName=${encodeURIComponent(
-    clientName
+  const clientName =
+    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  const url = `http://${desktop.host}:${
+    desktop.port
+  }/resources/mobile/shared?clientId=${clientId}&clientName=${encodeURIComponent(
+    clientName,
   )}`;
   try {
     const res = await fetch(url);
@@ -407,10 +428,13 @@ export async function listSharedFolderContents(
   }
 
   const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  const clientName =
+    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
   const encodedPath = encodeRemotePath(path);
   const pathSuffix = encodedPath ? `/${encodedPath}` : '';
-  const url = `http://${desktop.host}:${desktop.port}/resources/mobile/shared/${encodeURIComponent(
+  const url = `http://${desktop.host}:${
+    desktop.port
+  }/resources/mobile/shared/${encodeURIComponent(
     resourceId,
   )}/list${pathSuffix}?clientId=${clientId}&clientName=${encodeURIComponent(
     clientName,
@@ -435,10 +459,13 @@ async function listReceivedLibraryWithScope(
   scope?: 'client',
 ): Promise<ReceivedLibraryItemDTO[]> {
   const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  const clientName =
+    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
   const scopeSuffix = scope ? `&scope=${encodeURIComponent(scope)}` : '';
-  const url = `http://${desktop.host}:${desktop.port}/resources/mobile/received?clientId=${clientId}&clientName=${encodeURIComponent(
-    clientName
+  const url = `http://${desktop.host}:${
+    desktop.port
+  }/resources/mobile/received?clientId=${clientId}&clientName=${encodeURIComponent(
+    clientName,
   )}${scopeSuffix}`;
   const res = await fetch(url);
   if (!res.ok) {
@@ -449,11 +476,16 @@ async function listReceivedLibraryWithScope(
   if (scope !== 'client') {
     return items;
   }
-  return withCurrentClientReceivedMediaUrls(desktop, items, clientId, clientName);
+  return withCurrentClientReceivedMediaUrls(
+    desktop,
+    items,
+    clientId,
+    clientName,
+  );
 }
 
 export async function listReceivedLibrary(
-  desktop: DesktopInfo
+  desktop: DesktopInfo,
 ): Promise<ReceivedLibraryItemDTO[]> {
   return listReceivedLibraryWithScope(desktop);
 }
@@ -466,7 +498,7 @@ export async function listCurrentClientReceivedLibrary(
 
 export async function downloadResource(
   desktop: DesktopInfo,
-  resourceId: string
+  resourceId: string,
 ): Promise<ResourceDownloadResult> {
   await requestResourceDownload(desktop, resourceId);
 
@@ -605,11 +637,12 @@ export async function getGlobalRemoteAccessPreviewUrl(
 
 export async function prepareGlobalRemoteAccessPreview(
   resourceId: string,
-  _filename?: string,
+  filename?: string,
 ): Promise<string> {
   const localPath = await prepareDirectoryFilePreview(
     'personal',
     getPersonalDirectoryPathFromResourceId(resourceId),
+    filename?.trim(),
   );
   if (typeof localPath !== 'string' || localPath.trim().length === 0) {
     throw new Error('Remote file was not prepared for preview');
@@ -640,7 +673,7 @@ export async function shareGlobalRemoteAccessResources(
 }
 
 export async function listHistory(
-  desktop: DesktopInfo
+  desktop: DesktopInfo,
 ): Promise<DesktopSyncRecordDTO[]> {
   const clientId = await getClientId();
   const url = `http://${desktop.host}:${desktop.port}/management/records/sync?clientId=${clientId}`;

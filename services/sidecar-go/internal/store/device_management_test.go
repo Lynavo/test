@@ -207,3 +207,56 @@ func TestConcurrentWrongCodeAttemptsReachBlockThreshold(t *testing.T) {
 		t.Fatalf("expected failed count %d, got %d", maxWrongConnectionCodeAttempts, state.FailedAttemptCount)
 	}
 }
+
+func TestPairingBlockedDeviceAppearsInListManagedDevices(t *testing.T) {
+	s := newTestStore(t)
+	desktopID, _ := s.GetDeviceID()
+
+	meta := PairingClientMetadata{
+		ClientID:        "pairing-blocked-phone",
+		DesktopDeviceID: desktopID,
+		ClientName:      "Bob's Android",
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := s.RecordPairingFailure(meta, 5); err != nil {
+			t.Fatalf("RecordPairingFailure attempt %d: %v", i+1, err)
+		}
+	}
+
+	// The pairing-blocked device should appear in ListManagedDevices.
+	devices, err := s.ListManagedDevices(desktopID)
+	if err != nil {
+		t.Fatalf("ListManagedDevices: %v", err)
+	}
+	found := false
+	for _, d := range devices {
+		if d.ClientID == meta.ClientID {
+			found = true
+			if d.BlockStatus != "active" {
+				t.Fatalf("blockStatus=%q, want active", d.BlockStatus)
+			}
+			if d.AuthorizationStatus != "revoked" {
+				t.Fatalf("authorizationStatus=%q, want revoked", d.AuthorizationStatus)
+			}
+			if d.BlockReason == nil || *d.BlockReason != "too_many_failed_attempts" {
+				t.Fatalf("blockReason=%v, want too_many_failed_attempts", d.BlockReason)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("pairing-blocked device not found in ListManagedDevices (got %d items)", len(devices))
+	}
+
+	// After UnblockDevice the pairing block should be cleared.
+	if err := s.UnblockDevice(desktopID, meta.ClientID); err != nil {
+		t.Fatalf("UnblockDevice: %v", err)
+	}
+	block, err := s.GetActivePairingBlock(meta.ClientID, desktopID)
+	if err != nil {
+		t.Fatalf("GetActivePairingBlock after unblock: %v", err)
+	}
+	if block != nil {
+		t.Fatalf("expected pairing block cleared, still active: %+v", block)
+	}
+}

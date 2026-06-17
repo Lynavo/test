@@ -51,6 +51,38 @@ func (s *Server) handleManagementUnblockDevice(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, state)
 }
 
+func (s *Server) handleManagementBlockDevice(w http.ResponseWriter, r *http.Request) {
+	clientID := strings.TrimSpace(r.PathValue("clientId"))
+	if !isValidAPIID(clientID) {
+		writeError(w, http.StatusBadRequest, "invalid clientId")
+		return
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
+		return
+	}
+	known, err := s.store.DeviceKnownForManagement(desktopDeviceID, clientID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load device")
+		return
+	}
+	if !known {
+		writeError(w, http.StatusNotFound, "device not found")
+		return
+	}
+	if err := s.store.BlockDevice(desktopDeviceID, clientID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to block device")
+		return
+	}
+	state, err := s.store.GetDeviceBlockState(desktopDeviceID, clientID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load block state")
+		return
+	}
+	writeJSON(w, http.StatusOK, state)
+}
+
 func (s *Server) handleManagementSyncRecords(w http.ResponseWriter, r *http.Request) {
 	clientID, ok := optionalClientIDFromQuery(w, r)
 	if !ok {

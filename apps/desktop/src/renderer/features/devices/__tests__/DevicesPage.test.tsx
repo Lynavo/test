@@ -129,14 +129,28 @@ describe('DevicesPage', () => {
     expect(screen.getByRole('button', { name: '确认禁用' })).toBeInTheDocument();
   });
 
-  it('marks a device as disabled after confirming the disable dialog', () => {
-    useManagementStore.setState({ devices: [authorizedDevice] });
+  it('marks a device as disabled after confirming the disable dialog', async () => {
+    // Mock blockDevice to simulate successful block and update the store
+    const blockedVersion: DesktopManagedDeviceDTO = {
+      ...authorizedDevice,
+      authorizationStatus: 'revoked',
+      blockStatus: 'active',
+      failedAttemptCount: 5,
+      blockedAt: new Date().toISOString(),
+      blockReason: 'too_many_failed_attempts',
+    };
+    const blockDevice = vi.fn().mockImplementation(async () => {
+      useManagementStore.setState({ devices: [blockedVersion] });
+    });
+    useManagementStore.setState({ devices: [authorizedDevice], blockDevice });
 
     render(<DevicesPage />);
     fireEvent.click(screen.getByRole('button', { name: '禁用' }));
     fireEvent.click(screen.getByRole('button', { name: '确认禁用' }));
 
-    expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
+    });
     expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消禁用' })).toBeInTheDocument();
   });

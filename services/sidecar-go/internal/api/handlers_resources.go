@@ -3,12 +3,13 @@ package api
 import (
 	"errors"
 	"fmt"
-	"mime"
 	"log/slog"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -148,7 +149,7 @@ func (s *Server) handleResourcesReceived(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleMobileSharedResources(w http.ResponseWriter, r *http.Request) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return
 	}
@@ -157,13 +158,45 @@ func (s *Server) handleMobileSharedResources(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
+
+	var virtualResources []store.SharedResource
+	if runtime.GOOS == "windows" {
+		for _, root := range windowsPersonalDriveRoots() {
+			drivePath := root.Path
+			displayName := root.ID + " 盘"
+			virtualResources = append(virtualResources, store.SharedResource{
+				ResourceID:      "drive_" + root.ID,
+				DesktopDeviceID: desktopDeviceID,
+				Kind:            "shared_folder",
+				DisplayName:     displayName,
+				LocalPath:       &drivePath,
+				Status:          "available",
+			})
+		}
+	} else {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			virtualResources = append(virtualResources, store.SharedResource{
+				ResourceID:      "user_home",
+				DesktopDeviceID: desktopDeviceID,
+				Kind:            "shared_folder",
+				DisplayName:     "电脑个人目录",
+				LocalPath:       &home,
+				Status:          "available",
+			})
+		}
+	}
+
 	resources, err := s.store.ListSharedResources(desktopDeviceID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list shared resources")
 		return
 	}
+
+	combined := append(virtualResources, resources...)
+
 	_, _ = s.recordResourceAccess(desktopDeviceID, client, "shared_resources", "shared_file", "Shared Resources", "list", "ok")
-	writeJSON(w, http.StatusOK, map[string]any{"items": resources})
+	writeJSON(w, http.StatusOK, map[string]any{"items": combined})
 }
 
 func (s *Server) handleMobileSharedResourceFolderList(w http.ResponseWriter, r *http.Request) {
@@ -175,7 +208,7 @@ func (s *Server) handleMobileSharedResourceFolderListPath(w http.ResponseWriter,
 }
 
 func (s *Server) listMobileSharedResourceFolder(w http.ResponseWriter, r *http.Request, relPath string) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return
 	}
@@ -189,7 +222,7 @@ func (s *Server) listMobileSharedResourceFolder(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
-	resource, err := s.store.ResolveSharedResource(desktopDeviceID, resourceID)
+	resource, err := s.resolveSharedResourceHelper(desktopDeviceID, resourceID)
 	if err != nil {
 		if errors.Is(err, store.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "resource not found")
@@ -266,7 +299,7 @@ func (s *Server) ensureMobileSharedFolderListable(
 }
 
 func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Request) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return
 	}
@@ -388,7 +421,7 @@ func (s *Server) resolveMobileReceivedUploadWithClient(
 	w http.ResponseWriter,
 	r *http.Request,
 ) (mobileAccessClient, *store.Upload, string, os.FileInfo, bool) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return mobileAccessClient{}, nil, "", nil, false
 	}
@@ -498,7 +531,7 @@ func isVideoMedia(mediaType string, filename string) bool {
 }
 
 func (s *Server) handleMobileResourceView(w http.ResponseWriter, r *http.Request) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return
 	}
@@ -512,7 +545,7 @@ func (s *Server) handleMobileResourceView(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
-	resource, err := s.store.ResolveSharedResource(desktopDeviceID, resourceID)
+	resource, err := s.resolveSharedResourceHelper(desktopDeviceID, resourceID)
 	if err != nil {
 		if errors.Is(err, store.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "resource not found")
@@ -529,7 +562,7 @@ func (s *Server) handleMobileResourceView(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleMobileResourceDownload(w http.ResponseWriter, r *http.Request) {
-	client, ok := mobileAccessClientFromQuery(w, r)
+	client, ok := s.verifyMobileClientPaired(w, r)
 	if !ok {
 		return
 	}
@@ -543,7 +576,7 @@ func (s *Server) handleMobileResourceDownload(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
-	resource, err := s.store.ResolveSharedResource(desktopDeviceID, resourceID)
+	resource, err := s.resolveSharedResourceHelper(desktopDeviceID, resourceID)
 	if err != nil {
 		if errors.Is(err, store.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "resource not found")
@@ -726,4 +759,62 @@ func isValidAccessResult(result string) bool {
 	default:
 		return false
 	}
+}
+
+// verifyMobileClientPaired validates the client exists in paired_devices, is not revoked, and is not blocked.
+func (s *Server) verifyMobileClientPaired(w http.ResponseWriter, r *http.Request) (mobileAccessClient, bool) {
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return client, false
+	}
+	device, err := s.store.GetPairedDevice(client.ClientID)
+	if err != nil {
+		writeError(w, http.StatusForbidden, "device not authorized")
+		return client, false
+	}
+	if device.RevokedAt != nil {
+		writeError(w, http.StatusForbidden, "device pairing revoked")
+		return client, false
+	}
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err == nil {
+		block, err := s.store.GetDeviceBlockState(desktopDeviceID, client.ClientID)
+		if err == nil && block.Blocked {
+			writeError(w, http.StatusForbidden, "device is blocked")
+			return client, false
+		}
+	}
+	return client, true
+}
+
+// resolveSharedResourceHelper resolves custom/DB shared resources as well as virtual OS-level defaults.
+func (s *Server) resolveSharedResourceHelper(desktopDeviceID, resourceID string) (store.SharedResource, error) {
+	if resourceID == "user_home" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return store.SharedResource{}, err
+		}
+		return store.SharedResource{
+			ResourceID:      "user_home",
+			DesktopDeviceID: desktopDeviceID,
+			Kind:            "shared_folder",
+			DisplayName:     "电脑个人目录",
+			LocalPath:       &home,
+			Status:          "available",
+		}, nil
+	}
+	if strings.HasPrefix(resourceID, "drive_") && len(resourceID) == 7 {
+		driveLetter := string(resourceID[6])
+		drivePath := driveLetter + ":\\"
+		displayName := driveLetter + " 盘"
+		return store.SharedResource{
+			ResourceID:      resourceID,
+			DesktopDeviceID: desktopDeviceID,
+			Kind:            "shared_folder",
+			DisplayName:     displayName,
+			LocalPath:       &drivePath,
+			Status:          "available",
+		}, nil
+	}
+	return s.store.ResolveSharedResource(desktopDeviceID, resourceID)
 }

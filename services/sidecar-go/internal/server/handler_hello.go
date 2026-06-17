@@ -113,7 +113,15 @@ func (c *connection) handleHello(body []byte) error {
 		slog.Error("failed to look up paired device", "clientID", req.ClientID, "err", err)
 	}
 
-	paired := device != nil && device.RevokedAt == nil
+	var blockBlocked bool
+	if err == nil {
+		block, err := c.store.GetDeviceBlockState(serverID, req.ClientID)
+		if err == nil {
+			blockBlocked = block.Blocked
+		}
+	}
+
+	paired := device != nil && device.RevokedAt == nil && !blockBlocked
 
 	// If device is "returning" but client didn't send a pairingToken,
 	// the client lost its credentials (e.g. app reinstall). Force re-pair.

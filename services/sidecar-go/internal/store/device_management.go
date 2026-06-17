@@ -153,6 +153,44 @@ func (s *Store) UnblockDevice(desktopDeviceID, clientID string) error {
 	if err != nil {
 		return fmt.Errorf("unblock device: %w", err)
 	}
+	// Also clear any active pairing block so the device can pair again (Path-1 block).
+	_, err = s.db.Exec(`
+		UPDATE blocked_pairing_clients
+		SET cleared_at = ?,
+		    cleared_by = 'desktop_user'
+		WHERE client_id = ? AND desktop_device_id = ? AND cleared_at IS NULL`,
+		now, clientID, desktopDeviceID,
+	)
+	if err != nil {
+		return fmt.Errorf("clear pairing block on unblock: %w", err)
+	}
+	// Also clear pairing rate-limit counters.
+	_, err = s.db.Exec(
+		"DELETE FROM pairing_rate_limits WHERE client_id = ? AND desktop_device_id = ?",
+		clientID, desktopDeviceID,
+	)
+	if err != nil {
+		return fmt.Errorf("clear pairing rate limits on unblock: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) BlockDevice(desktopDeviceID, clientID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := s.db.Exec(`
+		INSERT INTO device_blocks
+			(desktop_device_id, client_id, reason, failed_attempt_count, blocked_at, manually_unblocked_at, updated_at)
+		VALUES (?, ?, 'manually_blocked', 0, ?, NULL, ?)
+		ON CONFLICT(desktop_device_id, client_id) DO UPDATE SET
+			reason = 'manually_blocked',
+			blocked_at = excluded.blocked_at,
+			manually_unblocked_at = NULL,
+			updated_at = excluded.updated_at`,
+		desktopDeviceID, clientID, now, now,
+	)
+	if err != nil {
+		return fmt.Errorf("block device: %w", err)
+	}
 	return nil
 }
 
@@ -173,8 +211,16 @@ func (s *Store) DeviceKnownForManagement(desktopDeviceID, clientID string) (bool
 				AND blocked_at IS NOT NULL
 				AND manually_unblocked_at IS NULL
 			LIMIT 1
+		) IS NOT NULL
+		OR (
+			SELECT 1
+			FROM blocked_pairing_clients
+			WHERE desktop_device_id = ?
+				AND client_id = ?
+				AND cleared_at IS NULL
+			LIMIT 1
 		) IS NOT NULL`,
-		clientID, desktopDeviceID, clientID,
+		clientID, desktopDeviceID, clientID, desktopDeviceID, clientID,
 	).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check managed device exists: %w", err)
@@ -268,6 +314,14 @@ func (s *Store) ListManagedDevices(desktopDeviceID string) ([]ManagedDevice, err
 		return nil, err
 	}
 	devices = append(devices, blockedDevices...)
+
+	// Also include devices blocked via the pairing flow (wrong-code 5x) that
+	// never completed pairing and therefore have no row in paired_devices.
+	pairingBlocked, err := s.listBlockedPairingOnlyManagedDevices(desktopDeviceID, seen)
+	if err != nil {
+		return nil, err
+	}
+	devices = append(devices, pairingBlocked...)
 	return devices, nil
 }
 
@@ -338,4 +392,59 @@ func shortClientID(clientID string) string {
 		return parts[0]
 	}
 	return clientID[:8]
+}
+
+// listBlockedPairingOnlyManagedDevices returns devices that were blocked during
+// the pairing handshake (wrong connection code ≥ 5 times) but never completed
+// pairing, so they have no row in paired_devices. These devices are surfaced in
+// the Device Management page so the administrator can clear the block.
+func (s *Store) listBlockedPairingOnlyManagedDevices(desktopDeviceID string, seen map[string]struct{}) ([]ManagedDevice, error) {
+	rows, err := s.db.Query(`
+		SELECT
+			bpc.client_id,
+			COALESCE(bpc.device_alias, bpc.client_name, bpc.client_id),
+			bpc.platform,
+			bpc.last_ip,
+			bpc.failed_attempts,
+			bpc.blocked_at
+		FROM blocked_pairing_clients bpc
+		WHERE bpc.desktop_device_id = ?
+			AND bpc.cleared_at IS NULL
+		ORDER BY bpc.blocked_at DESC`,
+		desktopDeviceID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list pairing-only blocked managed devices: %w", err)
+	}
+	defer rows.Close()
+
+	reason := "too_many_failed_attempts"
+	devices := make([]ManagedDevice, 0)
+	for rows.Next() {
+		var device ManagedDevice
+		var platform *string
+		if err := rows.Scan(
+			&device.ClientID, &device.DisplayName, &platform,
+			&device.LastIP, &device.FailedAttemptCount, &device.BlockedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan pairing-only blocked managed device: %w", err)
+		}
+		if _, ok := seen[device.ClientID]; ok {
+			// Already included via paired_devices or device_blocks – skip.
+			continue
+		}
+		if platform != nil {
+			device.Platform = *platform
+		}
+		device.DesktopDeviceID = desktopDeviceID
+		device.ClientIDShort = shortClientID(device.ClientID)
+		device.AuthorizationStatus = "revoked"
+		device.BlockStatus = "active"
+		device.BlockReason = &reason
+		devices = append(devices, device)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pairing-only blocked managed devices: %w", err)
+	}
+	return devices, nil
 }

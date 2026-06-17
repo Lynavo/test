@@ -104,10 +104,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readStringField(
-  record: Record<string, unknown>,
-  key: string,
-): string {
+function readStringField(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === 'string' ? value : '';
 }
@@ -144,8 +141,7 @@ function normalizeHistoryLedgerCard(
 
   return {
     dateKey:
-      readStringField(item, 'dateKey') ||
-      readStringField(item, 'ledgerDate'),
+      readStringField(item, 'dateKey') || readStringField(item, 'ledgerDate'),
     deviceId: readStringField(item, 'deviceId'),
     deviceName: readStringField(item, 'deviceName'),
     deviceIp: readStringField(item, 'deviceIp'),
@@ -178,9 +174,7 @@ function createDocumentPickerCancelledError(): DocumentPickerCancelledError {
 }
 
 function loadDocumentPicker(): typeof import('@react-native-documents/picker') {
-  return require(
-    '@react-native-documents/picker',
-  ) as typeof import('@react-native-documents/picker');
+  return require('@react-native-documents/picker') as typeof import('@react-native-documents/picker');
 }
 
 export async function getBindingState(): Promise<BindingStateDTO | null> {
@@ -512,11 +506,13 @@ export async function getDirectoryFileStreamUrl(
 export async function prepareDirectoryFilePreview(
   scope: DirectoryScope,
   path: string,
+  filename?: string,
 ): Promise<string> {
   const result = await NativeSyncEngine.prepareSharedFilePreview(
     scope,
     path,
     scope === 'personal' ? getCurrentAccessToken() : '',
+    filename?.trim() ?? '',
   );
   return result as string;
 }
@@ -820,15 +816,15 @@ export async function pairDevice(params: {
       err?.remainingAttempts !== undefined
         ? Number(err.remainingAttempts)
         : meta?.remainingAttempts !== undefined
-          ? Number(meta.remainingAttempts)
-          : undefined;
+        ? Number(meta.remainingAttempts)
+        : undefined;
 
     const blocked =
       err?.blocked !== undefined
         ? Boolean(err.blocked)
         : err?.userInfo?.blocked !== undefined
-          ? Boolean(err.userInfo.blocked)
-          : undefined;
+        ? Boolean(err.userInfo.blocked)
+        : undefined;
 
     throw new PairingError(
       errMsg,

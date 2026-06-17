@@ -851,10 +851,15 @@ class NativeSyncEngineModule: RCTEventEmitter {
     }
 
     @objc
-    func prepareSharedFilePreview(_ scope: NSString, path: NSString, accessToken: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    func prepareSharedFilePreview(_ scope: NSString, path: NSString, accessToken: NSString, filename: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         Task {
             do {
-                let result = try await SyncEngineManager.shared.prepareSharedFilePreview(scope: scope as String, path: path as String, accessToken: accessToken as String)
+                let result = try await SyncEngineManager.shared.prepareSharedFilePreview(
+                    scope: scope as String,
+                    path: path as String,
+                    accessToken: accessToken as String,
+                    filename: filename as String
+                )
                 resolve(result)
             } catch {
                 reject("PREVIEW_ERROR", error.localizedDescription, error)

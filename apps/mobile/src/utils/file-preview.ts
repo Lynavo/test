@@ -17,7 +17,10 @@ function resolveShareOpen(): ShareOpen {
   return shareOpen;
 }
 
-export function isImageFile(mediaType?: string | null, filename?: string | null) {
+export function isImageFile(
+  mediaType?: string | null,
+  filename?: string | null,
+) {
   const name = filename ?? '';
   return (
     mediaType === 'image' ||
@@ -26,7 +29,10 @@ export function isImageFile(mediaType?: string | null, filename?: string | null)
   );
 }
 
-export function isVideoFile(mediaType?: string | null, filename?: string | null) {
+export function isVideoFile(
+  mediaType?: string | null,
+  filename?: string | null,
+) {
   const name = filename ?? '';
   return (
     mediaType === 'video' ||
@@ -87,13 +93,7 @@ export function canPreviewDocumentFile(
   if (hasExtension) {
     return (
       documentMimeType(filename) != null ||
-      [
-        'pages',
-        'numbers',
-        'key',
-        'yaml',
-        'yml',
-      ].includes(ext ?? '')
+      ['pages', 'numbers', 'key', 'yaml', 'yml'].includes(ext ?? '')
     );
   }
 
@@ -116,14 +116,26 @@ export function documentPreviewUri(localPath: string): string {
   return `file://${trimmed}`;
 }
 
+export function safeShareFilename(
+  filename?: string | null,
+): string | undefined {
+  const candidate = filename?.trim();
+  if (!candidate) return undefined;
+  const sanitized = candidate.replace(/[\/\\:\x00-\x1F\x7F]/g, '_').trim();
+  return sanitized.length > 0 ? sanitized : undefined;
+}
+
 export async function openFileWithOtherApp(
   localPath: string,
   filename?: string | null,
 ): Promise<void> {
+  const safeFilename = safeShareFilename(filename);
   await resolveShareOpen()({
     url: documentPreviewUri(localPath),
-    type: documentMimeType(filename) ?? 'application/octet-stream',
-    filename: filename ?? undefined,
+    type: documentMimeType(safeFilename) ?? 'application/octet-stream',
+    filename: safeFilename,
+    title: safeFilename,
+    subject: safeFilename,
     failOnCancel: false,
     showAppsToView: true,
   });

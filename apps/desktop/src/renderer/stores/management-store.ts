@@ -22,6 +22,7 @@ interface ManagementState {
   accessRecordsError: string | null;
   loadDevices(): Promise<void>;
   unblockDevice(clientId: string): Promise<void>;
+  blockDevice(clientId: string): Promise<void>;
   loadSyncRecords(filters?: RecordFilters): Promise<void>;
   loadAccessRecords(filters?: RecordFilters): Promise<void>;
 }
@@ -81,6 +82,19 @@ export const useManagementStore = create<ManagementState>((set, get) => ({
     set({ devicesError: null });
     try {
       await api.sidecar.unblockDevice(clientId);
+      await get().loadDevices();
+    } catch (error) {
+      set({ devicesError: errorMessage(error) });
+    }
+  },
+
+  blockDevice: async (clientId: string) => {
+    const api = window.electronAPI;
+    if (!api) return;
+
+    set({ devicesError: null });
+    try {
+      await api.sidecar.blockDevice(clientId);
       await get().loadDevices();
     } catch (error) {
       set({ devicesError: errorMessage(error) });

@@ -217,6 +217,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	// Local management
 	mux.HandleFunc("GET /management/devices", withJSON(srv.handleManagementDevices))
 	mux.HandleFunc("POST /management/devices/{clientId}/unblock", withJSON(srv.handleManagementUnblockDevice))
+	mux.HandleFunc("POST /management/devices/{clientId}/block", withJSON(srv.handleManagementBlockDevice))
 	mux.HandleFunc("GET /management/records/sync", withJSON(srv.handleManagementSyncRecords))
 	mux.HandleFunc("GET /management/records/access", withJSON(srv.handleManagementAccessRecords))
 	// Shared resource management

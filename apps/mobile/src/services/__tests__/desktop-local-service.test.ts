@@ -59,9 +59,8 @@ const mockedBrowseDirectory = browseDirectory as jest.MockedFunction<
 const mockedDownloadReceivedFile = downloadReceivedFile as jest.MockedFunction<
   typeof downloadReceivedFile
 >;
-const mockedDownloadDirectoryFile = downloadDirectoryFile as jest.MockedFunction<
-  typeof downloadDirectoryFile
->;
+const mockedDownloadDirectoryFile =
+  downloadDirectoryFile as jest.MockedFunction<typeof downloadDirectoryFile>;
 const mockedGetDirectoryFileStreamUrl =
   getDirectoryFileStreamUrl as jest.MockedFunction<
     typeof getDirectoryFileStreamUrl
@@ -74,22 +73,24 @@ const mockGetClientDisplayName = NativeModules.NativeSyncEngine
   ?.getClientDisplayName as jest.MockedFunction<() => Promise<string>>;
 const mockDownloadUrlToShareCache = NativeModules.NativeSyncEngine
   ?.downloadUrlToShareCache as jest.MockedFunction<
-    (url: string, filename: string) => Promise<string>
-  >;
+  (url: string, filename: string) => Promise<string>
+>;
 const mockDownloadUrlToLocal = NativeModules.NativeSyncEngine
   ?.downloadUrlToLocal as jest.MockedFunction<
-    (
-      url: string,
-      filename: string,
-      mediaType?: string | null,
-    ) => Promise<{
-      savedToPhotos: boolean;
-      localPath: string | null;
-      savedLocation?: string | null;
-    }>
-  >;
+  (
+    url: string,
+    filename: string,
+    mediaType?: string | null,
+  ) => Promise<{
+    savedToPhotos: boolean;
+    localPath: string | null;
+    savedLocation?: string | null;
+  }>
+>;
 const mockShareFiles = NativeModules.NativeSyncEngine
-  ?.shareFiles as jest.MockedFunction<(localPaths: string[]) => Promise<boolean>>;
+  ?.shareFiles as jest.MockedFunction<
+  (localPaths: string[]) => Promise<boolean>
+>;
 
 describe('desktop-local-service', () => {
   let fetchMock: jest.Mock;
@@ -617,12 +618,14 @@ describe('desktop-local-service', () => {
       mediaType: 'document',
     };
 
-    await expect(getReceivedLibraryPreviewUrl(desktop, imageItem)).resolves.toBe(
+    await expect(
+      getReceivedLibraryPreviewUrl(desktop, imageItem),
+    ).resolves.toBe(
       'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fclient-001-photo',
     );
-    await expect(
-      prepareReceivedLibraryPreview(desktop, docItem),
-    ).resolves.toBe('/cache/notes.pdf');
+    await expect(prepareReceivedLibraryPreview(desktop, docItem)).resolves.toBe(
+      '/cache/notes.pdf',
+    );
 
     expect(mockDownloadUrlToShareCache).toHaveBeenCalledWith(
       'http://192.168.10.20:39394/resources/mobile/received/download?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-doc',
@@ -727,10 +730,7 @@ describe('desktop-local-service', () => {
     });
 
     await expect(
-      listGlobalRemoteAccessFolderContents(
-        'personal-dir:Desktop',
-        'Projects',
-      ),
+      listGlobalRemoteAccessFolderContents('personal-dir:Desktop', 'Projects'),
     ).resolves.toEqual({
       scope: 'personal',
       path: 'Desktop/Projects',
@@ -772,9 +772,7 @@ describe('desktop-local-service', () => {
     });
     await expect(
       getGlobalRemoteAccessPreviewUrl('personal-dir:Desktop/notes.txt'),
-    ).resolves.toBe(
-      'http://127.0.0.1:39394/personal/stream/Desktop/notes.txt',
-    );
+    ).resolves.toBe('http://127.0.0.1:39394/personal/stream/Desktop/notes.txt');
     await expect(
       prepareGlobalRemoteAccessPreview(
         'personal-dir:Desktop/notes.txt',
@@ -793,6 +791,7 @@ describe('desktop-local-service', () => {
     expect(mockedPrepareDirectoryFilePreview).toHaveBeenCalledWith(
       'personal',
       'Desktop/notes.txt',
+      'notes.txt',
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -820,11 +819,13 @@ describe('desktop-local-service', () => {
       1,
       'personal',
       'Pictures/photo.jpg',
+      'photo.jpg',
     );
     expect(mockedPrepareDirectoryFilePreview).toHaveBeenNthCalledWith(
       2,
       'personal',
       'Documents/report.pdf',
+      'report.pdf',
     );
     expect(mockShareFiles).toHaveBeenCalledWith([
       '/cache/photo.jpg',
