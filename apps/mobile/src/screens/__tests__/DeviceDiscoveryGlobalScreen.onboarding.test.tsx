@@ -1,5 +1,5 @@
 import React from 'react';
-import { NativeEventEmitter, NativeModules } from 'react-native';
+import { Alert, NativeEventEmitter, NativeModules } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockDispatch = jest.fn();
@@ -12,6 +12,8 @@ const mockIsVisualQaEnabled = jest.fn(() => false);
 const mockAddDesktop = jest.fn().mockResolvedValue(undefined);
 const mockForgetDesktop = jest.fn().mockResolvedValue(undefined);
 const mockUpdateAuthStatus = jest.fn().mockResolvedValue(undefined);
+const mockGetBindingState = jest.fn().mockResolvedValue(null);
+const mockGetKnownDeviceIds = jest.fn().mockResolvedValue([]);
 let mockRouteParams: { mode?: 'initial' | 'switch' } | undefined = {
   mode: 'initial',
 };
@@ -150,6 +152,8 @@ jest.mock('../../services/SyncEngineModule', () => {
   }
 
   return {
+    getBindingState: mockGetBindingState,
+    getKnownDeviceIds: mockGetKnownDeviceIds,
     pairDevice: jest.fn(),
     PairingError: MockPairingError,
   };
@@ -166,6 +170,8 @@ const mockPairDevice = pairDevice as jest.Mock;
 const mockNativeSyncEngine = {
   startDiscovery: jest.fn().mockResolvedValue(undefined),
   stopDiscovery: jest.fn().mockResolvedValue(undefined),
+  getBindingState: mockGetBindingState,
+  getKnownDeviceIds: mockGetKnownDeviceIds,
   pairDevice: jest.fn().mockResolvedValue(undefined),
   addListener: jest.fn(),
   removeListeners: jest.fn(),
@@ -195,6 +201,8 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     mockAddDesktop.mockResolvedValue(undefined);
     mockForgetDesktop.mockResolvedValue(undefined);
     mockUpdateAuthStatus.mockResolvedValue(undefined);
+    mockGetBindingState.mockResolvedValue(null);
+    mockGetKnownDeviceIds.mockResolvedValue([]);
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
@@ -369,6 +377,57 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       expect(mockHasSeenUnconnectedGuide).not.toHaveBeenCalled();
     });
     expect(screen.queryByText('先连接电脑')).toBeNull();
+  });
+
+  it('marks the current desktop in switch mode and blocks reconnecting it', async () => {
+    mockRouteParams = { mode: 'switch' };
+    mockGetBindingState.mockResolvedValue({
+      deviceId: 'studio-mac',
+      deviceName: 'Studio Mac',
+      deviceAlias: 'Studio Mac',
+      connectionState: 'connected',
+    });
+    mockGetKnownDeviceIds.mockResolvedValue(['studio-mac']);
+    const alertSpy = jest
+      .spyOn(Alert, 'alert')
+      .mockImplementation(() => undefined);
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('当前')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Studio Mac'));
+
+    expect(alertSpy).toHaveBeenCalledWith('已是当前连接设备');
+    expect(mockPairDevice).not.toHaveBeenCalled();
+    expect(screen.queryByText('选择连接方式')).toBeNull();
+  });
+
+  it('deduplicates a recent desktop that is also discovered on the LAN', async () => {
+    mockRouteParams = { mode: 'switch' };
+    jest
+      .spyOn(NativeEventEmitter.prototype, 'addListener')
+      .mockImplementation((_event, listener) => {
+        listener([
+          {
+            deviceId: 'studio-mac',
+            name: 'Studio Mac',
+            ip: '192.168.31.8',
+            type: 'mac',
+            port: 39393,
+          },
+        ]);
+        return { remove: jest.fn() } as any;
+      });
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('已发现 1 台')).toBeTruthy();
+    });
+    expect(screen.getAllByText('Studio Mac')).toHaveLength(1);
   });
 
   it('does not let guide touches pass through to a real device', async () => {

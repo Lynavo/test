@@ -46,6 +46,8 @@ class MainActivity : ReactActivity() {
             "SYNCFLOW_VISUAL_QA_HOME_EMPTY",
             "SYNCFLOW_VISUAL_QA_ROUTE",
             "SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW",
+            "SYNCFLOW_DEV_SKIP_AUTH",
+            "SYNCFLOW_DEV_SKIP_AUTH_EMAIL",
         )
 
     @Volatile private var visualQaLaunchExtras: Map<String, String> = emptyMap()

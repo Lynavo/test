@@ -1,6 +1,7 @@
 import { NativeModules } from 'react-native';
 import {
   applyVisualQaRemotePreviewFlag,
+  getDevSkipAuthMockTokens,
   getVisualQaMockTokens,
   isVisualQaHomeEmptyStateEnabled,
   resolveVisualQaInitialRoute,
@@ -30,6 +31,8 @@ describe('visual QA dev bootstrap', () => {
     delete process.env.SYNCFLOW_VISUAL_QA_ROUTE;
     delete process.env.SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW;
     delete process.env.SYNCFLOW_VISUAL_QA_HOME_EMPTY;
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH;
+    delete process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL;
   });
 
   afterAll(() => {
@@ -128,6 +131,22 @@ describe('visual QA dev bootstrap', () => {
       refreshToken: 'mock-sandbox-refresh-token',
     });
     expect(resolveVisualQaInitialRoute()).toBe('History');
+  });
+
+  test('reads native dev skip-auth constants without enabling visual QA mocks', () => {
+    NativeModules.AppleAuthModule = {
+      SYNCFLOW_DEV_SKIP_AUTH: '1',
+      SYNCFLOW_DEV_SKIP_AUTH_EMAIL: 'functional@example.com',
+      SYNCFLOW_VISUAL_QA: '0',
+      SYNCFLOW_VISUAL_QA_ROUTE: 'DeviceDiscovery',
+    };
+
+    expect(getDevSkipAuthMockTokens()).toEqual({
+      accessToken: 'mock-sandbox-access-token:functional@example.com',
+      refreshToken: 'mock-sandbox-refresh-token',
+    });
+    expect(getVisualQaMockTokens()).toBeNull();
+    expect(resolveVisualQaInitialRoute()).toBeNull();
   });
 
   test('uses requested visual QA email for mock access token', () => {

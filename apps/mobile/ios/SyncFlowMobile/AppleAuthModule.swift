@@ -25,6 +25,8 @@ class AppleAuthModule: NSObject, ASAuthorizationControllerDelegate, ASAuthorizat
       "SYNCFLOW_VISUAL_QA_HOME_EMPTY",
       "SYNCFLOW_VISUAL_QA_ROUTE",
       "SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW",
+      "SYNCFLOW_DEV_SKIP_AUTH",
+      "SYNCFLOW_DEV_SKIP_AUTH_EMAIL",
     ].forEach { key in
       if let value = environment[key] {
         constants[key] = value

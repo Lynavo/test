@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   Animated,
   Easing,
@@ -55,7 +56,10 @@ import {
   markUnconnectedGuideSeen,
 } from '../utils/onboardingStorage';
 import { isVisualQaEnabled } from '../dev/visualQa';
-import { pairDevice, PairingError } from '../services/SyncEngineModule';
+import {
+  pairDevice,
+  PairingError,
+} from '../services/SyncEngineModule';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
 
@@ -381,6 +385,10 @@ export function DeviceDiscoveryGlobalScreen() {
   const mode = route.params?.mode ?? 'initial';
   const { recentDesktops, addDesktop } = useRecentDesktops();
 
+  const [knownDeviceIds, setKnownDeviceIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [scanning, setScanning] = useState(true);
   const [manualHost, setManualHost] = useState('');
@@ -409,6 +417,50 @@ export function DeviceDiscoveryGlobalScreen() {
   useEffect(() => {
     devicesRef.current = devices;
   }, [devices]);
+
+  useEffect(() => {
+    if (mode !== 'switch') {
+      setKnownDeviceIds(new Set());
+      setCurrentDeviceId(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const { NativeSyncEngine } = NativeModules;
+
+    Promise.all([
+      (
+        NativeSyncEngine?.getKnownDeviceIds?.() ?? Promise.resolve([])
+      ).catch((error: unknown) => {
+        console.warn(
+          '[DeviceDiscoveryGlobalScreen] switch bootstrap getKnownDeviceIds failed',
+          error,
+        );
+        return [] as string[];
+      }),
+      (NativeSyncEngine?.getBindingState?.() ?? Promise.resolve(null)).catch(
+        (error: unknown) => {
+          console.warn(
+            '[DeviceDiscoveryGlobalScreen] switch bootstrap getBindingState failed',
+            error,
+          );
+          return null;
+        },
+      ),
+    ]).then(([ids, binding]) => {
+      if (cancelled) return;
+      setKnownDeviceIds(new Set(ids));
+      setCurrentDeviceId(
+        ((binding as { deviceId?: string } | null)?.deviceId as
+          | string
+          | undefined) ?? null,
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
 
   useEffect(() => {
     if (mode === 'switch') {
@@ -537,7 +589,11 @@ export function DeviceDiscoveryGlobalScreen() {
     };
   }, []);
 
-  const discoveredCount = devices.length + recentDesktops.length;
+  const displayedRecentDesktops = recentDesktops.filter(
+    recent =>
+      !devices.some(device => device.deviceId === recent.desktopDeviceId),
+  );
+  const discoveredCount = devices.length + displayedRecentDesktops.length;
   const isShowingSkeleton = scanning && discoveredCount === 0;
   const statusLabel = isShowingSkeleton
     ? '扫描中...'
@@ -607,6 +663,10 @@ export function DeviceDiscoveryGlobalScreen() {
       if (showGuide) {
         return;
       }
+      if (mode === 'switch' && device.deviceId === currentDeviceId) {
+        Alert.alert('已是当前连接设备');
+        return;
+      }
       setSelectedDevice(device);
       setConnectionCode('');
       setCodeError(null);
@@ -618,7 +678,7 @@ export function DeviceDiscoveryGlobalScreen() {
       setConnectionStatus('ready');
       setConnectionModalStep('method');
     },
-    [showGuide],
+    [currentDeviceId, mode, showGuide],
   );
 
   const openRecentDesktop = useCallback(
@@ -639,6 +699,11 @@ export function DeviceDiscoveryGlobalScreen() {
         availability: discoveredDevice?.availability,
         deviceKind: discoveredDevice?.deviceKind,
       };
+
+      if (mode === 'switch' && device.deviceId === currentDeviceId) {
+        Alert.alert('已是当前连接设备');
+        return;
+      }
 
       if (device.availability === 'busy') {
         setConnectionStatus('timeout');
@@ -683,7 +748,7 @@ export function DeviceDiscoveryGlobalScreen() {
         setConnectionModalStep('method');
       }
     },
-    [addDesktop, devices, navigation, showGuide],
+    [addDesktop, currentDeviceId, devices, mode, navigation, showGuide],
   );
 
   const handleManualPair = useCallback(() => {
@@ -945,36 +1010,66 @@ export function DeviceDiscoveryGlobalScreen() {
                     <FlowStateCard state={connectionStateContent} />
                   ) : null}
                   {!connectionStateContent
-                    ? devices.map(device => (
-                        <DeviceRow
-                          key={device.deviceId}
-                          title={device.name}
-                          subtitle={device.ip}
-                          status={
-                            device.availability === 'busy' ? '使用中' : '可连接'
-                          }
-                          iconName={
-                            device.deviceKind === 'laptop'
-                              ? 'laptop-outline'
-                              : 'desktop-outline'
-                          }
-                          availability={device.availability ?? 'available'}
-                          onPress={() => openMethodModal(device)}
-                        />
-                      ))
+                    ? devices.map(device => {
+                        const isCurrentDevice =
+                          mode === 'switch' &&
+                          device.deviceId === currentDeviceId;
+                        const isKnownDevice =
+                          mode === 'switch' &&
+                          !isCurrentDevice &&
+                          knownDeviceIds.has(device.deviceId);
+                        return (
+                          <DeviceRow
+                            key={device.deviceId}
+                            title={device.name}
+                            subtitle={device.ip}
+                            status={
+                              isCurrentDevice
+                                ? '当前'
+                                : isKnownDevice
+                                  ? '直接切换'
+                                  : device.availability === 'busy'
+                                    ? '使用中'
+                                    : '可连接'
+                            }
+                            iconName={
+                              device.deviceKind === 'laptop'
+                                ? 'laptop-outline'
+                                : 'desktop-outline'
+                            }
+                            availability={device.availability ?? 'available'}
+                            onPress={() => openMethodModal(device)}
+                          />
+                        );
+                      })
                     : null}
                   {!connectionStateContent
-                    ? recentDesktops.map(recent => (
-                        <DeviceRow
-                          key={recent.desktopDeviceId}
-                          title={recent.desktopName}
-                          subtitle={`${recent.host}:${recent.port}`}
-                          status="可连接"
-                          iconName="desktop-outline"
-                          availability="available"
-                          onPress={() => openRecentDesktop(recent)}
-                        />
-                      ))
+                    ? displayedRecentDesktops.map(recent => {
+                        const isCurrentDevice =
+                          mode === 'switch' &&
+                          recent.desktopDeviceId === currentDeviceId;
+                        const isKnownDevice =
+                          mode === 'switch' &&
+                          !isCurrentDevice &&
+                          knownDeviceIds.has(recent.desktopDeviceId);
+                        return (
+                          <DeviceRow
+                            key={recent.desktopDeviceId}
+                            title={recent.desktopName}
+                            subtitle={`${recent.host}:${recent.port}`}
+                            status={
+                              isCurrentDevice
+                                ? '当前'
+                                : isKnownDevice
+                                  ? '直接切换'
+                                  : '可连接'
+                            }
+                            iconName="desktop-outline"
+                            availability="available"
+                            onPress={() => openRecentDesktop(recent)}
+                          />
+                        );
+                      })
                     : null}
                   <TouchableOpacity
                     activeOpacity={0.76}
