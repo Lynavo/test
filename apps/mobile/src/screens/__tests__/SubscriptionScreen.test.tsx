@@ -375,8 +375,22 @@ describe('SubscriptionScreen', () => {
     };
     mockAuthState.user = { id: 1, status: 'trial_expired' };
     mockAuthState.subscription = null;
+    mockLoadSubscription.mockReset();
     mockLoadSubscription.mockResolvedValue(null);
     mockSetSubscription.mockReset();
+    (iapService.purchase as jest.Mock).mockReset();
+    (iapService.restore as jest.Mock).mockReset();
+    (iapService.restore as jest.Mock).mockResolvedValue([]);
+    (iapService.finishTransaction as jest.Mock).mockReset();
+    (iapService.finishTransaction as jest.Mock).mockResolvedValue(undefined);
+    (iapService.refreshReceipt as jest.Mock).mockReset();
+    (iapService.refreshReceipt as jest.Mock).mockResolvedValue(null);
+    (iapService.checkEligibility as jest.Mock).mockReset();
+    (iapService.checkEligibility as jest.Mock).mockResolvedValue([]);
+    (iapService.getProductSummaries as jest.Mock).mockReset();
+    (verifyIapReceipt as jest.Mock).mockReset();
+    (verifyIapReceipt as jest.Mock).mockResolvedValue(undefined);
+    (getSubscriptionStatus as jest.Mock).mockReset();
     (getSubscriptionStatus as jest.Mock).mockResolvedValue({
       status: 'trial_expired',
       plan: '',
@@ -908,6 +922,70 @@ describe('SubscriptionScreen', () => {
       'yearly',
       IAP_PRODUCTS.yearly,
       'tx_1',
+    );
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      expect.stringMatching(
+        /产品设置有误|產品設定有誤|Product configuration error/,
+      ),
+    );
+  });
+
+  test('uses preflight current plan when deciding whether to refresh a plan-switch mismatch', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    (getSubscriptionStatus as jest.Mock).mockResolvedValue({
+      status: 'subscribed',
+      plan: 'monthly',
+      expireAt: '2026-04-28T00:00:00Z',
+      trialEnd: null,
+    });
+    (iapService.purchase as jest.Mock).mockResolvedValueOnce({
+      productId: IAP_PRODUCTS.yearly,
+      transactionReceipt: 'STALE_MONTHLY_APP_RECEIPT',
+      transactionId: 'tx_preflight_plan_switch',
+    });
+    (iapService.refreshReceipt as jest.Mock).mockResolvedValueOnce(
+      'FRESH_YEARLY_RECEIPT',
+    );
+    (verifyIapReceipt as jest.Mock)
+      .mockRejectedValueOnce(
+        new ApiError(ERROR_CODE.PRODUCT_ID_MISMATCH, 'mismatch'),
+      )
+      .mockResolvedValueOnce(undefined);
+    mockLoadSubscription.mockResolvedValueOnce({
+      status: 'subscribed',
+      plan: 'yearly',
+      expireAt: '2026-04-28T00:00:00Z',
+      trialEnd: null,
+    });
+
+    const { findByText } = renderScreen();
+    await findByText('年度方案');
+    fireEvent.press(await findByText(/立即订阅|立即訂閱|Subscribe Now/));
+
+    await waitFor(
+      () => expect(iapService.refreshReceipt).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () =>
+        expect(iapService.finishTransaction).toHaveBeenCalledWith(
+          'tx_preflight_plan_switch',
+        ),
+      { timeout: 5000 },
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      1,
+      'STALE_MONTHLY_APP_RECEIPT',
+      'yearly',
+      IAP_PRODUCTS.yearly,
+      'tx_preflight_plan_switch',
+    );
+    expect(verifyIapReceipt).toHaveBeenNthCalledWith(
+      2,
+      'FRESH_YEARLY_RECEIPT',
+      'yearly',
+      IAP_PRODUCTS.yearly,
+      'tx_preflight_plan_switch',
     );
     expect(Alert.alert).not.toHaveBeenCalledWith(
       expect.stringMatching(

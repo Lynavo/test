@@ -1424,10 +1424,12 @@ export function SubscriptionScreen() {
 
     setIsLoading(true);
     try {
+      let effectiveCurrentPlan = currentPlan;
       try {
         const fresh = await getSubscriptionStatus();
         setSubscription(fresh);
         const freshPlan = resolveCurrentPlan(fresh);
+        effectiveCurrentPlan = freshPlan;
         const freshDisplay = resolveSubscriptionDisplayState({
           subscription: fresh,
           user,
@@ -1484,7 +1486,8 @@ export function SubscriptionScreen() {
         hasTransactionId: receipt.transactionId.length > 0,
       });
       let receiptData = receipt.transactionReceipt;
-      const isPlanSwitch = currentPlan != null && currentPlan !== targetTier;
+      const isPlanSwitch =
+        effectiveCurrentPlan != null && effectiveCurrentPlan !== targetTier;
       const receiptProductMatchesSelection =
         receipt.productId === targetProductId;
       const shouldRefreshReceiptOnMismatch =

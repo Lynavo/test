@@ -394,6 +394,10 @@ function AuthedStack({
   return (
     <>
       <ExpiryReminderWatcher subscription={subscription} />
+      <SubscriptionGateBlockWatcher
+        subscription={subscription}
+        userStatus={userStatus}
+      />
       <SubscriptionGateReleaseWatcher
         subscription={subscription}
         userStatus={userStatus}
@@ -471,10 +475,7 @@ function GlobalMainTabsScreen({
           <SettingsGlobalScreen showBottomTabBar={false} />
         )}
       </View>
-      <GlobalBottomTabBar
-        activeTab={activeTab}
-        onTabPress={setActiveTab}
-      />
+      <GlobalBottomTabBar activeTab={activeTab} onTabPress={setActiveTab} />
     </View>
   );
 }
@@ -532,6 +533,36 @@ function SubscriptionGateReleaseWatcher({
     return () => {
       cancelled = true;
     };
+  }, [navigation, subscription?.status, userStatus]);
+
+  return null;
+}
+
+function SubscriptionGateBlockWatcher({
+  userStatus,
+  subscription,
+}: {
+  userStatus: AccountStatus;
+  subscription: SubscriptionInfo | null;
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const navigation = useNavigation<any>();
+
+  useEffect(() => {
+    if (!FEATURES.SUBSCRIPTION_ENFORCEMENT) return;
+
+    const effectiveStatus = subscription?.status ?? userStatus;
+    if (isFeatureAccessAllowed(effectiveStatus)) return;
+
+    const state = navigation.getState?.();
+    const currentRoute = state?.routes?.[state.index ?? 0]?.name;
+    if (!currentRoute) return;
+    if (currentRoute === 'Subscription') return;
+
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Subscription' }],
+    });
   }, [navigation, subscription?.status, userStatus]);
 
   return null;

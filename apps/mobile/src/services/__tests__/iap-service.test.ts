@@ -813,6 +813,64 @@ describe('iapService — orphan recovery', () => {
     expect(finishTxMock).not.toHaveBeenCalled();
   });
 
+  test('orphan 2001 IAP_VERIFY_FAILED finishes the stale transaction without notifying', async () => {
+    (verifyIapReceipt as jest.Mock).mockRejectedValueOnce(
+      new ApiError(ERROR_CODE.IAP_VERIFY_FAILED, 'invalid receipt'),
+    );
+    const listener = jest.fn();
+    iapService.onOrphanPurchaseVerified(listener);
+
+    updatedCb?.({
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'INVALID_STALE_RECEIPT',
+      transactionId: 'tx_invalid_stale',
+    });
+
+    await new Promise<void>(r => setImmediate(r));
+
+    expect(verifyIapReceipt).toHaveBeenCalledTimes(1);
+    expect(finishTxMock).toHaveBeenCalledWith({
+      purchase: { transactionId: 'tx_invalid_stale' },
+      isConsumable: false,
+    });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  test('coalesces concurrent iOS orphan replays that share one app receipt', async () => {
+    const verify = deferred<void>();
+    (verifyIapReceipt as jest.Mock).mockReturnValueOnce(verify.promise);
+    const first = {
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'SAME_APP_RECEIPT',
+      transactionId: 'tx_replay_1',
+    };
+    const second = {
+      productId: IAP_PRODUCTS.monthly,
+      transactionReceipt: 'SAME_APP_RECEIPT',
+      transactionId: 'tx_replay_2',
+    };
+
+    updatedCb?.(first);
+    updatedCb?.(second);
+    await new Promise<void>(r => setImmediate(r));
+
+    expect(verifyIapReceipt).toHaveBeenCalledTimes(1);
+
+    verify.reject(
+      new ApiError(ERROR_CODE.IAP_VERIFY_FAILED, 'invalid receipt'),
+    );
+    await new Promise<void>(r => setImmediate(r));
+
+    expect(finishTxMock).toHaveBeenCalledWith({
+      purchase: { transactionId: 'tx_replay_1' },
+      isConsumable: false,
+    });
+    expect(finishTxMock).toHaveBeenCalledWith({
+      purchase: { transactionId: 'tx_replay_2' },
+      isConsumable: false,
+    });
+  });
+
   test('orphan with retryable failure is throttled for the same transaction', async () => {
     (verifyIapReceipt as jest.Mock).mockRejectedValue(
       new ApiError(ERROR_CODE.NETWORK_ERROR, 'net'),

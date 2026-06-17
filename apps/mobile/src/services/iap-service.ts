@@ -200,6 +200,7 @@ class IapServiceImpl implements IapService {
   private pendingPurchase = new Map<string, PendingPurchase>();
   private orphanListeners = new Set<() => void>();
   private orphanVerificationInFlight = new Set<string>();
+  private orphanPurchasesByKey = new Map<string, Purchase[]>();
   private orphanRetryAfter = new Map<string, number>();
   private purchasesByFinishKey = new Map<string, Purchase>();
 
@@ -255,6 +256,7 @@ class IapServiceImpl implements IapService {
     } finally {
       this.initialized = false;
       this.teardownPromise = null;
+      this.clearOrphanRecoveryState();
     }
   }
 
@@ -264,7 +266,10 @@ class IapServiceImpl implements IapService {
       await Promise.race([
         initConnection(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('initConnection timed out')), 10000),
+          setTimeout(
+            () => reject(new Error('initConnection timed out')),
+            10000,
+          ),
         ),
       ]);
       if (this.teardownRequested) {
@@ -451,8 +456,8 @@ class IapServiceImpl implements IapService {
     // the native purchase object from the purchase / restore / orphan path.
     const purchase =
       Platform.OS === 'android'
-        ? this.purchasesByFinishKey.get(transactionId) ??
-          ({ purchaseToken: transactionId } as Purchase)
+        ? (this.purchasesByFinishKey.get(transactionId) ??
+          ({ purchaseToken: transactionId } as Purchase))
         : ({ transactionId } as Purchase);
     await rnFinishTransaction({
       purchase,
@@ -677,9 +682,8 @@ class IapServiceImpl implements IapService {
         productId,
         hasTransactionId: !!purchase.transactionId,
       });
-      const transactionReceipt = await this.verificationReceiptForPurchase(
-        purchase,
-      );
+      const transactionReceipt =
+        await this.verificationReceiptForPurchase(purchase);
       if (!transactionReceipt) {
         throw new Error('purchase receipt is empty');
       }
@@ -960,6 +964,7 @@ class IapServiceImpl implements IapService {
     const txId = p.transactionId ?? '';
     const orphanKey = this.orphanPurchaseKey(p);
     if (this.orphanVerificationInFlight.has(orphanKey)) {
+      this.rememberOrphanPurchaseForKey(orphanKey, p);
       return;
     }
     const retryAfter = this.orphanRetryAfter.get(orphanKey);
@@ -967,6 +972,7 @@ class IapServiceImpl implements IapService {
       return;
     }
 
+    this.rememberOrphanPurchaseForKey(orphanKey, p);
     this.orphanVerificationInFlight.add(orphanKey);
     let plan: SubscriptionPlanTier | null = null;
     try {
@@ -975,10 +981,7 @@ class IapServiceImpl implements IapService {
         // Product may be an inactive/deprecated SKU that is still valid for an
         // existing subscriber. Do not finish it until the server rejects both
         // entitlement tiers; finishing first would lose the recovery path.
-        const receiptCandidates = this.restoreReceiptCandidates(
-          null,
-          p,
-        );
+        const receiptCandidates = this.restoreReceiptCandidates(null, p);
         const restored =
           receiptCandidates.length > 0
             ? await this.verifyRestoredPurchase(
@@ -1015,8 +1018,7 @@ class IapServiceImpl implements IapService {
       });
       const receipt = await this.verificationReceiptForPurchase(p);
       await verifyIapReceipt(receipt, plan, productId, txId);
-      this.rememberPurchaseForFinish(p);
-      await this.finishTransaction(txId).catch(() => {});
+      await this.finishOrphanPurchases(orphanKey, p);
       this.orphanRetryAfter.delete(orphanKey);
       this.orphanListeners.forEach(cb => cb());
       recordDiagnosticsLog('IAP', 'orphan purchase verified', {
@@ -1052,8 +1054,7 @@ class IapServiceImpl implements IapService {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === ERROR_CODE.RECEIPT_ALREADY_USED) {
-          this.rememberPurchaseForFinish(p);
-          await this.finishTransaction(txId).catch(() => {});
+          await this.finishOrphanPurchases(orphanKey, p);
           this.orphanRetryAfter.delete(orphanKey);
           this.orphanListeners.forEach(cb => cb());
           recordDiagnosticsLog('IAP', 'orphan purchase already used', {
@@ -1092,7 +1093,7 @@ class IapServiceImpl implements IapService {
           return;
         }
         if (err.code === ERROR_CODE.PRODUCT_ID_MISMATCH) {
-          await this.finishTransaction(txId).catch(() => {});
+          await this.finishOrphanPurchases(orphanKey, p);
           this.orphanRetryAfter.delete(orphanKey);
           recordDiagnosticsLog('IAP', 'orphan purchase product mismatch', {
             productId,
@@ -1100,8 +1101,17 @@ class IapServiceImpl implements IapService {
           });
           return;
         }
+        if (err.code === ERROR_CODE.IAP_VERIFY_FAILED) {
+          await this.finishOrphanPurchases(orphanKey, p);
+          this.orphanRetryAfter.delete(orphanKey);
+          recordDiagnosticsLog('IAP', 'orphan purchase invalid receipt', {
+            productId,
+            plan,
+          });
+          return;
+        }
       }
-      // Network / 5xx / 2001 — leave the transaction unfinished so Apple
+      // Network / 5xx — leave the transaction unfinished so Apple
       // redelivers it later, but throttle same-transaction repeats so login
       // cannot get flooded by StoreKit redelivery loops.
       this.orphanRetryAfter.set(
@@ -1115,6 +1125,7 @@ class IapServiceImpl implements IapService {
       });
     } finally {
       this.orphanVerificationInFlight.delete(orphanKey);
+      this.orphanPurchasesByKey.delete(orphanKey);
     }
   }
 
@@ -1123,10 +1134,73 @@ class IapServiceImpl implements IapService {
     if (Platform.OS === 'android' && purchaseToken) {
       return `token:${purchaseToken}`;
     }
+    const receipt =
+      typeof p.transactionReceipt === 'string' ? p.transactionReceipt : '';
+    if (Platform.OS === 'ios' && receipt.length > 0) {
+      return `receipt:${p.productId}:${this.receiptFingerprint(receipt)}`;
+    }
+    if (p.transactionId) return `tx:${p.transactionId}`;
+    return `receipt:${p.productId}:${this.receiptFingerprint(receipt)}`;
+  }
+
+  private receiptFingerprint(receipt: string): string {
+    let hash = 5381;
+    for (let i = 0; i < receipt.length; i += 1) {
+      hash = (hash * 33) ^ receipt.charCodeAt(i);
+    }
+    return `${receipt.length}:${(hash >>> 0).toString(36)}`;
+  }
+
+  private rememberOrphanPurchaseForKey(orphanKey: string, p: Purchase): void {
+    const purchases = this.orphanPurchasesByKey.get(orphanKey);
+    if (!purchases) {
+      this.orphanPurchasesByKey.set(orphanKey, [p]);
+      return;
+    }
+    const identity = this.purchaseFinishIdentity(p);
+    if (
+      identity &&
+      purchases.some(
+        existing => this.purchaseFinishIdentity(existing) === identity,
+      )
+    ) {
+      return;
+    }
+    purchases.push(p);
+  }
+
+  private purchaseFinishIdentity(p: Purchase): string {
+    const purchaseToken = this.androidPurchaseToken(p);
+    if (purchaseToken) return `token:${purchaseToken}`;
     if (p.transactionId) return `tx:${p.transactionId}`;
     const receipt =
       typeof p.transactionReceipt === 'string' ? p.transactionReceipt : '';
-    return `receipt:${p.productId}:${receipt.slice(0, 64)}`;
+    return `receipt:${p.productId}:${this.receiptFingerprint(receipt)}`;
+  }
+
+  private async finishOrphanPurchases(
+    orphanKey: string,
+    primary: Purchase,
+  ): Promise<void> {
+    this.rememberOrphanPurchaseForKey(orphanKey, primary);
+    const purchases = this.orphanPurchasesByKey.get(orphanKey) ?? [primary];
+    for (const purchase of purchases) {
+      const finishKey =
+        Platform.OS === 'android'
+          ? (this.androidPurchaseToken(purchase) ??
+            purchase.transactionId ??
+            '')
+          : (purchase.transactionId ?? '');
+      if (!finishKey) continue;
+      this.rememberPurchaseForFinish(purchase);
+      await this.finishTransaction(finishKey).catch(() => {});
+    }
+  }
+
+  private clearOrphanRecoveryState(): void {
+    this.orphanVerificationInFlight.clear();
+    this.orphanPurchasesByKey.clear();
+    this.orphanRetryAfter.clear();
   }
 
   private async clearDevSandboxQueueBeforeListenerAttach(): Promise<void> {

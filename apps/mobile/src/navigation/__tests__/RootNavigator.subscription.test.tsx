@@ -467,6 +467,25 @@ describe('RootNavigator — SUBSCRIPTION_ENFORCEMENT', () => {
     expect(screen.queryByTestId('subscription-screen')).toBeNull();
   });
 
+  test('resets to SubscriptionScreen when subscription expires after entering the app', async () => {
+    const view = renderWith('subscribed');
+    await waitFor(() =>
+      expect(screen.getByTestId('device-discovery-screen')).toBeTruthy(),
+    );
+
+    mockAuthForStatus('subscribed', 'sub_expired');
+    view.rerender(
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('subscription-screen')).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('device-discovery-screen')).toBeNull();
+  });
+
   test('uses visual QA whitelisted authed route as initial route', async () => {
     process.env.SYNCFLOW_VISUAL_QA = '1';
     process.env.SYNCFLOW_VISUAL_QA_ROUTE = 'History';
@@ -497,8 +516,9 @@ describe('RootNavigator — SUBSCRIPTION_ENFORCEMENT', () => {
       ).toBeTruthy(),
     );
     expect(
-      StyleSheet.flatten(screen.getByTestId('global-main-tabs-root').props.style)
-        .backgroundColor,
+      StyleSheet.flatten(
+        screen.getByTestId('global-main-tabs-root').props.style,
+      ).backgroundColor,
     ).toBe('#F7FBFF');
     expect(
       StyleSheet.flatten(
