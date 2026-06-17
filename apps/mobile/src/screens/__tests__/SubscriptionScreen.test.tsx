@@ -650,7 +650,7 @@ describe('SubscriptionScreen', () => {
       source: 'apple_iap',
       paymentProvider: 'apple',
       renewalState: 'auto_renewing',
-      entitlementExpireAt: '2026-06-17T00:00:00.000Z',
+      entitlementExpireAt: new Date(Date.now() + 86400000).toISOString(),
       entitlementSource: 'gift_card',
     });
 

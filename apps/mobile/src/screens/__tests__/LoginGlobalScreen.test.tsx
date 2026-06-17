@@ -36,6 +36,8 @@ jest.mock('../../stores/auth-store', () => ({
 
 const mockAppleLogin = jest.fn();
 const mockGoogleLogin = jest.fn();
+const mockSendEmailCode = jest.fn();
+const mockEmailLogin = jest.fn();
 
 jest.mock('../../services/auth-service', () => ({
   appleLogin: (args: {
@@ -44,6 +46,8 @@ jest.mock('../../services/auth-service', () => ({
     fullName?: string;
   }) => mockAppleLogin(args),
   googleLogin: (identityToken: string) => mockGoogleLogin(identityToken),
+  sendEmailCode: (email: string) => mockSendEmailCode(email),
+  emailLogin: (email: string, code: string) => mockEmailLogin(email, code),
 }));
 
 describe('LoginGlobalScreen', () => {
@@ -79,21 +83,15 @@ describe('LoginGlobalScreen', () => {
 
     expect(getByText('ViviDrop')).toBeTruthy();
     expect(getByText('轻量同步素材到电脑端')).toBeTruthy();
-    expect(getByText('让手机素材同步变得更安静、更快。')).toBeTruthy();
-    expect(
-      getByText('连接同一局域网中的电脑，自动上传照片、视频和文件。'),
-    ).toBeTruthy();
-    expect(getByText('照片')).toBeTruthy();
-    expect(getByText('视频')).toBeTruthy();
-    expect(getByText('文件')).toBeTruthy();
     expect(getByText('登录或创建账号')).toBeTruthy();
     expect(getByText('使用 Google 继续')).toBeTruthy();
     expect(getByText('使用 Apple 继续')).toBeTruthy();
+    expect(getByText('使用邮箱登录')).toBeTruthy();
     expect(getByText('继续即表示你同意', { exact: false })).toBeTruthy();
 
     expect(queryByText('OR')).toBeNull();
     expect(queryByText(/or phone/i)).toBeNull();
-    expect(queryByText(/手机号|验证码|短信|邮箱/)).toBeNull();
+    expect(queryByText(/手机号|验证码|短信/)).toBeNull();
     expect(queryByText('Continue')).toBeNull();
     expect(queryByPlaceholderText('Phone number')).toBeNull();
   });
@@ -262,5 +260,75 @@ describe('LoginGlobalScreen', () => {
     });
     expect(mockLogin).not.toHaveBeenCalled();
     expect(removeListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches to email login screen and requires terms agreement before sending code or logging in', async () => {
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <LoginGlobalScreen />,
+    );
+
+    fireEvent.press(getByText('使用邮箱登录'));
+
+    expect(getByText('邮箱登录')).toBeTruthy();
+    expect(getByPlaceholderText('请输入电子邮箱')).toBeTruthy();
+    expect(getByPlaceholderText('6 位数验证码')).toBeTruthy();
+
+    // Try sending code without entering email
+    fireEvent.press(getByText('获取验证码'));
+    expect(Alert.alert).toHaveBeenCalledWith('提示', '请输入电子邮箱');
+
+    // Try logging in without terms agreement
+    fireEvent.changeText(getByPlaceholderText('请输入电子邮箱'), 'test@example.com');
+    fireEvent.changeText(getByPlaceholderText('6 位数验证码'), '123456');
+    fireEvent.press(getByText('登录'));
+
+    // Check that Agreement modal is shown
+    expect(getByText('请先同意服务协议')).toBeTruthy();
+    expect(
+      getByText(
+        '登录前需要确认你已阅读并同意服务条款和隐私政策，之后可继续使用 邮箱登录。',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('completes email login flow successfully after agreement', async () => {
+    mockSendEmailCode.mockResolvedValue(undefined);
+    mockEmailLogin.mockResolvedValue({ accessToken: 'a', refreshToken: 'r' });
+
+    const { getByRole, getByText, getByPlaceholderText } = render(
+      <LoginGlobalScreen />,
+    );
+
+    fireEvent.press(getByText('使用邮箱登录'));
+    fireEvent.press(getByRole('checkbox'));
+
+    fireEvent.changeText(getByPlaceholderText('请输入电子邮箱'), 'test@example.com');
+    fireEvent.press(getByText('获取验证码'));
+
+    await waitFor(() => {
+      expect(mockSendEmailCode).toHaveBeenCalledWith('test@example.com');
+      expect(Alert.alert).toHaveBeenCalledWith('提示', '验证码已发送至您的邮箱，请注意查收');
+    });
+
+    fireEvent.changeText(getByPlaceholderText('6 位数验证码'), '123456');
+    fireEvent.press(getByText('登录'));
+
+    await waitFor(() => {
+      expect(mockEmailLogin).toHaveBeenCalledWith('test@example.com', '123456');
+      expect(mockLogin).toHaveBeenCalledWith('a', 'r');
+    });
+  });
+
+  it('allows returning back to provider selection', () => {
+    const { getByText, queryByPlaceholderText } = render(
+      <LoginGlobalScreen />,
+    );
+
+    fireEvent.press(getByText('使用邮箱登录'));
+    expect(queryByPlaceholderText('请输入电子邮箱')).toBeTruthy();
+
+    fireEvent.press(getByText('返回第三方登录'));
+    expect(queryByPlaceholderText('请输入电子邮箱')).toBeNull();
+    expect(getByText('使用 Google 继续')).toBeTruthy();
   });
 });

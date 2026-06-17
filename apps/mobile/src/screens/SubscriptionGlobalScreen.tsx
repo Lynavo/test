@@ -16,6 +16,7 @@ import {
   NativeModules,
   Platform,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -26,6 +27,7 @@ import * as RNLocalize from 'react-native-localize';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
+import { SubscriptionPlanCard } from '../components/SubscriptionPlanCard';
 import {
   SUBSCRIPTION_STATUS_ICON_BACKGROUNDS,
   SUBSCRIPTION_STATUS_ICON_COLORS,
@@ -87,6 +89,40 @@ const MODAL_CARD_BG = 'rgba(248,251,255,0.98)';
 const POST_VERIFY_STATUS_POLL_DELAYS_MS = [
   2_000, 5_000, 10_000, 20_000, 30_000,
 ] as const;
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const PLAN_CARD_GAP = 12;
+const PLAN_CARD_HORIZONTAL_PADDING = 16;
+
+function planCardWidth(cardsPerRow: number): number {
+  const totalGap = PLAN_CARD_GAP * (cardsPerRow - 1);
+  return (
+    (SCREEN_WIDTH - PLAN_CARD_HORIZONTAL_PADDING * 2 - totalGap) / cardsPerRow
+  );
+}
+
+function periodLabel(
+  product: { periodUnit?: string; periodCount?: number } | null,
+  fallbackLabel: string,
+  t: TFunction,
+): string {
+  const unit = product?.periodUnit;
+  const count = product?.periodCount;
+  if (!unit || !count || count < 1) return fallbackLabel;
+  const lower = unit.toLowerCase();
+  if (
+    lower !== 'day' &&
+    lower !== 'week' &&
+    lower !== 'month' &&
+    lower !== 'year'
+  ) {
+    return fallbackLabel;
+  }
+  return t(`subscription.plans.unit.${lower}` as never, {
+    count,
+    defaultValue: fallbackLabel,
+  });
+}
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Subscription'>;
 type PostSubscriptionRoute = Extract<
@@ -1025,9 +1061,11 @@ export function SubscriptionGlobalScreen() {
   // 方案" badge, card disable, and CTA copy.
   const currentPlan = resolveCurrentPlan(subscription);
 
-  // The global membership route no longer renders plan tiles. The selected
-  // SKU is derived from the server catalog (recommended first, then first
-  // selectable) so StoreKit / wallet semantics stay catalog-driven.
+  // selectedProductId tracks the Apple/Google SKU the user has tapped on. Defaults to
+  // recommended first, then first selectable.
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(
+    null,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [showWalletPaymentSheet, setShowWalletPaymentSheet] = useState(false);
   const [selectedWalletMethod, setSelectedWalletMethod] =
@@ -1231,9 +1269,10 @@ export function SubscriptionGlobalScreen() {
     return filtered;
   }, [rawPlans, plansLoading, productsLoading]);
 
-  // Resolve the active SKU without mutating state during catalog hydration.
-  // Prefer the recommended row (server intent) or the first post-sort
-  // selectable entry.
+  // Resolve the active selection without mutating state during catalog
+  // hydration. Prefer a user-tapped SKU when it is still available and
+  // selectable; otherwise fall back to the recommended row (server intent) or
+  // the first post-sort selectable entry.
   const effectiveSelectedProductId = useMemo<string | null>(() => {
     if (plans.length === 0) {
       return null;
@@ -1247,14 +1286,19 @@ export function SubscriptionGlobalScreen() {
       );
     };
 
+    const tapped = plans.find(
+      entry => entry.plan.product_id === selectedProductId,
+    );
+    if (tapped && !isBlocked(tapped)) return tapped.plan.product_id;
+
     const recommended = plans.find(
       entry => entry.plan.recommended && !isBlocked(entry),
     );
     const alternative = recommended ?? plans.find(entry => !isBlocked(entry));
     if (alternative) return alternative.plan.product_id;
 
-    return plans[0].plan.product_id;
-  }, [plans, currentPlan]);
+    return (tapped ?? plans[0]).plan.product_id;
+  }, [plans, selectedProductId, currentPlan]);
 
   // Map the effective SKU back to the full catalog row used by CTA copy,
   // purchase, wallet checkout, and downgrade/current-plan guards.
@@ -2049,6 +2093,52 @@ export function SubscriptionGlobalScreen() {
 
         <MembershipBenefitsCard t={t} />
 
+        <View
+          style={[
+            styles.planRow,
+            plansLoading && styles.planRowLoading,
+          ]}
+        >
+          {plans.map(entry => {
+            const product = entry.product;
+            const tier = resolveSubscriptionPlanTier(entry.plan);
+            const cardIsCurrent = tier != null && currentPlan === tier;
+            const cardIsDowngrade =
+              tier != null && isDowngradePlan(currentPlan, tier);
+            const unitLabel = product ? periodLabel(product, '', t) : '';
+            return (
+              <SubscriptionPlanCard
+                key={entry.plan.product_id}
+                title={entry.plan.name}
+                description={entry.plan.description}
+                badges={entry.plan.badges}
+                width={planCardWidth(plans.length)}
+                price={product?.displayPrice ?? '—'}
+                unit={unitLabel}
+                oldPrice={entry.savings?.annualizedMonthlyDisplay}
+                savingsBadge={entry.savings?.display}
+                selected={effectiveSelectedProductId === entry.plan.product_id}
+                disabled={
+                  hasActiveOrQueuedGiftCardEntitlement ||
+                  cardIsCurrent ||
+                  cardIsDowngrade
+                }
+                recommended={entry.plan.recommended}
+                currentBadge={
+                  cardIsCurrent
+                    ? t('subscription.plans.currentPlan')
+                    : undefined
+                }
+                onPress={() => {
+                  if (!hasActiveOrQueuedGiftCardEntitlement) {
+                    setSelectedProductId(entry.plan.product_id);
+                  }
+                }}
+              />
+            );
+          })}
+        </View>
+
         {(plansError || (FEATURES.IAP_ENABLED && plans.length === 0)) &&
         FEATURES.IAP_ENABLED ? (
           <TouchableOpacity
@@ -2648,5 +2738,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#fff',
+  },
+  planRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: PLAN_CARD_GAP,
+    marginBottom: 20,
+  },
+  planRowLoading: {
+    opacity: 0.55,
   },
 });

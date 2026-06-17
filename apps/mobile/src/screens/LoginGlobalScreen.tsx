@@ -11,16 +11,12 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import Svg, {
-  Circle,
-  Defs,
-  LinearGradient,
   Path,
-  Rect,
-  Stop,
 } from 'react-native-svg';
 
 import {
@@ -28,7 +24,7 @@ import {
   GlobalAuthScreenShell,
 } from '../components/auth/GlobalAuthScreenShell';
 import { authTextScalingProps } from '../components/auth/authPlatformStyles';
-import { appleLogin, googleLogin } from '../services/auth-service';
+import { appleLogin, googleLogin, sendEmailCode, emailLogin } from '../services/auth-service';
 import { useAuth } from '../stores/auth-store';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
@@ -36,8 +32,7 @@ import { getBaseUrl } from '../services/config';
 
 const VIVIDROP_LOGO = require('../assets/icons/vividrop-logo.png');
 
-type Provider = 'apple' | 'google';
-type MediaKind = 'photo' | 'video' | 'file';
+type Provider = 'apple' | 'google' | 'email';
 
 const APPLE_ANDROID_CALLBACK_TIMEOUT_MS = 120000;
 
@@ -98,6 +93,74 @@ export function LoginGlobalScreen() {
   );
   const [pendingProvider, setPendingProvider] = useState<Provider | null>(null);
   const { login } = useAuth();
+
+  const [loginMethod, setLoginMethod] = useState<'oauth' | 'email'>('oauth');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [countdown, setCountdown] = useState(0);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [codeFocused, setCodeFocused] = useState(false);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setTimeout(() => {
+      setCountdown(prev => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleSendCode = async () => {
+    if (!email.trim()) {
+      Alert.alert('提示', '请输入电子邮箱');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('错误', '请输入有效的电子邮箱地址');
+      return;
+    }
+
+    setIsSendingCode(true);
+    try {
+      await sendEmailCode(email.trim());
+      Alert.alert('提示', '验证码已发送至您的邮箱，请注意查收');
+      setCountdown(60);
+    } catch (error) {
+      Alert.alert('发送失败', getErrorMessage(error, '发送验证码失败'));
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
+
+  const handleEmailLoginSubmit = async () => {
+    if (!agreedToTerms) {
+      setAgreementProvider('email');
+      return;
+    }
+    if (!email.trim()) {
+      Alert.alert('提示', '请输入电子邮箱');
+      return;
+    }
+    if (!code.trim() || code.trim().length !== 6) {
+      Alert.alert('提示', '请输入 6 位数验证码');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    try {
+      const authRes = await emailLogin(email.trim(), code.trim());
+      login(authRes.accessToken, authRes.refreshToken);
+    } catch (error) {
+      Alert.alert(
+        '登录失败',
+        getErrorMessage(error, '登录失败，验证码可能错误或已过期'),
+      );
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   useEffect(() => {
     try {
@@ -283,91 +346,187 @@ export function LoginGlobalScreen() {
               </Text>
             </View>
           </View>
-
-          <Text {...authTextScalingProps} style={styles.heroTitle}>
-            让手机素材同步变得更安静、更快。
-          </Text>
-          <Text {...authTextScalingProps} style={styles.heroCopy}>
-            连接同一局域网中的电脑，自动上传照片、视频和文件。
-          </Text>
-
-          <View style={styles.featureGrid}>
-            {[
-              { type: 'photo' as const, label: '照片' },
-              { type: 'video' as const, label: '视频' },
-              { type: 'file' as const, label: '文件' },
-            ].map(item => (
-              <View key={item.type} style={styles.featureCard}>
-                <MediaTypeIcon type={item.type} />
-                <Text {...authTextScalingProps} style={styles.featureLabel}>
-                  {item.label}
-                </Text>
-              </View>
-            ))}
-          </View>
         </View>
 
         <View style={styles.authCard}>
           <Text {...authTextScalingProps} style={styles.cardTitle}>
-            登录或创建账号
+            {loginMethod === 'oauth' ? '登录或创建账号' : '邮箱登录'}
           </Text>
           <Text {...authTextScalingProps} style={styles.cardDescription}>
-            使用现有账号继续，稍后可连接电脑设备。
+            {loginMethod === 'oauth'
+              ? '使用现有账号继续，稍后可连接电脑设备。'
+              : '未注册的账号将自动注册，稍后可连接电脑设备。'}
           </Text>
 
-          <View style={styles.providerList}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="使用 Google 继续"
-              disabled={pendingProvider !== null}
-              onPress={() => beginProviderLogin('google')}
-              testID="global-auth-google-provider-button"
-              style={({ pressed }) => [
-                styles.providerButton,
-                pressed ? styles.providerButtonPressed : null,
-                pendingProvider !== null ? styles.providerButtonDisabled : null,
-              ]}
-            >
-              {pendingProvider === 'google' ? (
-                <ActivityIndicator size="small" color={AUTH_COLORS.text} />
-              ) : (
-                <>
-                  <Text {...authTextScalingProps} style={styles.googleMark}>
-                    G
-                  </Text>
-                  <Text {...authTextScalingProps} style={styles.providerText}>
-                    使用 Google 继续
-                  </Text>
-                </>
-              )}
-            </Pressable>
+          {loginMethod === 'oauth' ? (
+            <View style={styles.providerList}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="使用 Google 继续"
+                disabled={pendingProvider !== null}
+                onPress={() => beginProviderLogin('google')}
+                testID="global-auth-google-provider-button"
+                style={({ pressed }) => [
+                  styles.providerButton,
+                  pressed ? styles.providerButtonPressed : null,
+                  pendingProvider !== null ? styles.providerButtonDisabled : null,
+                ]}
+              >
+                {pendingProvider === 'google' ? (
+                  <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+                ) : (
+                  <>
+                    <GoogleSvgIcon size={20} />
+                    <Text {...authTextScalingProps} style={styles.providerText}>
+                      使用 Google 继续
+                    </Text>
+                  </>
+                )}
+              </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="使用 Apple 继续"
-              disabled={pendingProvider !== null}
-              onPress={() => beginProviderLogin('apple')}
-              testID="global-auth-apple-provider-button"
-              style={({ pressed }) => [
-                styles.providerButton,
-                pressed ? styles.providerButtonPressed : null,
-                pendingProvider !== null ? styles.providerButtonDisabled : null,
-              ]}
-            >
-              {pendingProvider === 'apple' ? (
-                <ActivityIndicator size="small" color={AUTH_COLORS.text} />
-              ) : (
-                <>
-                  <Text {...authTextScalingProps} style={styles.appleMark}>
-                    
-                  </Text>
-                  <Text {...authTextScalingProps} style={styles.providerText}>
-                    使用 Apple 继续
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="使用 Apple 继续"
+                disabled={pendingProvider !== null}
+                onPress={() => beginProviderLogin('apple')}
+                testID="global-auth-apple-provider-button"
+                style={({ pressed }) => [
+                  styles.providerButton,
+                  pressed ? styles.providerButtonPressed : null,
+                  pendingProvider !== null ? styles.providerButtonDisabled : null,
+                ]}
+              >
+                {pendingProvider === 'apple' ? (
+                  <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+                ) : (
+                  <>
+                    <AppleSvgIcon size={20} color={AUTH_COLORS.text} />
+                    <Text {...authTextScalingProps} style={styles.providerText}>
+                      使用 Apple 继续
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>或</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="使用邮箱登录"
+                onPress={() => setLoginMethod('email')}
+                style={({ pressed }) => [
+                  styles.emailChooseButton,
+                  pressed ? styles.providerButtonPressed : null,
+                ]}
+              >
+                <MailSvgIcon size={18} color={AUTH_COLORS.text} />
+                <Text {...authTextScalingProps} style={styles.providerText}>
+                  使用邮箱登录
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.providerList}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>电子邮箱</Text>
+                <TextInput
+                  accessibilityLabel="请输入电子邮箱"
+                  placeholder="请输入电子邮箱"
+                  placeholderTextColor="#7B8490"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={() => setEmailFocused(true)}
+                  onBlur={() => setEmailFocused(false)}
+                  editable={!isLoggingIn && !isSendingCode}
+                  style={[styles.input, emailFocused ? styles.inputFocused : null]}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>验证码</Text>
+                <View style={styles.codeInputRow}>
+                  <TextInput
+                    accessibilityLabel="6 位数验证码"
+                    placeholder="6 位数验证码"
+                    placeholderTextColor="#7B8490"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={code}
+                    onChangeText={text => setCode(text.replace(/\D/g, ''))}
+                    onFocus={() => setCodeFocused(true)}
+                    onBlur={() => setCodeFocused(false)}
+                    editable={!isLoggingIn}
+                    style={[
+                      styles.input,
+                      styles.codeInput,
+                      codeFocused ? styles.inputFocused : null,
+                    ]}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isSendingCode
+                        ? '正在获取验证码'
+                        : countdown > 0
+                        ? `已发送 ${countdown}秒`
+                        : '获取验证码'
+                    }
+                    onPress={handleSendCode}
+                    disabled={isSendingCode || countdown > 0}
+                    style={({ pressed }) => [
+                      styles.sendCodeButton,
+                      pressed ? styles.providerButtonPressed : null,
+                      isSendingCode || countdown > 0
+                        ? styles.sendCodeButtonDisabled
+                        : null,
+                    ]}
+                  >
+                    {isSendingCode ? (
+                      <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+                    ) : (
+                      <Text style={styles.sendCodeButtonText}>
+                        {countdown > 0 ? `已发送 (${countdown}s)` : '获取验证码'}
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="登录"
+                onPress={handleEmailLoginSubmit}
+                disabled={isLoggingIn}
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  pressed ? styles.providerButtonPressed : null,
+                  isLoggingIn ? styles.providerButtonDisabled : null,
+                ]}
+              >
+                {isLoggingIn ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.submitButtonText}>登录</Text>
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="返回第三方登录"
+                onPress={() => setLoginMethod('oauth')}
+                style={styles.backToOAuthButton}
+              >
+                <Text style={styles.backToOAuthText}>返回第三方登录</Text>
+              </Pressable>
+            </View>
+          )}
 
           <View style={styles.termsRow}>
             <Pressable
@@ -384,11 +543,11 @@ export function LoginGlobalScreen() {
               {agreedToTerms ? <CheckGlyph /> : null}
             </Pressable>
             <Text {...authTextScalingProps} style={styles.termsText}>
-              继续即表示你同意{' '}
+              继续即表示你同意
               <Text style={styles.termsLink} onPress={handleOpenTerms}>
                 服务条款
               </Text>
-              {'\n'}和{' '}
+              和
               <Text style={styles.termsLink} onPress={handleOpenPrivacy}>
                 隐私政策
               </Text>
@@ -411,140 +570,56 @@ export function LoginGlobalScreen() {
         onContinue={provider => {
           setAgreedToTerms(true);
           setAgreementProvider(null);
-          setAuthProvider(provider);
+          if (provider !== 'email') {
+            setAuthProvider(provider);
+          }
         }}
       />
     </GlobalAuthScreenShell>
   );
 }
 
-function MediaTypeIcon({ type }: { type: MediaKind }) {
-  if (type === 'photo') {
-    return (
-      <View style={[styles.mediaIcon, styles.photoIcon]}>
-        <MediaIconGradient type="photo" />
-        <View style={styles.photoSun} />
-        <View style={styles.photoHillLeft} />
-        <View style={styles.photoHillRight} />
-        <PhotoGlyph />
-      </View>
-    );
-  }
-
-  if (type === 'video') {
-    return (
-      <View style={[styles.mediaIcon, styles.videoIcon]}>
-        <MediaIconGradient type="video" />
-        <View style={styles.videoDotRowTop}>
-          {[0, 1, 2].map(item => (
-            <View key={item} style={styles.videoDot} />
-          ))}
-        </View>
-        <View style={styles.playCircle}>
-          <VideoPlayGlyph />
-        </View>
-        <View style={styles.videoDotRowBottom}>
-          {[0, 1, 2].map(item => (
-            <View key={item} style={styles.videoDotFaint} />
-          ))}
-        </View>
-      </View>
-    );
-  }
-
+function GoogleSvgIcon({ size = 18 }: { size?: number }) {
   return (
-    <View style={[styles.mediaIcon, styles.fileIcon]}>
-      <MediaIconGradient type="file" />
-      <View style={styles.fileCorner} />
-      <FileGlyph />
-    </View>
-  );
-}
-
-function MediaIconGradient({ type }: { type: MediaKind }) {
-  const stops =
-    type === 'photo'
-      ? ['#F7FCFF', '#D8F0FF', '#9FD6FF']
-      : type === 'video'
-      ? ['#F8F6FF', '#E3E6FF', '#9AAEFF']
-      : ['#FFFFFF', '#EFF5FB', '#D7E2F0'];
-
-  return (
-    <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-      <Defs>
-        <LinearGradient
-          id={`${type}MediaGradient`}
-          x1="0%"
-          y1="0%"
-          x2="100%"
-          y2="100%"
-        >
-          <Stop offset="0%" stopColor={stops[0]} />
-          <Stop offset="56%" stopColor={stops[1]} />
-          <Stop offset="100%" stopColor={stops[2]} />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${type}MediaGradient)`} />
-    </Svg>
-  );
-}
-
-function PhotoGlyph() {
-  return (
-    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
-      <Rect
-        x={5}
-        y={4.5}
-        width={14}
-        height={15}
-        rx={2.4}
-        stroke="#1677D2"
-        strokeWidth={2}
-      />
-      <Circle cx={15.2} cy={8.8} r={1.55} fill="#1677D2" />
+    <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
-        d="M6.5 16.9l3.75-4.05a1.35 1.35 0 0 1 1.96-.02l1.28 1.33.62-.72a1.35 1.35 0 0 1 1.98-.05l1.4 1.42"
-        stroke="#1677D2"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        fill="#4285F4"
+        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.927h6.6a5.647 5.647 0 0 1-2.45 3.717v3.082h3.94c2.31-2.13 3.655-5.26 3.655-8.65z"
+      />
+      <Path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.94-3.082c-1.1.74-2.5 1.18-3.99 1.18-3.07 0-5.67-2.08-6.6-4.88H1.37v3.18A11.996 11.996 0 0 0 12 24z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M5.4 14.308a7.16 7.16 0 0 1 0-4.616V6.512H1.37a11.99 11.99 0 0 0 0 10.976l4.03-3.18z"
+      />
+      <Path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.43-3.43A11.928 11.928 0 0 0 12 0C7.3 0 3.2 2.67 1.37 6.512l4.03 3.18C6.33 6.83 8.93 4.75 12 4.75z"
       />
     </Svg>
   );
 }
 
-function VideoPlayGlyph() {
+function AppleSvgIcon({ size = 18, color = '#000000' }: { size?: number; color?: string }) {
   return (
-    <Svg width={15} height={15} viewBox="0 0 18 18">
-      <Path d="M6.2 4.15v9.7l7.55-4.86-7.55-4.84z" fill="#746AA8" />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.82M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.69-1.12 1.84-.98 2.94.12 0 .23.01.35.01.96 0 2.06-.59 2.46-1.34" />
     </Svg>
   );
 }
 
-function FileGlyph() {
+function MailSvgIcon({ size = 18, color = '#17191C' }: { size?: number; color?: string }) {
   return (
-    <Svg width={21} height={21} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M7 3.8h6.15L18 8.65V19a1.6 1.6 0 0 1-1.6 1.6H7A1.6 1.6 0 0 1 5.4 19V5.4A1.6 1.6 0 0 1 7 3.8z"
-        stroke="#59616D"
-        strokeWidth={1.9}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M13.1 3.9v4.75H18"
-        stroke="#59616D"
-        strokeWidth={1.9}
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M8.5 12.4h7M8.5 15.7h5.4"
-        stroke="#59616D"
-        strokeWidth={1.9}
-        strokeLinecap="round"
-      />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <Path d="M22 6l-10 7L2 6" />
     </Svg>
   );
 }
+
+
 
 function ShieldCheckGlyph() {
   return (
@@ -591,7 +666,7 @@ function ProviderConfirmModal({
   onCancel: () => void;
   onContinue: (provider: Provider) => void;
 }) {
-  if (!provider) return null;
+  if (!provider || provider === 'email') return null;
 
   const isGoogle = provider === 'google';
 
@@ -609,14 +684,11 @@ function ProviderConfirmModal({
               isGoogle ? styles.modalGoogleIcon : styles.modalAppleIcon,
             ]}
           >
-            <Text
-              style={[
-                styles.modalProviderMark,
-                isGoogle ? styles.modalGoogleMark : styles.modalAppleMark,
-              ]}
-            >
-              {isGoogle ? 'G' : ''}
-            </Text>
+            {isGoogle ? (
+              <GoogleSvgIcon size={24} />
+            ) : (
+              <AppleSvgIcon size={24} color={AUTH_COLORS.text} />
+            )}
           </View>
           <View style={styles.modalHeaderText}>
             <Text {...authTextScalingProps} style={styles.modalTitle}>
@@ -735,7 +807,7 @@ function AgreementRequiredModal({
             </Text>
             <Text {...authTextScalingProps} style={styles.modalBodyText}>
               登录前需要确认你已阅读并同意服务条款和隐私政策，之后可继续使用
-              {provider === 'google' ? ' Google' : ' Apple'} 授权。
+              {provider === 'google' ? ' Google 授权' : provider === 'apple' ? ' Apple 授权' : ' 邮箱登录'}。
             </Text>
           </View>
         </View>
@@ -787,13 +859,7 @@ const glassShadow = {
   elevation: 6,
 };
 
-const panelShadow = {
-  shadowColor: '#46608A',
-  shadowOffset: { width: 0, height: 12 },
-  shadowOpacity: 0.08,
-  shadowRadius: 34,
-  elevation: 4,
-};
+
 
 const styles = StyleSheet.create({
   pageContent: {
@@ -838,148 +904,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     color: AUTH_COLORS.textMuted,
   },
-  heroTitle: {
-    marginTop: 24,
-    maxWidth: 300,
-    fontSize: 26,
-    lineHeight: 29,
-    fontWeight: '600',
-    color: AUTH_COLORS.text,
-  },
-  heroCopy: {
-    marginTop: 12,
-    fontSize: 13,
-    lineHeight: 24,
-    color: AUTH_COLORS.textMuted,
-  },
-  featureGrid: {
-    marginTop: 20,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  featureCard: {
-    flex: 1,
-    height: 91,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.70)',
-    backgroundColor: 'rgba(255,255,255,0.50)',
-    alignItems: 'center',
-    paddingTop: 12,
-    ...panelShadow,
-  },
-  featureLabel: {
-    marginTop: 8,
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: '600',
-    color: AUTH_COLORS.textMuted,
-  },
-  mediaIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#46608A',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
-    shadowRadius: 28,
-    elevation: 3,
-  },
-  photoIcon: {
-    backgroundColor: '#D8F0FF',
-  },
-  photoSun: {
-    position: 'absolute',
-    left: 9,
-    top: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.86)',
-  },
-  photoHillLeft: {
-    position: 'absolute',
-    left: 3,
-    bottom: -2,
-    width: 28,
-    height: 16,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.62)',
-    transform: [{ rotate: '-8deg' }],
-  },
-  photoHillRight: {
-    position: 'absolute',
-    right: -1,
-    bottom: -2,
-    width: 30,
-    height: 19,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    backgroundColor: 'rgba(191,227,255,0.78)',
-    transform: [{ rotate: '10deg' }],
-  },
-  videoIcon: {
-    backgroundColor: '#E3E6FF',
-  },
-  videoDotRowTop: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  videoDotRowBottom: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  videoDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-  },
-  videoDotFaint: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.54)',
-  },
-  playCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.74)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fileIcon: {
-    backgroundColor: '#EFF5FB',
-  },
-  fileCorner: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 12,
-    height: 12,
-    borderBottomLeftRadius: 8,
-    borderLeftWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#C6D2DF',
-    backgroundColor: 'rgba(255,255,255,0.76)',
-  },
   authCard: {
-    marginTop: 24,
+    marginTop: 40,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.70)',
@@ -990,15 +916,15 @@ const styles = StyleSheet.create({
     ...glassShadow,
   },
   cardTitle: {
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 20,
+    lineHeight: 25,
     fontWeight: '600',
     color: AUTH_COLORS.text,
   },
   cardDescription: {
     marginTop: 6,
-    fontSize: 12,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: AUTH_COLORS.textMuted,
   },
   providerList: {
@@ -1028,21 +954,9 @@ const styles = StyleSheet.create({
   providerButtonDisabled: {
     opacity: 0.5,
   },
-  googleMark: {
-    fontSize: 18,
-    lineHeight: 22,
-    fontWeight: '700',
-    color: '#4285F4',
-  },
-  appleMark: {
-    fontSize: 19,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: AUTH_COLORS.text,
-  },
   providerText: {
-    fontSize: 13,
-    lineHeight: 17,
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: '600',
     color: AUTH_COLORS.text,
   },
@@ -1069,8 +983,8 @@ const styles = StyleSheet.create({
   },
   termsText: {
     flex: 1,
-    fontSize: 10,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 18,
     color: '#7B8490',
   },
   termsLink: {
@@ -1247,5 +1161,109 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(207,214,223,0.4)',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8D96A3',
+  },
+  emailChooseButton: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.64)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    shadowColor: '#46608A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 2,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7B8490',
+    marginBottom: 6,
+  },
+  input: {
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cfd6df',
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: AUTH_COLORS.text,
+  },
+  inputFocused: {
+    borderColor: '#17191c',
+  },
+  codeInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  codeInput: {
+    flex: 1,
+  },
+  sendCodeButton: {
+    height: 40,
+    minWidth: 100,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cfd6df',
+    backgroundColor: 'rgba(255,255,255,0.58)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  sendCodeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  sendCodeButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButton: {
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#17191c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  backToOAuthButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 4,
+  },
+  backToOAuthText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7B8490',
   },
 });

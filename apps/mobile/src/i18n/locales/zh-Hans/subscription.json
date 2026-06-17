@@ -76,6 +76,7 @@
     "currentYearly": "已是年会员",
     "giftCardMember": "已是礼品卡会员",
     "giftCardQueued": "已兑换礼品卡",
+    "renew": "立即续订",
     "start": "开始使用"
   },
   "footer": "订阅即表示您同意自动续费条款，可随时取消",
@@ -129,5 +130,36 @@
     "expiredBody": "续订以继续使用 Vivi Drop。",
     "renewNow": "立即续订",
     "later": "稍后"
+  },
+  "member": {
+    "title": "会员中心",
+    "accountTrial": "免费试用",
+    "plans": {
+      "monthly": "月度会员",
+      "yearly": "年度会员"
+    },
+    "trialUntil": "试用期至 {{date}}",
+    "expiresAt": "有效期至 {{date}}",
+    "activeBody": "已解锁全部高级功能",
+    "giftCardBody": "已激活礼品卡会员",
+    "expiredBody": "订阅已到期，恢复订阅以继续使用",
+    "trialBody": "试用中，体验全部高级功能",
+    "remainingPrefix": "剩",
+    "remainingDays": "{{days}}天"
+  },
+  "benefits": {
+    "title": "会员专享权益",
+    "fastTransfer": {
+      "label": "极速传输",
+      "value": "专享通道"
+    },
+    "autoUpload": {
+      "label": "自动备份",
+      "value": "后台无感"
+    },
+    "crossNetwork": {
+      "label": "远程访问",
+      "value": "随时随地"
+    }
   }
 }

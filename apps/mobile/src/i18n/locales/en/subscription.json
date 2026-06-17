@@ -76,6 +76,7 @@
     "currentYearly": "Current Yearly Plan",
     "giftCardMember": "Gift card member",
     "giftCardQueued": "Gift card redeemed",
+    "renew": "Renew Now",
     "start": "Get Started"
   },
   "footer": "Subscribing means you agree to auto-renewal. Cancel any time.",
@@ -129,5 +130,36 @@
     "expiredBody": "Renew to keep using Vivi Drop.",
     "renewNow": "Renew",
     "later": "Later"
+  },
+  "member": {
+    "title": "Membership Center",
+    "accountTrial": "Free Trial",
+    "plans": {
+      "monthly": "Monthly Membership",
+      "yearly": "Annual Membership"
+    },
+    "trialUntil": "Trial until {{date}}",
+    "expiresAt": "Expires at {{date}}",
+    "activeBody": "All premium features unlocked",
+    "giftCardBody": "Gift card membership active",
+    "expiredBody": "Subscription expired. Renew to continue.",
+    "trialBody": "Trialing, enjoy all premium features.",
+    "remainingPrefix": "Left ",
+    "remainingDays": "{{days}} days"
+  },
+  "benefits": {
+    "title": "Membership Benefits",
+    "fastTransfer": {
+      "label": "High-speed Transfer",
+      "value": "Dedicated Channel"
+    },
+    "autoUpload": {
+      "label": "Auto Backup",
+      "value": "Background Seamless"
+    },
+    "crossNetwork": {
+      "label": "Remote Access",
+      "value": "Anytime, Anywhere"
+    }
   }
 }
