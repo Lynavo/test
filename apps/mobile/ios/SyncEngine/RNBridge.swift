@@ -28,6 +28,105 @@ private func diagnosticsUploadLog(_ message: String) {
     slog("[DiagnosticsUpload] %@", message)
 }
 
+private func shareCacheFilename(_ rawFilename: String, fallbackURL: URL? = nil) -> String {
+    let trimmed = rawFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+    let fallback = fallbackURL?.lastPathComponent ?? "remote-file"
+    let candidate = trimmed.isEmpty ? fallback : trimmed
+    let invalid = CharacterSet(charactersIn: "/\\:")
+        .union(.controlCharacters)
+        .union(.newlines)
+    let sanitized = candidate
+        .components(separatedBy: invalid)
+        .filter { !$0.isEmpty }
+        .joined(separator: "_")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return sanitized.isEmpty ? "remote-file" : sanitized
+}
+
+private func uniqueShareCacheURL(directory: URL, filename: String) -> URL {
+    let baseURL = directory.appendingPathComponent(filename)
+    if !FileManager.default.fileExists(atPath: baseURL.path) {
+        return baseURL
+    }
+    let name = (filename as NSString).deletingPathExtension
+    let ext = (filename as NSString).pathExtension
+    for index in 1...999 {
+        let indexedName = ext.isEmpty ? "\(name)-\(index)" : "\(name)-\(index).\(ext)"
+        let candidate = directory.appendingPathComponent(indexedName)
+        if !FileManager.default.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+    }
+    return directory.appendingPathComponent("\(UUID().uuidString)-\(filename)")
+}
+
+private func localDownloadMediaType(filename: String, mediaType: String?) -> String {
+    let normalized = mediaType?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+    if normalized == "image" || normalized == "video" {
+        return normalized!
+    }
+
+    let ext = (filename as NSString).pathExtension.lowercased()
+    switch ext {
+    case "jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif", "tiff", "tif":
+        return "image"
+    case "mp4", "mov", "avi", "mkv", "m4v":
+        return "video"
+    default:
+        return "other"
+    }
+}
+
+private func saveLocalDownloadToPhotos(fileURL: URL, mediaType: String) async throws {
+    try await PHPhotoLibrary.shared().performChanges {
+        if mediaType == "video" {
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL)
+        } else {
+            PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: fileURL)
+        }
+    }
+}
+
+private func persistDownloadedURLToLocalStorage(
+    downloadedURL: URL,
+    filename: String,
+    mediaType rawMediaType: String?
+) async throws -> [String: Any] {
+    let safeFilename = shareCacheFilename(filename)
+    let tempDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("syncflow_local_downloads", isDirectory: true)
+    try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    let tempURL = uniqueShareCacheURL(directory: tempDir, filename: safeFilename)
+    try FileManager.default.moveItem(at: downloadedURL, to: tempURL)
+
+    let mediaType = localDownloadMediaType(filename: safeFilename, mediaType: rawMediaType)
+    if mediaType == "image" || mediaType == "video" {
+        do {
+            try await saveLocalDownloadToPhotos(fileURL: tempURL, mediaType: mediaType)
+            try? FileManager.default.removeItem(at: tempURL)
+            return [
+                "savedToPhotos": true,
+                "localPath": NSNull(),
+                "savedLocation": "Photos",
+            ]
+        } catch {
+            try? FileManager.default.removeItem(at: tempURL)
+            throw error
+        }
+    }
+
+    let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    let finalURL = uniqueShareCacheURL(directory: documentsURL, filename: safeFilename)
+    try FileManager.default.moveItem(at: tempURL, to: finalURL)
+    return [
+        "savedToPhotos": false,
+        "localPath": finalURL.path,
+        "savedLocation": "Files",
+    ]
+}
+
 private func appendDiagnosticsMultipartString(_ value: String, to data: inout Data) {
     data.append(Data(value.utf8))
 }
@@ -817,6 +916,57 @@ class NativeSyncEngineModule: RCTEventEmitter {
     }
 
     @objc
+    func downloadUrlToShareCache(_ url: NSString, filename: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            do {
+                guard let remoteURL = URL(string: url as String) else {
+                    reject("SHARE_DOWNLOAD_ERROR", "Invalid download URL", nil)
+                    return
+                }
+                let (downloadedURL, response) = try await URLSession.shared.download(from: remoteURL)
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    reject("SHARE_DOWNLOAD_ERROR", "Download failed with HTTP \(http.statusCode)", nil)
+                    return
+                }
+                let destDir = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
+                try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+                let safeFilename = shareCacheFilename(filename as String, fallbackURL: remoteURL)
+                let destURL = uniqueShareCacheURL(directory: destDir, filename: safeFilename)
+                try FileManager.default.moveItem(at: downloadedURL, to: destURL)
+                resolve(destURL.path)
+            } catch {
+                reject("SHARE_DOWNLOAD_ERROR", error.localizedDescription, error)
+            }
+        }
+    }
+
+    @objc
+    func downloadUrlToLocal(_ url: NSString, filename: NSString, mediaType: NSString?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            do {
+                guard let remoteURL = URL(string: url as String) else {
+                    reject("LOCAL_DOWNLOAD_ERROR", "Invalid download URL", nil)
+                    return
+                }
+                let (downloadedURL, response) = try await URLSession.shared.download(from: remoteURL)
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                    reject("LOCAL_DOWNLOAD_ERROR", "Download failed with HTTP \(http.statusCode)", nil)
+                    return
+                }
+                let result = try await persistDownloadedURLToLocalStorage(
+                    downloadedURL: downloadedURL,
+                    filename: filename as String,
+                    mediaType: mediaType as String?
+                )
+                resolve(result)
+            } catch {
+                reject("LOCAL_DOWNLOAD_ERROR", error.localizedDescription, error)
+            }
+        }
+    }
+
+    @objc
     func shareFile(_ localPath: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         let fileURL = URL(fileURLWithPath: localPath as String)
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
@@ -836,6 +986,43 @@ class NativeSyncEngineModule: RCTEventEmitter {
                 reject("SHARE_ERROR", "Cannot present share sheet", nil)
                 return
             }
+            activityVC.completionWithItemsHandler = { _, completed, _, _ in
+                resolve(completed)
+            }
+            rootVC.present(activityVC, animated: true)
+        }
+    }
+
+    @objc
+    func shareFiles(_ localPaths: NSArray, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        let fileURLs = localPaths.compactMap { item -> URL? in
+            guard let path = item as? String else { return nil }
+            return URL(fileURLWithPath: path)
+        }
+        guard !fileURLs.isEmpty else {
+            reject("SHARE_ERROR", "No files to share", nil)
+            return
+        }
+        for fileURL in fileURLs {
+            guard FileManager.default.fileExists(atPath: fileURL.path) else {
+                reject("SHARE_ERROR", "File not found", nil)
+                return
+            }
+        }
+        DispatchQueue.main.async {
+            let activityVC = UIActivityViewController(
+                activityItems: fileURLs,
+                applicationActivities: nil
+            )
+            guard let rootVC = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController else {
+                reject("SHARE_ERROR", "Cannot present share sheet", nil)
+                return
+            }
+            activityVC.popoverPresentationController?.sourceView = rootVC.view
             activityVC.completionWithItemsHandler = { _, completed, _, _ in
                 resolve(completed)
             }

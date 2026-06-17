@@ -53,6 +53,18 @@ export interface Spec extends TurboModule {
     path: string,
     accessToken: string,
   ): Promise<string>;
+  downloadUrlToShareCache(url: string, filename: string): Promise<string>;
+  downloadUrlToLocal(
+    url: string,
+    filename: string,
+    mediaType?: string | null,
+  ): Promise<{
+    savedToPhotos: boolean;
+    localPath: string | null;
+    savedLocation?: string | null;
+  }>;
+  shareFile(localPath: string): Promise<boolean>;
+  shareFiles(localPaths: string[]): Promise<boolean>;
   recordDiagnosticsLog(category: string, message: string): void;
   getClientDisplayName(): Promise<string>;
   setClientDisplayName(name: string): Promise<void>;

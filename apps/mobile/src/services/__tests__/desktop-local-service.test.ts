@@ -8,6 +8,7 @@ import {
   listReceivedLibrary,
   listSharedResources,
   listSharedFolderContents,
+  shareResources,
 } from '../desktop-local-service';
 import { getClientId } from '../SyncEngineModule';
 
@@ -15,6 +16,9 @@ jest.mock('react-native', () => ({
   NativeModules: {
     NativeSyncEngine: {
       getClientDisplayName: jest.fn(),
+      downloadUrlToShareCache: jest.fn(),
+      downloadUrlToLocal: jest.fn(),
+      shareFiles: jest.fn(),
     },
   },
 }));
@@ -28,6 +32,24 @@ const mockedGetClientId = getClientId as jest.MockedFunction<
 >;
 const mockGetClientDisplayName = NativeModules.NativeSyncEngine
   ?.getClientDisplayName as jest.MockedFunction<() => Promise<string>>;
+const mockDownloadUrlToShareCache = NativeModules.NativeSyncEngine
+  ?.downloadUrlToShareCache as jest.MockedFunction<
+    (url: string, filename: string) => Promise<string>
+  >;
+const mockDownloadUrlToLocal = NativeModules.NativeSyncEngine
+  ?.downloadUrlToLocal as jest.MockedFunction<
+    (
+      url: string,
+      filename: string,
+      mediaType?: string | null,
+    ) => Promise<{
+      savedToPhotos: boolean;
+      localPath: string | null;
+      savedLocation?: string | null;
+    }>
+  >;
+const mockShareFiles = NativeModules.NativeSyncEngine
+  ?.shareFiles as jest.MockedFunction<(localPaths: string[]) => Promise<boolean>>;
 
 describe('desktop-local-service', () => {
   let fetchMock: jest.Mock;
@@ -58,16 +80,30 @@ describe('desktop-local-service', () => {
     );
   });
 
-  it('exposes a global-only download result without pretending local persistence exists', async () => {
+  it('downloads a global remote resource through native local persistence', async () => {
+    mockDownloadUrlToLocal.mockResolvedValueOnce({
+      savedToPhotos: false,
+      localPath: '/downloads/report.pdf',
+      savedLocation: '/downloads/report.pdf',
+    });
+
     await expect(
       downloadResourceForGlobal(
         { host: '192.168.10.20', port: 39394 },
         'resource-1',
+        'report.pdf',
+        'document',
       ),
     ).resolves.toEqual({
       savedToPhotos: false,
-      localPath: null,
+      localPath: '/downloads/report.pdf',
+      savedLocation: '/downloads/report.pdf',
     });
+    expect(mockDownloadUrlToLocal).toHaveBeenCalledWith(
+      'http://192.168.10.20:39394/resources/mobile/download/resource-1?clientId=client-001&clientName=Alice%20iPhone',
+      'report.pdf',
+      'document',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -320,6 +356,39 @@ describe('desktop-local-service', () => {
     ]);
   });
 
+  it('downloads selected remote resources to share cache and opens the system share sheet once', async () => {
+    mockDownloadUrlToShareCache
+      .mockResolvedValueOnce('/cache/photo.jpg')
+      .mockResolvedValueOnce('/cache/spec.pdf');
+    mockShareFiles.mockResolvedValueOnce(true);
+
+    await expect(
+      shareResources({ host: '192.168.10.20', port: 39394 }, [
+        { resourceId: 'resource-1', displayName: 'photo.jpg' },
+        {
+          resourceId: 'shared-folder-entry:folder-1:Specs/June Plan.pdf',
+          displayName: 'spec.pdf',
+        },
+      ]),
+    ).resolves.toBeUndefined();
+
+    expect(mockDownloadUrlToShareCache).toHaveBeenNthCalledWith(
+      1,
+      'http://192.168.10.20:39394/resources/mobile/download/resource-1?clientId=client-001&clientName=Alice%20iPhone',
+      'photo.jpg',
+    );
+    expect(mockDownloadUrlToShareCache).toHaveBeenNthCalledWith(
+      2,
+      'http://192.168.10.20:39394/resources/mobile/download/folder-1?path=Specs%2FJune%20Plan.pdf&clientId=client-001&clientName=Alice%20iPhone',
+      'spec.pdf',
+    );
+    expect(mockShareFiles).toHaveBeenCalledWith([
+      '/cache/photo.jpg',
+      '/cache/spec.pdf',
+    ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('detects whether a download result was actually saved locally', () => {
     expect(
       isDownloadSavedLocally({ savedToPhotos: false, localPath: null }),
@@ -331,6 +400,13 @@ describe('desktop-local-service', () => {
       isDownloadSavedLocally({
         savedToPhotos: false,
         localPath: '/tmp/report.pdf',
+      }),
+    ).toBe(true);
+    expect(
+      isDownloadSavedLocally({
+        savedToPhotos: false,
+        localPath: null,
+        savedLocation: 'Downloads/Vivi Drop',
       }),
     ).toBe(true);
     expect(

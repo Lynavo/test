@@ -1,17 +1,144 @@
 import { useEffect } from 'react';
-import { FileText, Folder, FolderOpen, HardDrive, ImageIcon, Smartphone } from 'lucide-react';
+import {
+  FileText,
+  FolderOpen,
+  HardDrive,
+  ImageIcon,
+  Smartphone,
+  FileIcon as FileIconLucide,
+  Share2,
+  Monitor,
+  AlertCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useResourcesStore } from '@renderer/stores/resources-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useManagementStore } from '@renderer/stores/management-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
-import { formatBytes } from '@renderer/lib/format';
+import { formatBytes, formatSmartDate } from '@renderer/lib/format';
+import { FileIcon } from '@renderer/components/shared/FileIcon';
 import { Skeleton } from '@renderer/components/ui/skeleton';
 import {
   previewManagedDevices,
   previewReceivedLibraryItems,
   shouldUsePreviewData,
 } from '@renderer/features/preview/demo-data';
+import type { ReceivedLibraryItemDTO } from '@syncflow/contracts';
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+function getMediaLabel(mediaType: string): { label: string; color: string; bg: string } {
+  const t = mediaType.toLowerCase();
+  if (t.startsWith('video/')) return { label: '视频', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' };
+  if (t.startsWith('image/')) return { label: '照片', color: '#0ea5c9', bg: 'rgba(14,165,201,0.08)' };
+  if (t.startsWith('audio/')) return { label: '音频', color: '#a855f7', bg: 'rgba(168,85,247,0.08)' };
+  return { label: '文件', color: '#6b7a8d', bg: 'rgba(107,122,141,0.08)' };
+}
+
+function getShareStatusBadge(
+  shareStatus: ReceivedLibraryItemDTO['shareStatus'],
+): { label: string; color: string; bg: string; border: string } {
+  switch (shareStatus) {
+    case 'shared':
+      return {
+        label: '已共享至手机',
+        color: '#2c9c5a',
+        bg: 'rgba(44,156,90,0.07)',
+        border: 'rgba(44,156,90,0.18)',
+      };
+    case 'missing':
+      return {
+        label: '文件丢失',
+        color: '#e35b4a',
+        bg: 'rgba(227,91,74,0.07)',
+        border: 'rgba(227,91,74,0.18)',
+      };
+    default:
+      return {
+        label: '仅电脑端存在',
+        color: '#697786',
+        bg: 'rgba(105,119,134,0.07)',
+        border: 'rgba(105,119,134,0.18)',
+      };
+  }
+}
+
+// ─── FileItemRow ─────────────────────────────────────────────────────────────
+
+function FileItemRow({
+  item,
+  deviceDisplayName,
+}: {
+  item: ReceivedLibraryItemDTO;
+  deviceDisplayName: string;
+}) {
+  const mediaLabel = getMediaLabel(item.mediaType);
+  const statusBadge = getShareStatusBadge(item.shareStatus);
+
+  const StatusIcon =
+    item.shareStatus === 'shared'
+      ? Share2
+      : item.shareStatus === 'missing'
+        ? AlertCircle
+        : Monitor;
+
+  return (
+    <div className="flex items-center gap-4 rounded-lg border border-white/55 bg-white/28 px-4 py-3 shadow-[0_8px_28px_rgba(70,96,138,0.06)] transition hover:-translate-y-px hover:bg-white/48 hover:shadow-[0_12px_36px_rgba(70,96,138,0.10)]">
+      {/* File type icon */}
+      <FileIcon name={item.filename} className="h-10 w-10 shrink-0" />
+
+      {/* Main info */}
+      <div className="min-w-0 flex-1">
+        <p
+          className="truncate text-[13px] font-semibold leading-snug"
+          style={{ color: '#17191c' }}
+          title={item.filename}
+        >
+          {item.filename}
+        </p>
+        <div className="mt-1 flex items-center gap-2">
+          {/* Media type badge */}
+          <span
+            className="inline-flex items-center rounded px-1.5 py-px text-[11px] font-semibold leading-none"
+            style={{
+              color: mediaLabel.color,
+              background: mediaLabel.bg,
+            }}
+          >
+            {mediaLabel.label}
+          </span>
+          <span className="text-[12px] text-[#97a3b0]">·</span>
+          <span className="text-[12px] font-medium text-[#8a96a3]">
+            {formatBytes(item.fileSize)}
+          </span>
+          <span className="text-[12px] text-[#97a3b0]">·</span>
+          <span className="text-[12px] text-[#8a96a3]">{formatSmartDate(item.completedAt)}</span>
+        </div>
+      </div>
+
+      {/* Right: device name + status */}
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <span className="flex items-center gap-1 text-[12px] font-medium text-[#626a76]">
+          <Smartphone className="h-3 w-3 text-[#97a3b0]" />
+          {deviceDisplayName}
+        </span>
+        <span
+          className="inline-flex items-center gap-1 rounded border px-1.5 py-px text-[11px] font-semibold leading-none"
+          style={{
+            color: statusBadge.color,
+            background: statusBadge.bg,
+            borderColor: statusBadge.border,
+          }}
+        >
+          <StatusIcon className="h-2.5 w-2.5" />
+          {statusBadge.label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── ReceivedLibraryPage ─────────────────────────────────────────────────────
 
 export function ReceivedLibraryPage() {
   const { receivedItems, receivedLoading, receivedError, loadReceivedLibrary } =
@@ -34,6 +161,11 @@ export function ReceivedLibraryPage() {
   const visibleReceivedItems = usingPreviewItems ? previewReceivedLibraryItems : receivedItems;
   const visibleManagedDevices =
     usingPreviewItems && managedDevices.length === 0 ? previewManagedDevices : managedDevices;
+
+  // Build a clientId → displayName map
+  const deviceNameMap = new Map<string, string>(
+    visibleManagedDevices.map((d) => [d.clientId, d.displayName]),
+  );
 
   // Calculations for stats cards
   const totalFiles = visibleReceivedItems.length;
@@ -77,7 +209,6 @@ export function ReceivedLibraryPage() {
       clientId: d.clientId,
       displayName: d.displayName,
       platform: d.platform,
-      // Attempt to find receiveDirName
       devicePath: d.stableDeviceId || d.clientIdShort || d.clientId,
       ...stats,
     };
@@ -90,7 +221,6 @@ export function ReceivedLibraryPage() {
     }
     const path = devicePath ? `${settings.receivePath}/${devicePath}` : settings.receivePath;
     void window.electronAPI?.files.openFolder(path).catch(() => {
-      // fallback to main received folder
       void window.electronAPI?.files.openFolder(settings.receivePath);
     });
   };
@@ -148,7 +278,7 @@ export function ReceivedLibraryPage() {
           </div>
         </div>
 
-        {/* Sync Device List */}
+        {/* Sync Device Summary List */}
         <div className="mb-2 flex justify-end">
           <span className="px-1 text-xs font-semibold text-[#7b8490]">
             {deviceList.length} 台设备
@@ -203,7 +333,7 @@ export function ReceivedLibraryPage() {
                       相册上传 {device.photoCount}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Folder className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
+                      <FileIconLucide className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
                       文件上传 {device.fileCount}
                     </span>
                     <span className="flex items-center gap-1">
@@ -225,6 +355,36 @@ export function ReceivedLibraryPage() {
               </div>
             ))}
         </div>
+
+        {/* ── File List ── */}
+        {!receivedLoading && !receivedError && visibleReceivedItems.length > 0 && (
+          <div className="mt-6">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[#3d4653]">所有文件</h2>
+              <span className="text-xs font-semibold text-[#7b8490]">
+                {visibleReceivedItems.length} 个文件
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              {receivedLoading ? (
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-[60px] w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : (
+                visibleReceivedItems.map((item) => (
+                  <FileItemRow
+                    key={item.resourceId}
+                    item={item}
+                    deviceDisplayName={deviceNameMap.get(item.clientId) ?? item.displayName}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

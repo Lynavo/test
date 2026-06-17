@@ -20,7 +20,7 @@ import { Icon } from '../components/Icon';
 import { GradientBackground } from '../components/GradientBackground';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { listReceivedLibrary } from '../services/desktop-local-service';
-import type { ReceivedLibraryItemDTO } from '@syncflow/contracts';
+import type { BindingStateDTO, ReceivedLibraryItemDTO } from '@syncflow/contracts';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
 
@@ -30,6 +30,7 @@ export function PhoneSyncSpaceScreen() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ReceivedLibraryItemDTO[]>([]);
   const [sortDesc, setSortDesc] = useState(true);
+  const [binding, setBinding] = useState<BindingStateDTO | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -39,14 +40,15 @@ export function PhoneSyncSpaceScreen() {
         return;
       }
 
-      const binding = await NativeSyncEngine.getBindingState();
-      if (!binding || !binding.host) {
+      const bindingState = await NativeSyncEngine.getBindingState();
+      setBinding(bindingState);
+      if (!bindingState || !bindingState.host) {
         setItems([]);
         setLoading(false);
         return;
       }
 
-      const desktop = { host: binding.host, port: 39394 };
+      const desktop = { host: bindingState.host, port: 39394 };
       const result = await listReceivedLibrary(desktop);
       setItems(result || []);
     } catch (e) {
@@ -117,6 +119,13 @@ export function PhoneSyncSpaceScreen() {
     const iconConfig = getFileIcon(item.mediaType, item.filename);
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const formattedTime = formatItemTime(item.completedAt);
+    const displayName = item.filename || item.displayName;
+
+    const desktopName = binding
+      ? (item.desktopDeviceId === binding.deviceId || (item.desktopDeviceId && (item.desktopDeviceId.includes('-') || item.desktopDeviceId.length > 12))
+        ? (binding.deviceAlias || binding.deviceName || '已同步的电脑')
+        : item.desktopDeviceId)
+      : (item.desktopDeviceId || '未知設備');
 
     return (
       <View style={styles.card}>
@@ -125,7 +134,7 @@ export function PhoneSyncSpaceScreen() {
         </View>
         <View style={styles.infoWrapper}>
           <Text style={styles.filename} numberOfLines={1}>
-            {item.displayName || item.filename}
+            {displayName}
           </Text>
           <View style={styles.metaRow}>
             <Text style={styles.metaText}>
@@ -141,7 +150,7 @@ export function PhoneSyncSpaceScreen() {
             </View>
           )}
           <Text style={styles.deviceText} numberOfLines={1}>
-            {item.desktopDeviceId || '未知設備'}
+            {desktopName}
           </Text>
         </View>
       </View>

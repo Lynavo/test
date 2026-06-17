@@ -31,6 +31,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
@@ -1599,12 +1600,214 @@ class NativeSyncEngineModule(
     }
   }
 
+  @ReactMethod
+  fun downloadUrlToShareCache(url: String, filename: String, promise: Promise) {
+    runAsync(promise) {
+      val connection = URL(url).openConnection() as HttpURLConnection
+      try {
+        connection.requestMethod = "GET"
+        connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+        connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
+        if (connection.responseCode !in 200..299) {
+          throw IllegalStateException("Download failed with HTTP ${connection.responseCode}")
+        }
+        val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_downloads")
+        if (!destDir.exists()) {
+          destDir.mkdirs()
+        }
+        val fallbackName = URL(url).path.substringAfterLast('/').ifBlank { "remote-file" }
+        val destFile = uniqueShareCacheFile(destDir, safeShareCacheFilename(filename, fallbackName))
+        BufferedOutputStream(destFile.outputStream()).use { output ->
+          BufferedInputStream(connection.inputStream).use { input ->
+            input.copyTo(output)
+          }
+        }
+        promise.resolve(destFile.absolutePath)
+      } finally {
+        connection.disconnect()
+      }
+    }
+  }
+
+  @ReactMethod
+  fun downloadUrlToLocal(url: String, filename: String, mediaType: String?, promise: Promise) {
+    runAsync(promise) {
+      val safeFilename = safeShareCacheFilename(
+        filename,
+        URL(url).path.substringAfterLast('/').ifBlank { "remote-file" },
+      )
+      val localMediaType = localDownloadMediaType(safeFilename, mediaType)
+      val connection = URL(url).openConnection() as HttpURLConnection
+      try {
+        connection.requestMethod = "GET"
+        connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
+        connection.readTimeout = SHARED_DOWNLOAD_TIMEOUT_MS
+        if (connection.responseCode !in 200..299) {
+          throw IllegalStateException("Download failed with HTTP ${connection.responseCode}")
+        }
+        val mimeType = connection.contentType?.substringBefore(';')
+          ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
+        val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
+
+        if (localMediaType == "image" || localMediaType == "video") {
+          val collection = if (localMediaType == "video") {
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+          } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+          }
+          val savedLocation = if (localMediaType == "video") {
+            "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+          } else {
+            "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+          }
+          val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+              put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+              put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+          }
+          val uri = reactApplicationContext.contentResolver.insert(collection, values)
+            ?: throw IllegalStateException("Unable to create MediaStore item")
+          reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+            connection.inputStream.use { input ->
+              copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
+            }
+          } ?: throw IllegalStateException("Unable to write MediaStore item")
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            reactApplicationContext.contentResolver.update(uri, values, null, null)
+          }
+          promise.resolve(Arguments.createMap().apply {
+            putBoolean("savedToPhotos", true)
+            putNull("localPath")
+            putString("savedLocation", savedLocation)
+          })
+          return@runAsync
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
+          val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+          }
+          val uri = reactApplicationContext.contentResolver.insert(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            values,
+          ) ?: throw IllegalStateException("Unable to create MediaStore item")
+          reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+            connection.inputStream.use { input ->
+              copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
+            }
+          } ?: throw IllegalStateException("Unable to write MediaStore item")
+          values.clear()
+          values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+          reactApplicationContext.contentResolver.update(uri, values, null, null)
+          promise.resolve(Arguments.createMap().apply {
+            putBoolean("savedToPhotos", false)
+            putString("localPath", uri.toString())
+            putString("savedLocation", savedLocation)
+          })
+        } else {
+          val destDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "Vivi Drop",
+          )
+          if (!destDir.exists()) {
+            destDir.mkdirs()
+          }
+          val destFile = uniqueShareCacheFile(destDir, safeFilename)
+          destFile.outputStream().use { output ->
+            connection.inputStream.use { input ->
+              copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
+            }
+          }
+          promise.resolve(Arguments.createMap().apply {
+            putBoolean("savedToPhotos", false)
+            putString("localPath", destFile.absolutePath)
+            putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop")
+          })
+        }
+      } finally {
+        connection.disconnect()
+      }
+    }
+  }
+
+  @ReactMethod
+  fun shareFiles(localPaths: ReadableArray, promise: Promise) {
+    try {
+      val uris = arrayListOf<Uri>()
+      var mimeType: String? = null
+      for (index in 0 until localPaths.size()) {
+        val localPath = localPaths.getString(index) ?: continue
+        val uri = when {
+          localPath.startsWith("content://") -> Uri.parse(localPath)
+          localPath.startsWith("file://") -> fileProviderUri(File(Uri.parse(localPath).path ?: ""))
+          else -> fileProviderUri(File(localPath))
+        }
+        uris.add(uri)
+        val currentType = reactApplicationContext.contentResolver.getType(uri) ?: "*/*"
+        mimeType = if (mimeType == null || mimeType == currentType) currentType else "*/*"
+      }
+      if (uris.isEmpty()) {
+        throw IllegalArgumentException("No files to share")
+      }
+      val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+        type = mimeType ?: "*/*"
+        putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      reactApplicationContext.startActivity(Intent.createChooser(intent, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+      promise.resolve(true)
+    } catch (error: Throwable) {
+      promise.reject("ANDROID_SHARE_FAILED", error.message, error)
+    }
+  }
+
   private fun fileProviderUri(file: File): Uri =
     FileProvider.getUriForFile(
       reactApplicationContext,
       "${reactApplicationContext.packageName}.syncflow.fileprovider",
       file,
     )
+
+  private fun safeShareCacheFilename(filename: String, fallbackName: String): String {
+    val candidate = filename.trim().ifBlank { fallbackName }
+    val sanitized = candidate
+      .replace(Regex("[/\\\\:\\p{Cntrl}]"), "_")
+      .trim()
+    return sanitized.ifBlank { "remote-file" }
+  }
+
+  private fun localDownloadMediaType(filename: String, requestedMediaType: String?): String {
+    val normalized = requestedMediaType?.trim()?.lowercase(Locale.ROOT)
+    if (normalized == "image" || normalized == "video") {
+      return normalized
+    }
+    return AndroidSyncPrimitives.classifyMediaType(
+      AndroidSyncPrimitives.mimeTypeForFilename(filename),
+      filename,
+    )
+  }
+
+  private fun uniqueShareCacheFile(directory: File, filename: String): File {
+    val initial = File(directory, filename)
+    if (!initial.exists()) return initial
+    val dotIndex = filename.lastIndexOf('.')
+    val baseName = if (dotIndex > 0) filename.substring(0, dotIndex) else filename
+    val extension = if (dotIndex > 0) filename.substring(dotIndex) else ""
+    for (index in 1..999) {
+      val candidate = File(directory, "$baseName-$index$extension")
+      if (!candidate.exists()) return candidate
+    }
+    return File(directory, "${UUID.randomUUID()}-$filename")
+  }
 
   @ReactMethod
   fun getPhotoAuthorizationStatus(promise: Promise) {

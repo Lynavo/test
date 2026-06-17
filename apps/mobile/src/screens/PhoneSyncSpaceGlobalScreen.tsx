@@ -30,7 +30,7 @@ import {
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import {
   SIDECAR_HTTP_PORT,
-  type ReceivedLibraryItemDTO,
+  type BindingStateDTO,
 } from '@syncflow/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -38,13 +38,16 @@ import { colors } from '../theme/globalColors';
 import { formatBytes } from '../utils/format';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
-import { listCurrentClientReceivedLibrary } from '../services/desktop-local-service';
+import {
+  listCurrentClientReceivedLibrary,
+  type ReceivedLibraryMediaItem,
+} from '../services/desktop-local-service';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'PhoneSyncSpace'>;
 type ReceivedSection = {
   title: string;
   key: string;
-  data: ReceivedLibraryItemDTO[];
+  data: ReceivedLibraryMediaItem[];
 };
 type SortKey = 'time' | 'name' | 'size';
 type MediaTypeIconKind = 'photo' | 'video' | 'file';
@@ -80,7 +83,7 @@ const MEDIA_TYPE_ICON_GRADIENTS: Record<
 };
 
 const now = Date.now();
-const MOCK_RECEIVED_ITEMS: ReceivedLibraryItemDTO[] = [
+const MOCK_RECEIVED_ITEMS: ReceivedLibraryMediaItem[] = [
   {
     resourceId: 'mock-received-1',
     desktopDeviceId: '剪辑工作站-A',
@@ -224,7 +227,7 @@ function getSectionTitle(isoString: string) {
   )}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function getItemTimestamp(item: ReceivedLibraryItemDTO) {
+function getItemTimestamp(item: ReceivedLibraryMediaItem) {
   const timestamp = new Date(item.completedAt).getTime();
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
@@ -254,11 +257,11 @@ function getFileIconType(
   return 'file';
 }
 
-function getReceivedFileTitle(item: ReceivedLibraryItemDTO) {
+function getReceivedFileTitle(item: ReceivedLibraryMediaItem) {
   return item.filename || item.displayName || item.fileKey || '未命名文件';
 }
 
-function getReceivedItemKey(item: ReceivedLibraryItemDTO, index: number) {
+function getReceivedItemKey(item: ReceivedLibraryMediaItem, index: number) {
   return (
     item.resourceId ||
     item.fileKey ||
@@ -280,12 +283,13 @@ export function PhoneSyncSpaceGlobalScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<ReceivedLibraryItemDTO[]>([]);
+  const [items, setItems] = useState<ReceivedLibraryMediaItem[]>([]);
   const [sortBy, setSortBy] = useState<SortKey>('time');
   const [showSortSheet, setShowSortSheet] = useState(false);
-  const [previewItem, setPreviewItem] = useState<ReceivedLibraryItemDTO | null>(
+  const [previewItem, setPreviewItem] = useState<ReceivedLibraryMediaItem | null>(
     null,
   );
+  const [binding, setBinding] = useState<BindingStateDTO | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -296,14 +300,15 @@ export function PhoneSyncSpaceGlobalScreen() {
         return;
       }
 
-      const binding = await NativeSyncEngine.getBindingState();
-      if (!binding || !binding.host) {
+      const bindingState = await NativeSyncEngine.getBindingState();
+      setBinding(bindingState);
+      if (!bindingState || !bindingState.host) {
         setItems(getPreviewReceivedItems());
         setLoading(false);
         return;
       }
 
-      const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
+      const desktop = { host: bindingState.host, port: SIDECAR_HTTP_PORT };
       const result = await listCurrentClientReceivedLibrary(desktop);
       const receivedItems = result ?? [];
       const previewItems = getPreviewReceivedItems();
@@ -365,11 +370,21 @@ export function PhoneSyncSpaceGlobalScreen() {
   const sortLabel =
     SORT_OPTIONS.find(option => option.id === sortBy)?.label ?? '时间';
 
-  const renderItem = ({ item }: { item: ReceivedLibraryItemDTO }) => {
+  const renderItem = ({ item }: { item: ReceivedLibraryMediaItem }) => {
     const iconType = getFileIconType(item.mediaType, item.filename);
     const displayName = getReceivedFileTitle(item);
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const clock = formatClock(item.completedAt);
+
+    const looksLikeDesktopId =
+      item.desktopDeviceId &&
+      (item.desktopDeviceId === binding?.deviceId ||
+        item.desktopDeviceId.includes('-') ||
+        item.desktopDeviceId.length > 12);
+    const desktopName =
+      binding && looksLikeDesktopId
+        ? binding.deviceAlias || binding.deviceName || '已同步的电脑'
+        : item.desktopDeviceId || '未知设备';
 
     return (
       <View style={styles.card}>
@@ -381,18 +396,14 @@ export function PhoneSyncSpaceGlobalScreen() {
           <Text style={styles.metaText} numberOfLines={1}>
             {`${fileType} · ${formatBytes(item.fileSize)}${clock ? ` · ${clock}` : ''}`}
           </Text>
-          <View style={styles.badgeRow}>
-            <View style={styles.sourceBadge}>
-              <Text style={styles.sourceBadgeText} numberOfLines={1}>
-                {item.desktopDeviceId || '未知设备'}
-              </Text>
-            </View>
-            {item.shareStatus === 'missing' ? (
-              <View style={styles.warningBadge}>
-                <Text style={styles.warningBadgeText}>仅电脑端</Text>
-              </View>
-            ) : null}
-          </View>
+        </View>
+        <View style={styles.rightWrapper}>
+          <Text style={styles.deviceText} numberOfLines={1}>
+            {desktopName}
+          </Text>
+          {item.shareStatus === 'missing' && (
+            <Text style={styles.missingText}>仅电脑端存在</Text>
+          )}
         </View>
         <TouchableOpacity
           style={styles.previewButton}
@@ -592,7 +603,7 @@ function ReceivedMediaThumbnail({
   item,
   iconType,
 }: {
-  item: ReceivedLibraryItemDTO;
+  item: ReceivedLibraryMediaItem;
   iconType: MediaTypeIconKind;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -752,7 +763,7 @@ function ReceivedMediaPreviewModal({
   item,
   onClose,
 }: {
-  item: ReceivedLibraryItemDTO | null;
+  item: ReceivedLibraryMediaItem | null;
   onClose: () => void;
 }) {
   if (!item) return null;
@@ -1092,34 +1103,20 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: '#59616D',
   },
-  badgeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
+  rightWrapper: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginRight: 8,
   },
-  sourceBadge: {
-    maxWidth: 130,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.62)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  sourceBadgeText: {
-    fontSize: 9,
+  deviceText: {
+    fontSize: 11,
+    color: '#1677D2',
     fontWeight: '600',
-    color: '#7B8490',
   },
-  warningBadge: {
-    borderRadius: 999,
-    backgroundColor: '#FFF5E0',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  warningBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#B7791F',
+  missingText: {
+    marginTop: 4,
+    fontSize: 10,
+    color: '#9AA3AE',
   },
   previewButton: {
     width: 32,

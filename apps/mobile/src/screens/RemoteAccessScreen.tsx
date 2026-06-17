@@ -23,7 +23,9 @@ import {
   listSharedResources,
   listSharedFolderContents,
   downloadResource,
+  shareResources,
 } from '../services/desktop-local-service';
+import { recordDownloadedFile } from '../services/download-records-service';
 import type { DesktopSharedResourceDTO, DirectoryFileDTO } from '@syncflow/contracts';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
@@ -95,6 +97,9 @@ export function RemoteAccessScreen() {
   const [currentFolder, setCurrentFolder] = useState<RemoteAccessItem | null>(null);
   const [folderHistory, setFolderHistory] = useState<RemoteAccessItem[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [sharing, setSharing] = useState(false);
   const [sortDesc, setSortDesc] = useState(true);
 
   const getBoundDesktop = useCallback(async () => {
@@ -113,6 +118,8 @@ export function RemoteAccessScreen() {
         setFolderItems([]);
         setCurrentFolder(null);
         setFolderHistory([]);
+        setSelectionMode(false);
+        setSelectedIds(new Set());
         setLoading(false);
         return;
       }
@@ -125,6 +132,8 @@ export function RemoteAccessScreen() {
       setFolderItems([]);
       setCurrentFolder(null);
       setFolderHistory([]);
+      setSelectionMode(false);
+      setSelectedIds(new Set());
     } catch (e) {
       console.warn('[RemoteAccessScreen] Failed to load data:', e);
     } finally {
@@ -139,8 +148,13 @@ export function RemoteAccessScreen() {
     }, [loadData])
   );
 
+  const currentItems = currentFolder
+    ? folderItems
+    : rootItems;
+
   const handleDownload = useCallback(
-    async (resourceId: string, filename: string) => {
+    async (item: RemoteAccessItem) => {
+      const { resourceId, displayName: filename } = item;
       if (downloadingId) return;
       setDownloadingId(resourceId);
 
@@ -154,6 +168,16 @@ export function RemoteAccessScreen() {
 
         const desktop = { host: binding.host, port: 39394 };
         await downloadResource(desktop, resourceId);
+
+        // Keep 「最近下載」 in sync with remote-access downloads.
+        await recordDownloadedFile({
+          resourceId,
+          filename,
+          fileSize: item.fileSize,
+          mediaType: item.mediaType,
+          localPath: null,
+          savedToPhotos: false,
+        });
 
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
@@ -174,9 +198,78 @@ export function RemoteAccessScreen() {
     [downloadingId, t]
   );
 
-  const handleSelect = () => {
-    Alert.alert(t('sharedFiles.remoteAccess.select') || '選擇檔案', t('sharedFiles.remoteAccess.selectFeature') || '該功能正在開發中');
-  };
+  const handleSelect = useCallback(() => {
+    setSelectionMode(prev => {
+      if (prev) {
+        setSelectedIds(new Set());
+        return false;
+      }
+      return true;
+    });
+  }, []);
+
+  const toggleSelected = useCallback((resourceId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(resourceId)) {
+        next.delete(resourceId);
+      } else {
+        next.add(resourceId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectedDownload = useCallback(async () => {
+    if (downloadingId) return;
+    const selectedFiles = currentItems.filter(
+      item => selectedIds.has(item.resourceId) && item.kind === 'shared_file',
+    );
+    for (const item of selectedFiles) {
+      await handleDownload(item);
+    }
+  }, [currentItems, downloadingId, handleDownload, selectedIds]);
+
+  const handleShareSelected = useCallback(async () => {
+    if (sharing) return;
+    const selectedFiles = currentItems.filter(
+      item => selectedIds.has(item.resourceId) && item.kind === 'shared_file',
+    );
+    if (selectedFiles.length === 0) {
+      Alert.alert(
+        t('sharedFiles.remoteAccess.shareNoSelectionTitle') || '尚未選擇檔案',
+        t('sharedFiles.remoteAccess.shareNoSelectionMessage') || '請先選擇要分享的檔案',
+      );
+      return;
+    }
+
+    setSharing(true);
+    try {
+      const desktop = await getBoundDesktop();
+      if (!desktop) {
+        Alert.alert(t('sharedFiles.deviceUnavailable.title') || '設備不可用');
+        return;
+      }
+      await shareResources(
+        desktop,
+        selectedFiles.map(item => ({
+          resourceId: item.resourceId,
+          displayName: item.displayName,
+        })),
+      );
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+    } catch (err) {
+      console.warn('[RemoteAccessScreen] Share failed:', err);
+      Alert.alert(
+        t('sharedFiles.remoteAccess.shareFailedTitle') || '分享失敗',
+        t('sharedFiles.remoteAccess.shareFailedMessage') ||
+          '無法開啟系統分享，請稍後重試',
+      );
+    } finally {
+      setSharing(false);
+    }
+  }, [currentItems, getBoundDesktop, selectedIds, sharing, t]);
 
   const navigateIntoFolder = useCallback(
     async (folder: RemoteAccessItem) => {
@@ -195,6 +288,7 @@ export function RemoteAccessScreen() {
           folder.remotePath ?? '',
         );
         setFolderItems(listing.files.map(file => directoryFileToRemoteItem(file, folder)));
+        setSelectedIds(new Set());
         if (currentFolder) {
           setFolderHistory(prev => [...prev, currentFolder]);
         }
@@ -224,6 +318,7 @@ export function RemoteAccessScreen() {
           folder.remotePath ?? '',
         );
         setFolderItems(listing.files.map(file => directoryFileToRemoteItem(file, folder)));
+        setSelectedIds(new Set());
       } catch (e) {
         console.warn('[RemoteAccessScreen] Failed to reload folder contents:', e);
         setFolderItems([]);
@@ -239,10 +334,12 @@ export function RemoteAccessScreen() {
       const prev = folderHistory[folderHistory.length - 1];
       setFolderHistory(folderHistory.slice(0, -1));
       setCurrentFolder(prev);
+      setSelectedIds(new Set());
       void reloadFolder(prev);
     } else {
       setCurrentFolder(null);
       setFolderItems([]);
+      setSelectedIds(new Set());
     }
   };
 
@@ -261,10 +358,6 @@ export function RemoteAccessScreen() {
     return { name: 'document-text', color: '#10b981', bg: 'rgba(16,185,129,0.08)' };
   };
 
-  const currentItems = currentFolder
-    ? folderItems
-    : rootItems;
-
   const sortedItems = [...currentItems].sort((a, b) => {
     const nameA = a.displayName.toLowerCase();
     const nameB = b.displayName.toLowerCase();
@@ -278,12 +371,17 @@ export function RemoteAccessScreen() {
     const iconConfig = getFileIcon(item.kind, item.mediaType, item.displayName);
     const isFolder = item.kind === 'shared_folder';
     const isDownloading = downloadingId === item.resourceId;
+    const isSelected = selectedIds.has(item.resourceId);
 
     return (
       <TouchableOpacity
-        style={styles.card}
-        activeOpacity={isFolder ? 0.7 : 1}
+        style={[styles.card, isSelected && styles.cardSelected]}
+        activeOpacity={isFolder || selectionMode ? 0.7 : 1}
         onPress={() => {
+          if (selectionMode && !isFolder) {
+            toggleSelected(item.resourceId);
+            return;
+          }
           if (isFolder) {
             void navigateIntoFolder(item);
           }
@@ -303,12 +401,22 @@ export function RemoteAccessScreen() {
           )}
         </View>
         <View style={styles.rightWrapper}>
-          {isFolder ? (
+          {selectionMode ? (
+            <View
+              style={[
+                styles.selectionCircle,
+                isSelected && styles.selectionCircleSelected,
+                isFolder && styles.selectionCircleDisabled,
+              ]}
+            >
+              {isSelected && <Icon name="checkmark" size={14} color="#ffffff" />}
+            </View>
+          ) : isFolder ? (
             <Icon name="chevron-forward" size={20} color="#94a3b8" />
           ) : (
             <TouchableOpacity
               style={[styles.downloadButton, isDownloading && styles.downloadButtonDisabled]}
-              onPress={() => handleDownload(item.resourceId, item.displayName)}
+              onPress={() => handleDownload(item)}
               activeOpacity={0.7}
               disabled={isDownloading}
             >
@@ -350,7 +458,11 @@ export function RemoteAccessScreen() {
             onPress={handleSelect}
             activeOpacity={0.7}
           >
-            <Text style={styles.selectButtonText}>{t('sharedFiles.remoteAccess.select') || '選擇'}</Text>
+            <Text style={styles.selectButtonText}>
+              {selectionMode
+                ? t('sharedFiles.remoteAccess.done') || '完成'
+                : t('sharedFiles.remoteAccess.select') || '選擇'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -392,9 +504,63 @@ export function RemoteAccessScreen() {
             data={sortedItems}
             keyExtractor={item => item.resourceId}
             renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              selectionMode && styles.listContentSelecting,
+            ]}
             showsVerticalScrollIndicator={false}
           />
+        )}
+        {selectionMode && (
+          <View style={styles.selectionBar}>
+            <Text style={styles.selectionCount}>
+              {t('sharedFiles.remoteAccess.selectedCount', { count: selectedIds.size }) ||
+                `已選擇 ${selectedIds.size} 個`}
+            </Text>
+            <View style={styles.selectionActions}>
+              <TouchableOpacity
+                style={[
+                  styles.selectionDownloadButton,
+                  (selectedIds.size === 0 || downloadingId) &&
+                    styles.selectionDownloadButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={selectedIds.size === 0 || downloadingId !== null}
+                onPress={handleSelectedDownload}
+              >
+                {downloadingId ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <>
+                    <Icon name="download-outline" size={17} color="#2563eb" />
+                    <Text style={styles.selectionDownloadButtonText}>
+                      {t('sharedFiles.remoteAccess.download') || '下載'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.shareButton,
+                  (selectedIds.size === 0 || sharing) && styles.shareButtonDisabled,
+                ]}
+                activeOpacity={0.75}
+                disabled={selectedIds.size === 0 || sharing}
+                onPress={handleShareSelected}
+              >
+                {sharing ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Icon name="share-outline" size={17} color="#ffffff" />
+                    <Text style={styles.shareButtonText}>
+                      {t('sharedFiles.remoteAccess.share') || '分享'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
       </SafeAreaView>
       <BottomTabBar activeTab="files" />
@@ -495,6 +661,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
+  listContentSelecting: {
+    paddingBottom: 172,
+  },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -507,6 +676,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 1.5,
+  },
+  cardSelected: {
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
   },
   iconWrapper: {
     width: 48,
@@ -544,5 +718,93 @@ const styles = StyleSheet.create({
   },
   downloadButtonDisabled: {
     backgroundColor: 'rgba(148, 163, 184, 0.08)',
+  },
+  selectionCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  selectionCircleSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#3b82f6',
+  },
+  selectionCircleDisabled: {
+    opacity: 0.35,
+  },
+  selectionBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 92,
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  selectionCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectionDownloadButton: {
+    minWidth: 88,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  selectionDownloadButtonDisabled: {
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f1f5f9',
+  },
+  selectionDownloadButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563eb',
+  },
+  shareButton: {
+    minWidth: 96,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+  },
+  shareButtonDisabled: {
+    backgroundColor: '#94a3b8',
+  },
+  shareButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

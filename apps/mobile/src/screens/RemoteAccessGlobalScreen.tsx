@@ -48,6 +48,7 @@ import {
   isDownloadSavedLocally,
   listSharedFolderContents,
   listSharedResources,
+  shareResources,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 
@@ -87,9 +88,6 @@ const FALLBACK_DESKTOP_LABEL = '当前电脑';
 const LOCAL_SAVE_UNSUPPORTED_TITLE = '暂不支持保存';
 const LOCAL_SAVE_UNSUPPORTED_MESSAGE =
   '当前版本还没有接入客户端本地保存能力，请等待后续版本。';
-const SHARE_UNSUPPORTED_TITLE = '暂不支持分享';
-const SHARE_UNSUPPORTED_MESSAGE =
-  '当前版本还没有接入客户端分享能力，请等待后续版本。';
 const REMOTE_RESOURCE_ICON_GRADIENTS: Record<
   RemoteResourceIconType,
   RemoteResourceGradientStop[]
@@ -520,6 +518,7 @@ export function RemoteAccessGlobalScreen() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('list');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [sharing, setSharing] = useState(false);
   const [showSortSheet, setShowSortSheet] = useState(false);
   const [showShareSheet, setShowShareSheet] = useState(false);
 
@@ -656,7 +655,12 @@ export function RemoteAccessGlobalScreen() {
         }
 
         const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
-        const result = await downloadResourceForGlobal(desktop, item.resourceId);
+        const result = await downloadResourceForGlobal(
+          desktop,
+          item.resourceId,
+          item.displayName,
+          item.mediaType,
+        );
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
             LOCAL_SAVE_UNSUPPORTED_TITLE,
@@ -680,7 +684,9 @@ export function RemoteAccessGlobalScreen() {
             ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
                 name: item.displayName,
               }) || `${item.displayName} 已儲存至相簿`
-            : `${item.displayName} 已保存至 ${result.localPath}`,
+            : `${item.displayName} 已保存至 ${
+                result.savedLocation ?? result.localPath
+              }`,
         );
       } catch (err) {
         console.warn('[RemoteAccessScreen] Download failed:', err);
@@ -784,10 +790,36 @@ export function RemoteAccessGlobalScreen() {
     }
   }, [downloadingId, handleDownload, selectedItems]);
 
-  const handleSelectedShare = useCallback(() => {
-    if (selectedItems.length === 0) return;
-    Alert.alert(SHARE_UNSUPPORTED_TITLE, SHARE_UNSUPPORTED_MESSAGE);
-  }, [selectedItems.length]);
+  const handleSelectedShare = useCallback(async () => {
+    if (selectedItems.length === 0 || sharing) return;
+    setSharing(true);
+    try {
+      const { NativeSyncEngine } = NativeModules;
+      const binding = await NativeSyncEngine?.getBindingState();
+      if (!binding || !binding.host) {
+        Alert.alert(t('sharedFiles.deviceUnavailable.title') || '設備不可用');
+        return;
+      }
+
+      await shareResources(
+        { host: binding.host, port: SIDECAR_HTTP_PORT },
+        selectedItems.map(item => ({
+          resourceId: item.resourceId,
+          displayName: item.displayName,
+        })),
+      );
+      resetSelection();
+    } catch (err) {
+      console.warn('[RemoteAccessScreen] Share failed:', err);
+      Alert.alert(
+        t('sharedFiles.remoteAccess.shareFailedTitle') || '分享失敗',
+        t('sharedFiles.remoteAccess.shareFailedMessage') ||
+          '無法開啟系統分享，請稍後重試',
+      );
+    } finally {
+      setSharing(false);
+    }
+  }, [resetSelection, selectedItems, sharing, t]);
 
   const retryLoadData = useCallback(() => {
     setLoading(true);
@@ -925,20 +957,28 @@ export function RemoteAccessGlobalScreen() {
               <TouchableOpacity
                 style={[
                   styles.actionButtonSecondary,
-                  selectedItems.length === 0 ? styles.actionButtonDisabled : null,
+                  selectedItems.length === 0 || sharing
+                    ? styles.actionButtonDisabled
+                    : null,
                 ]}
-                disabled={selectedItems.length === 0}
+                disabled={selectedItems.length === 0 || sharing}
                 activeOpacity={0.7}
                 onPress={handleSelectedShare}
               >
-                <Text
-                  style={[
-                    styles.actionButtonSecondaryText,
-                    selectedItems.length === 0 ? styles.actionButtonDisabledText : null,
-                  ]}
-                >
-                  分享
-                </Text>
+                {sharing ? (
+                  <ActivityIndicator size="small" color="#9AA3AE" />
+                ) : (
+                  <Text
+                    style={[
+                      styles.actionButtonSecondaryText,
+                      selectedItems.length === 0
+                        ? styles.actionButtonDisabledText
+                        : null,
+                    ]}
+                  >
+                    分享
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           ) : (

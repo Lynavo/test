@@ -483,6 +483,48 @@ func (s *Server) handleMobileResourceDownload(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to resolve resource")
 		return
 	}
+
+	// If a ?path= query param is provided and the resource is a shared_folder,
+	// resolve the file path securely inside the folder's LocalPath.
+	subPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	if subPath != "" {
+		if resource.Kind != "shared_folder" {
+			writeError(w, http.StatusBadRequest, "path param is only valid for shared_folder resources")
+			return
+		}
+		if resource.LocalPath == nil || strings.TrimSpace(*resource.LocalPath) == "" {
+			_, _ = s.recordResourceAccess(desktopDeviceID, client, resource.ResourceID, resource.Kind, resource.DisplayName, "download", "missing")
+			writeError(w, http.StatusNotFound, "resource folder not found")
+			return
+		}
+		rootPath := strings.TrimSpace(*resource.LocalPath)
+		resolvedPath, resolveErr := resolveDirectoryPath(rootPath, subPath, "shared resource")
+		if resolveErr != nil {
+			writeError(w, http.StatusBadRequest, resolveErr.Error())
+			return
+		}
+		info, statErr := os.Stat(resolvedPath)
+		if statErr != nil || info.IsDir() {
+			_, _ = s.recordResourceAccess(desktopDeviceID, client, resource.ResourceID, resource.Kind, resource.DisplayName, "download", "missing")
+			writeError(w, http.StatusNotFound, "resource file not found")
+			return
+		}
+		if _, err := s.recordResourceAccess(desktopDeviceID, client, resource.ResourceID, resource.Kind, resource.DisplayName, "download", "ok"); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to record resource access")
+			return
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(resolvedPath)))
+		contentType := mime.TypeByExtension(filepath.Ext(resolvedPath))
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+		w.Header().Set("ETag", sharedFileEntityTag(info))
+		http.ServeFile(w, r, resolvedPath)
+		return
+	}
+
 	localPath, err := s.localPathForSharedResource(resource)
 	if err != nil {
 		_, _ = s.recordResourceAccess(desktopDeviceID, client, resource.ResourceID, resource.Kind, resource.DisplayName, "download", "missing")

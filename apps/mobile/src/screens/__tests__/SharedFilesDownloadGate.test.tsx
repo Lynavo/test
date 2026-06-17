@@ -42,6 +42,10 @@ jest.mock('react-i18next', () => ({
         'sharedFiles.remoteAccess.desc': '流覽電腦端共享的目錄結構並下載文件',
         'sharedFiles.remoteAccess.empty': '此資料夾為空',
         'sharedFiles.remoteAccess.select': '選擇',
+        'sharedFiles.remoteAccess.done': '完成',
+        'sharedFiles.remoteAccess.download': '下載',
+        'sharedFiles.remoteAccess.share': '分享',
+        'sharedFiles.remoteAccess.selectedCount': `已選擇 ${options?.count ?? 0} 個`,
       };
       if (
         key === 'sharedFiles.dialogs.downloadSavedToPhotos' &&
@@ -157,6 +161,7 @@ jest.mock('../../services/desktop-local-service', () => ({
   listCurrentClientReceivedLibrary: jest.fn(),
   downloadResource: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
+  shareResources: jest.fn(),
   isDownloadSavedLocally: jest.fn(
     (result: { savedToPhotos?: boolean; localPath?: string | null }) =>
       result.savedToPhotos === true ||
@@ -182,6 +187,7 @@ import {
   listCurrentClientReceivedLibrary,
   downloadResource,
   downloadResourceForGlobal,
+  shareResources,
 } from '../../services/desktop-local-service';
 import { recordDownloadedFile } from '../../services/download-records-service';
 import { SharedFilesGlobalScreen } from '../SharedFilesGlobalScreen';
@@ -195,6 +201,7 @@ const mockListCurrentClientReceivedLibrary =
   listCurrentClientReceivedLibrary as jest.Mock;
 const mockDownloadResource = downloadResource as jest.Mock;
 const mockDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
+const mockShareResources = shareResources as jest.Mock;
 const mockRecordDownloadedFile = recordDownloadedFile as jest.Mock;
 
 class TestErrorBoundary extends React.Component<
@@ -529,7 +536,7 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('does not record an unsupported global remote download as successful', async () => {
+  it('records a saved global remote download after native persistence succeeds', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListSharedResources.mockResolvedValueOnce([
       {
@@ -546,7 +553,7 @@ describe('RemoteAccessGlobalScreen', () => {
     ]);
     mockDownloadResourceForGlobal.mockResolvedValueOnce({
       savedToPhotos: false,
-      localPath: null,
+      localPath: '/local/alpha.jpg',
     });
 
     const { getByText } = render(
@@ -565,12 +572,21 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(mockDownloadResourceForGlobal).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
         'res-1',
+        'alpha.jpg',
+        'image',
       );
     });
-    expect(mockRecordDownloadedFile).not.toHaveBeenCalled();
+    expect(mockRecordDownloadedFile).toHaveBeenCalledWith({
+      resourceId: 'res-1',
+      filename: 'alpha.jpg',
+      fileSize: 1024,
+      mediaType: 'image',
+      localPath: '/local/alpha.jpg',
+      savedToPhotos: false,
+    });
     expect(alertSpy).toHaveBeenCalledWith(
-      '暂不支持保存',
-      expect.stringContaining('客户端本地保存能力'),
+      '下載完成',
+      'alpha.jpg 已保存至 /local/alpha.jpg',
     );
 
     alertSpy.mockRestore();
@@ -629,16 +645,19 @@ describe('RemoteAccessGlobalScreen', () => {
       1,
       { host: '192.168.1.100', port: 39394 },
       'res-1',
+      'alpha.jpg',
+      'image',
     );
     expect(mockDownloadResourceForGlobal).toHaveBeenNthCalledWith(
       2,
       { host: '192.168.1.100', port: 39394 },
       'res-2',
+      'beta.mov',
+      'video',
     );
   });
 
-  it('shows unsupported feedback instead of opening fake share targets', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  it('opens the system share flow for selected global remote files', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-1',
@@ -652,8 +671,9 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
+    mockShareResources.mockResolvedValueOnce(undefined);
 
-    const { getByText, queryByText } = render(
+    const { getByText } = render(
       <TestErrorBoundary>
         <RemoteAccessGlobalScreen />
       </TestErrorBoundary>,
@@ -667,14 +687,12 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('alpha.jpg'));
     fireEvent.press(getByText('分享'));
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      '暂不支持分享',
-      expect.stringContaining('客户端分享能力'),
-    );
-    expect(queryByText('微信')).toBeNull();
-    expect(queryByText('企业微信')).toBeNull();
-
-    alertSpy.mockRestore();
+    await waitFor(() => {
+      expect(mockShareResources).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        [{ resourceId: 'res-1', displayName: 'alpha.jpg' }],
+      );
+    });
   });
 });
 
@@ -1035,9 +1053,11 @@ describe('RemoteAccessScreen', () => {
         displayName: 'photo.jpg',
         kind: 'shared_file',
         fileSize: 1048576, // 1.0 MB
+        mediaType: 'image',
       },
     ]);
     mockDownloadResource.mockResolvedValueOnce(undefined);
+    mockRecordDownloadedFile.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
       <TestErrorBoundary>
@@ -1060,12 +1080,171 @@ describe('RemoteAccessScreen', () => {
     });
 
     await waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith(
-        '下載完成',
-        'photo.jpg 已儲存至相簿',
+      expect(mockRecordDownloadedFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'res-2',
+          filename: 'photo.jpg',
+          fileSize: 1048576,
+          mediaType: 'image',
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('下載完成', 'photo.jpg 已儲存至相簿');
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  it('records folder-entry sub-file downloads into 「最近下载」', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListSharedResources.mockResolvedValueOnce([
+      {
+        resourceId: 'folder-root',
+        displayName: 'Project Files',
+        kind: 'shared_folder',
+        fileSize: 0,
+      },
+    ]);
+    mockListSharedFolderContents.mockResolvedValueOnce({
+      path: '',
+      files: [
+        {
+          name: 'contract.pdf',
+          path: 'contract.pdf',
+          type: 'document',
+          size: 204800,
+          modifiedAt: '2026-06-16T08:00:00.000Z',
+        },
+      ],
+      totalCount: 1,
+    });
+    mockDownloadResource.mockResolvedValueOnce(undefined);
+    mockRecordDownloadedFile.mockResolvedValueOnce(undefined);
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessScreen />
+      </TestErrorBoundary>
+    );
+
+    // Open the folder
+    await waitFor(() => {
+      expect(getByText('Project Files')).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByText('Project Files'));
+    });
+    await waitFor(() => {
+      expect(getByText('contract.pdf')).toBeTruthy();
+    });
+
+    // Download the sub-file
+    fireEvent.press(getByText('download-outline'));
+
+    await waitFor(() => {
+      expect(mockDownloadResource).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        'shared-folder-entry:folder-root:contract.pdf',
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockRecordDownloadedFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'shared-folder-entry:folder-root:contract.pdf',
+          filename: 'contract.pdf',
+          fileSize: 204800,
+          mediaType: 'document',
+        })
       );
     });
 
     alertSpy.mockRestore();
+  });
+
+  it('keeps download available for selected remote files', async () => {
+    mockListSharedResources.mockResolvedValueOnce([
+      {
+        resourceId: 'res-1',
+        displayName: 'alpha.jpg',
+        kind: 'shared_file',
+        fileSize: 1024,
+        mediaType: 'image',
+      },
+      {
+        resourceId: 'res-2',
+        displayName: 'beta.mov',
+        kind: 'shared_file',
+        fileSize: 2048,
+        mediaType: 'video',
+      },
+    ]);
+    mockDownloadResource.mockResolvedValue(undefined);
+    mockRecordDownloadedFile.mockResolvedValue(undefined);
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessScreen />
+      </TestErrorBoundary>
+    );
+
+    await waitFor(() => {
+      expect(getByText('alpha.jpg')).toBeTruthy();
+      expect(getByText('beta.mov')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('選擇'));
+    fireEvent.press(getByText('alpha.jpg'));
+    fireEvent.press(getByText('beta.mov'));
+    fireEvent.press(getByText('下載'));
+
+    await waitFor(() => {
+      expect(mockDownloadResource).toHaveBeenCalledTimes(2);
+    });
+    expect(mockDownloadResource).toHaveBeenNthCalledWith(
+      1,
+      { host: '192.168.1.100', port: 39394 },
+      'res-1',
+    );
+    expect(mockDownloadResource).toHaveBeenNthCalledWith(
+      2,
+      { host: '192.168.1.100', port: 39394 },
+      'res-2',
+    );
+  });
+
+  it('opens the system share flow for selected remote files', async () => {
+    mockListSharedResources.mockResolvedValueOnce([
+      {
+        resourceId: 'res-2',
+        displayName: 'photo.jpg',
+        kind: 'shared_file',
+        fileSize: 1048576,
+      },
+    ]);
+    mockShareResources.mockResolvedValueOnce(undefined);
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessScreen />
+      </TestErrorBoundary>
+    );
+
+    await waitFor(() => {
+      expect(getByText('photo.jpg')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('選擇'));
+    fireEvent.press(getByText('photo.jpg'));
+    fireEvent.press(getByText('分享'));
+
+    await waitFor(() => {
+      expect(mockShareResources).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        [{ resourceId: 'res-2', displayName: 'photo.jpg' }],
+      );
+    });
   });
 });

@@ -18,38 +18,70 @@ export interface DesktopInfo {
 export interface ResourceDownloadResult {
   savedToPhotos: boolean;
   localPath: string | null;
+  savedLocation?: string | null;
 }
+
+export interface ResourceShareItem {
+  resourceId: string;
+  displayName: string;
+}
+
+export type ReceivedLibraryMediaItem = ReceivedLibraryItemDTO & {
+  previewUrl?: string;
+  thumbnailUrl?: string;
+  streamUrl?: string;
+};
 
 const SHARED_DIRECTORY_RESOURCE_PREFIX = 'shared-dir:';
 const SHARED_DIRECTORY_DESKTOP_ID = 'shared-dir';
+const SHARED_FOLDER_ENTRY_PREFIX = 'shared-folder-entry:';
 
 export function isDownloadSavedLocally(result: ResourceDownloadResult): boolean {
   return (
     result.savedToPhotos ||
-    (typeof result.localPath === 'string' && result.localPath.trim().length > 0)
+    (typeof result.localPath === 'string' &&
+      result.localPath.trim().length > 0) ||
+    (typeof result.savedLocation === 'string' &&
+      result.savedLocation.trim().length > 0)
   );
+}
+
+async function resourceDownloadUrl(
+  desktop: DesktopInfo,
+  resourceId: string,
+): Promise<string> {
+  if (isSharedDirectoryResourceId(resourceId)) {
+    const sharedPath = getSharedDirectoryPathFromResourceId(resourceId);
+    const encodedPath = encodeRemotePath(sharedPath);
+    return `http://${desktop.host}:${desktop.port}/shared/download/${encodedPath}`;
+  }
+
+  // shared-folder-entry:{rootResourceId}:{filePath} — file inside a database-backed folder
+  if (resourceId.startsWith(SHARED_FOLDER_ENTRY_PREFIX)) {
+    const rest = resourceId.slice(SHARED_FOLDER_ENTRY_PREFIX.length);
+    const colonIdx = rest.indexOf(':');
+    if (colonIdx === -1) {
+      throw new Error('Invalid shared-folder-entry resource ID');
+    }
+    const rootResourceId = rest.slice(0, colonIdx);
+    const filePath = rest.slice(colonIdx + 1);
+    const clientId = await getClientId();
+    const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+    return `http://${desktop.host}:${desktop.port}/resources/mobile/download/${encodeURIComponent(rootResourceId)}?path=${encodeURIComponent(filePath)}&clientId=${clientId}&clientName=${encodeURIComponent(clientName)}`;
+  }
+
+  const clientId = await getClientId();
+  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
+  return `http://${desktop.host}:${desktop.port}/resources/mobile/download/${resourceId}?clientId=${clientId}&clientName=${encodeURIComponent(
+    clientName
+  )}`;
 }
 
 async function requestResourceDownload(
   desktop: DesktopInfo,
   resourceId: string,
 ): Promise<void> {
-  if (isSharedDirectoryResourceId(resourceId)) {
-    const sharedPath = getSharedDirectoryPathFromResourceId(resourceId);
-    const encodedPath = encodeRemotePath(sharedPath);
-    const url = `http://${desktop.host}:${desktop.port}/shared/download/${encodedPath}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to download shared file: ${res.statusText}`);
-    }
-    return;
-  }
-
-  const clientId = await getClientId();
-  const clientName = (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
-  const url = `http://${desktop.host}:${desktop.port}/resources/mobile/download/${resourceId}?clientId=${clientId}&clientName=${encodeURIComponent(
-    clientName
-  )}`;
+  const url = await resourceDownloadUrl(desktop, resourceId);
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to download resource: ${res.statusText}`);
@@ -178,10 +210,10 @@ function buildReceivedMediaUrl(
 
 function withCurrentClientReceivedMediaUrls(
   desktop: DesktopInfo,
-  items: ReceivedLibraryItemDTO[],
+  items: ReceivedLibraryMediaItem[],
   clientId: string,
   clientName: string,
-): ReceivedLibraryItemDTO[] {
+): ReceivedLibraryMediaItem[] {
   return items.map(item => {
     const fileKey = item.fileKey?.trim();
     if (!fileKey || item.clientId !== clientId) {
@@ -190,7 +222,7 @@ function withCurrentClientReceivedMediaUrls(
     const previewUrl =
       absoluteDesktopUrl(desktop, item.previewUrl) ??
       buildReceivedMediaUrl(desktop, 'preview', clientId, clientName, fileKey);
-    const next: ReceivedLibraryItemDTO = {
+    const next: ReceivedLibraryMediaItem = {
       ...item,
       previewUrl,
     };
@@ -276,7 +308,7 @@ async function listReceivedLibraryWithScope(
     throw new Error(`Failed to list received library: ${res.statusText}`);
   }
   const data = await res.json();
-  const items = (data.items || []) as ReceivedLibraryItemDTO[];
+  const items = (data.items || []) as ReceivedLibraryMediaItem[];
   if (scope !== 'client') {
     return items;
   }
@@ -291,7 +323,7 @@ export async function listReceivedLibrary(
 
 export async function listCurrentClientReceivedLibrary(
   desktop: DesktopInfo,
-): Promise<ReceivedLibraryItemDTO[]> {
+): Promise<ReceivedLibraryMediaItem[]> {
   return listReceivedLibraryWithScope(desktop, 'client');
 }
 
@@ -309,17 +341,62 @@ export async function downloadResource(
   };
 }
 
+export async function shareResources(
+  desktop: DesktopInfo,
+  resources: ResourceShareItem[],
+): Promise<void> {
+  if (resources.length === 0) {
+    return;
+  }
+  if (
+    typeof NativeSyncEngine?.downloadUrlToShareCache !== 'function' ||
+    typeof NativeSyncEngine?.shareFiles !== 'function'
+  ) {
+    throw new Error('System share is not available');
+  }
+
+  const localPaths: string[] = [];
+  for (const resource of resources) {
+    const url = await resourceDownloadUrl(desktop, resource.resourceId);
+    const localPath = await NativeSyncEngine.downloadUrlToShareCache(
+      url,
+      resource.displayName,
+    );
+    if (typeof localPath !== 'string' || localPath.trim().length === 0) {
+      throw new Error('Remote file was not prepared for sharing');
+    }
+    localPaths.push(localPath);
+  }
+
+  await NativeSyncEngine.shareFiles(localPaths);
+}
+
 export async function downloadResourceForGlobal(
-  _desktop: DesktopInfo,
-  _resourceId: string,
+  desktop: DesktopInfo,
+  resourceId: string,
+  filename?: string,
+  mediaType?: string | null,
 ): Promise<ResourceDownloadResult> {
-  // Global must not report a successful local save until native persistence
-  // returns a real localPath or confirms the asset was saved to Photos. Do not
-  // hit the sidecar download endpoint yet, otherwise desktop-side counters may
-  // treat an unsupported client action as a real download.
+  if (typeof NativeSyncEngine?.downloadUrlToLocal !== 'function') {
+    throw new Error('Native local download is not available');
+  }
+  const url = await resourceDownloadUrl(desktop, resourceId);
+  const result = await NativeSyncEngine.downloadUrlToLocal(
+    url,
+    filename?.trim() || 'remote-file',
+    mediaType ?? null,
+  );
   return {
-    savedToPhotos: false,
-    localPath: null,
+    savedToPhotos: result.savedToPhotos === true,
+    localPath:
+      typeof result.localPath === 'string' && result.localPath.trim().length > 0
+        ? result.localPath
+        : null,
+    savedLocation:
+      typeof result.savedLocation === 'string' &&
+      result.savedLocation.trim().length > 0
+        ? result.savedLocation
+        : null,
   };
 }
 
