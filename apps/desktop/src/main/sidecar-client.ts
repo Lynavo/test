@@ -22,6 +22,7 @@ import type {
   DeviceFileLedgerPageDTO,
   DeviceFileSortField,
   ReceivedLibraryItemDTO,
+  ReceivedLibraryPageDTO,
   SortDirection,
 } from '@syncflow/contracts';
 import { desktopClientHeaders } from './app-info';
@@ -50,6 +51,10 @@ const APP_REVIEW_PHONE =
   process.env.SYNCFLOW_APP_REVIEW_PHONE?.trim() ||
   process.env.APP_REVIEW_PHONE?.trim() ||
   '17000000002';
+const DEV_SANDBOX_AUTH_BASE_URL = 'dev-sandbox://auth';
+const DEV_SANDBOX_ACCESS_TOKEN_PREFIX = 'mock-sandbox-access-token';
+const DEV_SANDBOX_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
+const DEV_SANDBOX_ACCOUNT_ID = '99999';
 const AUTH_SMS_SEND_PATH = process.env.SYNCFLOW_AUTH_SMS_SEND_PATH ?? '/api/v1/auth/sms/send';
 const AUTH_SMS_LOGIN_PATH = process.env.SYNCFLOW_AUTH_SMS_LOGIN_PATH ?? '/api/v1/auth/sms/login';
 const AUTH_EMAIL_SEND_PATH = process.env.SYNCFLOW_AUTH_EMAIL_SEND_PATH ?? '/api/v1/auth/email/send';
@@ -153,6 +158,14 @@ let preserveSidecarTunnelCredentialsAfterSessionLoss = false;
 const DEFAULT_REMOTE_REQUEST_TIMEOUT_MS = 15_000;
 const DEFAULT_SIDECAR_REQUEST_TIMEOUT_MS = 30_000;
 
+function isDevSkipAuthEnabled(): boolean {
+  return app.isPackaged !== true && process.env.SYNCFLOW_DEV_SKIP_AUTH === '1';
+}
+
+function getDevSkipAuthEmail(): string {
+  return process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL?.trim() || 'qa@example.com';
+}
+
 function parsePositiveInteger(value: string | undefined, fallback: number): number {
   if (!value) {
     return fallback;
@@ -251,7 +264,7 @@ function loadSession(): AuthSession | null {
 
 function ensureSessionLoaded(): void {
   if (!authSessionLoaded) {
-    authSession = loadSession();
+    authSession = isDevSkipAuthEnabled() ? createDevSkipAuthSession() : loadSession();
     authSessionLoaded = true;
   }
 }
@@ -329,6 +342,26 @@ function createAuthSession(
     ...(metadata.email ? { email: metadata.email } : {}),
     ...(metadata.accountLabel ? { accountLabel: metadata.accountLabel } : {}),
   };
+}
+
+function createDevSkipAuthSession(): AuthSession {
+  const email = getDevSkipAuthEmail();
+  return createAuthSession(
+    `${DEV_SANDBOX_ACCESS_TOKEN_PREFIX}:${email}`,
+    DEV_SANDBOX_REFRESH_TOKEN,
+    {
+      baseUrl: DEV_SANDBOX_AUTH_BASE_URL,
+      email,
+      accountLabel: email,
+    },
+  );
+}
+
+function isDevSandboxAuthSession(session: AuthSession | null): session is AuthSession {
+  return (
+    session?.baseUrl === DEV_SANDBOX_AUTH_BASE_URL &&
+    session.accessToken.startsWith(`${DEV_SANDBOX_ACCESS_TOKEN_PREFIX}:`)
+  );
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -866,6 +899,25 @@ async function request<T>(
   });
 }
 
+function absoluteSidecarUrl(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return new URL(trimmed, BASE).toString();
+}
+
+function normalizeReceivedLibraryItem(item: ReceivedLibraryItemDTO): ReceivedLibraryItemDTO {
+  const { thumbnailUrl, previewUrl, streamUrl, ...rest } = item;
+  const absoluteThumbnailUrl = absoluteSidecarUrl(thumbnailUrl);
+  const absolutePreviewUrl = absoluteSidecarUrl(previewUrl);
+  const absoluteStreamUrl = absoluteSidecarUrl(streamUrl);
+  return {
+    ...rest,
+    ...(absoluteThumbnailUrl ? { thumbnailUrl: absoluteThumbnailUrl } : {}),
+    ...(absolutePreviewUrl ? { previewUrl: absolutePreviewUrl } : {}),
+    ...(absoluteStreamUrl ? { streamUrl: absoluteStreamUrl } : {}),
+  };
+}
+
 export const sidecarClient = {
   getHealth: () => request<SidecarHealth>('GET', '/health'),
   updatePowerState: (snapshot: PowerEventSnapshot) =>
@@ -941,8 +993,18 @@ export const sidecarClient = {
     request<DesktopSharedResourceDTO>('POST', '/resources/shared', payload),
   removeSharedResource: (resourceId: string) =>
     request<{ ok: boolean }>('DELETE', `/resources/shared/${encodeURIComponent(resourceId)}`),
-  getReceivedLibrary: () =>
-    request<DesktopLocalListResponse<ReceivedLibraryItemDTO>>('GET', '/resources/received'),
+  getReceivedLibrary: async (options?: { page?: number; pageSize?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.page) params.set('page', String(options.page));
+    if (options?.pageSize) params.set('pageSize', String(options.pageSize));
+    const endpoint =
+      params.size > 0 ? `/resources/received?${params.toString()}` : '/resources/received';
+    const response = await request<ReceivedLibraryPageDTO>('GET', endpoint);
+    return {
+      ...response,
+      items: response.items.map(normalizeReceivedLibraryItem),
+    };
+  },
   getClientConfig: async () => {
     const response = await request<unknown>(
       'GET',
@@ -1176,6 +1238,20 @@ export async function syncCredentialsToSidecar(): Promise<boolean> {
         message: res.message,
       });
       return true;
+    }
+
+    if (isDevSandboxAuthSession(session)) {
+      const accountRes = await sidecarClient.syncAccountContext({
+        authBaseUrl: DEV_SANDBOX_AUTH_BASE_URL,
+        accessToken: session.accessToken,
+        accountId: DEV_SANDBOX_ACCOUNT_ID,
+      });
+      log.info('[sidecar-client] Dev skip-auth account context sync request completed.', {
+        ok: accountRes.ok,
+        message: accountRes.message,
+        hasAccountId: true,
+      });
+      return accountRes.ok;
     }
 
     const syncActiveAccountContext = async () => {

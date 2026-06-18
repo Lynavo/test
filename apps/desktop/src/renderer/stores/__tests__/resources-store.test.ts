@@ -17,6 +17,13 @@ describe('resources-store', () => {
     useResourcesStore.setState({
       sharedResources: [],
       receivedItems: [],
+      receivedPage: 1,
+      receivedPageSize: 30,
+      receivedTotalItems: 0,
+      receivedTotalBytes: 0,
+      receivedDeviceStats: [],
+      receivedHasMore: false,
+      receivedLoadingMore: false,
       sharedLoading: false,
       receivedLoading: false,
       sharedError: null,
@@ -82,6 +89,18 @@ describe('resources-store', () => {
           shareStatus: 'not_shared' as const,
         },
       ],
+      page: 1,
+      pageSize: 30,
+      totalItems: 45,
+      totalBytes: 46080,
+      deviceStats: [
+        {
+          clientId: 'client-1',
+          photoCount: 42,
+          fileCount: 3,
+          totalBytes: 46080,
+        },
+      ],
     };
 
     (window as any).electronAPI = {
@@ -92,9 +111,81 @@ describe('resources-store', () => {
 
     await useResourcesStore.getState().loadReceivedLibrary();
 
+    expect((window as any).electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 30,
+    });
     expect(useResourcesStore.getState().receivedItems).toEqual(mockReceived.items);
+    expect(useResourcesStore.getState().receivedPage).toBe(1);
+    expect(useResourcesStore.getState().receivedPageSize).toBe(30);
+    expect(useResourcesStore.getState().receivedTotalItems).toBe(45);
+    expect(useResourcesStore.getState().receivedTotalBytes).toBe(46080);
+    expect(useResourcesStore.getState().receivedDeviceStats).toEqual(mockReceived.deviceStats);
+    expect(useResourcesStore.getState().receivedHasMore).toBe(true);
     expect(useResourcesStore.getState().receivedLoading).toBe(false);
+    expect(useResourcesStore.getState().receivedLoadingMore).toBe(false);
     expect(useResourcesStore.getState().receivedError).toBeNull();
+  });
+
+  it('appends the next received library page', async () => {
+    const firstItem = {
+      resourceId: 'rec-1',
+      desktopDeviceId: 'dev-1',
+      clientId: 'client-1',
+      displayName: 'first.png',
+      fileKey: 'key-1',
+      filename: 'first.png',
+      mediaType: 'image/png',
+      fileSize: 1024,
+      completedAt: '2026-06-15T00:00:00Z',
+      shareStatus: 'not_shared' as const,
+    };
+    const secondItem = {
+      ...firstItem,
+      resourceId: 'rec-2',
+      displayName: 'second.png',
+      fileKey: 'key-2',
+      filename: 'second.png',
+    };
+    useResourcesStore.setState({
+      receivedItems: [firstItem],
+      receivedPage: 1,
+      receivedPageSize: 30,
+      receivedTotalItems: 2,
+      receivedHasMore: true,
+    });
+    const secondPage = {
+      items: [secondItem],
+      page: 2,
+      pageSize: 30,
+      totalItems: 2,
+      totalBytes: 2048,
+      deviceStats: [
+        {
+          clientId: 'client-1',
+          photoCount: 2,
+          fileCount: 0,
+          totalBytes: 2048,
+        },
+      ],
+    };
+
+    (window as any).electronAPI = {
+      sidecar: {
+        getReceivedLibrary: vi.fn().mockResolvedValue(secondPage),
+      },
+    };
+
+    await useResourcesStore.getState().loadMoreReceivedLibrary();
+
+    expect((window as any).electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
+      page: 2,
+      pageSize: 30,
+    });
+    expect(useResourcesStore.getState().receivedItems).toEqual([firstItem, secondItem]);
+    expect(useResourcesStore.getState().receivedPage).toBe(2);
+    expect(useResourcesStore.getState().receivedHasMore).toBe(false);
+    expect(useResourcesStore.getState().receivedLoadingMore).toBe(false);
   });
 
   it('handles received library fetch error', async () => {
@@ -184,7 +275,14 @@ describe('resources-store', () => {
       sidecar: {
         addSharedResource: vi.fn().mockResolvedValue({ resourceId: 'new-res-3' }),
         getSharedResources: vi.fn().mockResolvedValue({ items: [] }),
-        getReceivedLibrary: vi.fn().mockResolvedValue({ items: [] }),
+        getReceivedLibrary: vi.fn().mockResolvedValue({
+          items: [],
+          page: 1,
+          pageSize: 30,
+          totalItems: 0,
+          totalBytes: 0,
+          deviceStats: [],
+        }),
       },
     };
 

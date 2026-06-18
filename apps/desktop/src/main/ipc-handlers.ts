@@ -12,6 +12,7 @@ import { resolveAppleOAuthConfig, resolveGoogleOAuthConfig } from './oauth-confi
 import {
   openFolder,
   openFile,
+  revealPath,
   openExternal,
   selectFile,
   selectFolder,
@@ -73,6 +74,7 @@ export const IPC = {
   SUPPORT_APP_INFO: 'support:app-info',
   FILES_OPEN_FOLDER: 'files:open-folder',
   FILES_OPEN_FILE: 'files:open-file',
+  FILES_REVEAL_PATH: 'files:reveal-path',
   FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FILE: 'files:select-file',
   FILES_SELECT_FOLDER: 'files:select-folder',
@@ -636,7 +638,11 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_REMOVE_SHARED_RESOURCE, (_e, resourceId: string) =>
     sidecarClient.removeSharedResource(resourceId),
   );
-  ipcMain.handle(IPC.SIDECAR_RECEIVED_LIBRARY, () => sidecarClient.getReceivedLibrary());
+  ipcMain.handle(
+    IPC.SIDECAR_RECEIVED_LIBRARY,
+    (_e, options?: { page?: number; pageSize?: number }) =>
+      sidecarClient.getReceivedLibrary(options),
+  );
   if (powerSave) {
     ipcMain.handle(IPC.POWER_SAVE_GET_STATE, async () => powerSave.getState());
     ipcMain.handle(IPC.POWER_SAVE_SET_PREVENT_SLEEP, async (_e, enabled: boolean) =>
@@ -655,6 +661,7 @@ export function registerIpcHandlers(
   // File operations — real Electron APIs
   ipcMain.handle(IPC.FILES_OPEN_FOLDER, (_e, path: string) => openFolder(path));
   ipcMain.handle(IPC.FILES_OPEN_FILE, (_e, path: string) => openFile(path));
+  ipcMain.handle(IPC.FILES_REVEAL_PATH, (_e, path: string) => revealPath(path));
   ipcMain.handle(IPC.FILES_OPEN_EXTERNAL, (_e, target: string) => openExternal(target));
   ipcMain.handle(IPC.FILES_SELECT_FILE, () => selectFile());
   ipcMain.handle(IPC.FILES_SELECT_FOLDER, () => selectFolder());
@@ -670,18 +677,15 @@ export function registerIpcHandlers(
       return { granted: false };
     }
   });
-  ipcMain.handle(
-    IPC.FILES_REQUEST_FOLDER_PERMISSION,
-    async (): Promise<{ granted: boolean }> => {
-      if (process.platform !== 'darwin') return { granted: true };
-      try {
-        // Probing a TCC-protected directory triggers the macOS permission prompt.
-        await readdir(join(homedir(), 'Desktop'), { withFileTypes: true });
-        return { granted: true };
-      } catch (err) {
-        log.warn('[Permissions] folder permission request failed', err);
-        return { granted: false };
-      }
-    },
-  );
+  ipcMain.handle(IPC.FILES_REQUEST_FOLDER_PERMISSION, async (): Promise<{ granted: boolean }> => {
+    if (process.platform !== 'darwin') return { granted: true };
+    try {
+      // Probing a TCC-protected directory triggers the macOS permission prompt.
+      await readdir(join(homedir(), 'Desktop'), { withFileTypes: true });
+      return { granted: true };
+    } catch (err) {
+      log.warn('[Permissions] folder permission request failed', err);
+      return { granted: false };
+    }
+  });
 }

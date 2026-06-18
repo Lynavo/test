@@ -25,10 +25,12 @@ const accessRecord2: DesktopAccessRecordDTO = {
   resourceId: 'res-2',
   resourceKind: 'received_file',
   resourceName: 'photo.jpg',
-  action: 'download',
+  action: 'view',
   result: 'ok',
   accessedAt: '2026-06-15T10:15:00Z',
 };
+
+const revealPath = vi.fn().mockResolvedValue(undefined);
 
 function resetStore() {
   useManagementStore.setState({
@@ -47,6 +49,15 @@ function resetStore() {
 describe('RecordsPage', () => {
   beforeEach(() => {
     resetStore();
+    revealPath.mockClear();
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: {
+        files: {
+          revealPath,
+        },
+      },
+    });
     vi.spyOn(useManagementStore.getState(), 'loadAccessRecords').mockResolvedValue();
     vi.spyOn(useManagementStore.getState(), 'loadDevices').mockResolvedValue();
   });
@@ -111,7 +122,48 @@ describe('RecordsPage', () => {
     expect(screen.getByText('Android')).toBeInTheDocument();
     expect(screen.getByText('clip.mp4')).toBeInTheDocument();
     expect(screen.getByText('photo.jpg')).toBeInTheDocument();
+    expect(screen.getByText('下载')).toBeInTheDocument();
+    expect(screen.getByText('预览')).toBeInTheDocument();
     expect(screen.getByText('2026-06-15')).toBeInTheDocument();
+    expect(screen.getByText('局域网')).toBeInTheDocument();
+    expect(screen.getByText('192.168.1.112')).toBeInTheDocument();
+    expect(screen.queryByText(/广东省/)).not.toBeInTheDocument();
+  });
+
+  it('does not invent an IP address when a device has not been matched', () => {
+    useManagementStore.setState({
+      accessRecords: [accessRecord1],
+      devices: [],
+    });
+
+    render(<RecordsPage />);
+
+    expect(screen.getByText('IP 未记录')).toBeInTheDocument();
+    expect(screen.queryByText('192.168.1.106')).not.toBeInTheDocument();
+  });
+
+  it('shows the full local path on hover and reveals it from access records', () => {
+    const recordWithPath = {
+      ...accessRecord1,
+      localPath: '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+    } as DesktopAccessRecordDTO;
+    useManagementStore.setState({
+      accessRecords: [recordWithPath],
+    });
+
+    render(<RecordsPage />);
+
+    const fileButton = screen.getByRole('button', { name: '在文件夹中显示 clip.mp4' });
+    expect(fileButton).toHaveAttribute(
+      'title',
+      '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+    );
+
+    fireEvent.click(fileButton);
+
+    expect(revealPath).toHaveBeenCalledWith(
+      '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+    );
   });
 
   it('filters sessions by search query', () => {

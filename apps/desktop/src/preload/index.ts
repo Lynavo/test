@@ -51,6 +51,7 @@ const IPC = {
   SUPPORT_APP_INFO: 'support:app-info',
   FILES_OPEN_FOLDER: 'files:open-folder',
   FILES_OPEN_FILE: 'files:open-file',
+  FILES_REVEAL_PATH: 'files:reveal-path',
   FILES_OPEN_EXTERNAL: 'files:open-external',
   FILES_SELECT_FILE: 'files:select-file',
   FILES_SELECT_FOLDER: 'files:select-folder',
@@ -106,11 +107,13 @@ const electronAPI: ElectronAPI = {
     addSharedResource: (payload) => ipcRenderer.invoke(IPC.SIDECAR_ADD_SHARED_RESOURCE, payload),
     removeSharedResource: (resourceId: string) =>
       ipcRenderer.invoke(IPC.SIDECAR_REMOVE_SHARED_RESOURCE, resourceId),
-    getReceivedLibrary: () => ipcRenderer.invoke(IPC.SIDECAR_RECEIVED_LIBRARY),
+    getReceivedLibrary: (options?: { page?: number; pageSize?: number }) =>
+      ipcRenderer.invoke(IPC.SIDECAR_RECEIVED_LIBRARY, options),
   },
   files: {
     openFolder: (path: string) => ipcRenderer.invoke(IPC.FILES_OPEN_FOLDER, path),
     openFile: (path: string) => ipcRenderer.invoke(IPC.FILES_OPEN_FILE, path),
+    revealPath: (path: string) => ipcRenderer.invoke(IPC.FILES_REVEAL_PATH, path),
     openExternal: (target: string) => ipcRenderer.invoke(IPC.FILES_OPEN_EXTERNAL, target),
     selectFile: () => ipcRenderer.invoke(IPC.FILES_SELECT_FILE),
     selectFolder: () => ipcRenderer.invoke(IPC.FILES_SELECT_FOLDER),

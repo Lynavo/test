@@ -77,6 +77,7 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   getSharedList: async () => ({ path: '', files: [], totalCount: 0 }),
   getManagedDevices: async () => ({ items: [] }),
   unblockDevice: async () => ({ ok: true }),
+  blockDevice: async () => ({ ok: true }),
   getSyncRecords: async () => ({ items: [] }),
   getAccessRecords: async () => ({ items: [] }),
   getSharedResources: async () => ({ items: [] }),
@@ -92,12 +93,20 @@ const mockSidecar: ElectronAPI['sidecar'] = {
     downloadCount: 0,
   }),
   removeSharedResource: async () => ({ ok: true }),
-  getReceivedLibrary: async () => ({ items: [] }),
+  getReceivedLibrary: async (options) => ({
+    items: [],
+    page: options?.page ?? 1,
+    pageSize: options?.pageSize ?? 30,
+    totalItems: 0,
+    totalBytes: 0,
+    deviceStats: [],
+  }),
 };
 
 const mockFiles: ElectronAPI['files'] = {
   openFolder: async () => {},
   openFile: async () => {},
+  revealPath: async () => {},
   openExternal: async () => {},
   selectFile: async () => null,
   selectFolder: async () => null,

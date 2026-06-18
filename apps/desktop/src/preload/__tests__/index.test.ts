@@ -17,10 +17,11 @@ const exposed = vi.hoisted(() => ({
           getSharedResources(): Promise<unknown>;
           addSharedResource(payload: unknown): Promise<unknown>;
           removeSharedResource(resourceId: string): Promise<unknown>;
-          getReceivedLibrary(): Promise<unknown>;
+          getReceivedLibrary(options?: { page?: number; pageSize?: number }): Promise<unknown>;
         };
         files: {
           selectFile(): Promise<unknown>;
+          revealPath(path: string): Promise<unknown>;
         };
         auth: {
           sendSMSCode(payload: { phone: string }): Promise<unknown>;
@@ -103,7 +104,7 @@ describe('preload electronAPI', () => {
       localPath: '/tmp/photo.jpg',
     });
     await exposed.api?.sidecar.removeSharedResource('res-1');
-    await exposed.api?.sidecar.getReceivedLibrary();
+    await exposed.api?.sidecar.getReceivedLibrary({ page: 2, pageSize: 30 });
 
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:connection-devices');
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:revoke-connection-device', 'phone-a');
@@ -119,7 +120,10 @@ describe('preload electronAPI', () => {
       localPath: '/tmp/photo.jpg',
     });
     expect(exposed.invoke).toHaveBeenCalledWith('sidecar:remove-shared-resource', 'res-1');
-    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:received-library');
+    expect(exposed.invoke).toHaveBeenCalledWith('sidecar:received-library', {
+      page: 2,
+      pageSize: 30,
+    });
   });
 
   it('maps file selection to the IPC channel', async () => {
@@ -129,6 +133,15 @@ describe('preload electronAPI', () => {
 
     await expect(exposed.api?.files.selectFile()).resolves.toBe('/tmp/photo.jpg');
     expect(exposed.invoke).toHaveBeenCalledWith('files:select-file');
+  });
+
+  it('maps reveal path to the IPC channel', async () => {
+    exposed.invoke.mockResolvedValue(undefined);
+
+    await import('../index');
+
+    await expect(exposed.api?.files.revealPath('/tmp/photo.jpg')).resolves.toBeUndefined();
+    expect(exposed.invoke).toHaveBeenCalledWith('files:reveal-path', '/tmp/photo.jpg');
   });
 
   it('maps phone auth calls to IPC channels', async () => {
