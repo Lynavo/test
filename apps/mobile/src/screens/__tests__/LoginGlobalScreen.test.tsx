@@ -81,8 +81,8 @@ describe('LoginGlobalScreen', () => {
       <LoginGlobalScreen />,
     );
 
-    expect(getByText('ViviDrop')).toBeTruthy();
-    expect(getByText('轻量同步素材到电脑端')).toBeTruthy();
+    expect(getByText('Vivi Drop')).toBeTruthy();
+    expect(getByText('Connect your desktop and keep media in sync.')).toBeTruthy();
     expect(getByText('登录或创建账号')).toBeTruthy();
     expect(getByText('使用 Google 继续')).toBeTruthy();
     expect(getByText('使用 Apple 继续')).toBeTruthy();

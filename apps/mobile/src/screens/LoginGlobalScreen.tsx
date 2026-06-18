@@ -329,7 +329,7 @@ export function LoginGlobalScreen() {
     <GlobalAuthScreenShell>
       <View style={styles.pageContent}>
         <View style={styles.heroSection}>
-          <View style={styles.brandRow}>
+          <View style={styles.brandCol}>
             <View style={styles.logoBox}>
               <Image
                 source={VIVIDROP_LOGO}
@@ -337,12 +337,12 @@ export function LoginGlobalScreen() {
                 resizeMode="contain"
               />
             </View>
-            <View>
+            <View style={styles.brandTextWrap}>
               <Text {...authTextScalingProps} style={styles.brandTitle}>
-                ViviDrop
+                Vivi Drop
               </Text>
               <Text {...authTextScalingProps} style={styles.brandSubtitle}>
-                轻量同步素材到电脑端
+                Connect your desktop and keep media in sync.
               </Text>
             </View>
           </View>
@@ -866,43 +866,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   heroSection: {
-    paddingTop: 4,
-  },
-  brandRow: {
-    flexDirection: 'row',
+    paddingTop: 24,
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 16,
+  },
+  brandCol: {
+    alignItems: 'center',
+    gap: 16,
   },
   logoBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.70)',
-    backgroundColor: 'rgba(255,255,255,0.64)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#46608A',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.12,
-    shadowRadius: 34,
-    elevation: 4,
   },
   logoImage: {
-    width: 36,
-    height: 36,
+    width: 64,
+    height: 64,
+  },
+  brandTextWrap: {
+    alignItems: 'center',
   },
   brandTitle: {
     fontSize: 24,
     lineHeight: 29,
     fontWeight: '600',
     color: AUTH_COLORS.text,
+    textAlign: 'center',
   },
   brandSubtitle: {
-    marginTop: 4,
-    fontSize: 12,
+    marginTop: 8,
+    fontSize: 14,
     lineHeight: 20,
     color: AUTH_COLORS.textMuted,
+    textAlign: 'center',
   },
   authCard: {
     marginTop: 40,
