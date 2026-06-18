@@ -104,16 +104,30 @@ export function canPreviewDocumentFile(
   );
 }
 
+function decodePathSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+function encodeFileUriPath(path: string): string {
+  return path
+    .split('/')
+    .map(segment => encodeURIComponent(decodePathSegment(segment)))
+    .join('/');
+}
+
 export function documentPreviewUri(localPath: string): string {
   const trimmed = localPath.trim();
-  if (
-    trimmed.startsWith('file://') ||
-    trimmed.startsWith('content://') ||
-    trimmed.startsWith('ph://')
-  ) {
+  if (trimmed.startsWith('file://')) {
+    return `file://${encodeFileUriPath(trimmed.slice('file://'.length))}`;
+  }
+  if (trimmed.startsWith('content://') || trimmed.startsWith('ph://')) {
     return trimmed;
   }
-  return `file://${trimmed}`;
+  return `file://${encodeFileUriPath(trimmed)}`;
 }
 
 export function safeShareFilename(

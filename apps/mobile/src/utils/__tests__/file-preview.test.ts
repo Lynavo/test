@@ -22,6 +22,12 @@ describe('file-preview', () => {
     );
   });
 
+  it('encodes filesystem paths before converting them to file URIs', () => {
+    expect(documentPreviewUri('/tmp/syncflow previews/客戶 報告#Q2.pdf')).toBe(
+      'file:///tmp/syncflow%20previews/%E5%AE%A2%E6%88%B6%20%E5%A0%B1%E5%91%8A%23Q2.pdf',
+    );
+  });
+
   it('passes a sanitized filename and metadata to the share sheet', async () => {
     await openFileWithOtherApp(
       '/tmp/syncflow_shared_downloads/cache-item',
