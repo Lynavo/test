@@ -88,6 +88,12 @@ func ensureReceiveDirName(st *store.Store, receiveDir string, clientID string, s
 
 // resolveReceiveDirName tries legacy claim first (unless skipped), then generates a new unique name.
 func resolveReceiveDirName(st *store.Store, receiveDir string, device *store.PairedDevice, skipLegacyClaim bool) (string, error) {
+	if candidate, ok, err := historicalUploadDirName(st, receiveDir, device); err != nil {
+		return "", err
+	} else if ok {
+		return candidate, nil
+	}
+
 	if !skipLegacyClaim {
 		// --- 2a. Legacy claim: try to find an existing directory. ---
 		// A directory is only claimable if it exists on disk AND is not already
@@ -130,6 +136,43 @@ func resolveReceiveDirName(st *store.Store, receiveDir string, device *store.Pai
 		return "", err
 	}
 	return unique, nil
+}
+
+func historicalUploadDirName(st *store.Store, receiveDir string, device *store.PairedDevice) (string, bool, error) {
+	rootDirs, err := st.ListCompletedUploadRootDirs(device.ClientID)
+	if err != nil {
+		return "", false, fmt.Errorf("list historical upload dirs: %w", err)
+	}
+	for _, rootDir := range rootDirs {
+		if !dirExists(receiveDir, rootDir) {
+			continue
+		}
+		reserved, err := receiveDirReservedByOther(st, rootDir, device.ClientID)
+		if err != nil {
+			return "", false, err
+		}
+		if reserved {
+			continue
+		}
+		return rootDir, true, nil
+	}
+	return "", false, nil
+}
+
+func receiveDirReservedByOther(st *store.Store, dirName string, clientID string) (bool, error) {
+	devices, err := st.ListPairedDevices()
+	if err != nil {
+		return false, fmt.Errorf("list paired devices: %w", err)
+	}
+	for _, device := range devices {
+		if device.ClientID == clientID || device.ReceiveDirName == nil {
+			continue
+		}
+		if *device.ReceiveDirName == dirName {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // pickBestName returns the best human-readable name for a new device.
@@ -218,6 +261,33 @@ func ReconcileReceiveDirNames(st *store.Store, receiveDir string) {
 
 	reconciled := 0
 	for _, d := range devices {
+		if historicalDir, ok, err := historicalUploadDirName(st, receiveDir, &d); err != nil {
+			slog.Warn("reconcile: failed to inspect historical upload dirs",
+				"clientID", d.ClientID, "err", err)
+		} else if ok {
+			if d.ReceiveDirName == nil || *d.ReceiveDirName != historicalDir {
+				oldName := ""
+				if d.ReceiveDirName != nil {
+					oldName = *d.ReceiveDirName
+				}
+				if err := st.UpdateReceiveDirName(d.ClientID, historicalDir); err != nil {
+					slog.Warn("reconcile: failed to restore historical receive_dir_name",
+						"clientID", d.ClientID, "oldName", oldName, "historicalName", historicalDir, "err", err)
+					continue
+				}
+				if err := os.MkdirAll(filepath.Join(receiveDir, historicalDir), 0o755); err != nil {
+					slog.Warn("reconcile: mkdir historical receive_dir_name failed (non-fatal)",
+						"clientID", d.ClientID, "dir", historicalDir, "err", err)
+				}
+				reconciled++
+				slog.Info("reconcile: restored historical receive_dir_name",
+					"clientID", d.ClientID,
+					"oldName", oldName,
+					"newName", historicalDir)
+			}
+			continue
+		}
+
 		if d.ReceiveDirName == nil || *d.ReceiveDirName == "" {
 			continue
 		}
