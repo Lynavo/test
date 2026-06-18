@@ -715,6 +715,32 @@ export async function prepareGlobalRemoteAccessPreview(
   return localPath;
 }
 
+export async function prepareGlobalRemoteAccessShareFile(
+  resourceId: string,
+  filename?: string,
+): Promise<string> {
+  if (typeof NativeSyncEngine?.downloadUrlToShareCache !== 'function') {
+    throw new Error('System share is not available');
+  }
+
+  const remotePath = getPersonalDirectoryPathFromResourceId(resourceId);
+  const url = await getDirectoryFileStreamUrl('personal', remotePath);
+  const fallbackFilename =
+    remotePath
+      .split('/')
+      .filter(segment => segment.trim().length > 0)
+      .pop()
+      ?.trim() || 'remote-file';
+  const localPath = await NativeSyncEngine.downloadUrlToShareCache(
+    url,
+    filename?.trim() || fallbackFilename,
+  );
+  if (typeof localPath !== 'string' || localPath.trim().length === 0) {
+    throw new Error('Remote file was not prepared for sharing');
+  }
+  return localPath;
+}
+
 export async function shareGlobalRemoteAccessResources(
   resources: ResourceShareItem[],
 ): Promise<void> {
@@ -727,7 +753,7 @@ export async function shareGlobalRemoteAccessResources(
 
   const localPaths: string[] = [];
   for (const resource of resources) {
-    const localPath = await prepareGlobalRemoteAccessPreview(
+    const localPath = await prepareGlobalRemoteAccessShareFile(
       resource.resourceId,
       resource.displayName,
     );

@@ -192,6 +192,7 @@ jest.mock('../../services/desktop-local-service', () => ({
   prepareResourcePreview: jest.fn(),
   prepareReceivedLibraryPreview: jest.fn(),
   prepareGlobalRemoteAccessPreview: jest.fn(),
+  prepareGlobalRemoteAccessShareFile: jest.fn(),
   shareResources: jest.fn(),
   shareGlobalRemoteAccessResources: jest.fn(),
   isDownloadSavedLocally: jest.fn(
@@ -249,6 +250,7 @@ import {
   prepareResourcePreview,
   prepareReceivedLibraryPreview,
   prepareGlobalRemoteAccessPreview,
+  prepareGlobalRemoteAccessShareFile,
   shareResources,
   shareGlobalRemoteAccessResources,
 } from '../../services/desktop-local-service';
@@ -284,6 +286,8 @@ const mockPrepareReceivedLibraryPreview =
   prepareReceivedLibraryPreview as jest.Mock;
 const mockPrepareGlobalRemoteAccessPreview =
   prepareGlobalRemoteAccessPreview as jest.Mock;
+const mockPrepareGlobalRemoteAccessShareFile =
+  prepareGlobalRemoteAccessShareFile as jest.Mock;
 const mockShareResources = shareResources as jest.Mock;
 const mockShareGlobalRemoteAccessResources =
   shareGlobalRemoteAccessResources as jest.Mock;
@@ -823,8 +827,8 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockPrepareGlobalRemoteAccessPreview.mockResolvedValueOnce(
-      '/cache/protoc-gen-go',
+    mockPrepareGlobalRemoteAccessShareFile.mockResolvedValueOnce(
+      '/downloads/protoc-gen-go',
     );
     mockShareOpen.mockResolvedValueOnce(undefined);
 
@@ -841,14 +845,14 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('protoc-gen-go'));
 
     await waitFor(() => {
-      expect(mockPrepareGlobalRemoteAccessPreview).toHaveBeenCalledWith(
+      expect(mockPrepareGlobalRemoteAccessShareFile).toHaveBeenCalledWith(
         'personal-dir:protoc-gen-go',
         'protoc-gen-go',
       );
     });
 
     expect(mockShareOpen).toHaveBeenCalledWith({
-      url: 'file:///cache/protoc-gen-go',
+      url: 'file:///downloads/protoc-gen-go',
       type: 'application/octet-stream',
       filename: 'protoc-gen-go',
       title: 'protoc-gen-go',
@@ -856,6 +860,7 @@ describe('RemoteAccessGlobalScreen', () => {
       failOnCancel: false,
       showAppsToView: true,
     });
+    expect(mockPrepareGlobalRemoteAccessPreview).not.toHaveBeenCalled();
     expect(mockViewDocument).not.toHaveBeenCalled();
   });
 

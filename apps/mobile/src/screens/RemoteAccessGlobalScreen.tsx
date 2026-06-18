@@ -52,6 +52,7 @@ import {
   listGlobalRemoteAccessFolderContents,
   listGlobalRemoteAccessResources,
   prepareGlobalRemoteAccessPreview,
+  prepareGlobalRemoteAccessShareFile,
   shareGlobalRemoteAccessResources,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
@@ -816,7 +817,7 @@ export function RemoteAccessGlobalScreen() {
 
         if (!canPreviewDocumentFile(item.mediaType, item.displayName)) {
           try {
-            const localPath = await prepareGlobalRemoteAccessPreview(
+            const localPath = await prepareGlobalRemoteAccessShareFile(
               item.resourceId,
               item.displayName,
             );

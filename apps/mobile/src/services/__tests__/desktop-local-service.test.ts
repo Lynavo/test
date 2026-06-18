@@ -15,6 +15,7 @@ import {
   listReceivedLibrary,
   listSharedResources,
   listSharedFolderContents,
+  prepareGlobalRemoteAccessShareFile,
   prepareGlobalRemoteAccessPreview,
   prepareReceivedLibraryPreview,
   prepareResourcePreview,
@@ -945,10 +946,44 @@ describe('desktop-local-service', () => {
     });
   });
 
-  it('shares global remote access files through the personal directory preview cache', async () => {
-    mockedPrepareDirectoryFilePreview
-      .mockResolvedValueOnce('/cache/photo.jpg')
-      .mockResolvedValueOnce('/cache/report.pdf');
+  it('prepares global remote access share files through the native share cache', async () => {
+    mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
+      'http://127.0.0.1:39394/personal/stream/protoc-gen-go',
+    );
+    mockDownloadUrlToShareCache.mockResolvedValueOnce(
+      '/share-cache/protoc-gen-go',
+    );
+
+    await expect(
+      prepareGlobalRemoteAccessShareFile(
+        'personal-dir:protoc-gen-go',
+        'protoc-gen-go',
+      ),
+    ).resolves.toBe('/share-cache/protoc-gen-go');
+
+    expect(mockedGetDirectoryFileStreamUrl).toHaveBeenCalledWith(
+      'personal',
+      'protoc-gen-go',
+    );
+    expect(mockDownloadUrlToShareCache).toHaveBeenCalledWith(
+      'http://127.0.0.1:39394/personal/stream/protoc-gen-go',
+      'protoc-gen-go',
+    );
+    expect(mockedDownloadDirectoryFile).not.toHaveBeenCalled();
+    expect(mockedPrepareDirectoryFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('shares global remote access files through the native share cache', async () => {
+    mockedGetDirectoryFileStreamUrl
+      .mockResolvedValueOnce(
+        'http://127.0.0.1:39394/personal/stream/Pictures/photo.jpg',
+      )
+      .mockResolvedValueOnce(
+        'http://127.0.0.1:39394/personal/stream/Documents/report.pdf',
+      );
+    mockDownloadUrlToShareCache
+      .mockResolvedValueOnce('/share-cache/photo.jpg')
+      .mockResolvedValueOnce('/share-cache/report.pdf');
     mockShareFiles.mockResolvedValueOnce(true);
 
     await expect(
@@ -964,21 +999,31 @@ describe('desktop-local-service', () => {
       ]),
     ).resolves.toBeUndefined();
 
-    expect(mockedPrepareDirectoryFilePreview).toHaveBeenNthCalledWith(
+    expect(mockedGetDirectoryFileStreamUrl).toHaveBeenNthCalledWith(
       1,
       'personal',
       'Pictures/photo.jpg',
-      'photo.jpg',
     );
-    expect(mockedPrepareDirectoryFilePreview).toHaveBeenNthCalledWith(
+    expect(mockedGetDirectoryFileStreamUrl).toHaveBeenNthCalledWith(
       2,
       'personal',
       'Documents/report.pdf',
+    );
+    expect(mockDownloadUrlToShareCache).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:39394/personal/stream/Pictures/photo.jpg',
+      'photo.jpg',
+    );
+    expect(mockDownloadUrlToShareCache).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:39394/personal/stream/Documents/report.pdf',
       'report.pdf',
     );
+    expect(mockedDownloadDirectoryFile).not.toHaveBeenCalled();
+    expect(mockedPrepareDirectoryFilePreview).not.toHaveBeenCalled();
     expect(mockShareFiles).toHaveBeenCalledWith([
-      '/cache/photo.jpg',
-      '/cache/report.pdf',
+      '/share-cache/photo.jpg',
+      '/share-cache/report.pdf',
     ]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
