@@ -6,6 +6,7 @@ import { Button } from '@renderer/components/ui/button';
 import { Input } from '@renderer/components/ui/input';
 import { Label } from '@renderer/components/ui/label';
 import { useAuthStore } from '@renderer/stores/auth-store';
+import { LogoutConfirmDialog } from '@renderer/components/shared/LogoutConfirmDialog';
 
 type RedeemResult = {
   ok: boolean;
@@ -79,12 +80,21 @@ export function GiftCardSection() {
   const refreshSession = useAuthStore((state) => state.refreshSession);
   const logout = useAuthStore((state) => state.logout);
   const clearSession = useAuthStore((state) => state.clearSession);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const accountLabel =
+    session?.phone?.trim() || session?.email?.trim() || session?.accountLabel?.trim() || '';
 
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = useCallback(() => {
+    setShowLogoutConfirm(true);
+  }, []);
+
+  const handleConfirmLogout = useCallback(async () => {
+    setShowLogoutConfirm(false);
     if (!window.electronAPI?.auth?.logout) {
       toast.error('Auth API unavailable');
       return;
@@ -240,6 +250,15 @@ export function GiftCardSection() {
           {lastResult.text}
         </p>
       ) : null}
+
+      <LogoutConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          void handleConfirmLogout();
+        }}
+        accountLabel={accountLabel}
+      />
     </div>
   );
 }

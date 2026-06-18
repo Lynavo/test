@@ -34,7 +34,11 @@
     "signedIn": "Signed in",
     "connected": "Account connected",
     "dialogTitle": "Sign in",
-    "dialogDescription": "Sign in to use remote transfer."
+    "dialogDescription": "Sign in to use remote transfer.",
+    "logoutConfirmTitle": "Sign Out",
+    "logoutConfirmDescription": "Are you sure you want to sign out of the current account {{account}}? You will need to sign in again to use the sync features.",
+    "logoutConfirmCancel": "Cancel",
+    "logoutConfirmOk": "Confirm"
   },
   "errorBoundary": {
     "helpLoadFailed": "Help failed to load. Please retry."

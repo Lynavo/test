@@ -72,6 +72,10 @@ describe('Sidebar', () => {
 
     fireEvent.click(await screen.findByTitle('登出'));
 
+    // Click confirm button in the confirmation dialog
+    const confirmButton = await screen.findByRole('button', { name: '确认退出' });
+    fireEvent.click(confirmButton);
+
     await waitFor(() => {
       expect(logout).toHaveBeenCalledTimes(1);
     });

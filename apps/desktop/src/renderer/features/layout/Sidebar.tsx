@@ -9,13 +9,14 @@ import {
   Crown,
   type LucideIcon,
 } from 'lucide-react';
-import { useCallback, type CSSProperties } from 'react';
+import { useCallback, useState, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import vividropLogo from '@renderer/assets/vividrop-logo-cutout.png';
 import { useAppStore, type AppView } from '@renderer/stores/app-store';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { getProductName } from '../../../shared/market';
+import { LogoutConfirmDialog } from '@renderer/components/shared/LogoutConfirmDialog';
 
 const navItems: { key: AppView; labelKey: string; icon: LucideIcon }[] = [
   { key: 'dashboard', labelKey: 'layout.nav.dashboard', icon: HardDrive },
@@ -41,8 +42,14 @@ export function Sidebar() {
   const session = useAuthStore((s) => s.session);
   const logout = useAuthStore((s) => s.logout);
   const deviceName = useSettingsStore((s) => s.settings.deviceName);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleLogout = useCallback(() => {
+    setShowLogoutConfirm(true);
+  }, []);
+
+  const handleConfirmLogout = useCallback(() => {
+    setShowLogoutConfirm(false);
     void logout();
   }, [logout]);
 
@@ -133,6 +140,13 @@ export function Sidebar() {
           </div>
         </div>
       ) : null}
+
+      <LogoutConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={handleConfirmLogout}
+        accountLabel={accountLabel}
+      />
     </aside>
   );
 }

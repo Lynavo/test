@@ -10,6 +10,7 @@ import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { useResourcesStore } from '@renderer/stores/resources-store';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import { AuthPage } from '@renderer/components/shared/AuthPage';
+import { LogoutConfirmDialog } from '@renderer/components/shared/LogoutConfirmDialog';
 import { Sidebar } from './Sidebar';
 import { SidecarStatusBanner } from './SidecarStatusBanner';
 
@@ -70,12 +71,14 @@ type ConnectionCodeSetupPageProps = {
 function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPageProps) {
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const session = useAuthStore((s) => s.session);
   const [draftCode, setDraftCode] = useState(() =>
     normalizeConnectionCode(settings.connectionCode || ''),
   );
   const [hasEdited, setHasEdited] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const deviceName =
     settings.deviceName || window.electronAPI?.platform?.getHostName?.() || 'ViviDrop';
   const setupSteps = [
@@ -157,7 +160,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
           </div>
           <button
             type="button"
-            onClick={() => void onLogout()}
+            onClick={() => setShowLogoutConfirm(true)}
             className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-white/58 px-3 text-xs font-medium text-[#687380] transition hover:bg-white/90 hover:text-[#17191c]"
           >
             退出
@@ -240,6 +243,18 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
           </div>
         </div>
       </section>
+
+      <LogoutConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          void onLogout();
+        }}
+        accountLabel={
+          session?.phone?.trim() || session?.email?.trim() || session?.accountLabel?.trim() || ''
+        }
+      />
     </div>
   );
 }

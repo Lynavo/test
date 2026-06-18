@@ -34,7 +34,11 @@
     "signedIn": "已登入",
     "connected": "帳號已連線",
     "dialogTitle": "登入帳號",
-    "dialogDescription": "登入後可使用遠端傳輸。"
+    "dialogDescription": "登入後可使用遠端傳輸。",
+    "logoutConfirmTitle": "退出登入",
+    "logoutConfirmDescription": "確定要退出目前帳號 {{account}} 嗎？退出後需重新登入才能使用同步功能。",
+    "logoutConfirmCancel": "取消",
+    "logoutConfirmOk": "確認退出"
   },
   "errorBoundary": {
     "helpLoadFailed": "說明中心載入失敗，請重試"
