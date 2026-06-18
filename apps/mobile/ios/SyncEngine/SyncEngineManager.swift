@@ -1999,12 +1999,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         while true {
             let startReason = attempt == 0 ? reason : "\(reason)_retry_\(attempt)"
             let state = await p2pTunnelRouteState(startReason: startReason)
+            var isRouteAcceptable = false
             if state.isActive,
                await acceptedSharedFilesTunnelHost(
                    state: state,
                    hasReachableLANHost: false,
                    reason: reason
                ) != nil {
+                isRouteAcceptable = true
                 syncDiagnosticsLog(
                     "SharedFiles",
                     "P2P tunnel ready for shared files reason=\(reason) port=\(state.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(state.selectedICERoute)) attempts=\(attempt + 1)"
@@ -2012,9 +2014,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 return true
             }
 
-            guard SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
+            guard SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
                 hasTunnelCredentials: state.hasCredentials,
-                isTunnelActive: state.isActive
+                isTunnelActive: state.isActive,
+                isRouteAcceptable: isRouteAcceptable
             ) else {
                 if !state.hasCredentials {
                     syncDiagnosticsLog(
@@ -2034,6 +2037,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 syncDiagnosticsLog(
                     "SharedFiles",
                     "waiting for P2P tunnel before shared files route reason=\(reason)"
+                )
+            }
+
+            if state.isActive {
+                await restartRejectedSharedFilesTunnel(
+                    state: state,
+                    reason: "\(reason)_wait_unacceptable_route_\(attempt)"
                 )
             }
 

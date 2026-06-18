@@ -388,9 +388,39 @@ func selectedICERoute(pair *webrtc.ICECandidatePair) string {
 		return "turn_relay"
 	}
 	if local.Typ == webrtc.ICECandidateTypeHost && remote.Typ == webrtc.ICECandidateTypeHost {
-		return "direct_host"
+		return selectedHostICERoute(local.Address, remote.Address)
 	}
 	return "direct_reflexive"
+}
+
+func selectedHostICERoute(localAddress string, remoteAddress string) string {
+	localIP := net.ParseIP(localAddress)
+	remoteIP := net.ParseIP(remoteAddress)
+	if localIP == nil || remoteIP == nil {
+		return "direct_host"
+	}
+	if isLinkLocalIP(localIP) || isLinkLocalIP(remoteIP) {
+		return "link_local_direct"
+	}
+	if isPrivateIPv4(localIP) && isPrivateIPv4(remoteIP) {
+		return "lan_direct"
+	}
+	if isPublicIPv6(localIP) && isPublicIPv6(remoteIP) {
+		return "ipv6_direct"
+	}
+	return "direct_host"
+}
+
+func isPrivateIPv4(ip net.IP) bool {
+	return ip.To4() != nil && ip.IsPrivate()
+}
+
+func isPublicIPv6(ip net.IP) bool {
+	return ip.To4() == nil && ip.IsGlobalUnicast() && !ip.IsPrivate() && !ip.IsLinkLocalUnicast()
+}
+
+func isLinkLocalIP(ip net.IP) bool {
+	return ip.IsLinkLocalUnicast()
 }
 
 func pairLocal(pair *webrtc.ICECandidatePair) *webrtc.ICECandidate {

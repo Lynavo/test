@@ -174,10 +174,18 @@ enum SharedFilesRoutePolicy {
         }
 
         let normalizedRoute = selectedICERoute.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalizedRoute == "turn_relay" {
+        if normalizedRoute == "turn_relay" || normalizedRoute == "ipv6_direct" {
             return true
         }
         return hasReachableLANHost
+    }
+
+    static func shouldContinueWaitingForP2PTunnelRoute(
+        hasTunnelCredentials: Bool,
+        isTunnelActive: Bool,
+        isRouteAcceptable: Bool
+    ) -> Bool {
+        hasTunnelCredentials && (!isTunnelActive || !isRouteAcceptable)
     }
 
     static func shouldAttemptWake(

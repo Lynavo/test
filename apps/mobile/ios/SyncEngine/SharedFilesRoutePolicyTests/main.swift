@@ -42,6 +42,24 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
+        hasTunnelCredentials: true,
+        isTunnelActive: true,
+        isRouteAcceptable: false
+    ),
+    "shared files must keep waiting when an active P2P tunnel selected an unacceptable route"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
+        hasTunnelCredentials: true,
+        isTunnelActive: true,
+        isRouteAcceptable: true
+    ),
+    "shared files must stop waiting when an active P2P tunnel selected an acceptable route"
+)
+
+expect(
     !SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
         isTunnelActive: true,
         hasTunnelPort: true,
@@ -49,6 +67,16 @@ expect(
         hasReachableLANHost: false
     ),
     "shared files must not trust a direct_host tunnel as a WAN route when LAN is not reachable"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
+        isTunnelActive: true,
+        hasTunnelPort: true,
+        selectedICERoute: "ipv6_direct",
+        hasReachableLANHost: false
+    ),
+    "shared files must accept an IPv6 direct tunnel before falling back to relay when LAN is not reachable"
 )
 
 expect(
