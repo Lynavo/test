@@ -34,6 +34,7 @@ jest.mock('react-i18next', () => ({
         'sharedFiles.networkError.message': '請稍後重試',
         'sharedFiles.dialogs.downloadFailed': '下載失敗',
         'sharedFiles.dialogs.downloadFailedMessage': '無法下載檔案，请稍後重試',
+        'sharedFiles.dialogs.savedLocationPhotos': '相簿',
         'sharedFiles.dialogs.previewFailed': '預覽失敗',
         'sharedFiles.dialogs.previewFailedMessage': '無法取得檔案預覽',
         'sharedFiles.dialogs.previewUnsupported': '無法預覽',
@@ -58,7 +59,7 @@ jest.mock('react-i18next', () => ({
         key === 'sharedFiles.dialogs.downloadSavedToPhotos' &&
         options?.name
       ) {
-        return `${options.name} 已儲存至相簿`;
+        return `${options.name} 已儲存到${options.location ?? ''}`;
       }
       if (key === 'sharedFiles.dialogs.downloadSavedToFiles' && options?.name) {
         return `${options.name} 已儲存到檔案`;
@@ -1202,7 +1203,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       localPath: 'ph://asset-001',
       savedToPhotos: true,
     });
-    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存至相簿');
+    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存到相簿');
 
     alertSpy.mockRestore();
   });
@@ -1256,7 +1257,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       localPath: 'ph://asset-001',
       savedToPhotos: true,
     });
-    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存至相簿');
+    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存到相簿');
 
     alertSpy.mockRestore();
   });
@@ -1582,7 +1583,7 @@ describe('RemoteAccessScreen', () => {
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         '下載完成',
-        'photo.jpg 已儲存至相簿',
+        'photo.jpg 已儲存到相簿',
       );
     });
 
@@ -1916,7 +1917,7 @@ describe('PhoneSyncSpaceScreen', () => {
       localPath: 'ph://asset-001',
       savedToPhotos: true,
     });
-    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存至相簿');
+    expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存到相簿');
 
     alertSpy.mockRestore();
   });

@@ -76,9 +76,9 @@
     "playVideo": "點擊播放影片"
   },
   "dialogs": {
-    "downloadSavedToPhotos": "{{name}} 已儲存到 {{location}}",
+    "downloadSavedToPhotos": "{{name}} 已儲存到{{location}}",
     "downloadSavedToFiles": "{{name}} 已儲存到檔案",
-    "downloadSaved": "{{name}} 已儲存到 {{location}}",
+    "downloadSaved": "{{name}} 已儲存到{{location}}",
     "downloadComplete": "下載完成",
     "downloadFailed": "下載失敗",
     "downloadFailedMessage": "無法下載檔案，請稍後重試",

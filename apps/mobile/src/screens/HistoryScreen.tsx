@@ -83,7 +83,10 @@ export function HistoryScreen() {
 
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
-          t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
+          t('sharedFiles.dialogs.downloadSavedToPhotos', {
+            name: filename,
+            location: t('sharedFiles.dialogs.savedLocationPhotos') || '相簿',
+          }) ||
             `${filename} 已儲存至相簿`
         );
       } catch (err) {

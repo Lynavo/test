@@ -714,6 +714,8 @@ export function RemoteAccessGlobalScreen() {
           result.savedToPhotos
             ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
                 name: item.displayName,
+                location:
+                  t('sharedFiles.dialogs.savedLocationPhotos') || '相簿',
               }) || `${item.displayName} 已儲存至相簿`
             : t('sharedFiles.dialogs.downloadSavedToFiles', {
                 name: item.displayName,

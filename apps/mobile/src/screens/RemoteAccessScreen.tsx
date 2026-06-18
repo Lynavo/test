@@ -206,7 +206,11 @@ export function RemoteAccessScreen() {
         Alert.alert(
           t('sharedFiles.dialogs.downloadComplete') || '下載完成',
           isPhotoOrVideo
-            ? t('sharedFiles.dialogs.downloadSavedToPhotos', { name: filename }) ||
+            ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
+                name: filename,
+                location:
+                  t('sharedFiles.dialogs.savedLocationPhotos') || '相簿',
+              }) ||
                 `${filename} 已儲存至相簿`
             : t('sharedFiles.dialogs.downloadSavedToFiles', { name: filename }) ||
                 `${filename} 已保存到文件`

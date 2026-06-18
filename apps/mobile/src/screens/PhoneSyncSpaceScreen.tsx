@@ -193,6 +193,8 @@ export function PhoneSyncSpaceScreen() {
           savedToPhotos
             ? t('sharedFiles.dialogs.downloadSavedToPhotos', {
                 name: filename,
+                location:
+                  t('sharedFiles.dialogs.savedLocationPhotos') || '相簿',
               }) || `${filename} 已儲存至相簿`
             : t('sharedFiles.dialogs.downloadSavedToFiles', {
                 name: filename,
