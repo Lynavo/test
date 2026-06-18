@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Modal,
+  NativeModules,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,12 +16,25 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Video from 'react-native-video';
+import {
+  SIDECAR_HTTP_PORT,
+  type ReceivedLibraryItemDTO,
+} from '@syncflow/contracts';
 
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { Icon } from '../components/Icon';
 import { isVisualQaEnabled } from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import {
+  downloadGlobalRemoteAccessResource,
+  downloadReceivedLibraryItem,
+  downloadResourceForGlobal,
+  isDownloadSavedLocally,
+  isDownloadSavedToPhotos,
+  type DesktopInfo,
+  type ResourceDownloadResult,
+} from '../services/desktop-local-service';
 import {
   listDownloadRecords,
   type DownloadRecord,
@@ -120,22 +134,35 @@ export function DownloadRecordsGlobalScreen() {
   }, []);
 
   const handleDownloadPress = useCallback(async (record: DownloadRecord) => {
-    if (!record.localPath) {
-      Alert.alert(
-        '無法重新下載',
-        '這筆紀錄沒有可用的本機檔案，也沒有足夠的遠端路由資訊可重新下載。',
-      );
-      return;
-    }
-
     try {
-      await openFileWithOtherApp(record.localPath, record.filename);
+      if (record.localPath) {
+        await openFileWithOtherApp(record.localPath, record.filename);
+        return;
+      }
+
+      const desktop = await getBoundDesktop();
+      const result = await redownloadRecord(record, desktop);
+      if (!isDownloadSavedLocally(result)) {
+        Alert.alert(
+          '無法重新下載',
+          '這筆紀錄沒有可用的本機檔案，也沒有足夠的遠端路由資訊可重新下載。',
+        );
+        return;
+      }
+
+      const savedToPhotos = isDownloadSavedToPhotos(result);
+      Alert.alert(
+        '下載完成',
+        savedToPhotos
+          ? `${record.filename} 已儲存到相簿`
+          : `${record.filename} 已儲存到檔案`,
+      );
     } catch (err) {
       console.warn(
-        '[DownloadRecordsGlobalScreen] Open local file failed:',
+        '[DownloadRecordsGlobalScreen] Re-download failed:',
         err,
       );
-      Alert.alert('開啟失敗', '無法開啟或分享這個本機檔案。');
+      Alert.alert('下載失敗', '無法下載檔案，請稍後重試。');
     }
   }, []);
 
@@ -260,6 +287,87 @@ function getDownloadRecordThumbnailUri(record: DownloadRecord): string | null {
   if (candidate?.trim()) return candidate.trim();
   if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   return null;
+}
+
+async function getBoundDesktop(): Promise<DesktopInfo> {
+  const binding = await NativeModules.NativeSyncEngine?.getBindingState?.();
+  if (!binding || typeof binding.host !== 'string' || !binding.host.trim()) {
+    throw new Error('Bound desktop is unavailable');
+  }
+  return { host: binding.host.trim(), port: SIDECAR_HTTP_PORT };
+}
+
+async function redownloadRecord(
+  record: DownloadRecord,
+  desktop: DesktopInfo,
+): Promise<ResourceDownloadResult> {
+  if (isReceivedDownloadRecord(record)) {
+    return downloadReceivedLibraryItem(desktop, receivedItemFromRecord(record));
+  }
+
+  if (record.resourceId.startsWith('personal-dir:')) {
+    return downloadGlobalRemoteAccessResource(record.resourceId);
+  }
+
+  return downloadResourceForGlobal(
+    desktop,
+    record.resourceId,
+    record.filename,
+    record.mediaType ?? null,
+  );
+}
+
+function isReceivedDownloadRecord(record: DownloadRecord): boolean {
+  return (
+    getReceivedFileKey(record) !== null &&
+    [record.thumbnailUrl, record.previewUrl, record.streamUrl].some(url =>
+      url?.includes('/resources/mobile/received/'),
+    )
+  );
+}
+
+function receivedItemFromRecord(record: DownloadRecord): ReceivedLibraryItemDTO {
+  const fileKey = getReceivedFileKey(record);
+  if (!fileKey) {
+    throw new Error('Received download record is missing fileKey');
+  }
+
+  return {
+    resourceId: record.resourceId,
+    desktopDeviceId: '',
+    clientId: '',
+    displayName: record.filename,
+    fileKey,
+    filename: record.filename,
+    mediaType: record.mediaType ?? '',
+    fileSize: record.fileSize ?? 0,
+    completedAt: record.downloadedAt,
+    shareStatus: 'not_shared',
+    ...(record.thumbnailUrl ? { thumbnailUrl: record.thumbnailUrl } : {}),
+    ...(record.previewUrl ? { previewUrl: record.previewUrl } : {}),
+    ...(record.streamUrl ? { streamUrl: record.streamUrl } : {}),
+  };
+}
+
+function getReceivedFileKey(record: DownloadRecord): string | null {
+  const fromUrl = [record.previewUrl, record.thumbnailUrl, record.streamUrl]
+    .map(extractReceivedFileKeyFromUrl)
+    .find((fileKey): fileKey is string => typeof fileKey === 'string');
+  if (fromUrl) return fromUrl;
+
+  const trimmed = record.resourceId.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function extractReceivedFileKeyFromUrl(value?: string | null): string | null {
+  if (!value?.trim()) return null;
+  const match = value.match(/[?&]fileKey=([^&]+)/);
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 function DownloadRecordPreviewThumbnail({

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, NativeModules } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 let mockVisualQaEnabled = false;
@@ -46,6 +46,38 @@ jest.mock('../../services/download-records-service', () => ({
   listDownloadRecords: jest.fn(),
 }));
 
+jest.mock('../../services/desktop-local-service', () => ({
+  downloadGlobalRemoteAccessResource: jest.fn(),
+  downloadReceivedLibraryItem: jest.fn(),
+  downloadResourceForGlobal: jest.fn(),
+  isDownloadSavedLocally: jest.fn(
+    (result: {
+      savedToPhotos?: boolean;
+      localPath?: string | null;
+      savedLocation?: string | null;
+    }) =>
+      result.savedToPhotos === true ||
+      (typeof result.localPath === 'string' &&
+        result.localPath.trim().length > 0) ||
+      (typeof result.savedLocation === 'string' &&
+        result.savedLocation.trim().length > 0),
+  ),
+  isDownloadSavedToPhotos: jest.fn(
+    (result: {
+      savedToPhotos?: boolean;
+      localPath?: string | null;
+      savedLocation?: string | null;
+    }) =>
+      result.savedToPhotos === true ||
+      (typeof result.localPath === 'string' &&
+        result.localPath.trim().toLowerCase().startsWith('ph://')) ||
+      (typeof result.savedLocation === 'string' &&
+        ['photos', 'pictures/vivi drop', 'movies/vivi drop'].includes(
+          result.savedLocation.trim().toLowerCase(),
+        )),
+  ),
+}));
+
 jest.mock('@react-native-documents/viewer', () => ({
   viewDocument: jest.fn(),
 }));
@@ -79,6 +111,10 @@ jest.mock('../../dev/visualQa', () => ({
 }));
 
 import { listDownloadRecords } from '../../services/download-records-service';
+import {
+  downloadReceivedLibraryItem,
+  downloadResourceForGlobal,
+} from '../../services/desktop-local-service';
 import { viewDocument } from '@react-native-documents/viewer';
 import { openFileWithOtherApp } from '../../utils/file-preview';
 import { DownloadRecordsGlobalScreen } from '../DownloadRecordsGlobalScreen';
@@ -88,11 +124,19 @@ const mockedListDownloadRecords = listDownloadRecords as jest.MockedFunction<
 >;
 const mockedViewDocument = viewDocument as jest.Mock;
 const mockedOpenFileWithOtherApp = openFileWithOtherApp as jest.Mock;
+const mockedDownloadReceivedLibraryItem =
+  downloadReceivedLibraryItem as jest.Mock;
+const mockedDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
 
 describe('DownloadRecordsGlobalScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVisualQaEnabled = false;
+    NativeModules.NativeSyncEngine = {
+      getBindingState: jest.fn().mockResolvedValue({
+        host: '192.168.1.100',
+      }),
+    };
   });
 
   it('renders a dedicated empty download records page', async () => {
@@ -248,7 +292,7 @@ describe('DownloadRecordsGlobalScreen', () => {
     });
   });
 
-  it('download button shares a local file or explains when re-download is unavailable', async () => {
+  it('download button shares a local file or re-downloads a remote record', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockedListDownloadRecords.mockResolvedValueOnce([
       {
@@ -267,6 +311,11 @@ describe('DownloadRecordsGlobalScreen', () => {
         downloadedAt: '2026-06-16T02:41:00.000Z',
       },
     ]);
+    mockedDownloadResourceForGlobal.mockResolvedValueOnce({
+      savedToPhotos: false,
+      localPath: '/downloads/Missing.pdf',
+      savedLocation: 'Downloads/Vivi Drop',
+    });
 
     const { getByTestId } = render(<DownloadRecordsGlobalScreen />);
 
@@ -281,9 +330,67 @@ describe('DownloadRecordsGlobalScreen', () => {
         '/tmp/Local.pdf',
         'Local.pdf',
       );
+      expect(mockedDownloadResourceForGlobal).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        'missing-1',
+        'Missing.pdf',
+        'application/pdf',
+      );
       expect(alertSpy).toHaveBeenCalledWith(
-        '無法重新下載',
-        '這筆紀錄沒有可用的本機檔案，也沒有足夠的遠端路由資訊可重新下載。',
+        '下載完成',
+        'Missing.pdf 已儲存到檔案',
+      );
+    });
+  });
+
+  it('re-downloads a recent received image saved to Photos even when localPath is missing', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    mockedListDownloadRecords.mockResolvedValueOnce([
+      {
+        id: 'received-image-1',
+        resourceId:
+          '50cd567dd5610903b1016351646a7f910f3df6525b53ade18646f14a238260be',
+        filename: 'CAP_5FA32EEE-723F-4B25-ABB7-1EF7B23290FA.jpg',
+        fileSize: 267404,
+        mediaType: 'image',
+        downloadedAt: '2026-06-18T09:16:54.000Z',
+        previewUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=50cd567dd5610903b1016351646a7f910f3df6525b53ade18646f14a238260be',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=50cd567dd5610903b1016351646a7f910f3df6525b53ade18646f14a238260be',
+        savedToPhotos: true,
+        localPath: null,
+      },
+    ]);
+    mockedDownloadReceivedLibraryItem.mockResolvedValueOnce({
+      savedToPhotos: true,
+      localPath: null,
+      savedLocation: 'Photos',
+    });
+
+    const { getByTestId } = render(<DownloadRecordsGlobalScreen />);
+
+    await waitFor(() => {
+      expect(
+        getByTestId('download-record-download-received-image-1'),
+      ).toBeTruthy();
+    });
+    fireEvent.press(getByTestId('download-record-download-received-image-1'));
+
+    await waitFor(() => {
+      expect(mockedDownloadReceivedLibraryItem).toHaveBeenCalledWith(
+        { host: '192.168.1.100', port: 39394 },
+        expect.objectContaining({
+          fileKey:
+            '50cd567dd5610903b1016351646a7f910f3df6525b53ade18646f14a238260be',
+          filename: 'CAP_5FA32EEE-723F-4B25-ABB7-1EF7B23290FA.jpg',
+          mediaType: 'image',
+        }),
+      );
+      expect(mockedDownloadResourceForGlobal).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledWith(
+        '下載完成',
+        'CAP_5FA32EEE-723F-4B25-ABB7-1EF7B23290FA.jpg 已儲存到相簿',
       );
     });
   });
