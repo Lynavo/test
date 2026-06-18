@@ -77,6 +77,7 @@ const mockSidecar: ElectronAPI['sidecar'] = {
   getSharedList: async () => ({ path: '', files: [], totalCount: 0 }),
   getManagedDevices: async () => ({ items: [] }),
   unblockDevice: async () => ({ ok: true }),
+  blockDevice: async () => ({ ok: true }),
   getSyncRecords: async () => ({ items: [] }),
   getAccessRecords: async () => ({ items: [] }),
   getSharedResources: async () => ({ items: [] }),

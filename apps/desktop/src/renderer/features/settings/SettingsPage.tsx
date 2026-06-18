@@ -25,6 +25,15 @@ import {
   type SupportedLocale,
 } from '@renderer/i18n/locale-resolver';
 import { useAuthStore } from '@renderer/stores/auth-store';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@renderer/components/ui/dialog';
+import { Label } from '@renderer/components/ui/label';
 import type { PowerSaveState } from '../../../preload/api';
 
 type Tone = 'blue' | 'sky' | 'green' | 'amber' | 'rose' | 'slate';
@@ -44,7 +53,7 @@ const languageOptions = SUPPORTED_LOCALES.map((locale) => ({
 }));
 
 export function SettingsPage() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const session = useAuthStore((s) => s.session);
   const accountEmail =
     session?.email || session?.phone || session?.accountLabel || 'vividrop@studio.example';
@@ -61,6 +70,8 @@ export function SettingsPage() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackContact, setFeedbackContact] = useState(accountEmail);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [diagnosticsDescription, setDiagnosticsDescription] = useState('');
 
   const currentLocale = isSupportedLocale(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'en';
   const activeLanguage = localeLabels[currentLocale];
@@ -141,12 +152,16 @@ export function SettingsPage() {
   };
 
   const handleUploadLogs = async () => {
+    const description = diagnosticsDescription.trim();
     setUploadingLogs(true);
     try {
       await window.electronAPI?.support.uploadDiagnostics({
-        description: 'Manual upload from desktop settings',
+        description: description || 'Manual upload from desktop settings',
+        locale: i18n.resolvedLanguage ?? i18n.language,
       });
       toast.success('诊断包上传成功！感谢您的反馈');
+      setDiagnosticsDescription('');
+      setUploadDialogOpen(false);
     } catch {
       toast.error('上传诊断包失败，请检查网络连接');
     } finally {
@@ -399,7 +414,7 @@ export function SettingsPage() {
                 action={
                   <button
                     type="button"
-                    onClick={handleUploadLogs}
+                    onClick={() => setUploadDialogOpen(true)}
                     disabled={uploadingLogs}
                     className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-white/60 px-3 text-xs font-semibold text-[#59616d] transition hover:bg-white/82 disabled:cursor-not-allowed disabled:text-[#aab2bd]"
                   >
@@ -412,6 +427,66 @@ export function SettingsPage() {
                   </button>
                 }
               />
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogContent className="border border-white/80 bg-white/90 shadow-2xl backdrop-blur-xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg font-semibold text-[#17191c]">
+                      上传诊断包
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-[#7b8490]">
+                      上传运行日志，包含配置与运行状态，帮助排查问题
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="diagnostics-description"
+                      className="text-xs font-semibold text-[#858b96]"
+                    >
+                      问题描述
+                    </Label>
+                    <textarea
+                      id="diagnostics-description"
+                      value={diagnosticsDescription}
+                      onChange={(event) => setDiagnosticsDescription(event.target.value)}
+                      placeholder="请描述出现问题的步骤、手机型号、网络环境或错误现象（选填）"
+                      maxLength={500}
+                      className="min-h-28 w-full resize-none rounded-lg border border-white/80 bg-white/70 px-3 py-2.5 text-sm leading-6 text-[#17191c] outline-none transition placeholder:text-[#a4acb7] focus:border-[#66c6ff] focus:ring-2 focus:ring-[#66c6ff]/18 disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={uploadingLogs}
+                    />
+                    <div className="flex justify-end text-[11px] text-[#9aa3af]">
+                      {diagnosticsDescription.length}/500
+                    </div>
+                  </div>
+                  <DialogFooter className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      data-testid="cancel-diagnostics-btn"
+                      disabled={uploadingLogs}
+                      onClick={() => {
+                        setUploadDialogOpen(false);
+                        setDiagnosticsDescription('');
+                      }}
+                      className="rounded-md border border-white/80 bg-white/58 px-3 py-2 text-sm font-semibold text-[#59616d] transition hover:bg-white/82 disabled:opacity-50"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="submit-diagnostics-btn"
+                      disabled={uploadingLogs}
+                      onClick={() => void handleUploadLogs()}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#17191c] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(23,25,28,0.16)] transition hover:bg-[#2b2f36] disabled:cursor-not-allowed disabled:bg-[#cfd6df]"
+                    >
+                      {uploadingLogs ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileUp className="h-4 w-4" />
+                      )}
+                      上传
+                    </button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </SettingsCard>
           </div>
         </div>

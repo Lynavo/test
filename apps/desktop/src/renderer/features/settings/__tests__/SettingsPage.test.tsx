@@ -123,7 +123,24 @@ describe('SettingsPage', () => {
     expect(uploadBtn).toBeInTheDocument();
 
     fireEvent.click(uploadBtn);
-    expect(window.electronAPI?.support.uploadDiagnostics).toHaveBeenCalled();
+
+    // Dialog should be open, find the description textarea
+    const textarea = screen.getByPlaceholderText(
+      '请描述出现问题的步骤、手机型号、网络环境或错误现象（选填）',
+    );
+    expect(textarea).toBeInTheDocument();
+
+    // Fill in a description
+    fireEvent.change(textarea, { target: { value: 'Test log description' } });
+
+    // Click the submit button inside the Dialog (using data-testid)
+    const submitBtn = screen.getByTestId('submit-diagnostics-btn');
+    fireEvent.click(submitBtn);
+
+    expect(window.electronAPI?.support.uploadDiagnostics).toHaveBeenCalledWith({
+      description: 'Test log description',
+      locale: expect.any(String),
+    });
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('诊断包上传成功！感谢您的反馈');
     });
