@@ -88,7 +88,7 @@ func isWindowsDriveRootPath(path string) bool {
 	return true
 }
 
-func (s *Server) listWindowsPersonalDriveRoot(w http.ResponseWriter) {
+func (s *Server) listWindowsPersonalDriveRoot(w http.ResponseWriter) bool {
 	roots := windowsPersonalDriveRoots()
 	files := make([]directoryFileDTO, 0, len(roots))
 	now := time.Now().UTC()
@@ -125,6 +125,7 @@ func (s *Server) listWindowsPersonalDriveRoot(w http.ResponseWriter) {
 		Files:      files,
 		TotalCount: len(files),
 	})
+	return true
 }
 
 func resolveWindowsPersonalDrivePath(relPath string) (string, error) {

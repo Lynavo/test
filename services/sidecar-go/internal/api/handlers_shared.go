@@ -1,15 +1,29 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"image"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"log/slog"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	directoryThumbnailCacheVersion = "v1"
+	directoryThumbnailMaxEdge      = 256
+	directoryThumbnailJPEGQuality  = 80
+	directoryThumbnailMaxCacheSize = int64(256 * 1024 * 1024)
 )
 
 // directoryFileDTO mirrors the DirectoryFileDTO contract.
@@ -148,7 +162,7 @@ func (s *Server) listSharedDir(w http.ResponseWriter, relPath string) {
 		return
 	}
 
-	s.listDirectory(w, relPath, s.resolveSharedPath, "", "/shared/thumbnail/")
+	s.listDirectory(w, relPath, s.resolveSharedPath, "", "/shared/thumbnail/", false)
 }
 
 func (s *Server) listDirectory(
@@ -157,33 +171,34 @@ func (s *Server) listDirectory(
 	resolvePath func(string) (string, error),
 	scope string,
 	thumbnailPrefix string,
-) {
+	versionedSupportedThumbnails bool,
+) bool {
 	resolved, err := resolvePath(relPath)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return false
 	}
 
 	info, err := os.Stat(resolved)
 	if err != nil {
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "directory not found")
-			return
+			return false
 		}
 		slog.Error("stat shared dir", "path", resolved, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to read directory")
-		return
+		return false
 	}
 	if !info.IsDir() {
 		writeError(w, http.StatusBadRequest, "path is not a directory")
-		return
+		return false
 	}
 
 	entries, err := os.ReadDir(resolved)
 	if err != nil {
 		slog.Error("read shared dir", "path", resolved, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to read directory")
-		return
+		return false
 	}
 
 	files := make([]directoryFileDTO, 0, len(entries))
@@ -216,8 +231,13 @@ func (s *Server) listDirectory(
 
 		var thumbURL *string
 		if fileType == "image" && thumbnailPrefix != "" {
-			u := thumbnailPrefix + filePath
-			thumbURL = &u
+			if !versionedSupportedThumbnails {
+				u := thumbnailPrefix + filePath
+				thumbURL = &u
+			} else if isSupportedDirectoryThumbnailSource(e.Name()) {
+				u := thumbnailPrefix + filePath + "?v=" + directoryThumbnailSourceVersion(entryInfo)
+				thumbURL = &u
+			}
 		}
 
 		files = append(files, directoryFileDTO{
@@ -237,6 +257,7 @@ func (s *Server) listDirectory(
 		Files:      files,
 		TotalCount: len(files),
 	})
+	return true
 }
 
 // handleSharedThumbnail serves a thumbnail for a shared file.
@@ -286,7 +307,7 @@ func (s *Server) serveDirectoryThumbnail(
 	http.ServeFile(w, r, resolved)
 }
 
-func (s *Server) serveDirectoryDownload(
+func (s *Server) serveCachedDirectoryThumbnail(
 	w http.ResponseWriter,
 	r *http.Request,
 	relPath string,
@@ -304,6 +325,216 @@ func (s *Server) serveDirectoryDownload(
 		return
 	}
 
+	s.serveCachedThumbnailForResolvedFile(w, r, resolved, info)
+}
+
+func (s *Server) serveCachedThumbnailForResolvedFile(
+	w http.ResponseWriter,
+	r *http.Request,
+	resolved string,
+	info os.FileInfo,
+) {
+	if !isSupportedDirectoryThumbnailSource(info.Name()) {
+		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+		return
+	}
+
+	cachePath := s.directoryThumbnailCachePath(resolved, info)
+	if fileExists(cachePath) {
+		serveCachedThumbnailFile(w, r, cachePath)
+		return
+	}
+
+	if err := acquireThumbnailSlot(r, s.thumbnailLimiter); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "thumbnail request cancelled")
+		return
+	}
+	defer releaseThumbnailSlot(s.thumbnailLimiter)
+
+	if fileExists(cachePath) {
+		serveCachedThumbnailFile(w, r, cachePath)
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		slog.Error("create thumbnail cache dir", "path", filepath.Dir(cachePath), "err", err)
+		writeError(w, http.StatusInternalServerError, "failed to prepare thumbnail cache")
+		return
+	}
+
+	if err := generateDirectoryThumbnail(resolved, cachePath); err != nil {
+		slog.Warn("generate directory thumbnail", "path", resolved, "err", err)
+		writeError(w, http.StatusNotFound, "thumbnail not available for this file")
+		return
+	}
+	pruneDirectoryThumbnailCache(filepath.Join(s.config.DataDir, "thumbnail-cache"), directoryThumbnailMaxCacheSize)
+	serveCachedThumbnailFile(w, r, cachePath)
+}
+
+func acquireThumbnailSlot(r *http.Request, limiter chan struct{}) error {
+	select {
+	case limiter <- struct{}{}:
+		return nil
+	case <-r.Context().Done():
+		return r.Context().Err()
+	}
+}
+
+func releaseThumbnailSlot(limiter chan struct{}) {
+	<-limiter
+}
+
+func (s *Server) directoryThumbnailCachePath(resolved string, info os.FileInfo) string {
+	sum := sha256.Sum256([]byte(
+		resolved + "\x00" + directoryThumbnailSourceVersion(info) + "\x00" + directoryThumbnailCacheVersion,
+	))
+	key := hex.EncodeToString(sum[:])
+	return filepath.Join(s.config.DataDir, "thumbnail-cache", key[:2], key+".jpg")
+}
+
+func directoryThumbnailSourceVersion(info os.FileInfo) string {
+	return fmt.Sprintf("%d-%d-%s", info.Size(), info.ModTime().UnixNano(), directoryThumbnailCacheVersion)
+}
+
+func isSupportedDirectoryThumbnailSource(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".gif":
+		return true
+	default:
+		return false
+	}
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func serveCachedThumbnailFile(w http.ResponseWriter, r *http.Request, path string) {
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	http.ServeFile(w, r, path)
+}
+
+func generateDirectoryThumbnail(sourcePath string, cachePath string) error {
+	src, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	img, _, err := image.Decode(src)
+	if err != nil {
+		return err
+	}
+	thumbnail := resizeImageNearest(img, directoryThumbnailMaxEdge)
+
+	tmp, err := os.CreateTemp(filepath.Dir(cachePath), ".thumbnail-*.jpg")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	if err := jpeg.Encode(tmp, thumbnail, &jpeg.Options{Quality: directoryThumbnailJPEGQuality}); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, cachePath)
+}
+
+func resizeImageNearest(src image.Image, maxEdge int) image.Image {
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 || maxEdge <= 0 {
+		return src
+	}
+
+	targetWidth := width
+	targetHeight := height
+	if width >= height && width > maxEdge {
+		targetWidth = maxEdge
+		targetHeight = max(1, (height*maxEdge)/width)
+	} else if height > width && height > maxEdge {
+		targetHeight = maxEdge
+		targetWidth = max(1, (width*maxEdge)/height)
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, targetWidth, targetHeight))
+	for y := 0; y < targetHeight; y++ {
+		srcY := bounds.Min.Y + (y*height)/targetHeight
+		for x := 0; x < targetWidth; x++ {
+			srcX := bounds.Min.X + (x*width)/targetWidth
+			dst.Set(x, y, src.At(srcX, srcY))
+		}
+	}
+	return dst
+}
+
+type thumbnailCacheFile struct {
+	path    string
+	size    int64
+	modTime time.Time
+}
+
+func pruneDirectoryThumbnailCache(cacheDir string, maxSize int64) {
+	files := []thumbnailCacheFile{}
+	var total int64
+	err := filepath.WalkDir(cacheDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		info, statErr := entry.Info()
+		if statErr != nil {
+			return nil
+		}
+		total += info.Size()
+		files = append(files, thumbnailCacheFile{
+			path:    path,
+			size:    info.Size(),
+			modTime: info.ModTime(),
+		})
+		return nil
+	})
+	if err != nil || total <= maxSize {
+		return
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].modTime.Before(files[j].modTime)
+	})
+	for _, file := range files {
+		if total <= maxSize {
+			return
+		}
+		if err := os.Remove(file.path); err == nil {
+			total -= file.size
+		}
+	}
+}
+
+func (s *Server) serveDirectoryDownload(
+	w http.ResponseWriter,
+	r *http.Request,
+	relPath string,
+	resolvePath func(string) (string, error),
+) bool {
+	resolved, err := resolvePath(relPath)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+
+	info, err := os.Stat(resolved)
+	if err != nil || info.IsDir() {
+		writeError(w, http.StatusNotFound, "file not found")
+		return false
+	}
+
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", info.Name()))
 
 	contentType := mime.TypeByExtension(filepath.Ext(info.Name()))
@@ -315,6 +546,7 @@ func (s *Server) serveDirectoryDownload(
 	w.Header().Set("ETag", sharedFileEntityTag(info))
 
 	http.ServeFile(w, r, resolved)
+	return true
 }
 
 func sharedFileEntityTag(info os.FileInfo) string {
@@ -336,24 +568,24 @@ func (s *Server) serveDirectoryStream(
 	relPath string,
 	resolvePath func(string) (string, error),
 	scopeLabel string,
-) {
+) bool {
 	resolved, err := resolvePath(relPath)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return false
 	}
 
 	info, err := os.Stat(resolved)
 	if err != nil || info.IsDir() {
 		writeError(w, http.StatusNotFound, "file not found")
-		return
+		return false
 	}
 
 	f, err := os.Open(resolved)
 	if err != nil {
 		slog.Error("open file for streaming", "scope", scopeLabel, "path", resolved, "err", err)
 		writeError(w, http.StatusInternalServerError, "failed to open file")
-		return
+		return false
 	}
 	defer f.Close()
 
@@ -365,6 +597,7 @@ func (s *Server) serveDirectoryStream(
 
 	// http.ServeContent handles Accept-Ranges and Range requests automatically
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+	return true
 }
 
 // handleTransferActive returns whether any transfer is currently in progress.

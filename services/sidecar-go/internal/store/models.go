@@ -127,6 +127,15 @@ type ManagedDevice struct {
 	TotalBytes          int64   `json:"totalBytes"`
 }
 
+type ReceivedLibraryPage struct {
+	Items       []ReceivedLibraryItem       `json:"items"`
+	Page        int                         `json:"page"`
+	PageSize    int                         `json:"pageSize"`
+	TotalItems  int                         `json:"totalItems"`
+	TotalBytes  int64                       `json:"totalBytes"`
+	DeviceStats []ReceivedLibraryDeviceStat `json:"deviceStats"`
+}
+
 type DeviceBlockState struct {
 	DesktopDeviceID    string  `json:"desktopDeviceId"`
 	ClientID           string  `json:"clientId"`
@@ -176,16 +185,17 @@ type SharedResourceInput struct {
 }
 
 type AccessRecord struct {
-	RecordID        string `json:"recordId"`
-	DesktopDeviceID string `json:"desktopDeviceId"`
-	ClientID        string `json:"clientId"`
-	ClientName      string `json:"displayName"`
-	ResourceID      string `json:"resourceId"`
-	ResourceKind    string `json:"resourceKind"`
-	ResourceName    string `json:"resourceName"`
-	Action          string `json:"action"`
-	Result          string `json:"result"`
-	AccessedAt      string `json:"accessedAt"`
+	RecordID        string  `json:"recordId"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	ClientID        string  `json:"clientId"`
+	ClientName      string  `json:"displayName"`
+	ResourceID      string  `json:"resourceId"`
+	ResourceKind    string  `json:"resourceKind"`
+	ResourceName    string  `json:"resourceName"`
+	LocalPath       *string `json:"localPath,omitempty"`
+	Action          string  `json:"action"`
+	Result          string  `json:"result"`
+	AccessedAt      string  `json:"accessedAt"`
 }
 
 type DesktopSyncRecord struct {
@@ -204,19 +214,27 @@ type DesktopSyncRecord struct {
 }
 
 type ReceivedLibraryItem struct {
-	ResourceID      string `json:"resourceId"`
-	DesktopDeviceID string `json:"desktopDeviceId"`
-	ClientID        string `json:"clientId"`
-	DisplayName     string `json:"displayName"`
-	FileKey         string `json:"fileKey"`
-	Filename        string `json:"filename"`
-	MediaType       string `json:"mediaType"`
-	FileSize        int64  `json:"fileSize"`
-	CompletedAt     string `json:"completedAt"`
-	ShareStatus     string `json:"shareStatus"`
-	ThumbnailURL    string `json:"thumbnailUrl,omitempty"`
-	PreviewURL      string `json:"previewUrl,omitempty"`
-	StreamURL       string `json:"streamUrl,omitempty"`
+	ResourceID      string  `json:"resourceId"`
+	DesktopDeviceID string  `json:"desktopDeviceId"`
+	ClientID        string  `json:"clientId"`
+	DisplayName     string  `json:"displayName"`
+	FileKey         string  `json:"fileKey"`
+	Filename        string  `json:"filename"`
+	MediaType       string  `json:"mediaType"`
+	FileSize        int64   `json:"fileSize"`
+	CompletedAt     string  `json:"completedAt"`
+	ShareStatus     string  `json:"shareStatus"`
+	FinalPath       *string `json:"-"`
+	ThumbnailURL    string  `json:"thumbnailUrl,omitempty"`
+	PreviewURL      string  `json:"previewUrl,omitempty"`
+	StreamURL       string  `json:"streamUrl,omitempty"`
+}
+
+type ReceivedLibraryDeviceStat struct {
+	ClientID   string `json:"clientId"`
+	PhotoCount int    `json:"photoCount"`
+	FileCount  int    `json:"fileCount"`
+	TotalBytes int64  `json:"totalBytes"`
 }
 
 type PairingAttemptResult string

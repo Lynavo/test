@@ -6,13 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/nicksyncflow/sidecar/internal/events"
 	"github.com/nicksyncflow/sidecar/internal/runtimefs"
 )
+
+const devSandboxAuthBaseURL = "dev-sandbox://auth"
+const devSandboxAccessTokenPrefix = "mock-sandbox-access-token:"
+const devSandboxAccountID = "99999"
 
 func (s *Server) setDesktopAuthContext(accountID string, authBaseURL string) {
 	s.accountMu.Lock()
@@ -91,6 +97,10 @@ func bearerAccessToken(authorization string) (string, error) {
 }
 
 func (s *Server) verifyAccessTokenAccountID(ctx context.Context, authBaseURL string, accessToken string) (string, error) {
+	if isDevSandboxAuthBaseURL(authBaseURL) {
+		return devSandboxAccessTokenAccountID(accessToken)
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -122,6 +132,17 @@ func (s *Server) verifyAccessTokenAccountID(ctx context.Context, authBaseURL str
 		return "", fmt.Errorf("profile validation failed: code %d", body.Code)
 	}
 	return accountIDValue(body.Data["id"])
+}
+
+func isDevSandboxAuthBaseURL(authBaseURL string) bool {
+	return strings.TrimRight(strings.TrimSpace(authBaseURL), "/") == devSandboxAuthBaseURL
+}
+
+func devSandboxAccessTokenAccountID(accessToken string) (string, error) {
+	if strings.HasPrefix(strings.TrimSpace(accessToken), devSandboxAccessTokenPrefix) {
+		return devSandboxAccountID, nil
+	}
+	return "", fmt.Errorf("invalid dev sandbox token")
 }
 
 func accountIDValue(value any) (string, error) {
@@ -177,27 +198,39 @@ func (s *Server) handlePersonalList(w http.ResponseWriter, r *http.Request) {
 	if !s.authorizePersonalRequest(w, r) {
 		return
 	}
-	s.listPersonalDir(w, "")
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return
+	}
+	if s.listPersonalDir(w, "") {
+		s.recordPersonalAccess(client, "", "list", "shared_folder")
+	}
 }
 
 func (s *Server) handlePersonalListPath(w http.ResponseWriter, r *http.Request) {
 	if !s.authorizePersonalRequest(w, r) {
 		return
 	}
-	s.listPersonalDir(w, r.PathValue("path"))
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return
+	}
+	relPath := r.PathValue("path")
+	if s.listPersonalDir(w, relPath) {
+		s.recordPersonalAccess(client, relPath, "list", "shared_folder")
+	}
 }
 
-func (s *Server) listPersonalDir(w http.ResponseWriter, relPath string) {
+func (s *Server) listPersonalDir(w http.ResponseWriter, relPath string) bool {
 	if !s.ensurePersonalDirForRequest(w, "personal.list") {
-		return
+		return false
 	}
 
 	if s.usesWindowsPersonalVirtualDrives() && relPath == "" {
-		s.listWindowsPersonalDriveRoot(w)
-		return
+		return s.listWindowsPersonalDriveRoot(w)
 	}
 
-	s.listDirectory(w, relPath, s.resolvePersonalPath, "personal", "/personal/thumbnail/")
+	return s.listDirectory(w, relPath, s.resolvePersonalPath, "personal", "/personal/thumbnail/", true)
 }
 
 func (s *Server) handlePersonalThumbnail(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +241,7 @@ func (s *Server) handlePersonalThumbnail(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.serveDirectoryThumbnail(w, r, r.PathValue("path"), s.resolvePersonalPath)
+	s.serveCachedDirectoryThumbnail(w, r, r.PathValue("path"), s.resolvePersonalPath)
 }
 
 func (s *Server) handlePersonalDownload(w http.ResponseWriter, r *http.Request) {
@@ -218,8 +251,15 @@ func (s *Server) handlePersonalDownload(w http.ResponseWriter, r *http.Request) 
 	if !s.ensurePersonalDirForRequest(w, "personal.download") {
 		return
 	}
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return
+	}
 
-	s.serveDirectoryDownload(w, r, r.PathValue("path"), s.resolvePersonalPath)
+	relPath := r.PathValue("path")
+	if s.serveDirectoryDownload(w, r, relPath, s.resolvePersonalPath) {
+		s.recordPersonalAccess(client, relPath, "download", "shared_file")
+	}
 }
 
 func (s *Server) handlePersonalStream(w http.ResponseWriter, r *http.Request) {
@@ -229,8 +269,44 @@ func (s *Server) handlePersonalStream(w http.ResponseWriter, r *http.Request) {
 	if !s.ensurePersonalDirForRequest(w, "personal.stream") {
 		return
 	}
+	client, ok := mobileAccessClientFromQuery(w, r)
+	if !ok {
+		return
+	}
 
-	s.serveDirectoryStream(w, r, r.PathValue("path"), s.resolvePersonalPath, "personal")
+	relPath := r.PathValue("path")
+	if s.serveDirectoryStream(w, r, relPath, s.resolvePersonalPath, "personal") {
+		s.recordPersonalAccess(client, relPath, "view", "shared_file")
+	}
+}
+
+func (s *Server) recordPersonalAccess(client mobileAccessClient, relPath string, action string, resourceKind string) {
+	desktopDeviceID, err := s.store.GetDeviceID()
+	if err != nil {
+		slog.Warn("record personal access: load desktop id failed", "err", err)
+		return
+	}
+	resourceID := "personal"
+	normalizedPath := strings.Trim(strings.TrimSpace(relPath), "/")
+	if normalizedPath != "" {
+		resourceID = "personal:" + normalizedPath
+	}
+	resourceName := personalAccessResourceName(normalizedPath)
+	if _, err := s.recordResourceAccess(desktopDeviceID, client, resourceID, resourceKind, resourceName, action, "ok"); err != nil {
+		slog.Warn("record personal access failed", "resourceID", resourceID, "action", action, "err", err)
+	}
+}
+
+func personalAccessResourceName(relPath string) string {
+	trimmed := strings.Trim(strings.TrimSpace(relPath), "/")
+	if trimmed == "" {
+		return "个人空间"
+	}
+	name := strings.TrimSpace(path.Base(trimmed))
+	if name == "." || name == "/" || name == "" {
+		return trimmed
+	}
+	return name
 }
 
 func (s *Server) ensurePersonalDirForRequest(w http.ResponseWriter, operation string) bool {

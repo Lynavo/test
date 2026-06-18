@@ -3,6 +3,7 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
+	"image"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -100,16 +101,25 @@ func TestResourcesReceivedLibraryList(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	completedAt := "2026-06-14T09:00:00Z"
-	finalPath := filepath.Join(t.TempDir(), "photo.jpg")
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "photo.jpg")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	writeJPEGFixture(t, receivedAbsPath, 640, 480)
+	info, err := os.Stat(receivedAbsPath)
+	if err != nil {
+		t.Fatalf("stat received image: %v", err)
+	}
 	if err := st.UpsertUpload(store.Upload{
 		FileKey:              "file-001",
 		ClientID:             "client-001",
 		OriginalFilename:     "photo.jpg",
 		MediaType:            "image",
-		FileSize:             2048,
+		FileSize:             info.Size(),
 		Status:               "completed",
-		FinalPath:            &finalPath,
-		CommittedBytes:       2048,
+		FinalPath:            &receivedRelPath,
+		CommittedBytes:       info.Size(),
 		ActiveTransmissionMs: 250,
 		CompletedAt:          &completedAt,
 		UpdatedAt:            completedAt,
@@ -140,6 +150,180 @@ func TestResourcesReceivedLibraryList(t *testing.T) {
 	}
 	if receivedBody.Items[0].FileKey != "file-001" || receivedBody.Items[0].ShareStatus != "not_shared" {
 		t.Fatalf("unexpected received item: %+v", receivedBody.Items[0])
+	}
+	if !strings.HasPrefix(receivedBody.Items[0].ThumbnailURL, "/resources/received/thumbnail?") {
+		t.Fatalf("thumbnailUrl=%q, want desktop received thumbnail URL", receivedBody.Items[0].ThumbnailURL)
+	}
+	thumbnailURL, err := url.Parse(receivedBody.Items[0].ThumbnailURL)
+	if err != nil {
+		t.Fatalf("parse thumbnail URL: %v", err)
+	}
+	if thumbnailURL.Query().Get("fileKey") != "file-001" || thumbnailURL.Query().Get("v") == "" {
+		t.Fatalf("thumbnailUrl query=%v, want fileKey and version", thumbnailURL.Query())
+	}
+	if got := regularFilesUnder(t, filepath.Join(cfg.DataDir, "thumbnail-cache")); len(got) != 0 {
+		t.Fatalf("received library list generated thumbnail cache files: %+v", got)
+	}
+}
+
+func TestResourcesReceivedLibraryListSupportsPagination(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	insertPairedDeviceWithStableID(t, st, "client-002", "Bob Android", "Bob Android", "stable-002", "2026-06-14T08:00:00Z")
+
+	uploads := []struct {
+		fileKey     string
+		clientID    string
+		filename    string
+		mediaType   string
+		size        int64
+		completedAt string
+	}{
+		{"file-001", "client-001", "old.pdf", "application/pdf", 100, "2026-06-14T09:00:00Z"},
+		{"file-002", "client-001", "middle.jpg", "image/jpeg", 200, "2026-06-14T10:00:00Z"},
+		{"file-003", "client-002", "new.mov", "video/quicktime", 300, "2026-06-14T11:00:00Z"},
+	}
+	for _, upload := range uploads {
+		if err := st.UpsertUpload(store.Upload{
+			FileKey:              upload.fileKey,
+			ClientID:             upload.clientID,
+			OriginalFilename:     upload.filename,
+			MediaType:            upload.mediaType,
+			FileSize:             upload.size,
+			Status:               "completed",
+			CommittedBytes:       upload.size,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &upload.completedAt,
+			UpdatedAt:            upload.completedAt,
+		}); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", upload.fileKey, err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/received?page=2&pageSize=2")
+	if err != nil {
+		t.Fatalf("GET /resources/received paged: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /resources/received paged status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Items       []store.ReceivedLibraryItem       `json:"items"`
+		Page        int                               `json:"page"`
+		PageSize    int                               `json:"pageSize"`
+		TotalItems  int                               `json:"totalItems"`
+		TotalBytes  int64                             `json:"totalBytes"`
+		DeviceStats []store.ReceivedLibraryDeviceStat `json:"deviceStats"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode paged received library: %v", err)
+	}
+	if body.Page != 2 || body.PageSize != 2 || body.TotalItems != 3 || body.TotalBytes != 600 {
+		t.Fatalf("unexpected page metadata: page=%d pageSize=%d totalItems=%d totalBytes=%d", body.Page, body.PageSize, body.TotalItems, body.TotalBytes)
+	}
+	if len(body.Items) != 1 || body.Items[0].FileKey != "file-001" {
+		t.Fatalf("expected second page to contain oldest file-001 only, got %+v", body.Items)
+	}
+	statsByClient := map[string]store.ReceivedLibraryDeviceStat{}
+	for _, stat := range body.DeviceStats {
+		statsByClient[stat.ClientID] = stat
+	}
+	if statsByClient["client-001"].PhotoCount != 1 || statsByClient["client-001"].FileCount != 1 || statsByClient["client-001"].TotalBytes != 300 {
+		t.Fatalf("unexpected client-001 stats: %+v", statsByClient["client-001"])
+	}
+	if statsByClient["client-002"].PhotoCount != 1 || statsByClient["client-002"].FileCount != 0 || statsByClient["client-002"].TotalBytes != 300 {
+		t.Fatalf("unexpected client-002 stats: %+v", statsByClient["client-002"])
+	}
+}
+
+func TestResourcesReceivedFileThumbnailGeneratesSmallCachedJPEG(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	completedAt := "2026-06-14T09:00:00Z"
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "wide.jpg")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	writeJPEGFixture(t, receivedAbsPath, 640, 480)
+	info, err := os.Stat(receivedAbsPath)
+	if err != nil {
+		t.Fatalf("stat received image: %v", err)
+	}
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:              "desktop-wide-photo",
+		ClientID:             "client-001",
+		OriginalFilename:     "wide.jpg",
+		MediaType:            "image",
+		FileSize:             info.Size(),
+		Status:               "completed",
+		FinalPath:            &receivedRelPath,
+		CommittedBytes:       info.Size(),
+		ActiveTransmissionMs: 250,
+		CompletedAt:          &completedAt,
+		UpdatedAt:            completedAt,
+	}); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	thumbnailURL := srv.URL + "/resources/received/thumbnail?fileKey=desktop-wide-photo"
+	resp, err := http.Get(thumbnailURL)
+	if err != nil {
+		t.Fatalf("GET received thumbnail: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("received thumbnail status=%d, want 200", resp.StatusCode)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+		t.Fatalf("thumbnail content-type=%q, want image/jpeg", contentType)
+	}
+	thumbnail, format, err := image.Decode(resp.Body)
+	if err != nil {
+		t.Fatalf("decode thumbnail: %v", err)
+	}
+	if format != "jpeg" {
+		t.Fatalf("thumbnail format=%q, want jpeg", format)
+	}
+	bounds := thumbnail.Bounds()
+	if bounds.Dx() > 256 || bounds.Dy() > 256 {
+		t.Fatalf("thumbnail size=%dx%d, want max edge <= 256", bounds.Dx(), bounds.Dy())
+	}
+
+	cacheDir := filepath.Join(cfg.DataDir, "thumbnail-cache")
+	cacheFiles := regularFilesUnder(t, cacheDir)
+	if len(cacheFiles) != 1 {
+		t.Fatalf("cache files=%+v, want exactly one cached thumbnail", cacheFiles)
+	}
+	firstInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat first cache file: %v", err)
+	}
+
+	secondResp, err := http.Get(thumbnailURL)
+	if err != nil {
+		t.Fatalf("GET received thumbnail second time: %v", err)
+	}
+	io.Copy(io.Discard, secondResp.Body)
+	secondResp.Body.Close()
+	if secondResp.StatusCode != http.StatusOK {
+		t.Fatalf("second thumbnail status=%d, want 200", secondResp.StatusCode)
+	}
+	secondInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat second cache file: %v", err)
+	}
+	if !secondInfo.ModTime().Equal(firstInfo.ModTime()) {
+		t.Fatalf("cache mtime changed on cache hit: first=%s second=%s", firstInfo.ModTime(), secondInfo.ModTime())
 	}
 }
 
@@ -767,15 +951,6 @@ func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T)
 		t.Fatalf("preview body=%q, want image bytes", string(body))
 	}
 
-	thumbResp, err := http.Get(srv.URL + "/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-photo")
-	if err != nil {
-		t.Fatalf("GET received thumbnail: %v", err)
-	}
-	defer thumbResp.Body.Close()
-	if thumbResp.StatusCode != http.StatusOK {
-		t.Fatalf("received thumbnail status=%d, want 200", thumbResp.StatusCode)
-	}
-
 	otherResp, err := http.Get(srv.URL + "/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=other-client-photo")
 	if err != nil {
 		t.Fatalf("GET other client received preview: %v", err)
@@ -797,6 +972,92 @@ func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T)
 	}
 	if !seenView {
 		t.Fatalf("expected received preview to create a view access record, got %+v", records)
+	}
+}
+
+func TestMobileReceivedFileThumbnailGeneratesSmallCachedJPEG(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	completedAt := "2026-06-14T09:00:00Z"
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "wide.jpg")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	writeJPEGFixture(t, receivedAbsPath, 640, 480)
+	info, err := os.Stat(receivedAbsPath)
+	if err != nil {
+		t.Fatalf("stat received image: %v", err)
+	}
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:              "client-001-wide-photo",
+		ClientID:             "client-001",
+		OriginalFilename:     "wide.jpg",
+		MediaType:            "image",
+		FileSize:             info.Size(),
+		Status:               "completed",
+		FinalPath:            &receivedRelPath,
+		CommittedBytes:       info.Size(),
+		ActiveTransmissionMs: 250,
+		CompletedAt:          &completedAt,
+		UpdatedAt:            completedAt,
+	}); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	thumbnailURL := srv.URL + "/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-wide-photo"
+	resp, err := http.Get(thumbnailURL)
+	if err != nil {
+		t.Fatalf("GET received thumbnail: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("received thumbnail status=%d, want 200", resp.StatusCode)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+		t.Fatalf("thumbnail content-type=%q, want image/jpeg", contentType)
+	}
+	thumbnail, format, err := image.Decode(resp.Body)
+	if err != nil {
+		t.Fatalf("decode thumbnail: %v", err)
+	}
+	if format != "jpeg" {
+		t.Fatalf("thumbnail format=%q, want jpeg", format)
+	}
+	bounds := thumbnail.Bounds()
+	if bounds.Dx() > 256 || bounds.Dy() > 256 {
+		t.Fatalf("thumbnail size=%dx%d, want max edge <= 256", bounds.Dx(), bounds.Dy())
+	}
+
+	cacheDir := filepath.Join(cfg.DataDir, "thumbnail-cache")
+	cacheFiles := regularFilesUnder(t, cacheDir)
+	if len(cacheFiles) != 1 {
+		t.Fatalf("cache files=%+v, want exactly one cached thumbnail", cacheFiles)
+	}
+	firstInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat first cache file: %v", err)
+	}
+
+	secondResp, err := http.Get(thumbnailURL)
+	if err != nil {
+		t.Fatalf("GET received thumbnail second time: %v", err)
+	}
+	io.Copy(io.Discard, secondResp.Body)
+	secondResp.Body.Close()
+	if secondResp.StatusCode != http.StatusOK {
+		t.Fatalf("second thumbnail status=%d, want 200", secondResp.StatusCode)
+	}
+	secondInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat second cache file: %v", err)
+	}
+	if !secondInfo.ModTime().Equal(firstInfo.ModTime()) {
+		t.Fatalf("cache mtime changed on cache hit: first=%s second=%s", firstInfo.ModTime(), secondInfo.ModTime())
 	}
 }
 
