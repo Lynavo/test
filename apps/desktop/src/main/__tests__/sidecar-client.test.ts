@@ -228,8 +228,28 @@ describe('sidecarClient', () => {
                           : { items: [{ resourceId: 'res-1' }] }
                         : path === '/resources/shared/res-1'
                           ? { ok: true }
-                          : path === '/resources/received'
-                            ? { items: [{ resourceId: 'received-1' }] }
+                          : path === '/resources/received?page=2&pageSize=30'
+                            ? {
+                                items: [
+                                  {
+                                    resourceId: 'received-1',
+                                    thumbnailUrl:
+                                      '/resources/received/thumbnail?fileKey=file-1&v=version-1',
+                                  },
+                                ],
+                                page: 2,
+                                pageSize: 30,
+                                totalItems: 31,
+                                totalBytes: 4096,
+                                deviceStats: [
+                                  {
+                                    clientId: 'client-1',
+                                    photoCount: 1,
+                                    fileCount: 0,
+                                    totalBytes: 4096,
+                                  },
+                                ],
+                              }
                             : { ok: false };
       callback(createResponse(200, JSON.stringify(responseBody)));
       return req;
@@ -275,8 +295,26 @@ describe('sidecarClient', () => {
       }),
     ).resolves.toEqual({ resourceId: 'res-1' });
     await expect(client.removeSharedResource('res-1')).resolves.toEqual({ ok: true });
-    await expect(client.getReceivedLibrary()).resolves.toEqual({
-      items: [{ resourceId: 'received-1' }],
+    await expect(client.getReceivedLibrary({ page: 2, pageSize: 30 })).resolves.toEqual({
+      items: [
+        {
+          resourceId: 'received-1',
+          thumbnailUrl:
+            'http://127.0.0.1:39394/resources/received/thumbnail?fileKey=file-1&v=version-1',
+        },
+      ],
+      page: 2,
+      pageSize: 30,
+      totalItems: 31,
+      totalBytes: 4096,
+      deviceStats: [
+        {
+          clientId: 'client-1',
+          photoCount: 1,
+          fileCount: 0,
+          totalBytes: 4096,
+        },
+      ],
     });
 
     expect(
@@ -295,7 +333,7 @@ describe('sidecarClient', () => {
       { method: 'GET', path: '/resources/shared' },
       { method: 'POST', path: '/resources/shared' },
       { method: 'DELETE', path: '/resources/shared/res-1' },
-      { method: 'GET', path: '/resources/received' },
+      { method: 'GET', path: '/resources/received?page=2&pageSize=30' },
     ]);
     expect(bodies).toEqual([
       {},
@@ -2375,6 +2413,75 @@ describe('sidecarClient', () => {
         },
       );
 
+      vi.resetModules();
+    });
+
+    it('syncs a dev skip-auth account context without clearing credentials', async () => {
+      const sidecarPayloads: unknown[] = [];
+      const httpRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+        const req = new EventEmitter() as EventEmitter & {
+          on: typeof EventEmitter.prototype.on;
+          write: ReturnType<typeof vi.fn>;
+          end: ReturnType<typeof vi.fn>;
+        };
+        req.write = vi.fn((chunk: string) => {
+          sidecarPayloads.push({
+            path: options.path,
+            body: JSON.parse(chunk),
+          });
+        });
+        req.end = vi.fn();
+        callback(
+          createResponse(200, JSON.stringify({ ok: true, message: 'account context synced' })),
+        );
+        return req;
+      });
+      const httpsRequest = vi.fn();
+
+      vi.doMock('node:http', () => ({
+        default: { request: httpRequest },
+        request: httpRequest,
+      }));
+      vi.doMock('node:https', () => ({
+        default: { request: httpsRequest },
+        request: httpsRequest,
+      }));
+
+      vi.resetModules();
+      vi.stubEnv('SYNCFLOW_DEV_SKIP_AUTH', '1');
+      vi.stubEnv('SYNCFLOW_DEV_SKIP_AUTH_EMAIL', 'functional@example.com');
+      const { sidecarClient: client, syncCredentialsToSidecar } = await import('../sidecar-client');
+
+      await expect(syncCredentialsToSidecar()).resolves.toBe(true);
+      expect(client.getAuthSession()).toEqual({
+        accessToken: 'mock-sandbox-access-token:functional@example.com',
+        refreshToken: 'mock-sandbox-refresh-token',
+        baseUrl: 'dev-sandbox://auth',
+        email: 'functional@example.com',
+        accountLabel: 'functional@example.com',
+      });
+      await expect(client.getAuthSessionView()).resolves.toEqual({
+        loggedIn: true,
+        email: 'functional@example.com',
+        accountLabel: 'functional@example.com',
+      });
+      expect(sidecarPayloads).toEqual([
+        {
+          path: '/account/context',
+          body: {
+            authBaseUrl: 'dev-sandbox://auth',
+            accessToken: 'mock-sandbox-access-token:functional@example.com',
+            accountId: '99999',
+          },
+        },
+      ]);
+      expect(httpsRequest).not.toHaveBeenCalled();
+      expect(logWarnMock).not.toHaveBeenCalledWith(
+        '[sidecar-client] Clearing sidecar account context and tunnel credentials: no active auth session or access token.',
+        expect.anything(),
+      );
+
+      vi.unstubAllEnvs();
       vi.resetModules();
     });
 

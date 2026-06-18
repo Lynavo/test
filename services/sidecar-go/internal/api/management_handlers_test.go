@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/nicksyncflow/sidecar/internal/api"
@@ -247,7 +249,14 @@ func TestManagementRecordsSyncAndAccess(t *testing.T) {
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 
 	completedAt := "2026-06-14T09:00:00Z"
-	finalPath := "/tmp/photo.jpg"
+	finalPath := filepath.Join("Alice iPhone", "2026-06-14", "photo.jpg")
+	absoluteFinalPath := filepath.Join(cfg.ReceiveDir, finalPath)
+	if err := os.MkdirAll(filepath.Dir(absoluteFinalPath), 0o755); err != nil {
+		t.Fatalf("mkdir final path: %v", err)
+	}
+	if err := os.WriteFile(absoluteFinalPath, []byte("photo"), 0o644); err != nil {
+		t.Fatalf("write final file: %v", err)
+	}
 	if err := st.UpsertUpload(store.Upload{
 		FileKey:              "file-001",
 		ClientID:             "client-001",
@@ -268,9 +277,9 @@ func TestManagementRecordsSyncAndAccess(t *testing.T) {
 		DesktopDeviceID: desktopDeviceID,
 		ClientID:        "client-001",
 		ClientName:      "Alice iPhone",
-		ResourceID:      "res-001",
-		ResourceKind:    "shared_file",
-		ResourceName:    "Manual.pdf",
+		ResourceID:      "file-001",
+		ResourceKind:    "received_file",
+		ResourceName:    "photo.jpg",
 		Action:          "download",
 		Result:          "ok",
 		AccessedAt:      "2026-06-14T10:00:00Z",
@@ -322,6 +331,9 @@ func TestManagementRecordsSyncAndAccess(t *testing.T) {
 	}
 	if accessBody.Items[0].Action != "download" || accessBody.Items[0].Result != "ok" {
 		t.Fatalf("unexpected access action/result: %s/%s", accessBody.Items[0].Action, accessBody.Items[0].Result)
+	}
+	if accessBody.Items[0].LocalPath == nil || *accessBody.Items[0].LocalPath != absoluteFinalPath {
+		t.Fatalf("access localPath=%v, want %s", accessBody.Items[0].LocalPath, absoluteFinalPath)
 	}
 }
 
@@ -411,4 +423,3 @@ func TestManagementDevicesIncludesPairingBlockedDevice(t *testing.T) {
 		t.Fatalf("expected pairing block to be cleared after unblock, still active: %+v", block2)
 	}
 }
-

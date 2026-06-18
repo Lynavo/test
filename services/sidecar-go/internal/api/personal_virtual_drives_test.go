@@ -377,7 +377,7 @@ func newWindowsPersonalTestServer(t *testing.T, roots []personalDriveRoot, perso
 func getPersonal(t *testing.T, url string) *http.Response {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, withPersonalWindowsClientQuery(url), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -387,6 +387,17 @@ func getPersonal(t *testing.T, url string) *http.Response {
 		t.Fatalf("GET %s: %v", url, err)
 	}
 	return resp
+}
+
+func withPersonalWindowsClientQuery(rawURL string) string {
+	if strings.Contains(rawURL, "clientId=") {
+		return rawURL
+	}
+	separator := "?"
+	if strings.Contains(rawURL, "?") {
+		separator = "&"
+	}
+	return rawURL + separator + "clientId=test-client&clientName=Test%20Phone"
 }
 
 func profileAuthServerForPersonalWindows(t *testing.T, accountID string) *httptest.Server {

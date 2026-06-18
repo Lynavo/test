@@ -59,6 +59,58 @@ func (s *Store) GetUpload(fileKey string) (*Upload, error) {
 	return u, nil
 }
 
+// ListCompletedUploadRootDirs returns distinct first path components used by
+// completed uploads for a client, newest first.
+func (s *Store) ListCompletedUploadRootDirs(clientID string) ([]string, error) {
+	rows, err := s.db.Query(`
+		SELECT final_path
+		FROM uploads
+		WHERE client_id = ? AND status = 'completed' AND final_path IS NOT NULL AND final_path != ''
+		ORDER BY COALESCE(completed_at, updated_at) DESC, file_key DESC`, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("list completed upload root dirs for %q: %w", clientID, err)
+	}
+	defer rows.Close()
+
+	seen := map[string]bool{}
+	roots := []string{}
+	for rows.Next() {
+		var finalPath string
+		if err := rows.Scan(&finalPath); err != nil {
+			return nil, fmt.Errorf("scan completed upload final path: %w", err)
+		}
+		root := uploadRootDirFromFinalPath(finalPath)
+		if root == "" || seen[root] {
+			continue
+		}
+		seen[root] = true
+		roots = append(roots, root)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return roots, nil
+}
+
+func uploadRootDirFromFinalPath(finalPath string) string {
+	trimmed := strings.TrimSpace(finalPath)
+	if trimmed == "" ||
+		strings.HasPrefix(trimmed, "/") ||
+		strings.HasPrefix(trimmed, `\`) ||
+		(len(trimmed) >= 2 && trimmed[1] == ':') {
+		return ""
+	}
+	separatorIndex := strings.IndexAny(trimmed, `/\`)
+	if separatorIndex <= 0 {
+		return ""
+	}
+	root := strings.TrimSpace(trimmed[:separatorIndex])
+	if root == "" || root == "." || root == ".." {
+		return ""
+	}
+	return root
+}
+
 // ListUploadsByDeviceAndDate returns uploads for a given client on a given date (YYYY-MM-DD).
 func (s *Store) ListUploadsByDeviceAndDate(clientID, date string) ([]Upload, error) {
 	page, err := s.ListUploadsPageByDeviceAndDate(clientID, date, "completedAt", "desc", 1, 10000)

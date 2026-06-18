@@ -358,6 +358,18 @@ describe('registerIpcHandlers', () => {
     vi.mocked(sidecarClient.removeSharedResource).mockResolvedValue({ ok: true });
     vi.mocked(sidecarClient.getReceivedLibrary).mockResolvedValue({
       items: [receivedLibraryFixture],
+      page: 2,
+      pageSize: 30,
+      totalItems: 31,
+      totalBytes: 1024,
+      deviceStats: [
+        {
+          clientId: 'client-1',
+          photoCount: 1,
+          fileCount: 0,
+          totalBytes: 1024,
+        },
+      ],
     });
 
     registerIpcHandlers({ retryStart: vi.fn() } as never);
@@ -398,8 +410,22 @@ describe('registerIpcHandlers', () => {
     await expect(
       handlers.get(IPC.SIDECAR_REMOVE_SHARED_RESOURCE)?.(undefined, 'res-1'),
     ).resolves.toEqual({ ok: true });
-    await expect(handlers.get(IPC.SIDECAR_RECEIVED_LIBRARY)?.()).resolves.toEqual({
+    await expect(
+      handlers.get(IPC.SIDECAR_RECEIVED_LIBRARY)?.(undefined, { page: 2, pageSize: 30 }),
+    ).resolves.toEqual({
       items: [receivedLibraryFixture],
+      page: 2,
+      pageSize: 30,
+      totalItems: 31,
+      totalBytes: 1024,
+      deviceStats: [
+        {
+          clientId: 'client-1',
+          photoCount: 1,
+          fileCount: 0,
+          totalBytes: 1024,
+        },
+      ],
     });
 
     expect(sidecarClient.getConnectionDevices).toHaveBeenCalledTimes(1);
@@ -412,6 +438,7 @@ describe('registerIpcHandlers', () => {
       localPath: '/tmp/exports',
     });
     expect(sidecarClient.removeSharedResource).toHaveBeenCalledWith('res-1');
+    expect(sidecarClient.getReceivedLibrary).toHaveBeenCalledWith({ page: 2, pageSize: 30 });
   });
 
   it('registers phone auth IPC for SMS send and login', async () => {

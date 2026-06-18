@@ -173,6 +173,7 @@ export interface DesktopAccessRecordDTO {
   resourceId: string;
   resourceKind: DesktopResourceKind;
   resourceName: string;
+  localPath?: string;
   action: DesktopAccessAction;
   result: DesktopRecordResult;
   accessedAt: string;
@@ -208,8 +209,26 @@ export interface ReceivedLibraryItemDTO {
   streamUrl?: string;
 }
 
+export interface ReceivedLibraryDeviceStatDTO {
+  clientId: string;
+  photoCount: number;
+  fileCount: number;
+  totalBytes: number;
+}
+
 export interface DesktopLocalListResponse<T> {
   items: T[];
+}
+
+export interface DesktopLocalPageResponse<T> extends DesktopLocalListResponse<T> {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+}
+
+export interface ReceivedLibraryPageDTO extends DesktopLocalPageResponse<ReceivedLibraryItemDTO> {
+  totalBytes: number;
+  deviceStats: ReceivedLibraryDeviceStatDTO[];
 }
 
 export interface AddSharedResourcePayload {

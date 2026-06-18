@@ -3,6 +3,9 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"github.com/nicksyncflow/sidecar/internal/store"
+	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
 func (s *Server) handleManagementDevices(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +119,80 @@ func (s *Server) handleManagementAccessRecords(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "failed to list access records")
 		return
 	}
+	s.enrichAccessRecordLocalPaths(records)
 	writeJSON(w, http.StatusOK, map[string]any{"items": records})
+}
+
+func (s *Server) enrichAccessRecordLocalPaths(records []store.AccessRecord) {
+	for i := range records {
+		if localPath, ok := s.accessRecordLocalPath(records[i]); ok {
+			records[i].LocalPath = &localPath
+		}
+	}
+}
+
+func (s *Server) accessRecordLocalPath(record store.AccessRecord) (string, bool) {
+	if record.ResourceID == "received_library" {
+		return nonEmptyLocalPath(s.config.ReceiveDir)
+	}
+	if relPath, ok := personalAccessRecordPath(record.ResourceID); ok {
+		resolved, err := s.resolvePersonalPath(relPath)
+		if err == nil {
+			return nonEmptyLocalPath(resolved)
+		}
+	}
+	if localPath, ok := s.sharedResourceAccessLocalPath(record); ok {
+		return localPath, true
+	}
+	if record.ResourceKind == "received_file" {
+		return s.receivedFileAccessLocalPath(record.ResourceID)
+	}
+	return "", false
+}
+
+func personalAccessRecordPath(resourceID string) (string, bool) {
+	if resourceID == "personal" {
+		return "", true
+	}
+	if strings.HasPrefix(resourceID, "personal:") {
+		return strings.TrimPrefix(resourceID, "personal:"), true
+	}
+	return "", false
+}
+
+func (s *Server) sharedResourceAccessLocalPath(record store.AccessRecord) (string, bool) {
+	if record.ResourceID == "" || record.ResourceID == "shared_resources" {
+		return "", false
+	}
+	resource, err := s.resolveSharedResourceHelper(record.DesktopDeviceID, record.ResourceID)
+	if err != nil {
+		return "", false
+	}
+	localPath, err := s.localPathForSharedResource(resource)
+	if err != nil {
+		return "", false
+	}
+	return nonEmptyLocalPath(localPath)
+}
+
+func (s *Server) receivedFileAccessLocalPath(fileKey string) (string, bool) {
+	upload, err := s.store.GetUpload(fileKey)
+	if err != nil || upload.FinalPath == nil || upload.Status != "completed" {
+		return "", false
+	}
+	resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, upload.FinalPath)
+	if !ok {
+		return "", false
+	}
+	return nonEmptyLocalPath(resolvedPath)
+}
+
+func nonEmptyLocalPath(path string) (string, bool) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "", false
+	}
+	return trimmed, true
 }
 
 func optionalClientIDFromQuery(w http.ResponseWriter, r *http.Request) (*string, bool) {

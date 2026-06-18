@@ -10,6 +10,7 @@ import type {
   DesktopSyncRecordDTO,
   DeviceFileLedgerPageDTO,
   DeviceFileSortField,
+  ReceivedLibraryPageDTO,
   ReceivedLibraryItemDTO,
   SettingsDTO,
   SharedDirectoryDTO,
@@ -119,11 +120,15 @@ export interface ElectronAPI {
     getSharedResources(): Promise<DesktopLocalListResponse<DesktopSharedResourceDTO>>;
     addSharedResource(payload: AddSharedResourcePayload): Promise<DesktopSharedResourceDTO>;
     removeSharedResource(resourceId: string): Promise<{ ok: boolean }>;
-    getReceivedLibrary(): Promise<DesktopLocalListResponse<ReceivedLibraryItemDTO>>;
+    getReceivedLibrary(options?: {
+      page?: number;
+      pageSize?: number;
+    }): Promise<ReceivedLibraryPageDTO>;
   };
   files: {
     openFolder(path: string): Promise<void>;
     openFile(path: string): Promise<void>;
+    revealPath(path: string): Promise<void>;
     openExternal(target: string): Promise<void>;
     selectFile(): Promise<string | null>;
     selectFolder(): Promise<string | null>;

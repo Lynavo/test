@@ -7,8 +7,66 @@ import {
   previewManagedDevices,
   shouldUsePreviewData,
 } from '@renderer/features/preview/demo-data';
+import type { DesktopAccessRecordDTO } from '@syncflow/contracts';
 
 const RECORDS_PER_PAGE = 5;
+
+function getAccessActionLabel(action: DesktopAccessRecordDTO['action']): string {
+  switch (action) {
+    case 'list':
+      return '浏览';
+    case 'view':
+      return '预览';
+    case 'download':
+      return '下载';
+    case 'error':
+      return '错误';
+    default:
+      return action;
+  }
+}
+
+function getAccessResultLabel(result: DesktopAccessRecordDTO['result']): string | null {
+  switch (result) {
+    case 'ok':
+      return null;
+    case 'missing':
+      return '文件丢失';
+    case 'denied':
+      return '已拒绝';
+    case 'error':
+      return '失败';
+    default:
+      return result;
+  }
+}
+
+async function revealAccessRecordPath(localPath: string): Promise<void> {
+  await window.electronAPI?.files.revealPath(localPath);
+}
+
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split('.').map((part) => Number(part));
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return false;
+  }
+  const [first, second] = parts;
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 169 && second === 254) ||
+    first === 127
+  );
+}
+
+function getNetworkLabel(ip: string): string {
+  if (!ip) return 'IP 未记录';
+  return isPrivateIPv4(ip) ? '局域网' : '公网';
+}
 
 export function RecordsPage() {
   const accessRecords = useManagementStore((state) => state.accessRecords);
@@ -42,7 +100,7 @@ export function RecordsPage() {
       const matchedDevice = visibleDevices.find(
         (d) => d.clientId === record.clientId || d.stableDeviceId === record.clientId,
       );
-      const ip = matchedDevice?.lastIp || '192.168.1.106';
+      const ip = matchedDevice?.lastIp ?? '';
       const platform = matchedDevice?.platform || 'iPhone';
 
       if (!acc[key]) {
@@ -54,12 +112,29 @@ export function RecordsPage() {
           accessedAt: record.accessedAt,
           date: dateKey,
           ip,
-          files: [] as string[],
+          files: [] as Array<{
+            key: string;
+            name: string;
+            localPath?: string;
+            action: DesktopAccessRecordDTO['action'];
+            result: DesktopAccessRecordDTO['result'];
+          }>,
         };
       }
 
-      if (record.resourceName && !acc[key].files.includes(record.resourceName)) {
-        acc[key].files.push(record.resourceName);
+      if (record.resourceName) {
+        const fileKey = `${record.resourceId}:${record.action}:${record.resourceName}:${
+          record.localPath ?? ''
+        }`;
+        if (!acc[key].files.some((file) => file.key === fileKey)) {
+          acc[key].files.push({
+            key: fileKey,
+            name: record.resourceName,
+            localPath: record.localPath,
+            action: record.action,
+            result: record.result,
+          });
+        }
       }
       return acc;
     },
@@ -73,7 +148,13 @@ export function RecordsPage() {
         accessedAt: string;
         date: string;
         ip: string;
-        files: string[];
+        files: Array<{
+          key: string;
+          name: string;
+          localPath?: string;
+          action: DesktopAccessRecordDTO['action'];
+          result: DesktopAccessRecordDTO['result'];
+        }>;
       }
     >,
   );
@@ -82,18 +163,19 @@ export function RecordsPage() {
     b.accessedAt.localeCompare(a.accessedAt),
   );
 
-  const getMockLocation = (ip: string) => {
-    if (ip === '192.168.1.112') return '广东省深圳市 · 移动';
-    if (ip === '120.85.130.25') return '广东省广州市 · 联通';
-    return '广东省深圳市 · 电信';
-  };
-
   const filteredSessions = sessions.filter((s) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const nameMatch = s.displayName.toLowerCase().includes(q);
       const ipMatch = s.ip.includes(q);
-      const fileMatch = s.files.some((f) => f.toLowerCase().includes(q));
+      const fileMatch = s.files.some((f) => {
+        const actionLabel = getAccessActionLabel(f.action).toLowerCase();
+        return (
+          f.name.toLowerCase().includes(q) ||
+          actionLabel.includes(q) ||
+          (f.localPath?.toLowerCase().includes(q) ?? false)
+        );
+      });
       if (!nameMatch && !ipMatch && !fileMatch) return false;
     }
     if (startDate) {
@@ -224,21 +306,21 @@ export function RecordsPage() {
                     </div>
                   </div>
 
-                  {/* Right: Date, IP & ISP */}
-                  <div className="ml-auto flex shrink-0 items-center gap-4 text-xs font-medium text-[#4f5b68]">
+                  {/* Right: Date and actual network identity. Geolocation is not available here. */}
+                  <div className="ml-auto flex shrink-0 items-center gap-3 text-xs font-medium text-[#4f5b68]">
                     <span className="w-[78px] whitespace-nowrap text-right [font-variant-numeric:tabular-nums]">
                       {session.date}
                     </span>
-                    <span className="w-[120px] truncate whitespace-nowrap text-right">
-                      {getMockLocation(session.ip)}
+                    <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-white/70 bg-white/52 px-2 font-semibold text-[#59616d]">
+                      {getNetworkLabel(session.ip)}
                     </span>
                     <div className="inline-flex w-[128px] items-center justify-end gap-1.5 whitespace-nowrap font-mono [font-variant-numeric:tabular-nums]">
-                      {session.ip.startsWith('192.') ? (
+                      {isPrivateIPv4(session.ip) ? (
                         <Wifi className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
                       ) : (
                         <Globe className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
                       )}
-                      <span>{session.ip}</span>
+                      <span>{session.ip || '-'}</span>
                     </div>
                   </div>
                 </div>
@@ -247,17 +329,43 @@ export function RecordsPage() {
                 <div className="mt-4 rounded-md border border-white/70 bg-white/52">
                   <div className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-[#4f5b68]">
                     <Download className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
-                    <span>{session.files.length} 个文件</span>
+                    <span>{session.files.length} 条访问</span>
                   </div>
 
                   <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 border-t border-white/70 px-4 py-3 sm:grid-cols-2">
-                    {session.files.map((file, idx) => (
+                    {session.files.map((file) => (
                       <li
-                        key={idx}
+                        key={file.key}
                         className="flex min-w-0 items-center gap-2 text-[13px] text-[#17191c]"
                       >
                         <FileText className="h-3.5 w-3.5 shrink-0 text-[#9aa2ad]" />
-                        <span className="truncate">{file}</span>
+                        <span className="inline-flex shrink-0 items-center rounded border border-[#dbeafe] bg-[#eef6ff] px-1.5 py-px text-[11px] font-semibold leading-none text-[#1677d2]">
+                          {getAccessActionLabel(file.action)}
+                        </span>
+                        {file.localPath ? (
+                          <button
+                            type="button"
+                            title={file.localPath}
+                            aria-label={`在文件夹中显示 ${file.name}`}
+                            onClick={() => {
+                              void revealAccessRecordPath(file.localPath!).catch((err: unknown) => {
+                                console.warn('[RecordsPage] reveal access record path failed', err);
+                              });
+                            }}
+                            className="min-w-0 truncate text-left font-medium text-[#17191c] underline-offset-2 transition hover:text-[#1677d2] hover:underline"
+                          >
+                            {file.name}
+                          </button>
+                        ) : (
+                          <span className="truncate" title={file.name}>
+                            {file.name}
+                          </span>
+                        )}
+                        {getAccessResultLabel(file.result) ? (
+                          <span className="shrink-0 text-[11px] font-semibold text-[#e35b4a]">
+                            {getAccessResultLabel(file.result)}
+                          </span>
+                        ) : null}
                       </li>
                     ))}
                   </ul>

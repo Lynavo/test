@@ -140,12 +140,68 @@ func (s *Server) handleResourcesReceived(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusInternalServerError, "failed to load desktop device id")
 		return
 	}
-	items, err := s.store.ListReceivedLibrary(desktopDeviceID)
+	page := parsePositiveQueryInt(r, "page", 1)
+	pageSize := parsePositiveQueryInt(r, "pageSize", 30)
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	result, err := s.store.ListReceivedLibraryPage(desktopDeviceID, page, pageSize)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list received library")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	s.enrichResourcesReceivedThumbnailURLs(result.Items)
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) enrichResourcesReceivedThumbnailURLs(items []store.ReceivedLibraryItem) {
+	for i := range items {
+		if strings.TrimSpace(items[i].FileKey) == "" ||
+			!isImageMedia(items[i].MediaType, items[i].Filename) ||
+			!isSupportedDirectoryThumbnailSource(items[i].Filename) {
+			continue
+		}
+		resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, items[i].FinalPath)
+		if !ok {
+			continue
+		}
+		info, err := os.Stat(resolvedPath)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		query := url.Values{}
+		query.Set("fileKey", items[i].FileKey)
+		query.Set("v", directoryThumbnailSourceVersion(info))
+		items[i].ThumbnailURL = "/resources/received/thumbnail?" + query.Encode()
+	}
+}
+
+func parsePositiveQueryInt(r *http.Request, key string, fallback int) int {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func (s *Server) handleResourcesReceivedThumbnail(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		writeError(w, http.StatusForbidden, "local access required")
+		return
+	}
+	upload, resolvedPath, info, ok := s.resolveResourcesReceivedUpload(w, r)
+	if !ok {
+		return
+	}
+	if !isImageMedia(upload.MediaType, upload.OriginalFilename) {
+		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+		return
+	}
+	s.serveCachedThumbnailForResolvedFile(w, r, resolvedPath, info)
 }
 
 func (s *Server) handleMobileSharedResources(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +320,7 @@ func (s *Server) listMobileSharedResourceFolder(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusInternalServerError, "failed to record resource access")
 		return
 	}
-	s.listDirectory(w, relPath, resolvePath, "", "")
+	s.listDirectory(w, relPath, resolvePath, "", "", false)
 }
 
 func (s *Server) ensureMobileSharedFolderListable(
@@ -362,7 +418,7 @@ func (s *Server) handleMobileReceivedFileThumbnail(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
 		return
 	}
-	serveLocalFileInline(w, r, resolvedPath, info)
+	s.serveCachedThumbnailForResolvedFile(w, r, resolvedPath, info)
 }
 
 func (s *Server) handleMobileReceivedFilePreview(w http.ResponseWriter, r *http.Request) {
@@ -407,6 +463,41 @@ func (s *Server) handleMobileReceivedFileDownload(w http.ResponseWriter, r *http
 		_, _ = s.recordResourceAccess(desktopDeviceID, client, upload.FileKey, "received_file", upload.OriginalFilename, "download", "ok")
 	}
 	serveLocalFileAttachment(w, r, resolvedPath, info, upload.OriginalFilename)
+}
+
+func (s *Server) resolveResourcesReceivedUpload(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*store.Upload, string, os.FileInfo, bool) {
+	fileKey := strings.TrimSpace(r.URL.Query().Get("fileKey"))
+	if !isValidReceivedFileKey(fileKey) {
+		writeError(w, http.StatusBadRequest, "invalid fileKey")
+		return nil, "", nil, false
+	}
+	upload, err := s.store.GetUpload(fileKey)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return nil, "", nil, false
+	}
+	if upload.Status != "completed" {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return nil, "", nil, false
+	}
+	resolvedPath, ok := uploadfs.ResolveFinalPath(s.config.ReceiveDir, upload.FinalPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return nil, "", nil, false
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return nil, "", nil, false
+	}
+	if !info.Mode().IsRegular() {
+		writeError(w, http.StatusNotFound, "received file not found")
+		return nil, "", nil, false
+	}
+	return upload, resolvedPath, info, true
 }
 
 func (s *Server) resolveMobileReceivedUpload(
@@ -696,6 +787,26 @@ func mobileAccessClientFromQuery(w http.ResponseWriter, r *http.Request) (mobile
 		return mobileAccessClient{}, false
 	}
 	return mobileAccessClient{ClientID: clientID, ClientName: clientName}, true
+}
+
+func optionalMobileAccessClientFromQuery(w http.ResponseWriter, r *http.Request) (mobileAccessClient, bool, bool) {
+	clientID := strings.TrimSpace(r.URL.Query().Get("clientId"))
+	clientName := strings.TrimSpace(r.URL.Query().Get("clientName"))
+	if clientID == "" && clientName == "" {
+		return mobileAccessClient{}, false, true
+	}
+	if !isValidAPIID(clientID) {
+		writeError(w, http.StatusBadRequest, "invalid clientId")
+		return mobileAccessClient{}, false, false
+	}
+	if clientName == "" {
+		clientName = clientID
+	}
+	if len(clientName) > 128 {
+		writeError(w, http.StatusBadRequest, "invalid clientName")
+		return mobileAccessClient{}, false, false
+	}
+	return mobileAccessClient{ClientID: clientID, ClientName: clientName}, true, true
 }
 
 func (s *Server) recordResourceAccess(

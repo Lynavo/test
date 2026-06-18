@@ -61,6 +61,7 @@ type Server struct {
 	wakeSender           WakePacketSender
 	proxyWakeTargets     ProxyWakeTargetProvider
 	power                *PowerTracker
+	thumbnailLimiter     chan struct{}
 	tunnelMu             sync.Mutex
 	tunnel               *protocol.P2PManager
 	accountMu            sync.RWMutex
@@ -195,14 +196,15 @@ func (s *Server) tunnelSignalingAuthState() protocol.SignalingAuthState {
 // NewServer creates a new HTTP handler with all API routes registered.
 func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientStateProvider) (*Server, http.Handler) {
 	srv := &Server{
-		store:        s,
-		config:       cfg,
-		hub:          hub,
-		clientStates: csp,
-		presence:     NewPresenceTracker(),
-		wakeProvider: defaultWakeProvider{},
-		wakeSender:   udpWakePacketSender{},
-		power:        NewPowerTracker(),
+		store:            s,
+		config:           cfg,
+		hub:              hub,
+		clientStates:     csp,
+		presence:         NewPresenceTracker(),
+		wakeProvider:     defaultWakeProvider{},
+		wakeSender:       udpWakePacketSender{},
+		power:            NewPowerTracker(),
+		thumbnailLimiter: make(chan struct{}, 2),
 	}
 	mux := http.NewServeMux()
 
@@ -225,6 +227,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux.HandleFunc("POST /resources/shared", withJSON(srv.handleResourcesAddShared))
 	mux.HandleFunc("DELETE /resources/shared/{resourceId}", withJSON(srv.handleResourcesRemoveShared))
 	mux.HandleFunc("GET /resources/received", withJSON(srv.handleResourcesReceived))
+	mux.HandleFunc("GET /resources/received/thumbnail", srv.handleResourcesReceivedThumbnail)
 	mux.HandleFunc("GET /resources/mobile/shared", withJSON(srv.handleMobileSharedResources))
 	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list", withJSON(srv.handleMobileSharedResourceFolderList))
 	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list/{path...}", withJSON(srv.handleMobileSharedResourceFolderListPath))

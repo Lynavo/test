@@ -141,6 +141,88 @@ func TestCompleteUpload(t *testing.T) {
 	}
 }
 
+func TestListCompletedUploadRootDirs(t *testing.T) {
+	s := newTestStore(t)
+
+	olderCompletedAt := "2026-06-16T10:00:00Z"
+	newerCompletedAt := "2026-06-17T10:00:00Z"
+	for _, fixture := range []struct {
+		fileKey     string
+		clientID    string
+		status      string
+		finalPath   *string
+		completedAt *string
+	}{
+		{
+			fileKey:     "old-root",
+			clientID:    "client-1",
+			status:      "completed",
+			finalPath:   stringPtr("iPhone 17 Pro/2026-06-16/old.jpg"),
+			completedAt: &olderCompletedAt,
+		},
+		{
+			fileKey:     "new-root",
+			clientID:    "client-1",
+			status:      "completed",
+			finalPath:   stringPtr(`iPhone 17 Pro\2026-06-17\new.jpg`),
+			completedAt: &newerCompletedAt,
+		},
+		{
+			fileKey:     "other-root",
+			clientID:    "client-1",
+			status:      "completed",
+			finalPath:   stringPtr("Other Phone/2026-06-17/new.jpg"),
+			completedAt: &olderCompletedAt,
+		},
+		{
+			fileKey:     "absolute-path",
+			clientID:    "client-1",
+			status:      "completed",
+			finalPath:   stringPtr("/tmp/received/iPhone 17 Pro/file.jpg"),
+			completedAt: &newerCompletedAt,
+		},
+		{
+			fileKey:     "in-progress",
+			clientID:    "client-1",
+			status:      "transferring",
+			finalPath:   stringPtr("Ignored/2026-06-17/file.jpg"),
+			completedAt: &newerCompletedAt,
+		},
+		{
+			fileKey:     "other-client",
+			clientID:    "client-2",
+			status:      "completed",
+			finalPath:   stringPtr("Other Client/2026-06-17/file.jpg"),
+			completedAt: &newerCompletedAt,
+		},
+	} {
+		upload := sampleUpload(fixture.fileKey, fixture.clientID)
+		upload.Status = fixture.status
+		upload.FinalPath = fixture.finalPath
+		upload.CompletedAt = fixture.completedAt
+		if fixture.completedAt != nil {
+			upload.UpdatedAt = *fixture.completedAt
+		}
+		if err := s.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", fixture.fileKey, err)
+		}
+	}
+
+	roots, err := s.ListCompletedUploadRootDirs("client-1")
+	if err != nil {
+		t.Fatalf("ListCompletedUploadRootDirs: %v", err)
+	}
+	want := []string{"iPhone 17 Pro", "Other Phone"}
+	if len(roots) != len(want) {
+		t.Fatalf("roots=%v, want %v", roots, want)
+	}
+	for i := range want {
+		if roots[i] != want[i] {
+			t.Fatalf("roots=%v, want %v", roots, want)
+		}
+	}
+}
+
 func TestUpdateUploadProgress(t *testing.T) {
 	s := newTestStore(t)
 	u := sampleUpload("progress-me", "client-1")

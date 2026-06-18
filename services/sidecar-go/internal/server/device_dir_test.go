@@ -588,6 +588,24 @@ func newPairDevice(clientID, clientName string, alias *string) store.PairedDevic
 	}
 }
 
+func insertCompletedUploadWithFinalPath(t *testing.T, st *store.Store, clientID, fileKey, finalPath, completedAt string) {
+	t.Helper()
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:          fileKey,
+		ClientID:         clientID,
+		OriginalFilename: filepath.Base(finalPath),
+		MediaType:        "image/jpeg",
+		FileSize:         1024,
+		Status:           "completed",
+		FinalPath:        &finalPath,
+		CommittedBytes:   1024,
+		CompletedAt:      &completedAt,
+		UpdatedAt:        completedAt,
+	}); err != nil {
+		t.Fatalf("UpsertUpload %q: %v", fileKey, err)
+	}
+}
+
 func TestPairDeviceWithDirName_DoesNotClaimOrphanDir(t *testing.T) {
 	st := newTestStoreForDir(t)
 	receiveDir := t.TempDir()
@@ -615,6 +633,66 @@ func TestPairDeviceWithDirName_DoesNotClaimOrphanDir(t *testing.T) {
 	}
 	if d.ReceiveDirName == nil || *d.ReceiveDirName != "My iPhone (2)" {
 		t.Fatalf("expected persisted dir name 'My iPhone (2)', got %v", d.ReceiveDirName)
+	}
+}
+
+func TestPairDeviceWithDirName_ReusesHistoricalUploadDir(t *testing.T) {
+	st := newTestStoreForDir(t)
+	receiveDir := t.TempDir()
+
+	mkDir(t, receiveDir, "My iPhone")
+	insertCompletedUploadWithFinalPath(
+		t,
+		st,
+		"new-dev",
+		"historical-file",
+		filepath.Join("My iPhone", "2026-06-17", "IMG_0001.JPG"),
+		"2026-06-17T10:00:00Z",
+	)
+
+	device := newPairDevice("new-dev", "My iPhone", nil)
+	got, err := PairDeviceWithDirName(st, receiveDir, device)
+	if err != nil {
+		t.Fatalf("PairDeviceWithDirName: %v", err)
+	}
+	if got != "My iPhone" {
+		t.Fatalf("expected historical upload dir %q, got %q", "My iPhone", got)
+	}
+
+	d, err := st.GetPairedDevice("new-dev")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if d.ReceiveDirName == nil || *d.ReceiveDirName != "My iPhone" {
+		t.Fatalf("expected persisted historical dir name, got %v", d.ReceiveDirName)
+	}
+}
+
+func TestPairDeviceWithDirName_DoesNotReuseHistoricalUploadDirReservedByAnotherDevice(t *testing.T) {
+	st := newTestStoreForDir(t)
+	receiveDir := t.TempDir()
+
+	mkDir(t, receiveDir, "My iPhone")
+	insertDevice(t, st, "other-dev", "My iPhone", nil)
+	if err := st.UpdateReceiveDirName("other-dev", "My iPhone"); err != nil {
+		t.Fatalf("UpdateReceiveDirName: %v", err)
+	}
+	insertCompletedUploadWithFinalPath(
+		t,
+		st,
+		"new-dev",
+		"historical-file",
+		filepath.Join("My iPhone", "2026-06-17", "IMG_0001.JPG"),
+		"2026-06-17T10:00:00Z",
+	)
+
+	device := newPairDevice("new-dev", "My iPhone", nil)
+	got, err := PairDeviceWithDirName(st, receiveDir, device)
+	if err != nil {
+		t.Fatalf("PairDeviceWithDirName: %v", err)
+	}
+	if got != "My iPhone (2)" {
+		t.Fatalf("expected conflict-safe dir %q, got %q", "My iPhone (2)", got)
 	}
 }
 
@@ -687,6 +765,37 @@ func TestReconcileReceiveDirNames_FixesStaleEntry(t *testing.T) {
 	// Legacy claim should find "iPhone app" (via clientName match).
 	if dev.ReceiveDirName == nil || *dev.ReceiveDirName != "iPhone app" {
 		t.Fatalf("expected reconciled receive_dir_name=%q, got %v", "iPhone app", dev.ReceiveDirName)
+	}
+}
+
+func TestReconcileReceiveDirNames_RestoresHistoricalUploadDirEvenWhenCurrentDirExists(t *testing.T) {
+	st := newTestStoreForDir(t)
+	receiveDir := t.TempDir()
+
+	insertDevice(t, st, "dev-1", "iPhone 17 Pro", nil)
+	if err := st.UpdateReceiveDirName("dev-1", "iPhone 17 Pro (3)"); err != nil {
+		t.Fatalf("UpdateReceiveDirName: %v", err)
+	}
+	mkDir(t, receiveDir, "iPhone 17 Pro")
+	mkDir(t, receiveDir, "iPhone 17 Pro (2)")
+	mkDir(t, receiveDir, "iPhone 17 Pro (3)")
+	insertCompletedUploadWithFinalPath(
+		t,
+		st,
+		"dev-1",
+		"historical-file",
+		filepath.Join("iPhone 17 Pro", "2026-06-17", "IMG_0001.JPG"),
+		"2026-06-17T10:00:00Z",
+	)
+
+	ReconcileReceiveDirNames(st, receiveDir)
+
+	dev, err := st.GetPairedDevice("dev-1")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if dev.ReceiveDirName == nil || *dev.ReceiveDirName != "iPhone 17 Pro" {
+		t.Fatalf("expected historical receive_dir_name=%q, got %v", "iPhone 17 Pro", dev.ReceiveDirName)
 	}
 }
 

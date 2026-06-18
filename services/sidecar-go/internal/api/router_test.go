@@ -3,6 +3,9 @@ package api_test
 import (
 	"encoding/base64"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +24,111 @@ import (
 	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
+
+func writeJPEGFixture(t *testing.T, path string, width int, height int) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8((x * 255) / width),
+				G: uint8((y * 255) / height),
+				B: 160,
+				A: 255,
+			})
+		}
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create jpeg fixture: %v", err)
+	}
+	defer f.Close()
+	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatalf("encode jpeg fixture: %v", err)
+	}
+}
+
+func authenticatePersonalAPITestServer(
+	t *testing.T,
+	st *store.Store,
+	cfg *config.Config,
+	hub *events.Hub,
+) *httptest.Server {
+	t.Helper()
+	authSrv := profileAuthServer(t, "account-1")
+	t.Cleanup(authSrv.Close)
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	reqBody := `{"signalingUrl":"` + authSrv.URL + `","accessToken":"token","accountId":"account-1","iceServers":[]}`
+	resp, err := http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
+	}
+
+	return srv
+}
+
+func authorizedPersonalGET(t *testing.T, srv *httptest.Server, path string) *http.Response {
+	return authorizedPersonalGETPath(t, srv, withPersonalClientQuery(path))
+}
+
+func authorizedPersonalGETWithoutClient(t *testing.T, srv *httptest.Server, path string) *http.Response {
+	return authorizedPersonalGETPath(t, srv, path)
+}
+
+func authorizedPersonalGETPath(t *testing.T, srv *httptest.Server, path string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, srv.URL+path, nil)
+	if err != nil {
+		t.Fatalf("new personal request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "account-1"))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	return resp
+}
+
+func withPersonalClientQuery(path string) string {
+	if strings.Contains(path, "clientId=") {
+		return path
+	}
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	return path + separator + "clientId=test-client&clientName=Test%20Phone"
+}
+
+func regularFilesUnder(t *testing.T, dir string) []string {
+	t.Helper()
+	paths := []string{}
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return paths
+	} else if err != nil {
+		t.Fatalf("stat cache dir: %v", err)
+	}
+	if err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			paths = append(paths, path)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("walk cache dir: %v", err)
+	}
+	return paths
+}
 
 // testEnv sets up a temporary database, config, and hub for testing.
 func testEnv(t *testing.T) (*store.Store, *config.Config, *events.Hub) {
@@ -2132,7 +2240,7 @@ func TestPersonalListRejectsWhenRemoteAccessDisabled(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2159,7 +2267,7 @@ func TestPersonalListRequiresDesktopAccountIdentity(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2201,11 +2309,53 @@ func TestPersonalListUsesAccountContextWithoutTunnelCredentials(t *testing.T) {
 		t.Fatalf("expected account context sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "account-1"))
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /personal/list: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, string(body))
+	}
+}
+
+func TestPersonalListAcceptsDevSandboxMockToken(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "notes.txt"), []byte("personal"), 0o644); err != nil {
+		t.Fatalf("write personal file: %v", err)
+	}
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	token := "mock-sandbox-access-token:functional@example.com"
+	reqBody := `{"authBaseUrl":"dev-sandbox://auth","accessToken":"` + token + `","accountId":"99999"}`
+	resp, err := http.Post(srv.URL+"/account/context", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /account/context: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected account context sync 200, got %d", resp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
@@ -2250,7 +2400,7 @@ func TestAccountContextClearDisablesPersonalList(t *testing.T) {
 		t.Fatalf("expected account context clear 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2289,7 +2439,7 @@ func TestPersonalListRequiresBearerAccountToken(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	resp, err = http.Get(srv.URL + "/personal/list")
+	resp, err = http.Get(srv.URL + withPersonalClientQuery("/personal/list"))
 	if err != nil {
 		t.Fatalf("GET /personal/list: %v", err)
 	}
@@ -2326,7 +2476,7 @@ func TestPersonalListUsesAccountIDFromPaddedJWTWhenCredentialsOmitAccountID(t *t
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2366,7 +2516,7 @@ func TestPersonalListRejectsDifferentAccount(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2407,7 +2557,7 @@ func TestPersonalListRejectsTokenWhenServerValidationFails(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2452,7 +2602,7 @@ func TestPersonalListRejectsTokenWhenProfileCodeIsNonZero(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2503,7 +2653,7 @@ func TestPersonalListReturnsSameAccountPersonalDirectory(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2548,6 +2698,161 @@ func TestPersonalListReturnsSameAccountPersonalDirectory(t *testing.T) {
 	}
 }
 
+func TestPersonalListReturnsVersionedThumbnailURLOnlyForSupportedImages(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal dir: %v", err)
+	}
+	writeJPEGFixture(t, filepath.Join(cfg.PersonalDir(), "photo.jpg"), 640, 480)
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "clip.mov"), []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "vector.svg"), []byte("<svg />"), 0o644); err != nil {
+		t.Fatalf("write svg: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(cfg.PersonalDir(), "Album"), 0o755); err != nil {
+		t.Fatalf("mkdir album: %v", err)
+	}
+
+	srv := authenticatePersonalAPITestServer(t, st, cfg, hub)
+	resp := authorizedPersonalGET(t, srv, "/personal/list")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("personal list status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Files []struct {
+			Name         string  `json:"name"`
+			ThumbnailURL *string `json:"thumbnailUrl,omitempty"`
+			IsDirectory  bool    `json:"isDirectory,omitempty"`
+		} `json:"files"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode personal list: %v", err)
+	}
+
+	files := map[string]struct {
+		ThumbnailURL *string
+		IsDirectory  bool
+	}{}
+	for _, file := range body.Files {
+		files[file.Name] = struct {
+			ThumbnailURL *string
+			IsDirectory  bool
+		}{ThumbnailURL: file.ThumbnailURL, IsDirectory: file.IsDirectory}
+	}
+
+	photo := files["photo.jpg"].ThumbnailURL
+	if photo == nil {
+		t.Fatalf("photo.jpg missing thumbnailUrl in %+v", body.Files)
+	}
+	if !strings.HasPrefix(*photo, "/personal/thumbnail/photo.jpg?v=") {
+		t.Fatalf("thumbnailUrl=%q, want versioned personal thumbnail URL", *photo)
+	}
+	for _, name := range []string{"clip.mov", "vector.svg", "Album"} {
+		if got := files[name].ThumbnailURL; got != nil {
+			t.Fatalf("%s thumbnailUrl=%q, want omitted", name, *got)
+		}
+	}
+	if got := regularFilesUnder(t, filepath.Join(cfg.DataDir, "thumbnail-cache")); len(got) != 0 {
+		t.Fatalf("personal list generated thumbnail cache files: %+v", got)
+	}
+}
+
+func TestPersonalThumbnailGeneratesSmallCachedJPEG(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal dir: %v", err)
+	}
+	imagePath := filepath.Join(cfg.PersonalDir(), "wide.jpg")
+	writeJPEGFixture(t, imagePath, 640, 480)
+
+	srv := authenticatePersonalAPITestServer(t, st, cfg, hub)
+	resp := authorizedPersonalGET(t, srv, "/personal/thumbnail/wide.jpg")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("thumbnail status=%d, want 200", resp.StatusCode)
+	}
+	if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+		t.Fatalf("thumbnail content-type=%q, want image/jpeg", contentType)
+	}
+	thumbnail, format, err := image.Decode(resp.Body)
+	if err != nil {
+		t.Fatalf("decode thumbnail: %v", err)
+	}
+	if format != "jpeg" {
+		t.Fatalf("thumbnail format=%q, want jpeg", format)
+	}
+	bounds := thumbnail.Bounds()
+	if bounds.Dx() > 256 || bounds.Dy() > 256 {
+		t.Fatalf("thumbnail size=%dx%d, want max edge <= 256", bounds.Dx(), bounds.Dy())
+	}
+
+	cacheDir := filepath.Join(cfg.DataDir, "thumbnail-cache")
+	cacheFiles := regularFilesUnder(t, cacheDir)
+	if len(cacheFiles) != 1 {
+		t.Fatalf("cache files=%+v, want exactly one cached thumbnail", cacheFiles)
+	}
+	firstInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat first cache file: %v", err)
+	}
+
+	secondResp := authorizedPersonalGET(t, srv, "/personal/thumbnail/wide.jpg")
+	io.Copy(io.Discard, secondResp.Body)
+	secondResp.Body.Close()
+	if secondResp.StatusCode != http.StatusOK {
+		t.Fatalf("second thumbnail status=%d, want 200", secondResp.StatusCode)
+	}
+	secondCacheFiles := regularFilesUnder(t, cacheDir)
+	if len(secondCacheFiles) != 1 || secondCacheFiles[0] != cacheFiles[0] {
+		t.Fatalf("second cache files=%+v, want cache hit on %q", secondCacheFiles, cacheFiles[0])
+	}
+	secondInfo, err := os.Stat(cacheFiles[0])
+	if err != nil {
+		t.Fatalf("stat second cache file: %v", err)
+	}
+	if !secondInfo.ModTime().Equal(firstInfo.ModTime()) {
+		t.Fatalf("cache mtime changed on cache hit: first=%s second=%s", firstInfo.ModTime(), secondInfo.ModTime())
+	}
+
+	newMod := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(imagePath, newMod, newMod); err != nil {
+		t.Fatalf("touch source image: %v", err)
+	}
+	thirdResp := authorizedPersonalGET(t, srv, "/personal/thumbnail/wide.jpg")
+	io.Copy(io.Discard, thirdResp.Body)
+	thirdResp.Body.Close()
+	if thirdResp.StatusCode != http.StatusOK {
+		t.Fatalf("third thumbnail status=%d, want 200", thirdResp.StatusCode)
+	}
+	thirdCacheFiles := regularFilesUnder(t, cacheDir)
+	if len(thirdCacheFiles) != 2 {
+		t.Fatalf("cache files after source change=%+v, want two versioned cache files", thirdCacheFiles)
+	}
+}
+
+func TestPersonalThumbnailReturnsNotFoundForUnsupportedImages(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "vector.svg"), []byte("<svg />"), 0o644); err != nil {
+		t.Fatalf("write svg: %v", err)
+	}
+
+	srv := authenticatePersonalAPITestServer(t, st, cfg, hub)
+	resp := authorizedPersonalGET(t, srv, "/personal/thumbnail/vector.svg")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("svg thumbnail status=%d, want 404", resp.StatusCode)
+	}
+}
+
 func TestPersonalListUsesConfiguredPersonalSharePathInsteadOfReceivePath(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	externalRoot := t.TempDir()
@@ -2583,7 +2888,7 @@ func TestPersonalListUsesConfiguredPersonalSharePathInsteadOfReceivePath(t *test
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2646,7 +2951,7 @@ func TestPersonalDownloadServesRegularDocumentFile(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/download/notes.txt", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/download/notes.txt"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
@@ -2668,6 +2973,81 @@ func TestPersonalDownloadServesRegularDocumentFile(t *testing.T) {
 	}
 	if string(body) != "personal notes" {
 		t.Fatalf("download body=%q, want personal notes", string(body))
+	}
+}
+
+func TestPersonalAccessCreatesAccessRecordsWhenClientMetadataPresent(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	personalRoot := filepath.Join(t.TempDir(), "Personal Share")
+	cfg.PersonalShareDir = personalRoot
+	if err := os.MkdirAll(personalRoot, 0o755); err != nil {
+		t.Fatalf("mkdir personal share dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(personalRoot, "notes.txt"), []byte("personal notes"), 0o644); err != nil {
+		t.Fatalf("write personal file: %v", err)
+	}
+	desktopDeviceID, err := st.GetDeviceID()
+	if err != nil {
+		t.Fatalf("GetDeviceID: %v", err)
+	}
+
+	srv := authenticatePersonalAPITestServer(t, st, cfg, hub)
+	for _, path := range []string{
+		"/personal/list?clientId=client-001&clientName=Alice%20iPhone",
+		"/personal/stream/notes.txt?clientId=client-001&clientName=Alice%20iPhone",
+		"/personal/download/notes.txt?clientId=client-001&clientName=Alice%20iPhone",
+	} {
+		resp := authorizedPersonalGET(t, srv, path)
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s status=%d, want 200", path, resp.StatusCode)
+		}
+	}
+
+	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
+	if err != nil {
+		t.Fatalf("ListAccessRecords: %v", err)
+	}
+	seen := map[string]store.AccessRecord{}
+	for _, record := range records {
+		seen[record.Action] = record
+		if record.ClientName != "Alice iPhone" {
+			t.Fatalf("record client name=%q, want Alice iPhone: %+v", record.ClientName, record)
+		}
+		if record.Result != "ok" {
+			t.Fatalf("record result=%q, want ok: %+v", record.Result, record)
+		}
+	}
+	for _, action := range []string{"list", "view", "download"} {
+		if _, ok := seen[action]; !ok {
+			t.Fatalf("expected %s access record, got %+v", action, records)
+		}
+	}
+	if seen["list"].ResourceName != "个人空间" || seen["list"].ResourceKind != "shared_folder" {
+		t.Fatalf("list record should describe personal folder, got %+v", seen["list"])
+	}
+	if seen["view"].ResourceName != "notes.txt" || seen["view"].ResourceKind != "shared_file" ||
+		seen["download"].ResourceName != "notes.txt" || seen["download"].ResourceKind != "shared_file" {
+		t.Fatalf("file access records should use filename, got view=%+v download=%+v", seen["view"], seen["download"])
+	}
+}
+
+func TestPersonalListRequiresClientMetadataForAccessRecording(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	personalRoot := filepath.Join(t.TempDir(), "Personal Share")
+	cfg.PersonalShareDir = personalRoot
+	if err := os.MkdirAll(personalRoot, 0o755); err != nil {
+		t.Fatalf("mkdir personal share dir: %v", err)
+	}
+
+	srv := authenticatePersonalAPITestServer(t, st, cfg, hub)
+	resp := authorizedPersonalGETWithoutClient(t, srv, "/personal/list")
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 400 when personal access omits client metadata, got %d body=%s", resp.StatusCode, string(body))
 	}
 }
 
@@ -2705,7 +3085,7 @@ func TestPersonalListSkipsSymlinkEscapingPersonalRoot(t *testing.T) {
 		t.Fatalf("expected credentials sync 200, got %d", resp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, srv.URL+"/personal/list", nil)
+	req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/list"), nil)
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
