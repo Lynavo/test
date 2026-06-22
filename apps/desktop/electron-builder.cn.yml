@@ -62,6 +62,19 @@ win:
         - syncflow-sidecar.exe
         - dns-sd.exe
         - dnssd.dll
+linux:
+  artifactName: ViviDrop-${version}-linux-${arch}.${ext}
+  target:
+    - target: deb
+      arch:
+        - x64
+        - arm64
+  category: Utility
+  executableName: Vivi Drop
+  icon: resources/icon-1024.png
+  extraResources:
+    - from: resources/syncflow-sidecar
+      to: syncflow-sidecar
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

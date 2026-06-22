@@ -9,6 +9,24 @@ function readDesktopConfig(name) {
   return readFileSync(resolve(repoRoot, 'apps/desktop', name), 'utf8');
 }
 
+function readTopLevelSection(config, sectionName) {
+  const startMarker = `${sectionName}:`;
+  const startIndex = config.indexOf(startMarker);
+
+  if (startIndex === -1) {
+    return '';
+  }
+
+  const rest = config.slice(startIndex);
+  const nextSectionMatch = rest.slice(startMarker.length).match(/\n[a-z][\w-]*:/);
+
+  if (nextSectionMatch?.index === undefined) {
+    return rest;
+  }
+
+  return rest.slice(0, startMarker.length + nextSectionMatch.index);
+}
+
 test('global desktop builder config uses Vivi Drop for visible package branding', () => {
   const config = readDesktopConfig('electron-builder.global.yml');
 
@@ -39,4 +57,25 @@ test('windows installer removes legacy SyncFlow firewall rules during upgrade', 
   assert.match(installer, /delete rule name="\$\{SF_LEGACY_RULE_TCP\}"/);
   assert.match(installer, /delete rule name="\$\{SF_LEGACY_RULE_HTTP\}"/);
   assert.match(installer, /delete rule name="\$\{SF_LEGACY_RULE_MDNS\}"/);
+});
+
+test('desktop builder configs define Linux deb packaging', () => {
+  for (const name of [
+    'electron-builder.yml',
+    'electron-builder.cn.yml',
+    'electron-builder.global.yml',
+  ]) {
+    const linuxConfig = readTopLevelSection(readDesktopConfig(name), 'linux');
+
+    assert.match(linuxConfig, /^linux:$/m);
+    assert.match(linuxConfig, /^  artifactName: ViviDrop-\$\{version\}-linux-\$\{arch\}\.\$\{ext\}$/m);
+    assert.match(linuxConfig, /^  executableName: Vivi Drop$/m);
+    assert.match(linuxConfig, /^  category: Utility$/m);
+    assert.match(linuxConfig, /^  icon: resources\/icon-1024\.png$/m);
+    assert.match(linuxConfig, /^    - target: deb$/m);
+    assert.match(linuxConfig, /^        - x64$/m);
+    assert.match(linuxConfig, /^        - arm64$/m);
+    assert.match(linuxConfig, /^    - from: resources\/syncflow-sidecar$/m);
+    assert.match(linuxConfig, /^      to: syncflow-sidecar$/m);
+  }
 });
