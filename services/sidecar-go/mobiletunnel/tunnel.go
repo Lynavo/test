@@ -628,12 +628,15 @@ func selectedICERoute(pair *webrtc.ICECandidatePair) string {
 	if local.Typ == webrtc.ICECandidateTypeHost && remote.Typ == webrtc.ICECandidateTypeHost {
 		return selectedHostICERoute(local.Address, remote.Address)
 	}
+	if candidateHasLinkLocalAddress(local) || candidateHasLinkLocalAddress(remote) {
+		return "link_local_reflexive"
+	}
 	return "direct_reflexive"
 }
 
 func selectedHostICERoute(localAddress string, remoteAddress string) string {
-	localIP := net.ParseIP(localAddress)
-	remoteIP := net.ParseIP(remoteAddress)
+	localIP := parseCandidateIP(localAddress)
+	remoteIP := parseCandidateIP(remoteAddress)
 	if localIP == nil || remoteIP == nil {
 		return "direct_host"
 	}
@@ -650,6 +653,30 @@ func selectedHostICERoute(localAddress string, remoteAddress string) string {
 		return "public_ipv4_direct"
 	}
 	return "direct_host"
+}
+
+func candidateHasLinkLocalAddress(candidate *webrtc.ICECandidate) bool {
+	if candidate == nil {
+		return false
+	}
+	for _, address := range []string{candidate.Address, candidate.RelatedAddress} {
+		if ip := parseCandidateIP(address); ip != nil && isLinkLocalIP(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+func parseCandidateIP(address string) net.IP {
+	trimmed := strings.TrimSpace(address)
+	if trimmed == "" {
+		return nil
+	}
+	trimmed = strings.TrimPrefix(strings.TrimSuffix(trimmed, "]"), "[")
+	if zoneIndex := strings.LastIndex(trimmed, "%"); zoneIndex >= 0 {
+		trimmed = trimmed[:zoneIndex]
+	}
+	return net.ParseIP(trimmed)
 }
 
 func isPrivateIPv4(ip net.IP) bool {

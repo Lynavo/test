@@ -386,6 +386,20 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 		if scopedToClient {
 			enrichMobileReceivedPreviewURLs(result.Items, client)
 		}
+		slog.Info(
+			"mobile received library listed",
+			"clientID", client.ClientID,
+			"scopedToClient", scopedToClient,
+			"hasPageParams", true,
+			"page", result.Page,
+			"pageSize", result.PageSize,
+			"itemCount", len(result.Items),
+			"totalItems", result.TotalItems,
+			"totalBytes", result.TotalBytes,
+			"deletedCount", countDeletedReceivedLibraryItems(result.Items),
+			"deviceStatsCount", len(result.DeviceStats),
+			"remoteAddr", r.RemoteAddr,
+		)
 		_, _ = s.recordResourceAccess(desktopDeviceID, client, "received_library", "received_file", "Received Library", "list", "ok")
 		writeJSON(w, http.StatusOK, result)
 		return
@@ -404,8 +418,27 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 	if scopedToClient {
 		enrichMobileReceivedPreviewURLs(items, client)
 	}
+	slog.Info(
+		"mobile received library listed",
+		"clientID", client.ClientID,
+		"scopedToClient", scopedToClient,
+		"hasPageParams", false,
+		"itemCount", len(items),
+		"deletedCount", countDeletedReceivedLibraryItems(items),
+		"remoteAddr", r.RemoteAddr,
+	)
 	_, _ = s.recordResourceAccess(desktopDeviceID, client, "received_library", "received_file", "Received Library", "list", "ok")
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func countDeletedReceivedLibraryItems(items []store.ReceivedLibraryItem) int {
+	count := 0
+	for _, item := range items {
+		if item.FileStatus == "deleted" {
+			count++
+		}
+	}
+	return count
 }
 
 func enrichMobileReceivedPreviewURLs(items []store.ReceivedLibraryItem, client mobileAccessClient) {
@@ -573,11 +606,6 @@ func (s *Server) resolveMobileReceivedUploadWithClient(
 	upload, err := s.store.GetUpload(fileKey)
 	if err != nil {
 		slog.Warn("resolveMobileReceivedUpload: GetUpload failed", "fileKey", fileKey, "err", err)
-		writeError(w, http.StatusNotFound, "received file not found")
-		return mobileAccessClient{}, nil, "", nil, false
-	}
-	if upload.ClientID != client.ClientID {
-		slog.Warn("resolveMobileReceivedUpload: ClientID mismatch", "fileKey", fileKey, "dbClientID", upload.ClientID, "queryClientID", client.ClientID)
 		writeError(w, http.StatusNotFound, "received file not found")
 		return mobileAccessClient{}, nil, "", nil, false
 	}

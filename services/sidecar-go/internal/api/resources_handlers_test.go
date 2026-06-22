@@ -1158,7 +1158,7 @@ func TestMobileReceivedResourcesSupportsScopedPagination(t *testing.T) {
 	}
 }
 
-func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T) {
+func TestMobileReceivedFilePreviewByFileKeyAllowsPairedClientReceivedLibraryAccess(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	insertPairedDeviceWithStableID(t, st, "other-client", "Bob iPhone", "Bob iPhone", "stable-002", "2026-06-14T08:00:00Z")
@@ -1236,8 +1236,15 @@ func TestMobileReceivedFilePreviewByFileKeyIsScopedToCurrentClient(t *testing.T)
 		t.Fatalf("GET other client received preview: %v", err)
 	}
 	defer otherResp.Body.Close()
-	if otherResp.StatusCode != http.StatusNotFound {
-		t.Fatalf("other client preview status=%d, want 404", otherResp.StatusCode)
+	if otherResp.StatusCode != http.StatusOK {
+		t.Fatalf("other client preview status=%d, want 200", otherResp.StatusCode)
+	}
+	otherBody, err := io.ReadAll(otherResp.Body)
+	if err != nil {
+		t.Fatalf("read other client preview body: %v", err)
+	}
+	if string(otherBody) != "image bytes" {
+		t.Fatalf("other client preview body=%q, want image bytes", string(otherBody))
 	}
 
 	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])
@@ -1427,7 +1434,7 @@ func TestMobileReceivedFileThumbnailBroadcastsDesktopGeneratedRequest(t *testing
 	}
 }
 
-func TestMobileReceivedFileDownloadByFileKeyServesDocuments(t *testing.T) {
+func TestMobileReceivedFileDownloadByFileKeyServesDocumentsForPairedClients(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
 	desktopDeviceID, err := st.GetDeviceID()
@@ -1504,8 +1511,15 @@ func TestMobileReceivedFileDownloadByFileKeyServesDocuments(t *testing.T) {
 		t.Fatalf("GET other client received download: %v", err)
 	}
 	defer otherResp.Body.Close()
-	if otherResp.StatusCode != http.StatusNotFound {
-		t.Fatalf("other client download status=%d, want 404", otherResp.StatusCode)
+	if otherResp.StatusCode != http.StatusOK {
+		t.Fatalf("other client download status=%d, want 200", otherResp.StatusCode)
+	}
+	otherBody, err := io.ReadAll(otherResp.Body)
+	if err != nil {
+		t.Fatalf("read other client download body: %v", err)
+	}
+	if string(otherBody) != "document bytes" {
+		t.Fatalf("other client download body=%q, want document bytes", string(otherBody))
 	}
 
 	records, err := st.ListAccessRecords(desktopDeviceID, &[]string{"client-001"}[0])

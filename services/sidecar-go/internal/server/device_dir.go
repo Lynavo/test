@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/nicksyncflow/sidecar/internal/store"
@@ -94,6 +95,12 @@ func resolveReceiveDirName(st *store.Store, receiveDir string, device *store.Pai
 		return candidate, nil
 	}
 
+	if candidate, ok, err := stableDeviceReceiveDirName(st, receiveDir, device); err != nil {
+		return "", err
+	} else if ok {
+		return candidate, nil
+	}
+
 	if !skipLegacyClaim {
 		// --- 2a. Legacy claim: try to find an existing directory. ---
 		// A directory is only claimable if it exists on disk AND is not already
@@ -136,6 +143,52 @@ func resolveReceiveDirName(st *store.Store, receiveDir string, device *store.Pai
 		return "", err
 	}
 	return unique, nil
+}
+
+func stableDeviceReceiveDirName(st *store.Store, receiveDir string, device *store.PairedDevice) (string, bool, error) {
+	stableID := ""
+	if device.StableDeviceID != nil {
+		stableID = strings.TrimSpace(*device.StableDeviceID)
+	}
+	if stableID == "" {
+		return "", false, nil
+	}
+
+	devices, err := st.ListPairedDevices()
+	if err != nil {
+		return "", false, fmt.Errorf("list paired devices for stable-device dir reuse: %w", err)
+	}
+
+	for _, candidate := range devices {
+		if candidate.ClientID == device.ClientID || candidate.ReceiveDirName == nil || *candidate.ReceiveDirName == "" {
+			continue
+		}
+		if candidate.StableDeviceID == nil || strings.TrimSpace(*candidate.StableDeviceID) != stableID {
+			continue
+		}
+		dirName := *candidate.ReceiveDirName
+		if !dirExists(receiveDir, dirName) {
+			continue
+		}
+		if receiveDirReservedByDifferentStable(devices, dirName, device.ClientID, stableID) {
+			continue
+		}
+		return dirName, true, nil
+	}
+
+	return "", false, nil
+}
+
+func receiveDirReservedByDifferentStable(devices []store.PairedDevice, dirName string, clientID string, stableID string) bool {
+	for _, device := range devices {
+		if device.ClientID == clientID || device.ReceiveDirName == nil || *device.ReceiveDirName != dirName {
+			continue
+		}
+		if device.StableDeviceID == nil || strings.TrimSpace(*device.StableDeviceID) != stableID {
+			return true
+		}
+	}
+	return false
 }
 
 func historicalUploadDirName(st *store.Store, receiveDir string, device *store.PairedDevice) (string, bool, error) {

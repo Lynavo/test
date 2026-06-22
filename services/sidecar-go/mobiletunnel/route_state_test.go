@@ -49,6 +49,12 @@ func TestSelectedICERouteClassifiesIPv6AndLinkLocalHostPairs(t *testing.T) {
 			remote: "169.254.188.171",
 			want:   "link_local_direct",
 		},
+		{
+			name:   "scoped ipv6 link local direct",
+			local:  "fe80::1%utun3",
+			remote: "fe80::2%utun4",
+			want:   "link_local_direct",
+		},
 	}
 
 	for _, tt := range tests {
@@ -72,6 +78,27 @@ func TestSelectedICERouteClassifiesIPv6AndLinkLocalHostPairs(t *testing.T) {
 				t.Fatalf("expected %s route, got %q", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestSelectedICERouteClassifiesScopedIPv6LinkLocalReflexivePairs(t *testing.T) {
+	pair := &webrtc.ICECandidatePair{
+		Local: &webrtc.ICECandidate{
+			Typ:      webrtc.ICECandidateTypeHost,
+			Protocol: webrtc.ICEProtocolUDP,
+			Address:  "fe80::1%utun3",
+			Port:     50123,
+		},
+		Remote: &webrtc.ICECandidate{
+			Typ:      webrtc.ICECandidateTypePrflx,
+			Protocol: webrtc.ICEProtocolUDP,
+			Address:  "fe80::2%utun4",
+			Port:     49876,
+		},
+	}
+
+	if got := selectedICERoute(pair); got != "link_local_reflexive" {
+		t.Fatalf("expected link_local_reflexive route, got %q", got)
 	}
 }
 
@@ -109,8 +136,8 @@ func TestAppendConnectionStateDiagnosticArgsIncludesSelectedPairSnapshot(t *test
 	if values["connectedForMs"] != int64(10250) {
 		t.Fatalf("expected connectedForMs 10250, got %#v", values["connectedForMs"])
 	}
-	if values["lastSelectedRoute"] != "direct_reflexive" {
-		t.Fatalf("expected direct_reflexive route, got %#v", values["lastSelectedRoute"])
+	if values["lastSelectedRoute"] != "link_local_reflexive" {
+		t.Fatalf("expected link_local_reflexive route, got %#v", values["lastSelectedRoute"])
 	}
 	if values["lastSelectedLocalType"] != "host" || values["lastSelectedRemoteType"] != "srflx" {
 		t.Fatalf("unexpected candidate types: %#v", values)

@@ -692,8 +692,8 @@ func TestAppendConnectionStateDiagnosticArgsIncludesSelectedPairSnapshot(t *test
 	if values["connectedForMs"] != int64(10250) {
 		t.Fatalf("expected connectedForMs 10250, got %#v", values["connectedForMs"])
 	}
-	if values["lastSelectedRoute"] != "direct_reflexive" {
-		t.Fatalf("expected direct_reflexive route, got %#v", values["lastSelectedRoute"])
+	if values["lastSelectedRoute"] != "link_local_reflexive" {
+		t.Fatalf("expected link_local_reflexive route, got %#v", values["lastSelectedRoute"])
 	}
 	if values["lastSelectedLocalType"] != "host" || values["lastSelectedRemoteType"] != "srflx" {
 		t.Fatalf("unexpected candidate types: %#v", values)
