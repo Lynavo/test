@@ -164,6 +164,13 @@ jest.mock('../../services/SyncEngineModule', () => {
   };
 });
 
+jest.mock('react-native-vision-camera', () => ({
+  Camera: {
+    getCameraPermissionStatus: jest.fn().mockReturnValue('not-determined'),
+  },
+}));
+
+import { Camera } from 'react-native-vision-camera';
 import { pairDevice, PairingError } from '../../services/SyncEngineModule';
 import {
   DeviceDiscoveryGlobalScreen,
@@ -218,6 +225,9 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     mockUpdateAuthStatus.mockResolvedValue(undefined);
     mockGetBindingState.mockResolvedValue(null);
     mockGetKnownDeviceIds.mockResolvedValue([]);
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue(
+      'not-determined',
+    );
     mockNativeSyncEngine.getDiscoveryPermissionStatus.mockResolvedValue(
       'granted',
     );
@@ -693,6 +703,23 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       expect(screen.getByText('允许相机访问')).toBeTruthy();
     });
     expect(screen.getByText('允许')).toBeTruthy();
+  });
+
+  it('navigates directly to QR scanner when camera permission is already granted', async () => {
+    mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('granted');
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('手动配对')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('手动配对'));
+    fireEvent.press(screen.getByText('扫码配对'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('QRScanner');
+    expect(screen.queryByText('允许相机访问')).toBeNull();
   });
 
   it('opens manual IP input from the manual pairing options', async () => {

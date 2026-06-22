@@ -18,6 +18,7 @@ jest.mock('react-native-vision-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
   const Camera = (props: Record<string, unknown>) => <View {...props} />;
+  Camera.getCameraPermissionStatus = jest.fn().mockReturnValue('not-determined');
   Camera.requestCameraPermission = jest.fn().mockResolvedValue('granted');
 
   return {
@@ -52,7 +53,7 @@ jest.mock('../../components/Icon', () => ({
 
 import i18n from '../../i18n';
 import { QRScannerScreen } from '../QRScannerScreen';
-import { useCodeScanner } from 'react-native-vision-camera';
+import { Camera, useCodeScanner } from 'react-native-vision-camera';
 
 describe('QRScannerScreen', () => {
   beforeAll(async () => {
@@ -66,6 +67,21 @@ describe('QRScannerScreen', () => {
       configurable: true,
       value: 'ios',
     });
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('not-determined');
+    (Camera.requestCameraPermission as jest.Mock).mockResolvedValue('granted');
+  });
+
+  it('does not request camera permission again when it is already granted', async () => {
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('granted');
+
+    const { getByText } = render(<QRScannerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('如何取得二維碼？')).toBeTruthy();
+    });
+
+    expect(Camera.getCameraPermissionStatus).toHaveBeenCalledTimes(1);
+    expect(Camera.requestCameraPermission).not.toHaveBeenCalled();
   });
 
   it('renders the v0-style scanner guidance card', async () => {

@@ -44,6 +44,7 @@ import {
   Monitor,
   Smartphone,
 } from 'lucide-react-native';
+import { Camera } from 'react-native-vision-camera';
 
 import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
@@ -1026,6 +1027,16 @@ export function DeviceDiscoveryGlobalScreen() {
     setConnectionModalStep(null);
   }, [verifying]);
 
+  const openScannerOrPermissionPrompt = useCallback(() => {
+    if (Camera.getCameraPermissionStatus() === 'granted') {
+      setConnectionModalStep(null);
+      navigation.navigate('QRScanner');
+      return;
+    }
+
+    setConnectionModalStep('cameraPermission');
+  }, [navigation]);
+
   const dismissGuide = useCallback(async () => {
     await markUnconnectedGuideSeen();
     setShowGuide(false);
@@ -1228,9 +1239,7 @@ export function DeviceDiscoveryGlobalScreen() {
             verifying={verifying}
             codeError={codeError}
             onClose={closeConnectionModal}
-            onScan={() => {
-              setConnectionModalStep('cameraPermission');
-            }}
+            onScan={openScannerOrPermissionPrompt}
             onCode={() => {
               setCodeError(null);
               setConnectionFailure(null);

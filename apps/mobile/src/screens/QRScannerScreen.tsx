@@ -30,10 +30,28 @@ function CameraQRScannerScreen() {
   const scanLineProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let isMounted = true;
+
     (async () => {
-      const status = await Camera.requestCameraPermission();
-      setHasPermission(status === 'granted');
+      const currentStatus = Camera.getCameraPermissionStatus();
+
+      if (currentStatus === 'granted') {
+        if (isMounted) setHasPermission(true);
+        return;
+      }
+
+      if (currentStatus !== 'not-determined') {
+        if (isMounted) setHasPermission(false);
+        return;
+      }
+
+      const requestStatus = await Camera.requestCameraPermission();
+      if (isMounted) setHasPermission(requestStatus === 'granted');
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
