@@ -191,7 +191,10 @@ function expectPreviewText(screen: ReturnType<typeof render>, text: string) {
   ).toBeGreaterThan(0);
 }
 
-function expectPreviewTestId(screen: ReturnType<typeof render>, testID: string) {
+function expectPreviewTestId(
+  screen: ReturnType<typeof render>,
+  testID: string,
+) {
   expect(
     screen.getAllByTestId(testID, { includeHiddenElements: true }).length,
   ).toBeGreaterThan(0);
@@ -310,7 +313,9 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     });
 
     expect(screen.getByText('等待授权')).toBeTruthy();
-    expect(mockNativeSyncEngine.getDiscoveryPermissionStatus).toHaveBeenCalled();
+    expect(
+      mockNativeSyncEngine.getDiscoveryPermissionStatus,
+    ).toHaveBeenCalled();
     expect(mockNativeSyncEngine.startDiscovery).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByText('开始扫描'));
@@ -474,6 +479,71 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       expect(screen.getByText('已发现 1 台')).toBeTruthy();
     });
     expect(screen.getAllByText('Studio Mac')).toHaveLength(1);
+  });
+
+  it('deduplicates a recent desktop when LAN discovery reports a different id for the same host', async () => {
+    mockRouteParams = { mode: 'initial' };
+    jest
+      .spyOn(NativeEventEmitter.prototype, 'addListener')
+      .mockImplementation((_event, listener) => {
+        listener([
+          {
+            deviceId: 'studio-mac-server-id',
+            name: 'Studio Mac',
+            ip: '192.168.31.8',
+            type: 'mac',
+            port: 39393,
+          },
+        ]);
+        return { remove: jest.fn() } as any;
+      });
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('已发现 1 台')).toBeTruthy();
+    });
+    expect(screen.getAllByText('Studio Mac')).toHaveLength(1);
+  });
+
+  it('deduplicates LAN discoveries that describe the same host and port with different ids', async () => {
+    mockRouteParams = { mode: 'switch' };
+    jest
+      .spyOn(NativeEventEmitter.prototype, 'addListener')
+      .mockImplementation((_event, listener) => {
+        listener([
+          {
+            deviceId: 'mini4-server-id',
+            name: 'Mini4',
+            ip: '172.16.20.108',
+            type: 'mac',
+            port: 39393,
+          },
+          {
+            deviceId: 'Mini4',
+            name: 'Mini4',
+            ip: '172.16.20.108:39393',
+            type: 'mac',
+            port: 39393,
+          },
+          {
+            deviceId: 'fallback-172.16.20.108',
+            name: '172.16.20.108',
+            ip: '172.16.20.108:39393',
+            type: 'mac',
+            port: 39393,
+          },
+        ]);
+        return { remove: jest.fn() } as any;
+      });
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('已发现 1 台')).toBeTruthy();
+    });
+    expect(screen.getAllByText('Mini4')).toHaveLength(1);
+    expect(screen.queryByText('172.16.20.108:39393')).toBeNull();
   });
 
   it('does not count recent-only desktops as online devices in switch mode', async () => {

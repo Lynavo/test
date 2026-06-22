@@ -49,6 +49,10 @@ import {
   markUnconnectedGuideSeen,
 } from '../utils/onboardingStorage';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
+import {
+  normalizeDiscoveredDevices,
+  recentDesktopMatchesDiscoveredDevice,
+} from './deviceDiscoveryDevices';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
 import { marketConfig } from '../markets';
 import { useRecentDesktops } from '../stores/recent-desktops-store';
@@ -276,16 +280,18 @@ export function DeviceDiscoveryScreen() {
           subscription = emitter.addListener(
             'onDiscoveredDevicesChanged',
             (discoveredDevices: DiscoveredDevice[]) => {
+              const normalizedDevices =
+                normalizeDiscoveredDevices(discoveredDevices);
               console.log(
                 '[DiscoveryScreen] onDiscoveredDevicesChanged',
-                discoveredDevices.length,
-                deviceDiscoveryDebugSummary(discoveredDevices),
+                normalizedDevices.length,
+                deviceDiscoveryDebugSummary(normalizedDevices),
               );
 
               if (
                 shouldKeepCachedDevicesVisible({
                   currentDeviceCount: devicesRef.current.length,
-                  nextDeviceCount: discoveredDevices.length,
+                  nextDeviceCount: normalizedDevices.length,
                   preserveCachedDevices: preserveCachedDevicesRef.current,
                 })
               ) {
@@ -296,8 +302,8 @@ export function DeviceDiscoveryScreen() {
               }
 
               preserveCachedDevicesRef.current = false;
-              setDevices(discoveredDevices);
-              if (discoveredDevices.length > 0) {
+              setDevices(normalizedDevices);
+              if (normalizedDevices.length > 0) {
                 setScanning(false);
                 if (timeoutTimer) {
                   clearTimeout(timeoutTimer);
@@ -425,7 +431,9 @@ export function DeviceDiscoveryScreen() {
     async (device: DiscoveredDevice) => {
       console.log(
         '[DiscoveryScreen] handleDevicePress',
-        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${device.type}`,
+        `${device.name}/${device.ip || 'no-ip'}/${device.deviceId}/${
+          device.type
+        }`,
       );
 
       if (device.deviceId === currentDeviceId) {
@@ -765,13 +773,21 @@ export function DeviceDiscoveryScreen() {
       });
     }
   }
-  if (recentDesktops.length > 0) {
+  const displayedRecentDesktops = recentDesktops.filter(
+    recent =>
+      !devices.some(device =>
+        mode === 'switch'
+          ? device.deviceId === recent.desktopDeviceId
+          : recentDesktopMatchesDiscoveredDevice(recent, device),
+      ),
+  );
+  if (displayedRecentDesktops.length > 0) {
     listData.push({
       type: 'header',
       key: 'header-recent',
       title: t('deviceDiscovery.sections.recent'),
     });
-    for (const recent of recentDesktops) {
+    for (const recent of displayedRecentDesktops) {
       listData.push({
         type: 'recent',
         key: `recent-${recent.desktopDeviceId}`,

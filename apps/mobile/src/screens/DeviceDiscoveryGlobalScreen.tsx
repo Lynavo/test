@@ -57,11 +57,12 @@ import {
   markUnconnectedGuideSeen,
 } from '../utils/onboardingStorage';
 import { isVisualQaEnabled } from '../dev/visualQa';
-import {
-  pairDevice,
-  PairingError,
-} from '../services/SyncEngineModule';
+import { pairDevice, PairingError } from '../services/SyncEngineModule';
 import { buildManualPairDevice } from './deviceDiscoveryManualPairing';
+import {
+  normalizeDiscoveredDevices,
+  recentDesktopMatchesDiscoveredDevice,
+} from './deviceDiscoveryDevices';
 import { shouldKeepCachedDevicesVisible } from './deviceDiscoveryRefresh';
 
 type NavigationProp = StackNavigationProp<
@@ -414,9 +415,7 @@ export function DeviceDiscoveryGlobalScreen() {
   const mode = route.params?.mode ?? 'initial';
   const { recentDesktops, addDesktop } = useRecentDesktops();
 
-  const [knownDeviceIds, setKnownDeviceIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [knownDeviceIds, setKnownDeviceIds] = useState<Set<string>>(new Set());
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
   const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
   const [scanning, setScanning] = useState(true);
@@ -458,15 +457,15 @@ export function DeviceDiscoveryGlobalScreen() {
     const { NativeSyncEngine } = NativeModules;
 
     Promise.all([
-      (
-        NativeSyncEngine?.getKnownDeviceIds?.() ?? Promise.resolve([])
-      ).catch((error: unknown) => {
-        console.warn(
-          '[DeviceDiscoveryGlobalScreen] switch bootstrap getKnownDeviceIds failed',
-          error,
-        );
-        return [] as string[];
-      }),
+      (NativeSyncEngine?.getKnownDeviceIds?.() ?? Promise.resolve([])).catch(
+        (error: unknown) => {
+          console.warn(
+            '[DeviceDiscoveryGlobalScreen] switch bootstrap getKnownDeviceIds failed',
+            error,
+          );
+          return [] as string[];
+        },
+      ),
       (NativeSyncEngine?.getBindingState?.() ?? Promise.resolve(null)).catch(
         (error: unknown) => {
           console.warn(
@@ -564,10 +563,11 @@ export function DeviceDiscoveryGlobalScreen() {
       subscription = emitter.addListener(
         'onDiscoveredDevicesChanged',
         (nextDevices: DiscoveredDevice[]) => {
+          const normalizedDevices = normalizeDiscoveredDevices(nextDevices);
           if (
             shouldKeepCachedDevicesVisible({
               currentDeviceCount: devicesRef.current.length,
-              nextDeviceCount: nextDevices.length,
+              nextDeviceCount: normalizedDevices.length,
               preserveCachedDevices: preserveCachedDevicesRef.current,
             })
           ) {
@@ -575,8 +575,8 @@ export function DeviceDiscoveryGlobalScreen() {
           }
 
           preserveCachedDevicesRef.current = false;
-          setDevices(nextDevices);
-          if (nextDevices.length > 0) {
+          setDevices(normalizedDevices);
+          if (normalizedDevices.length > 0) {
             setScanning(false);
             setConnectionStatus('ready');
             if (timeoutTimer) {
@@ -593,8 +593,9 @@ export function DeviceDiscoveryGlobalScreen() {
         );
         if (!active) return;
 
-        const permissionStatus =
-          await getAndroidDiscoveryPermissionStatus(NativeSyncEngine);
+        const permissionStatus = await getAndroidDiscoveryPermissionStatus(
+          NativeSyncEngine,
+        );
         if (!active) return;
         if (permissionStatus === 'required') {
           preserveCachedDevicesRef.current = false;
@@ -639,7 +640,9 @@ export function DeviceDiscoveryGlobalScreen() {
         )
       : recentDesktops.filter(
           recent =>
-            !devices.some(device => device.deviceId === recent.desktopDeviceId),
+            !devices.some(device =>
+              recentDesktopMatchesDiscoveredDevice(recent, device),
+            ),
         );
   const discoveredCount = devices.length + displayedRecentDesktops.length;
   const isShowingSkeleton = scanning && discoveredCount === 0;
@@ -941,54 +944,53 @@ export function DeviceDiscoveryGlobalScreen() {
           },
         }
       : !isShowingSkeleton && connectionStatus === 'permissionRequired'
-        ? {
-            title: '允许查找附近设备',
-            description:
-              'Android 需要允许查找附近设备，才能发现同一局域网下的电脑。',
-            actionLabel: '开始扫描',
-            icon: 'radio-outline',
-            tone: 'neutral',
-            onAction: handleRescan,
-          }
+      ? {
+          title: '允许查找附近设备',
+          description:
+            'Android 需要允许查找附近设备，才能发现同一局域网下的电脑。',
+          actionLabel: '开始扫描',
+          icon: 'radio-outline',
+          tone: 'neutral',
+          onAction: handleRescan,
+        }
       : !isShowingSkeleton && connectionStatus === 'failed'
-        ? {
-            ...getConnectionFailureCopy(connectionFailure),
-            onAction: () => {
-              if (connectionFailure?.code === 'version_incompatible') {
-                handleRescan();
-                return;
-              }
-              setConnectionCode('');
-              setCodeError(null);
-              setConnectionFailure(null);
-              setConnectionStatus('ready');
-              setConnectionModalStep('code');
-            },
-          }
-        : !isShowingSkeleton && connectionStatus === 'timeout'
-          ? {
-              title: '连接超时',
-              description: '电脑端长时间没有响应，可能正在使用中或客户端离线。',
-              actionLabel: '再次扫描',
-              icon: 'time-outline',
-              tone: 'warning',
-              onAction: handleRescan,
+      ? {
+          ...getConnectionFailureCopy(connectionFailure),
+          onAction: () => {
+            if (connectionFailure?.code === 'version_incompatible') {
+              handleRescan();
+              return;
             }
-          : !isShowingSkeleton && connectionStatus === 'cameraDenied'
-            ? {
-                title: '相机权限被拒绝',
-                description:
-                  '无法打开相机扫码，可以改用电脑端显示的连接码完成配对。',
-                actionLabel: '输入连接码',
-                icon: 'camera-outline',
-                tone: 'warning',
-                onAction: () => {
-                  setConnectionCode('');
-                  setCodeError(null);
-                  setConnectionModalStep(selectedDevice ? 'code' : 'method');
-                },
-              }
-            : null;
+            setConnectionCode('');
+            setCodeError(null);
+            setConnectionFailure(null);
+            setConnectionStatus('ready');
+            setConnectionModalStep('code');
+          },
+        }
+      : !isShowingSkeleton && connectionStatus === 'timeout'
+      ? {
+          title: '连接超时',
+          description: '电脑端长时间没有响应，可能正在使用中或客户端离线。',
+          actionLabel: '再次扫描',
+          icon: 'time-outline',
+          tone: 'warning',
+          onAction: handleRescan,
+        }
+      : !isShowingSkeleton && connectionStatus === 'cameraDenied'
+      ? {
+          title: '相机权限被拒绝',
+          description: '无法打开相机扫码，可以改用电脑端显示的连接码完成配对。',
+          actionLabel: '输入连接码',
+          icon: 'camera-outline',
+          tone: 'warning',
+          onAction: () => {
+            setConnectionCode('');
+            setCodeError(null);
+            setConnectionModalStep(selectedDevice ? 'code' : 'method');
+          },
+        }
+      : null;
 
   const activeConnectionModalStep =
     connectionModalStep === 'manualPair' ||
@@ -1092,10 +1094,10 @@ export function DeviceDiscoveryGlobalScreen() {
                               isCurrentDevice
                                 ? '当前'
                                 : isKnownDevice
-                                  ? '直接切换'
-                                  : device.availability === 'busy'
-                                    ? '使用中'
-                                    : '可连接'
+                                ? '直接切换'
+                                : device.availability === 'busy'
+                                ? '使用中'
+                                : '可连接'
                             }
                             iconName={
                               device.deviceKind === 'laptop'
@@ -1126,8 +1128,8 @@ export function DeviceDiscoveryGlobalScreen() {
                               isCurrentDevice
                                 ? '当前'
                                 : isKnownDevice
-                                  ? '直接切换'
-                                  : '可连接'
+                                ? '直接切换'
+                                : '可连接'
                             }
                             iconName="desktop-outline"
                             availability="available"
@@ -1302,18 +1304,18 @@ function FlowStateCard({ state }: { state: FlowStateContent }) {
           actionText: styles.flowActionTextDanger,
         }
       : state.tone === 'warning'
-        ? {
-            icon: styles.flowIconWarning,
-            iconColor: '#AD761D',
-            action: styles.flowActionWarning,
-            actionText: styles.flowActionTextWarning,
-          }
-        : {
-            icon: styles.flowIconNeutral,
-            iconColor: '#7B8490',
-            action: styles.flowActionNeutral,
-            actionText: styles.flowActionTextNeutral,
-          };
+      ? {
+          icon: styles.flowIconWarning,
+          iconColor: '#AD761D',
+          action: styles.flowActionWarning,
+          actionText: styles.flowActionTextWarning,
+        }
+      : {
+          icon: styles.flowIconNeutral,
+          iconColor: '#7B8490',
+          action: styles.flowActionNeutral,
+          actionText: styles.flowActionTextNeutral,
+        };
 
   return (
     <View style={styles.flowStateCard}>
@@ -1487,11 +1489,7 @@ function GlobalConnectionFeaturePreviewCard({
               testID="guide-preview-auto-upload-icon"
               style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
             >
-              <Monitor
-                size={16}
-                color="#1677D2"
-                strokeWidth={2}
-              />
+              <Monitor size={16} color="#1677D2" strokeWidth={2} />
             </View>
             <View>
               <Text style={styles.guidePreviewStrong}>自动同步</Text>
@@ -1519,11 +1517,7 @@ function GlobalConnectionFeaturePreviewCard({
             testID="guide-preview-sync-plan-icon"
             style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
           >
-            <CloudDownload
-              size={16}
-              color="#1677D2"
-              strokeWidth={2}
-            />
+            <CloudDownload size={16} color="#1677D2" strokeWidth={2} />
           </View>
           <View style={styles.guidePreviewFlex}>
             <Text style={styles.guidePreviewStrong}>同步计划</Text>
@@ -1564,11 +1558,7 @@ function GlobalConnectionFeaturePreviewCard({
               testID="guide-preview-sync-progress-icon"
               style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
             >
-              <Monitor
-                size={16}
-                color="#1677D2"
-                strokeWidth={2}
-              />
+              <Monitor size={16} color="#1677D2" strokeWidth={2} />
             </View>
             <View>
               <Text style={styles.guidePreviewStrong}>自动同步</Text>
@@ -1625,11 +1615,7 @@ function GlobalConnectionFeaturePreviewCard({
               testID="guide-preview-records-download-icon"
               style={[styles.guidePreviewMiniIcon, styles.guidePreviewIconBlue]}
             >
-              <Download
-                size={16}
-                color="#1677D2"
-                strokeWidth={2}
-              />
+              <Download size={16} color="#1677D2" strokeWidth={2} />
             </View>
             <Text style={styles.guidePreviewStrong}>最近下载</Text>
           </View>
@@ -1810,7 +1796,10 @@ function GuidePreviewResourceEntry({
 }) {
   return (
     <View style={styles.guidePreviewResourceEntry}>
-      <View testID={testID} style={[styles.guidePreviewResourceIcon, iconStyle]}>
+      <View
+        testID={testID}
+        style={[styles.guidePreviewResourceIcon, iconStyle]}
+      >
         <ResourceIcon size={17} color={iconColor} strokeWidth={2} />
       </View>
       <View style={styles.guidePreviewFlex}>
