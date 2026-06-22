@@ -172,6 +172,7 @@ func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string
 			return ReceivedLibraryPage{}, fmt.Errorf("scan received library item: %w", err)
 		}
 		item.DesktopDeviceID = desktopDeviceID
+		item.Filename = receivedLibraryDisplayFilename(item.Filename, item.FinalPath)
 		item.ShareStatus = "not_shared"
 		item.FileStatus = receivedLibraryFileStatus(receiveDir, item.FinalPath)
 		if resourceID != nil {
@@ -188,6 +189,18 @@ func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string
 	}
 	result.Items = items
 	return result, nil
+}
+
+func receivedLibraryDisplayFilename(originalFilename string, finalPath *string) string {
+	if finalPath == nil || strings.TrimSpace(*finalPath) == "" {
+		return originalFilename
+	}
+
+	base := filepath.Base(filepath.Clean(*finalPath))
+	if strings.TrimSpace(base) == "" || base == "." {
+		return originalFilename
+	}
+	return base
 }
 
 func receivedLibraryFileStatus(receiveDir string, finalPath *string) string {

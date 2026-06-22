@@ -181,6 +181,58 @@ func TestReceivedLibraryMarksDeletedFiles(t *testing.T) {
 	}
 }
 
+func TestReceivedLibraryUsesFinalPathBasenameForDisplayFilename(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	receiveDir := t.TempDir()
+
+	uploads := []struct {
+		fileKey   string
+		finalPath string
+	}{
+		{fileKey: "file-1", finalPath: filepath.Join("client-1", "2026-06-22", "part1.mp4")},
+		{fileKey: "file-2", finalPath: filepath.Join("client-1", "2026-06-22", "part1_file-2.mp4")},
+	}
+	for _, fixture := range uploads {
+		absPath := filepath.Join(receiveDir, fixture.finalPath)
+		if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+			t.Fatalf("MkdirAll %s: %v", fixture.fileKey, err)
+		}
+		if err := os.WriteFile(absPath, []byte("video"), 0o644); err != nil {
+			t.Fatalf("WriteFile %s: %v", fixture.fileKey, err)
+		}
+
+		upload := sampleUpload(fixture.fileKey, "client-1")
+		upload.OriginalFilename = "part1.mp4"
+		upload.MediaType = "video/mp4"
+		upload.Status = "completed"
+		upload.CompletedAt = &now
+		upload.UpdatedAt = now
+		upload.FinalPath = &fixture.finalPath
+		if err := s.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", fixture.fileKey, err)
+		}
+	}
+
+	items, err := s.ListReceivedLibraryWithReceiveDir("desktop-1", receiveDir)
+	if err != nil {
+		t.Fatalf("ListReceivedLibraryWithReceiveDir: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 received items, got %d", len(items))
+	}
+	byKey := map[string]ReceivedLibraryItem{}
+	for _, item := range items {
+		byKey[item.FileKey] = item
+	}
+	if byKey["file-1"].Filename != "part1.mp4" {
+		t.Fatalf("expected file-1 display filename part1.mp4, got %+v", byKey["file-1"])
+	}
+	if byKey["file-2"].Filename != "part1_file-2.mp4" {
+		t.Fatalf("expected file-2 display filename part1_file-2.mp4, got %+v", byKey["file-2"])
+	}
+}
+
 func TestListSyncRecordsIncludesCompletedAndFailedUploads(t *testing.T) {
 	s := newTestStore(t)
 	completedAt := "2026-06-15T10:00:00Z"
