@@ -147,13 +147,21 @@ pnpm package:desktop:win
 
 Ubuntu 22.04+ Linux 桌面包提供 `.deb`，覆蓋 `amd64` / `x64` 和 `arm64`；Ubuntu `amd64` 對應產物檔名中的 `x64`。
 
-從倉庫根目錄執行：
+Linux `.deb` 按目標 Ubuntu host / VM / arch 分開打包。從倉庫根目錄執行時，預設打包目前 Linux host arch：
 
 ```bash
 pnpm package:desktop:linux
 ```
 
-產物位置：
+如果需要顯式指定 arch，可在 `apps/desktop` 下用 pnpm 的 `--` 轉發參數：
+
+```bash
+cd apps/desktop
+pnpm package:linux -- --arch x64
+pnpm package:linux -- --arch arm64
+```
+
+產物位置如下；`linux-x64.deb` 與 `linux-arm64.deb` 分別來自 x64 和 arm64 的獨立打包執行，不是單次命令同時產出：
 
 - `apps/desktop/release/ViviDrop-0.1.0-linux-x64.deb`
 - `apps/desktop/release/ViviDrop-0.1.0-linux-arm64.deb`
