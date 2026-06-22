@@ -3,7 +3,11 @@ import os from 'node:os';
 import type { ElectronAPI } from './api';
 import type { SidecarEvent } from '@syncflow/contracts';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
-import { supportsAppleAuth, usesTitleBarOverlayControls } from '../shared/platform-capabilities';
+import {
+  isLinuxPlatform,
+  supportsAppleAuth,
+  usesTitleBarOverlayControls,
+} from '../shared/platform-capabilities';
 
 // IPC channel constants — duplicated from main/ipc-handlers.ts
 // because electron-vite builds preload and main as separate targets.
@@ -155,6 +159,7 @@ const electronAPI: ElectronAPI = {
   platform: {
     isMac: () => process.platform === 'darwin',
     isWindows: () => process.platform === 'win32',
+    isLinux: () => isLinuxPlatform(),
     supportsAppleAuth: () => supportsAppleAuth(),
     usesTitleBarOverlayControls: () => usesTitleBarOverlayControls(),
     isAuthBypassEnabled: () =>

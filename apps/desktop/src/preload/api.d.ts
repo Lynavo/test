@@ -160,6 +160,7 @@ export interface ElectronAPI {
   platform: {
     isMac(): boolean;
     isWindows(): boolean;
+    isLinux(): boolean;
     supportsAppleAuth(): boolean;
     usesTitleBarOverlayControls(): boolean;
     isAuthBypassEnabled(): boolean;

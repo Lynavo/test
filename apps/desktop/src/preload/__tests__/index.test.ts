@@ -33,6 +33,9 @@ const exposed = vi.hoisted(() => ({
           getState(): Promise<unknown>;
           setPreventSleepDuringTransfer(enabled: boolean): Promise<unknown>;
         };
+        platform: {
+          isLinux(): boolean;
+        };
       },
   invoke: vi.fn(),
   on: vi.fn(),
@@ -195,5 +198,11 @@ describe('preload electronAPI', () => {
     });
     expect(exposed.invoke).toHaveBeenCalledWith('power-save:get-state');
     expect(exposed.invoke).toHaveBeenCalledWith('power-save:set-prevent-sleep', false);
+  });
+
+  it('exposes whether the current platform is Linux', async () => {
+    await import('../index');
+
+    expect(exposed.api?.platform.isLinux()).toBe(process.platform === 'linux');
   });
 });

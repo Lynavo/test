@@ -133,6 +133,7 @@ const mockEvents: ElectronAPI['events'] = {
 const mockPlatform: ElectronAPI['platform'] = {
   isMac: () => true,
   isWindows: () => false,
+  isLinux: () => false,
   supportsAppleAuth: () => true,
   usesTitleBarOverlayControls: () => false,
   isAuthBypassEnabled: () => false,
