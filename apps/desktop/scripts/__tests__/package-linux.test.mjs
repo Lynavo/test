@@ -32,6 +32,23 @@ test('resolves explicit arch and builder config from split flags', () => {
   );
 });
 
+test('resolves explicit arch from equals flag', () => {
+  assert.deepEqual(resolvePackageLinuxOptions(['--arch=x64'], { arch: 'arm64' }), {
+    arch: 'x64',
+    builderConfig: null,
+  });
+
+  assert.deepEqual(
+    resolvePackageLinuxOptions(['--arch=arm64', '--config=electron-builder.cn.yml'], {
+      arch: 'x64',
+    }),
+    {
+      arch: 'arm64',
+      builderConfig: 'electron-builder.cn.yml',
+    },
+  );
+});
+
 test('resolves positional arch and builder config from equals flag', () => {
   assert.deepEqual(
     resolvePackageLinuxOptions(['arm64', '--config=electron-builder.cn.yml'], {
@@ -59,6 +76,14 @@ test('rejects missing builder config values and unsupported arches', () => {
   );
   assert.throws(
     () => resolvePackageLinuxOptions(['ia32'], { arch: 'x64' }),
+    /Unsupported Linux sidecar arch/,
+  );
+  assert.throws(
+    () => resolvePackageLinuxOptions(['--arch='], { arch: 'x64' }),
+    /--arch requires x64 or arm64/,
+  );
+  assert.throws(
+    () => resolvePackageLinuxOptions(['--arch=ia32'], { arch: 'x64' }),
     /Unsupported Linux sidecar arch/,
   );
 });

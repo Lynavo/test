@@ -31,6 +31,15 @@ function resolvePackageLinuxOptions(args = process.argv.slice(2), processInfo = 
       continue;
     }
 
+    if (arg.startsWith('--arch=')) {
+      const value = arg.slice('--arch='.length);
+      if (!value) {
+        throw new Error('--arch requires x64 or arm64.');
+      }
+      archArgs.push('--arch', value);
+      continue;
+    }
+
     archArgs.push(arg);
   }
 
