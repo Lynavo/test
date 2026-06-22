@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nicksyncflow/sidecar/internal/events"
 )
 
 const (
@@ -24,6 +26,8 @@ const (
 	directoryThumbnailMaxEdge      = 256
 	directoryThumbnailJPEGQuality  = 80
 	directoryThumbnailMaxCacheSize = int64(256 * 1024 * 1024)
+	videoThumbnailPollInterval     = 100 * time.Millisecond
+	videoThumbnailPollTimeout      = 3 * time.Second
 )
 
 // directoryFileDTO mirrors the DirectoryFileDTO contract.
@@ -34,6 +38,7 @@ type directoryFileDTO struct {
 	Size         int64   `json:"size"`
 	ModifiedAt   string  `json:"modifiedAt"`
 	ThumbnailURL *string `json:"thumbnailUrl,omitempty"`
+	StreamURL    *string `json:"streamUrl,omitempty"`
 	IsDirectory  bool    `json:"isDirectory,omitempty"`
 }
 
@@ -162,7 +167,7 @@ func (s *Server) listSharedDir(w http.ResponseWriter, relPath string) {
 		return
 	}
 
-	s.listDirectory(w, relPath, s.resolveSharedPath, "", "/shared/thumbnail/", false)
+	s.listDirectoryWithStreams(w, relPath, s.resolveSharedPath, "", "/shared/thumbnail/", "/shared/stream/", false)
 }
 
 func (s *Server) listDirectory(
@@ -171,6 +176,18 @@ func (s *Server) listDirectory(
 	resolvePath func(string) (string, error),
 	scope string,
 	thumbnailPrefix string,
+	versionedSupportedThumbnails bool,
+) bool {
+	return s.listDirectoryWithStreams(w, relPath, resolvePath, scope, thumbnailPrefix, "", versionedSupportedThumbnails)
+}
+
+func (s *Server) listDirectoryWithStreams(
+	w http.ResponseWriter,
+	relPath string,
+	resolvePath func(string) (string, error),
+	scope string,
+	thumbnailPrefix string,
+	streamPrefix string,
 	versionedSupportedThumbnails bool,
 ) bool {
 	resolved, err := resolvePath(relPath)
@@ -230,14 +247,39 @@ func (s *Server) listDirectory(
 		}
 
 		var thumbURL *string
-		if fileType == "image" && thumbnailPrefix != "" {
-			if !versionedSupportedThumbnails {
-				u := thumbnailPrefix + filePath
-				thumbURL = &u
-			} else if isSupportedDirectoryThumbnailSource(e.Name()) {
-				u := thumbnailPrefix + filePath + "?v=" + directoryThumbnailSourceVersion(entryInfo)
-				thumbURL = &u
+		var streamURL *string
+		if !entryInfo.IsDir() {
+			switch fileType {
+			case "image":
+				if thumbnailPrefix != "" {
+					if !versionedSupportedThumbnails {
+						u := thumbnailPrefix + filePath
+						thumbURL = &u
+					} else if isSupportedDirectoryThumbnailSource(e.Name()) {
+						u := thumbnailPrefix + filePath + "?v=" + directoryThumbnailSourceVersion(entryInfo)
+						thumbURL = &u
+					}
+				}
+			case "video":
+				if streamPrefix != "" {
+					u := streamPrefix + filePath
+					streamURL = &u
+				}
+				if thumbnailPrefix != "" && isSupportedDirectoryVideoPosterSource(e.Name()) {
+					u := thumbnailPrefix + filePath + "?v=" + directoryThumbnailSourceVersion(entryInfo)
+					thumbURL = &u
+				}
 			}
+		}
+		if fileType == "video" && !entryInfo.IsDir() {
+			slog.Info("directory video listed",
+				"scope", scope,
+				"path", filePath,
+				"name", e.Name(),
+				"thumbnailUrl", optionalStringValue(thumbURL),
+				"streamUrl", optionalStringValue(streamURL),
+				"supportedPoster", isSupportedDirectoryVideoPosterSource(e.Name()),
+			)
 		}
 
 		files = append(files, directoryFileDTO{
@@ -247,6 +289,7 @@ func (s *Server) listDirectory(
 			Size:         entryInfo.Size(),
 			ModifiedAt:   entryInfo.ModTime().UTC().Format(time.RFC3339),
 			ThumbnailURL: thumbURL,
+			StreamURL:    streamURL,
 			IsDirectory:  entryInfo.IsDir(),
 		})
 	}
@@ -261,7 +304,6 @@ func (s *Server) listDirectory(
 }
 
 // handleSharedThumbnail serves a thumbnail for a shared file.
-// For images, the file is served directly. For other types, a 404 is returned.
 func (s *Server) handleSharedThumbnail(w http.ResponseWriter, r *http.Request) {
 	if !s.ensureStorageDirsForRequest(w, "shared.thumbnail") {
 		return
@@ -294,6 +336,11 @@ func (s *Server) serveDirectoryThumbnail(
 	info, err := os.Stat(resolved)
 	if err != nil || info.IsDir() {
 		writeError(w, http.StatusNotFound, "file not found")
+		return
+	}
+
+	if isSupportedDirectoryVideoPosterSource(info.Name()) {
+		s.serveCachedThumbnailForResolvedFile(w, r, resolved, info)
 		return
 	}
 
@@ -334,25 +381,60 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 	resolved string,
 	info os.FileInfo,
 ) {
-	if !isSupportedDirectoryThumbnailSource(info.Name()) {
+	isImageThumbnail := isSupportedDirectoryThumbnailSource(info.Name())
+	isVideoThumbnail := isSupportedDirectoryVideoPosterSource(info.Name())
+	if !isImageThumbnail && !isVideoThumbnail {
 		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
 		return
 	}
 
 	cachePath := s.directoryThumbnailCachePath(resolved, info)
-	if fileExists(cachePath) {
+	if validCachedThumbnailFile(cachePath) {
+		if isVideoThumbnail {
+			slog.Info("video thumbnail cache hit",
+				"path", resolved,
+				"cachePath", cachePath,
+			)
+		}
 		serveCachedThumbnailFile(w, r, cachePath)
 		return
 	}
 
 	if err := acquireThumbnailSlot(r, s.thumbnailLimiter); err != nil {
+		if isVideoThumbnail {
+			slog.Warn("video thumbnail acquire slot failed",
+				"path", resolved,
+				"cachePath", cachePath,
+				"err", err,
+			)
+		}
 		writeError(w, http.StatusServiceUnavailable, "thumbnail request cancelled")
 		return
 	}
 	defer releaseThumbnailSlot(s.thumbnailLimiter)
 
-	if fileExists(cachePath) {
+	if validCachedThumbnailFile(cachePath) {
+		if isVideoThumbnail {
+			slog.Info("video thumbnail cache hit after limiter",
+				"path", resolved,
+				"cachePath", cachePath,
+			)
+		}
 		serveCachedThumbnailFile(w, r, cachePath)
+		return
+	}
+
+	if isVideoThumbnail {
+		if s.requestVideoThumbnail(r, resolved, info, cachePath) {
+			pruneDirectoryThumbnailCache(filepath.Join(s.config.DataDir, "thumbnail-cache"), directoryThumbnailMaxCacheSize)
+			serveCachedThumbnailFile(w, r, cachePath)
+			return
+		}
+		slog.Warn("video thumbnail unavailable after desktop request",
+			"path", resolved,
+			"cachePath", cachePath,
+		)
+		writeError(w, http.StatusNotFound, "thumbnail not available for this file")
 		return
 	}
 
@@ -369,6 +451,138 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 	}
 	pruneDirectoryThumbnailCache(filepath.Join(s.config.DataDir, "thumbnail-cache"), directoryThumbnailMaxCacheSize)
 	serveCachedThumbnailFile(w, r, cachePath)
+}
+
+type videoThumbnailInflight struct {
+	done chan struct{}
+}
+
+func (s *Server) requestVideoThumbnail(
+	r *http.Request,
+	resolved string,
+	info os.FileInfo,
+	cachePath string,
+) bool {
+	s.videoThumbnailMu.Lock()
+	if existing := s.videoThumbnailInflight[cachePath]; existing != nil {
+		done := existing.done
+		s.videoThumbnailMu.Unlock()
+		slog.Info("video thumbnail waiting for inflight request",
+			"path", resolved,
+			"cachePath", cachePath,
+		)
+		select {
+		case <-done:
+			ok := validCachedThumbnailFile(cachePath)
+			slog.Info("video thumbnail inflight request completed",
+				"path", resolved,
+				"cachePath", cachePath,
+				"cacheReady", ok,
+			)
+			return ok
+		case <-r.Context().Done():
+			slog.Warn("video thumbnail inflight wait cancelled",
+				"path", resolved,
+				"cachePath", cachePath,
+				"err", r.Context().Err(),
+			)
+			return false
+		}
+	}
+	inflight := &videoThumbnailInflight{done: make(chan struct{})}
+	s.videoThumbnailInflight[cachePath] = inflight
+	s.videoThumbnailMu.Unlock()
+
+	defer func() {
+		s.videoThumbnailMu.Lock()
+		if s.videoThumbnailInflight[cachePath] == inflight {
+			close(inflight.done)
+			delete(s.videoThumbnailInflight, cachePath)
+		}
+		s.videoThumbnailMu.Unlock()
+	}()
+
+	if validCachedThumbnailFile(cachePath) {
+		slog.Info("video thumbnail cache ready before broadcast",
+			"path", resolved,
+			"cachePath", cachePath,
+		)
+		return true
+	}
+
+	requestID := videoThumbnailRequestID(cachePath)
+	sourceVersion := directoryThumbnailSourceVersion(info)
+	slog.Info("video thumbnail request broadcast",
+		"requestId", requestID,
+		"path", resolved,
+		"cachePath", cachePath,
+		"sourceVersion", sourceVersion,
+		"maxEdge", directoryThumbnailMaxEdge,
+		"quality", directoryThumbnailJPEGQuality,
+	)
+	s.hub.Broadcast(events.Event{
+		Type: "video.thumbnail.request",
+		Payload: map[string]any{
+			"requestId":     requestID,
+			"sourcePath":    resolved,
+			"cachePath":     cachePath,
+			"sourceVersion": sourceVersion,
+			"maxEdge":       directoryThumbnailMaxEdge,
+			"quality":       directoryThumbnailJPEGQuality,
+		},
+	})
+
+	startedAt := time.Now()
+	ticker := time.NewTicker(videoThumbnailPollInterval)
+	defer ticker.Stop()
+	timeout := time.NewTimer(videoThumbnailPollTimeout)
+	defer timeout.Stop()
+
+	for {
+		if validCachedThumbnailFile(cachePath) {
+			slog.Info("video thumbnail cache appeared",
+				"requestId", requestID,
+				"path", resolved,
+				"cachePath", cachePath,
+				"elapsedMs", time.Since(startedAt).Milliseconds(),
+			)
+			return true
+		}
+		select {
+		case <-ticker.C:
+		case <-timeout.C:
+			ok := validCachedThumbnailFile(cachePath)
+			slog.Warn("video thumbnail wait timed out",
+				"requestId", requestID,
+				"path", resolved,
+				"cachePath", cachePath,
+				"cacheReady", ok,
+				"elapsedMs", time.Since(startedAt).Milliseconds(),
+			)
+			return ok
+		case <-r.Context().Done():
+			slog.Warn("video thumbnail request cancelled",
+				"requestId", requestID,
+				"path", resolved,
+				"cachePath", cachePath,
+				"err", r.Context().Err(),
+				"elapsedMs", time.Since(startedAt).Milliseconds(),
+			)
+			return false
+		}
+	}
+}
+
+func optionalStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func videoThumbnailRequestID(cachePath string) string {
+	sum := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", cachePath, time.Now().UnixNano())))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 func acquireThumbnailSlot(r *http.Request, limiter chan struct{}) error {
@@ -405,9 +619,23 @@ func isSupportedDirectoryThumbnailSource(name string) bool {
 	}
 }
 
+func isSupportedDirectoryVideoPosterSource(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".mp4", ".mov", ".m4v", ".webm":
+		return true
+	default:
+		return false
+	}
+}
+
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func validCachedThumbnailFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Size() > 0
 }
 
 func serveCachedThumbnailFile(w http.ResponseWriter, r *http.Request, path string) {

@@ -1051,7 +1051,7 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('renders global remote image thumbnails while keeping videos on file type icons', async () => {
+  it('renders global remote image and video thumbnails from thumbnail urls', async () => {
     mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
@@ -1076,10 +1076,13 @@ describe('RemoteAccessGlobalScreen', () => {
         status: 'available',
         addedAt: '2026-06-16T08:01:00.000Z',
         downloadCount: 0,
+        thumbnailUrl:
+          'http://192.168.1.100:39394/personal/thumbnail/beta.mov?v=2048-1780000',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/beta.mov',
       },
     ]);
 
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getAllByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
         <RemoteAccessGlobalScreen />
       </TestErrorBoundary>,
@@ -1090,10 +1093,10 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(getByText('beta.mov')).toBeTruthy();
     });
 
-    expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
+    const thumbnails = getAllByTestId('remote-resource-thumbnail-image');
+    expect(thumbnails).toHaveLength(2);
     expect(queryByTestId('remote-resource-icon-photo')).toBeNull();
-    expect(getByTestId('remote-resource-icon-video')).toBeTruthy();
-    expect(queryByTestId('remote-resource-thumbnail-video')).toBeNull();
+    expect(queryByTestId('remote-resource-icon-video')).toBeNull();
   });
 
   it('falls back to the image file type icon when a global remote thumbnail fails', async () => {
@@ -1129,6 +1132,43 @@ describe('RemoteAccessGlobalScreen', () => {
     await waitFor(() => {
       expect(queryByTestId('remote-resource-thumbnail-image')).toBeNull();
       expect(getByTestId('remote-resource-icon-photo')).toBeTruthy();
+    });
+  });
+
+  it('falls back to the video file type icon when a global remote video thumbnail fails', async () => {
+    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+      {
+        resourceId: 'personal-dir:broken.mov',
+        desktopDeviceId: 'desktop-device-id',
+        displayName: 'broken.mov',
+        kind: 'shared_file',
+        fileSize: 2048,
+        mediaType: 'video',
+        status: 'available',
+        addedAt: '2026-06-16T08:00:00.000Z',
+        downloadCount: 0,
+        thumbnailUrl:
+          'http://192.168.1.100:39394/personal/thumbnail/broken.mov?v=2048-1780000',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/broken.mov',
+      },
+    ]);
+
+    const { getByTestId, getByText, queryByTestId } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('broken.mov')).toBeTruthy();
+      expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
+    });
+
+    fireEvent(getByTestId('remote-resource-thumbnail-image'), 'error');
+
+    await waitFor(() => {
+      expect(queryByTestId('remote-resource-thumbnail-image')).toBeNull();
+      expect(getByTestId('remote-resource-icon-video')).toBeTruthy();
     });
   });
 

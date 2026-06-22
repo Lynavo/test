@@ -1871,8 +1871,34 @@ function RemoteResourceVisual({
   style: StyleProp<ViewStyle>;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const supportsThumbnail =
+    isImage(item) || isVideoFile(item.mediaType, item.displayName);
   const thumbnailUrl =
-    isImage(item) && !thumbnailFailed ? item.thumbnailUrl?.trim() : undefined;
+    supportsThumbnail && !thumbnailFailed
+      ? item.thumbnailUrl?.trim()
+      : undefined;
+
+  useEffect(() => {
+    if (!supportsThumbnail) {
+      return;
+    }
+    console.info('[video-thumbnail][mobile] remote resource thumbnail state', {
+      name: item.displayName,
+      mediaType: item.mediaType,
+      supportsThumbnail,
+      hasThumbnailUrl: Boolean(item.thumbnailUrl?.trim()),
+      renderingImage: Boolean(thumbnailUrl),
+      thumbnailFailed,
+      thumbnailUrl: item.thumbnailUrl?.trim() || null,
+    });
+  }, [
+    item.displayName,
+    item.mediaType,
+    item.thumbnailUrl,
+    supportsThumbnail,
+    thumbnailFailed,
+    thumbnailUrl,
+  ]);
 
   if (thumbnailUrl) {
     return (
@@ -1882,7 +1908,17 @@ function RemoteResourceVisual({
           source={{ uri: thumbnailUrl }}
           style={styles.remoteResourceThumbnail}
           resizeMode="cover"
-          onError={() => setThumbnailFailed(true)}
+          onError={() => {
+            console.warn(
+              '[video-thumbnail][mobile] remote resource image load failed',
+              {
+                name: item.displayName,
+                mediaType: item.mediaType,
+                thumbnailUrl,
+              },
+            );
+            setThumbnailFailed(true);
+          }}
         />
       </View>
     );

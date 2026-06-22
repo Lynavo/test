@@ -147,7 +147,8 @@ describe('RecentDownloadsSection', () => {
               filename: 'Client-Handoff.mov',
               mediaType: 'video',
               completedAt: '2026-06-17T08:31:00.000Z',
-              localPath: '/var/mobile/Containers/Data/clip.mov',
+              thumbnailUrl: 'http://127.0.0.1:39394/thumbnail/video.jpg',
+              streamUrl: 'http://127.0.0.1:39394/stream/video.mov',
             },
             {
               recordId: 'rec-fallback',
@@ -167,21 +168,49 @@ describe('RecentDownloadsSection', () => {
     const imageSources = tree!.root
       .findAllByType(Image)
       .map(node => node.props.source);
-    const videoSources = tree!.root
-      .findAllByProps({ testID: 'recent-download-thumbnail-video' })
-      .map(node => node.props.source);
-    expect(imageSources.length).toBe(1);
+    const videoNodes = tree!.root.findAllByProps({
+      testID: 'recent-download-thumbnail-video',
+    });
     expect(imageSources).toContainEqual({
       uri: 'http://127.0.0.1:39394/preview/image.png',
     });
-    expect(videoSources).toContainEqual({
-      uri: 'file:///var/mobile/Containers/Data/clip.mov',
+    expect(imageSources).toContainEqual({
+      uri: 'http://127.0.0.1:39394/thumbnail/video.jpg',
     });
+    expect(videoNodes).toHaveLength(0);
 
     const dummyItems = tree!.root
       .findAllByProps({ testID: 'recent-download-tile-dummy' })
       .filter(item => typeof item.type === 'string');
     expect(dummyItems.length).toBe(1);
+  });
+
+  it('does not render local video paths as recent download thumbnails', () => {
+    let tree: ReactTestRenderer.ReactTestRenderer;
+    ReactTestRenderer.act(() => {
+      tree = ReactTestRenderer.create(
+        <RecentDownloadsSection
+          records={[
+            {
+              recordId: 'rec-video',
+              filename: 'Local-Only.mov',
+              mediaType: 'video',
+              completedAt: '2026-06-17T08:31:00.000Z',
+              localPath: '/var/mobile/Containers/Data/clip.mov',
+            },
+          ]}
+          placeholders={placeholders}
+          t={tMock}
+          onPressViewAll={jest.fn()}
+          variant="globalPreview"
+        />,
+      );
+    });
+
+    expect(
+      tree!.root.findAllByProps({ testID: 'recent-download-thumbnail-video' }),
+    ).toHaveLength(0);
+    expect(tree!.root.findAllByType(Image)).toHaveLength(0);
   });
 
   it('renders an explicit empty sync record state for global preview summaries', () => {

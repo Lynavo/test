@@ -230,7 +230,7 @@ func (s *Server) listPersonalDir(w http.ResponseWriter, relPath string) bool {
 		return s.listWindowsPersonalDriveRoot(w)
 	}
 
-	return s.listDirectory(w, relPath, s.resolvePersonalPath, "personal", "/personal/thumbnail/", true)
+	return s.listDirectoryWithStreams(w, relPath, s.resolvePersonalPath, "personal", "/personal/thumbnail/", "/personal/stream/", true)
 }
 
 func (s *Server) handlePersonalThumbnail(w http.ResponseWriter, r *http.Request) {

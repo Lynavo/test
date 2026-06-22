@@ -49,10 +49,7 @@ export type ReceivedLibraryMediaItem = ReceivedLibraryItemDTO & {
   streamUrl?: string;
 };
 
-export type ReceivedLibraryMediaPage = Omit<
-  ReceivedLibraryPageDTO,
-  'items'
-> & {
+export type ReceivedLibraryMediaPage = Omit<ReceivedLibraryPageDTO, 'items'> & {
   items: ReceivedLibraryMediaItem[];
 };
 
@@ -62,7 +59,9 @@ type ReceivedLibraryPageOptions = {
 };
 
 export type GlobalRemoteAccessResource = DesktopSharedResourceDTO & {
+  previewUrl?: string;
   thumbnailUrl?: string;
+  streamUrl?: string;
 };
 
 const SHARED_DIRECTORY_RESOURCE_PREFIX = 'shared-dir:';
@@ -284,7 +283,7 @@ function directoryFileToSharedResource(
 function personalDirectoryFileToSharedResource(
   file: DirectoryFileDTO,
 ): GlobalRemoteAccessResource {
-  const resource: GlobalRemoteAccessResource = {
+  return {
     resourceId: personalDirectoryResourceId(file.path),
     desktopDeviceId: PERSONAL_DIRECTORY_DESKTOP_ID,
     kind: file.isDirectory ? 'shared_folder' : 'shared_file',
@@ -294,12 +293,8 @@ function personalDirectoryFileToSharedResource(
     mediaType: file.type,
     addedAt: file.modifiedAt,
     downloadCount: 0,
+    ...directoryFilePreviewUrls(file),
   };
-  const thumbnailUrl = file.thumbnailUrl?.trim();
-  if (!file.isDirectory && isImageMedia(file.type, file.name) && thumbnailUrl) {
-    resource.thumbnailUrl = thumbnailUrl;
-  }
-  return resource;
 }
 
 function directoryFilePreviewUrls(
@@ -314,6 +309,17 @@ function directoryFilePreviewUrls(
 
   const thumbnailUrl = file.thumbnailUrl?.trim();
   const streamUrl = file.streamUrl?.trim();
+
+  if (file.type === 'video') {
+    console.info('[video-thumbnail][mobile] directory video urls', {
+      name: file.name,
+      path: file.path,
+      hasThumbnailUrl: Boolean(thumbnailUrl),
+      hasStreamUrl: Boolean(streamUrl),
+      thumbnailUrl: thumbnailUrl ?? null,
+      streamUrl: streamUrl ?? null,
+    });
+  }
 
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
@@ -522,7 +528,9 @@ function receivedLibraryListUrl(
 }
 
 function normalizeReceivedLibraryPage(
-  data: Partial<ReceivedLibraryPageDTO> & { items?: ReceivedLibraryMediaItem[] },
+  data: Partial<ReceivedLibraryPageDTO> & {
+    items?: ReceivedLibraryMediaItem[];
+  },
   options?: ReceivedLibraryPageOptions,
 ): ReceivedLibraryMediaPage {
   const items = data.items || [];
@@ -903,9 +911,9 @@ export async function prepareReceivedLibraryPreview(
     typeof result.localPath === 'string' && result.localPath.trim().length > 0
       ? result.localPath
       : typeof result.savedLocation === 'string' &&
-        result.savedLocation.trim().length > 0
-      ? result.savedLocation
-      : null;
+          result.savedLocation.trim().length > 0
+        ? result.savedLocation
+        : null;
   if (typeof localPath !== 'string' || localPath.trim().length === 0) {
     throw new Error('Remote file was not prepared for preview');
   }

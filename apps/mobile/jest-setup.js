@@ -33,6 +33,10 @@ jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('@react-native-documents/viewer', () => ({
+  viewDocument: jest.fn(),
+}));
+
 global.__mockReactNativeShareOpen = jest.fn();
 jest.mock('react-native-share', () => {
   const shareMock = {

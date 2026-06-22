@@ -11,6 +11,7 @@ export const SIDECAR_EVENT_TYPES = {
   DEVICE_MANAGEMENT_UPDATED: 'device.management.updated',
   SHARED_RESOURCES_UPDATED: 'shared.resources.updated',
   ACCESS_RECORDS_UPDATED: 'access.records.updated',
+  VIDEO_THUMBNAIL_REQUEST: 'video.thumbnail.request',
 } as const;
 
 export type SidecarEvent =
@@ -30,6 +31,17 @@ export type SidecarEvent =
   | {
       type: typeof SIDECAR_EVENT_TYPES.ACCESS_RECORDS_UPDATED;
       payload: { desktopDeviceId?: string; clientId?: string; recordId?: string };
+    }
+  | {
+      type: typeof SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST;
+      payload: {
+        requestId: string;
+        sourcePath: string;
+        cachePath: string;
+        sourceVersion: string;
+        maxEdge: number;
+        quality: number;
+      };
     }
   | { type: 'upload.progress'; payload: { deviceId: string; fileKey: string; progress: number } }
   | { type: 'upload.completed'; payload: { deviceId: string; fileKey: string } }

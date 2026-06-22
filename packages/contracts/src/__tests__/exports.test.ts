@@ -27,6 +27,7 @@ import {
   type ReceivedLibraryItemDTO,
   type RecentDesktopDTO,
   type PairingFailureDTO,
+  type SidecarEvent,
 } from '../index';
 import type {
   BindingStateDTO,
@@ -219,5 +220,25 @@ describe('desktop-local product exports', () => {
     expect(SIDECAR_EVENT_TYPES.DEVICE_MANAGEMENT_UPDATED).toBe('device.management.updated');
     expect(SIDECAR_EVENT_TYPES.SHARED_RESOURCES_UPDATED).toBe('shared.resources.updated');
     expect(SIDECAR_EVENT_TYPES.ACCESS_RECORDS_UPDATED).toBe('access.records.updated');
+  });
+
+  it('exports the video thumbnail request event type', () => {
+    expect(SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST).toBe(
+      'video.thumbnail.request',
+    );
+
+    const event: SidecarEvent = {
+      type: SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST,
+      payload: {
+        requestId: 'req-1',
+        sourcePath: '/tmp/source.mov',
+        cachePath: '/tmp/thumbnail-cache/aa/cache.jpg',
+        sourceVersion: '1024-123-v1',
+        maxEdge: 256,
+        quality: 80,
+      },
+    };
+
+    expect(event.payload.maxEdge).toBe(256);
   });
 });

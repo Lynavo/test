@@ -1003,6 +1003,8 @@ describe('desktop-local-service', () => {
           type: 'video',
           size: 4096,
           modifiedAt: '2026-06-17T08:03:00.000Z',
+          thumbnailUrl:
+            'http://192.168.1.100:39394/personal/thumbnail/walkthrough.mov?v=4096-1780000',
           streamUrl:
             'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
         },
@@ -1032,6 +1034,8 @@ describe('desktop-local-service', () => {
         mediaType: 'video',
         addedAt: '2026-06-17T08:01:00.000Z',
         downloadCount: 0,
+        previewUrl: 'http://127.0.0.1:39394/personal/stream/clip.mov',
+        streamUrl: 'http://127.0.0.1:39394/personal/stream/clip.mov',
       },
       {
         resourceId: 'personal-dir:cover.jpg',
@@ -1054,6 +1058,12 @@ describe('desktop-local-service', () => {
         status: 'available',
         fileSize: 4096,
         mediaType: 'video',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/personal/thumbnail/walkthrough.mov?v=4096-1780000',
+        previewUrl:
+          'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
+        streamUrl:
+          'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
         addedAt: '2026-06-17T08:03:00.000Z',
         downloadCount: 0,
       },

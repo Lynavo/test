@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +25,64 @@ import (
 	internalserver "github.com/nicksyncflow/sidecar/internal/server"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
+
+const (
+	directoryThumbnailMaxEdge     = 256
+	directoryThumbnailJPEGQuality = 80
+)
+
+type videoThumbnailRequestEvent struct {
+	Type    string `json:"type"`
+	Payload struct {
+		RequestID     string `json:"requestId"`
+		SourcePath    string `json:"sourcePath"`
+		CachePath     string `json:"cachePath"`
+		SourceVersion string `json:"sourceVersion"`
+		MaxEdge       int    `json:"maxEdge"`
+		Quality       int    `json:"quality"`
+	} `json:"payload"`
+}
+
+func readVideoThumbnailRequestEvent(t *testing.T, conn *websocket.Conn, timeout time.Duration) videoThumbnailRequestEvent {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(timeout))
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			t.Fatalf("read video thumbnail event: %v", err)
+		}
+		var event videoThumbnailRequestEvent
+		if err := json.Unmarshal(msg, &event); err != nil {
+			t.Fatalf("unmarshal video thumbnail event: %v", err)
+		}
+		if event.Type == "video.thumbnail.request" {
+			return event
+		}
+	}
+}
+
+func drainVideoThumbnailRequestEvents(t *testing.T, conn *websocket.Conn, timeout time.Duration) int {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	count := 0
+	for {
+		conn.SetReadDeadline(deadline)
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return count
+			}
+			t.Fatalf("drain video thumbnail events: %v", err)
+		}
+		var event videoThumbnailRequestEvent
+		if err := json.Unmarshal(msg, &event); err != nil {
+			t.Fatalf("unmarshal drained event: %v", err)
+		}
+		if event.Type == "video.thumbnail.request" {
+			count++
+		}
+	}
+}
 
 func writeJPEGFixture(t *testing.T, path string, width int, height int) {
 	t.Helper()
@@ -2708,6 +2767,9 @@ func TestPersonalListReturnsVersionedThumbnailURLOnlyForSupportedImages(t *testi
 	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "clip.mov"), []byte("video"), 0o644); err != nil {
 		t.Fatalf("write video: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "archive.mkv"), []byte("video"), 0o644); err != nil {
+		t.Fatalf("write mkv: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "vector.svg"), []byte("<svg />"), 0o644); err != nil {
 		t.Fatalf("write svg: %v", err)
 	}
@@ -2725,7 +2787,9 @@ func TestPersonalListReturnsVersionedThumbnailURLOnlyForSupportedImages(t *testi
 	var body struct {
 		Files []struct {
 			Name         string  `json:"name"`
+			Type         string  `json:"type"`
 			ThumbnailURL *string `json:"thumbnailUrl,omitempty"`
+			StreamURL    *string `json:"streamUrl,omitempty"`
 			IsDirectory  bool    `json:"isDirectory,omitempty"`
 		} `json:"files"`
 	}
@@ -2734,14 +2798,18 @@ func TestPersonalListReturnsVersionedThumbnailURLOnlyForSupportedImages(t *testi
 	}
 
 	files := map[string]struct {
+		Type         string
 		ThumbnailURL *string
+		StreamURL    *string
 		IsDirectory  bool
 	}{}
 	for _, file := range body.Files {
 		files[file.Name] = struct {
+			Type         string
 			ThumbnailURL *string
+			StreamURL    *string
 			IsDirectory  bool
-		}{ThumbnailURL: file.ThumbnailURL, IsDirectory: file.IsDirectory}
+		}{Type: file.Type, ThumbnailURL: file.ThumbnailURL, StreamURL: file.StreamURL, IsDirectory: file.IsDirectory}
 	}
 
 	photo := files["photo.jpg"].ThumbnailURL
@@ -2751,13 +2819,246 @@ func TestPersonalListReturnsVersionedThumbnailURLOnlyForSupportedImages(t *testi
 	if !strings.HasPrefix(*photo, "/personal/thumbnail/photo.jpg?v=") {
 		t.Fatalf("thumbnailUrl=%q, want versioned personal thumbnail URL", *photo)
 	}
-	for _, name := range []string{"clip.mov", "vector.svg", "Album"} {
+	clip := files["clip.mov"]
+	if clip.Type != "video" {
+		t.Fatalf("clip.mov type=%q, want video", clip.Type)
+	}
+	if clip.StreamURL == nil || *clip.StreamURL != "/personal/stream/clip.mov" {
+		t.Fatalf("clip.mov streamUrl=%v, want /personal/stream/clip.mov", clip.StreamURL)
+	}
+	if clip.ThumbnailURL == nil || !strings.HasPrefix(*clip.ThumbnailURL, "/personal/thumbnail/clip.mov?v=") {
+		t.Fatalf("clip.mov thumbnailUrl=%v, want versioned personal thumbnail URL", clip.ThumbnailURL)
+	}
+
+	archive := files["archive.mkv"]
+	if archive.Type != "video" {
+		t.Fatalf("archive.mkv type=%q, want video", archive.Type)
+	}
+	if archive.StreamURL == nil || *archive.StreamURL != "/personal/stream/archive.mkv" {
+		t.Fatalf("archive.mkv streamUrl=%v, want /personal/stream/archive.mkv", archive.StreamURL)
+	}
+	if archive.ThumbnailURL != nil {
+		t.Fatalf("archive.mkv thumbnailUrl=%q, want omitted", *archive.ThumbnailURL)
+	}
+
+	for _, name := range []string{"vector.svg", "Album"} {
 		if got := files[name].ThumbnailURL; got != nil {
 			t.Fatalf("%s thumbnailUrl=%q, want omitted", name, *got)
 		}
 	}
 	if got := regularFilesUnder(t, filepath.Join(cfg.DataDir, "thumbnail-cache")); len(got) != 0 {
 		t.Fatalf("personal list generated thumbnail cache files: %+v", got)
+	}
+}
+
+func TestSharedListReturnsVideoThumbnailAndStreamURLs(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	sharedDir := cfg.SharedDir()
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		t.Fatalf("mkdir shared dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sharedDir, "walkthrough.mp4"), []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/shared/list")
+	if err != nil {
+		t.Fatalf("GET /shared/list: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("shared list status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Files []struct {
+			Name         string  `json:"name"`
+			Type         string  `json:"type"`
+			ThumbnailURL *string `json:"thumbnailUrl,omitempty"`
+			StreamURL    *string `json:"streamUrl,omitempty"`
+		} `json:"files"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode shared list: %v", err)
+	}
+
+	var video *struct {
+		Name         string  `json:"name"`
+		Type         string  `json:"type"`
+		ThumbnailURL *string `json:"thumbnailUrl,omitempty"`
+		StreamURL    *string `json:"streamUrl,omitempty"`
+	}
+	for i := range body.Files {
+		if body.Files[i].Name == "walkthrough.mp4" {
+			video = &body.Files[i]
+			break
+		}
+	}
+	if video == nil {
+		t.Fatalf("walkthrough.mp4 missing in shared list: %+v", body.Files)
+	}
+	if video.Type != "video" {
+		t.Fatalf("walkthrough.mp4 type=%q, want video", video.Type)
+	}
+	if video.StreamURL == nil || *video.StreamURL != "/shared/stream/walkthrough.mp4" {
+		t.Fatalf("walkthrough.mp4 streamUrl=%v, want /shared/stream/walkthrough.mp4", video.StreamURL)
+	}
+	if video.ThumbnailURL == nil || !strings.HasPrefix(*video.ThumbnailURL, "/shared/thumbnail/walkthrough.mp4?v=") {
+		t.Fatalf("walkthrough.mp4 thumbnailUrl=%v, want versioned shared thumbnail URL", video.ThumbnailURL)
+	}
+	if got := regularFilesUnder(t, filepath.Join(cfg.DataDir, "thumbnail-cache")); len(got) != 0 {
+		t.Fatalf("shared list generated thumbnail cache files: %+v", got)
+	}
+}
+
+func TestSharedVideoThumbnailBroadcastsRequestAndServesGeneratedCache(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	sharedDir := cfg.SharedDir()
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		t.Fatalf("mkdir shared: %v", err)
+	}
+	videoPath := filepath.Join(sharedDir, "walkthrough.mp4")
+	if err := os.WriteFile(videoPath, []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+	resolvedVideoPath, err := filepath.EvalSymlinks(videoPath)
+	if err != nil {
+		t.Fatalf("resolve video path: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial events stream: %v", err)
+	}
+	defer conn.Close()
+
+	respCh := make(chan *http.Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := http.Get(srv.URL + "/shared/thumbnail/walkthrough.mp4")
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+
+	event := readVideoThumbnailRequestEvent(t, conn, 2*time.Second)
+	if event.Payload.RequestID == "" {
+		t.Fatal("requestId is empty")
+	}
+	if event.Payload.SourcePath != resolvedVideoPath {
+		t.Fatalf("sourcePath=%q, want %q", event.Payload.SourcePath, resolvedVideoPath)
+	}
+	if event.Payload.SourceVersion == "" {
+		t.Fatal("sourceVersion is empty")
+	}
+	if event.Payload.CachePath == "" || !strings.HasPrefix(event.Payload.CachePath, filepath.Join(cfg.DataDir, "thumbnail-cache")) {
+		t.Fatalf("cachePath=%q, want path under thumbnail-cache", event.Payload.CachePath)
+	}
+	if event.Payload.MaxEdge != directoryThumbnailMaxEdge || event.Payload.Quality != directoryThumbnailJPEGQuality {
+		t.Fatalf("maxEdge/quality=%d/%d, want %d/%d", event.Payload.MaxEdge, event.Payload.Quality, directoryThumbnailMaxEdge, directoryThumbnailJPEGQuality)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(event.Payload.CachePath), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	writeJPEGFixture(t, event.Payload.CachePath, 64, 48)
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("thumbnail request failed: %v", err)
+	case resp := <-respCh:
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("thumbnail status=%d, want 200", resp.StatusCode)
+		}
+		if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+			t.Fatalf("content-type=%q, want image/jpeg", contentType)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("thumbnail request timed out")
+	}
+}
+
+func TestSharedVideoThumbnailDeduplicatesConcurrentRequests(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	sharedDir := cfg.SharedDir()
+	if err := os.MkdirAll(sharedDir, 0o755); err != nil {
+		t.Fatalf("mkdir shared: %v", err)
+	}
+	videoPath := filepath.Join(sharedDir, "walkthrough.mp4")
+	if err := os.WriteFile(videoPath, []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial events stream: %v", err)
+	}
+	defer conn.Close()
+
+	const requestCount = 6
+	start := make(chan struct{})
+	respCh := make(chan *http.Response, requestCount)
+	errCh := make(chan error, requestCount)
+	for i := 0; i < requestCount; i++ {
+		go func() {
+			<-start
+			resp, err := http.Get(srv.URL + "/shared/thumbnail/walkthrough.mp4")
+			if err != nil {
+				errCh <- err
+				return
+			}
+			respCh <- resp
+		}()
+	}
+	close(start)
+
+	event := readVideoThumbnailRequestEvent(t, conn, 2*time.Second)
+	if event.Payload.CachePath == "" {
+		t.Fatal("cachePath is empty")
+	}
+
+	time.Sleep(200 * time.Millisecond)
+	if err := os.MkdirAll(filepath.Dir(event.Payload.CachePath), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	writeJPEGFixture(t, event.Payload.CachePath, 64, 48)
+
+	for i := 0; i < requestCount; i++ {
+		select {
+		case err := <-errCh:
+			t.Fatalf("thumbnail request %d failed: %v", i, err)
+		case resp := <-respCh:
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("thumbnail request %d status=%d, want 200", i, resp.StatusCode)
+			}
+			if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+				t.Fatalf("thumbnail request %d content-type=%q, want image/jpeg", i, contentType)
+			}
+		case <-time.After(4 * time.Second):
+			t.Fatalf("thumbnail request %d timed out", i)
+		}
+	}
+
+	if extra := drainVideoThumbnailRequestEvents(t, conn, 300*time.Millisecond); extra != 0 {
+		t.Fatalf("extra video thumbnail request events=%d, want 0", extra)
 	}
 }
 
@@ -2832,6 +3133,118 @@ func TestPersonalThumbnailGeneratesSmallCachedJPEG(t *testing.T) {
 	thirdCacheFiles := regularFilesUnder(t, cacheDir)
 	if len(thirdCacheFiles) != 2 {
 		t.Fatalf("cache files after source change=%+v, want two versioned cache files", thirdCacheFiles)
+	}
+}
+
+func TestPersonalVideoThumbnailBroadcastsRequestAndServesGeneratedCache(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
+	authSrv := profileAuthServer(t, "account-1")
+	t.Cleanup(authSrv.Close)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "account-1")
+
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal: %v", err)
+	}
+	videoPath := filepath.Join(cfg.PersonalDir(), "clip.mov")
+	if err := os.WriteFile(videoPath, []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+	resolvedVideoPath, err := filepath.EvalSymlinks(videoPath)
+	if err != nil {
+		t.Fatalf("resolve video path: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial events stream: %v", err)
+	}
+	defer conn.Close()
+
+	respCh := make(chan *http.Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+withPersonalClientQuery("/personal/thumbnail/clip.mov"), nil)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "account-1"))
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+
+	event := readVideoThumbnailRequestEvent(t, conn, 2*time.Second)
+	if event.Payload.RequestID == "" {
+		t.Fatal("requestId is empty")
+	}
+	if event.Payload.SourcePath != resolvedVideoPath {
+		t.Fatalf("sourcePath=%q, want %q", event.Payload.SourcePath, resolvedVideoPath)
+	}
+	if event.Payload.SourceVersion == "" {
+		t.Fatal("sourceVersion is empty")
+	}
+	if event.Payload.CachePath == "" || !strings.HasPrefix(event.Payload.CachePath, filepath.Join(cfg.DataDir, "thumbnail-cache")) {
+		t.Fatalf("cachePath=%q, want path under thumbnail-cache", event.Payload.CachePath)
+	}
+	if event.Payload.MaxEdge != directoryThumbnailMaxEdge || event.Payload.Quality != directoryThumbnailJPEGQuality {
+		t.Fatalf("maxEdge/quality=%d/%d, want %d/%d", event.Payload.MaxEdge, event.Payload.Quality, directoryThumbnailMaxEdge, directoryThumbnailJPEGQuality)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(event.Payload.CachePath), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	writeJPEGFixture(t, event.Payload.CachePath, 64, 48)
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("thumbnail request failed: %v", err)
+	case resp := <-respCh:
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("thumbnail status=%d, want 200", resp.StatusCode)
+		}
+		if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+			t.Fatalf("content-type=%q, want image/jpeg", contentType)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("thumbnail request timed out")
+	}
+}
+
+func TestPersonalVideoThumbnailReturnsNotFoundWhenCacheIsNotGenerated(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
+	authSrv := profileAuthServer(t, "account-1")
+	t.Cleanup(authSrv.Close)
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	syncAccountContextForTest(t, srv.URL, authSrv.URL, "account-1")
+
+	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
+		t.Fatalf("mkdir personal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.PersonalDir(), "clip.mov"), []byte("video"), 0o644); err != nil {
+		t.Fatalf("write video: %v", err)
+	}
+
+	start := time.Now()
+	resp := authorizedPersonalGET(t, srv, "/personal/thumbnail/clip.mov")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("thumbnail status=%d, want 404", resp.StatusCode)
+	}
+	if time.Since(start) < 250*time.Millisecond {
+		t.Fatalf("thumbnail returned too quickly; expected polling path")
 	}
 }
 

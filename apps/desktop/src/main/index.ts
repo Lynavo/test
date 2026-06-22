@@ -12,6 +12,7 @@ import { attachRendererLogging } from './renderer-logging';
 import { SidecarManager } from './sidecar-manager';
 import { sidecarClient } from './sidecar-client';
 import { checkForUpdatesOnStartup } from './startup-update-check';
+import { createVideoThumbnailEventHandler } from './video-thumbnail-generator';
 import { WsBridge } from './ws-bridge';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 import { getProductName } from '../shared/market';
@@ -107,9 +108,13 @@ app.whenReady().then(async () => {
     () => sidecarClient.getTransferActive(),
     (message, err) => log.warn(message, err),
   );
+  const handleVideoThumbnailEvent = createVideoThumbnailEventHandler();
   wsBridge = new WsBridge(
     () => mainWindow,
-    (event) => powerSaveCoordinator?.handleSidecarEvent(event),
+    (event) => {
+      powerSaveCoordinator?.handleSidecarEvent(event);
+      void handleVideoThumbnailEvent(event);
+    },
   );
   void sidecar.start().catch((err) => {
     log.error('Failed to start sidecar:', err);

@@ -186,44 +186,46 @@ describe('DownloadRecordsGlobalScreen', () => {
     });
   });
 
-  it('renders thumbnails for image and video download records when preview sources exist', async () => {
+  it('renders video record thumbnails as images and falls back to icon without thumbnailUrl', async () => {
     mockedListDownloadRecords.mockResolvedValueOnce([
       {
-        id: 'image-1',
-        resourceId: 'image-1',
-        filename: 'Vacation-01.JPG',
-        mediaType: 'image/jpeg',
-        downloadedAt: '2026-06-16T02:42:00.000Z',
-        thumbnailUrl: 'https://desktop.local/thumb.jpg',
+        id: 'video-with-thumb',
+        resourceId: 'video-with-thumb',
+        filename: 'clip.mov',
+        mediaType: 'video',
+        fileSize: 2048,
+        downloadedAt: '2026-06-17T08:00:00.000Z',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/personal/thumbnail/clip.mov?v=2048-1780000',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/clip.mov',
       },
       {
-        id: 'video-1',
-        resourceId: 'video-1',
-        filename: 'Clip.mov',
-        mediaType: 'video/quicktime',
-        downloadedAt: '2026-06-16T02:41:00.000Z',
-        localPath: '/tmp/Clip.mov',
+        id: 'video-no-thumb',
+        resourceId: 'video-no-thumb',
+        filename: 'fallback.mov',
+        mediaType: 'video',
+        fileSize: 4096,
+        downloadedAt: '2026-06-17T08:01:00.000Z',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/fallback.mov',
       },
     ]);
 
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, getByText, queryByTestId } = render(
       <DownloadRecordsGlobalScreen />,
     );
 
     await waitFor(() => {
-      expect(
-        getByTestId('download-record-thumbnail-image-1').props.source,
-      ).toEqual({
-        uri: 'https://desktop.local/thumb.jpg',
-      });
-      expect(
-        getByTestId('download-record-thumbnail-video-1').props.source,
-      ).toEqual({
-        uri: 'file:///tmp/Clip.mov',
-      });
+      expect(getByText('clip.mov')).toBeTruthy();
+      expect(getByText('fallback.mov')).toBeTruthy();
     });
-    expect(queryByText('preview-photo')).toBeNull();
-    expect(queryByText('preview-video')).toBeNull();
+
+    expect(
+      getByTestId('download-record-thumbnail-video-with-thumb').props.source,
+    ).toEqual({
+      uri: 'http://192.168.1.100:39394/personal/thumbnail/clip.mov?v=2048-1780000',
+    });
+    expect(queryByTestId('download-record-thumbnail-video-no-thumb')).toBeNull();
+    expect(getByText('preview-video')).toBeTruthy();
   });
 
   it('opens an in-app media preview modal when an image row is pressed', async () => {

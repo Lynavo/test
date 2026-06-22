@@ -1,6 +1,5 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Video from 'react-native-video';
 import Svg, {
   Circle,
   Defs,
@@ -105,7 +104,7 @@ interface SyncStatePreviewSectionProps {
 type GlobalMediaPreviewKind = 'photo' | 'video' | 'file';
 type RecentDownloadThumbnailSource = {
   uri: string;
-  renderer: 'image' | 'video';
+  renderer: 'image';
 };
 
 const GLOBAL_SECTION_EMPTY_ALIGNMENT_STYLE = {
@@ -285,6 +284,25 @@ function RecentDownloadPreview({
 }) {
   const [thumbnailFailed, setThumbnailFailed] = React.useState(false);
 
+  React.useEffect(() => {
+    if (type !== 'photo' && type !== 'video') {
+      return;
+    }
+    console.info('[video-thumbnail][mobile] recent download thumbnail state', {
+      label,
+      type,
+      hasThumbnailSource: Boolean(thumbnailSource),
+      renderer: thumbnailSource?.renderer ?? null,
+      renderingImage: Boolean(
+        thumbnailSource &&
+        !thumbnailFailed &&
+        thumbnailSource.renderer === 'image',
+      ),
+      thumbnailFailed,
+      uri: thumbnailSource?.uri ?? null,
+    });
+  }, [label, thumbnailFailed, thumbnailSource, type]);
+
   if (
     thumbnailSource &&
     !thumbnailFailed &&
@@ -297,25 +315,17 @@ function RecentDownloadPreview({
         style={styles.recentDownloadThumbnailImage}
         resizeMode="cover"
         accessibilityLabel={`${label} 縮圖`}
-        onError={() => setThumbnailFailed(true)}
-      />
-    );
-  }
-
-  if (
-    thumbnailSource &&
-    !thumbnailFailed &&
-    thumbnailSource.renderer === 'video'
-  ) {
-    return (
-      <Video
-        testID="recent-download-thumbnail-video"
-        source={{ uri: thumbnailSource.uri }}
-        style={styles.recentDownloadThumbnailImage}
-        resizeMode="cover"
-        paused
-        muted
-        onError={() => setThumbnailFailed(true)}
+        onError={() => {
+          console.warn(
+            '[video-thumbnail][mobile] recent download image load failed',
+            {
+              label,
+              type,
+              uri: thumbnailSource.uri,
+            },
+          );
+          setThumbnailFailed(true);
+        }}
       />
     );
   }
@@ -789,6 +799,10 @@ function getRecentDownloadThumbnailSource(
     return { uri: thumbnailUrl, renderer: 'image' };
   }
 
+  if (previewType === 'video') {
+    return undefined;
+  }
+
   const mediaUri =
     readNonEmptyUri(record.previewUrl) ??
     readNonEmptyUri(record.streamUrl) ??
@@ -799,7 +813,7 @@ function getRecentDownloadThumbnailSource(
 
   return {
     uri: mediaUri,
-    renderer: previewType === 'video' ? 'video' : 'image',
+    renderer: 'image',
   };
 }
 

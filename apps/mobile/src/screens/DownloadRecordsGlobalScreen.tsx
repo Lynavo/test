@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -159,10 +159,7 @@ export function DownloadRecordsGlobalScreen() {
           : `${record.filename} 已儲存到檔案`,
       );
     } catch (err) {
-      console.warn(
-        '[DownloadRecordsGlobalScreen] Re-download failed:',
-        err,
-      );
+      console.warn('[DownloadRecordsGlobalScreen] Re-download failed:', err);
       Alert.alert('下載失敗', '無法下載檔案，請稍後重試。');
     }
   }, []);
@@ -327,7 +324,9 @@ function isReceivedDownloadRecord(record: DownloadRecord): boolean {
   );
 }
 
-function receivedItemFromRecord(record: DownloadRecord): ReceivedLibraryItemDTO {
+function receivedItemFromRecord(
+  record: DownloadRecord,
+): ReceivedLibraryItemDTO {
   const fileKey = getReceivedFileKey(record);
   if (!fileKey) {
     throw new Error('Received download record is missing fileKey');
@@ -371,6 +370,11 @@ function extractReceivedFileKeyFromUrl(value?: string | null): string | null {
   }
 }
 
+function readNonEmptyUri(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
 function DownloadRecordPreviewThumbnail({
   record,
 }: {
@@ -378,32 +382,83 @@ function DownloadRecordPreviewThumbnail({
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const kind = getDownloadRecordPreviewKind(record);
-  const uri = getDownloadRecordThumbnailUri(record);
+  const thumbnailUri = readNonEmptyUri(record.thumbnailUrl);
 
-  if (uri && !thumbnailFailed && kind === 'photo') {
+  useEffect(() => {
+    if (kind !== 'photo' && kind !== 'video') {
+      return;
+    }
+    console.info('[video-thumbnail][mobile] download record thumbnail state', {
+      id: record.id,
+      filename: record.filename,
+      mediaType: record.mediaType,
+      kind,
+      hasThumbnailUrl: Boolean(thumbnailUri),
+      renderingImage: Boolean(thumbnailUri && !thumbnailFailed),
+      thumbnailFailed,
+      thumbnailUrl: thumbnailUri,
+    });
+  }, [
+    kind,
+    record.filename,
+    record.id,
+    record.mediaType,
+    thumbnailFailed,
+    thumbnailUri,
+  ]);
+
+  if (
+    thumbnailUri &&
+    !thumbnailFailed &&
+    (kind === 'photo' || kind === 'video')
+  ) {
     return (
       <Image
         testID={`download-record-thumbnail-${record.id}`}
-        source={{ uri }}
+        source={{ uri: thumbnailUri }}
         style={styles.previewMedia}
         resizeMode="cover"
-        onError={() => setThumbnailFailed(true)}
+        onError={() => {
+          console.warn(
+            '[video-thumbnail][mobile] download record image load failed',
+            {
+              id: record.id,
+              filename: record.filename,
+              mediaType: record.mediaType,
+              kind,
+              thumbnailUrl: thumbnailUri,
+            },
+          );
+          setThumbnailFailed(true);
+        }}
       />
     );
   }
 
-  if (uri && !thumbnailFailed && kind === 'video') {
-    return (
-      <Video
-        testID={`download-record-thumbnail-${record.id}`}
-        source={{ uri }}
-        style={styles.previewMedia}
-        resizeMode="cover"
-        paused
-        muted
-        onError={() => setThumbnailFailed(true)}
-      />
-    );
+  if (!thumbnailUri && kind === 'photo') {
+    const photoUri = getDownloadRecordThumbnailUri(record);
+    if (photoUri && !thumbnailFailed) {
+      return (
+        <Image
+          testID={`download-record-thumbnail-${record.id}`}
+          source={{ uri: photoUri }}
+          style={styles.previewMedia}
+          resizeMode="cover"
+          onError={() => {
+            console.warn(
+              '[video-thumbnail][mobile] download record photo fallback load failed',
+              {
+                id: record.id,
+                filename: record.filename,
+                mediaType: record.mediaType,
+                photoUri,
+              },
+            );
+            setThumbnailFailed(true);
+          }}
+        />
+      );
+    }
   }
 
   return <GlobalMediaPreviewIcon type={kind} />;

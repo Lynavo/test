@@ -52,23 +52,25 @@ func (udpWakePacketSender) SendWakePacket(addr string, packet []byte) error {
 
 // Server holds the dependencies for the HTTP API handlers.
 type Server struct {
-	store                *store.Store
-	config               *config.Config
-	hub                  *events.Hub
-	clientStates         ClientStateProvider
-	presence             *PresenceTracker
-	wakeProvider         WakeProvider
-	wakeSender           WakePacketSender
-	proxyWakeTargets     ProxyWakeTargetProvider
-	power                *PowerTracker
-	thumbnailLimiter     chan struct{}
-	tunnelMu             sync.Mutex
-	tunnel               *protocol.P2PManager
-	accountMu            sync.RWMutex
-	desktopAccountID     string
-	authBaseURL          string
-	OnDeviceRenamed      func(newName string) // called when device name changes, to restart Bonjour
-	OnShareStatusChanged func()               // called when share status changes, to restart Bonjour
+	store                  *store.Store
+	config                 *config.Config
+	hub                    *events.Hub
+	clientStates           ClientStateProvider
+	presence               *PresenceTracker
+	wakeProvider           WakeProvider
+	wakeSender             WakePacketSender
+	proxyWakeTargets       ProxyWakeTargetProvider
+	power                  *PowerTracker
+	thumbnailLimiter       chan struct{}
+	videoThumbnailMu       sync.Mutex
+	videoThumbnailInflight map[string]*videoThumbnailInflight
+	tunnelMu               sync.Mutex
+	tunnel                 *protocol.P2PManager
+	accountMu              sync.RWMutex
+	desktopAccountID       string
+	authBaseURL            string
+	OnDeviceRenamed        func(newName string) // called when device name changes, to restart Bonjour
+	OnShareStatusChanged   func()               // called when share status changes, to restart Bonjour
 }
 
 func (s *Server) PresenceTracker() *PresenceTracker {
@@ -196,15 +198,16 @@ func (s *Server) tunnelSignalingAuthState() protocol.SignalingAuthState {
 // NewServer creates a new HTTP handler with all API routes registered.
 func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientStateProvider) (*Server, http.Handler) {
 	srv := &Server{
-		store:            s,
-		config:           cfg,
-		hub:              hub,
-		clientStates:     csp,
-		presence:         NewPresenceTracker(),
-		wakeProvider:     defaultWakeProvider{},
-		wakeSender:       udpWakePacketSender{},
-		power:            NewPowerTracker(),
-		thumbnailLimiter: make(chan struct{}, 2),
+		store:                  s,
+		config:                 cfg,
+		hub:                    hub,
+		clientStates:           csp,
+		presence:               NewPresenceTracker(),
+		wakeProvider:           defaultWakeProvider{},
+		wakeSender:             udpWakePacketSender{},
+		power:                  NewPowerTracker(),
+		thumbnailLimiter:       make(chan struct{}, 2),
+		videoThumbnailInflight: make(map[string]*videoThumbnailInflight),
 	}
 	mux := http.NewServeMux()
 
