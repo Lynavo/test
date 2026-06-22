@@ -741,7 +741,6 @@ function directoryFileToResourceItem({
     relativePath: '',
     thumbnailUrl:
       !file.isDirectory &&
-      file.type === 'image' &&
       typeof file.thumbnailUrl === 'string' &&
       file.thumbnailUrl.trim().length > 0
         ? file.thumbnailUrl.trim()

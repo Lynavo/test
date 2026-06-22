@@ -630,6 +630,18 @@ describe('desktop-local-service', () => {
             completedAt: '2026-06-16T08:00:00.000Z',
             shareStatus: 'not_shared',
           },
+          {
+            resourceId: '',
+            desktopDeviceId: 'desktop-001',
+            clientId: 'client-001',
+            displayName: 'Alice iPhone',
+            fileKey: '2026/06/17/page-video',
+            filename: 'IMG_0346.MOV',
+            mediaType: 'video',
+            fileSize: 8192,
+            completedAt: '2026-06-16T08:01:00.000Z',
+            shareStatus: 'not_shared',
+          },
         ],
         page: 2,
         pageSize: 20,
@@ -663,6 +675,15 @@ describe('desktop-local-service', () => {
             'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fpage-image',
           thumbnailUrl:
             'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fpage-image',
+        },
+        {
+          fileKey: '2026/06/17/page-video',
+          previewUrl:
+            'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fpage-video',
+          thumbnailUrl:
+            'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fpage-video',
+          streamUrl:
+            'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fpage-video',
         },
       ],
     });

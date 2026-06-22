@@ -19,7 +19,14 @@ type VideoThumbnailRequestPayload = Extract<
   { type: typeof SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST }
 >['payload'];
 
-const SUPPORTED_VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
+const SUPPORTED_THUMBNAIL_SOURCE_EXTENSIONS = new Set([
+  '.mp4',
+  '.mov',
+  '.m4v',
+  '.webm',
+  '.heic',
+  '.heif',
+]);
 
 type VideoThumbnailFileSystem = {
   existsSync: typeof existsSync;
@@ -149,8 +156,8 @@ function validateSourcePath(value: string, fileSystem: VideoThumbnailFileSystem)
   }
 
   const sourcePath = resolve(value);
-  if (!SUPPORTED_VIDEO_EXTENSIONS.has(extname(sourcePath).toLowerCase())) {
-    throw new Error('unsupported video extension');
+  if (!SUPPORTED_THUMBNAIL_SOURCE_EXTENSIONS.has(extname(sourcePath).toLowerCase())) {
+    throw new Error('unsupported thumbnail source extension');
   }
 
   const info = fileSystem.statSync(sourcePath);

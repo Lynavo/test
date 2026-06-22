@@ -255,7 +255,8 @@ func (s *Server) listDirectoryWithStreams(
 					if !versionedSupportedThumbnails {
 						u := thumbnailPrefix + filePath
 						thumbURL = &u
-					} else if isSupportedDirectoryThumbnailSource(e.Name()) {
+					} else if isSupportedDirectoryThumbnailSource(e.Name()) ||
+						isSupportedDesktopGeneratedImageThumbnailSource(e.Name()) {
 						u := thumbnailPrefix + filePath + "?v=" + directoryThumbnailSourceVersion(entryInfo)
 						thumbURL = &u
 					}
@@ -339,7 +340,8 @@ func (s *Server) serveDirectoryThumbnail(
 		return
 	}
 
-	if isSupportedDirectoryVideoPosterSource(info.Name()) {
+	if isSupportedDirectoryVideoPosterSource(info.Name()) ||
+		isSupportedDesktopGeneratedImageThumbnailSource(info.Name()) {
 		s.serveCachedThumbnailForResolvedFile(w, r, resolved, info)
 		return
 	}
@@ -382,16 +384,17 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 	info os.FileInfo,
 ) {
 	isImageThumbnail := isSupportedDirectoryThumbnailSource(info.Name())
-	isVideoThumbnail := isSupportedDirectoryVideoPosterSource(info.Name())
-	if !isImageThumbnail && !isVideoThumbnail {
+	isDesktopGeneratedThumbnail := isSupportedDirectoryVideoPosterSource(info.Name()) ||
+		isSupportedDesktopGeneratedImageThumbnailSource(info.Name())
+	if !isImageThumbnail && !isDesktopGeneratedThumbnail {
 		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
 		return
 	}
 
 	cachePath := s.directoryThumbnailCachePath(resolved, info)
 	if validCachedThumbnailFile(cachePath) {
-		if isVideoThumbnail {
-			slog.Info("video thumbnail cache hit",
+		if isDesktopGeneratedThumbnail {
+			slog.Info("desktop thumbnail cache hit",
 				"path", resolved,
 				"cachePath", cachePath,
 			)
@@ -401,8 +404,8 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 	}
 
 	if err := acquireThumbnailSlot(r, s.thumbnailLimiter); err != nil {
-		if isVideoThumbnail {
-			slog.Warn("video thumbnail acquire slot failed",
+		if isDesktopGeneratedThumbnail {
+			slog.Warn("desktop thumbnail acquire slot failed",
 				"path", resolved,
 				"cachePath", cachePath,
 				"err", err,
@@ -414,8 +417,8 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 	defer releaseThumbnailSlot(s.thumbnailLimiter)
 
 	if validCachedThumbnailFile(cachePath) {
-		if isVideoThumbnail {
-			slog.Info("video thumbnail cache hit after limiter",
+		if isDesktopGeneratedThumbnail {
+			slog.Info("desktop thumbnail cache hit after limiter",
 				"path", resolved,
 				"cachePath", cachePath,
 			)
@@ -424,13 +427,13 @@ func (s *Server) serveCachedThumbnailForResolvedFile(
 		return
 	}
 
-	if isVideoThumbnail {
+	if isDesktopGeneratedThumbnail {
 		if s.requestVideoThumbnail(r, resolved, info, cachePath) {
 			pruneDirectoryThumbnailCache(filepath.Join(s.config.DataDir, "thumbnail-cache"), directoryThumbnailMaxCacheSize)
 			serveCachedThumbnailFile(w, r, cachePath)
 			return
 		}
-		slog.Warn("video thumbnail unavailable after desktop request",
+		slog.Warn("desktop thumbnail unavailable after request",
 			"path", resolved,
 			"cachePath", cachePath,
 		)
@@ -613,6 +616,15 @@ func directoryThumbnailSourceVersion(info os.FileInfo) string {
 func isSupportedDirectoryThumbnailSource(name string) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
 	case ".jpg", ".jpeg", ".png", ".gif":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSupportedDesktopGeneratedImageThumbnailSource(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".heic", ".heif":
 		return true
 	default:
 		return false

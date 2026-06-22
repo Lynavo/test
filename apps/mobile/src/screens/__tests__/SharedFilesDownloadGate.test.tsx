@@ -907,12 +907,14 @@ describe('RemoteAccessGlobalScreen', () => {
           type: 'video',
           size: 8192,
           modifiedAt: '2026-06-16T08:33:00.000Z',
+          thumbnailUrl:
+            'http://192.168.1.100:39394/personal/thumbnail/walkthrough.mov?v=8192-1780000',
         },
       ],
       totalCount: 4,
     });
 
-    const { getByText } = render(
+    const { getByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
         <RemoteAccessGlobalScreen />
       </TestErrorBoundary>,
@@ -936,6 +938,8 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(getByText('cover.jpg')).toBeTruthy();
       expect(getByText('walkthrough.mov')).toBeTruthy();
     });
+    expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
+    expect(queryByTestId('remote-resource-icon-video')).toBeNull();
   });
 
   it('keeps sparse global remote grid items constrained to a single column', async () => {
@@ -1752,7 +1756,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     });
   });
 
-  it('renders received video icon without preloading the video and opens the real video preview', async () => {
+  it('renders received video thumbnail image without preloading the video and opens the real video preview', async () => {
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-video',
@@ -1765,6 +1769,8 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
         fileSize: 2048,
         completedAt: '2026-06-16T07:00:00.000Z',
         shareStatus: 'shared',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-video',
         previewUrl:
           'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-video',
         streamUrl:
@@ -1785,8 +1791,9 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
       expect(getByText('beta.mov')).toBeTruthy();
     });
 
+    expect(getByTestId('phone-sync-thumbnail-image')).toBeTruthy();
     expect(queryByTestId('phone-sync-thumbnail-video')).toBeNull();
-    expect(getByTestId('phone-sync-media-icon-video')).toBeTruthy();
+    expect(queryByTestId('phone-sync-media-icon-video')).toBeNull();
 
     fireEvent.press(getByLabelText('预览已同步文件'));
 

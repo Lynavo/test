@@ -866,6 +866,30 @@ class SharedFilesService {
         )
     }
 
+    func resolveListedMediaUrl(
+        _ rawURL: String,
+        scope: SharedDirectoryScope = .team,
+        accessToken: String = "",
+        clientID: String = "",
+        clientName: String = ""
+    ) -> URL? {
+        let trimmedURL = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedURL.isEmpty,
+              let listedComponents = URLComponents(string: trimmedURL),
+              !listedComponents.percentEncodedPath.isEmpty else {
+            return nil
+        }
+
+        return try? buildMediaURL(
+            path: listedComponents.percentEncodedPath,
+            queryItems: listedComponents.queryItems ?? [],
+            scope: scope,
+            accessToken: accessToken,
+            clientID: clientID,
+            clientName: clientName
+        )
+    }
+
     private func buildURL(path: String, queryItems: [URLQueryItem] = []) throws -> URL {
         var components = URLComponents()
         components.scheme = "http"
@@ -894,12 +918,13 @@ class SharedFilesService {
 
     private func buildMediaURL(
         path: String,
+        queryItems: [URLQueryItem] = [],
         scope: SharedDirectoryScope,
         accessToken: String,
         clientID: String,
         clientName: String
     ) throws -> URL {
-        let baseURL = try buildURL(path: path)
+        let baseURL = try buildURL(path: path, queryItems: queryItems)
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             return baseURL
         }

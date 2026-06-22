@@ -8387,14 +8387,29 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 "modifiedAt": file.modifiedAt,
                 "isDirectory": file.isDirectory,
             ]
-            // Build absolute URLs for thumbnails and video streams
-            if file.type == "image", let thumbUrl = sharedFilesService.getThumbnailUrl(
-                scope: scope,
-                path: file.path,
-                accessToken: accessToken,
-                clientID: accessClientID,
-                clientName: accessClientName
-            ) {
+            // Build absolute URLs for thumbnails and video streams.
+            let listedThumbnailUrl = file.thumbnailUrl.flatMap { rawUrl in
+                sharedFilesService.resolveListedMediaUrl(
+                    rawUrl,
+                    scope: scope,
+                    accessToken: accessToken,
+                    clientID: accessClientID,
+                    clientName: accessClientName
+                )
+            }
+            let fallbackThumbnailUrl: URL?
+            if file.type == "image" {
+                fallbackThumbnailUrl = sharedFilesService.getThumbnailUrl(
+                    scope: scope,
+                    path: file.path,
+                    accessToken: accessToken,
+                    clientID: accessClientID,
+                    clientName: accessClientName
+                )
+            } else {
+                fallbackThumbnailUrl = nil
+            }
+            if let thumbUrl = listedThumbnailUrl ?? fallbackThumbnailUrl {
                 fileDict["thumbnailUrl"] = thumbUrl.absoluteString
             }
             if file.type == "video", let streamUrl = sharedFilesService.getStreamUrl(
@@ -8580,51 +8595,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             updateBindingConnectionState(.connected, reason: "list_received_files_success")
         }
 
+        let clientId = getClientId()
+        let clientName = getClientDisplayName()
         return items.map { item in
-            var next = item
-            let fileKey = (item["fileKey"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let filename = item["filename"] as? String ?? item["displayName"] as? String ?? ""
-            let mediaType = item["mediaType"] as? String ?? ""
-            guard !fileKey.isEmpty else {
-                return next
+            ReceivedLibraryMediaURLPolicy.enrich(item: item) { fileKey, kind in
+                try? sharedFilesService.getReceivedFileMediaUrl(
+                    fileKey: fileKey,
+                    clientId: clientId,
+                    clientName: clientName,
+                    kind: kind
+                ).absoluteString
             }
-            if isReceivedImage(mediaType: mediaType, filename: filename) {
-                if let previewUrl = try? sharedFilesService.getReceivedFileMediaUrl(
-                    fileKey: fileKey,
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    kind: "preview"
-                ) {
-                    next["previewUrl"] = previewUrl.absoluteString
-                }
-                if let thumbnailUrl = try? sharedFilesService.getReceivedFileMediaUrl(
-                    fileKey: fileKey,
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    kind: "thumbnail"
-                ) {
-                    next["thumbnailUrl"] = thumbnailUrl.absoluteString
-                }
-            }
-            if isReceivedVideo(mediaType: mediaType, filename: filename) {
-                if let previewUrl = try? sharedFilesService.getReceivedFileMediaUrl(
-                    fileKey: fileKey,
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    kind: "preview"
-                ) {
-                    next["previewUrl"] = previewUrl.absoluteString
-                }
-                if let streamUrl = try? sharedFilesService.getReceivedFileMediaUrl(
-                    fileKey: fileKey,
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    kind: "stream"
-                ) {
-                    next["streamUrl"] = streamUrl.absoluteString
-                }
-            }
-            return next
         }
     }
 
@@ -8674,24 +8655,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         default:
             return "download"
         }
-    }
-
-    private func isReceivedImage(mediaType: String, filename: String) -> Bool {
-        let normalized = mediaType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalized == "image" || normalized.hasPrefix("image/") {
-            return true
-        }
-        let ext = (filename as NSString).pathExtension.lowercased()
-        return ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tiff", "tif"].contains(ext)
-    }
-
-    private func isReceivedVideo(mediaType: String, filename: String) -> Bool {
-        let normalized = mediaType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalized == "video" || normalized.hasPrefix("video/") {
-            return true
-        }
-        let ext = (filename as NSString).pathExtension.lowercased()
-        return ["mp4", "mov", "avi", "mkv", "webm", "m4v"].contains(ext)
     }
 
     func downloadReceivedFile(fileKey: String, filename: String, mediaType: String?) async throws -> [String: Any] {

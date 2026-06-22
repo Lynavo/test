@@ -25,6 +25,7 @@
 		D4E1C9FC2F95000100000001 /* WakeOnLanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9FB2F95000100000001 /* WakeOnLanService.swift */; };
 		D4E1C9FE2F95000100000001 /* WakeMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9FD2F95000100000001 /* WakeMetadata.swift */; };
 		D4E1CA012F91000100000001 /* SilentAudioService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1CA002F91000100000001 /* SilentAudioService.swift */; };
+		D4E1CA112F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1CA102F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift */; };
 		DB862C6CA16A33F1996C19AF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		F099B4D807822DF27768C5E5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7906572870B674B3935AF6FD /* GoogleService-Info.plist */; };
 		FC3ECC2E2F6F05B5000460F8 /* RNBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC252F6F05B5000460F8 /* RNBridge.m */; };
@@ -81,6 +82,7 @@
 		D4E1C9FB2F95000100000001 /* WakeOnLanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeOnLanService.swift; sourceTree = "<group>"; };
 		D4E1C9FD2F95000100000001 /* WakeMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeMetadata.swift; sourceTree = "<group>"; };
 		D4E1CA002F91000100000001 /* SilentAudioService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilentAudioService.swift; sourceTree = "<group>"; };
+		D4E1CA102F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivedLibraryMediaURLPolicy.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		FC3ECC1F2F6F05B5000460F8 /* AssetExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetExportService.swift; sourceTree = "<group>"; };
 		FC3ECC202F6F05B5000460F8 /* BackgroundExecutionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundExecutionService.swift; sourceTree = "<group>"; };
@@ -211,6 +213,7 @@
 				FC3ECC272F6F05B5000460F8 /* SessionService.swift */,
 				D4E1CA002F91000100000001 /* SilentAudioService.swift */,
 				D4E1C9F92F94000100000001 /* PresenceReconnectPolicy.swift */,
+				D4E1CA102F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift */,
 				FC3ECC282F6F05B5000460F8 /* SyncEngineError.swift */,
 				FC3ECC292F6F05B5000460F8 /* SyncEngineManager.swift */,
 				D4E1C9F52F7A000100000001 /* SyncFlowVersion.generated.swift */,
@@ -403,6 +406,7 @@
 				FC3ECCC02F8A0002000460F8 /* BackgroundTransitionRefCount.swift in Sources */,
 				FC3ECC392F6F05B5000460F8 /* HistoryLedgerStore.swift in Sources */,
 				FC3ECC3A2F6F05B5000460F8 /* SyncEngineManager.swift in Sources */,
+				D4E1CA112F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift in Sources */,
 				FC3ECC3B2F6F05B5000460F8 /* SyncEngineError.swift in Sources */,
 				FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */,
 				D4E1C9F62F7A000100000001 /* SyncFlowVersion.generated.swift in Sources */,

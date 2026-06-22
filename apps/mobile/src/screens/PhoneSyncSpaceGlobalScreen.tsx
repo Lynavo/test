@@ -964,7 +964,7 @@ function ReceivedMediaThumbnail({
 
   if (
     loadRemoteThumbnail &&
-    iconType === 'photo' &&
+    (iconType === 'photo' || iconType === 'video') &&
     item.thumbnailUrl &&
     !imageFailed
   ) {
@@ -976,7 +976,7 @@ function ReceivedMediaThumbnail({
           style={styles.mediaPreviewImage}
           resizeMode="cover"
           fadeDuration={Platform.OS === 'android' ? 0 : undefined}
-          accessibilityLabel={`${displayName} 缩略图`}
+          accessibilityLabel={`${displayName} 縮圖`}
           onError={() => setImageFailed(true)}
         />
       </View>

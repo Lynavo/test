@@ -97,6 +97,33 @@ describe('video-thumbnail-generator', () => {
     expect(electronMockState.thumbnail.toJPEG).toHaveBeenCalledWith(80);
   });
 
+  it('generates a jpeg thumbnail for HEIC sources', async () => {
+    const { createVideoThumbnailEventHandler } = await import('../video-thumbnail-generator');
+    const root = electronMockState.userDataPath;
+    const sourcePath = join(root, 'photo.heic');
+    const cachePath = join(root, 'thumbnail-cache', 'aa', 'heic.jpg');
+    writeFileSync(sourcePath, 'heic-image');
+
+    const handler = createVideoThumbnailEventHandler();
+    await handler({
+      type: SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST,
+      payload: {
+        requestId: 'req-heic',
+        sourcePath,
+        cachePath,
+        sourceVersion: '10-123-v1',
+        maxEdge: 256,
+        quality: 80,
+      },
+    });
+
+    expect(electronMockState.createThumbnailFromPath).toHaveBeenCalledWith(sourcePath, {
+      width: 256,
+      height: 256,
+    });
+    expect(readFileSync(cachePath).toString()).toBe('jpeg-bytes');
+  });
+
   it('clamps requested thumbnail size and jpeg quality', async () => {
     const { createVideoThumbnailEventHandler } = await import('../video-thumbnail-generator');
     const root = electronMockState.userDataPath;

@@ -490,6 +490,13 @@ function withCurrentClientReceivedMediaUrls(
         clientName,
         fileKey,
       );
+      next.thumbnailUrl = buildReceivedMediaUrl(
+        desktop,
+        'thumbnail',
+        clientId,
+        clientName,
+        fileKey,
+      );
       next.streamUrl = buildReceivedMediaUrl(
         desktop,
         'stream',

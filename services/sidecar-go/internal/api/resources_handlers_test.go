@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/nicksyncflow/sidecar/internal/api"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
@@ -966,6 +968,87 @@ func TestMobileReceivedLibraryMarksDeletedFilesWithoutPreviewURLs(t *testing.T) 
 	}
 }
 
+func TestMobileReceivedLibraryAddsThumbnailURLsForVideoAndHEIC(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	completedAt := "2026-06-14T09:00:00Z"
+
+	for _, fixture := range []struct {
+		fileKey  string
+		filename string
+		media    string
+		body     []byte
+	}{
+		{fileKey: "client-001-video", filename: "clip.mov", media: "video/quicktime", body: []byte("video bytes")},
+		{fileKey: "client-001-heic", filename: "photo.heic", media: "image/heic", body: []byte("heic bytes")},
+	} {
+		receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", fixture.filename)
+		receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+		if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+			t.Fatalf("mkdir received path: %v", err)
+		}
+		if err := os.WriteFile(receivedAbsPath, fixture.body, 0o644); err != nil {
+			t.Fatalf("write received file: %v", err)
+		}
+		info, err := os.Stat(receivedAbsPath)
+		if err != nil {
+			t.Fatalf("stat received file: %v", err)
+		}
+		if err := st.UpsertUpload(store.Upload{
+			FileKey:              fixture.fileKey,
+			ClientID:             "client-001",
+			OriginalFilename:     fixture.filename,
+			MediaType:            fixture.media,
+			FileSize:             info.Size(),
+			Status:               "completed",
+			FinalPath:            &receivedRelPath,
+			CommittedBytes:       info.Size(),
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		}); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", fixture.fileKey, err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/received?clientId=client-001&clientName=Alice%20iPhone&scope=client")
+	if err != nil {
+		t.Fatalf("GET mobile received scoped: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET mobile received scoped status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Items []store.ReceivedLibraryItem `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode mobile received scoped: %v", err)
+	}
+	byKey := make(map[string]store.ReceivedLibraryItem, len(body.Items))
+	for _, item := range body.Items {
+		byKey[item.FileKey] = item
+	}
+
+	video := byKey["client-001-video"]
+	if !strings.Contains(video.ThumbnailURL, "/resources/mobile/received/thumbnail?") ||
+		!strings.Contains(video.PreviewURL, "/resources/mobile/received/preview?") ||
+		!strings.Contains(video.StreamURL, "/resources/mobile/received/stream?") {
+		t.Fatalf("video should expose thumbnail/preview/stream URLs, got %+v", video)
+	}
+	heic := byKey["client-001-heic"]
+	if !strings.Contains(heic.ThumbnailURL, "/resources/mobile/received/thumbnail?") ||
+		!strings.Contains(heic.PreviewURL, "/resources/mobile/received/preview?") ||
+		heic.StreamURL != "" {
+		t.Fatalf("heic should expose thumbnail/preview URLs only, got %+v", heic)
+	}
+}
+
 func TestMobileReceivedResourcesSupportsScopedPagination(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
@@ -1255,6 +1338,92 @@ func TestMobileReceivedFileThumbnailGeneratesSmallCachedJPEG(t *testing.T) {
 	}
 	if !secondInfo.ModTime().Equal(firstInfo.ModTime()) {
 		t.Fatalf("cache mtime changed on cache hit: first=%s second=%s", firstInfo.ModTime(), secondInfo.ModTime())
+	}
+}
+
+func TestMobileReceivedFileThumbnailBroadcastsDesktopGeneratedRequest(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	completedAt := "2026-06-14T09:00:00Z"
+	receivedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "clip.mov")
+	receivedAbsPath := filepath.Join(cfg.ReceiveDir, receivedRelPath)
+	if err := os.MkdirAll(filepath.Dir(receivedAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir received path: %v", err)
+	}
+	if err := os.WriteFile(receivedAbsPath, []byte("video bytes"), 0o644); err != nil {
+		t.Fatalf("write received file: %v", err)
+	}
+	info, err := os.Stat(receivedAbsPath)
+	if err != nil {
+		t.Fatalf("stat received video: %v", err)
+	}
+	if err := st.UpsertUpload(store.Upload{
+		FileKey:              "client-001-video",
+		ClientID:             "client-001",
+		OriginalFilename:     "clip.mov",
+		MediaType:            "video/quicktime",
+		FileSize:             info.Size(),
+		Status:               "completed",
+		FinalPath:            &receivedRelPath,
+		CommittedBytes:       info.Size(),
+		ActiveTransmissionMs: 250,
+		CompletedAt:          &completedAt,
+		UpdatedAt:            completedAt,
+	}); err != nil {
+		t.Fatalf("UpsertUpload: %v", err)
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial events stream: %v", err)
+	}
+	defer conn.Close()
+
+	respCh := make(chan *http.Response, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		resp, err := http.Get(srv.URL + "/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=client-001-video")
+		if err != nil {
+			errCh <- err
+			return
+		}
+		respCh <- resp
+	}()
+
+	event := readVideoThumbnailRequestEvent(t, conn, 2*time.Second)
+	eventSourceInfo, err := os.Stat(event.Payload.SourcePath)
+	if err != nil {
+		t.Fatalf("stat event source path: %v", err)
+	}
+	if !os.SameFile(eventSourceInfo, info) {
+		t.Fatalf("sourcePath=%q should point to received video %q", event.Payload.SourcePath, receivedAbsPath)
+	}
+	if event.Payload.CachePath == "" || !strings.HasPrefix(event.Payload.CachePath, filepath.Join(cfg.DataDir, "thumbnail-cache")) {
+		t.Fatalf("cachePath=%q, want path under thumbnail-cache", event.Payload.CachePath)
+	}
+	if err := os.MkdirAll(filepath.Dir(event.Payload.CachePath), 0o755); err != nil {
+		t.Fatalf("mkdir cache dir: %v", err)
+	}
+	writeJPEGFixture(t, event.Payload.CachePath, 64, 48)
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("thumbnail request failed: %v", err)
+	case resp := <-respCh:
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("thumbnail status=%d, want 200", resp.StatusCode)
+		}
+		if contentType := resp.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "image/jpeg") {
+			t.Fatalf("content-type=%q, want image/jpeg", contentType)
+		}
+	case <-time.After(4 * time.Second):
+		t.Fatal("thumbnail request timed out")
 	}
 }
 

@@ -419,11 +419,17 @@ func enrichMobileReceivedPreviewURLs(items []store.ReceivedLibraryItem, client m
 		if isVideoMedia(items[i].MediaType, items[i].Filename) {
 			items[i].PreviewURL = mobileReceivedFileURL("preview", client, items[i].FileKey)
 			items[i].StreamURL = mobileReceivedFileURL("stream", client, items[i].FileKey)
+			if isSupportedDirectoryVideoPosterSource(items[i].Filename) {
+				items[i].ThumbnailURL = mobileReceivedFileURL("thumbnail", client, items[i].FileKey)
+			}
 			continue
 		}
 		if isImageMedia(items[i].MediaType, items[i].Filename) {
 			items[i].PreviewURL = mobileReceivedFileURL("preview", client, items[i].FileKey)
-			items[i].ThumbnailURL = mobileReceivedFileURL("thumbnail", client, items[i].FileKey)
+			if isSupportedDirectoryThumbnailSource(items[i].Filename) ||
+				isSupportedDesktopGeneratedImageThumbnailSource(items[i].Filename) {
+				items[i].ThumbnailURL = mobileReceivedFileURL("thumbnail", client, items[i].FileKey)
+			}
 			continue
 		}
 		items[i].PreviewURL = mobileReceivedFileURL("download", client, items[i].FileKey)
@@ -443,11 +449,24 @@ func (s *Server) handleMobileReceivedFileThumbnail(w http.ResponseWriter, r *htt
 	if !ok {
 		return
 	}
-	if !isImageMedia(upload.MediaType, upload.OriginalFilename) {
-		writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+	if isVideoMedia(upload.MediaType, upload.OriginalFilename) {
+		if !isSupportedDirectoryVideoPosterSource(upload.OriginalFilename) {
+			writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+			return
+		}
+		s.serveCachedThumbnailForResolvedFile(w, r, resolvedPath, info)
 		return
 	}
-	s.serveCachedThumbnailForResolvedFile(w, r, resolvedPath, info)
+	if isImageMedia(upload.MediaType, upload.OriginalFilename) {
+		if !isSupportedDirectoryThumbnailSource(upload.OriginalFilename) &&
+			!isSupportedDesktopGeneratedImageThumbnailSource(upload.OriginalFilename) {
+			writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
+			return
+		}
+		s.serveCachedThumbnailForResolvedFile(w, r, resolvedPath, info)
+		return
+	}
+	writeError(w, http.StatusNotFound, "thumbnail not available for this file type")
 }
 
 func (s *Server) handleMobileReceivedFilePreview(w http.ResponseWriter, r *http.Request) {
