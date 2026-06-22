@@ -113,6 +113,116 @@ func TestUpdateSessionState_NotFound(t *testing.T) {
 	}
 }
 
+func TestCompleteSession_ClearsActiveFile(t *testing.T) {
+	s := newTestStore(t)
+	fileKey := "file-active"
+	sess := sampleSession("sess-complete", "client-1")
+	sess.State = "transferring"
+	sess.ActiveFileKey = &fileKey
+	sess.ActiveOffset = 2048
+
+	if err := s.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession: %v", err)
+	}
+	if err := s.CompleteSession("sess-complete"); err != nil {
+		t.Fatalf("CompleteSession: %v", err)
+	}
+
+	got, err := s.GetSession("sess-complete")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.State != "completed" {
+		t.Fatalf("state=%q, want completed", got.State)
+	}
+	if got.ActiveFileKey != nil {
+		t.Fatalf("active file key=%q, want nil", *got.ActiveFileKey)
+	}
+	if got.ActiveOffset != 0 {
+		t.Fatalf("active offset=%d, want 0", got.ActiveOffset)
+	}
+}
+
+func TestInterruptActiveSession_MarksActiveSessionAndKeepsProgress(t *testing.T) {
+	s := newTestStore(t)
+	fileKey := "file-active"
+	sess := sampleSession("sess-interrupt", "client-1")
+	sess.State = "transferring"
+	sess.ActiveFileKey = &fileKey
+	sess.ActiveOffset = 2048
+
+	if err := s.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession: %v", err)
+	}
+	updated, err := s.InterruptActiveSession("sess-interrupt")
+	if err != nil {
+		t.Fatalf("InterruptActiveSession: %v", err)
+	}
+	if !updated {
+		t.Fatal("expected active session to be updated")
+	}
+
+	got, err := s.GetSession("sess-interrupt")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.State != "interrupted" {
+		t.Fatalf("state=%q, want interrupted", got.State)
+	}
+	if got.ActiveFileKey == nil || *got.ActiveFileKey != fileKey {
+		t.Fatalf("active file key=%v, want %q", got.ActiveFileKey, fileKey)
+	}
+	if got.ActiveOffset != 2048 {
+		t.Fatalf("active offset=%d, want 2048", got.ActiveOffset)
+	}
+}
+
+func TestInterruptActiveSession_DoesNotOverwriteCompletedSession(t *testing.T) {
+	s := newTestStore(t)
+	fileKey := "file-active"
+	sess := sampleSession("sess-terminal", "client-1")
+	sess.State = "completed"
+	sess.ActiveFileKey = &fileKey
+	sess.ActiveOffset = 2048
+
+	if err := s.UpsertSession(sess); err != nil {
+		t.Fatalf("UpsertSession: %v", err)
+	}
+	updated, err := s.InterruptActiveSession("sess-terminal")
+	if err != nil {
+		t.Fatalf("InterruptActiveSession: %v", err)
+	}
+	if updated {
+		t.Fatal("expected completed session not to be updated")
+	}
+
+	got, err := s.GetSession("sess-terminal")
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if got.State != "completed" {
+		t.Fatalf("state=%q, want completed", got.State)
+	}
+	if got.ActiveFileKey == nil || *got.ActiveFileKey != fileKey {
+		t.Fatalf("active file key=%v, want %q", got.ActiveFileKey, fileKey)
+	}
+	if got.ActiveOffset != 2048 {
+		t.Fatalf("active offset=%d, want 2048", got.ActiveOffset)
+	}
+}
+
+func TestInterruptActiveSession_NotFound(t *testing.T) {
+	s := newTestStore(t)
+
+	updated, err := s.InterruptActiveSession("missing-session")
+	if !errors.Is(err, ErrNoRows) {
+		t.Fatalf("expected ErrNoRows, got %v", err)
+	}
+	if updated {
+		t.Fatal("expected missing session not to be updated")
+	}
+}
+
 func TestGetActiveSession(t *testing.T) {
 	s := newTestStore(t)
 

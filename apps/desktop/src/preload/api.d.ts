@@ -166,6 +166,7 @@ export interface ElectronAPI {
     isAuthBypassEnabled(): boolean;
     getHomeDir(): string;
     getHostName(): string;
+    setModalOverlayActive(active: boolean): Promise<void>;
     getLocalIPs(): string[];
   };
   support: {

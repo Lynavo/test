@@ -58,6 +58,7 @@ function setElectronPlatform(
 
 describe('SettingsPage', () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
     vi.clearAllMocks();
     setElectronPlatform();
     useAuthStore.setState({
@@ -142,6 +143,17 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
     expect(screen.getByText('本机 IP')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.227')).toBeInTheDocument();
+  });
+
+  it('hides local share address guidance in global builds', () => {
+    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+    setElectronPlatform({ isMac: false, isWindows: false, isLinux: true });
+
+    render(<SettingsPage />);
+
+    expect(screen.queryByText('局域网共享地址')).not.toBeInTheDocument();
+    expect(screen.queryByText('Linux 文件共享')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /打开团队共享目录/ })).not.toBeInTheDocument();
   });
 
   it('renders neutral Linux sharing guidance on the real settings page', () => {

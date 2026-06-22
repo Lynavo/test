@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -57,6 +58,54 @@ func (s *Store) UpdateSessionState(sessionID, state string) error {
 		return fmt.Errorf("update session state %q: %w", sessionID, ErrNoRows)
 	}
 	return nil
+}
+
+// CompleteSession marks a session completed and clears stale resume progress.
+func (s *Store) CompleteSession(sessionID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.Exec(
+		`UPDATE sessions
+		SET state = 'completed', active_file_key = NULL, active_offset = 0, updated_at = ?
+		WHERE session_id = ?`,
+		now, sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("complete session %q: %w", sessionID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("complete session %q: %w", sessionID, ErrNoRows)
+	}
+	return nil
+}
+
+// InterruptActiveSession marks a non-terminal session interrupted.
+func (s *Store) InterruptActiveSession(sessionID string) (bool, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	result, err := s.db.Exec(
+		`UPDATE sessions
+		SET state = 'interrupted', updated_at = ?
+		WHERE session_id = ?
+		  AND state NOT IN ('ended', 'error', 'completed', 'interrupted')`,
+		now, sessionID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("interrupt active session %q: %w", sessionID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n > 0 {
+		return true, nil
+	}
+
+	var existingState string
+	err = s.db.QueryRow("SELECT state FROM sessions WHERE session_id = ?", sessionID).Scan(&existingState)
+	if err == sql.ErrNoRows {
+		return false, fmt.Errorf("interrupt active session %q: %w", sessionID, ErrNoRows)
+	}
+	if err != nil {
+		return false, fmt.Errorf("interrupt active session %q: %w", sessionID, err)
+	}
+	return false, nil
 }
 
 // UpdateSessionActiveFile updates the currently active file and its byte offset for a session.

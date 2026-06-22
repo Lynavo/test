@@ -17,6 +17,10 @@ type IpcHandler = (...args: unknown[]) => unknown;
 
 const handlers = new Map<string, IpcHandler>();
 
+const platformCapabilitiesMock = vi.hoisted(() => ({
+  usesTitleBarOverlayControls: vi.fn(() => true),
+}));
+
 const managedDeviceFixture: DesktopManagedDeviceDTO = {
   desktopDeviceId: 'desktop-1',
   clientId: 'client-1',
@@ -103,6 +107,7 @@ const electronMockState = vi.hoisted(() => {
     on: vi.fn(),
     destroy: vi.fn(),
     loadURL: vi.fn().mockResolvedValue(undefined),
+    setTitleBarOverlay: vi.fn(),
     webContents: {
       session: {
         webRequest: {
@@ -125,6 +130,7 @@ const electronMockState = vi.hoisted(() => {
     BrowserWindow: vi.fn(function BrowserWindowMock() {
       return browserWindowInstance;
     }),
+    fromWebContents: vi.fn(() => browserWindowInstance),
     browserWindowInstance,
     getAppleBeforeRequest: () => appleBeforeRequest,
     resetAppleBeforeRequest: () => {
@@ -139,7 +145,9 @@ vi.mock('electron', () => ({
     getPath: () => '/tmp/vivi-drop-test',
     getVersion: () => '0.1.0',
   },
-  BrowserWindow: electronMockState.BrowserWindow,
+  BrowserWindow: Object.assign(electronMockState.BrowserWindow, {
+    fromWebContents: electronMockState.fromWebContents,
+  }),
   clipboard: { writeText: vi.fn() },
   dialog: { showOpenDialog: vi.fn(), showSaveDialog: vi.fn() },
   ipcMain: {
@@ -158,6 +166,8 @@ vi.mock('electron-log', () => ({
     warn: vi.fn(),
   },
 }));
+
+vi.mock('../../shared/platform-capabilities', () => platformCapabilitiesMock);
 
 vi.mock('../sidecar-client', async () => {
   const actual = await vi.importActual<typeof import('../sidecar-client')>('../sidecar-client');
@@ -241,6 +251,8 @@ describe('registerIpcHandlers', () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    platformCapabilitiesMock.usesTitleBarOverlayControls.mockReset();
+    platformCapabilitiesMock.usesTitleBarOverlayControls.mockReturnValue(true);
     electronMockState.resetAppleBeforeRequest();
   });
 
@@ -331,6 +343,20 @@ describe('registerIpcHandlers', () => {
       features: { giftCard: { enabled: true } },
     });
     expect(sidecarClient.getClientConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates the native title bar overlay while renderer modals are open', async () => {
+    registerIpcHandlers({ retryStart: vi.fn() } as never);
+    const handler = handlers.get('window:set-modal-overlay-active');
+
+    await expect(handler?.({ sender: {} }, true)).resolves.toBeUndefined();
+
+    expect(electronMockState.fromWebContents).toHaveBeenCalledWith({});
+    expect(electronMockState.browserWindowInstance.setTitleBarOverlay).toHaveBeenCalledWith({
+      color: '#7b7f82',
+      symbolColor: '#eef4fa',
+      height: 44,
+    });
   });
 
   it('registers desktop-local management and resource IPC handlers', async () => {

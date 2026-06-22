@@ -27,6 +27,8 @@ import {
   type DiagnosticsUploadRequest,
 } from './diagnostics';
 import { installBonjourForWindows } from './bonjour-installer';
+import { usesTitleBarOverlayControls } from '../shared/platform-capabilities';
+import { getTitleBarOverlayOptions } from './window-chrome';
 
 // Channel constants — shared between main and preload
 export const IPC = {
@@ -81,6 +83,7 @@ export const IPC = {
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
   FILES_CHECK_FOLDER_PERMISSION: 'files:check-folder-permission',
   FILES_REQUEST_FOLDER_PERMISSION: 'files:request-folder-permission',
+  WINDOW_SET_MODAL_OVERLAY_ACTIVE: 'window:set-modal-overlay-active',
   POWER_SAVE_GET_STATE: 'power-save:get-state',
   POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
@@ -657,6 +660,14 @@ export function registerIpcHandlers(
   );
   ipcMain.handle(IPC.SUPPORT_CHECK_FOR_UPDATES, () => checkForUpdates());
   ipcMain.handle(IPC.SUPPORT_APP_INFO, () => getAppInfo());
+  ipcMain.handle(IPC.WINDOW_SET_MODAL_OVERLAY_ACTIVE, async (event, active: boolean) => {
+    if (!usesTitleBarOverlayControls()) {
+      return;
+    }
+    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay(
+      getTitleBarOverlayOptions(Boolean(active)),
+    );
+  });
 
   // File operations — real Electron APIs
   ipcMain.handle(IPC.FILES_OPEN_FOLDER, (_e, path: string) => openFolder(path));

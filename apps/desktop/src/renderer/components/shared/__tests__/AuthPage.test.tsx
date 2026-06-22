@@ -70,4 +70,19 @@ describe('AuthPage', () => {
     expect(screen.getByRole('button', { name: '使用 Google 继续' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '使用 Apple 继续' })).not.toBeInTheDocument();
   });
+
+  it('keeps the login background draggable while leaving controls interactive', () => {
+    installElectronAPI({
+      isMac: vi.fn(() => false),
+      isWindows: vi.fn(() => false),
+      supportsAppleAuth: vi.fn(() => false),
+    });
+
+    const { container } = render(<AuthPage onAuthenticated={vi.fn()} />);
+
+    expect(container.firstElementChild).toHaveClass('vividrop-window-drag-region');
+    expect(screen.getByRole('heading', { name: '登录' }).closest('section')).toHaveClass(
+      'vividrop-window-no-drag-region',
+    );
+  });
 });

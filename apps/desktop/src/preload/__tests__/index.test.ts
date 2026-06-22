@@ -35,6 +35,7 @@ const exposed = vi.hoisted(() => ({
         };
         platform: {
           isLinux(): boolean;
+          setModalOverlayActive(active: boolean): Promise<unknown>;
         };
       },
   invoke: vi.fn(),
@@ -222,5 +223,14 @@ describe('preload electronAPI', () => {
     expect(exposed.api?.platform.isLinux()).toBe(true);
     expect(exposed.api?.platform.isLinux()).toBe(false);
     expect(platformCapabilities.isLinuxPlatform).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps modal title bar overlay updates to IPC', async () => {
+    exposed.invoke.mockResolvedValue(undefined);
+
+    await import('../index');
+
+    await expect(exposed.api?.platform.setModalOverlayActive(true)).resolves.toBeUndefined();
+    expect(exposed.invoke).toHaveBeenCalledWith('window:set-modal-overlay-active', true);
   });
 });

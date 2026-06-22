@@ -11,6 +11,7 @@ import { useResourcesStore } from '@renderer/stores/resources-store';
 import { useAuthStore } from '@renderer/stores/auth-store';
 import { AuthPage } from '@renderer/components/shared/AuthPage';
 import { LogoutConfirmDialog } from '@renderer/components/shared/LogoutConfirmDialog';
+import { installScrollbarActivityTracker } from '@renderer/hooks/scrollbar-activity';
 import { Sidebar } from './Sidebar';
 import { SidecarStatusBanner } from './SidecarStatusBanner';
 
@@ -55,7 +56,16 @@ const ReceivedLibraryPage = lazy(() =>
   })),
 );
 
-const TITLE_BAR_OVERLAY_CONTROLS_INSET = 154;
+const TITLE_BAR_OVERLAY_CONTROLS_FALLBACK_WIDTH = 128;
+const TITLE_BAR_OVERLAY_CONTROLS_GAP = 10;
+
+export function getTopActionsRight(usesTitleBarOverlay: boolean): CSSProperties['right'] {
+  if (!usesTitleBarOverlay) {
+    return 28;
+  }
+
+  return `calc(100vw - env(titlebar-area-width, calc(100vw - ${TITLE_BAR_OVERLAY_CONTROLS_FALLBACK_WIDTH}px)) + ${TITLE_BAR_OVERLAY_CONTROLS_GAP}px)`;
+}
 
 function PageFallback() {
   return <Skeleton className="flex-1" />;
@@ -141,7 +151,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center overflow-y-auto px-6 py-10 text-[#17191c]"
+      className="vividrop-window-drag-region flex min-h-screen items-center justify-center overflow-y-auto px-6 py-10 text-[#17191c]"
       style={{
         backgroundColor: '#f7fbff',
         backgroundImage:
@@ -149,7 +159,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
         backgroundBlendMode: 'normal, overlay',
       }}
     >
-      <section className="w-full max-w-[560px] rounded-lg border border-white/70 bg-white/66 p-5 shadow-[0_34px_110px_rgba(70,96,138,0.18)] backdrop-blur-2xl">
+      <section className="vividrop-window-no-drag-region w-full max-w-[560px] rounded-lg border border-white/70 bg-white/66 p-5 shadow-[0_34px_110px_rgba(70,96,138,0.18)] backdrop-blur-2xl">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#17191c] text-white shadow-[0_12px_28px_rgba(23,25,28,0.18)]">
@@ -278,6 +288,19 @@ export function AppShell() {
     window.electronAPI?.platform?.usesTitleBarOverlayControls?.() ??
     !(window.electronAPI?.platform?.isMac?.() ?? true);
 
+  useEffect(() => installScrollbarActivityTracker(), []);
+
+  useEffect(() => {
+    if (!usesTitleBarOverlay) {
+      return;
+    }
+
+    void window.electronAPI?.platform?.setModalOverlayActive?.(isHelpOpen);
+    return () => {
+      void window.electronAPI?.platform?.setModalOverlayActive?.(false);
+    };
+  }, [isHelpOpen, usesTitleBarOverlay]);
+
   useEffect(() => {
     let active = true;
     void refreshSession().finally(() => {
@@ -399,7 +422,7 @@ export function AppShell() {
   if (!authInitialized) {
     return (
       <div
-        className="flex h-screen items-center justify-center text-[#17191c]"
+        className="vividrop-window-drag-region flex h-screen items-center justify-center text-[#17191c]"
         style={{
           backgroundColor: '#f7fbff',
           backgroundImage:
@@ -450,11 +473,11 @@ export function AppShell() {
         {/* Global top-right header */}
         <div
           data-testid="global-top-actions"
-          className="fixed top-6 z-50"
+          className="fixed top-6 z-40"
           style={
             {
               WebkitAppRegion: 'no-drag',
-              right: usesTitleBarOverlay ? TITLE_BAR_OVERLAY_CONTROLS_INSET : 28,
+              right: getTopActionsRight(usesTitleBarOverlay),
             } as CSSProperties
           }
         >
@@ -539,8 +562,8 @@ export function AppShell() {
         </div>
 
         <div
-          className="shrink-0 px-6 pt-2 pb-2"
-          style={{ WebkitAppRegion: 'drag' } as CSSProperties}
+          data-testid="global-window-drag-strip"
+          className="vividrop-window-drag-region shrink-0 px-6 pt-2 pb-2"
         />
         <SidecarStatusBanner />
         <Suspense fallback={<PageFallback />}>

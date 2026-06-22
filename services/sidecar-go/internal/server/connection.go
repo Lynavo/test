@@ -141,11 +141,11 @@ func (c *connection) handle() {
 			})
 			c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
 
-			// Clean up stale session state — if the client disconnected
-			// without sending SYNC_END_REQ, the session row is stuck in
-			// "transferring" forever. Mark it as interrupted.
+			// Clean up stale session state. If the client disconnects without
+			// sending SYNC_END_REQ, the session would otherwise stay
+			// "transferring" forever. Terminal sessions must not be overwritten.
 			if c.sessionID != "" {
-				if err := c.store.UpdateSessionState(c.sessionID, "interrupted"); err != nil {
+				if _, err := c.store.InterruptActiveSession(c.sessionID); err != nil {
 					slog.Warn("failed to mark session interrupted on disconnect",
 						"sessionID", c.sessionID, "err", err)
 				}

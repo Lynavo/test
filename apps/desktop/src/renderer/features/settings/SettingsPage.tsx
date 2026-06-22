@@ -35,6 +35,7 @@ import {
 } from '@renderer/components/ui/dialog';
 import { Label } from '@renderer/components/ui/label';
 import type { PowerSaveState } from '../../../preload/api';
+import { isGlobalMarket } from '../../../shared/market';
 import { ShareAddressSection } from './ShareAddressSection';
 import { SystemGuideSection } from './SystemGuideSection';
 
@@ -90,6 +91,7 @@ export function SettingsPage() {
   const preventStandbyVal = powerState?.preventSleepDuringTransfer ?? false;
   const localIp = localIps[0] || '192.168.0.227';
   const feedbackReady = feedbackText.trim().length > 0;
+  const showLocalShareGuidance = !isGlobalMarket();
   const installedVersionLabel = appInfo
     ? `${appInfo.version}${appInfo.buildNumber ? ` (${appInfo.buildNumber})` : ''}`
     : installedVersionFallback;
@@ -259,9 +261,12 @@ export function SettingsPage() {
               <SettingsItem icon={Wifi} tone="blue" title="本机 IP" caption={localIp} />
             </SettingsCard>
 
-            <ShareAddressSection />
-
-            <SystemGuideSection />
+            {showLocalShareGuidance ? (
+              <>
+                <ShareAddressSection />
+                <SystemGuideSection />
+              </>
+            ) : null}
           </div>
 
           <div className="space-y-5">

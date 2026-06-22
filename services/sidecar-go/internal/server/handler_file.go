@@ -565,7 +565,7 @@ func (c *connection) handleSyncEnd(body []byte) error {
 		return fmt.Errorf("SYNC_END_REQ unexpected in state %d", c.state)
 	}
 
-	if err := c.store.UpdateSessionState(c.sessionID, "completed"); err != nil {
+	if err := c.store.CompleteSession(c.sessionID); err != nil {
 		slog.Warn("failed to update session state", "sessionID", c.sessionID, "err", err)
 	}
 

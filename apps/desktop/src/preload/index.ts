@@ -63,6 +63,7 @@ const IPC = {
   FILES_COPY_CLIPBOARD: 'files:copy-clipboard',
   FILES_CHECK_FOLDER_PERMISSION: 'files:check-folder-permission',
   FILES_REQUEST_FOLDER_PERMISSION: 'files:request-folder-permission',
+  WINDOW_SET_MODAL_OVERLAY_ACTIVE: 'window:set-modal-overlay-active',
   POWER_SAVE_GET_STATE: 'power-save:get-state',
   POWER_SAVE_SET_PREVENT_SLEEP: 'power-save:set-prevent-sleep',
 } as const;
@@ -166,6 +167,8 @@ const electronAPI: ElectronAPI = {
       process.env.SYNCFLOW_QA_SKIP_AUTH === '1' || process.env.SYNCFLOW_DEV_SKIP_AUTH === '1',
     getHomeDir: () => os.homedir(),
     getHostName: () => os.hostname(),
+    setModalOverlayActive: (active: boolean) =>
+      ipcRenderer.invoke(IPC.WINDOW_SET_MODAL_OVERLAY_ACTIVE, active),
     getLocalIPs: () => {
       const interfaces = os.networkInterfaces();
       const addresses: string[] = [];

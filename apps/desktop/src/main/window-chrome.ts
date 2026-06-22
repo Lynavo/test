@@ -1,4 +1,4 @@
-import type { BrowserWindowConstructorOptions } from 'electron';
+import type { BrowserWindowConstructorOptions, TitleBarOverlayOptions } from 'electron';
 import { usesTitleBarOverlayControls } from '../shared/platform-capabilities';
 
 type WorkAreaSize = {
@@ -11,6 +11,20 @@ const DEFAULT_MAIN_WINDOW_HEIGHT = 800;
 const MIN_MAIN_WINDOW_WIDTH = 960;
 const MIN_MAIN_WINDOW_HEIGHT = 640;
 const TITLE_BAR_OVERLAY_HEIGHT = 44;
+const DEFAULT_TITLE_BAR_OVERLAY: TitleBarOverlayOptions = {
+  color: '#f7fbff',
+  symbolColor: '#4f5b68',
+  height: TITLE_BAR_OVERLAY_HEIGHT,
+};
+const MODAL_TITLE_BAR_OVERLAY: TitleBarOverlayOptions = {
+  color: '#7b7f82',
+  symbolColor: '#eef4fa',
+  height: TITLE_BAR_OVERLAY_HEIGHT,
+};
+
+export function getTitleBarOverlayOptions(modalActive = false): TitleBarOverlayOptions {
+  return modalActive ? MODAL_TITLE_BAR_OVERLAY : DEFAULT_TITLE_BAR_OVERLAY;
+}
 
 export function getMainWindowChromeOptions(
   platform: NodeJS.Platform = process.platform,
@@ -25,11 +39,7 @@ export function getMainWindowChromeOptions(
     return {
       autoHideMenuBar: true,
       titleBarStyle: 'hidden',
-      titleBarOverlay: {
-        color: '#f7fbff',
-        symbolColor: '#4f5b68',
-        height: TITLE_BAR_OVERLAY_HEIGHT,
-      },
+      titleBarOverlay: getTitleBarOverlayOptions(false),
     };
   }
 

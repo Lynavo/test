@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getMainWindowChromeOptions, getMainWindowSizeOptions } from '../window-chrome';
+import {
+  getMainWindowChromeOptions,
+  getMainWindowSizeOptions,
+  getTitleBarOverlayOptions,
+} from '../window-chrome';
 
 describe('getMainWindowChromeOptions', () => {
   it('keeps the existing macOS hidden inset title bar', () => {
@@ -29,6 +33,14 @@ describe('getMainWindowChromeOptions', () => {
         symbolColor: '#4f5b68',
         height: 44,
       },
+    });
+  });
+
+  it('provides a dimmed title bar overlay for modal states', () => {
+    expect(getTitleBarOverlayOptions(true)).toEqual({
+      color: '#7b7f82',
+      symbolColor: '#eef4fa',
+      height: 44,
     });
   });
 });

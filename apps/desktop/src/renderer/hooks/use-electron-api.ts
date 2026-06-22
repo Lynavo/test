@@ -139,6 +139,7 @@ const mockPlatform: ElectronAPI['platform'] = {
   isAuthBypassEnabled: () => false,
   getHomeDir: () => '/Users/alice',
   getHostName: () => 'localhost',
+  setModalOverlayActive: async () => {},
   getLocalIPs: () => ['192.168.1.100'],
 };
 

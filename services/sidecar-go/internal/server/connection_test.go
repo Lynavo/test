@@ -62,6 +62,19 @@ const (
 // a temp SQLite DB and net.Pipe(). It returns the client-side conn, store, config,
 // and a cleanup function.
 func setupTestConnection(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, cleanup func()) {
+	clientConn, st, cfg, _, cleanup = setupTestConnectionWithDone(t)
+	return clientConn, st, cfg, cleanup
+}
+
+func setupTestConnectionWithDone(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
+	return setupTestConnectionWithDoneAndServer(t, false)
+}
+
+func setupTestConnectionWithTCPServerDone(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
+	return setupTestConnectionWithDoneAndServer(t, true)
+}
+
+func setupTestConnectionWithDoneAndServer(t *testing.T, withTCPServer bool) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	cfg = &config.Config{
@@ -90,10 +103,18 @@ func setupTestConnection(t *testing.T) (clientConn net.Conn, st *store.Store, cf
 	hub := events.NewHub()
 
 	client, server := net.Pipe()
-	conn := newConnection(server, st, cfg, hub, nil)
-	go conn.handle()
+	var srv *TCPServer
+	if withTCPServer {
+		srv = NewTCPServer(st, cfg, hub)
+	}
+	conn := newConnection(server, st, cfg, hub, srv)
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		conn.handle()
+	}()
 
-	return client, st, cfg, func() {
+	return client, st, cfg, doneCh, func() {
 		client.Close()
 		st.Close()
 	}
@@ -762,6 +783,66 @@ func TestFullPairingAndFileTransfer(t *testing.T) {
 	recvJSON(t, client, protocol.TypeSyncEndRes, &syncEndRes)
 	if !syncEndRes.OK {
 		t.Fatal("SyncEndRes.OK=false")
+	}
+}
+
+func TestCompletedSessionStaysCompletedAfterDisconnect(t *testing.T) {
+	client, st, _, done, cleanup := setupTestConnectionWithTCPServerDone(t)
+	defer cleanup()
+
+	_ = doPairing(t, client)
+
+	sessionID := "sess-completed-disconnect"
+	payload := make([]byte, 1024)
+	for i := range payload {
+		payload[i] = byte(i % 251)
+	}
+	doSyncBegin(t, client, sessionID, 1, int64(len(payload)))
+
+	fileKey := "photo-completed-disconnect"
+	initRes := doFileInit(t, client, fileKey, "completed-disconnect.jpg", int64(len(payload)))
+	if initRes.Action != "UPLOAD" {
+		t.Fatalf("expected action=UPLOAD, got %q", initRes.Action)
+	}
+
+	sendFileData(t, client, fileKey, 0, payload)
+	var ack protocol.FileAck
+	recvJSON(t, client, protocol.TypeFileAck, &ack)
+
+	hash := sha256.Sum256(payload)
+	endRes := doFileEnd(t, client, fileKey, int64(len(payload)), hex.EncodeToString(hash[:]))
+	if !endRes.OK {
+		t.Fatal("FileEndRes.OK=false")
+	}
+
+	sendJSON(t, client, protocol.TypeSyncEndReq, struct{}{})
+	var syncEndRes protocol.SyncEndRes
+	recvJSON(t, client, protocol.TypeSyncEndRes, &syncEndRes)
+	if !syncEndRes.OK {
+		t.Fatal("SyncEndRes.OK=false")
+	}
+
+	if err := client.Close(); err != nil {
+		t.Fatalf("client.Close: %v", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(testReadTimeout):
+		t.Fatal("server connection did not stop after client close")
+	}
+
+	sess, err := st.GetSession(sessionID)
+	if err != nil {
+		t.Fatalf("GetSession: %v", err)
+	}
+	if sess.State != "completed" {
+		t.Fatalf("session state=%q, want completed", sess.State)
+	}
+	if sess.ActiveFileKey != nil {
+		t.Fatalf("active file key=%q, want nil", *sess.ActiveFileKey)
+	}
+	if sess.ActiveOffset != 0 {
+		t.Fatalf("active offset=%d, want 0", sess.ActiveOffset)
 	}
 }
 

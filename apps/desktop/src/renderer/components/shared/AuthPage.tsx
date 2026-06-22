@@ -188,7 +188,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
 
   return (
     <div
-      className="relative flex h-screen items-center justify-center overflow-hidden px-6 text-[#17191c]"
+      className="vividrop-window-drag-region relative flex h-screen items-center justify-center overflow-hidden px-6 text-[#17191c]"
       style={{
         backgroundColor: '#f7fbff',
         backgroundImage:
@@ -202,7 +202,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
       </div>
 
       <div className="w-full max-w-[440px]">
-        <section className="rounded-lg border border-white/70 bg-white/54 p-5 shadow-[0_30px_90px_rgba(70,96,138,0.16)] backdrop-blur-2xl">
+        <section className="vividrop-window-no-drag-region rounded-lg border border-white/70 bg-white/54 p-5 shadow-[0_30px_90px_rgba(70,96,138,0.16)] backdrop-blur-2xl">
           <div className="mb-5 text-center">
             <h1 className="text-xl font-semibold text-[#17191c]">登录</h1>
           </div>

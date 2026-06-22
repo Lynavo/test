@@ -8,8 +8,9 @@ import { useDirectoryStore } from '@renderer/stores/directory-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 import { mockSettings } from '@renderer/mocks/settings';
+import { installScrollbarActivityTracker } from '@renderer/hooks/scrollbar-activity';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../../../../shared/sidecar-runtime';
-import { AppShell } from '../AppShell';
+import { AppShell, getTopActionsRight } from '../AppShell';
 
 vi.mock('../Sidebar', () => ({
   Sidebar: () => <aside data-testid="sidebar" />,
@@ -55,6 +56,10 @@ vi.mock('@renderer/features/directory/DirectoryPage', () => ({
   DirectoryPage: () => <main data-testid="legacy-directory-page">DirectoryPage</main>,
 }));
 
+vi.mock('@renderer/hooks/scrollbar-activity', () => ({
+  installScrollbarActivityTracker: vi.fn(() => vi.fn()),
+}));
+
 function installElectronAPI(
   session: AuthSessionView | null = { loggedIn: true, email: 'ada@example.com' },
   platform: Partial<Window['electronAPI']['platform']> = {},
@@ -95,6 +100,7 @@ function installElectronAPI(
       isMac: vi.fn(() => true),
       isWindows: vi.fn(() => false),
       usesTitleBarOverlayControls: vi.fn(() => false),
+      setModalOverlayActive: vi.fn().mockResolvedValue(undefined),
       getHomeDir: vi.fn(() => '/Users/ada'),
       getHostName: vi.fn(() => 'Ada-MacBook-Pro'),
       getLocalIPs: vi.fn(() => ['192.168.1.10']),
@@ -145,6 +151,8 @@ describe('AppShell', () => {
       copiedField: null,
     });
     vi.restoreAllMocks();
+    vi.mocked(installScrollbarActivityTracker).mockClear();
+    vi.mocked(installScrollbarActivityTracker).mockReturnValue(vi.fn());
   });
 
   it('renders the full-page login screen instead of the desktop shell when not authenticated', async () => {
@@ -155,6 +163,16 @@ describe('AppShell', () => {
     expect(await screen.findByRole('heading', { name: '登录' })).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
     expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
+  });
+
+  it('keeps the auth initialization screen draggable while session lookup is pending', () => {
+    installElectronAPI();
+    const getAuthSession = window.electronAPI?.auth.getAuthSession as ReturnType<typeof vi.fn>;
+    getAuthSession.mockReturnValue(new Promise<AuthSessionView | null>(() => {}));
+
+    const { container } = render(<AppShell />);
+
+    expect(container.firstElementChild).toHaveClass('vividrop-window-drag-region');
   });
 
   it('uses the dev skip-auth session without calling the real auth bridge', async () => {
@@ -184,12 +202,32 @@ describe('AppShell', () => {
     expect(screen.queryByRole('heading', { name: '设置连接码' })).not.toBeInTheDocument();
   });
 
+  it('installs the scrollbar activity tracker for the shell lifetime', async () => {
+    const cleanup = vi.fn();
+    vi.mocked(installScrollbarActivityTracker).mockReturnValue(cleanup);
+    installElectronAPI(undefined, {
+      isAuthBypassEnabled: vi.fn(() => true),
+    } as Partial<Window['electronAPI']['platform']>);
+
+    const { unmount } = render(<AppShell />);
+
+    expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
+    expect(installScrollbarActivityTracker).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the connection code setup page after authentication before the desktop shell', async () => {
     installElectronAPI();
 
-    render(<AppShell />);
+    const { container } = render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass('vividrop-window-drag-region');
+    expect(screen.getByRole('heading', { name: '设置连接码' }).closest('section')).toHaveClass(
+      'vividrop-window-no-drag-region',
+    );
     expect(screen.getByDisplayValue(mockSettings.connectionCode)).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
     expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
@@ -236,6 +274,9 @@ describe('AppShell', () => {
     render(<AppShell />);
 
     await completeConnectionCodeSetup();
+    expect(screen.getByTestId('global-window-drag-strip')).toHaveClass(
+      'vividrop-window-drag-region',
+    );
     expect(await screen.findByText(pageText)).toBeInTheDocument();
   });
 
@@ -280,6 +321,26 @@ describe('AppShell', () => {
     expect(setHelpOpenSpy).toHaveBeenCalledWith(true);
   });
 
+  it('updates the non-macOS title bar overlay while the help dialog is open', async () => {
+    installElectronAPI(undefined, {
+      isMac: vi.fn(() => false),
+      isWindows: vi.fn(() => true),
+      usesTitleBarOverlayControls: vi.fn(() => true),
+      setModalOverlayActive: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(<AppShell />);
+
+    await completeConnectionCodeSetup();
+    expect(window.electronAPI?.platform.setModalOverlayActive).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(await screen.findByRole('button', { name: /帮助|幫助|layout\.nav\.help/i }));
+
+    await waitFor(() => {
+      expect(window.electronAPI?.platform.setModalOverlayActive).toHaveBeenLastCalledWith(true);
+    });
+  });
+
   it('opens the mobile download QR panel from the top action', async () => {
     installElectronAPI();
 
@@ -294,6 +355,11 @@ describe('AppShell', () => {
   });
 
   it('keeps top actions clear of non-macOS native caption buttons', async () => {
+    expect(getTopActionsRight(true)).toBe(
+      'calc(100vw - env(titlebar-area-width, calc(100vw - 128px)) + 10px)',
+    );
+    expect(getTopActionsRight(false)).toBe(28);
+
     installElectronAPI(undefined, {
       isMac: vi.fn(() => false),
       isWindows: vi.fn(() => false),
@@ -303,6 +369,6 @@ describe('AppShell', () => {
     render(<AppShell />);
 
     await completeConnectionCodeSetup();
-    expect(await screen.findByTestId('global-top-actions')).toHaveStyle({ right: '154px' });
+    expect(await screen.findByTestId('global-top-actions')).toBeInTheDocument();
   });
 });
