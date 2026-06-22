@@ -878,6 +878,94 @@ func TestMobileReceivedResourcesCreatesAccessRecord(t *testing.T) {
 	}
 }
 
+func TestMobileReceivedLibraryMarksDeletedFilesWithoutPreviewURLs(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")
+	completedAt := "2026-06-14T09:00:00Z"
+	availableRelPath := filepath.Join("Alice iPhone", "2026-06-14", "available.jpg")
+	availableAbsPath := filepath.Join(cfg.ReceiveDir, availableRelPath)
+	if err := os.MkdirAll(filepath.Dir(availableAbsPath), 0o755); err != nil {
+		t.Fatalf("mkdir available received path: %v", err)
+	}
+	writeJPEGFixture(t, availableAbsPath, 320, 240)
+	availableInfo, err := os.Stat(availableAbsPath)
+	if err != nil {
+		t.Fatalf("stat available received file: %v", err)
+	}
+	deletedRelPath := filepath.Join("Alice iPhone", "2026-06-14", "deleted.jpg")
+
+	for _, upload := range []store.Upload{
+		{
+			FileKey:              "available-photo",
+			ClientID:             "client-001",
+			OriginalFilename:     "available.jpg",
+			MediaType:            "image",
+			FileSize:             availableInfo.Size(),
+			Status:               "completed",
+			FinalPath:            &availableRelPath,
+			CommittedBytes:       availableInfo.Size(),
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+		{
+			FileKey:              "deleted-photo",
+			ClientID:             "client-001",
+			OriginalFilename:     "deleted.jpg",
+			MediaType:            "image",
+			FileSize:             1024,
+			Status:               "completed",
+			FinalPath:            &deletedRelPath,
+			CommittedBytes:       1024,
+			ActiveTransmissionMs: 250,
+			CompletedAt:          &completedAt,
+			UpdatedAt:            completedAt,
+		},
+	} {
+		if err := st.UpsertUpload(upload); err != nil {
+			t.Fatalf("UpsertUpload %s: %v", upload.FileKey, err)
+		}
+	}
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/resources/mobile/received?clientId=client-001&clientName=Alice%20iPhone&scope=client")
+	if err != nil {
+		t.Fatalf("GET mobile received scoped: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET mobile received scoped status=%d, want 200", resp.StatusCode)
+	}
+
+	var body struct {
+		Items []store.ReceivedLibraryItem `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode mobile received scoped: %v", err)
+	}
+	if len(body.Items) != 2 {
+		t.Fatalf("expected 2 mobile received items, got %+v", body.Items)
+	}
+	byKey := make(map[string]store.ReceivedLibraryItem, len(body.Items))
+	for _, item := range body.Items {
+		byKey[item.FileKey] = item
+	}
+	if byKey["available-photo"].FileStatus != "available" ||
+		!strings.Contains(byKey["available-photo"].PreviewURL, "/resources/mobile/received/preview?") ||
+		!strings.Contains(byKey["available-photo"].ThumbnailURL, "/resources/mobile/received/thumbnail?") {
+		t.Fatalf("available photo should be previewable, got %+v", byKey["available-photo"])
+	}
+	if deleted := byKey["deleted-photo"]; deleted.FileStatus != "deleted" ||
+		deleted.PreviewURL != "" ||
+		deleted.ThumbnailURL != "" ||
+		deleted.StreamURL != "" {
+		t.Fatalf("deleted photo should not expose preview URLs, got %+v", deleted)
+	}
+}
+
 func TestMobileReceivedResourcesSupportsScopedPagination(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	insertPairedDeviceWithStableID(t, st, "client-001", "Alice iPhone", "Alice iPhone", "stable-001", "2026-06-14T08:00:00Z")

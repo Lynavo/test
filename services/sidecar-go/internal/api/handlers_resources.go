@@ -145,7 +145,7 @@ func (s *Server) handleResourcesReceived(w http.ResponseWriter, r *http.Request)
 	if pageSize > 200 {
 		pageSize = 200
 	}
-	result, err := s.store.ListReceivedLibraryPage(desktopDeviceID, page, pageSize)
+	result, err := s.store.ListReceivedLibraryPageWithReceiveDir(desktopDeviceID, page, pageSize, s.config.ReceiveDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list received library")
 		return
@@ -375,9 +375,9 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 		}
 		var result store.ReceivedLibraryPage
 		if scopedToClient {
-			result, err = s.store.ListReceivedLibraryPageForClient(desktopDeviceID, client.ClientID, page, pageSize)
+			result, err = s.store.ListReceivedLibraryPageForClientWithReceiveDir(desktopDeviceID, client.ClientID, page, pageSize, s.config.ReceiveDir)
 		} else {
-			result, err = s.store.ListReceivedLibraryPage(desktopDeviceID, page, pageSize)
+			result, err = s.store.ListReceivedLibraryPageWithReceiveDir(desktopDeviceID, page, pageSize, s.config.ReceiveDir)
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to list received library")
@@ -393,9 +393,9 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 
 	var items []store.ReceivedLibraryItem
 	if scopedToClient {
-		items, err = s.store.ListReceivedLibraryForClient(desktopDeviceID, client.ClientID)
+		items, err = s.store.ListReceivedLibraryForClientWithReceiveDir(desktopDeviceID, client.ClientID, s.config.ReceiveDir)
 	} else {
-		items, err = s.store.ListReceivedLibrary(desktopDeviceID)
+		items, err = s.store.ListReceivedLibraryWithReceiveDir(desktopDeviceID, s.config.ReceiveDir)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list received library")
@@ -411,6 +411,9 @@ func (s *Server) handleMobileReceivedResources(w http.ResponseWriter, r *http.Re
 func enrichMobileReceivedPreviewURLs(items []store.ReceivedLibraryItem, client mobileAccessClient) {
 	for i := range items {
 		if items[i].ClientID != client.ClientID || strings.TrimSpace(items[i].FileKey) == "" {
+			continue
+		}
+		if items[i].FileStatus == "deleted" {
 			continue
 		}
 		if isVideoMedia(items[i].MediaType, items[i].Filename) {

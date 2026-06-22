@@ -53,6 +53,11 @@ jest.mock('react-i18next', () => ({
         'sharedFiles.phoneSyncSpace.title': '手機同步空間',
         'sharedFiles.phoneSyncSpace.desc': '檢視已同步至电脑的檔案與上传来源',
         'sharedFiles.phoneSyncSpace.empty': '尚無同步檔案',
+        'sharedFiles.phoneSyncSpace.desktopDeleted': '電腦已刪除',
+        'sharedFiles.phoneSyncSpace.desktopDeletedMessage':
+          '此檔案已從電腦刪除',
+        'sharedFiles.phoneSyncSpace.deletedDownloadMessage':
+          '無法下載已刪除的檔案',
         'sharedFiles.remoteAccess.title': '遠端訪問電腦',
         'sharedFiles.remoteAccess.desc': '流覽電腦端共享的目錄結構並下載文件',
         'sharedFiles.remoteAccess.empty': '此資料夾為空',
@@ -1879,6 +1884,57 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     });
   });
 
+  it('marks deleted global sync-space items and disables preview and download', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: 'received-deleted',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'deleted.jpg',
+        fileKey: 'received/deleted.jpg',
+        filename: 'deleted.jpg',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-16T08:00:00.000Z',
+        shareStatus: 'shared',
+        fileStatus: 'deleted',
+        thumbnailUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-deleted',
+        previewUrl:
+          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-deleted',
+      },
+    ]);
+
+    const { getByLabelText, getByText, queryByTestId } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('deleted.jpg')).toBeTruthy();
+    });
+
+    expect(getByText('電腦已刪除')).toBeTruthy();
+    expect(queryByTestId('phone-sync-thumbnail-image')).toBeNull();
+
+    const previewButton = getByLabelText('预览已同步文件');
+    const downloadButton = getByLabelText('下载已同步文件');
+    expect(previewButton.props.accessibilityState?.disabled).toBe(true);
+    expect(downloadButton.props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(previewButton);
+    fireEvent.press(downloadButton);
+
+    expect(mockGetReceivedLibraryPreviewUrl).not.toHaveBeenCalled();
+    expect(mockPrepareReceivedLibraryPreview).not.toHaveBeenCalled();
+    expect(mockDownloadReceivedLibraryItem).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
+  });
+
   it('downloads a not-shared global sync-space item by fileKey', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
@@ -2876,6 +2932,52 @@ describe('PhoneSyncSpaceScreen', () => {
       expect(getByTestId('phone-sync-cn-preview-image')).toBeTruthy();
     });
     expect(mockViewDocument).not.toHaveBeenCalled();
+  });
+
+  it('marks deleted phone-sync items and disables preview and download', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: 'received-deleted',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'deleted.jpg',
+        fileKey: 'received/deleted.jpg',
+        filename: 'deleted.jpg',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-16T08:00:00.000Z',
+        shareStatus: 'shared',
+        fileStatus: 'deleted',
+      },
+    ]);
+
+    const { getByLabelText, getByText } = render(
+      <TestErrorBoundary>
+        <PhoneSyncSpaceScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('deleted.jpg')).toBeTruthy();
+    });
+
+    expect(getByText('電腦已刪除')).toBeTruthy();
+
+    const previewButton = getByLabelText('預覽已同步檔案');
+    const downloadButton = getByLabelText('下載已同步檔案');
+    expect(previewButton.props.accessibilityState?.disabled).toBe(true);
+    expect(downloadButton.props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(previewButton);
+    fireEvent.press(downloadButton);
+
+    expect(mockGetReceivedLibraryPreviewUrl).not.toHaveBeenCalled();
+    expect(mockPrepareReceivedLibraryPreview).not.toHaveBeenCalled();
+    expect(mockDownloadReceivedLibraryItem).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
   });
 
   it('opens received documents from phone sync space with the system preview viewer', async () => {

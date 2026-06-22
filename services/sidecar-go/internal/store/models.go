@@ -224,6 +224,7 @@ type ReceivedLibraryItem struct {
 	FileSize        int64   `json:"fileSize"`
 	CompletedAt     string  `json:"completedAt"`
 	ShareStatus     string  `json:"shareStatus"`
+	FileStatus      string  `json:"fileStatus"`
 	FinalPath       *string `json:"-"`
 	ThumbnailURL    string  `json:"thumbnailUrl,omitempty"`
 	PreviewURL      string  `json:"previewUrl,omitempty"`

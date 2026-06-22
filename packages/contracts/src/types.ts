@@ -204,6 +204,7 @@ export interface ReceivedLibraryItemDTO {
   fileSize: number;
   completedAt: string;
   shareStatus: 'not_shared' | 'shared' | 'missing';
+  fileStatus?: 'available' | 'deleted';
   thumbnailUrl?: string;
   previewUrl?: string;
   streamUrl?: string;

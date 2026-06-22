@@ -1,6 +1,8 @@
 package store
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -110,6 +112,72 @@ func TestReceivedLibraryForClientFiltersCompletedUploads(t *testing.T) {
 	}
 	if aliceItems[0].ClientID != "alice-phone" || aliceItems[0].Filename != "Alice.jpg" {
 		t.Fatalf("unexpected alice mobile received item: %+v", aliceItems[0])
+	}
+}
+
+func TestReceivedLibraryMarksDeletedFiles(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	receiveDir := t.TempDir()
+	availableRelPath := filepath.Join("client-1", "2026-06-22", "available.jpg")
+	availableAbsPath := filepath.Join(receiveDir, availableRelPath)
+	if err := os.MkdirAll(filepath.Dir(availableAbsPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll available file dir: %v", err)
+	}
+	if err := os.WriteFile(availableAbsPath, []byte("image"), 0o644); err != nil {
+		t.Fatalf("WriteFile available file: %v", err)
+	}
+
+	availableUpload := sampleUpload("available-file", "client-1")
+	availableUpload.OriginalFilename = "available.jpg"
+	availableUpload.Status = "completed"
+	availableUpload.CompletedAt = &now
+	availableUpload.UpdatedAt = now
+	availableUpload.FinalPath = &availableRelPath
+	if err := s.UpsertUpload(availableUpload); err != nil {
+		t.Fatalf("UpsertUpload available: %v", err)
+	}
+
+	deletedRelPath := filepath.Join("client-1", "2026-06-22", "deleted.jpg")
+	deletedUpload := sampleUpload("deleted-file", "client-1")
+	deletedUpload.OriginalFilename = "deleted.jpg"
+	deletedUpload.Status = "completed"
+	deletedUpload.CompletedAt = &now
+	deletedUpload.UpdatedAt = now
+	deletedUpload.FinalPath = &deletedRelPath
+	if err := s.UpsertUpload(deletedUpload); err != nil {
+		t.Fatalf("UpsertUpload deleted: %v", err)
+	}
+
+	legacyUpload := sampleUpload("legacy-file", "client-1")
+	legacyUpload.OriginalFilename = "legacy.jpg"
+	legacyUpload.Status = "completed"
+	legacyUpload.CompletedAt = &now
+	legacyUpload.UpdatedAt = now
+	legacyUpload.FinalPath = nil
+	if err := s.UpsertUpload(legacyUpload); err != nil {
+		t.Fatalf("UpsertUpload legacy: %v", err)
+	}
+
+	items, err := s.ListReceivedLibraryWithReceiveDir("desktop-1", receiveDir)
+	if err != nil {
+		t.Fatalf("ListReceivedLibraryWithReceiveDir: %v", err)
+	}
+	if len(items) != 3 {
+		t.Fatalf("expected 3 received items, got %d", len(items))
+	}
+	byKey := map[string]ReceivedLibraryItem{}
+	for _, item := range items {
+		byKey[item.FileKey] = item
+	}
+	if byKey["available-file"].FileStatus != "available" {
+		t.Fatalf("expected available fileStatus, got %+v", byKey["available-file"])
+	}
+	if byKey["deleted-file"].FileStatus != "deleted" {
+		t.Fatalf("expected deleted fileStatus, got %+v", byKey["deleted-file"])
+	}
+	if byKey["legacy-file"].FileStatus != "available" {
+		t.Fatalf("expected legacy fileStatus to stay available, got %+v", byKey["legacy-file"])
 	}
 }
 

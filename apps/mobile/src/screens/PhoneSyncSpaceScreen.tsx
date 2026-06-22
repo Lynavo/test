@@ -51,6 +51,10 @@ type PhoneSyncPreviewState = {
   url: string;
 };
 
+function isReceivedFileDeleted(item: ReceivedLibraryItemDTO) {
+  return item.fileStatus === 'deleted';
+}
+
 export function PhoneSyncSpaceScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
@@ -164,6 +168,7 @@ export function PhoneSyncSpaceScreen() {
   const handleDownload = useCallback(
     async (item: ReceivedLibraryItemDTO) => {
       if (downloadingId !== null) return;
+      if (isReceivedFileDeleted(item)) return;
       const itemKey = item.fileKey || item.resourceId;
       setDownloadingId(itemKey);
 
@@ -219,6 +224,7 @@ export function PhoneSyncSpaceScreen() {
 
   const handleOpenItem = useCallback(
     async (item: ReceivedLibraryItemDTO) => {
+      if (isReceivedFileDeleted(item)) return;
       try {
         const { NativeSyncEngine } = NativeModules;
         const bindingState = await NativeSyncEngine?.getBindingState();
@@ -288,6 +294,7 @@ export function PhoneSyncSpaceScreen() {
     const formattedTime = formatItemTime(item.completedAt);
     const displayName = item.filename || item.displayName;
     const isDownloading = downloadingId === (item.fileKey || item.resourceId);
+    const isDeleted = isReceivedFileDeleted(item);
 
     const desktopName = binding
       ? item.desktopDeviceId === binding.deviceId ||
@@ -300,9 +307,13 @@ export function PhoneSyncSpaceScreen() {
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, isDeleted && styles.cardDisabled]}
         activeOpacity={0.75}
         onPress={() => handleOpenItem(item)}
+        disabled={isDeleted}
+        accessibilityRole="button"
+        accessibilityLabel="預覽已同步檔案"
+        accessibilityState={{ disabled: isDeleted }}
       >
         <View style={[styles.iconWrapper, { backgroundColor: iconConfig.bg }]}>
           <Icon name={iconConfig.name} size={24} color={iconConfig.color} />
@@ -324,22 +335,37 @@ export function PhoneSyncSpaceScreen() {
               <Text style={styles.missingText}>僅電腦端存在</Text>
             </View>
           )}
+          {isDeleted && (
+            <View style={styles.missingBadge}>
+              <Text style={styles.missingText}>
+                {t('sharedFiles.phoneSyncSpace.desktopDeleted') ||
+                  '電腦已刪除'}
+              </Text>
+            </View>
+          )}
           <Text style={styles.deviceText} numberOfLines={1}>
             {desktopName}
           </Text>
           <TouchableOpacity
             style={[
               styles.downloadButton,
-              isDownloading && styles.downloadButtonDisabled,
+              (isDownloading || isDeleted) && styles.downloadButtonDisabled,
             ]}
             onPress={() => handleDownload(item)}
             activeOpacity={0.7}
-            disabled={isDownloading || downloadingId !== null}
+            disabled={isDeleted || isDownloading || downloadingId !== null}
+            accessibilityRole="button"
+            accessibilityLabel="下載已同步檔案"
+            accessibilityState={{ disabled: isDeleted || isDownloading }}
           >
             {isDownloading ? (
               <ActivityIndicator size="small" color="#3b82f6" />
             ) : (
-              <Icon name="download-outline" size={18} color="#3b82f6" />
+              <Icon
+                name="download-outline"
+                size={18}
+                color={isDeleted ? '#94a3b8' : '#3b82f6'}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -576,6 +602,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 1.5,
+  },
+  cardDisabled: {
+    opacity: 0.72,
   },
   iconWrapper: {
     width: 48,

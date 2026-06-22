@@ -77,6 +77,10 @@ type ReceivedPreviewState = {
   item: ReceivedLibraryMediaItem;
   url: string;
 };
+
+function isReceivedFileDeleted(item: ReceivedLibraryMediaItem) {
+  return item.fileStatus === 'deleted';
+}
 type IdleCallbackHandle = number;
 type IdleCallbackOptions = {
   timeout?: number;
@@ -514,6 +518,7 @@ export function PhoneSyncSpaceGlobalScreen() {
   const handleDownload = useCallback(
     async (item: ReceivedLibraryMediaItem) => {
       if (downloadingId !== null) return;
+      if (isReceivedFileDeleted(item)) return;
       const itemKey = item.fileKey || item.resourceId;
       setDownloadingId(itemKey);
       try {
@@ -575,6 +580,7 @@ export function PhoneSyncSpaceGlobalScreen() {
 
   const handleOpenReceivedItem = useCallback(
     async (item: ReceivedLibraryMediaItem) => {
+      if (isReceivedFileDeleted(item)) return;
       const filename = getReceivedFileTitle(item);
       const image = isImageFile(item.mediaType, filename);
       const video = isVideoFile(item.mediaType, filename);
@@ -682,19 +688,22 @@ export function PhoneSyncSpaceGlobalScreen() {
     const fileType = getFileTypeText(item.mediaType, item.filename);
     const clock = formatClock(item.completedAt);
     const isDownloading = downloadingId === (item.fileKey || item.resourceId);
+    const isDeleted = isReceivedFileDeleted(item);
 
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, isDeleted && styles.cardDisabled]}
         activeOpacity={0.75}
         onPress={() => handleOpenReceivedItem(item)}
+        disabled={isDeleted}
         accessibilityRole="button"
         accessibilityLabel="预览已同步文件"
+        accessibilityState={{ disabled: isDeleted }}
       >
         <ReceivedMediaThumbnail
           item={item}
           iconType={iconType}
-          loadRemoteThumbnail={remoteThumbnailsEnabled}
+          loadRemoteThumbnail={remoteThumbnailsEnabled && !isDeleted}
         />
         <View style={styles.infoWrapper}>
           <Text style={styles.filename} numberOfLines={1}>
@@ -705,15 +714,24 @@ export function PhoneSyncSpaceGlobalScreen() {
               clock ? ` · ${clock}` : ''
             }`}
           </Text>
+          {isDeleted ? (
+            <View style={styles.deletedBadge}>
+              <Text style={styles.deletedBadgeText}>
+                {t('sharedFiles.phoneSyncSpace.desktopDeleted') ||
+                  '電腦已刪除'}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <TouchableOpacity
           style={[
             styles.downloadButton,
-            isDownloading && styles.downloadButtonDisabled,
+            (isDownloading || isDeleted) && styles.downloadButtonDisabled,
           ]}
           accessibilityRole="button"
           accessibilityLabel="下载已同步文件"
-          disabled={isDownloading || downloadingId !== null}
+          accessibilityState={{ disabled: isDeleted || isDownloading }}
+          disabled={isDeleted || isDownloading || downloadingId !== null}
           onPress={() => handleDownload(item)}
           activeOpacity={0.72}
         >
@@ -727,7 +745,7 @@ export function PhoneSyncSpaceGlobalScreen() {
             <Download
               testID="phone-sync-download-icon"
               size={16}
-              color={colors.primary}
+              color={isDeleted ? '#9AA3AE' : colors.primary}
               strokeWidth={2}
             />
           )}
@@ -1290,6 +1308,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     ...glassShadow,
   },
+  cardDisabled: {
+    opacity: 0.72,
+  },
   mediaTypeIcon: {
     width: 46,
     height: 46,
@@ -1447,6 +1468,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: '#59616D',
+  },
+  deletedBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+  },
+  deletedBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#ef4444',
   },
   rightWrapper: {
     alignItems: 'flex-end',

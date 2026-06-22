@@ -5,7 +5,10 @@
     "desc": "View files synced to your computer and their upload sources",
     "select": "Select",
     "selectFeature": "This feature is under development",
-    "empty": "No synced files yet"
+    "empty": "No synced files yet",
+    "desktopDeleted": "Deleted on computer",
+    "desktopDeletedMessage": "This file was deleted from the computer.",
+    "deletedDownloadMessage": "Deleted files cannot be downloaded."
   },
   "remoteAccess": {
     "title": "Remote Access",

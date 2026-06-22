@@ -5,7 +5,10 @@
     "desc": "檢視已同步至電腦的檔案與上傳來源",
     "select": "選擇",
     "selectFeature": "該功能正在開發中",
-    "empty": "尚無同步檔案"
+    "empty": "尚無同步檔案",
+    "desktopDeleted": "電腦已刪除",
+    "desktopDeletedMessage": "此檔案已從電腦刪除",
+    "deletedDownloadMessage": "無法下載已刪除的檔案"
   },
   "remoteAccess": {
     "title": "遠端訪問電腦",

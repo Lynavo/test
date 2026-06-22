@@ -2,7 +2,10 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
+
+	"github.com/nicksyncflow/sidecar/internal/uploadfs"
 )
 
 func (s *Store) ListSyncRecords(desktopDeviceID string, clientID *string) ([]DesktopSyncRecord, error) {
@@ -51,22 +54,30 @@ func (s *Store) ListSyncRecords(desktopDeviceID string, clientID *string) ([]Des
 }
 
 func (s *Store) ListReceivedLibrary(desktopDeviceID string) ([]ReceivedLibraryItem, error) {
-	return s.listAllReceivedLibrary(desktopDeviceID, nil)
+	return s.ListReceivedLibraryWithReceiveDir(desktopDeviceID, "")
+}
+
+func (s *Store) ListReceivedLibraryWithReceiveDir(desktopDeviceID string, receiveDir string) ([]ReceivedLibraryItem, error) {
+	return s.listAllReceivedLibrary(desktopDeviceID, nil, receiveDir)
 }
 
 func (s *Store) ListReceivedLibraryForClient(desktopDeviceID string, clientID string) ([]ReceivedLibraryItem, error) {
-	return s.listAllReceivedLibrary(desktopDeviceID, &clientID)
+	return s.ListReceivedLibraryForClientWithReceiveDir(desktopDeviceID, clientID, "")
 }
 
-func (s *Store) listAllReceivedLibrary(desktopDeviceID string, clientID *string) ([]ReceivedLibraryItem, error) {
-	page, err := s.listReceivedLibraryPage(desktopDeviceID, clientID, 1, 1)
+func (s *Store) ListReceivedLibraryForClientWithReceiveDir(desktopDeviceID string, clientID string, receiveDir string) ([]ReceivedLibraryItem, error) {
+	return s.listAllReceivedLibrary(desktopDeviceID, &clientID, receiveDir)
+}
+
+func (s *Store) listAllReceivedLibrary(desktopDeviceID string, clientID *string, receiveDir string) ([]ReceivedLibraryItem, error) {
+	page, err := s.listReceivedLibraryPage(desktopDeviceID, clientID, 1, 1, receiveDir)
 	if err != nil {
 		return nil, err
 	}
 	if page.TotalItems == 0 {
 		return []ReceivedLibraryItem{}, nil
 	}
-	fullPage, err := s.listReceivedLibraryPage(desktopDeviceID, clientID, 1, page.TotalItems)
+	fullPage, err := s.listReceivedLibraryPage(desktopDeviceID, clientID, 1, page.TotalItems, receiveDir)
 	if err != nil {
 		return nil, err
 	}
@@ -74,14 +85,22 @@ func (s *Store) listAllReceivedLibrary(desktopDeviceID string, clientID *string)
 }
 
 func (s *Store) ListReceivedLibraryPage(desktopDeviceID string, page, pageSize int) (ReceivedLibraryPage, error) {
-	return s.listReceivedLibraryPage(desktopDeviceID, nil, page, pageSize)
+	return s.ListReceivedLibraryPageWithReceiveDir(desktopDeviceID, page, pageSize, "")
+}
+
+func (s *Store) ListReceivedLibraryPageWithReceiveDir(desktopDeviceID string, page, pageSize int, receiveDir string) (ReceivedLibraryPage, error) {
+	return s.listReceivedLibraryPage(desktopDeviceID, nil, page, pageSize, receiveDir)
 }
 
 func (s *Store) ListReceivedLibraryPageForClient(desktopDeviceID string, clientID string, page, pageSize int) (ReceivedLibraryPage, error) {
-	return s.listReceivedLibraryPage(desktopDeviceID, &clientID, page, pageSize)
+	return s.ListReceivedLibraryPageForClientWithReceiveDir(desktopDeviceID, clientID, page, pageSize, "")
 }
 
-func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string, page, pageSize int) (ReceivedLibraryPage, error) {
+func (s *Store) ListReceivedLibraryPageForClientWithReceiveDir(desktopDeviceID string, clientID string, page, pageSize int, receiveDir string) (ReceivedLibraryPage, error) {
+	return s.listReceivedLibraryPage(desktopDeviceID, &clientID, page, pageSize, receiveDir)
+}
+
+func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string, page, pageSize int, receiveDir string) (ReceivedLibraryPage, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -154,6 +173,7 @@ func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string
 		}
 		item.DesktopDeviceID = desktopDeviceID
 		item.ShareStatus = "not_shared"
+		item.FileStatus = receivedLibraryFileStatus(receiveDir, item.FinalPath)
 		if resourceID != nil {
 			item.ResourceID = *resourceID
 			item.ShareStatus = "shared"
@@ -168,6 +188,22 @@ func (s *Store) listReceivedLibraryPage(desktopDeviceID string, clientID *string
 	}
 	result.Items = items
 	return result, nil
+}
+
+func receivedLibraryFileStatus(receiveDir string, finalPath *string) string {
+	if finalPath == nil || strings.TrimSpace(*finalPath) == "" {
+		return "available"
+	}
+
+	cleanPath := filepath.Clean(*finalPath)
+	if !filepath.IsAbs(cleanPath) && strings.TrimSpace(receiveDir) == "" {
+		return "available"
+	}
+
+	if uploadfs.FinalFileExists(receiveDir, finalPath) {
+		return "available"
+	}
+	return "deleted"
 }
 
 func receivedLibraryWhere(clientID *string) (string, []any) {
