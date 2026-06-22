@@ -163,8 +163,8 @@ pnpm package:linux -- --arch arm64
 
 產物位置如下；`linux-x64.deb` 與 `linux-arm64.deb` 分別來自 x64 和 arm64 的獨立打包執行，不是單次命令同時產出：
 
-- `apps/desktop/release/ViviDrop-0.1.0-linux-x64.deb`
-- `apps/desktop/release/ViviDrop-0.1.0-linux-arm64.deb`
+- `apps/desktop/release/ViviDrop-<version>-linux-x64.deb`
+- `apps/desktop/release/ViviDrop-<version>-linux-arm64.deb`
 
 發佈前至少確認：
 
