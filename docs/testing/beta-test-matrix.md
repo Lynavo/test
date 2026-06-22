@@ -155,7 +155,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 ### 4.6 Linux desktop 冒烟
 
 1. 在 Ubuntu 22.04 arm64 fresh install `ViviDrop-*-linux-arm64.deb`
-2. 在 Ubuntu 22.04 amd64 fresh install `ViviDrop-*-linux-amd64.deb`
+2. 在 Ubuntu 22.04 amd64 fresh install `ViviDrop-*-linux-x64.deb`
 3. 启动 app，确认 sidecar health 进入 healthy
 4. 确认 `ss -ltnup` 能看到 `39393/TCP`、`39394/TCP`，并允许 `5353/UDP`
 5. 设置页显示 Linux 手动共享提示，不显示 Apple Bonjour 安装或 Windows 高级共享按钮

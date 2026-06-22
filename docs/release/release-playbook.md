@@ -145,7 +145,7 @@ pnpm package:desktop:win
 
 ### 5.3 Linux `.deb`
 
-Ubuntu 22.04+ Linux 桌面包提供 `.deb`，覆蓋 `amd64` / `x64` 和 `arm64`。
+Ubuntu 22.04+ Linux 桌面包提供 `.deb`，覆蓋 `amd64` / `x64` 和 `arm64`；Ubuntu `amd64` 對應產物檔名中的 `x64`。
 
 從倉庫根目錄執行：
 
@@ -155,7 +155,7 @@ pnpm package:desktop:linux
 
 產物位置：
 
-- `apps/desktop/release/ViviDrop-0.1.0-linux-amd64.deb`
+- `apps/desktop/release/ViviDrop-0.1.0-linux-x64.deb`
 - `apps/desktop/release/ViviDrop-0.1.0-linux-arm64.deb`
 
 發佈前至少確認：
