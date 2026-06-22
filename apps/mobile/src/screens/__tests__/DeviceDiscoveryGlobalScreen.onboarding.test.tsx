@@ -769,6 +769,10 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     });
     expect(screen.queryByText('选择连接方式')).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
+    expect(console.warn).not.toHaveBeenCalledWith(
+      '[DeviceDiscoveryGlobalScreen] recent desktop reconnect failed, requiring pairing',
+      expect.any(PairingError),
+    );
   });
 
   it('pairs manually through SyncEngineModule instead of the raw native module', async () => {

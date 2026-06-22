@@ -162,6 +162,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function describeLogError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'unknown';
+}
+
 function isConnectionFailureCode(
   value: unknown,
 ): value is ConnectionFailureCode {
@@ -794,10 +804,21 @@ export function DeviceDiscoveryGlobalScreen() {
           }),
         );
       } catch (error) {
-        console.warn(
-          '[DeviceDiscoveryGlobalScreen] recent desktop reconnect failed, requiring pairing',
-          error,
-        );
+        if (error instanceof PairingError) {
+          console.info(
+            '[DeviceDiscoveryGlobalScreen] recent desktop reconnect requires pairing',
+            {
+              code: error.code,
+              nativeCode: error.nativeCode,
+              message: describeLogError(error),
+            },
+          );
+        } else {
+          console.warn(
+            '[DeviceDiscoveryGlobalScreen] recent desktop reconnect failed, requiring pairing',
+            error,
+          );
+        }
         setVerifying(false);
         setConnectionModalStep('code');
       }

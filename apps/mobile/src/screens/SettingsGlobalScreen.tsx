@@ -128,6 +128,16 @@ function firstNonEmptyString(...values: unknown[]): string | null {
   return null;
 }
 
+function describeLogError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'unknown';
+}
+
 function getAccountDisplayName(user: UserProfile | null): string {
   return (
     firstNonEmptyString(
@@ -419,7 +429,10 @@ export function SettingsGlobalScreen({
     const refreshToken = auth.refreshToken;
     if (refreshToken) {
       void serverLogout(refreshToken).catch(error => {
-        console.warn('[SettingsGlobal] server logout failed:', error);
+        console.info(
+          '[SettingsGlobal] server logout failed (already cleared locally):',
+          describeLogError(error),
+        );
       });
     }
 

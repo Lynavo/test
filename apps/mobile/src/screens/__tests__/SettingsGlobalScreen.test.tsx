@@ -497,6 +497,27 @@ describe('SettingsGlobalScreen', () => {
     expect(mockClearAuth).toHaveBeenCalledTimes(1);
   });
 
+  test('keeps local logout complete when server token revoke has already expired', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+    mockedServerLogout.mockRejectedValueOnce(
+      new Error('Token 无效或已过期'),
+    );
+    const { getByTestId } = await renderSettingsGlobalScreen();
+
+    fireEvent.press(getByTestId('global-settings-logout'));
+    await act(async () => {
+      fireEvent.press(getByTestId('global-settings-confirm-logout'));
+      await Promise.resolve();
+    });
+
+    expect(mockSetSignedOutTransition).toHaveBeenCalledWith('logout');
+    expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      '[SettingsGlobal] server logout failed:',
+      expect.any(Error),
+    );
+  });
+
   test('does not clear auth when logout cannot wipe native sync identity', async () => {
     mockedWipeSyncIdentity.mockRejectedValueOnce(new Error('wipe failed'));
     const { getByText, getByTestId } = await renderSettingsGlobalScreen();
