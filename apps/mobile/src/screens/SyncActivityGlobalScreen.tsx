@@ -87,7 +87,7 @@ const EMPTY_SYNC_OVERVIEW: GlobalSyncOverview = {
 const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   {
     key: 'photo',
-    label: '照片',
+    label: 'Photo',
     iconName: 'image-outline',
     iconColor: BLUE,
     iconBackground: '#B8DDF8',
@@ -95,7 +95,7 @@ const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   },
   {
     key: 'video',
-    label: '视频',
+    label: 'Video',
     iconName: 'play-circle-outline',
     iconColor: '#ffffff',
     iconBackground: '#AAB7FF',
@@ -103,7 +103,7 @@ const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   },
   {
     key: 'file-1',
-    label: '文件',
+    label: 'File',
     iconName: 'document-outline',
     iconColor: '#315E8C',
     iconBackground: '#EEF3FA',
@@ -111,7 +111,7 @@ const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
   },
   {
     key: 'file-2',
-    label: '文件',
+    label: 'File',
     iconName: 'document-outline',
     iconColor: '#315E8C',
     iconBackground: '#EEF3FA',

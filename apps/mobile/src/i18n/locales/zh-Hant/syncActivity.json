@@ -283,6 +283,22 @@
   },
   "recentDownload": {
     "title": "最近下載",
-    "viewAll": "查看全部"
+    "viewAll": "查看全部",
+    "emptyTitle": "暫無最近下載",
+    "emptyMessage": "從電腦下載到本機的檔案會出現在這裡。"
+  },
+  "syncRecords": {
+    "title": "同步記錄",
+    "totalSynced": "累計已同步 {{size}} 檔案",
+    "emptyTitle": "暫無同步記錄",
+    "emptyMessage": "完成第一次自動同步後，記錄會按電腦完成日期顯示在這裡。",
+    "dayStats": "{{count}} 個 · {{size}}",
+    "todayRecord": "當天同步記錄",
+    "statusCompleted": "已完成",
+    "statusSyncing": "同步中",
+    "uploadFiles": "上傳檔案",
+    "fileCount": "{{count}} 個",
+    "totalSize": "總大小",
+    "duration": "耗時"
   }
 }

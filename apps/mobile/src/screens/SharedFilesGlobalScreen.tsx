@@ -40,7 +40,7 @@ export function SharedFilesGlobalScreen({
             {t('sharedFiles.title') || '遠端資源'}
           </Text>
           <Text style={styles.headerSubtitle}>
-            从手机回看同步素材，也可以进入电脑目录取文件。
+            {t('sharedFiles.headerSubtitle')}
           </Text>
         </View>
 
@@ -68,10 +68,10 @@ export function SharedFilesGlobalScreen({
               </Text>
               <View style={styles.badgeRow}>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>同步后显示</Text>
+                  <Text style={styles.badgeText}>{t('sharedFiles.phoneSyncSpace.badgeSync')}</Text>
                 </View>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>保留来源</Text>
+                  <Text style={styles.badgeText}>{t('sharedFiles.phoneSyncSpace.badgeSource')}</Text>
                 </View>
               </View>
             </View>
@@ -101,10 +101,10 @@ export function SharedFilesGlobalScreen({
               </Text>
               <View style={styles.badgeRow}>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>桌面目录</Text>
+                  <Text style={styles.badgeText}>{t('sharedFiles.remoteAccess.badgeDesktop')}</Text>
                 </View>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>列表/网格</Text>
+                  <Text style={styles.badgeText}>{t('sharedFiles.remoteAccess.badgeView')}</Text>
                 </View>
               </View>
             </View>

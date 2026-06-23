@@ -1,8 +1,11 @@
 {
   "title": "遠端資源",
+  "headerSubtitle": "從手機回看同步素材，也可以進入電腦目錄取檔案。",
   "phoneSyncSpace": {
     "title": "手機同步空間",
     "desc": "檢視已同步至電腦的檔案與上傳來源",
+    "badgeSync": "同步後顯示",
+    "badgeSource": "保留來源",
     "select": "選擇",
     "selectFeature": "該功能正在開發中",
     "empty": "尚無同步檔案",
@@ -29,7 +32,9 @@
   },
   "remoteAccess": {
     "title": "遠端訪問電腦",
-    "desc": "瀏覽電腦端共享的目錄結構並下載文件",
+    "desc": "瀏覽電腦端共享的目錄結構並下載檔案",
+    "badgeDesktop": "桌面目錄",
+    "badgeView": "列表/網格",
     "select": "選擇",
     "done": "完成",
     "download": "下載",

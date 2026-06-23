@@ -283,6 +283,22 @@
   },
   "recentDownload": {
     "title": "最近下载",
-    "viewAll": "查看全部"
+    "viewAll": "查看全部",
+    "emptyTitle": "暂无最近下载",
+    "emptyMessage": "从电脑下载到本机的文件会出现在这里。"
+  },
+  "syncRecords": {
+    "title": "同步记录",
+    "totalSynced": "累计已同步 {{size}} 文件",
+    "emptyTitle": "暂无同步记录",
+    "emptyMessage": "完成第一次自动同步后，记录会按电脑完成日期显示在这里。",
+    "dayStats": "{{count}} 个 · {{size}}",
+    "todayRecord": "当天同步记录",
+    "statusCompleted": "已完成",
+    "statusSyncing": "同步中",
+    "uploadFiles": "上传文件",
+    "fileCount": "{{count}} 个",
+    "totalSize": "总大小",
+    "duration": "耗时"
   }
 }

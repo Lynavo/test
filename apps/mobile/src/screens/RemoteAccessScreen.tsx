@@ -620,7 +620,9 @@ export function RemoteAccessScreen() {
             onPress={() => setSortDesc(!sortDesc)}
           >
             <Text style={styles.filterButtonText}>
-              {sortDesc ? '名稱 ⬇' : '名稱 ⬆'}
+              {sortDesc
+                ? `${t('sharedFiles.sortBy.name')} ⬇`
+                : `${t('sharedFiles.sortBy.name')} ⬆`}
             </Text>
           </TouchableOpacity>
 
@@ -631,7 +633,7 @@ export function RemoteAccessScreen() {
               onPress={navigateBackFolder}
             >
               <Icon name="arrow-up" size={14} color="#475569" />
-              <Text style={styles.upButtonText}>返回上級</Text>
+              <Text style={styles.upButtonText}>{t('sharedFiles.files.parentFolder')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -731,6 +733,7 @@ function RemoteAccessThumbnail({
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const { t } = useTranslation();
   const imagePreviewUrl =
     item.thumbnailUrl || item.previewUrl || item.streamUrl;
   const videoPreviewUrl = item.streamUrl || item.previewUrl;
@@ -748,7 +751,7 @@ function RemoteAccessThumbnail({
           source={{ uri: imagePreviewUrl }}
           style={styles.thumbnailMedia}
           resizeMode="cover"
-          accessibilityLabel={`${item.displayName} 縮圖`}
+          accessibilityLabel={`${item.displayName} ${t('common.thumbnail')}`}
           onError={() => setImageFailed(true)}
         />
       </View>
@@ -795,6 +798,7 @@ function RemoteAccessPreviewModal({
   onClose: () => void;
 }) {
   if (!preview) return null;
+  const { t } = useTranslation();
 
   const video = isVideoFile(preview.item.mediaType, preview.item.displayName);
 
@@ -813,7 +817,7 @@ function RemoteAccessPreviewModal({
           <TouchableOpacity
             style={styles.previewCloseButton}
             accessibilityRole="button"
-            accessibilityLabel="關閉預覽"
+            accessibilityLabel={t('sharedFiles.remoteAccess.closePreview')}
             activeOpacity={0.7}
             onPress={onClose}
           >

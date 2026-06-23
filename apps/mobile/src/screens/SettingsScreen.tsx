@@ -1368,8 +1368,8 @@ export function SettingsScreen() {
               // the keys can be added to the strict i18next resource
               // types without typecheck errors.
               Alert.alert(
-                '登出失敗',
-                '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
+                t('common.logoutError.title'),
+                t('common.logoutError.message'),
               );
               setIsLoggingOut(false);
               return;
@@ -1970,7 +1970,7 @@ export function SettingsScreen() {
               <View style={styles.rowRight}>
                 {isConnected ? (
                   <View style={styles.currentBadge}>
-                    <Text style={styles.currentBadgeText}>當前</Text>
+                    <Text style={styles.currentBadgeText}>{t('settings.connection.online')}</Text>
                   </View>
                 ) : null}
               </View>

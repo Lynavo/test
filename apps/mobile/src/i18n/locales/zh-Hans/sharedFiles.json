@@ -1,8 +1,11 @@
 {
   "title": "远端资源",
+  "headerSubtitle": "从手机回看同步素材，也可以进入电脑目录取文件。",
   "phoneSyncSpace": {
     "title": "手机同步空间",
     "desc": "查看已同步至电脑的文件与上传来源",
+    "badgeSync": "同步后显示",
+    "badgeSource": "保留来源",
     "select": "选择",
     "selectFeature": "该功能正在开发中",
     "empty": "尚无同步文件",
@@ -30,6 +33,8 @@
   "remoteAccess": {
     "title": "远端访问电脑",
     "desc": "浏览电脑端共享的目录结构并下载文件",
+    "badgeDesktop": "桌面目录",
+    "badgeView": "列表/网格",
     "select": "选择",
     "done": "完成",
     "download": "下载",

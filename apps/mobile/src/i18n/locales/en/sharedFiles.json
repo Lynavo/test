@@ -1,8 +1,11 @@
 {
   "title": "Remote Resources",
+  "headerSubtitle": "Browse synced media from your phone or access your computer's directory.",
   "phoneSyncSpace": {
     "title": "Phone Sync Space",
     "desc": "View files synced to your computer and their upload sources",
+    "badgeSync": "Synced",
+    "badgeSource": "Source kept",
     "select": "Select",
     "selectFeature": "This feature is under development",
     "empty": "No synced files yet",
@@ -30,6 +33,8 @@
   "remoteAccess": {
     "title": "Remote Access",
     "desc": "Browse your computer's shared directory and download files",
+    "badgeDesktop": "Desktop dir",
+    "badgeView": "List/Grid",
     "select": "Select",
     "done": "Done",
     "download": "Download",

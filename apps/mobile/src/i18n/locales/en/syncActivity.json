@@ -283,6 +283,22 @@
   },
   "recentDownload": {
     "title": "Recent Downloads",
-    "viewAll": "View All"
+    "viewAll": "View All",
+    "emptyTitle": "No Recent Downloads",
+    "emptyMessage": "Files downloaded from your computer to this device will appear here."
+  },
+  "syncRecords": {
+    "title": "Sync Records",
+    "totalSynced": "Total synced: {{size}}",
+    "emptyTitle": "No Sync Records Yet",
+    "emptyMessage": "After your first auto sync, records will appear here sorted by completion date.",
+    "dayStats": "{{count}} files · {{size}}",
+    "todayRecord": "Today's sync record",
+    "statusCompleted": "Completed",
+    "statusSyncing": "Syncing",
+    "uploadFiles": "Uploaded Files",
+    "fileCount": "{{count}}",
+    "totalSize": "Total Size",
+    "duration": "Duration"
   }
 }

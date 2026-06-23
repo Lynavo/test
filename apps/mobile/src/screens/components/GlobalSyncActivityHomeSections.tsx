@@ -9,6 +9,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { ArrowDownCircle } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
@@ -229,8 +230,8 @@ export function RecentDownloadsSection({
         <GlobalSectionEmptyState
           testID="recent-download-empty-state"
           iconName="cloud-download-outline"
-          title="暂无最近下载"
-          message="从电脑下载到本机的文件会出现在这里。"
+          title={t('syncActivity.recentDownload.emptyTitle')}
+          message={t('syncActivity.recentDownload.emptyMessage')}
         />
       ) : (
         <View style={styles.recentDownloadGrid}>
@@ -287,6 +288,8 @@ function RecentDownloadPreview({
   type: GlobalMediaPreviewKind;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = React.useState(false);
+  const { t } = useTranslation();
+
 
   React.useEffect(() => {
     if (type !== 'photo' && type !== 'video') {
@@ -318,7 +321,7 @@ function RecentDownloadPreview({
         source={{ uri: thumbnailSource.uri }}
         style={styles.recentDownloadThumbnailImage}
         resizeMode="cover"
-        accessibilityLabel={`${label} 縮圖`}
+        accessibilityLabel={`${label} ${t('common.thumbnail')}`}
         onError={() => {
           console.warn(
             '[video-thumbnail][mobile] recent download image load failed',
@@ -382,8 +385,8 @@ export function SyncRecordSummarySection({
         <GlobalSectionEmptyState
           testID="sync-record-empty-state"
           iconName="time-outline"
-          title="暂无同步记录"
-          message="完成第一次自动同步后，记录会按电脑完成日期显示在这里。"
+          title={t('syncActivity.syncRecords.emptyTitle')}
+          message={t('syncActivity.syncRecords.emptyMessage')}
         />
       ) : (
         <>
@@ -443,6 +446,7 @@ export function GlobalSyncRecordTimelineSection({
   days,
   totalSyncedSize,
 }: GlobalSyncRecordTimelineSectionProps) {
+  const { t } = useTranslation();
   const shouldRenderEmpty = days.length === 0;
 
   return (
@@ -453,10 +457,10 @@ export function GlobalSyncRecordTimelineSection({
           <Text
             style={[styles.sectionTitleText, styles.globalSectionTitleText]}
           >
-            同步记录
+            {t('syncActivity.syncRecords.title')}
           </Text>
           <Text style={styles.globalSyncRecordTotal}>
-            累计已同步 {totalSyncedSize} 文件
+            {t('syncActivity.syncRecords.totalSynced', { size: totalSyncedSize })}
           </Text>
         </View>
       </View>
@@ -465,8 +469,8 @@ export function GlobalSyncRecordTimelineSection({
         <GlobalSectionEmptyState
           testID="global-sync-record-empty-state"
           iconName="time-outline"
-          title="暂无同步记录"
-          message="完成第一次自动同步后，记录会按电脑完成日期显示在这里。"
+          title={t('syncActivity.syncRecords.emptyTitle')}
+          message={t('syncActivity.syncRecords.emptyMessage')}
         />
       ) : (
         <View style={styles.globalSyncTimelineDayList}>
@@ -475,7 +479,7 @@ export function GlobalSyncRecordTimelineSection({
               <View style={styles.globalSyncRecordDayRow}>
                 <Text style={styles.globalSyncRecordDay}>{day.label}</Text>
                 <Text style={styles.globalSyncRecordDayStats}>
-                  {day.totalFiles} 个 · {day.totalSize}
+                  {t('syncActivity.syncRecords.dayStats', { count: day.totalFiles, size: day.totalSize })}
                 </Text>
               </View>
               <View style={styles.globalSyncTimelineRecordList}>
@@ -492,7 +496,7 @@ export function GlobalSyncRecordTimelineSection({
                             {record.deviceName}
                           </Text>
                           <Text style={styles.globalSyncRecordSubtle}>
-                            当天同步记录
+                            {t('syncActivity.syncRecords.todayRecord')}
                           </Text>
                         </View>
                         <View
@@ -511,7 +515,7 @@ export function GlobalSyncRecordTimelineSection({
                                 : styles.globalSyncRecordStatusTextSyncing,
                             ]}
                           >
-                            {isCompleted ? '已完成' : '同步中'}
+                            {isCompleted ? t('syncActivity.syncRecords.statusCompleted') : t('syncActivity.syncRecords.statusSyncing')}
                           </Text>
                         </View>
                       </View>
@@ -519,15 +523,15 @@ export function GlobalSyncRecordTimelineSection({
                       <View style={styles.globalSyncRecordStatsGrid}>
                         <View style={styles.globalSyncRecordStat}>
                           <Text style={styles.globalSyncRecordSubtle}>
-                            上传文件
+                            {t('syncActivity.syncRecords.uploadFiles')}
                           </Text>
                           <Text style={styles.globalSyncRecordStatValue}>
-                            {record.fileCount} 个
+                            {t('syncActivity.syncRecords.fileCount', { count: record.fileCount })}
                           </Text>
                         </View>
                         <View style={styles.globalSyncRecordStat}>
                           <Text style={styles.globalSyncRecordSubtle}>
-                            总大小
+                            {t('syncActivity.syncRecords.totalSize')}
                           </Text>
                           <Text style={styles.globalSyncRecordStatValue}>
                             {record.totalSize}
@@ -540,7 +544,7 @@ export function GlobalSyncRecordTimelineSection({
                           ]}
                         >
                           <Text style={styles.globalSyncRecordSubtle}>
-                            耗时
+                            {t('syncActivity.syncRecords.duration')}
                           </Text>
                           <Text style={styles.globalSyncRecordStatValue}>
                             {record.duration}

@@ -2087,8 +2087,8 @@ export function SubscriptionGlobalScreen() {
                 e,
               );
               Alert.alert(
-                '登出失敗',
-                '未能完整清理本機資料，請稍後再試。若持續失敗，請重新啟動應用程式。',
+                t('common.logoutError.title'),
+                t('common.logoutError.message'),
               );
               setIsLoggingOut(false);
               return;
