@@ -199,6 +199,40 @@ describe('DevicesPage', () => {
     expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
   });
 
+  it('shows transfer progress for a managed device that is currently uploading', () => {
+    useManagementStore.setState({ devices: [authorizedDevice] });
+    useDashboardStore.setState({
+      devices: [
+        {
+          deviceId: 'client-1',
+          stableDeviceId: 'client-1',
+          displayName: 'iPhone 15 Pro',
+          clientName: 'iPhone',
+          platform: 'ios',
+          ip: '192.168.1.100',
+          status: 'transferring',
+          todayFileCount: 0,
+          todayBytes: 0,
+          storageLeft: '10 GB',
+          storagePath: '/tmp',
+          devicePath: '/tmp/client-1',
+          currentFile: {
+            filename: 'IMG_0421.mov',
+            progress: 42,
+            fileSize: 1024,
+          },
+        },
+      ],
+    });
+
+    render(<DevicesPage />);
+
+    expect(screen.getAllByText('传输中').length).toBeGreaterThan(0);
+    expect(screen.getByText('IMG_0421.mov')).toBeInTheDocument();
+    expect(screen.getByText('42%')).toBeInTheDocument();
+    expect(screen.queryByText('已连接，等待同步')).not.toBeInTheDocument();
+  });
+
   it('does not hardcode localized Chinese copy in device management source', () => {
     const devicesPageSource = readFileSync(resolve(__dirname, '../DevicesPage.tsx'), 'utf8');
     const tableSource = readFileSync(resolve(__dirname, '../DeviceManagementTable.tsx'), 'utf8');

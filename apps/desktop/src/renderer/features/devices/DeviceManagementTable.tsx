@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { DashboardDeviceDTO, DesktopManagedDeviceDTO } from '@syncflow/contracts';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { Button } from '@renderer/components/ui/button';
+import { Progress } from '@renderer/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@renderer/components/ui/dialog';
+
+function findDashboardDevice(
+  dashboardDevices: DashboardDeviceDTO[],
+  device: DesktopManagedDeviceDTO,
+): DashboardDeviceDTO | undefined {
+  return dashboardDevices.find(
+    (dashboardDevice) =>
+      dashboardDevice.deviceId === device.clientId ||
+      dashboardDevice.stableDeviceId === device.clientId ||
+      (device.stableDeviceId !== undefined &&
+        dashboardDevice.stableDeviceId === device.stableDeviceId),
+  );
+}
 
 export function DeviceManagementTable({
   actionsDisabled = false,
@@ -35,9 +49,10 @@ export function DeviceManagementTable({
     if (device.blockStatus === 'active') {
       return 'blocked';
     }
-    const matched = dashboardDevices.find(
-      (d) => d.stableDeviceId === device.clientId || d.deviceId === device.clientId,
-    );
+    const matched = findDashboardDevice(dashboardDevices, device);
+    if (matched?.status === 'transferring') {
+      return 'transferring';
+    }
     if (matched && matched.status !== 'offline') {
       return 'connected';
     }
@@ -58,7 +73,10 @@ export function DeviceManagementTable({
         {devices.map((device) => {
           const status = getDeviceStatus(device);
           const isBlocked = status === 'blocked';
-          const isConnected = status === 'connected';
+          const isTransferring = status === 'transferring';
+          const isConnected = status === 'connected' || isTransferring;
+          const dashboardDevice = findDashboardDevice(dashboardDevices, device);
+          const currentFile = isTransferring ? dashboardDevice?.currentFile : undefined;
           const displayName = device.displayName || t('devices.table.unnamedDevice');
 
           return (
@@ -107,7 +125,9 @@ export function DeviceManagementTable({
                 <div className="flex min-w-0 items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 rounded-full ${
-                      isConnected
+                      isTransferring
+                        ? 'bg-[#1677d2] shadow-[0_0_0_4px_rgba(22,119,210,0.12)]'
+                        : isConnected
                         ? 'bg-[#2d8f54] shadow-[0_0_0_4px_rgba(45,143,84,0.12)]'
                         : isBlocked
                           ? 'bg-[#d92d20] shadow-[0_0_0_4px_rgba(217,45,32,0.12)]'
@@ -115,7 +135,9 @@ export function DeviceManagementTable({
                     }`}
                   />
                   <span className="text-[11px] font-semibold text-[#626a76]">
-                    {isConnected
+                    {isTransferring
+                      ? t('common.status.transferring')
+                      : isConnected
                       ? t('devices.status.connected')
                       : isBlocked
                         ? t('devices.status.disabled')
@@ -133,15 +155,38 @@ export function DeviceManagementTable({
                     </span>
                   )}
                   {!isBlocked && (
-                    <span
-                      className={`mb-1 flex items-center text-[11px] ${
-                        isConnected ? 'text-[#626a76]' : 'text-[#9aa2ad]'
-                      }`}
-                    >
-                      <span className="truncate">
-                        {isConnected ? t('devices.status.connectedWaitingSync') : ''}
-                      </span>
-                    </span>
+                    <div className="min-w-0">
+                      {isTransferring ? (
+                        <div className="flex min-w-0 flex-col gap-1.5">
+                          <div className="flex min-w-0 items-center justify-between gap-3 text-[11px] text-[#2f7fd3]">
+                            <span className="truncate font-medium">
+                              {currentFile?.filename ?? t('common.status.transferring')}
+                            </span>
+                            {currentFile ? (
+                              <span className="shrink-0 font-semibold">
+                                {Math.round(currentFile.progress)}%
+                              </span>
+                            ) : null}
+                          </div>
+                          {currentFile ? (
+                            <Progress
+                              value={currentFile.progress}
+                              className="h-1.5 bg-[#d7ecff]"
+                            />
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span
+                          className={`mb-1 flex items-center text-[11px] ${
+                            isConnected ? 'text-[#626a76]' : 'text-[#9aa2ad]'
+                          }`}
+                        >
+                          <span className="truncate">
+                            {isConnected ? t('devices.status.connectedWaitingSync') : ''}
+                          </span>
+                        </span>
+                      )}
+                    </div>
                   )}
                 </span>
 
