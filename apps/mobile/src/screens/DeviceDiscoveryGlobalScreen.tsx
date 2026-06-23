@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   ActivityIndicator,
@@ -206,18 +207,23 @@ function normalizeConnectionFailure(error: unknown): ConnectionFailure {
   return { code: 'unknown' };
 }
 
-function getConnectionCodeErrorMessage(failure: ConnectionFailure): string {
+function getConnectionCodeErrorMessage(failure: ConnectionFailure, t: any): string {
   if (
     failure.code === 'wrong_code' &&
     failure.remainingAttempts !== undefined &&
     failure.remainingAttempts > 0
   ) {
-    return `连接码错误，还可以再试 ${failure.remainingAttempts} 次。`;
+    return t('deviceDiscovery.global.connectionCodeWrongWithAttempts', {
+      remainingAttempts: failure.remainingAttempts,
+    });
   }
-  return '连接码错误，请重新输入电脑端显示的 6 位连接码。';
+  return t('deviceDiscovery.global.connectionCodeWrong');
 }
 
-function getConnectionFailureCopy(failure: ConnectionFailure | null): {
+function getConnectionFailureCopy(
+  failure: ConnectionFailure | null,
+  t: any,
+): {
   title: string;
   description: string;
   actionLabel: string;
@@ -226,9 +232,9 @@ function getConnectionFailureCopy(failure: ConnectionFailure | null): {
 } {
   if (failure?.code === 'blocked') {
     return {
-      title: '配对已被阻止',
-      description: '这台电脑已阻止此手机配对，请先在电脑端解除阻止后再试。',
-      actionLabel: '重新输入',
+      title: t('deviceDiscovery.global.pairingBlockedTitle'),
+      description: t('deviceDiscovery.global.pairingBlockedDesc'),
+      actionLabel: t('deviceDiscovery.global.reenter'),
       icon: 'alert-circle-outline',
       tone: 'danger',
     };
@@ -236,9 +242,9 @@ function getConnectionFailureCopy(failure: ConnectionFailure | null): {
 
   if (failure?.code === 'version_incompatible') {
     return {
-      title: '版本不兼容',
-      description: '手机和电脑端版本不兼容，请更新两端 Vivi Drop 后再试。',
-      actionLabel: '重新扫描',
+      title: t('deviceDiscovery.global.versionIncompatibleTitle'),
+      description: t('deviceDiscovery.global.versionIncompatibleDesc'),
+      actionLabel: t('deviceDiscovery.global.rescan'),
       icon: 'alert-circle-outline',
       tone: 'warning',
     };
@@ -246,18 +252,18 @@ function getConnectionFailureCopy(failure: ConnectionFailure | null): {
 
   if (failure?.code === 'wrong_code') {
     return {
-      title: '连接码错误',
-      description: getConnectionCodeErrorMessage(failure),
-      actionLabel: '重新输入',
+      title: t('deviceDiscovery.global.connectionCodeError'),
+      description: getConnectionCodeErrorMessage(failure, t),
+      actionLabel: t('deviceDiscovery.global.reenter'),
       icon: 'alert-circle-outline',
       tone: 'danger',
     };
   }
 
   return {
-    title: '连接失败',
-    description: '连接失败，请确认电脑端在线后重试。',
-    actionLabel: '重新输入',
+    title: t('deviceDiscovery.global.connectionFailed'),
+    description: t('deviceDiscovery.global.connectionFailedDesc'),
+    actionLabel: t('deviceDiscovery.global.reenter'),
     icon: 'alert-circle-outline',
     tone: 'danger',
   };
@@ -350,47 +356,6 @@ const VISUAL_QA_LAN_DEVICES: DiscoveredDevice[] = [
   },
 ];
 
-const CONNECTION_FEATURE_GUIDE_STEPS: ConnectionGuideStep[] = [
-  {
-    title: '先连接电脑',
-    description:
-      '选择一台电脑完成连接。后续引导只预览关键功能入口，不会跳转真实页面或创建假数据。',
-    actionLabel: '继续预览',
-    previewKind: 'connect',
-  },
-  {
-    title: '开启自动上传',
-    description:
-      '连接成功后，可以开启自动上传，让新增照片、视频和文件静默同步到电脑。',
-    actionLabel: '下一步',
-    previewKind: 'autoUpload',
-  },
-  {
-    title: '选择同步内容和范围',
-    description: '可以选择相册、系统文件和上传范围，控制哪些素材会自动同步。',
-    actionLabel: '下一步',
-    previewKind: 'uploadScope',
-  },
-  {
-    title: '查看同步状态',
-    description: '这里会显示自动同步开启后的上传进度、最近同步时间和异常状态。',
-    actionLabel: '下一步',
-    previewKind: 'syncProgress',
-  },
-  {
-    title: '最近下载和同步记录',
-    description: '从电脑下载到本机的文件、以及完成同步的历史记录都会集中展示。',
-    actionLabel: '下一步',
-    previewKind: 'records',
-  },
-  {
-    title: '远程资源 / 访问电脑',
-    description:
-      '远程资源入口可以浏览电脑文件和手机同步空间，快速取回需要的文件。',
-    actionLabel: '完成',
-    previewKind: 'remoteResources',
-  },
-];
 
 function PulseDot() {
   const opacity = useRef(new Animated.Value(0.45)).current;
@@ -420,11 +385,66 @@ function PulseDot() {
 }
 
 export function DeviceDiscoveryGlobalScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<RootStackParamList, 'DeviceDiscovery'>>();
   const insets = useSafeAreaInsets();
   const mode = route.params?.mode ?? 'initial';
   const { recentDesktops, addDesktop } = useRecentDesktops();
+
+  const getVisualQaDevices = useCallback(() => {
+    return VISUAL_QA_LAN_DEVICES.map(device => {
+      if (device.deviceId === 'visual-qa-openimde-mac-mini') {
+        return { ...device, name: t('deviceDiscovery.global.demoMacStudio') };
+      }
+      if (device.deviceId === 'visual-qa-macbook-pro') {
+        return { ...device, name: t('deviceDiscovery.global.demoMacBook') };
+      }
+      if (device.deviceId === 'visual-qa-windows-workstation') {
+        return { ...device, name: t('deviceDiscovery.global.demoWindows') };
+      }
+      return device;
+    });
+  }, [t]);
+
+  const connectionFeatureGuideSteps = React.useMemo<ConnectionGuideStep[]>(() => [
+    {
+      title: t('deviceDiscovery.global.onboarding.step1Title'),
+      description: t('deviceDiscovery.global.onboarding.step1Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step1Action'),
+      previewKind: 'connect',
+    },
+    {
+      title: t('deviceDiscovery.global.onboarding.step2Title'),
+      description: t('deviceDiscovery.global.onboarding.step2Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step2Action'),
+      previewKind: 'autoUpload',
+    },
+    {
+      title: t('deviceDiscovery.global.onboarding.step3Title'),
+      description: t('deviceDiscovery.global.onboarding.step3Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step3Action'),
+      previewKind: 'uploadScope',
+    },
+    {
+      title: t('deviceDiscovery.global.onboarding.step4Title'),
+      description: t('deviceDiscovery.global.onboarding.step4Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step4Action'),
+      previewKind: 'syncProgress',
+    },
+    {
+      title: t('deviceDiscovery.global.onboarding.step5Title'),
+      description: t('deviceDiscovery.global.onboarding.step5Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step5Action'),
+      previewKind: 'records',
+    },
+    {
+      title: t('deviceDiscovery.global.onboarding.step6Title'),
+      description: t('deviceDiscovery.global.onboarding.step6Desc'),
+      actionLabel: t('deviceDiscovery.global.onboarding.step6Action'),
+      previewKind: 'remoteResources',
+    },
+  ], [t]);
 
   const [knownDeviceIds, setKnownDeviceIds] = useState<Set<string>>(new Set());
   const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null);
@@ -533,7 +553,7 @@ export function DeviceDiscoveryGlobalScreen() {
       visualQaTimer = setTimeout(() => {
         if (!active || devicesRef.current.length > 0) return;
         preserveCachedDevicesRef.current = false;
-        setDevices(VISUAL_QA_LAN_DEVICES);
+        setDevices(getVisualQaDevices());
         setScanning(false);
         setConnectionStatus('ready');
         if (timeoutTimer) {
@@ -658,10 +678,10 @@ export function DeviceDiscoveryGlobalScreen() {
   const discoveredCount = devices.length + displayedRecentDesktops.length;
   const isShowingSkeleton = scanning && discoveredCount === 0;
   const statusLabel = isShowingSkeleton
-    ? '扫描中...'
+    ? t('deviceDiscovery.global.connectionStatus.scanning')
     : connectionStatus === 'permissionRequired'
-    ? '等待授权'
-    : `已发现 ${discoveredCount} 台`;
+    ? t('deviceDiscovery.global.connectionStatus.permissionRequired')
+    : t('deviceDiscovery.devices.foundCount', { count: discoveredCount });
 
   const measureGuideTarget = useCallback(() => {
     const containerNode = containerRef.current;
@@ -728,7 +748,7 @@ export function DeviceDiscoveryGlobalScreen() {
         return;
       }
       if (mode === 'switch' && device.deviceId === currentDeviceId) {
-        Alert.alert('已是当前连接设备');
+        Alert.alert(t('deviceDiscovery.switch.toast.alreadyCurrent'));
         return;
       }
       setSelectedDevice(device);
@@ -766,7 +786,7 @@ export function DeviceDiscoveryGlobalScreen() {
       };
 
       if (mode === 'switch' && device.deviceId === currentDeviceId) {
-        Alert.alert('已是当前连接设备');
+        Alert.alert(t('deviceDiscovery.switch.toast.alreadyCurrent'));
         return;
       }
 
@@ -830,7 +850,7 @@ export function DeviceDiscoveryGlobalScreen() {
   const handleManualPair = useCallback(() => {
     const manualDevice = buildManualPairDevice(manualHost);
     if (!manualDevice) {
-      setManualError('请输入有效的 IP 地址或主机名');
+      setManualError(t('deviceDiscovery.global.manualIPErr'));
       return;
     }
     setManualError(null);
@@ -903,7 +923,7 @@ export function DeviceDiscoveryGlobalScreen() {
       setVerifying(false);
       setConnectionFailure(failure);
       if (failure.code === 'wrong_code') {
-        setCodeError(getConnectionCodeErrorMessage(failure));
+        setCodeError(getConnectionCodeErrorMessage(failure, t));
         return;
       }
       setConnectionModalStep(null);
@@ -918,7 +938,7 @@ export function DeviceDiscoveryGlobalScreen() {
     setConnectionFailure(null);
     if (isVisualQaEnabled()) {
       setTimeout(() => {
-        setDevices(VISUAL_QA_LAN_DEVICES);
+        setDevices(getVisualQaDevices());
         setScanning(false);
         setConnectionStatus('ready');
       }, 900);
@@ -947,15 +967,14 @@ export function DeviceDiscoveryGlobalScreen() {
       setScanning(false);
       setConnectionStatus('empty');
     }
-  }, []);
+  }, [getVisualQaDevices]);
 
   const connectionStateContent: FlowStateContent | null =
     !isShowingSkeleton && connectionStatus === 'empty'
       ? {
-          title: '未发现可连接设备',
-          description:
-            '没有扫到同一局域网内的电脑，请确认电脑端已打开并连接同一 Wi‑Fi。',
-          actionLabel: '手动配对',
+          title: t('deviceDiscovery.global.noDeviceTitle'),
+          description: t('deviceDiscovery.global.noDeviceDesc'),
+          actionLabel: t('deviceDiscovery.global.manualPairing'),
           icon: 'desktop-outline',
           tone: 'neutral',
           onAction: () => {
@@ -967,17 +986,16 @@ export function DeviceDiscoveryGlobalScreen() {
         }
       : !isShowingSkeleton && connectionStatus === 'permissionRequired'
       ? {
-          title: '允许查找附近设备',
-          description:
-            'Android 需要允许查找附近设备，才能发现同一局域网下的电脑。',
-          actionLabel: '开始扫描',
+          title: t('deviceDiscovery.global.nearbyPermissionTitle'),
+          description: t('deviceDiscovery.global.nearbyPermissionDesc'),
+          actionLabel: t('deviceDiscovery.global.startScan'),
           icon: 'radio-outline',
           tone: 'neutral',
           onAction: handleRescan,
         }
       : !isShowingSkeleton && connectionStatus === 'failed'
       ? {
-          ...getConnectionFailureCopy(connectionFailure),
+          ...getConnectionFailureCopy(connectionFailure, t),
           onAction: () => {
             if (connectionFailure?.code === 'version_incompatible') {
               handleRescan();
@@ -992,18 +1010,18 @@ export function DeviceDiscoveryGlobalScreen() {
         }
       : !isShowingSkeleton && connectionStatus === 'timeout'
       ? {
-          title: '连接超时',
-          description: '电脑端长时间没有响应，可能正在使用中或客户端离线。',
-          actionLabel: '再次扫描',
+          title: t('deviceDiscovery.global.connectTimeoutTitle'),
+          description: t('deviceDiscovery.global.connectTimeoutDesc'),
+          actionLabel: t('deviceDiscovery.global.rescan'),
           icon: 'time-outline',
           tone: 'warning',
           onAction: handleRescan,
         }
       : !isShowingSkeleton && connectionStatus === 'cameraDenied'
       ? {
-          title: '相机权限被拒绝',
-          description: '无法打开相机扫码，可以改用电脑端显示的连接码完成配对。',
-          actionLabel: '输入连接码',
+          title: t('deviceDiscovery.global.cameraDeniedTitle'),
+          description: t('deviceDiscovery.global.cameraDeniedDesc'),
+          actionLabel: t('deviceDiscovery.global.inputCode'),
           icon: 'camera-outline',
           tone: 'warning',
           onAction: () => {
@@ -1044,14 +1062,14 @@ export function DeviceDiscoveryGlobalScreen() {
   }, []);
 
   const continuePreview = useCallback(() => {
-    if (guideStepIndex < CONNECTION_FEATURE_GUIDE_STEPS.length - 1) {
+    if (guideStepIndex < connectionFeatureGuideSteps.length - 1) {
       setGuideStepIndex(index =>
-        Math.min(index + 1, CONNECTION_FEATURE_GUIDE_STEPS.length - 1),
+        Math.min(index + 1, connectionFeatureGuideSteps.length - 1),
       );
       return;
     }
     void dismissGuide();
-  }, [dismissGuide, guideStepIndex]);
+  }, [dismissGuide, guideStepIndex, connectionFeatureGuideSteps]);
 
   return (
     <GlobalGradientBackground>
@@ -1067,7 +1085,7 @@ export function DeviceDiscoveryGlobalScreen() {
               <TouchableOpacity
                 activeOpacity={0.76}
                 accessibilityRole="button"
-                accessibilityLabel="返回"
+                accessibilityLabel={t('deviceDiscovery.global.back')}
                 onPress={goBack}
                 style={styles.backButton}
               >
@@ -1077,10 +1095,10 @@ export function DeviceDiscoveryGlobalScreen() {
 
             <View style={styles.header}>
               <Text style={styles.title}>
-                {mode === 'switch' ? '切换电脑' : '连接你的电脑'}
+                {mode === 'switch' ? t('deviceDiscovery.global.switchComputer') : t('deviceDiscovery.global.connectYourPC')}
               </Text>
               <Text style={styles.subtitle}>
-                先扫描同一局域网下的电脑设备，再选择扫码连接或输入连接码。
+                {t('deviceDiscovery.global.scanFirstText')}
               </Text>
             </View>
 
@@ -1090,7 +1108,7 @@ export function DeviceDiscoveryGlobalScreen() {
               onLayout={measureGuideTarget}
             >
               <View style={styles.devicesHeader}>
-                <Text style={styles.devicesTitle}>同一局域网下的电脑设备</Text>
+                <Text style={styles.devicesTitle}>{t('deviceDiscovery.global.lanDeviceTitle')}</Text>
                 <View style={styles.statusPill}>
                   {scanning ? <PulseDot /> : null}
                   <Text style={styles.statusText}>{statusLabel}</Text>
@@ -1124,12 +1142,12 @@ export function DeviceDiscoveryGlobalScreen() {
                             subtitle={device.ip}
                             status={
                               isCurrentDevice
-                                ? '当前'
+                                ? t('deviceDiscovery.switch.badge.current')
                                 : isKnownDevice
-                                ? '直接切换'
+                                ? t('deviceDiscovery.switch.badge.known')
                                 : device.availability === 'busy'
-                                ? '使用中'
-                                : '可连接'
+                                ? t('deviceDiscovery.global.connectionStatus.busy')
+                                : t('deviceDiscovery.global.connectionStatus.available')
                             }
                             iconName={
                               device.deviceKind === 'laptop'
@@ -1158,10 +1176,10 @@ export function DeviceDiscoveryGlobalScreen() {
                             subtitle={`${recent.host}:${recent.port}`}
                             status={
                               isCurrentDevice
-                                ? '当前'
+                                ? t('deviceDiscovery.switch.badge.current')
                                 : isKnownDevice
-                                ? '直接切换'
-                                : '可连接'
+                                ? t('deviceDiscovery.switch.badge.known')
+                                : t('deviceDiscovery.global.connectionStatus.available')
                             }
                             iconName="desktop-outline"
                             availability="available"
@@ -1185,9 +1203,9 @@ export function DeviceDiscoveryGlobalScreen() {
                       <Icon name="link-outline" size={22} color="#1677D2" />
                     </View>
                     <View style={styles.rowCopy}>
-                      <Text style={styles.rowTitle}>手动配对</Text>
+                      <Text style={styles.rowTitle}>{t('deviceDiscovery.actions.manualPair')}</Text>
                       <Text style={styles.rowSubtitle}>
-                        未显示设备时，输入电脑 IP 和连接码连接
+                        {t('deviceDiscovery.global.enterIPAndCode')}
                       </Text>
                     </View>
                     <Icon name="chevron-forward" size={18} color="#A1B6CF" />
@@ -1204,25 +1222,24 @@ export function DeviceDiscoveryGlobalScreen() {
               >
                 <View style={styles.rescanButtonContent}>
                   <Icon name="refresh" size={16} color="#5A9ABF" />
-                  <Text style={styles.rescanText}>重新扫描</Text>
+                  <Text style={styles.rescanText}>{t('deviceDiscovery.actions.rescan')}</Text>
                 </View>
               </TouchableOpacity>
             ) : null}
 
             <View style={styles.helpPanel}>
-              <Text style={styles.helpTitle}>电脑端还没有准备好？</Text>
+              <Text style={styles.helpTitle}>{t('deviceDiscovery.troubleshooting.notReadyTitle')}</Text>
               <Text style={styles.helpBody}>
-                请先在官网 Vividrop.cn
-                下载并打开客户端，然后返回此页面扫码或输入连接码进行连接。
+                {t('deviceDiscovery.troubleshooting.notReadyDesc')}
               </Text>
             </View>
           </ScrollView>
 
           {showGuide ? (
             <ConnectionGuideOverlay
-              step={CONNECTION_FEATURE_GUIDE_STEPS[guideStepIndex]}
+              step={connectionFeatureGuideSteps[guideStepIndex]}
               stepIndex={guideStepIndex}
-              totalSteps={CONNECTION_FEATURE_GUIDE_STEPS.length}
+              totalSteps={connectionFeatureGuideSteps.length}
               targetLayout={guideStepIndex === 0 ? spotlightLayout : null}
               bottomInset={insets.bottom}
               onSkip={() => void dismissGuide()}
@@ -1388,6 +1405,7 @@ function ConnectionGuideOverlay({
   onSkip: () => void;
   onNext: () => void;
 }) {
+  const { t } = useTranslation();
   const { height: viewportHeight } = useWindowDimensions();
   const isSpotlightStep = step.previewKind === 'connect';
   const spotlightPadding = 10;
@@ -1481,12 +1499,12 @@ function ConnectionGuideOverlay({
             <TouchableOpacity
               accessible
               accessibilityRole="button"
-              accessibilityLabel="跳过引导"
+              accessibilityLabel={t('deviceDiscovery.global.preview.skipGuide')}
               activeOpacity={0.76}
               style={styles.guideSkipButton}
               onPress={onSkip}
             >
-              <Text style={styles.guideSkip}>跳过引导</Text>
+              <Text style={styles.guideSkip}>{t('deviceDiscovery.global.preview.skipGuide')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               accessible
@@ -1510,6 +1528,7 @@ function GlobalConnectionFeaturePreviewCard({
 }: {
   kind: ConnectionGuidePreviewKind;
 }) {
+  const { t } = useTranslation();
   if (kind === 'autoUpload') {
     return (
       <GuidePreviewShell>
@@ -1522,18 +1541,18 @@ function GlobalConnectionFeaturePreviewCard({
               <Monitor size={16} color="#1677D2" strokeWidth={2} />
             </View>
             <View>
-              <Text style={styles.guidePreviewStrong}>自动同步</Text>
-              <Text style={styles.guidePreviewSubtle}>未开启</Text>
+              <Text style={styles.guidePreviewStrong}>{t('deviceDiscovery.global.preview.autoUpload')}</Text>
+              <Text style={styles.guidePreviewSubtle}>{t('deviceDiscovery.global.preview.disabled')}</Text>
             </View>
           </View>
           <View style={styles.guidePreviewPrimaryPill}>
-            <Text style={styles.guidePreviewPrimaryPillText}>开启</Text>
+            <Text style={styles.guidePreviewPrimaryPillText}>{t('deviceDiscovery.global.preview.enableAction')}</Text>
           </View>
         </View>
         <View style={styles.guidePreviewPanel}>
-          <Text style={styles.guidePreviewPanelTitle}>当前手机状态</Text>
-          <Text style={styles.guidePreviewPanelValue}>自动同步未开启</Text>
-          <Text style={styles.guidePreviewPanelMeta}>最近同步时间：暂无</Text>
+          <Text style={styles.guidePreviewPanelTitle}>{t('deviceDiscovery.global.preview.deviceStatus')}</Text>
+          <Text style={styles.guidePreviewPanelValue}>{t('deviceDiscovery.global.preview.autoUploadDisabled')}</Text>
+          <Text style={styles.guidePreviewPanelMeta}>{t('deviceDiscovery.global.preview.lastSyncNone')}</Text>
         </View>
       </GuidePreviewShell>
     );
@@ -1550,29 +1569,29 @@ function GlobalConnectionFeaturePreviewCard({
             <CloudDownload size={16} color="#1677D2" strokeWidth={2} />
           </View>
           <View style={styles.guidePreviewFlex}>
-            <Text style={styles.guidePreviewStrong}>同步计划</Text>
+            <Text style={styles.guidePreviewStrong}>{t('deviceDiscovery.global.preview.syncPlan')}</Text>
             <Text style={styles.guidePreviewSubtle} numberOfLines={1}>
-              相册内容和指定文件将同步到电脑。
+              {t('deviceDiscovery.global.preview.syncPlanDesc')}
             </Text>
           </View>
         </View>
         <View style={styles.guidePreviewStatsRow}>
-          <GuidePreviewStat label="来源" value="2" />
-          <GuidePreviewStat label="文件" value="3" />
-          <GuidePreviewStat label="范围" value="全部内容" />
+          <GuidePreviewStat label={t('deviceDiscovery.global.preview.statSource')} value="2" />
+          <GuidePreviewStat label={t('deviceDiscovery.global.preview.statFiles')} value="3" />
+          <GuidePreviewStat label={t('deviceDiscovery.global.preview.statScope')} value={t('deviceDiscovery.global.preview.statScopeAll')} />
         </View>
-        <Text style={styles.guidePreviewSectionLabel}>同步来源</Text>
+        <Text style={styles.guidePreviewSectionLabel}>{t('deviceDiscovery.global.preview.syncSource')}</Text>
         <GuidePreviewOption
           iconName="auto-upload-image"
-          title="照片和视频"
-          description="同步系统相册中的媒体内容"
+          title={t('deviceDiscovery.global.preview.photosAndVideos')}
+          description={t('deviceDiscovery.global.preview.photosAndVideosDesc')}
           active
         />
-        <Text style={styles.guidePreviewSectionLabel}>同步范围</Text>
+        <Text style={styles.guidePreviewSectionLabel}>{t('deviceDiscovery.global.preview.syncScope')}</Text>
         <GuidePreviewOption
           iconName="auto-upload-folder"
-          title="全部内容"
-          description="同步现有照片和视频"
+          title={t('deviceDiscovery.global.preview.statScopeAll')}
+          description={t('deviceDiscovery.global.preview.allContentDesc')}
           active
         />
       </GuidePreviewShell>
@@ -1591,21 +1610,23 @@ function GlobalConnectionFeaturePreviewCard({
               <Monitor size={16} color="#1677D2" strokeWidth={2} />
             </View>
             <View>
-              <Text style={styles.guidePreviewStrong}>自动同步</Text>
-              <Text style={styles.guidePreviewSubtle}>已开启</Text>
+              <Text style={styles.guidePreviewStrong}>{t('deviceDiscovery.global.preview.autoUpload')}</Text>
+              <Text style={styles.guidePreviewSubtle}>{t('deviceDiscovery.global.preview.enabled')}</Text>
             </View>
           </View>
           <View style={styles.guidePreviewPrimaryPill}>
-            <Text style={styles.guidePreviewPrimaryPillText}>调整</Text>
+            <Text style={styles.guidePreviewPrimaryPillText}>{t('deviceDiscovery.global.preview.adjustAction')}</Text>
           </View>
         </View>
         <View style={styles.guidePreviewPanel}>
-          <Text style={styles.guidePreviewPanelTitle}>当前手机状态</Text>
-          <Text style={styles.guidePreviewPanelValue}>已上传96/128</Text>
+          <Text style={styles.guidePreviewPanelTitle}>{t('deviceDiscovery.global.preview.deviceStatus')}</Text>
+          <Text style={styles.guidePreviewPanelValue}>
+            {t('deviceDiscovery.global.preview.uploadedCount', { uploaded: 96, total: 128 })}
+          </Text>
           <View style={styles.guidePreviewUploadCard}>
             <View style={styles.guidePreviewUploadHeader}>
               <Text style={styles.guidePreviewUploadTitle}>
-                上传中 · 本次传输进度
+                {t('deviceDiscovery.global.preview.uploadingProgress')}
               </Text>
               <Text style={styles.guidePreviewUploadPercent}>75%</Text>
             </View>
@@ -1613,24 +1634,24 @@ function GlobalConnectionFeaturePreviewCard({
               <View style={styles.guidePreviewUploadFill} />
             </View>
             <View style={styles.guidePreviewUploadGrid}>
-              <GuidePreviewProgressStat label="传输速度" value="68.5 MB/s" />
+              <GuidePreviewProgressStat label={t('deviceDiscovery.global.preview.speed')} value="68.5 MB/s" />
               <GuidePreviewProgressStat
-                label="传输进度"
+                label={t('deviceDiscovery.global.preview.progress')}
                 value="96 / 128"
                 alignRight
               />
               <GuidePreviewProgressStat
-                label="文件大小"
+                label={t('deviceDiscovery.global.preview.fileSize')}
                 value="2.4 GB / 3.6 GB"
               />
               <GuidePreviewProgressStat
-                label="剩余时间"
-                value="24 秒"
+                label={t('deviceDiscovery.global.preview.remainingTime')}
+                value={t('deviceDiscovery.global.preview.secondsVal', { seconds: 24 })}
                 alignRight
               />
             </View>
           </View>
-          <Text style={styles.guidePreviewPanelMeta}>最近同步时间：暂无</Text>
+          <Text style={styles.guidePreviewPanelMeta}>{t('deviceDiscovery.global.preview.lastSyncNone')}</Text>
         </View>
       </GuidePreviewShell>
     );
@@ -1647,15 +1668,15 @@ function GlobalConnectionFeaturePreviewCard({
             >
               <Download size={16} color="#1677D2" strokeWidth={2} />
             </View>
-            <Text style={styles.guidePreviewStrong}>最近下载</Text>
+            <Text style={styles.guidePreviewStrong}>{t('deviceDiscovery.global.preview.recentDownload')}</Text>
           </View>
-          <Text style={styles.guidePreviewLink}>查看全部</Text>
+          <Text style={styles.guidePreviewLink}>{t('deviceDiscovery.global.preview.viewAll')}</Text>
         </View>
         <View style={styles.guidePreviewDownloadRow}>
           {[
-            { icon: FileText, label: '品牌手册.pdf', testID: 'file' },
-            { icon: FileVideo, label: '发布视频.mov', testID: 'video' },
-            { icon: FileText, label: '报价单.xlsx', testID: 'document' },
+            { icon: FileText, label: t('deviceDiscovery.global.preview.demoFileName1'), testID: 'file' },
+            { icon: FileVideo, label: t('deviceDiscovery.global.preview.demoFileName2'), testID: 'video' },
+            { icon: FileText, label: t('deviceDiscovery.global.preview.demoFileName3'), testID: 'document' },
           ].map(({ icon: PreviewIcon, label, testID }) => (
             <View key={label} style={styles.guidePreviewDownloadItem}>
               <View testID={`guide-preview-download-${testID}-icon`}>
@@ -1669,18 +1690,19 @@ function GlobalConnectionFeaturePreviewCard({
         </View>
         <View style={styles.guidePreviewCompactRecord}>
           <View>
-            <Text style={styles.guidePreviewStrong}>同步记录</Text>
+            <Text style={styles.guidePreviewStrong}>{t('deviceDiscovery.global.preview.syncRecords')}</Text>
             <Text style={styles.guidePreviewSubtle}>
-              今天 · 18 个 · 18.4 GB
+              {t('deviceDiscovery.global.preview.todayStat')}
             </Text>
           </View>
           <View style={styles.guidePreviewCompletedPill}>
-            <Text style={styles.guidePreviewCompletedText}>已完成</Text>
+            <Text style={styles.guidePreviewCompletedText}>{t('deviceDiscovery.global.preview.completed')}</Text>
           </View>
         </View>
       </GuidePreviewShell>
     );
   }
+
   if (kind === 'remoteResources') {
     return (
       <GuidePreviewShell>
@@ -1689,18 +1711,24 @@ function GlobalConnectionFeaturePreviewCard({
           iconStyle={styles.guidePreviewIconBlue}
           iconColor="#3B82F6"
           testID="guide-preview-phone-sync-icon"
-          title="手机同步空间"
-          description="查看已同步至电脑的文件与上传来源"
-          badges={['今日 5 个', '保留来源']}
+          title={t('deviceDiscovery.global.preview.syncSpaceTitle')}
+          description={t('deviceDiscovery.global.preview.syncSpaceDesc')}
+          badges={[
+            t('deviceDiscovery.global.preview.syncSpaceBadge1'),
+            t('deviceDiscovery.global.preview.syncSpaceBadge2'),
+          ]}
         />
         <GuidePreviewResourceEntry
           icon={Monitor}
           iconStyle={styles.guidePreviewIconPurple}
           iconColor="#8B5CF6"
           testID="guide-preview-remote-access-icon"
-          title="远程访问电脑"
-          description="浏览电脑端共享目录并下载文件"
-          badges={['桌面目录', '列表/网格']}
+          title={t('deviceDiscovery.global.preview.remoteAccessTitle')}
+          description={t('deviceDiscovery.global.preview.remoteAccessDesc')}
+          badges={[
+            t('deviceDiscovery.global.preview.remoteAccessBadge1'),
+            t('deviceDiscovery.global.preview.remoteAccessBadge2'),
+          ]}
         />
       </GuidePreviewShell>
     );
@@ -1892,6 +1920,7 @@ function ConnectionFlowModal({
   onChange: (value: string) => void;
   onSubmit: () => void;
 }) {
+  const { t } = useTranslation();
   if (!step) return null;
 
   const keyboardEnabled = step === 'manualPair' || step === 'code';
@@ -1907,12 +1936,12 @@ function ConnectionFlowModal({
           </View>
           <View style={styles.modalTitleStack}>
             <Text style={styles.modalTitle}>
-              {isManualPairing ? '手动配对' : '选择连接方式'}
+              {isManualPairing ? t('deviceDiscovery.global.manualPairing') : t('deviceDiscovery.global.selectMethod')}
             </Text>
             <Text style={styles.modalSubtitle}>
               {isManualPairing
-                ? '选择扫码配对，或输入电脑 IP 后继续输入连接码。'
-                : `已选择 ${deviceName}`}
+                ? t('deviceDiscovery.global.manualPairingDesc')
+                : t('deviceDiscovery.connectionMethod.selected', { name: deviceName })}
             </Text>
           </View>
         </View>
@@ -1925,8 +1954,10 @@ function ConnectionFlowModal({
             <Icon name="scan-outline" size={20} color="#1677D2" />
           </View>
           <View style={styles.optionCopy}>
-            <Text style={styles.optionTitle}>扫码配对</Text>
-            <Text style={styles.optionBody}>扫描电脑端显示的二维码</Text>
+            <Text style={styles.optionTitle}>{t('deviceDiscovery.actions.qrPair')}</Text>
+            <Text style={styles.optionBody}>
+              {t('deviceDiscovery.connectionMethod.qrDesc', { name: deviceName || t('deviceDiscovery.global.findPC') })}
+            </Text>
           </View>
           <Icon name="chevron-forward" size={18} color="#9AA3AE" />
         </TouchableOpacity>
@@ -1944,12 +1975,12 @@ function ConnectionFlowModal({
           </View>
           <View style={styles.optionCopy}>
             <Text style={styles.optionTitle}>
-              {isManualPairing ? '手动输入 IP' : '输入连接码'}
+              {isManualPairing ? t('deviceDiscovery.global.manualIP') : t('deviceDiscovery.connectionMethod.codeTitle')}
             </Text>
             <Text style={styles.optionBody}>
               {isManualPairing
-                ? '输入电脑 IP 和连接码连接'
-                : '手动输入电脑端的 6 位连接码'}
+                ? t('deviceDiscovery.global.enterIPAndCode')
+                : t('deviceDiscovery.connectionMethod.codeDesc', { name: deviceName })}
             </Text>
           </View>
           <Icon name="chevron-forward" size={18} color="#9AA3AE" />
@@ -1959,7 +1990,7 @@ function ConnectionFlowModal({
           style={styles.modalCancel}
           onPress={onClose}
         >
-          <Text style={styles.modalCancelText}>取消</Text>
+          <Text style={styles.modalCancelText}>{t('deviceDiscovery.global.cancel')}</Text>
         </TouchableOpacity>
       </>
     );
@@ -1971,9 +2002,9 @@ function ConnectionFlowModal({
             <Icon name="link-outline" size={22} color="#746AA8" />
           </View>
           <View style={styles.modalTitleStack}>
-            <Text style={styles.modalTitle}>手动配对</Text>
+            <Text style={styles.modalTitle}>{t('deviceDiscovery.global.manualPairing')}</Text>
             <Text style={styles.modalSubtitle}>
-              输入电脑端显示的 IP 地址，下一步继续输入连接码。
+              {t('deviceDiscovery.global.manualIPHint')}
             </Text>
           </View>
         </View>
@@ -1990,7 +2021,7 @@ function ConnectionFlowModal({
         />
         <Text style={manualError ? styles.errorText : styles.inputHint}>
           {manualError ||
-            '可在电脑端 ViviDrop 的全局设置中查看 IP 和 6 位连接码。'}
+            t('deviceDiscovery.global.viewSettingsHint')}
         </Text>
         <View style={styles.modalActions}>
           <TouchableOpacity
@@ -1998,14 +2029,14 @@ function ConnectionFlowModal({
             style={styles.secondaryAction}
             onPress={onClose}
           >
-            <Text style={styles.secondaryActionText}>取消</Text>
+            <Text style={styles.secondaryActionText}>{t('deviceDiscovery.global.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.82}
             style={styles.primaryAction}
             onPress={onManualSubmit}
           >
-            <Text style={styles.primaryActionText}>下一步</Text>
+            <Text style={styles.primaryActionText}>{t('deviceDiscovery.global.onboarding.step2Action')}</Text>
           </TouchableOpacity>
         </View>
       </>
@@ -2018,9 +2049,9 @@ function ConnectionFlowModal({
             <Icon name="scan-outline" size={22} color="#1677D2" />
           </View>
           <View style={styles.modalTitleStack}>
-            <Text style={styles.modalTitle}>允许相机访问</Text>
+            <Text style={styles.modalTitle}>{t('deviceDiscovery.global.cameraAccessTitle')}</Text>
             <Text style={styles.modalSubtitle}>
-              扫码连接需要临时打开相机，用于识别电脑端二维码。
+              {t('deviceDiscovery.global.cameraAccessDesc')}
             </Text>
           </View>
         </View>
@@ -2030,14 +2061,14 @@ function ConnectionFlowModal({
             style={styles.secondaryAction}
             onPress={onDeny}
           >
-            <Text style={styles.secondaryActionText}>不允许</Text>
+            <Text style={styles.secondaryActionText}>{t('deviceDiscovery.global.deny')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.82}
             style={styles.primaryAction}
             onPress={onAllow}
           >
-            <Text style={styles.primaryActionText}>允许</Text>
+            <Text style={styles.primaryActionText}>{t('deviceDiscovery.global.allow')}</Text>
           </TouchableOpacity>
         </View>
       </>
@@ -2050,16 +2081,16 @@ function ConnectionFlowModal({
             <Icon name="link-outline" size={22} color="#746AA8" />
           </View>
           <View style={styles.modalTitleStack}>
-            <Text style={styles.modalTitle}>输入连接码</Text>
+            <Text style={styles.modalTitle}>{t('deviceDiscovery.global.enterCodeTitle')}</Text>
             <Text style={styles.modalSubtitle}>
-              输入 {deviceName || '电脑端'} 显示的连接码以完成连接。
+              {t('deviceDiscovery.global.enterCodeDesc', { deviceName: deviceName || t('deviceDiscovery.global.lanDeviceTitle') })}
             </Text>
           </View>
         </View>
         <TextInput
           value={connectionCode}
           onChangeText={onChange}
-          placeholder="例如 A8X2K9"
+          placeholder={t('deviceDiscovery.global.pairingCodePlaceholder')}
           placeholderTextColor="#A8B6C6"
           autoCapitalize="characters"
           autoCorrect={false}
@@ -2071,7 +2102,7 @@ function ConnectionFlowModal({
         {verifying ? (
           <View style={styles.verifyingRow}>
             <ActivityIndicator size="small" color="#1677D2" />
-            <Text style={styles.verifyingText}>正在验证连接码...</Text>
+            <Text style={styles.verifyingText}>{t('deviceDiscovery.global.verifyingCode')}</Text>
           </View>
         ) : null}
         {codeError ? <Text style={styles.errorText}>{codeError}</Text> : null}
@@ -2081,7 +2112,7 @@ function ConnectionFlowModal({
             style={styles.secondaryAction}
             onPress={onClose}
           >
-            <Text style={styles.secondaryActionText}>取消</Text>
+            <Text style={styles.secondaryActionText}>{t('deviceDiscovery.global.cancel')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             activeOpacity={0.82}
@@ -2092,7 +2123,7 @@ function ConnectionFlowModal({
             ]}
             onPress={onSubmit}
           >
-            <Text style={styles.primaryActionText}>连接</Text>
+            <Text style={styles.primaryActionText}>{t('deviceDiscovery.global.connect')}</Text>
           </TouchableOpacity>
         </View>
       </>

@@ -8,7 +8,24 @@
     "empty": "尚无同步文件",
     "desktopDeleted": "电脑已删除",
     "desktopDeletedMessage": "此文件已从电脑删除",
-    "deletedDownloadMessage": "无法下载已删除的文件"
+    "deletedDownloadMessage": "无法下载已删除的文件",
+    "summary": "{{count}} 个文件 · {{size}}",
+    "filesCount": "{{count}} 个文件",
+    "unnamedFile": "未命名文件",
+    "previewSyncedFile": "预览已同步文件",
+    "downloadSyncedFile": "下载已同步文件",
+    "loadingTitle": "正在加载",
+    "loadingSubtitle": "同步空间列表会在这里刷新。",
+    "loadFailedTitle": "加载失败",
+    "loadFailedSubtitle": "请稍后重试。",
+    "emptySubtitle": "开启自动上传后，同步到电脑的素材会出现在这里。",
+    "mediaTypes": {
+      "video": "视频",
+      "photo": "照片",
+      "file": "文件"
+    },
+    "previewFailedTitle": "无法加载预览",
+    "previewFailedSubtitle": "请确认电脑在线且文件仍存在。"
   },
   "remoteAccess": {
     "title": "远端访问电脑",
@@ -23,11 +40,40 @@
     "shareNoSelectionMessage": "请先选择要分享的文件",
     "shareFailedTitle": "分享失败",
     "shareFailedMessage": "无法打开系统分享，请稍后重试",
-    "empty": "目前没有共享资源"
+    "empty": "目前没有共享资源",
+    "rootDirectoryLabel": "用户目录",
+    "fallbackDesktopLabel": "当前电脑",
+    "unboundRemoteSubtitle": "尚未连接电脑",
+    "searchFolderPlaceholder": "搜索当前文件夹",
+    "searchFilesPlaceholder": "搜索电脑文件",
+    "loadingTitle": "远端资源加载中",
+    "loadingSubtitle": "正在读取电脑端共享目录。",
+    "folderLoadingTitle": "文件夹加载中",
+    "folderLoadingSubtitle": "正在读取电脑端目录内容。",
+    "connectionStatePrefix": "远端访问连接方式：",
+    "networkDisconnectedTitle": "网络断开",
+    "networkDisconnectedSubtitle": "当前路径会保留，恢复网络或电脑端在线后可以继续访问。",
+    "retryConnection": "重试连接",
+    "folderLoadErrorTitle": "目录加载失败",
+    "folderLoadErrorSubtitle": "无法读取这个共享文件夹，请确认电脑端文件仍然存在。",
+    "reload": "重新加载",
+    "closePreview": "关闭预览",
+    "noMatchTitle": "没有匹配结果",
+    "noMatchSubtitle": "换个关键词再试一次",
+    "emptyFolderTitle": "空文件夹",
+    "emptyFolderSubtitle": "这个目录暂时没有可下载或分享的文件。",
+    "noFilesTitle": "暂无文件",
+    "noFilesSubtitle": "电脑端还没有开放可访问的文件目录。",
+    "sortTitle": "排序方式",
+    "shareTitle": "分享所选文件",
+    "shareSubtitle": "已选择 {{count}} 个文件",
+    "shareTargets": ["微信", "QQ", "企业微信", "更多"],
+    "listView": "列表视图",
+    "gridView": "网格视图"
   },
-  "defaultFolderName": "共享目录",
   "teamFolderName": "共享目录",
   "personalFolderName": "个人共享目录",
+  "defaultFolderName": "共享目录",
   "globalPersonalFolderName": "我的电脑",
   "scopes": {
     "team": "共享目录",
@@ -40,7 +86,11 @@
     "folder": "文件夹",
     "downloaded": "已下载",
     "parentFolder": "上一级",
-    "parentFolderMeta": "返回上层目录"
+    "parentFolderMeta": "返回上层目录",
+    "emptyFolder": "空文件夹",
+    "justNow": "刚刚",
+    "modifiedToday": "今天",
+    "modifiedDaysAgo": "{{count}}天前"
   },
   "connectionStatus": {
     "lan": "局域网在线",
@@ -48,7 +98,11 @@
     "relay": "中继在线",
     "waking": "正在唤醒电脑端",
     "unavailable": "电脑端不可达",
-    "offline": "离线"
+    "offline": "离线",
+    "p2pConnecting": "P2P 连接中",
+    "relayConnecting": "中继服务器连接中",
+    "unbound": "未绑定",
+    "remoteWakeSetupRequired": "需设置唤醒"
   },
   "emptyState": {
     "title": "目前没有内容",
@@ -95,5 +149,14 @@
     "savedLocationPhotos": "相册",
     "savedLocationDocuments": "iOS“文件”App -> Vivi Drop 目录",
     "savedLocationDownloads": "系统 Downloads -> Vivi Drop 目录"
+  },
+  "localSaveUnsupported": {
+    "title": "暂不支持保存",
+    "message": "当前版本还没有接入客户端本地保存能力，请等待后续版本。"
+  },
+  "sortBy": {
+    "name": "名称",
+    "time": "时间",
+    "size": "文件大小"
   }
 }

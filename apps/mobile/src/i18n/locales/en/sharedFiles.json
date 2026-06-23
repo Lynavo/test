@@ -8,7 +8,24 @@
     "empty": "No synced files yet",
     "desktopDeleted": "Deleted on computer",
     "desktopDeletedMessage": "This file was deleted from the computer.",
-    "deletedDownloadMessage": "Deleted files cannot be downloaded."
+    "deletedDownloadMessage": "Deleted files cannot be downloaded.",
+    "summary": "{{count}} files · {{size}}",
+    "filesCount": "{{count}} files",
+    "unnamedFile": "Unnamed File",
+    "previewSyncedFile": "Preview synced file",
+    "downloadSyncedFile": "Download synced file",
+    "loadingTitle": "Loading",
+    "loadingSubtitle": "Sync space list will refresh here.",
+    "loadFailedTitle": "Failed to Load",
+    "loadFailedSubtitle": "Please try again later.",
+    "emptySubtitle": "Once auto upload is enabled, assets synced to the computer will appear here.",
+    "mediaTypes": {
+      "video": "Video",
+      "photo": "Photo",
+      "file": "File"
+    },
+    "previewFailedTitle": "Cannot load preview",
+    "previewFailedSubtitle": "Please ensure the computer is online and the file still exists."
   },
   "remoteAccess": {
     "title": "Remote Access",
@@ -23,12 +40,41 @@
     "shareNoSelectionMessage": "Select files to share first.",
     "shareFailedTitle": "Share Failed",
     "shareFailedMessage": "Could not open the system share sheet. Please try again later.",
-    "empty": "No shared resources available"
+    "empty": "No shared resources available",
+    "rootDirectoryLabel": "User Directory",
+    "fallbackDesktopLabel": "Current PC",
+    "unboundRemoteSubtitle": "Not connected to computer",
+    "searchFolderPlaceholder": "Search current folder",
+    "searchFilesPlaceholder": "Search computer files",
+    "loadingTitle": "Remote resources loading",
+    "loadingSubtitle": "Reading computer shared directory...",
+    "folderLoadingTitle": "Folder loading",
+    "folderLoadingSubtitle": "Reading computer directory contents...",
+    "connectionStatePrefix": "Remote access connection method: ",
+    "networkDisconnectedTitle": "Network Disconnected",
+    "networkDisconnectedSubtitle": "Current path will be kept. You can continue accessing after network is restored or desktop app is online.",
+    "retryConnection": "Retry Connection",
+    "folderLoadErrorTitle": "Folder Load Failed",
+    "folderLoadErrorSubtitle": "Unable to read this shared folder. Please make sure the files still exist on the computer.",
+    "reload": "Reload",
+    "closePreview": "Close Preview",
+    "noMatchTitle": "No Matching Results",
+    "noMatchSubtitle": "Try another keyword",
+    "emptyFolderTitle": "Empty Folder",
+    "emptyFolderSubtitle": "No files available for download or sharing in this directory.",
+    "noFilesTitle": "No Files",
+    "noFilesSubtitle": "No accessible file directories have been opened on the computer yet.",
+    "sortTitle": "Sort By",
+    "shareTitle": "Share Selected Files",
+    "shareSubtitle": "{{count}} files selected",
+    "shareTargets": ["WeChat", "QQ", "WeCom", "More"],
+    "listView": "List View",
+    "gridView": "Grid View"
   },
   "defaultFolderName": "Shared Folder",
   "teamFolderName": "Shared Folder",
   "personalFolderName": "Personal Shared Folder",
-  "globalPersonalFolderName": "My Computer",
+  "globalPersonalFolderName": "My PC",
   "scopes": {
     "team": "Shared Folder",
     "personal": "Personal Shared Folder",
@@ -40,7 +86,11 @@
     "folder": "Folder",
     "downloaded": "Downloaded",
     "parentFolder": "Parent Folder",
-    "parentFolderMeta": "Up one level"
+    "parentFolderMeta": "Up one level",
+    "emptyFolder": "Empty Folder",
+    "justNow": "Just now",
+    "modifiedToday": "Today",
+    "modifiedDaysAgo": "{{count}} days ago"
   },
   "connectionStatus": {
     "lan": "LAN online",
@@ -48,7 +98,11 @@
     "relay": "Relay online",
     "waking": "Waking desktop...",
     "unavailable": "Desktop unreachable",
-    "offline": "Offline"
+    "offline": "Offline",
+    "p2pConnecting": "P2P connecting...",
+    "relayConnecting": "Relay connecting...",
+    "unbound": "Unbound",
+    "remoteWakeSetupRequired": "Remote Wake Required"
   },
   "emptyState": {
     "title": "No Content Yet",
@@ -95,5 +149,14 @@
     "savedLocationPhotos": "Photos",
     "savedLocationDocuments": "iOS Files App -> Vivi Drop folder",
     "savedLocationDownloads": "system Downloads -> Vivi Drop folder"
+  },
+  "localSaveUnsupported": {
+    "title": "Save Not Supported Yet",
+    "message": "Local client saving is not integrated in the current version. Please wait for future releases."
+  },
+  "sortBy": {
+    "name": "Name",
+    "time": "Date",
+    "size": "Size"
   }
 }

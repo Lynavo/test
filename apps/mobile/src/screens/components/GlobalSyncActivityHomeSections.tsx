@@ -173,7 +173,11 @@ export function RecentDownloadsSection({
         })
       : placeholders.slice(0, 4).map(item => ({
           key: item.key,
-          label: item.label,
+          label: item.key === 'photo'
+            ? t('syncActivity.home.recentDownloadPhoto') || item.label
+            : item.key === 'video'
+            ? t('syncActivity.home.recentDownloadVideo') || item.label
+            : t('syncActivity.home.recentDownloadFile') || item.label,
           meta: '',
           iconName: item.iconName,
           iconColor: item.iconColor,

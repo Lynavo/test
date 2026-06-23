@@ -13,6 +13,20 @@
     "windows": "Windows PC"
   },
   "diagnosticsArchiveTitle": "Vivi Drop Diagnostics",
+  "notApplicable": "N/A",
+  "unknownTime": "Unknown time",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "thumbnail": "thumbnail",
+  "connectionStates": {
+    "connected": "Connected",
+    "connecting": "Connecting",
+    "offline": "Offline",
+    "bound": "Bound",
+    "active": "Enabled",
+    "inactive": "Disabled",
+    "boundDeviceFallback": "Bound computer"
+  },
   "tabs": {
     "home": "Home",
     "files": "Files",

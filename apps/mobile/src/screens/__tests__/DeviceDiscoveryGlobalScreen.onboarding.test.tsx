@@ -43,6 +43,41 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+jest.mock('react-i18next', () => {
+  const zhHans = {
+    deviceDiscovery: require('../../i18n/locales/zh-Hans/deviceDiscovery.json'),
+    common: require('../../i18n/locales/zh-Hans/common.json'),
+    errors: require('../../i18n/locales/zh-Hans/errors.json'),
+  };
+  return {
+    useTranslation: () => ({
+      i18n: {
+        language: 'zh-Hans',
+        resolvedLanguage: 'zh-Hans',
+      },
+      t: (key: string, options?: any) => {
+        const parts = key.split('.');
+        let current: any = zhHans;
+        for (const part of parts) {
+          if (current == null) return key;
+          current = current[part];
+        }
+        if (typeof current === 'string') {
+          if (options) {
+            let res = current;
+            for (const k of Object.keys(options)) {
+              res = res.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), options[k]);
+            }
+            return res;
+          }
+          return current;
+        }
+        return key;
+      },
+    }),
+  };
+});
+
 jest.mock('react-native-svg', () => {
   const ReactInner = require('react');
   const { View } = require('react-native');
@@ -350,12 +385,12 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       expect(screen.getByText('开启自动上传')).toBeTruthy();
     });
     expect(screen.getByText('2/6')).toBeTruthy();
-    expectPreviewText(screen, '自动同步');
+    expectPreviewText(screen, '自动上传');
     expectPreviewText(screen, '当前手机状态');
     expectPreviewText(screen, '开启');
 
     fireEvent.press(screen.getByText('下一步'));
-    expect(screen.getByText('选择同步内容和范围')).toBeTruthy();
+    expect(screen.getByText('同步范围与限制')).toBeTruthy();
     expect(screen.getByText('3/6')).toBeTruthy();
     expectPreviewText(screen, '同步计划');
     expectPreviewText(screen, '同步来源');
@@ -364,7 +399,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expectPreviewText(screen, '全部内容');
 
     fireEvent.press(screen.getByText('下一步'));
-    expect(screen.getByText('查看同步状态')).toBeTruthy();
+    expect(screen.getByText('查看同步进度')).toBeTruthy();
     expect(screen.getByText('4/6')).toBeTruthy();
     expectPreviewText(screen, '上传中 · 本次传输进度');
     expectPreviewText(screen, '已上传96/128');
@@ -377,7 +412,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryAllByText('剪辑工作站-A')).toHaveLength(0);
 
     fireEvent.press(screen.getByText('下一步'));
-    expect(screen.getByText('最近下载和同步记录')).toBeTruthy();
+    expect(screen.getByText('查看最近记录')).toBeTruthy();
     expect(screen.getByText('5/6')).toBeTruthy();
     expectPreviewText(screen, '最近下载');
     expectPreviewText(screen, '查看全部');
@@ -393,7 +428,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryAllByText('arrow-down-circle-outline')).toHaveLength(0);
 
     fireEvent.press(screen.getByText('下一步'));
-    expect(screen.getByText('远程资源 / 访问电脑')).toBeTruthy();
+    expect(screen.getByText('远程访问文件')).toBeTruthy();
     expect(screen.getByText('6/6')).toBeTruthy();
     expect(screen.getByText('完成')).toBeTruthy();
     expectPreviewText(screen, '手机同步空间');

@@ -8,7 +8,24 @@
     "empty": "尚無同步檔案",
     "desktopDeleted": "電腦已刪除",
     "desktopDeletedMessage": "此檔案已從電腦刪除",
-    "deletedDownloadMessage": "無法下載已刪除的檔案"
+    "deletedDownloadMessage": "無法下載已刪除的檔案",
+    "summary": "{{count}} 個檔案 · {{size}}",
+    "filesCount": "{{count}} 個檔案",
+    "unnamedFile": "未命名檔案",
+    "previewSyncedFile": "預覽已同步檔案",
+    "downloadSyncedFile": "下載已同步檔案",
+    "loadingTitle": "正在載入",
+    "loadingSubtitle": "同步空間列表會在這裡更新。",
+    "loadFailedTitle": "載入失敗",
+    "loadFailedSubtitle": "請稍後重試。",
+    "emptySubtitle": "開啟自動上傳後，同步到電腦的素材會出現在這裡。",
+    "mediaTypes": {
+      "video": "影片",
+      "photo": "照片",
+      "file": "檔案"
+    },
+    "previewFailedTitle": "無法載入預覽",
+    "previewFailedSubtitle": "請確認電腦在線且檔案仍存在。"
   },
   "remoteAccess": {
     "title": "遠端訪問電腦",
@@ -23,7 +40,36 @@
     "shareNoSelectionMessage": "請先選擇要分享的檔案",
     "shareFailedTitle": "分享失敗",
     "shareFailedMessage": "無法開啟系統分享，請稍後重試",
-    "empty": "目前沒有共享資源"
+    "empty": "目前沒有共享資源",
+    "rootDirectoryLabel": "用戶目錄",
+    "fallbackDesktopLabel": "當前電腦",
+    "unboundRemoteSubtitle": "尚未連接電腦",
+    "searchFolderPlaceholder": "搜尋目前資料夾",
+    "searchFilesPlaceholder": "搜尋電腦檔案",
+    "loadingTitle": "遠端資源載入中",
+    "loadingSubtitle": "正在讀取電腦端共享目錄。",
+    "folderLoadingTitle": "資料夹載入中",
+    "folderLoadingSubtitle": "正在讀取電腦端目錄內容。",
+    "connectionStatePrefix": "遠端訪問連接方式：",
+    "networkDisconnectedTitle": "網路斷開",
+    "networkDisconnectedSubtitle": "目前路徑將保留，恢復網路或電腦端在線後可繼續存取。",
+    "retryConnection": "重試連線",
+    "folderLoadErrorTitle": "目錄載入失敗",
+    "folderLoadErrorSubtitle": "無法讀取此共享資料夾，請確認電腦端檔案依然存在。",
+    "reload": "重新載入",
+    "closePreview": "關閉預覽",
+    "noMatchTitle": "無符合結果",
+    "noMatchSubtitle": "換個關鍵字再試一次",
+    "emptyFolderTitle": "空資料夾",
+    "emptyFolderSubtitle": "此目錄暫時沒有可下載或分享的檔案。",
+    "noFilesTitle": "暫無檔案",
+    "noFilesSubtitle": "電腦端尚未開放可存取的檔案目錄。",
+    "sortTitle": "排序方式",
+    "shareTitle": "分享所選檔案",
+    "shareSubtitle": "已選擇 {{count}} 個檔案",
+    "shareTargets": ["微信", "QQ", "企業微信", "更多"],
+    "listView": "列表檢視",
+    "gridView": "網格檢視"
   },
   "teamFolderName": "共享目錄",
   "personalFolderName": "個人共享目錄",
@@ -40,7 +86,11 @@
     "folder": "資料夾",
     "downloaded": "已下載",
     "parentFolder": "上一級",
-    "parentFolderMeta": "返回上層目錄"
+    "parentFolderMeta": "返回上層目錄",
+    "emptyFolder": "空資料夾",
+    "justNow": "剛剛",
+    "modifiedToday": "今天",
+    "modifiedDaysAgo": "{{count}}天前"
   },
   "connectionStatus": {
     "lan": "區域網路在線",
@@ -48,7 +98,11 @@
     "relay": "中繼在線",
     "waking": "正在喚醒電腦端",
     "unavailable": "電腦端不可達",
-    "offline": "離線"
+    "offline": "離線",
+    "p2pConnecting": "P2P 連線中",
+    "relayConnecting": "中繼伺服器連線中",
+    "unbound": "未綁定",
+    "remoteWakeSetupRequired": "需設定喚醒"
   },
   "emptyState": {
     "title": "目前沒有內容",
@@ -95,5 +149,14 @@
     "savedLocationPhotos": "相簿",
     "savedLocationDocuments": "iOS「檔案」App -> Vivi Drop 目錄",
     "savedLocationDownloads": "系統 Downloads -> Vivi Drop 目錄"
+  },
+  "localSaveUnsupported": {
+    "title": "暫不支援儲存",
+    "message": "目前版本尚未整合客戶端本地儲存功能，請等待後續版本。"
+  },
+  "sortBy": {
+    "name": "名稱",
+    "time": "時間",
+    "size": "檔案大小"
   }
 }

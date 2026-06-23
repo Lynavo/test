@@ -13,6 +13,20 @@
     "windows": "Windows 電腦"
   },
   "diagnosticsArchiveTitle": "Vivi Drop 診斷包",
+  "notApplicable": "不適用",
+  "unknownTime": "未知時間",
+  "today": "今天",
+  "yesterday": "昨天",
+  "thumbnail": "縮圖",
+  "connectionStates": {
+    "connected": "已連線",
+    "connecting": "連線中",
+    "offline": "離線",
+    "bound": "已綁定",
+    "active": "已開啟",
+    "inactive": "未開啟",
+    "boundDeviceFallback": "已綁定電腦"
+  },
   "tabs": {
     "home": "首頁",
     "files": "遠端資源",

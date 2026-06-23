@@ -15,9 +15,8 @@ import {
   View,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import Svg, {
-  Path,
-} from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 
 import {
   GLOBAL_AUTH_COLORS as AUTH_COLORS,
@@ -27,7 +26,12 @@ import {
   authTextScalingProps,
   getAuthTextScalingProps,
 } from '../components/auth/authPlatformStyles';
-import { appleLogin, googleLogin, sendEmailCode, emailLogin } from '../services/auth-service';
+import {
+  appleLogin,
+  googleLogin,
+  sendEmailCode,
+  emailLogin,
+} from '../services/auth-service';
 import { useAuth } from '../stores/auth-store';
 import { PRIVACY_POLICY_URL, USER_AGREEMENT_URL } from '../constants/legal';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
@@ -76,6 +80,7 @@ function getGoogleIdToken(
 }
 
 export function LoginGlobalScreen() {
+  const { t } = useTranslation();
   const [authProvider, setAuthProvider] = useState<Provider | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreementProvider, setAgreementProvider] = useState<Provider | null>(
@@ -106,22 +111,31 @@ export function LoginGlobalScreen() {
 
   const handleSendCode = async () => {
     if (!email.trim()) {
-      Alert.alert('提示', '请输入电子邮箱');
+      Alert.alert(
+        t('auth.globalLogin.tip'),
+        t('auth.globalLogin.emailRequired'),
+      );
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      Alert.alert('错误', '请输入有效的电子邮箱地址');
+      Alert.alert(
+        t('auth.globalLogin.error'),
+        t('auth.globalLogin.emailInvalid'),
+      );
       return;
     }
 
     setIsSendingCode(true);
     try {
       await sendEmailCode(email.trim());
-      Alert.alert('提示', '验证码已发送至您的邮箱，请注意查收');
+      Alert.alert(t('auth.globalLogin.tip'), t('auth.globalLogin.codeSent'));
       setCountdown(60);
     } catch (error) {
-      Alert.alert('发送失败', getErrorMessage(error, '发送验证码失败'));
+      Alert.alert(
+        t('auth.globalLogin.error'),
+        getErrorMessage(error, t('auth.globalLogin.sendCodeFailed')),
+      );
     } finally {
       setIsSendingCode(false);
     }
@@ -133,11 +147,17 @@ export function LoginGlobalScreen() {
       return;
     }
     if (!email.trim()) {
-      Alert.alert('提示', '请输入电子邮箱');
+      Alert.alert(
+        t('auth.globalLogin.tip'),
+        t('auth.globalLogin.emailRequired'),
+      );
       return;
     }
     if (!code.trim() || code.trim().length !== 6) {
-      Alert.alert('提示', '请输入 6 位数验证码');
+      Alert.alert(
+        t('auth.globalLogin.tip'),
+        t('auth.globalLogin.codeRequired'),
+      );
       return;
     }
 
@@ -147,8 +167,8 @@ export function LoginGlobalScreen() {
       login(authRes.accessToken, authRes.refreshToken);
     } catch (error) {
       Alert.alert(
-        '登录失败',
-        getErrorMessage(error, '登录失败，验证码可能错误或已过期'),
+        t('auth.globalLogin.error'),
+        getErrorMessage(error, t('auth.globalLogin.loginFailed')),
       );
     } finally {
       setIsLoggingIn(false);
@@ -207,7 +227,10 @@ export function LoginGlobalScreen() {
       }
     } catch (err: unknown) {
       if (!isProviderSignInCancelled(err)) {
-        Alert.alert('Sign In Failed', getErrorMessage(err, 'Unknown error'));
+        Alert.alert(
+          t('auth.globalLogin.error'),
+          getErrorMessage(err, t('errors.unknown')),
+        );
       }
     } finally {
       setPendingProvider(null);
@@ -248,26 +271,30 @@ export function LoginGlobalScreen() {
 
         <View style={styles.authCard}>
           <Text {...authTextScalingProps} style={styles.cardTitle}>
-            {loginMethod === 'oauth' ? '登录或创建账号' : '邮箱登录'}
+            {loginMethod === 'oauth'
+              ? t('auth.globalLogin.titleOAuth')
+              : t('auth.globalLogin.titleEmail')}
           </Text>
           <Text {...authTextScalingProps} style={styles.cardDescription}>
             {loginMethod === 'oauth'
-              ? '使用现有账号继续，稍后可连接电脑设备。'
-              : '未注册的账号将自动注册，稍后可连接电脑设备。'}
+              ? t('auth.globalLogin.descriptionOAuth')
+              : t('auth.globalLogin.descriptionEmail')}
           </Text>
 
           {loginMethod === 'oauth' ? (
             <View style={styles.providerList}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="使用 Google 继续"
+                accessibilityLabel={t('auth.globalLogin.continueWithGoogle')}
                 disabled={pendingProvider !== null}
                 onPress={() => beginProviderLogin('google')}
                 testID="global-auth-google-provider-button"
                 style={({ pressed }) => [
                   styles.providerButton,
                   pressed ? styles.providerButtonPressed : null,
-                  pendingProvider !== null ? styles.providerButtonDisabled : null,
+                  pendingProvider !== null
+                    ? styles.providerButtonDisabled
+                    : null,
                 ]}
               >
                 {pendingProvider === 'google' ? (
@@ -276,7 +303,7 @@ export function LoginGlobalScreen() {
                   <>
                     <GoogleSvgIcon size={20} />
                     <Text {...authTextScalingProps} style={styles.providerText}>
-                      使用 Google 继续
+                      {t('auth.globalLogin.continueWithGoogle')}
                     </Text>
                   </>
                 )}
@@ -285,7 +312,7 @@ export function LoginGlobalScreen() {
               {showAppleSignIn ? (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="使用 Apple 继续"
+                  accessibilityLabel={t('auth.globalLogin.continueWithApple')}
                   disabled={pendingProvider !== null}
                   onPress={() => beginProviderLogin('apple')}
                   testID="global-auth-apple-provider-button"
@@ -306,7 +333,7 @@ export function LoginGlobalScreen() {
                         {...authTextScalingProps}
                         style={styles.providerText}
                       >
-                        使用 Apple 继续
+                        {t('auth.globalLogin.continueWithApple')}
                       </Text>
                     </>
                   )}
@@ -315,13 +342,15 @@ export function LoginGlobalScreen() {
 
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>或</Text>
+                <Text style={styles.dividerText}>
+                  {t('auth.globalLogin.or')}
+                </Text>
                 <View style={styles.dividerLine} />
               </View>
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="使用邮箱登录"
+                accessibilityLabel={t('auth.globalLogin.useEmailLogin')}
                 onPress={() => setLoginMethod('email')}
                 style={({ pressed }) => [
                   styles.emailChooseButton,
@@ -330,18 +359,20 @@ export function LoginGlobalScreen() {
               >
                 <MailSvgIcon size={18} color={AUTH_COLORS.text} />
                 <Text {...authTextScalingProps} style={styles.providerText}>
-                  使用邮箱登录
+                  {t('auth.globalLogin.useEmailLogin')}
                 </Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.providerList}>
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>电子邮箱</Text>
+                <Text style={styles.inputLabel}>
+                  {t('auth.globalLogin.emailLabel')}
+                </Text>
                 <TextInput
                   {...textInputScalingProps}
-                  accessibilityLabel="请输入电子邮箱"
-                  placeholder="请输入电子邮箱"
+                  accessibilityLabel={t('auth.globalLogin.emailPlaceholder')}
+                  placeholder={t('auth.globalLogin.emailPlaceholder')}
                   placeholderTextColor="#7B8490"
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -360,12 +391,14 @@ export function LoginGlobalScreen() {
               </View>
 
               <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>验证码</Text>
+                <Text style={styles.inputLabel}>
+                  {t('auth.globalLogin.codeLabel')}
+                </Text>
                 <View style={styles.codeInputRow}>
                   <TextInput
                     {...textInputScalingProps}
-                    accessibilityLabel="6 位数验证码"
-                    placeholder="6 位数验证码"
+                    accessibilityLabel={t('auth.globalLogin.codePlaceholder')}
+                    placeholder={t('auth.globalLogin.codePlaceholder')}
                     placeholderTextColor="#7B8490"
                     keyboardType="number-pad"
                     maxLength={6}
@@ -377,7 +410,9 @@ export function LoginGlobalScreen() {
                     style={[
                       styles.input,
                       styles.codeInput,
-                      Platform.OS === 'android' ? styles.androidInputText : null,
+                      Platform.OS === 'android'
+                        ? styles.androidInputText
+                        : null,
                       codeFocused ? styles.inputFocused : null,
                     ]}
                   />
@@ -385,10 +420,12 @@ export function LoginGlobalScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={
                       isSendingCode
-                        ? '正在获取验证码'
+                        ? t('auth.globalLogin.sendingCode')
                         : countdown > 0
-                        ? `已发送 ${countdown}秒`
-                        : '获取验证码'
+                          ? t('auth.globalLogin.sentCountdown', {
+                              seconds: countdown,
+                            })
+                          : t('auth.globalLogin.getCode')
                     }
                     onPress={handleSendCode}
                     disabled={isSendingCode || countdown > 0}
@@ -401,10 +438,17 @@ export function LoginGlobalScreen() {
                     ]}
                   >
                     {isSendingCode ? (
-                      <ActivityIndicator size="small" color={AUTH_COLORS.text} />
+                      <ActivityIndicator
+                        size="small"
+                        color={AUTH_COLORS.text}
+                      />
                     ) : (
                       <Text style={styles.sendCodeButtonText}>
-                        {countdown > 0 ? `已发送 (${countdown}s)` : '获取验证码'}
+                        {countdown > 0
+                          ? t('auth.globalLogin.sentCountdown', {
+                              seconds: countdown,
+                            })
+                          : t('auth.globalLogin.getCode')}
                       </Text>
                     )}
                   </Pressable>
@@ -413,7 +457,7 @@ export function LoginGlobalScreen() {
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="登录"
+                accessibilityLabel={t('auth.globalLogin.loginButton')}
                 onPress={handleEmailLoginSubmit}
                 disabled={isLoggingIn}
                 style={({ pressed }) => [
@@ -425,17 +469,21 @@ export function LoginGlobalScreen() {
                 {isLoggingIn ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.submitButtonText}>登录</Text>
+                  <Text style={styles.submitButtonText}>
+                    {t('auth.globalLogin.loginButton')}
+                  </Text>
                 )}
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="返回第三方登录"
+                accessibilityLabel={t('auth.globalLogin.backToOAuth')}
                 onPress={() => setLoginMethod('oauth')}
                 style={styles.backToOAuthButton}
               >
-                <Text style={styles.backToOAuthText}>返回第三方登录</Text>
+                <Text style={styles.backToOAuthText}>
+                  {t('auth.globalLogin.backToOAuth')}
+                </Text>
               </Pressable>
             </View>
           )}
@@ -455,15 +503,15 @@ export function LoginGlobalScreen() {
               {agreedToTerms ? <CheckGlyph /> : null}
             </Pressable>
             <Text {...authTextScalingProps} style={styles.termsText}>
-              继续即表示你同意
+              {t('auth.globalLogin.termsPrefix')}
               <Text style={styles.termsLink} onPress={handleOpenTerms}>
-                服务条款
+                {t('common.termsOfService')}
               </Text>
-              和
+              {t('auth.globalLogin.termsAnd')}
               <Text style={styles.termsLink} onPress={handleOpenPrivacy}>
-                隐私政策
+                {t('common.privacyPolicy')}
               </Text>
-              。
+              {t('auth.globalLogin.termsSuffix')}
             </Text>
           </View>
         </View>
@@ -514,7 +562,13 @@ function GoogleSvgIcon({ size = 18 }: { size?: number }) {
   );
 }
 
-function AppleSvgIcon({ size = 18, color = '#000000' }: { size?: number; color?: string }) {
+function AppleSvgIcon({
+  size = 18,
+  color = '#000000',
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <Path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.82M15.97 4.17c.66-.81 1.11-1.93.99-3.06-.96.04-2.13.64-2.82 1.45-.6.69-1.12 1.84-.98 2.94.12 0 .23.01.35.01.96 0 2.06-.59 2.46-1.34" />
@@ -522,16 +576,29 @@ function AppleSvgIcon({ size = 18, color = '#000000' }: { size?: number; color?:
   );
 }
 
-function MailSvgIcon({ size = 18, color = '#17191C' }: { size?: number; color?: string }) {
+function MailSvgIcon({
+  size = 18,
+  color = '#17191C',
+}: {
+  size?: number;
+  color?: string;
+}) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
       <Path d="M22 6l-10 7L2 6" />
     </Svg>
   );
 }
-
-
 
 function ShieldCheckGlyph() {
   return (
@@ -578,6 +645,7 @@ function ProviderConfirmModal({
   onCancel: () => void;
   onContinue: (provider: Provider) => void;
 }) {
+  const { t } = useTranslation();
   if (!provider || provider === 'email') return null;
 
   const isGoogle = provider === 'google';
@@ -604,12 +672,14 @@ function ProviderConfirmModal({
           </View>
           <View style={styles.modalHeaderText}>
             <Text {...authTextScalingProps} style={styles.modalTitle}>
-              {isGoogle ? 'Google 授权登录' : 'Apple 授权登录'}
+              {isGoogle
+                ? t('auth.globalLogin.googleAuthTitle')
+                : t('auth.globalLogin.appleAuthTitle')}
             </Text>
             <Text {...authTextScalingProps} style={styles.modalSubtitle}>
               {isGoogle
-                ? '将打开 Google 完成账号授权。'
-                : '将打开 Apple 完成账号授权。'}
+                ? t('auth.globalLogin.googleAuthSubtitle')
+                : t('auth.globalLogin.appleAuthSubtitle')}
             </Text>
           </View>
         </View>
@@ -617,8 +687,8 @@ function ProviderConfirmModal({
         <View style={styles.modalInfoBox}>
           <Text {...authTextScalingProps} style={styles.modalInfoText}>
             {isGoogle
-              ? '使用 Google 账号授权后，ViviDrop 只会用于识别账号和同步设备，不会读取你的密码。'
-              : '使用 Apple ID 授权后，ViviDrop 只会用于识别账号和同步设备，不会读取你的密码。'}
+              ? t('auth.globalLogin.googleAuthInfo')
+              : t('auth.globalLogin.appleAuthInfo')}
           </Text>
         </View>
 
@@ -631,14 +701,18 @@ function ProviderConfirmModal({
             ]}
             onPress={onCancel}
           >
-            <Text style={styles.modalSecondaryText}>取消</Text>
+            <Text style={styles.modalSecondaryText}>
+              {t('auth.globalLogin.cancel')}
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: pendingProvider !== null }}
             style={({ pressed }) => [
               styles.modalPrimaryButton,
-              pendingProvider !== null ? styles.modalPrimaryButtonDisabled : null,
+              pendingProvider !== null
+                ? styles.modalPrimaryButtonDisabled
+                : null,
               pressed ? styles.providerButtonPressed : null,
             ]}
             onPress={() => onContinue(provider)}
@@ -647,7 +721,9 @@ function ProviderConfirmModal({
             {pendingProvider === provider ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
-              <Text style={styles.modalPrimaryText}>继续授权</Text>
+              <Text style={styles.modalPrimaryText}>
+                {t('auth.globalLogin.continueAuth')}
+              </Text>
             )}
           </Pressable>
         </View>
@@ -700,6 +776,7 @@ function AgreementRequiredModal({
   onCancel: () => void;
   onContinue: (provider: Provider) => void;
 }) {
+  const { t } = useTranslation();
   if (!provider) return null;
 
   return (
@@ -715,11 +792,17 @@ function AgreementRequiredModal({
           </View>
           <View style={styles.modalHeaderText}>
             <Text {...authTextScalingProps} style={styles.modalTitle}>
-              请先同意服务协议
+              {t('auth.globalLogin.agreementRequiredTitle')}
             </Text>
             <Text {...authTextScalingProps} style={styles.modalBodyText}>
-              登录前需要确认你已阅读并同意服务条款和隐私政策，之后可继续使用
-              {provider === 'google' ? ' Google 授权' : provider === 'apple' ? ' Apple 授权' : ' 邮箱登录'}。
+              {t('auth.globalLogin.agreementRequiredBody', {
+                provider:
+                  provider === 'google'
+                    ? t('auth.globalLogin.providerGoogle')
+                    : provider === 'apple'
+                      ? t('auth.globalLogin.providerApple')
+                      : t('auth.globalLogin.providerEmail'),
+              })}
             </Text>
           </View>
         </View>
@@ -729,10 +812,10 @@ function AgreementRequiredModal({
             {...authTextScalingProps}
             style={[styles.modalInfoText, styles.agreementModalInfoText]}
           >
-            <Text style={styles.termsLink}>服务条款</Text>
+            <Text style={styles.termsLink}>{t('common.termsOfService')}</Text>
             <Text style={styles.modalDividerText}> / </Text>
-            <Text style={styles.termsLink}>隐私政策</Text>
-            <Text> 用于说明账号、设备连接和同步数据的处理方式。</Text>
+            <Text style={styles.termsLink}>{t('common.privacyPolicy')}</Text>
+            <Text>{t('auth.globalLogin.agreementInfoText')}</Text>
           </Text>
         </View>
 
@@ -745,7 +828,9 @@ function AgreementRequiredModal({
             ]}
             onPress={onCancel}
           >
-            <Text style={styles.modalSecondaryText}>稍后</Text>
+            <Text style={styles.modalSecondaryText}>
+              {t('auth.globalLogin.later')}
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -755,7 +840,9 @@ function AgreementRequiredModal({
             ]}
             onPress={() => onContinue(provider)}
           >
-            <Text style={styles.modalPrimaryText}>同意并继续</Text>
+            <Text style={styles.modalPrimaryText}>
+              {t('auth.globalLogin.agreeAndContinue')}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -775,8 +862,6 @@ const glassShadow = {
     color: 'rgba(70, 96, 138, 0.12)',
   }),
 };
-
-
 
 const styles = StyleSheet.create({
   pageContent: {

@@ -63,11 +63,40 @@ jest.mock('@react-navigation/native', () => ({
   }),
 }));
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
+jest.mock('react-i18next', () => {
+  const zhHans = {
+    settings: require('../../i18n/locales/zh-Hans/settings.json'),
+    deviceDiscovery: require('../../i18n/locales/zh-Hans/deviceDiscovery.json'),
+    common: require('../../i18n/locales/zh-Hans/common.json'),
+  };
+  return {
+    useTranslation: () => ({
+      i18n: {
+        language: 'zh-Hans',
+        resolvedLanguage: 'zh-Hans',
+      },
+      t: (key: string, options?: any) => {
+        const parts = key.split('.');
+        let current: any = zhHans;
+        for (const part of parts) {
+          if (current == null) return key;
+          current = current[part];
+        }
+        if (typeof current === 'string') {
+          if (options) {
+            let res = current;
+            for (const k of Object.keys(options)) {
+              res = res.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), options[k]);
+            }
+            return res;
+          }
+          return current;
+        }
+        return key;
+      },
+    }),
+  };
+});
 
 jest.mock('../../stores/auth-store', () => ({
   useAuth: () => mockAuth,
