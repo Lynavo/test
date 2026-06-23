@@ -110,7 +110,7 @@ describe('@syncflow/contracts exports', () => {
       clientName: 'Nick iPhone',
       platform: 'ios',
       lastIp: '192.168.1.20',
-      failedAttempts: 5,
+      failedAttempts: 3,
       blockedAt: '2026-06-10T01:11:00Z',
       lastAttemptAt: '2026-06-10T01:11:00Z',
       reason: 'wrong_connection_code_limit',
@@ -127,9 +127,9 @@ describe('@syncflow/contracts exports', () => {
       createdAt: '2026-06-10T01:11:00Z',
     };
     const meta: PairingErrorMetadataDTO = {
-      failedAttempts: 4,
+      failedAttempts: 2,
       remainingAttempts: 1,
-      maxAttempts: 5,
+      maxAttempts: 3,
     };
     const settings: ConnectionDevicesSettingsDTO = {
       authorizedDevices: [device],

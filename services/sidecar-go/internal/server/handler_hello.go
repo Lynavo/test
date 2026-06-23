@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	pairingMaxWrongCodeAttempts = 5
+	pairingMaxWrongCodeAttempts = 3
 	errorPairingCodeInvalid     = "PAIRING_CODE_INVALID"
 	errorPairingClientBlocked   = "PAIRING_CLIENT_BLOCKED"
 	errorPairTokenInvalid       = "PAIR_TOKEN_INVALID"

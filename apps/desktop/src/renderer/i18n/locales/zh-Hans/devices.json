@@ -19,7 +19,7 @@
     "connectedWaitingSync": "已连接，等待同步"
   },
   "blockReason": {
-    "tooManyFailedAttempts": "输错连接码超过 5 次，已自动禁用"
+    "tooManyFailedAttempts": "输错连接码 3 次，已自动禁用"
   },
   "actions": {
     "block": "禁用",

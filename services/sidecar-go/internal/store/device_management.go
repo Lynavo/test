@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-const maxWrongConnectionCodeAttempts = 5
+const (
+	maxWrongConnectionCodeAttempts = 3
+	blockReasonTooManyFailed       = "too_many_failed_attempts"
+)
 
 func (s *Store) RecordConnectionAttempt(attempt ConnectionAttempt) (DeviceBlockState, error) {
 	switch attempt.Result {
@@ -121,10 +124,8 @@ func (s *Store) GetDeviceBlockState(desktopDeviceID, clientID string) (DeviceBlo
 		return DeviceBlockState{}, fmt.Errorf("get device block state: %w", err)
 	}
 
-	if reason != "" {
-		state.Reason = &reason
-	}
 	state.Blocked = state.BlockedAt != nil && manuallyUnblockedAt == nil
+	state.Reason = managedDeviceBlockReason(reason, state.FailedAttemptCount)
 	if state.Blocked {
 		state.RemainingAttempts = 0
 		return state, nil
@@ -315,7 +316,7 @@ func (s *Store) ListManagedDevices(desktopDeviceID string) ([]ManagedDevice, err
 	}
 	devices = append(devices, blockedDevices...)
 
-	// Also include devices blocked via the pairing flow (wrong-code 5x) that
+	// Also include devices blocked via the pairing flow (wrong-code 3x) that
 	// never completed pairing and therefore have no row in paired_devices.
 	pairingBlocked, err := s.listBlockedPairingOnlyManagedDevices(desktopDeviceID, seen)
 	if err != nil {
@@ -372,15 +373,24 @@ func (s *Store) listBlockedUnpairedManagedDevices(desktopDeviceID string, seen m
 		device.ClientIDShort = shortClientID(device.ClientID)
 		device.AuthorizationStatus = "revoked"
 		device.BlockStatus = "active"
-		if reason != "" {
-			device.BlockReason = &reason
-		}
+		device.BlockReason = managedDeviceBlockReason(reason, device.FailedAttemptCount)
 		devices = append(devices, device)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate blocked unpaired managed devices: %w", err)
 	}
 	return devices, nil
+}
+
+func managedDeviceBlockReason(reason string, failedAttemptCount int) *string {
+	if failedAttemptCount >= maxWrongConnectionCodeAttempts {
+		normalized := blockReasonTooManyFailed
+		return &normalized
+	}
+	if reason == "" {
+		return nil
+	}
+	return &reason
 }
 
 func shortClientID(clientID string) string {
@@ -395,7 +405,7 @@ func shortClientID(clientID string) string {
 }
 
 // listBlockedPairingOnlyManagedDevices returns devices that were blocked during
-// the pairing handshake (wrong connection code ≥ 5 times) but never completed
+// the pairing handshake (wrong connection code >= 3 times) but never completed
 // pairing, so they have no row in paired_devices. These devices are surfaced in
 // the Device Management page so the administrator can clear the block.
 func (s *Store) listBlockedPairingOnlyManagedDevices(desktopDeviceID string, seen map[string]struct{}) ([]ManagedDevice, error) {

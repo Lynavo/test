@@ -23,7 +23,7 @@ func TestManagementDevicesListsBlockStateAndUnblocksDevice(t *testing.T) {
 
 	reason := "wrong_code"
 	clientName := "Alice iPhone"
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := st.RecordConnectionAttempt(store.ConnectionAttempt{
 			DesktopDeviceID: desktopDeviceID,
 			ClientID:        "client-001",
@@ -62,6 +62,9 @@ func TestManagementDevicesListsBlockStateAndUnblocksDevice(t *testing.T) {
 	}
 	if listBody.Items[0].BlockStatus != "active" {
 		t.Fatalf("blockStatus=%q, want active", listBody.Items[0].BlockStatus)
+	}
+	if listBody.Items[0].BlockReason == nil || *listBody.Items[0].BlockReason != "too_many_failed_attempts" {
+		t.Fatalf("blockReason=%v, want too_many_failed_attempts", listBody.Items[0].BlockReason)
 	}
 
 	resp, err = http.Post(srv.URL+"/management/devices/client-001/unblock", "application/json", nil)
@@ -125,7 +128,7 @@ func TestManagementDevicesIncludesBlockedUnpairedClientAndCanUnblock(t *testing.
 	}
 	reason := "wrong_code"
 	clientName := "Unpaired iPhone"
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := st.RecordConnectionAttempt(store.ConnectionAttempt{
 			DesktopDeviceID: desktopDeviceID,
 			ClientID:        "blocked-unpaired",
@@ -192,7 +195,7 @@ func TestManagementUnblockKeepsOtherDesktopBlockState(t *testing.T) {
 	}
 	otherDesktopID := desktopDeviceID + "-other"
 	reason := "wrong_code"
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := st.RecordConnectionAttempt(store.ConnectionAttempt{
 			DesktopDeviceID: desktopDeviceID,
 			ClientID:        "same-client",
@@ -235,7 +238,7 @@ func TestManagementUnblockKeepsOtherDesktopBlockState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDeviceBlockState other desktop: %v", err)
 	}
-	if !otherDesktop.Blocked || otherDesktop.FailedAttemptCount != 5 {
+	if !otherDesktop.Blocked || otherDesktop.FailedAttemptCount != 3 {
 		t.Fatalf("expected other desktop block to remain active, got %+v", otherDesktop)
 	}
 }
@@ -338,7 +341,7 @@ func TestManagementRecordsSyncAndAccess(t *testing.T) {
 }
 
 // TestManagementDevicesIncludesPairingBlockedDevice verifies that a device
-// blocked via the pairing handshake (wrong connection code ≥ 5 times, stored
+// blocked via the pairing handshake (wrong connection code >= 3 times, stored
 // in blocked_pairing_clients) appears in GET /management/devices and can be
 // unblocked via POST /management/devices/{id}/unblock, which clears the
 // pairing block so the device can pair again.
@@ -349,15 +352,15 @@ func TestManagementDevicesIncludesPairingBlockedDevice(t *testing.T) {
 		t.Fatalf("GetDeviceID: %v", err)
 	}
 
-	// Simulate 5 wrong-code attempts via the pairing security path
+	// Simulate 3 wrong-code attempts via the pairing security path
 	// (writes blocked_pairing_clients, NOT device_blocks).
 	meta := store.PairingClientMetadata{
 		ClientID:        "pairing-blocked-phone",
 		DesktopDeviceID: desktopDeviceID,
 		ClientName:      "Bob's Android",
 	}
-	for i := 0; i < 5; i++ {
-		if _, err := st.RecordPairingFailure(meta, 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPairingFailure(meta, 3); err != nil {
 			t.Fatalf("RecordPairingFailure attempt %d: %v", i+1, err)
 		}
 	}

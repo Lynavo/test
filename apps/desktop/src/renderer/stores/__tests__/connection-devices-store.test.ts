@@ -18,7 +18,7 @@ const fixture: ConnectionDevicesSettingsDTO = {
     {
       clientId: 'phone-b',
       displayName: 'Blocked Phone',
-      failedAttempts: 5,
+      failedAttempts: 3,
       blockedAt: '2026-06-10T01:15:00Z',
       lastAttemptAt: '2026-06-10T01:15:00Z',
       reason: 'wrong_connection_code_limit',

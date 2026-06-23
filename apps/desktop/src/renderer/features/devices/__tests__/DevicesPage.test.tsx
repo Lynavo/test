@@ -40,7 +40,7 @@ const blockedDevice: DesktopManagedDeviceDTO = {
   platform: 'android',
   authorizationStatus: 'revoked',
   blockStatus: 'active',
-  failedAttemptCount: 5,
+  failedAttemptCount: 3,
   blockedAt: '2026-06-15T09:00:00Z',
   blockReason: 'too_many_failed_attempts',
 };
@@ -103,7 +103,7 @@ describe('DevicesPage', () => {
 
     expect(screen.getByText('Galaxy S24')).toBeInTheDocument();
     expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
-    expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
+    expect(screen.getByText('输错连接码 3 次，已自动禁用')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消禁用' })).toBeInTheDocument();
   });
 
@@ -135,7 +135,7 @@ describe('DevicesPage', () => {
       ...authorizedDevice,
       authorizationStatus: 'revoked',
       blockStatus: 'active',
-      failedAttemptCount: 5,
+      failedAttemptCount: 3,
       blockedAt: new Date().toISOString(),
       blockReason: 'too_many_failed_attempts',
     };
@@ -151,7 +151,7 @@ describe('DevicesPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
+    expect(screen.getByText('输错连接码 3 次，已自动禁用')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消禁用' })).toBeInTheDocument();
   });
 
@@ -196,7 +196,7 @@ describe('DevicesPage', () => {
     expect(screen.getByText('Galaxy S24')).toBeInTheDocument();
     expect(screen.getAllByText('已连接').length).toBeGreaterThan(0);
     expect(screen.getAllByText('已禁用').length).toBeGreaterThan(0);
-    expect(screen.getByText('输错连接码超过 5 次，已自动禁用')).toBeInTheDocument();
+    expect(screen.getByText('输错连接码 3 次，已自动禁用')).toBeInTheDocument();
   });
 
   it('shows transfer progress for a managed device that is currently uploading', () => {

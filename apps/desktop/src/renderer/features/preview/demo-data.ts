@@ -76,7 +76,7 @@ export const previewManagedDevices: DesktopManagedDeviceDTO[] = [
     lastSeenAt: '2026-06-13T21:31:00Z',
     authorizationStatus: 'revoked',
     blockStatus: 'active',
-    failedAttemptCount: 5,
+    failedAttemptCount: 3,
     blockedAt: '2026-06-13T21:32:00Z',
     blockReason: 'too_many_failed_attempts',
     todayFileCount: 0,

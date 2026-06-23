@@ -6,14 +6,14 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/protocol"
 )
 
-func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testing.T) {
+func TestPairingWrongCodeBlocksAfterThreeAttemptsAndUnblockRestartsCounter(t *testing.T) {
 	client, st, cfg, cleanup := setupTestConnection(t)
 	defer cleanup()
 
 	clientID := "blocked-client-001"
 	clientName := "Blocked iPhone"
 
-	for attempt := 1; attempt <= 5; attempt++ {
+	for attempt := 1; attempt <= 3; attempt++ {
 		if attempt > 1 {
 			var cleanupConn func()
 			client, cleanupConn = setupTestConnectionWithStore(t, st, cfg)
@@ -46,11 +46,11 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 		if pairRes.OK {
 			t.Fatal("expected PairRes.OK=false for wrong code")
 		}
-		if attempt < 5 {
+		if attempt < 3 {
 			if pairRes.ErrorCode != "PAIRING_CODE_INVALID" {
 				t.Fatalf("attempt %d ErrorCode=%q, want PAIRING_CODE_INVALID", attempt, pairRes.ErrorCode)
 			}
-			wantRemaining := 5 - attempt
+			wantRemaining := 3 - attempt
 			if pairRes.RemainingAttempts != wantRemaining {
 				t.Fatalf("attempt %d RemainingAttempts=%d, want %d", attempt, pairRes.RemainingAttempts, wantRemaining)
 			}
@@ -67,7 +67,7 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 			t.Fatalf("attempt %d RemainingAttempts=%d, want 0", attempt, pairRes.RemainingAttempts)
 		}
 		if !pairRes.Blocked {
-			t.Fatal("expected blocked failure after fifth wrong code")
+			t.Fatal("expected blocked failure after third wrong code")
 		}
 	}
 
@@ -117,11 +117,45 @@ func TestPairingWrongCodeBlocksAfterFiveAttemptsAndUnblockAllowsPairing(t *testi
 	sendJSON(t, unblockedClient, protocol.TypePairReq, protocol.PairReq{
 		ClientID:       clientID,
 		ClientName:     clientName,
+		ConnectionCode: "000000",
+	})
+
+	var wrongAfterUnblock protocol.PairRes
+	recvJSON(t, unblockedClient, protocol.TypePairRes, &wrongAfterUnblock)
+	if wrongAfterUnblock.OK {
+		t.Fatal("expected first wrong code after unblock to fail")
+	}
+	if wrongAfterUnblock.ErrorCode != "PAIRING_CODE_INVALID" {
+		t.Fatalf("wrong-after-unblock ErrorCode=%q, want PAIRING_CODE_INVALID", wrongAfterUnblock.ErrorCode)
+	}
+	if wrongAfterUnblock.RemainingAttempts != 2 || wrongAfterUnblock.Blocked {
+		t.Fatalf("expected counter restart after unblock, got %+v", wrongAfterUnblock)
+	}
+
+	retryClient, cleanupRetry := setupTestConnectionWithStore(t, st, cfg)
+	defer cleanupRetry()
+	sendJSON(t, retryClient, protocol.TypeHelloReq, protocol.HelloReq{
+		ClientID:                clientID,
+		ClientName:              clientName,
+		ClientPlatform:          "ios",
+		AppVersion:              "1.0.0",
+		AppCompatibilityVersion: protocol.AppCompatibilityVersion,
+		AppState:                "active",
+	})
+
+	recvJSON(t, retryClient, protocol.TypeHelloRes, &helloRes)
+	if !helloRes.AuthRequired {
+		t.Fatal("expected authRequired=true after first wrong code post-unblock")
+	}
+
+	sendJSON(t, retryClient, protocol.TypePairReq, protocol.PairReq{
+		ClientID:       clientID,
+		ClientName:     clientName,
 		ConnectionCode: testConnCode,
 	})
 
 	var pairRes protocol.PairRes
-	recvJSON(t, unblockedClient, protocol.TypePairRes, &pairRes)
+	recvJSON(t, retryClient, protocol.TypePairRes, &pairRes)
 	if !pairRes.OK {
 		t.Fatalf("expected pairing to succeed after unblock, error=%q code=%q", pairRes.Error, pairRes.ErrorCode)
 	}

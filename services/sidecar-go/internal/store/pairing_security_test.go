@@ -103,7 +103,7 @@ func TestBlockedPairingClientsActiveUniqueAllowsHistoricalClearedRows(t *testing
 	}
 }
 
-func TestRecordPairingFailureBlocksOnFifthWrongCode(t *testing.T) {
+func TestRecordPairingFailureBlocksOnThirdWrongCode(t *testing.T) {
 	st := newPairingSecurityStore(t)
 	meta := store.PairingClientMetadata{
 		ClientID:        "phone-a",
@@ -113,8 +113,8 @@ func TestRecordPairingFailureBlocksOnFifthWrongCode(t *testing.T) {
 		IP:              "192.168.1.20",
 	}
 
-	for attempt := 1; attempt <= 4; attempt++ {
-		result, err := st.RecordPairingFailure(meta, 5)
+	for attempt := 1; attempt <= 2; attempt++ {
+		result, err := st.RecordPairingFailure(meta, 3)
 		if err != nil {
 			t.Fatalf("RecordPairingFailure attempt %d: %v", attempt, err)
 		}
@@ -124,24 +124,24 @@ func TestRecordPairingFailureBlocksOnFifthWrongCode(t *testing.T) {
 		if result.FailedAttempts != attempt {
 			t.Fatalf("attempt %d failed count = %d", attempt, result.FailedAttempts)
 		}
-		if result.RemainingAttempts != 5-attempt {
+		if result.RemainingAttempts != 3-attempt {
 			t.Fatalf("attempt %d remaining = %d", attempt, result.RemainingAttempts)
 		}
 	}
 
-	result, err := st.RecordPairingFailure(meta, 5)
+	result, err := st.RecordPairingFailure(meta, 3)
 	if err != nil {
-		t.Fatalf("RecordPairingFailure fifth: %v", err)
+		t.Fatalf("RecordPairingFailure third: %v", err)
 	}
-	if !result.Blocked || result.FailedAttempts != 5 || result.RemainingAttempts != 0 {
-		t.Fatalf("unexpected fifth result: %+v", result)
+	if !result.Blocked || result.FailedAttempts != 3 || result.RemainingAttempts != 0 {
+		t.Fatalf("unexpected third result: %+v", result)
 	}
 
 	block, err := st.GetActivePairingBlock("phone-a", "desktop-1")
 	if err != nil {
 		t.Fatalf("GetActivePairingBlock: %v", err)
 	}
-	if block == nil || block.FailedAttempts != 5 || block.Reason != "wrong_connection_code_limit" {
+	if block == nil || block.FailedAttempts != 3 || block.Reason != "wrong_connection_code_limit" {
 		t.Fatalf("unexpected block: %+v", block)
 	}
 }
@@ -184,13 +184,13 @@ func TestRecordPairingFailureRejectsNonPositiveMaxAttemptsWithoutSideEffects(t *
 
 func TestPairingBlockScopeIsClientAndDesktop(t *testing.T) {
 	st := newPairingSecurityStore(t)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		_, err := st.RecordPairingFailure(store.PairingClientMetadata{
 			ClientID:        "phone-a",
 			DesktopDeviceID: "desktop-1",
 			ClientName:      "Nick iPhone",
 			Platform:        "ios",
-		}, 5)
+		}, 3)
 		if err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
@@ -210,8 +210,8 @@ func TestPairingBlockScopeIsClientAndDesktop(t *testing.T) {
 func TestClearPairingBlockClearsRateLimitButDoesNotAuthorize(t *testing.T) {
 	st := newPairingSecurityStore(t)
 	meta := store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-1", ClientName: "Nick iPhone"}
-	for i := 0; i < 5; i++ {
-		if _, err := st.RecordPairingFailure(meta, 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPairingFailure(meta, 3); err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
 	}
@@ -223,7 +223,7 @@ func TestClearPairingBlockClearsRateLimitButDoesNotAuthorize(t *testing.T) {
 		t.Fatal("expected active block to be cleared")
 	}
 
-	result, err := st.RecordPairingFailure(meta, 5)
+	result, err := st.RecordPairingFailure(meta, 3)
 	if err != nil {
 		t.Fatalf("RecordPairingFailure after clear: %v", err)
 	}
@@ -283,14 +283,14 @@ func TestPairingManagementListsActiveRowsAndRecentAttempts(t *testing.T) {
 	}, store.PairingAttemptBlocked, "PAIRING_CLIENT_BLOCKED"); err != nil {
 		t.Fatalf("RecordPairingAttempt: %v", err)
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{
 			ClientID:        "phone-b",
 			DesktopDeviceID: "desktop-1",
 			ClientName:      "Blocked Phone",
 			Platform:        "android",
 			IP:              "192.168.1.30",
-		}, 5); err != nil {
+		}, 3); err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
 	}

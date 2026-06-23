@@ -19,7 +19,7 @@
     "connectedWaitingSync": "Connected, waiting to sync"
   },
   "blockReason": {
-    "tooManyFailedAttempts": "Pairing code entered incorrectly more than 5 times. Device disabled automatically."
+    "tooManyFailedAttempts": "Pairing code entered incorrectly 3 times. Device disabled automatically."
   },
   "actions": {
     "block": "Disable",

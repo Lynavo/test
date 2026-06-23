@@ -4177,14 +4177,14 @@ func TestConnectionDevicesEndpointReturnsAuthorizedBlockedAndRecentAttempts(t *t
 	st, cfg, hub := testEnv(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{
 			ClientID:        "phone-b",
 			DesktopDeviceID: "desktop-1",
 			ClientName:      "Blocked Phone",
 			Platform:        "android",
 			IP:              "192.168.1.30",
-		}, 5); err != nil {
+		}, 3); err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
 	}
@@ -4339,11 +4339,11 @@ func TestRevokeAuthorizedDeviceEndpointDoesNotDeleteHistory(t *testing.T) {
 
 func TestClearBlockedClientEndpointClearsBlockOnly(t *testing.T) {
 	st, cfg, hub := testEnv(t)
-	for i := 0; i < 5; i++ {
-		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-1"}, 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-1"}, 3); err != nil {
 			t.Fatalf("RecordPairingFailure desktop-1: %v", err)
 		}
-		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-2"}, 5); err != nil {
+		if _, err := st.RecordPairingFailure(store.PairingClientMetadata{ClientID: "phone-a", DesktopDeviceID: "desktop-2"}, 3); err != nil {
 			t.Fatalf("RecordPairingFailure desktop-2: %v", err)
 		}
 	}

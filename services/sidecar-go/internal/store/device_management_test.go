@@ -29,11 +29,11 @@ func TestDeviceBlockLifecycle(t *testing.T) {
 	if state.FailedAttemptCount != 1 {
 		t.Fatalf("expected failed count 1, got %d", state.FailedAttemptCount)
 	}
-	if state.RemainingAttempts != 4 {
-		t.Fatalf("expected 4 remaining attempts, got %d", state.RemainingAttempts)
+	if state.RemainingAttempts != 2 {
+		t.Fatalf("expected 2 remaining attempts, got %d", state.RemainingAttempts)
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 2; i++ {
 		state, err = s.RecordConnectionAttempt(ConnectionAttempt{
 			DesktopDeviceID: "desktop-1",
 			ClientID:        "client-1",
@@ -46,10 +46,10 @@ func TestDeviceBlockLifecycle(t *testing.T) {
 		}
 	}
 	if !state.Blocked {
-		t.Fatal("expected fifth wrong_code to block")
+		t.Fatal("expected third wrong_code to block")
 	}
-	if state.FailedAttemptCount != 5 {
-		t.Fatalf("expected failed count 5, got %d", state.FailedAttemptCount)
+	if state.FailedAttemptCount != 3 {
+		t.Fatalf("expected failed count 3, got %d", state.FailedAttemptCount)
 	}
 	if state.RemainingAttempts != 0 {
 		t.Fatalf("expected 0 remaining attempts, got %d", state.RemainingAttempts)
@@ -86,8 +86,8 @@ func TestDeviceBlockLifecycle(t *testing.T) {
 	if !got.Blocked {
 		t.Fatal("expected ClearConnectionAttempts not to clear active block")
 	}
-	if got.FailedAttemptCount != 5 {
-		t.Fatalf("expected ClearConnectionAttempts to preserve failed count 5 while blocked, got %d", got.FailedAttemptCount)
+	if got.FailedAttemptCount != 3 {
+		t.Fatalf("expected ClearConnectionAttempts to preserve failed count 3 while blocked, got %d", got.FailedAttemptCount)
 	}
 
 	if err := s.UnblockDevice("desktop-1", "client-1"); err != nil {
@@ -106,6 +106,25 @@ func TestDeviceBlockLifecycle(t *testing.T) {
 	if got.Reason != nil {
 		t.Fatalf("expected unblock to clear stale reason, got %q", *got.Reason)
 	}
+	got, err = s.RecordConnectionAttempt(ConnectionAttempt{
+		DesktopDeviceID: "desktop-1",
+		ClientID:        "client-1",
+		Result:          "wrong_code",
+		FailureReason:   stringPtr("invalid_code"),
+		AttemptedAt:     time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		t.Fatalf("RecordConnectionAttempt after unblock: %v", err)
+	}
+	if got.Blocked {
+		t.Fatal("expected first wrong_code after unblock not to block")
+	}
+	if got.FailedAttemptCount != 1 {
+		t.Fatalf("expected failed count to restart at 1 after unblock, got %d", got.FailedAttemptCount)
+	}
+	if got.RemainingAttempts != 2 {
+		t.Fatalf("expected 2 remaining attempts after unblock, got %d", got.RemainingAttempts)
+	}
 	payload, err := json.Marshal(got)
 	if err != nil {
 		t.Fatalf("Marshal DeviceBlockState: %v", err)
@@ -118,7 +137,7 @@ func TestDeviceBlockLifecycle(t *testing.T) {
 func TestDeviceBlockDesktopIsolation(t *testing.T) {
 	s := newTestStore(t)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		_, err := s.RecordConnectionAttempt(ConnectionAttempt{
 			DesktopDeviceID: "desktop-1",
 			ClientID:        "client-1",
@@ -217,8 +236,8 @@ func TestPairingBlockedDeviceAppearsInListManagedDevices(t *testing.T) {
 		DesktopDeviceID: desktopID,
 		ClientName:      "Bob's Android",
 	}
-	for i := 0; i < 5; i++ {
-		if _, err := s.RecordPairingFailure(meta, 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := s.RecordPairingFailure(meta, 3); err != nil {
 			t.Fatalf("RecordPairingFailure attempt %d: %v", i+1, err)
 		}
 	}

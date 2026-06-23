@@ -19,7 +19,7 @@
     "connectedWaitingSync": "已連線，等待同步"
   },
   "blockReason": {
-    "tooManyFailedAttempts": "連線碼輸錯超過 5 次，已自動停用"
+    "tooManyFailedAttempts": "連線碼輸錯 3 次，已自動停用"
   },
   "actions": {
     "block": "停用",

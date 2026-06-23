@@ -407,14 +407,14 @@ func TestHelloRejectsIncompatibleAppVersion(t *testing.T) {
 	}
 }
 
-func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
+func TestWrongConnectionCodeBlocksOnThirdAttempt(t *testing.T) {
 	client, st, cfg, cleanup := setupTestConnection(t)
 	defer cleanup()
 	if err := st.SetSetting("device_id", "desktop-1"); err != nil {
 		t.Fatalf("SetSetting(device_id): %v", err)
 	}
 
-	for attempt := 1; attempt <= 5; attempt++ {
+	for attempt := 1; attempt <= 3; attempt++ {
 		attemptClient := client
 		attemptCleanup := func() {}
 		if attempt > 1 {
@@ -427,7 +427,7 @@ func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
 			t.Fatalf("attempt %d PairRes.OK=true, want false", attempt)
 		}
 		wantCode := "PAIRING_CODE_INVALID"
-		if attempt == 5 {
+		if attempt == 3 {
 			wantCode = "PAIRING_CLIENT_BLOCKED"
 		}
 		if pairRes.ErrorCode != wantCode {
@@ -439,14 +439,14 @@ func TestWrongConnectionCodeBlocksOnFifthAttempt(t *testing.T) {
 		if pairRes.ErrorMeta.FailedAttempts != attempt {
 			t.Fatalf("attempt %d failedAttempts=%d, want %d", attempt, pairRes.ErrorMeta.FailedAttempts, attempt)
 		}
-		wantRemaining := 5 - attempt
+		wantRemaining := 3 - attempt
 		if pairRes.ErrorMeta.RemainingAttempts != wantRemaining {
 			t.Fatalf("attempt %d remainingAttempts=%d, want %d", attempt, pairRes.ErrorMeta.RemainingAttempts, wantRemaining)
 		}
-		if pairRes.ErrorMeta.MaxAttempts != 5 {
-			t.Fatalf("attempt %d maxAttempts=%d, want 5", attempt, pairRes.ErrorMeta.MaxAttempts)
+		if pairRes.ErrorMeta.MaxAttempts != 3 {
+			t.Fatalf("attempt %d maxAttempts=%d, want 3", attempt, pairRes.ErrorMeta.MaxAttempts)
 		}
-		if attempt == 5 {
+		if attempt == 3 {
 			assertPairingMetaRemainingZeroInRawJSON(t, rawPairRes)
 		}
 		assertNoExtraFrame(t, attemptClient)
@@ -471,8 +471,8 @@ func TestBlockedClientRejectedAtHelloBeforePairReq(t *testing.T) {
 	if err := st.SetSetting("device_id", "desktop-1"); err != nil {
 		t.Fatalf("SetSetting(device_id): %v", err)
 	}
-	for i := 0; i < 5; i++ {
-		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 3); err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
 	}
@@ -517,8 +517,8 @@ func TestPairingBlockDoesNotAffectOtherDesktopOrClient(t *testing.T) {
 	if err := st1.SetSetting("device_id", "desktop-1"); err != nil {
 		t.Fatalf("SetSetting(device_id desktop-1): %v", err)
 	}
-	for i := 0; i < 5; i++ {
-		if _, err := st1.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st1.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 3); err != nil {
 			t.Fatalf("RecordPairingFailure desktop-1: %v", err)
 		}
 	}
@@ -631,8 +631,8 @@ func TestAuthBlockedAfterNonceDoesNotSendExtraProtocolError(t *testing.T) {
 		t.Fatal("nonce is empty")
 	}
 
-	for i := 0; i < 5; i++ {
-		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 5); err != nil {
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPairingFailure(pairingTestMeta("phone-a", "desktop-1"), 3); err != nil {
 			t.Fatalf("RecordPairingFailure: %v", err)
 		}
 	}

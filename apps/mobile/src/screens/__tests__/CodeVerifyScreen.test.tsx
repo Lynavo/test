@@ -178,9 +178,9 @@ describe('CodeVerifyScreen', () => {
   it('shows remaining attempts when pairDevice rejects with PAIRING_CODE_INVALID metadata', async () => {
     const { getByText } = await renderPrefilledPairingFailure(
       pairingNativeError('PAIRING_CODE_INVALID', 'Pairing code invalid', {
-        failedAttempts: 3,
+        failedAttempts: 1,
         remainingAttempts: 2,
-        maxAttempts: 5,
+        maxAttempts: 3,
       }),
     );
 
@@ -198,9 +198,9 @@ describe('CodeVerifyScreen', () => {
   it('shows permanent blocked guidance when pairDevice rejects with PAIRING_CLIENT_BLOCKED', async () => {
     const { getByText } = await renderPrefilledPairingFailure(
       pairingNativeError('PAIRING_CLIENT_BLOCKED', 'Client blocked', {
-        failedAttempts: 5,
+        failedAttempts: 3,
         remainingAttempts: 0,
-        maxAttempts: 5,
+        maxAttempts: 3,
       }),
     );
 
@@ -213,7 +213,7 @@ describe('CodeVerifyScreen', () => {
     const { getByText, queryByText } = await renderPrefilledPairingFailure(
       pairingNativeError('PAIR_TOKEN_INVALID', 'Pairing token invalid', {
         remainingAttempts: 2,
-        maxAttempts: 5,
+        maxAttempts: 3,
       }),
     );
 

@@ -146,7 +146,7 @@ export function DeviceManagementTable({
                 </div>
 
                 <span className="min-w-0">
-                  {isBlocked && device.failedAttemptCount >= 5 && (
+                  {isBlocked && device.blockReason === 'too_many_failed_attempts' && (
                     <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#b42318]">
                       <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
                       <span className="truncate">
