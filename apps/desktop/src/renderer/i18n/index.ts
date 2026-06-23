@@ -1,7 +1,7 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
-import { isSupportedLocale, type SupportedLocale } from './locale-resolver';
+import { isSupportedLocale, resolveLocale, type SupportedLocale } from './locale-resolver';
 import { resources } from './resources';
 
 export const LOCALE_STORAGE_KEY = 'syncflow.desktop.locale';
@@ -15,7 +15,11 @@ export function persistLocale(locale: SupportedLocale): void {
   window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
 }
 
-const lng = getPersistedLocale() ?? 'zh-Hans';
+export function resolveInitialLocale(): SupportedLocale {
+  return getPersistedLocale() ?? resolveLocale(window.navigator.languages);
+}
+
+const lng = resolveInitialLocale();
 
 void i18next.use(initReactI18next).init({
   resources,

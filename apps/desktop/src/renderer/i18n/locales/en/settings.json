@@ -185,6 +185,70 @@
       "Confirm the team shared folder is readable by the current user"
     ]
   },
+  "profile": {
+    "title": "Me",
+    "cards": {
+      "account": "Account",
+      "localMachine": "This computer",
+      "general": "General",
+      "version": "Version",
+      "support": "Support"
+    },
+    "account": {
+      "title": "My account",
+      "bindingInfo": "Binding information",
+      "accountLabel": "Account",
+      "loginMethod": "Sign-in method",
+      "accountLogin": "Account sign-in",
+      "currentComputer": "Current computer"
+    },
+    "membership": {
+      "title": "Membership status",
+      "free": "Free plan"
+    },
+    "localIp": "Local IP",
+    "language": {
+      "search": "Search languages",
+      "empty": "No matching languages"
+    },
+    "preventSleep": {
+      "title": "Prevent sleep",
+      "caption": "Keep the computer awake while transfer jobs are running"
+    },
+    "version": {
+      "caption": "v{{version}} · Current version installed"
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "send": "Send"
+    },
+    "feedback": {
+      "title": "Feedback",
+      "openedCaption": "Email composer opened",
+      "placeholder": "Describe the issue, steps, or improvements you want",
+      "contactPlaceholder": "Contact email or phone",
+      "contactEmpty": "No contact provided",
+      "mailSubject": "ViviDrop Desktop feedback v{{version}}",
+      "mailBody": "Issue description:\n{{description}}\n\nContact:\n{{contact}}\n\nCurrent version: v{{version}}"
+    },
+    "diagnostics": {
+      "uploadingCaption": "Uploading diagnostics bundle",
+      "caption": "Send logs and runtime status to support",
+      "description": "Upload a diagnostics bundle to help locate transfer, pairing, or sharing issues.",
+      "placeholder": "Describe the steps, phone model, network environment, or error symptoms (optional)"
+    },
+    "toasts": {
+      "languageChanged": "Language changed",
+      "preventSleepEnabled": "Computer will stay awake during transfers",
+      "preventSleepDisabled": "Computer sleep prevention disabled",
+      "preventSleepFailed": "Unable to update power setting",
+      "upToDate": "You are up to date",
+      "checkUpdateFailed": "Unable to check for updates",
+      "diagnosticsUploaded": "Diagnostics bundle uploaded. Thanks for your feedback.",
+      "diagnosticsUploadFailed": "Unable to upload diagnostics bundle",
+      "feedbackOpened": "Feedback email opened"
+    }
+  },
   "support": {
     "title": "Support and diagnostics",
     "description": "Upload a diagnostics bundle to support. Local export is only used when the network is unavailable.",

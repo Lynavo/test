@@ -80,5 +80,40 @@
   },
   "toast": {
     "copied": "已複製到剪貼簿"
+  },
+  "authPage": {
+    "title": "登入",
+    "continueWithGoogle": "使用 Google 繼續",
+    "continueWithApple": "使用 Apple 繼續",
+    "divider": "或",
+    "useEmailLogin": "使用電子郵件登入",
+    "emailLabel": "電子郵件",
+    "emailPlaceholder": "請輸入電子郵件",
+    "codeLabel": "驗證碼",
+    "codePlaceholder": "6 位數驗證碼",
+    "codeSentCountdown": "已傳送 ({{seconds}}s)",
+    "getCode": "取得驗證碼",
+    "backToOAuth": "返回第三方登入",
+    "agreementAriaLabel": "我已閱讀並同意《隱私權政策》和《使用者協議》",
+    "agreementPrefix": "我已閱讀並同意",
+    "privacyPolicy": "《隱私權政策》",
+    "agreementConjunction": "和",
+    "userAgreement": "《使用者協議》",
+    "agreementRequired": "請先勾選同意隱私權政策後再登入",
+    "autoRegisterHint": "未註冊的帳號將自動註冊",
+    "toast": {
+      "googleLoginFailed": "Google 登入失敗",
+      "appleLoginFailed": "Apple 登入失敗",
+      "emailRequired": "請輸入電子郵件",
+      "invalidEmail": "請輸入有效的電子郵件地址",
+      "sendCodeUnavailable": "驗證碼服務暫時無法使用",
+      "codeSent": "驗證碼已寄送至您的電子郵件，請留意收信",
+      "sendCodeFailed": "傳送驗證碼失敗",
+      "codeRequired": "請輸入 6 位數驗證碼",
+      "loginUnavailable": "登入服務暫時無法使用",
+      "loginSuccess": "登入成功",
+      "emailLoginFailed": "登入失敗，驗證碼可能錯誤或已過期",
+      "loginFailed": "登入失敗"
+    }
   }
 }

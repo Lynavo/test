@@ -13,6 +13,14 @@
   "stats": {
     "duration": "耗时"
   },
+  "overview": {
+    "title": "设备概览",
+    "authorizedDevices": "授权设备",
+    "blockedDevices": "封锁中",
+    "totalFiles": "累计文件",
+    "totalBytes": "累计容量",
+    "latestSeenAt": "最近出现：{{time}}"
+  },
   "table": {
     "fileName": "文件名称",
     "fileSize": "文件大小",

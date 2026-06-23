@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import vividropLogo from '@renderer/assets/vividrop-logo-cutout.png';
@@ -47,14 +48,21 @@ function AppleIcon({ className }: { className?: string }) {
   );
 }
 
-function getOAuthErrorMessage(result: AuthResult, provider: AuthProvider): string {
+function getOAuthErrorMessage(
+  result: AuthResult,
+  provider: AuthProvider,
+  t: (key: string) => string,
+): string {
   if (result.message) {
     return result.message;
   }
-  return provider === 'google' ? 'Google 登录失败' : 'Apple 登录失败';
+  return provider === 'google'
+    ? t('common.authPage.toast.googleLoginFailed')
+    : t('common.authPage.toast.appleLoginFailed');
 }
 
 export function AuthPage({ onAuthenticated }: AuthPageProps) {
+  const { t } = useTranslation();
   const showAppleOAuth = shouldShowAppleOAuth(window.electronAPI?.platform);
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
   const [showAgreementHint, setShowAgreementHint] = useState(false);
@@ -77,18 +85,18 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
 
   const handleSendCode = async () => {
     if (!email.trim()) {
-      toast.error('请输入电子邮箱');
+      toast.error(t('common.authPage.toast.emailRequired'));
       return;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      toast.error('请输入有效的电子邮箱地址');
+      toast.error(t('common.authPage.toast.invalidEmail'));
       return;
     }
 
     const auth = window.electronAPI?.auth;
     if (!auth?.sendEmailCode) {
-      toast.error('发送验证码服务暂不可用');
+      toast.error(t('common.authPage.toast.sendCodeUnavailable'));
       return;
     }
 
@@ -96,13 +104,13 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
     try {
       const result = await auth.sendEmailCode({ email: email.trim() });
       if (result.ok) {
-        toast.success('验证码已发送至您的邮箱，请注意查收');
+        toast.success(t('common.authPage.toast.codeSent'));
         setCountdown(60);
       } else {
-        toast.error(result.message || '发送验证码失败');
+        toast.error(result.message || t('common.authPage.toast.sendCodeFailed'));
       }
     } catch (error) {
-      toast.error('发送验证码失败', {
+      toast.error(t('common.authPage.toast.sendCodeFailed'), {
         description: error instanceof Error ? error.message : undefined,
       });
     } finally {
@@ -118,17 +126,17 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
       return;
     }
     if (!email.trim()) {
-      toast.error('请输入电子邮箱');
+      toast.error(t('common.authPage.toast.emailRequired'));
       return;
     }
     if (!code.trim() || code.trim().length !== 6) {
-      toast.error('请输入 6 位数验证码');
+      toast.error(t('common.authPage.toast.codeRequired'));
       return;
     }
 
     const auth = window.electronAPI?.auth;
     if (!auth?.loginWithEmailCode) {
-      toast.error('登录服务暂不可用');
+      toast.error(t('common.authPage.toast.loginUnavailable'));
       return;
     }
 
@@ -139,13 +147,13 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
         code: code.trim(),
       });
       if (result.ok) {
-        toast.success('登录成功');
+        toast.success(t('common.authPage.toast.loginSuccess'));
         await onAuthenticated();
       } else {
-        toast.error(result.message || '登录失败，验证码可能错误或已过期');
+        toast.error(result.message || t('common.authPage.toast.emailLoginFailed'));
       }
     } catch (error) {
-      toast.error('登录失败', {
+      toast.error(t('common.authPage.toast.loginFailed'), {
         description: error instanceof Error ? error.message : undefined,
       });
     } finally {
@@ -162,7 +170,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
 
       const auth = window.electronAPI?.auth;
       if (!auth?.loginWithOAuth) {
-        toast.error('登录服务暂不可用');
+        toast.error(t('common.authPage.toast.loginUnavailable'));
         return;
       }
 
@@ -170,20 +178,25 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
       try {
         const result: AuthResult = await auth.loginWithOAuth({ provider });
         if (result.ok) {
-          toast.success('登录成功');
+          toast.success(t('common.authPage.toast.loginSuccess'));
           await onAuthenticated();
         } else {
-          toast.error(getOAuthErrorMessage(result, provider));
+          toast.error(getOAuthErrorMessage(result, provider, t));
         }
       } catch (error) {
-        toast.error(provider === 'google' ? 'Google 登录失败' : 'Apple 登录失败', {
-          description: error instanceof Error ? error.message : undefined,
-        });
+        toast.error(
+          provider === 'google'
+            ? t('common.authPage.toast.googleLoginFailed')
+            : t('common.authPage.toast.appleLoginFailed'),
+          {
+            description: error instanceof Error ? error.message : undefined,
+          },
+        );
       } finally {
         setLoadingProvider(null);
       }
     },
-    [agreedToPrivacy, onAuthenticated],
+    [agreedToPrivacy, onAuthenticated, t],
   );
 
   return (
@@ -204,7 +217,9 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
       <div className="w-full max-w-[440px]">
         <section className="vividrop-window-no-drag-region rounded-lg border border-white/70 bg-white/54 p-5 shadow-[0_30px_90px_rgba(70,96,138,0.16)] backdrop-blur-2xl">
           <div className="mb-5 text-center">
-            <h1 className="text-xl font-semibold text-[#17191c]">登录</h1>
+            <h1 className="text-xl font-semibold text-[#17191c]">
+              {t('common.authPage.title')}
+            </h1>
           </div>
 
           {loginMethod === 'oauth' ? (
@@ -220,7 +235,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                 ) : (
                   <GoogleIcon className="h-4 w-4 shrink-0" />
                 )}
-                使用 Google 继续
+                {t('common.authPage.continueWithGoogle')}
               </button>
               {showAppleOAuth ? (
                 <button
@@ -234,13 +249,15 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                   ) : (
                     <AppleIcon className="h-4 w-4 shrink-0 text-[#17191c]" />
                   )}
-                  使用 Apple 继续
+                  {t('common.authPage.continueWithApple')}
                 </button>
               ) : null}
 
               <div className="my-2 flex items-center">
                 <div className="h-[1px] flex-grow bg-[#cfd6df]/40" />
-                <span className="mx-3 text-[11px] font-semibold text-[#8d96a3]">或</span>
+                <span className="mx-3 text-[11px] font-semibold text-[#8d96a3]">
+                  {t('common.authPage.divider')}
+                </span>
                 <div className="h-[1px] flex-grow bg-[#cfd6df]/40" />
               </div>
 
@@ -249,19 +266,19 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                 onClick={() => setLoginMethod('email')}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#cfd6df] bg-white/58 text-sm font-semibold text-[#17191c] shadow-[0_10px_30px_rgba(90,120,170,0.08)] transition hover:bg-white/82"
               >
-                使用邮箱登录
+                {t('common.authPage.useEmailLogin')}
               </button>
             </div>
           ) : (
             <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="email-input" className="text-xs font-semibold text-[#7b8490]">
-                  电子邮箱
+                  {t('common.authPage.emailLabel')}
                 </label>
                 <input
                   id="email-input"
                   type="email"
-                  placeholder="请输入电子邮箱"
+                  placeholder={t('common.authPage.emailPlaceholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoggingIn || isSendingCode}
@@ -271,14 +288,14 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
 
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="code-input" className="text-xs font-semibold text-[#7b8490]">
-                  验证码
+                  {t('common.authPage.codeLabel')}
                 </label>
                 <div className="flex gap-2">
                   <input
                     id="code-input"
                     type="text"
                     maxLength={6}
-                    placeholder="6 位数验证码"
+                    placeholder={t('common.authPage.codePlaceholder')}
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
                     disabled={isLoggingIn}
@@ -293,9 +310,9 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                     {isSendingCode ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : countdown > 0 ? (
-                      `已发送 (${countdown}s)`
+                      t('common.authPage.codeSentCountdown', { seconds: countdown })
                     ) : (
-                      '获取验证码'
+                      t('common.authPage.getCode')
                     )}
                   </button>
                 </div>
@@ -307,7 +324,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                 className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#17191c] text-sm font-semibold text-white shadow-[0_14px_34px_rgba(23,25,28,0.14)] transition hover:bg-[#303740] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                登录
+                {t('common.authPage.title')}
               </button>
 
               <button
@@ -315,7 +332,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
                 onClick={() => setLoginMethod('oauth')}
                 className="mt-1 text-center text-xs font-semibold text-[#7b8490] hover:text-[#17191c] transition"
               >
-                返回第三方登录
+                {t('common.authPage.backToOAuth')}
               </button>
             </form>
           )}
@@ -325,7 +342,7 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
               type="button"
               role="checkbox"
               aria-checked={agreedToPrivacy}
-              aria-label="我已阅读并同意《隐私政策》和《用户协议》"
+              aria-label={t('common.authPage.agreementAriaLabel')}
               onClick={() => {
                 setAgreedToPrivacy((prev) => !prev);
                 setShowAgreementHint(false);
@@ -339,30 +356,32 @@ export function AuthPage({ onAuthenticated }: AuthPageProps) {
               <Check className="h-3 w-3" strokeWidth={3} />
             </button>
             <span>
-              我已阅读并同意
+              {t('common.authPage.agreementPrefix')}
               <button
                 type="button"
                 className="font-semibold text-[#17191c] underline-offset-2 hover:underline"
               >
-                《隐私政策》
+                {t('common.authPage.privacyPolicy')}
               </button>
-              和
+              {t('common.authPage.agreementConjunction')}
               <button
                 type="button"
                 className="font-semibold text-[#17191c] underline-offset-2 hover:underline"
               >
-                《用户协议》
+                {t('common.authPage.userAgreement')}
               </button>
             </span>
           </div>
 
           {showAgreementHint ? (
             <p className="mt-2 text-center text-xs font-medium text-[#d92d20]">
-              请先勾选同意隐私政策后再登录
+              {t('common.authPage.agreementRequired')}
             </p>
           ) : null}
 
-          <p className="mt-4 text-center text-xs text-[#7b8490]">未注册的账号将自动注册</p>
+          <p className="mt-4 text-center text-xs text-[#7b8490]">
+            {t('common.authPage.autoRegisterHint')}
+          </p>
         </section>
       </div>
     </div>

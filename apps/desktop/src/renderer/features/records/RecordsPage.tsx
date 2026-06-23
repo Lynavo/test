@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Smartphone, Search, FileText, ChevronDown, Download, Globe, Wifi } from 'lucide-react';
 import { useManagementStore } from '@renderer/stores/management-store';
 import { Skeleton } from '@renderer/components/ui/skeleton';
@@ -11,31 +12,31 @@ import type { DesktopAccessRecordDTO } from '@syncflow/contracts';
 
 const RECORDS_PER_PAGE = 5;
 
-function getAccessActionLabel(action: DesktopAccessRecordDTO['action']): string {
+function getAccessActionLabelKey(action: DesktopAccessRecordDTO['action']): string {
   switch (action) {
     case 'list':
-      return '浏览';
+      return 'directory.records.actions.list';
     case 'view':
-      return '预览';
+      return 'directory.records.actions.view';
     case 'download':
-      return '下载';
+      return 'directory.records.actions.download';
     case 'error':
-      return '错误';
+      return 'directory.records.actions.error';
     default:
       return action;
   }
 }
 
-function getAccessResultLabel(result: DesktopAccessRecordDTO['result']): string | null {
+function getAccessResultLabelKey(result: DesktopAccessRecordDTO['result']): string | null {
   switch (result) {
     case 'ok':
       return null;
     case 'missing':
-      return '文件丢失';
+      return 'directory.records.results.missing';
     case 'denied':
-      return '已拒绝';
+      return 'directory.records.results.denied';
     case 'error':
-      return '失败';
+      return 'directory.records.results.error';
     default:
       return result;
   }
@@ -63,12 +64,13 @@ function isPrivateIPv4(ip: string): boolean {
   );
 }
 
-function getNetworkLabel(ip: string): string {
-  if (!ip) return 'IP 未记录';
-  return isPrivateIPv4(ip) ? '局域网' : '公网';
+function getNetworkLabelKey(ip: string): string {
+  if (!ip) return 'directory.records.network.missing';
+  return isPrivateIPv4(ip) ? 'directory.records.network.lan' : 'directory.records.network.public';
 }
 
 export function RecordsPage() {
+  const { t } = useTranslation();
   const accessRecords = useManagementStore((state) => state.accessRecords);
   const devices = useManagementStore((state) => state.devices);
   const loading = useManagementStore((state) => state.accessRecordsLoading);
@@ -169,7 +171,7 @@ export function RecordsPage() {
       const nameMatch = s.displayName.toLowerCase().includes(q);
       const ipMatch = s.ip.includes(q);
       const fileMatch = s.files.some((f) => {
-        const actionLabel = getAccessActionLabel(f.action).toLowerCase();
+        const actionLabel = t(getAccessActionLabelKey(f.action)).toLowerCase();
         return (
           f.name.toLowerCase().includes(q) ||
           actionLabel.includes(q) ||
@@ -208,7 +210,7 @@ export function RecordsPage() {
         <header className="mb-5 flex min-h-12 items-center justify-between gap-5 border-b border-white/60 pb-5">
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-semibold leading-tight text-[#17191c]">
-              访问记录
+              {t('directory.records.title')}
             </h1>
           </div>
         </header>
@@ -220,7 +222,7 @@ export function RecordsPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7b8490]" />
             <input
               type="text"
-              placeholder="搜索用户名、设备或 IP"
+              placeholder={t('directory.records.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg border border-white/70 bg-white/54 py-3 pl-10 pr-3 text-sm outline-none shadow-[0_10px_30px_rgba(90,120,170,0.08)] transition placeholder:text-[#9aa3af] focus:border-[#66c6ff] focus:bg-white/70 focus:ring-2 focus:ring-[#66c6ff]/18"
@@ -231,7 +233,7 @@ export function RecordsPage() {
           <div className="flex shrink-0 items-center gap-2">
             <input
               type="date"
-              aria-label="开始日期"
+              aria-label={t('directory.records.startDate')}
               value={startDate}
               max={endDate || undefined}
               onChange={(e) => setStartDate(e.target.value)}
@@ -240,7 +242,7 @@ export function RecordsPage() {
             <span className="text-sm text-[#7b8490]">-</span>
             <input
               type="date"
-              aria-label="结束日期"
+              aria-label={t('directory.records.endDate')}
               value={endDate}
               min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
@@ -255,7 +257,7 @@ export function RecordsPage() {
                 }}
                 className="h-[46px] shrink-0 rounded-lg border border-white/70 bg-white/54 px-3 text-sm font-semibold text-[#59616d] transition hover:bg-white/78 hover:text-[#17191c]"
               >
-                清空
+                {t('directory.records.clear')}
               </button>
             )}
           </div>
@@ -278,8 +280,12 @@ export function RecordsPage() {
 
           {!loading && !error && filteredSessions.length === 0 && (
             <div className="rounded-lg border border-white/70 bg-white/46 px-5 py-10 text-center shadow-[0_18px_54px_rgba(70,96,138,0.1)] backdrop-blur-xl">
-              <p className="text-sm font-semibold text-[#17191c]">没有匹配的访问记录</p>
-              <p className="mt-1 text-xs text-[#7b8490]">尝试更换关键词或日期</p>
+              <p className="text-sm font-semibold text-[#17191c]">
+                {t('directory.records.empty.title')}
+              </p>
+              <p className="mt-1 text-xs text-[#7b8490]">
+                {t('directory.records.empty.description')}
+              </p>
             </div>
           )}
 
@@ -298,7 +304,7 @@ export function RecordsPage() {
                     </div>
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-semibold text-[#17191c]">
-                        {session.displayName || '未命名设备'}
+                        {session.displayName || t('directory.records.unnamedDevice')}
                       </h3>
                       <p className="mt-0.5 truncate text-xs text-[#626a76]">
                         {session.platform || 'iPhone'}
@@ -312,7 +318,7 @@ export function RecordsPage() {
                       {session.date}
                     </span>
                     <span className="inline-flex h-6 shrink-0 items-center rounded-md border border-white/70 bg-white/52 px-2 font-semibold text-[#59616d]">
-                      {getNetworkLabel(session.ip)}
+                      {t(getNetworkLabelKey(session.ip))}
                     </span>
                     <div className="inline-flex w-[128px] items-center justify-end gap-1.5 whitespace-nowrap font-mono [font-variant-numeric:tabular-nums]">
                       {isPrivateIPv4(session.ip) ? (
@@ -329,7 +335,7 @@ export function RecordsPage() {
                 <div className="mt-4 rounded-md border border-white/70 bg-white/52">
                   <div className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-[#4f5b68]">
                     <Download className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
-                    <span>{session.files.length} 条访问</span>
+                    <span>{t('directory.records.accessCount', { count: session.files.length })}</span>
                   </div>
 
                   <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 border-t border-white/70 px-4 py-3 sm:grid-cols-2">
@@ -340,13 +346,13 @@ export function RecordsPage() {
                       >
                         <FileText className="h-3.5 w-3.5 shrink-0 text-[#9aa2ad]" />
                         <span className="inline-flex shrink-0 items-center rounded border border-[#dbeafe] bg-[#eef6ff] px-1.5 py-px text-[11px] font-semibold leading-none text-[#1677d2]">
-                          {getAccessActionLabel(file.action)}
+                          {t(getAccessActionLabelKey(file.action))}
                         </span>
                         {file.localPath ? (
                           <button
                             type="button"
                             title={file.localPath}
-                            aria-label={`在文件夹中显示 ${file.name}`}
+                            aria-label={t('directory.records.revealFile', { filename: file.name })}
                             onClick={() => {
                               void revealAccessRecordPath(file.localPath!).catch((err: unknown) => {
                                 console.warn('[RecordsPage] reveal access record path failed', err);
@@ -361,9 +367,9 @@ export function RecordsPage() {
                             {file.name}
                           </span>
                         )}
-                        {getAccessResultLabel(file.result) ? (
+                        {getAccessResultLabelKey(file.result) ? (
                           <span className="shrink-0 text-[11px] font-semibold text-[#e35b4a]">
-                            {getAccessResultLabel(file.result)}
+                            {t(getAccessResultLabelKey(file.result)!)}
                           </span>
                         ) : null}
                       </li>
@@ -374,7 +380,10 @@ export function RecordsPage() {
             ))}
 
           {totalPages > 1 && (
-            <nav className="flex items-center justify-center gap-2 pt-1" aria-label="访问记录分页">
+            <nav
+              className="flex items-center justify-center gap-2 pt-1"
+              aria-label={t('directory.records.pagination')}
+            >
               <button
                 type="button"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
@@ -382,7 +391,7 @@ export function RecordsPage() {
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-white/70 bg-white/52 px-3 text-xs font-semibold text-[#4f5b68] transition hover:bg-white/80 hover:text-[#17191c] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <ChevronDown className="h-3.5 w-3.5 rotate-90" />
-                上一页
+                {t('directory.records.previousPage')}
               </button>
               {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
                 <button
@@ -405,7 +414,7 @@ export function RecordsPage() {
                 disabled={safePage === totalPages}
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-white/70 bg-white/52 px-3 text-xs font-semibold text-[#4f5b68] transition hover:bg-white/80 hover:text-[#17191c] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                下一页
+                {t('directory.records.nextPage')}
                 <ChevronDown className="h-3.5 w-3.5 -rotate-90" />
               </button>
             </nav>

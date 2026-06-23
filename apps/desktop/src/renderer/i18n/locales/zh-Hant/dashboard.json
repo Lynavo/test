@@ -27,5 +27,52 @@
       "failed": "啟動失敗",
       "stopped": "已停止"
     }
+  },
+  "share": {
+    "title": "共享管理",
+    "toast": {
+      "connectionCodeCopied": "連線碼已複製",
+      "copyFailed": "複製失敗",
+      "remoteAccessEnabled": "遠端存取已開啟",
+      "remoteAccessDisabled": "遠端存取已關閉",
+      "remoteAccessUpdateFailed": "修改遠端存取狀態失敗",
+      "folderPermissionGranted": "資料夾存取權限已授權",
+      "folderPermissionDenied": "未取得資料夾權限，請在系統設定中手動授權",
+      "folderPermissionRequestFailed": "權限請求失敗",
+      "showCodeBeforeRegenerate": "請先顯示連線碼，再雙擊修改",
+      "connectionCodeRegenerated": "連線碼已重新產生，舊配對裝置已失效",
+      "regenerateFailed": "重新產生連線碼失敗",
+      "transferActiveReceivePathLocked": "正在傳輸檔案，無法修改接收目錄",
+      "receivePathUpdated": "接收目錄修改成功",
+      "receivePathUpdateFailed": "儲存接收目錄失敗"
+    },
+    "connectionCode": {
+      "title": "連線碼",
+      "regenerateTitle": "雙擊重新產生連線碼",
+      "showBeforeRegenerateTitle": "顯示連線碼後可雙擊修改",
+      "regenerateHint": "雙擊修改連線碼",
+      "show": "顯示連線碼",
+      "hide": "隱藏連線碼",
+      "copy": "複製",
+      "showQr": "顯示連線 QR Code",
+      "collapseQr": "收合連線 QR Code",
+      "qrTitle": "ViviDrop 連線 QR Code",
+      "qrDescription": "用手機掃描以配對這台電腦",
+      "downloadApp": "下載 App",
+      "downloadInstruction": "，在同一個 Wi-Fi 下掃描，選擇此裝置，掃碼或輸入連線碼連接裝置"
+    },
+    "remoteAccess": {
+      "title": "遠端存取",
+      "description": "開啟後，手機可遠端存取這台電腦的檔案",
+      "toggle": "遠端存取開關",
+      "folderPermissionWarning": "尚未取得資料夾存取權限，手機將無法瀏覽這台電腦的檔案",
+      "authorize": "授權存取"
+    },
+    "receiveFolder": {
+      "title": "接收目錄",
+      "defaultPath": "預設自動建立",
+      "remaining": "剩餘 {{space}}",
+      "changeFolder": "修改目錄"
+    }
   }
 }

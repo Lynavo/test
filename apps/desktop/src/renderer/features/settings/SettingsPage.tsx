@@ -140,7 +140,7 @@ export function SettingsPage() {
     void i18n.changeLanguage(value);
     setLanguageOpen(false);
     setLanguageSearch('');
-    toast.success('界面语言修改成功');
+    toast.success(t('settings.profile.toasts.languageChanged'));
   };
 
   const togglePreventSleep = async () => {
@@ -151,10 +151,16 @@ export function SettingsPage() {
         await window.electronAPI?.power.setPreventSleepDuringTransfer(!currentEnabled);
       if (nextState) {
         setPowerState(nextState);
-        toast.success(!currentEnabled ? '防止电脑待机已启用' : '防止电脑待机已关闭');
+        toast.success(
+          t(
+            !currentEnabled
+              ? 'settings.profile.toasts.preventSleepEnabled'
+              : 'settings.profile.toasts.preventSleepDisabled',
+          ),
+        );
       }
     } catch {
-      toast.error('修改防止待机配置失败');
+      toast.error(t('settings.profile.toasts.preventSleepFailed'));
     }
   };
 
@@ -162,9 +168,9 @@ export function SettingsPage() {
     setCheckingUpdates(true);
     try {
       await window.electronAPI?.support.checkForUpdates();
-      toast.success('已是最新版本');
+      toast.success(t('settings.profile.toasts.upToDate'));
     } catch {
-      toast.error('检查更新失败，请稍后重试');
+      toast.error(t('settings.profile.toasts.checkUpdateFailed'));
     } finally {
       setCheckingUpdates(false);
     }
@@ -178,11 +184,11 @@ export function SettingsPage() {
         description: description || 'Manual upload from desktop settings',
         locale: i18n.resolvedLanguage ?? i18n.language,
       });
-      toast.success('诊断包上传成功！感谢您的反馈');
+      toast.success(t('settings.profile.toasts.diagnosticsUploaded'));
       setDiagnosticsDescription('');
       setUploadDialogOpen(false);
     } catch {
-      toast.error('上传诊断包失败，请检查网络连接');
+      toast.error(t('settings.profile.toasts.diagnosticsUploadFailed'));
     } finally {
       setUploadingLogs(false);
     }
@@ -191,11 +197,15 @@ export function SettingsPage() {
   const handleSendFeedback = () => {
     if (!feedbackReady) return;
 
-    const subject = encodeURIComponent(`ViviDrop 问题反馈 - v${installedVersionLabel}`);
+    const subject = encodeURIComponent(
+      t('settings.profile.feedback.mailSubject', { version: installedVersionLabel }),
+    );
     const body = encodeURIComponent(
-      `问题描述：\n${feedbackText.trim()}\n\n联系方式：${
-        feedbackContact.trim() || '未填写'
-      }\n当前版本：v${installedVersionLabel}`,
+      t('settings.profile.feedback.mailBody', {
+        description: feedbackText.trim(),
+        contact: feedbackContact.trim() || t('settings.profile.feedback.contactEmpty'),
+        version: installedVersionLabel,
+      }),
     );
 
     void window.electronAPI?.files.openExternal(
@@ -204,7 +214,7 @@ export function SettingsPage() {
     setFeedbackSent(true);
     setFeedbackText('');
     setFeedbackOpen(false);
-    toast.success('已打开邮件反馈入口');
+    toast.success(t('settings.profile.toasts.feedbackOpened'));
   };
 
   return (
@@ -212,18 +222,20 @@ export function SettingsPage() {
       <div className="mx-auto max-w-[1460px] px-8 py-6">
         <header className="mb-5 flex min-h-12 items-center justify-between gap-5 border-b border-white/60 pb-5">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold leading-tight text-[#17191c]">我的</h1>
+            <h1 className="truncate text-2xl font-semibold leading-tight text-[#17191c]">
+              {t('settings.profile.title')}
+            </h1>
           </div>
         </header>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)]">
           <div className="space-y-5">
-            <SettingsCard title="我的账户">
+            <SettingsCard title={t('settings.profile.cards.account')}>
               <SettingsItem
                 asButton
                 icon={UserCircle}
                 tone="rose"
-                title="账户"
+                title={t('settings.profile.account.title')}
                 caption={accountEmail}
                 onClick={() => setAccountOpen((open) => !open)}
                 action={
@@ -236,19 +248,33 @@ export function SettingsPage() {
               />
               {accountOpen && (
                 <div className="mx-4 mb-4 rounded-lg border border-white/70 bg-white/50 p-4">
-                  <p className="text-xs font-semibold text-[#858b96]">账户绑定信息</p>
+                  <p className="text-xs font-semibold text-[#858b96]">
+                    {t('settings.profile.account.bindingInfo')}
+                  </p>
                   <ul className="mt-2 flex flex-col gap-2.5">
-                    <AccountFact icon={Mail} label="账号" value={accountEmail} />
-                    <AccountFact icon={Globe} label="登录方式" value="账号登录" />
-                    <AccountFact icon={Smartphone} label="当前电脑" value={localIp} />
+                    <AccountFact
+                      icon={Mail}
+                      label={t('settings.profile.account.accountLabel')}
+                      value={accountEmail}
+                    />
+                    <AccountFact
+                      icon={Globe}
+                      label={t('settings.profile.account.loginMethod')}
+                      value={t('settings.profile.account.accountLogin')}
+                    />
+                    <AccountFact
+                      icon={Smartphone}
+                      label={t('settings.profile.account.currentComputer')}
+                      value={localIp}
+                    />
                   </ul>
                 </div>
               )}
               <SettingsItem
                 icon={Crown}
                 tone="amber"
-                title="会员状态"
-                caption="免费版"
+                title={t('settings.profile.membership.title')}
+                caption={t('settings.profile.membership.free')}
                 action={
                   <span className="rounded-md bg-[#eaf6ff] px-2.5 py-1 text-xs font-semibold text-[#1677d2]">
                     Pro
@@ -257,8 +283,13 @@ export function SettingsPage() {
               />
             </SettingsCard>
 
-            <SettingsCard title="本机">
-              <SettingsItem icon={Wifi} tone="blue" title="本机 IP" caption={localIp} />
+            <SettingsCard title={t('settings.profile.cards.localMachine')}>
+              <SettingsItem
+                icon={Wifi}
+                tone="blue"
+                title={t('settings.profile.localIp')}
+                caption={localIp}
+              />
             </SettingsCard>
 
             {showLocalShareGuidance ? (
@@ -270,12 +301,12 @@ export function SettingsPage() {
           </div>
 
           <div className="space-y-5">
-            <SettingsCard title="通用">
+            <SettingsCard title={t('settings.profile.cards.general')}>
               <SettingsItem
                 asButton
                 icon={Languages}
                 tone="blue"
-                title="界面语言"
+                title={t('settings.language.label')}
                 caption={activeLanguage.caption}
                 onClick={() => setLanguageOpen((open) => !open)}
                 action={
@@ -293,8 +324,8 @@ export function SettingsPage() {
                     type="search"
                     value={languageSearch}
                     onChange={(event) => setLanguageSearch(event.currentTarget.value)}
-                    placeholder="搜索语言"
-                    aria-label="搜索语言"
+                    placeholder={t('settings.profile.language.search')}
+                    aria-label={t('settings.profile.language.search')}
                     className="mb-1.5 h-9 w-full rounded-md border border-white/70 bg-white/62 px-3 text-sm text-[#17191c] outline-none transition placeholder:text-[#a4acb7] focus:border-[#66c6ff] focus:ring-2 focus:ring-[#66c6ff]/18"
                   />
                   <div className="max-h-[264px] overflow-y-auto">
@@ -323,7 +354,7 @@ export function SettingsPage() {
                     </div>
                     {filteredLanguages.length === 0 && (
                       <p className="px-2.5 py-3 text-center text-xs text-[#8d96a3]">
-                        没有匹配的语言
+                        {t('settings.profile.language.empty')}
                       </p>
                     )}
                   </div>
@@ -332,13 +363,13 @@ export function SettingsPage() {
               <SettingsItem
                 icon={Power}
                 tone="green"
-                title="防止待机"
-                caption="传输任务运行时保持电脑唤醒"
+                title={t('settings.profile.preventSleep.title')}
+                caption={t('settings.profile.preventSleep.caption')}
                 action={
                   <button
                     type="button"
                     onClick={togglePreventSleep}
-                    aria-label="防止待机"
+                    aria-label={t('settings.profile.preventSleep.title')}
                     aria-pressed={preventStandbyVal}
                     disabled={powerLoading}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed ${
@@ -355,12 +386,14 @@ export function SettingsPage() {
               />
             </SettingsCard>
 
-            <SettingsCard title="版本">
+            <SettingsCard title={t('settings.profile.cards.version')}>
               <SettingsItem
                 icon={BadgeCheck}
                 tone="green"
                 title="ViviDrop Desktop"
-                caption={`v${installedVersionLabel} · 当前版本已安装`}
+                caption={t('settings.profile.version.caption', {
+                  version: installedVersionLabel,
+                })}
                 action={
                   <button
                     type="button"
@@ -369,19 +402,23 @@ export function SettingsPage() {
                     className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-white/60 px-3 text-xs font-semibold text-[#59616d] transition hover:bg-white/82 disabled:cursor-not-allowed disabled:text-[#aab2bd]"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${checkingUpdates ? 'animate-spin' : ''}`} />
-                    检查更新
+                    {t('settings.support.checkUpdates')}
                   </button>
                 }
               />
             </SettingsCard>
 
-            <SettingsCard title="支持">
+            <SettingsCard title={t('settings.profile.cards.support')}>
               <SettingsItem
                 asButton
                 icon={Mail}
                 tone="rose"
-                title="问题反馈"
-                caption={feedbackSent ? '已打开邮件发送入口' : developerFeedbackEmail}
+                title={t('settings.profile.feedback.title')}
+                caption={
+                  feedbackSent
+                    ? t('settings.profile.feedback.openedCaption')
+                    : developerFeedbackEmail
+                }
                 onClick={() => setFeedbackOpen((open) => !open)}
                 action={
                   <ChevronRight
@@ -399,7 +436,7 @@ export function SettingsPage() {
                       setFeedbackText(event.currentTarget.value);
                       setFeedbackSent(false);
                     }}
-                    placeholder="请描述问题、发生步骤或希望改进的地方"
+                    placeholder={t('settings.profile.feedback.placeholder')}
                     rows={4}
                     className="min-h-[112px] w-full resize-none rounded-lg border border-white/80 bg-white/70 px-3 py-2.5 text-sm leading-6 text-[#17191c] outline-none transition placeholder:text-[#a4acb7] focus:border-[#66c6ff] focus:ring-2 focus:ring-[#66c6ff]/18"
                   />
@@ -408,7 +445,7 @@ export function SettingsPage() {
                     <input
                       value={feedbackContact}
                       onChange={(event) => setFeedbackContact(event.currentTarget.value)}
-                      placeholder="联系方式（选填）"
+                      placeholder={t('settings.profile.feedback.contactPlaceholder')}
                       className="min-w-0 flex-1 bg-transparent text-sm text-[#17191c] outline-none placeholder:text-[#a4acb7]"
                     />
                   </div>
@@ -418,7 +455,7 @@ export function SettingsPage() {
                       onClick={() => setFeedbackOpen(false)}
                       className="rounded-md border border-white/80 bg-white/58 px-3 py-2 text-sm font-semibold text-[#59616d] transition hover:bg-white/82"
                     >
-                      取消
+                      {t('settings.profile.actions.cancel')}
                     </button>
                     <button
                       type="button"
@@ -427,7 +464,7 @@ export function SettingsPage() {
                       className="inline-flex items-center justify-center gap-2 rounded-md bg-[#17191c] px-3 py-2 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(23,25,28,0.16)] transition hover:bg-[#2b2f36] disabled:cursor-not-allowed disabled:bg-[#cfd6df] disabled:text-white/80"
                     >
                       <Send className="h-4 w-4" />
-                      发送
+                      {t('settings.profile.actions.send')}
                     </button>
                   </div>
                 </div>
@@ -435,8 +472,12 @@ export function SettingsPage() {
               <SettingsItem
                 icon={FileUp}
                 tone="sky"
-                title="上传诊断包"
-                caption={uploadingLogs ? '正在收集并上传日志' : '上传运行日志，帮助排查问题'}
+                title={t('settings.support.uploadDiagnostics')}
+                caption={
+                  uploadingLogs
+                    ? t('settings.profile.diagnostics.uploadingCaption')
+                    : t('settings.profile.diagnostics.caption')
+                }
                 action={
                   <button
                     type="button"
@@ -449,7 +490,7 @@ export function SettingsPage() {
                     ) : (
                       <FileUp className="h-3.5 w-3.5" />
                     )}
-                    上传
+                    {t('settings.support.diagnosticsSubmit')}
                   </button>
                 }
               />
@@ -457,10 +498,10 @@ export function SettingsPage() {
                 <DialogContent className="border border-white/80 bg-white/90 shadow-2xl backdrop-blur-xl">
                   <DialogHeader>
                     <DialogTitle className="text-lg font-semibold text-[#17191c]">
-                      上传诊断包
+                      {t('settings.support.uploadDiagnostics')}
                     </DialogTitle>
                     <DialogDescription className="text-xs text-[#7b8490]">
-                      上传运行日志，包含配置与运行状态，帮助排查问题
+                      {t('settings.profile.diagnostics.description')}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-2">
@@ -468,13 +509,13 @@ export function SettingsPage() {
                       htmlFor="diagnostics-description"
                       className="text-xs font-semibold text-[#858b96]"
                     >
-                      问题描述
+                      {t('settings.support.diagnosticsDescriptionLabel')}
                     </Label>
                     <textarea
                       id="diagnostics-description"
                       value={diagnosticsDescription}
                       onChange={(event) => setDiagnosticsDescription(event.target.value)}
-                      placeholder="请描述出现问题的步骤、手机型号、网络环境或错误现象（选填）"
+                      placeholder={t('settings.profile.diagnostics.placeholder')}
                       maxLength={500}
                       className="min-h-28 w-full resize-none rounded-lg border border-white/80 bg-white/70 px-3 py-2.5 text-sm leading-6 text-[#17191c] outline-none transition placeholder:text-[#a4acb7] focus:border-[#66c6ff] focus:ring-2 focus:ring-[#66c6ff]/18 disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={uploadingLogs}
@@ -494,7 +535,7 @@ export function SettingsPage() {
                       }}
                       className="rounded-md border border-white/80 bg-white/58 px-3 py-2 text-sm font-semibold text-[#59616d] transition hover:bg-white/82 disabled:opacity-50"
                     >
-                      取消
+                      {t('settings.support.diagnosticsCancel')}
                     </button>
                     <button
                       type="button"
@@ -508,7 +549,7 @@ export function SettingsPage() {
                       ) : (
                         <FileUp className="h-4 w-4" />
                       )}
-                      上传
+                      {t('settings.support.diagnosticsSubmit')}
                     </button>
                   </DialogFooter>
                 </DialogContent>

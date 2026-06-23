@@ -13,6 +13,14 @@
   "stats": {
     "duration": "Duration"
   },
+  "overview": {
+    "title": "Device overview",
+    "authorizedDevices": "Authorized devices",
+    "blockedDevices": "Blocked",
+    "totalFiles": "Total files",
+    "totalBytes": "Total size",
+    "latestSeenAt": "Last seen: {{time}}"
+  },
   "table": {
     "fileName": "File name",
     "fileSize": "File size",

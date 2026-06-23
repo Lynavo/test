@@ -26,6 +26,31 @@ const dynamicRendererKeys = [
   'layout.sidecar.runtimeMessages.retryingAfterFailure',
   'layout.sidecar.runtimeMessages.failedCheckExecutable',
 ];
+const hardcodedUserFacingCopyFiles = [
+  'components/shared/AuthPage.tsx',
+  'features/dashboard/Dashboard.tsx',
+  'features/devices/DeviceDetailPanel.tsx',
+  'features/help/HelpDialog.tsx',
+  'features/layout/AppShell.tsx',
+  'features/layout/Sidebar.tsx',
+  'features/library/ReceivedLibraryPage.tsx',
+  'features/records/RecordsPage.tsx',
+  'features/settings/SettingsPage.tsx',
+];
+const chineseTextPattern = /[\p{Script=Han}]/u;
+const translatedFallbackPattern = /defaultValue:\s*['"`][^'"`]*[\p{Script=Han}]/u;
+const allowedHardcodedChinesePatterns = [
+  /console\.(?:warn|error|log)/,
+  /encodeURIComponent\(/,
+  /subject = encodeURIComponent/,
+  /body = encodeURIComponent/,
+  /const localeLabels:/,
+  /'zh-Hans':/,
+  /'zh-Hant':/,
+  /title="ViviDrop/,
+  /ViviDrop/,
+  /Vivi Drop/,
+];
 
 function collectLeafPaths(value: unknown, prefix = ''): string[] {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -77,6 +102,23 @@ function collectStaticTranslationKeys(): Array<{ file: string; key: string }> {
   });
 }
 
+function collectHardcodedChineseCopy(): string[] {
+  return hardcodedUserFacingCopyFiles.flatMap((file) => {
+    const path = join(sourceRoot, file);
+    const source = readFileSync(path, 'utf8');
+
+    return source
+      .split('\n')
+      .flatMap((line, index) => {
+        if (!chineseTextPattern.test(line)) return [];
+        if (translatedFallbackPattern.test(line)) return [];
+        if (allowedHardcodedChinesePatterns.some((pattern) => pattern.test(line))) return [];
+
+        return [`${file}:${index + 1}: ${line.trim()}`];
+      });
+  });
+}
+
 describe('i18n resources', () => {
   it('keeps the same leaf keys across en, zh-Hans, and zh-Hant', () => {
     const enKeys = collectLeafPaths(resources.en.translation);
@@ -97,5 +139,9 @@ describe('i18n resources', () => {
       .map(({ file, key }) => `${file}: ${key}`);
 
     expect(missingKeys).toEqual([]);
+  });
+
+  it('does not leave hardcoded Chinese user-facing copy in active renderer pages', () => {
+    expect(collectHardcodedChineseCopy()).toEqual([]);
   });
 });

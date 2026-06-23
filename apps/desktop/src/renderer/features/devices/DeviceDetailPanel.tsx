@@ -1,4 +1,5 @@
 import type { DesktopManagedDeviceDTO } from '@syncflow/contracts';
+import { useTranslation } from 'react-i18next';
 import { GlassCard } from '@renderer/components/shared/GlassCard';
 import { formatBytes, formatDateTime } from '@renderer/lib/format';
 
@@ -12,6 +13,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export function DeviceDetailPanel({ devices }: { devices: DesktopManagedDeviceDTO[] }) {
+  const { t } = useTranslation();
   const totalFiles = devices.reduce((sum, device) => sum + device.totalFileCount, 0);
   const totalBytes = devices.reduce((sum, device) => sum + device.totalBytes, 0);
   const blockedCount = devices.filter((device) => device.blockStatus === 'active').length;
@@ -25,16 +27,18 @@ export function DeviceDetailPanel({ devices }: { devices: DesktopManagedDeviceDT
 
   return (
     <GlassCard className="p-5">
-      <h2 className="text-base font-semibold text-foreground">設備概覽</h2>
+      <h2 className="text-base font-semibold text-foreground">
+        {t('deviceDetail.overview.title')}
+      </h2>
       <dl className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="授權設備" value={`${authorizedCount}`} />
-        <Stat label="封鎖中" value={`${blockedCount}`} />
-        <Stat label="累計檔案" value={`${totalFiles}`} />
-        <Stat label="累計容量" value={formatBytes(totalBytes)} />
+        <Stat label={t('deviceDetail.overview.authorizedDevices')} value={`${authorizedCount}`} />
+        <Stat label={t('deviceDetail.overview.blockedDevices')} value={`${blockedCount}`} />
+        <Stat label={t('deviceDetail.overview.totalFiles')} value={`${totalFiles}`} />
+        <Stat label={t('deviceDetail.overview.totalBytes')} value={formatBytes(totalBytes)} />
       </dl>
       {latestSeenAt && (
         <p className="mt-4 text-xs text-muted-foreground">
-          最近出現：{formatDateTime(latestSeenAt)}
+          {t('deviceDetail.overview.latestSeenAt', { time: formatDateTime(latestSeenAt) })}
         </p>
       )}
     </GlassCard>

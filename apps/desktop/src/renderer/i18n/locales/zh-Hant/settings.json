@@ -185,6 +185,70 @@
       "確認團隊共享目錄允許目前使用者讀取"
     ]
   },
+  "profile": {
+    "title": "我的",
+    "cards": {
+      "account": "帳戶",
+      "localMachine": "本機",
+      "general": "一般",
+      "version": "版本",
+      "support": "支援"
+    },
+    "account": {
+      "title": "我的帳戶",
+      "bindingInfo": "綁定資訊",
+      "accountLabel": "帳號",
+      "loginMethod": "登入方式",
+      "accountLogin": "帳號登入",
+      "currentComputer": "目前電腦"
+    },
+    "membership": {
+      "title": "會員狀態",
+      "free": "免費版"
+    },
+    "localIp": "本機 IP",
+    "language": {
+      "search": "搜尋語言",
+      "empty": "沒有符合的語言"
+    },
+    "preventSleep": {
+      "title": "防止待機",
+      "caption": "傳輸任務執行時保持電腦喚醒"
+    },
+    "version": {
+      "caption": "v{{version}} · 目前版本已安裝"
+    },
+    "actions": {
+      "cancel": "取消",
+      "send": "傳送"
+    },
+    "feedback": {
+      "title": "問題回饋",
+      "openedCaption": "已開啟郵件回饋",
+      "placeholder": "請描述問題、發生步驟或希望改善的地方",
+      "contactPlaceholder": "聯絡信箱或手機號碼",
+      "contactEmpty": "未提供聯絡方式",
+      "mailSubject": "ViviDrop Desktop 問題回饋 v{{version}}",
+      "mailBody": "問題描述：\n{{description}}\n\n聯絡方式：\n{{contact}}\n\n目前版本：v{{version}}"
+    },
+    "diagnostics": {
+      "uploadingCaption": "正在上傳診斷包",
+      "caption": "上傳記錄與執行狀態給支援團隊",
+      "description": "上傳診斷包，協助定位傳輸、配對或共享問題。",
+      "placeholder": "請描述出現問題的步驟、手機型號、網路環境或錯誤現象（選填）"
+    },
+    "toasts": {
+      "languageChanged": "語言已切換",
+      "preventSleepEnabled": "傳輸時將保持電腦喚醒",
+      "preventSleepDisabled": "已關閉防止待機",
+      "preventSleepFailed": "無法更新電源設定",
+      "upToDate": "目前已是最新版本",
+      "checkUpdateFailed": "暫時無法檢查更新",
+      "diagnosticsUploaded": "診斷包上傳成功，感謝您的回饋",
+      "diagnosticsUploadFailed": "診斷包上傳失敗，請稍後再試",
+      "feedbackOpened": "已開啟郵件回饋"
+    }
+  },
   "support": {
     "title": "支援與診斷",
     "description": "上傳診斷包給支援團隊；只有網路不可用時才會改為本機匯出。",

@@ -1,6 +1,118 @@
 {
   "title": "Help Center",
   "subtitle": "Guidance for understanding and using Vivi Drop",
+  "dialog": {
+    "navLabel": "Help categories",
+    "nav": {
+      "intro": "Introduction",
+      "guide": "First-use guide",
+      "upload": "Upload and sharing",
+      "faq": "FAQ",
+      "contact": "Contact us"
+    },
+    "sections": {
+      "intro": {
+        "items": [
+          {
+            "title": "What is ViviDrop",
+            "body": "ViviDrop is a LAN media sync tool that helps short video teams move phone media to the desktop seamlessly. When the phone and computer are on the same Wi-Fi network, you can connect once and sync automatically."
+          },
+          {
+            "title": "How to connect to the computer",
+            "body": "After opening the app, scan for the ViviDrop desktop on the LAN, or scan the QR code shown on the desktop to connect directly. Uploading is available after connection succeeds."
+          },
+          {
+            "title": "How to upload media",
+            "body": "Both automatic and manual uploads are supported. Automatic upload silently syncs new media in the background. Manual upload lets you select photos and videos from the album and submit them together."
+          },
+          {
+            "title": "How to access the shared folder",
+            "body": "Tap Shared Folder on the home screen to browse the shared folder on the desktop. Image and video preview are supported, and subscribers can download files to the phone."
+          }
+        ]
+      },
+      "guide": {
+        "items": [
+          {
+            "title": "Connect to the computer",
+            "body": "Make sure the phone and computer are on the same Wi-Fi network. Open ViviDrop on the desktop, then tap Scan Devices on the phone to find and connect to the computer, or scan the desktop QR code."
+          },
+          {
+            "title": "Enable automatic upload",
+            "body": "Go to the album page, expand the Automatic Upload panel, and turn on the switch. New media will then transfer to the computer automatically in the background."
+          },
+          {
+            "title": "Manual upload",
+            "body": "Select the photos or videos you want to upload on the album page. Already transferred items are disabled. Tap the Upload button at the bottom to submit them to the transfer queue."
+          },
+          {
+            "title": "View the shared folder",
+            "body": "Tap the Shared Folder card on the home screen to browse files in the desktop shared folder. You can preview images and videos, and subscribers can download files."
+          }
+        ]
+      },
+      "upload": {
+        "items": [
+          {
+            "title": "Automatic upload vs manual upload",
+            "body": "Automatic upload continuously watches for new album media and silently syncs while connected. Manual upload is initiated by selecting files on the album page, which is useful for curated transfers."
+          },
+          {
+            "title": "received folder and shared folder",
+            "body": "The received folder stores all media uploaded from phones to the computer and is the default upload destination. The shared folder is configured on the desktop; phones can browse and preview it, and subscribers can download files."
+          },
+          {
+            "title": "Shared folder access is read-only",
+            "body": "Phones can only browse and preview shared folder content. They cannot modify, delete, or upload files into the shared folder."
+          }
+        ]
+      },
+      "faq": {
+        "items": [
+          {
+            "title": "What if the device is offline?",
+            "body": "Confirm the phone and computer are on the same Wi-Fi network and that ViviDrop is running on the desktop. If the computer is asleep or the desktop app is closed, restart the desktop app and tap Refresh on the phone to scan again."
+          },
+          {
+            "title": "What if upload fails?",
+            "body": "Check that the network connection is stable and the desktop app is still running. You can retry failed tasks on the transfer page, or export a diagnostics package from Settings for support."
+          },
+          {
+            "title": "What if the shared folder is empty?",
+            "body": "In ViviDrop desktop settings, confirm that the shared folder path is set and contains files. After setting it, pull to refresh on the phone."
+          },
+          {
+            "title": "What if I cannot connect to the computer?",
+            "body": "Confirm the phone and computer are on the same LAN, check whether the desktop firewall blocks ViviDrop, then try restarting the desktop app or connecting with the QR code."
+          },
+          {
+            "title": "How long is the trial?",
+            "body": "New users can try all features for 7 days after registration. A subscription is required after the trial ends."
+          },
+          {
+            "title": "How do I manage my subscription?",
+            "body": "Go to Settings -> Manage Subscription to view the current subscription status and expiration date, or purchase again."
+          }
+        ]
+      },
+      "contact": {
+        "items": [
+          {
+            "title": "Support email",
+            "body": "support@vividrop.cn. We reply within 24 hours on business days."
+          },
+          {
+            "title": "Export diagnostics package",
+            "body": "Go to My -> Export Diagnostics Package and send the runtime logs to support so we can troubleshoot faster."
+          },
+          {
+            "title": "Feedback entry",
+            "body": "Use My -> Feedback to describe issues or suggestions. We keep collecting feedback to improve the product."
+          }
+        ]
+      }
+    }
+  },
   "introduction": {
     "title": "Introduction",
     "items": [

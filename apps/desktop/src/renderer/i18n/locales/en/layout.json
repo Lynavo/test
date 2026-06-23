@@ -38,7 +38,39 @@
     "logoutConfirmTitle": "Sign Out",
     "logoutConfirmDescription": "Are you sure you want to sign out of the current account {{account}}? You will need to sign in again to use the sync features.",
     "logoutConfirmCancel": "Cancel",
-    "logoutConfirmOk": "Confirm"
+    "logoutConfirmOk": "Confirm",
+    "businessMember": "Business member"
+  },
+  "connectionSetup": {
+    "title": "Set pairing code",
+    "connectionCodeLabel": "Pairing code",
+    "saveAndEnter": "Save and enter ViviDrop",
+    "downloadSectionTitle": "Use and download the mobile app",
+    "errors": {
+      "invalidCode": "Enter a 6-digit pairing code",
+      "serviceUnavailable": "Pairing code service is unavailable",
+      "saveFailed": "Failed to save pairing code"
+    },
+    "steps": {
+      "download": {
+        "title": "Scan to download the mobile app",
+        "description": "Scan the QR code on the right with your phone, then download and install the ViviDrop mobile app"
+      },
+      "pair": {
+        "title": "Enter pairing code",
+        "description": "Enter this pairing code on the phone to connect this computer. Photos and files sync automatically on the same LAN."
+      },
+      "remoteAccess": {
+        "title": "Remotely access computer files",
+        "description": "After pairing succeeds, your phone can remotely access files on this computer"
+      }
+    }
+  },
+  "download": {
+    "openButton": "Download mobile app",
+    "panelTitle": "Scan to download mobile app",
+    "qrTitle": "{{platform}} download QR code",
+    "qrAriaLabel": "{{platform}} download QR code"
   },
   "errorBoundary": {
     "helpLoadFailed": "Help failed to load. Please retry."

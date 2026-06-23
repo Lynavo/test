@@ -27,5 +27,52 @@
       "failed": "启动失败",
       "stopped": "已停止"
     }
+  },
+  "share": {
+    "title": "共享管理",
+    "toast": {
+      "connectionCodeCopied": "连接码已复制",
+      "copyFailed": "复制失败",
+      "remoteAccessEnabled": "远端访问已开启",
+      "remoteAccessDisabled": "远端访问已关闭",
+      "remoteAccessUpdateFailed": "修改远端访问状态失败",
+      "folderPermissionGranted": "文件夹访问权限已授权",
+      "folderPermissionDenied": "未获得文件夹权限，请在系统设置中手动授权",
+      "folderPermissionRequestFailed": "权限请求失败",
+      "showCodeBeforeRegenerate": "请先显示连接码再双击修改",
+      "connectionCodeRegenerated": "连接码已重新生成！旧配对设备已失效",
+      "regenerateFailed": "重新生成连接码失败",
+      "transferActiveReceivePathLocked": "正在传输文件中，无法修改接收目录",
+      "receivePathUpdated": "接收目录修改成功",
+      "receivePathUpdateFailed": "储存接收目录失败"
+    },
+    "connectionCode": {
+      "title": "连接码",
+      "regenerateTitle": "双击重新生成连接码",
+      "showBeforeRegenerateTitle": "显示连接码后可双击修改",
+      "regenerateHint": "双击修改连接码",
+      "show": "显示连接码",
+      "hide": "隐藏连接码",
+      "copy": "复制",
+      "showQr": "显示连接二维码",
+      "collapseQr": "收起连接二维码",
+      "qrTitle": "ViviDrop 连接二维码",
+      "qrDescription": "手机扫码配对该电脑",
+      "downloadApp": "下载 App",
+      "downloadInstruction": "，在同一 Wi-Fi 下扫描，选择该设备，扫码或输入连接码连接设备"
+    },
+    "remoteAccess": {
+      "title": "远程访问",
+      "description": "开启后手机可远程访问此电脑的文件",
+      "toggle": "远程访问开关",
+      "folderPermissionWarning": "尚未获得文件夹访问权限，手机将无法浏览此电脑的文件",
+      "authorize": "授权访问"
+    },
+    "receiveFolder": {
+      "title": "接收目录",
+      "defaultPath": "默认自动创建",
+      "remaining": "剩余 {{space}}",
+      "changeFolder": "修改目录"
+    }
   }
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Eye,
   EyeOff,
@@ -19,6 +20,7 @@ import { formatBytes } from '@renderer/lib/format';
 import { Button } from '@renderer/components/ui/button';
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const summary = useDashboardStore((s) => s.summary);
   const fetchDashboard = useDashboardStore((s) => s.fetchDashboard);
@@ -35,10 +37,10 @@ export function Dashboard() {
     try {
       await api.files.copyToClipboard(settings.connectionCode || '000000');
       setCopied(true);
-      toast.success('连接码已复制');
+      toast.success(t('dashboard.share.toast.connectionCodeCopied'));
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error('复制失败');
+      toast.error(t('dashboard.share.toast.copyFailed'));
     }
   };
 
@@ -91,11 +93,15 @@ export function Dashboard() {
       });
       if (updated) {
         useSettingsStore.getState().updateSettings(updated);
-        toast.success(next ? '远端访问已开启' : '远端访问已关闭');
+        toast.success(
+          next
+            ? t('dashboard.share.toast.remoteAccessEnabled')
+            : t('dashboard.share.toast.remoteAccessDisabled'),
+        );
       }
     } catch (err) {
       console.error('Failed to toggle remote access:', err);
-      toast.error('修改远端访问状态失败');
+      toast.error(t('dashboard.share.toast.remoteAccessUpdateFailed'));
     }
   };
 
@@ -106,22 +112,22 @@ export function Dashboard() {
       const result = await api.files.requestFolderPermission();
       setFolderPermissionGranted(result.granted);
       if (result.granted) {
-        toast.success('文件夹访问权限已授权');
+        toast.success(t('dashboard.share.toast.folderPermissionGranted'));
       } else {
-        toast.error('未获得文件夹权限，请在系统设置中手动授权');
+        toast.error(t('dashboard.share.toast.folderPermissionDenied'));
         // Open macOS Privacy & Security settings
         void api.files.openExternal(
           'x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders',
         );
       }
     } catch {
-      toast.error('权限请求失败');
+      toast.error(t('dashboard.share.toast.folderPermissionRequestFailed'));
     }
   };
 
   const handleDoubleClickCode = async () => {
     if (masked) {
-      toast.error('请先显示连接码再双击修改');
+      toast.error(t('dashboard.share.toast.showCodeBeforeRegenerate'));
       return;
     }
     const api = window.electronAPI;
@@ -132,16 +138,16 @@ export function Dashboard() {
         ...settings,
         connectionCode: result.code,
       });
-      toast.success('连接码已重新生成！旧配对设备已失效');
+      toast.success(t('dashboard.share.toast.connectionCodeRegenerated'));
     } catch (err) {
       console.error('Failed to regenerate code:', err);
-      toast.error('重新生成连接码失败');
+      toast.error(t('dashboard.share.toast.regenerateFailed'));
     }
   };
 
   const handleSelectFolder = async () => {
     if (transferActive) {
-      toast.error('正在传输文件中，无法修改接收目录');
+      toast.error(t('dashboard.share.toast.transferActiveReceivePathLocked'));
       return;
     }
     try {
@@ -154,11 +160,11 @@ export function Dashboard() {
         if (updated) {
           useSettingsStore.getState().updateSettings(updated);
           void useSettingsStore.getState().refreshShareStatus(true);
-          toast.success('接收目录修改成功');
+          toast.success(t('dashboard.share.toast.receivePathUpdated'));
         }
       }
     } catch {
-      toast.error('储存接收目录失败');
+      toast.error(t('dashboard.share.toast.receivePathUpdateFailed'));
     } finally {
       setSaving(false);
     }
@@ -185,7 +191,7 @@ export function Dashboard() {
         <header className="mb-5 flex min-h-12 items-center justify-between gap-5 border-b border-white/60 pb-5">
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-semibold leading-tight text-[#17191c]">
-              共享管理
+              {t('dashboard.share.title')}
             </h1>
           </div>
         </header>
@@ -198,7 +204,9 @@ export function Dashboard() {
                 <HardDrive className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-[#17191c]">连接码</h2>
+                <h2 className="truncate text-base font-semibold text-[#17191c]">
+                  {t('dashboard.share.connectionCode.title')}
+                </h2>
               </div>
             </div>
 
@@ -209,13 +217,19 @@ export function Dashboard() {
                   className={`min-w-0 select-none flex flex-col items-center px-12 text-center ${
                     !masked ? 'cursor-pointer' : 'cursor-default'
                   }`}
-                  title={!masked ? '双击重新生成连接码' : '显示连接码后可双击修改'}
+                  title={
+                    !masked
+                      ? t('dashboard.share.connectionCode.regenerateTitle')
+                      : t('dashboard.share.connectionCode.showBeforeRegenerateTitle')
+                  }
                 >
                   <p className="whitespace-nowrap font-mono text-3xl font-semibold tracking-[0.06em] text-[#17191c] [font-variant-numeric:tabular-nums]">
                     {masked ? '••••••' : connectionCode}
                   </p>
                   <p className="mt-1.5 text-xs text-[#9aa2ad]">
-                    {!masked ? '双击修改连接码' : '显示连接码后可双击修改'}
+                    {!masked
+                      ? t('dashboard.share.connectionCode.regenerateHint')
+                      : t('dashboard.share.connectionCode.showBeforeRegenerateTitle')}
                   </p>
                 </div>
 
@@ -224,8 +238,16 @@ export function Dashboard() {
                     type="button"
                     onClick={() => setMasked(!masked)}
                     className="flex h-10 w-10 items-center justify-center rounded-md text-[#626a76] transition hover:bg-[#e9f7ff] hover:text-[#1677d2]"
-                    aria-label={masked ? '显示连接码' : '隐藏连接码'}
-                    title={masked ? '显示连接码' : '隐藏连接码'}
+                    aria-label={
+                      masked
+                        ? t('dashboard.share.connectionCode.show')
+                        : t('dashboard.share.connectionCode.hide')
+                    }
+                    title={
+                      masked
+                        ? t('dashboard.share.connectionCode.show')
+                        : t('dashboard.share.connectionCode.hide')
+                    }
                   >
                     {masked ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                   </button>
@@ -233,8 +255,8 @@ export function Dashboard() {
                     type="button"
                     onClick={handleCopyCode}
                     className="flex h-10 w-10 items-center justify-center rounded-md text-[#626a76] transition hover:bg-[#e9f7ff] hover:text-[#1677d2]"
-                    aria-label="复制"
-                    title="复制"
+                    aria-label={t('dashboard.share.connectionCode.copy')}
+                    title={t('dashboard.share.connectionCode.copy')}
                   >
                     {copied ? (
                       <Check className="h-4 w-4 text-[#2d8f54]" />
@@ -246,8 +268,16 @@ export function Dashboard() {
                     type="button"
                     onClick={() => setQrVisible((visible) => !visible)}
                     className="flex h-10 w-10 items-center justify-center rounded-md text-[#626a76] transition hover:bg-[#e9f7ff] hover:text-[#1677d2]"
-                    aria-label={qrVisible ? '收起连接二维码' : '显示连接二维码'}
-                    title={qrVisible ? '收起连接二维码' : '显示连接二维码'}
+                    aria-label={
+                      qrVisible
+                        ? t('dashboard.share.connectionCode.collapseQr')
+                        : t('dashboard.share.connectionCode.showQr')
+                    }
+                    title={
+                      qrVisible
+                        ? t('dashboard.share.connectionCode.collapseQr')
+                        : t('dashboard.share.connectionCode.showQr')
+                    }
                   >
                     <ChevronDown
                       className={`h-4 w-4 transition ${qrVisible ? 'rotate-180' : ''}`}
@@ -266,10 +296,12 @@ export function Dashboard() {
                       fgColor="#17191c"
                       level="M"
                       marginSize={1}
-                      title="ViviDrop 连接二维码"
+                      title={t('dashboard.share.connectionCode.qrTitle')}
                     />
                   </div>
-                  <p className="mt-2 text-[11px] font-medium text-[#7b8490]">手机扫码配对该电脑</p>
+                  <p className="mt-2 text-[11px] font-medium text-[#7b8490]">
+                    {t('dashboard.share.connectionCode.qrDescription')}
+                  </p>
                 </div>
               )}
             </div>
@@ -282,9 +314,9 @@ export function Dashboard() {
                   onClick={handleDownloadApp}
                   className="font-semibold text-[#1677d2] underline-offset-2 transition hover:text-[#0d68bd] hover:underline"
                 >
-                  下载 App
+                  {t('dashboard.share.connectionCode.downloadApp')}
                 </button>
-                ，在同一 Wi-Fi 下扫描，选择该设备，扫码或输入连接码连接设备
+                {t('dashboard.share.connectionCode.downloadInstruction')}
               </span>
             </p>
           </section>
@@ -296,15 +328,19 @@ export function Dashboard() {
                   <FolderOpen className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-[#17191c]">远程访问</h2>
-                  <p className="mt-1 text-xs text-[#7b8490]">开启后手机可远程访问此电脑的文件</p>
+                  <h2 className="text-base font-semibold text-[#17191c]">
+                    {t('dashboard.share.remoteAccess.title')}
+                  </h2>
+                  <p className="mt-1 text-xs text-[#7b8490]">
+                    {t('dashboard.share.remoteAccess.description')}
+                  </p>
                 </div>
               </div>
 
               <button
                 type="button"
                 onClick={toggleRemoteAccess}
-                aria-label="远程访问开关"
+                aria-label={t('dashboard.share.remoteAccess.toggle')}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   settings.remoteAccessEnabled ? 'bg-[#17191c]' : 'bg-slate-200'
                 }`}
@@ -322,7 +358,9 @@ export function Dashboard() {
               <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-amber-200/80 bg-amber-50/70 px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
-                  <p className="text-xs text-amber-700">尚未获得文件夹访问权限，手机将无法浏览此电脑的文件</p>
+                  <p className="text-xs text-amber-700">
+                    {t('dashboard.share.remoteAccess.folderPermissionWarning')}
+                  </p>
                 </div>
                 <button
                   id="btn-request-folder-permission"
@@ -330,7 +368,7 @@ export function Dashboard() {
                   onClick={handleRequestFolderPermission}
                   className="shrink-0 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-amber-600 active:scale-[0.97]"
                 >
-                  授权访问
+                  {t('dashboard.share.remoteAccess.authorize')}
                 </button>
               </div>
             )}
@@ -343,12 +381,18 @@ export function Dashboard() {
                   <FolderOpen className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-[#17191c]">接收目录</h2>
+                  <h2 className="text-base font-semibold text-[#17191c]">
+                    {t('dashboard.share.receiveFolder.title')}
+                  </h2>
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#7b8490]">
-                    <span className="truncate">{settings.receivePath || '默认自动创建'}</span>
+                    <span className="truncate">
+                      {settings.receivePath || t('dashboard.share.receiveFolder.defaultPath')}
+                    </span>
                     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#e6f7f1] px-2 py-0.5 font-semibold text-[#1e7d5f]">
                       <HardDrive className="h-3.5 w-3.5 shrink-0" />
-                      剩余 {formatBytes(summary.remainingBytes)}
+                      {t('dashboard.share.receiveFolder.remaining', {
+                        space: formatBytes(summary.remainingBytes),
+                      })}
                     </span>
                   </p>
                 </div>
@@ -363,7 +407,7 @@ export function Dashboard() {
                 className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#1677d2] px-3 text-xs font-semibold text-white shadow-[0_12px_22px_rgba(22,119,210,0.18)] transition hover:bg-[#0d68bd] active:scale-[0.98]"
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-                修改目录
+                {t('dashboard.share.receiveFolder.changeFolder')}
               </Button>
             </div>
           </section>

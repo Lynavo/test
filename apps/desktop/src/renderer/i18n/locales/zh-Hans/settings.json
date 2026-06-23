@@ -185,6 +185,70 @@
       "确认团队共享目录允许当前用户读取"
     ]
   },
+  "profile": {
+    "title": "我的",
+    "cards": {
+      "account": "账户",
+      "localMachine": "本机",
+      "general": "通用",
+      "version": "版本",
+      "support": "支持"
+    },
+    "account": {
+      "title": "我的账户",
+      "bindingInfo": "绑定信息",
+      "accountLabel": "账号",
+      "loginMethod": "登入方式",
+      "accountLogin": "账号登入",
+      "currentComputer": "当前电脑"
+    },
+    "membership": {
+      "title": "会员状态",
+      "free": "免费版"
+    },
+    "localIp": "本机 IP",
+    "language": {
+      "search": "搜索语言",
+      "empty": "没有匹配的语言"
+    },
+    "preventSleep": {
+      "title": "防止待机",
+      "caption": "传输任务运行时保持电脑唤醒"
+    },
+    "version": {
+      "caption": "v{{version}} · 当前版本已安装"
+    },
+    "actions": {
+      "cancel": "取消",
+      "send": "发送"
+    },
+    "feedback": {
+      "title": "问题反馈",
+      "openedCaption": "已打开邮件反馈",
+      "placeholder": "请描述问题、发生步骤或希望改进的地方",
+      "contactPlaceholder": "联系方式邮箱或手机号",
+      "contactEmpty": "未提供联系方式",
+      "mailSubject": "ViviDrop Desktop 问题反馈 v{{version}}",
+      "mailBody": "问题描述：\n{{description}}\n\n联系方式：\n{{contact}}\n\n当前版本：v{{version}}"
+    },
+    "diagnostics": {
+      "uploadingCaption": "正在上传诊断包",
+      "caption": "上传日志与运行状态给支持团队",
+      "description": "上传诊断包，帮助定位传输、配对或共享问题。",
+      "placeholder": "请描述出现问题的步骤、手机型号、网络环境或错误现象（选填）"
+    },
+    "toasts": {
+      "languageChanged": "语言已切换",
+      "preventSleepEnabled": "传输时将保持电脑唤醒",
+      "preventSleepDisabled": "已关闭防止待机",
+      "preventSleepFailed": "无法更新电源设置",
+      "upToDate": "已是最新版本",
+      "checkUpdateFailed": "暂时无法检查更新",
+      "diagnosticsUploaded": "诊断包上传成功！感谢您的反馈",
+      "diagnosticsUploadFailed": "诊断包上传失败，请稍后重试",
+      "feedbackOpened": "已打开邮件反馈"
+    }
+  },
   "support": {
     "title": "支持与诊断",
     "description": "上传诊断包给支持团队；只有网络不可用时才会改为本地导出。",

@@ -38,7 +38,39 @@
     "logoutConfirmTitle": "退出登入",
     "logoutConfirmDescription": "確定要退出目前帳號 {{account}} 嗎？退出後需重新登入才能使用同步功能。",
     "logoutConfirmCancel": "取消",
-    "logoutConfirmOk": "確認退出"
+    "logoutConfirmOk": "確認退出",
+    "businessMember": "商務會員"
+  },
+  "connectionSetup": {
+    "title": "設定連線碼",
+    "connectionCodeLabel": "連線碼",
+    "saveAndEnter": "儲存並進入 ViviDrop",
+    "downloadSectionTitle": "使用與下載手機端",
+    "errors": {
+      "invalidCode": "請輸入 6 位數字連線碼",
+      "serviceUnavailable": "連線碼服務暫時無法使用",
+      "saveFailed": "儲存連線碼失敗"
+    },
+    "steps": {
+      "download": {
+        "title": "掃碼下載手機端",
+        "description": "用手機掃描右側 QR Code，下載並安裝 ViviDrop 手機端"
+      },
+      "pair": {
+        "title": "輸入連線碼配對",
+        "description": "在手機端輸入此連線碼即可連接這台電腦，同一區域網路下會自動同步手機相簿和檔案到此電腦"
+      },
+      "remoteAccess": {
+        "title": "遠端存取電腦檔案",
+        "description": "連線碼連接成功後，手機可遠端存取這台電腦的檔案"
+      }
+    }
+  },
+  "download": {
+    "openButton": "下載手機端",
+    "panelTitle": "掃碼下載手機端",
+    "qrTitle": "{{platform}} 下載 QR Code",
+    "qrAriaLabel": "{{platform}} 下載 QR Code"
   },
   "errorBoundary": {
     "helpLoadFailed": "說明中心載入失敗，請重試"

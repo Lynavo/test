@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   FolderOpen,
@@ -20,19 +21,19 @@ import type { ReceivedLibraryItemDTO } from '@syncflow/contracts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function getMediaLabel(mediaType: string): { label: string; color: string; bg: string } {
+function getMediaLabel(mediaType: string): { labelKey: string; color: string; bg: string } {
   const t = mediaType.toLowerCase();
   if (t.startsWith('video/'))
-    return { label: '视频', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' };
+    return { labelKey: 'directory.library.media.video', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' };
   if (t.startsWith('image/'))
-    return { label: '照片', color: '#0ea5c9', bg: 'rgba(14,165,201,0.08)' };
+    return { labelKey: 'directory.library.media.photo', color: '#0ea5c9', bg: 'rgba(14,165,201,0.08)' };
   if (t.startsWith('audio/'))
-    return { label: '音频', color: '#a855f7', bg: 'rgba(168,85,247,0.08)' };
-  return { label: '文件', color: '#6b7a8d', bg: 'rgba(107,122,141,0.08)' };
+    return { labelKey: 'directory.library.media.audio', color: '#a855f7', bg: 'rgba(168,85,247,0.08)' };
+  return { labelKey: 'directory.library.media.file', color: '#6b7a8d', bg: 'rgba(107,122,141,0.08)' };
 }
 
 function getShareStatusBadge(shareStatus: ReceivedLibraryItemDTO['shareStatus']): {
-  label: string;
+  labelKey: string;
   color: string;
   bg: string;
   border: string;
@@ -40,14 +41,14 @@ function getShareStatusBadge(shareStatus: ReceivedLibraryItemDTO['shareStatus'])
   switch (shareStatus) {
     case 'shared':
       return {
-        label: '已共享至手机',
+        labelKey: 'directory.library.shareStatus.shared',
         color: '#2c9c5a',
         bg: 'rgba(44,156,90,0.07)',
         border: 'rgba(44,156,90,0.18)',
       };
     case 'missing':
       return {
-        label: '文件丢失',
+        labelKey: 'directory.library.shareStatus.missing',
         color: '#e35b4a',
         bg: 'rgba(227,91,74,0.07)',
         border: 'rgba(227,91,74,0.18)',
@@ -73,6 +74,7 @@ function isReceivedImageItem(item: ReceivedLibraryItemDTO): boolean {
 }
 
 function ReceivedItemVisual({ item }: { item: ReceivedLibraryItemDTO }) {
+  const { t } = useTranslation();
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const thumbnailUrl =
     isReceivedImageItem(item) && !thumbnailFailed ? item.thumbnailUrl?.trim() : undefined;
@@ -83,7 +85,7 @@ function ReceivedItemVisual({ item }: { item: ReceivedLibraryItemDTO }) {
         <img
           data-testid="received-library-thumbnail-image"
           src={thumbnailUrl}
-          alt={`${item.filename} 缩略图`}
+          alt={t('directory.library.thumbnailAlt', { filename: item.filename })}
           className="h-full w-full object-cover"
           onError={() => setThumbnailFailed(true)}
         />
@@ -103,6 +105,7 @@ function FileItemRow({
   item: ReceivedLibraryItemDTO;
   deviceDisplayName: string;
 }) {
+  const { t } = useTranslation();
   const mediaLabel = getMediaLabel(item.mediaType);
   const statusBadge = getShareStatusBadge(item.shareStatus);
   const StatusIcon = item.shareStatus === 'shared' ? Share2 : AlertCircle;
@@ -129,7 +132,7 @@ function FileItemRow({
               background: mediaLabel.bg,
             }}
           >
-            {mediaLabel.label}
+            {t(mediaLabel.labelKey)}
           </span>
           <span className="text-[12px] text-[#97a3b0]">·</span>
           <span className="text-[12px] font-medium text-[#8a96a3]">
@@ -156,7 +159,7 @@ function FileItemRow({
             }}
           >
             <StatusIcon className="h-2.5 w-2.5" />
-            {statusBadge.label}
+            {t(statusBadge.labelKey)}
           </span>
         ) : null}
       </div>
@@ -167,6 +170,7 @@ function FileItemRow({
 // ─── ReceivedLibraryPage ─────────────────────────────────────────────────────
 
 export function ReceivedLibraryPage() {
+  const { t } = useTranslation();
   const {
     receivedItems,
     receivedLoading,
@@ -280,7 +284,7 @@ export function ReceivedLibraryPage() {
         clientId,
         displayName:
           dashboardDevice?.displayName ?? receivedDeviceDisplayNameMap.get(clientId) ?? clientId,
-        platform: dashboardDevice?.platform ?? '移动设备',
+        platform: dashboardDevice?.platform ?? t('directory.library.mobileDevice'),
         devicePath: dashboardDevice?.devicePath,
         ...stats,
       };
@@ -290,16 +294,16 @@ export function ReceivedLibraryPage() {
   const handleOpenFolder = (devicePath?: string) => {
     const targetPath = devicePath?.trim();
     if (!targetPath) {
-      toast.error('设备目录暂不可用');
+      toast.error(t('directory.library.toasts.devicePathUnavailable'));
       return;
     }
     const openFolder = window.electronAPI?.files.openFolder;
     if (!openFolder) {
-      toast.error('文件管理器接口不可用');
+      toast.error(t('directory.library.toasts.fileManagerUnavailable'));
       return;
     }
     void openFolder(targetPath).catch(() => {
-      toast.error('设备目录不存在或无法打开');
+      toast.error(t('directory.library.toasts.devicePathMissing'));
     });
   };
 
@@ -310,7 +314,7 @@ export function ReceivedLibraryPage() {
           <header className="mb-5 flex min-h-12 items-center justify-between gap-5 border-b border-white/60 pb-5">
             <div className="min-w-0">
               <h1 className="truncate text-2xl font-semibold leading-tight text-[#17191c]">
-                同步记录
+                {t('directory.library.title')}
               </h1>
             </div>
           </header>
@@ -323,7 +327,9 @@ export function ReceivedLibraryPage() {
                 <FileText className="h-5 w-5" />
               </div>
               <div className="min-w-0 text-left">
-                <p className="truncate text-xs font-semibold text-[#697786]">总接收文件数</p>
+                <p className="truncate text-xs font-semibold text-[#697786]">
+                  {t('directory.library.stats.totalFiles')}
+                </p>
                 <p className="mt-1 text-2xl font-semibold leading-none text-[#17191c]">
                   {totalFiles}
                 </p>
@@ -336,7 +342,9 @@ export function ReceivedLibraryPage() {
                 <HardDrive className="h-5 w-5" />
               </div>
               <div className="min-w-0 text-left">
-                <p className="truncate text-xs font-semibold text-[#697786]">占用总空间</p>
+                <p className="truncate text-xs font-semibold text-[#697786]">
+                  {t('directory.library.stats.totalSpace')}
+                </p>
                 <p className="mt-1 text-2xl font-semibold leading-none text-[#17191c]">
                   {formatBytes(totalOccupiedSpace)}
                 </p>
@@ -349,7 +357,9 @@ export function ReceivedLibraryPage() {
                 <HardDrive className="h-5 w-5" />
               </div>
               <div className="min-w-0 text-left">
-                <p className="truncate text-xs font-semibold text-[#697786]">磁盘剩余空间</p>
+                <p className="truncate text-xs font-semibold text-[#697786]">
+                  {t('directory.library.stats.remainingSpace')}
+                </p>
                 <p className="mt-1 text-2xl font-semibold leading-none text-[#17191c]">
                   {formatBytes(summary.remainingBytes)}
                 </p>
@@ -366,7 +376,7 @@ export function ReceivedLibraryPage() {
           {/* Sync Device Summary List */}
           <div className="mb-2 flex justify-end">
             <span className="px-1 text-xs font-semibold text-[#7b8490]">
-              {deviceList.length} 台设备
+              {t('directory.library.deviceCount', { count: deviceList.length })}
             </span>
           </div>
 
@@ -387,9 +397,11 @@ export function ReceivedLibraryPage() {
             {!receivedLoading && !receivedError && deviceList.length === 0 && (
               <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/70 bg-white/24 px-6 text-center">
                 <FolderOpen className="h-8 w-8 text-slate-400" />
-                <h2 className="mt-3 text-sm font-bold text-slate-800">尚无同步记录</h2>
+                <h2 className="mt-3 text-sm font-bold text-slate-800">
+                  {t('directory.library.empty.title')}
+                </h2>
                 <p className="mt-1 text-xs text-slate-400">
-                  设备同步传输后的文件历史会汇总在这里。
+                  {t('directory.library.empty.description')}
                 </p>
               </div>
             )}
@@ -406,7 +418,7 @@ export function ReceivedLibraryPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-semibold text-[#17191c]">
-                        {device.displayName || '未命名设备'}
+                        {device.displayName || t('directory.library.unnamedDevice')}
                       </h3>
                       <p className="mt-0.5 truncate text-xs text-[#626a76]">
                         {device.platform || 'iPhone'}
@@ -417,11 +429,15 @@ export function ReceivedLibraryPage() {
                     <div className="flex shrink-0 items-center gap-3 text-xs font-semibold text-[#4f5b68] [font-variant-numeric:tabular-nums]">
                       <span className="flex items-center gap-1">
                         <ImageIcon className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
-                        相册上传 {device.photoCount}
+                        {t('directory.library.deviceStats.photoUploads', {
+                          count: device.photoCount,
+                        })}
                       </span>
                       <span className="flex items-center gap-1">
                         <FileIconLucide className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
-                        文件上传 {device.fileCount}
+                        {t('directory.library.deviceStats.fileUploads', {
+                          count: device.fileCount,
+                        })}
                       </span>
                       <span className="flex items-center gap-1">
                         <HardDrive className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
@@ -434,7 +450,7 @@ export function ReceivedLibraryPage() {
                       type="button"
                       onClick={() => handleOpenFolder(device.devicePath)}
                       className="flex h-12 w-[76px] items-center justify-center rounded-lg border border-[#cdeeff]/80 bg-[#edf8ff]/78 text-[#1677d2] shadow-[0_10px_24px_rgba(67,157,220,0.1)] transition hover:-translate-y-0.5 hover:bg-[#dff2ff] hover:text-[#0d68bd] hover:shadow-[0_16px_34px_rgba(67,157,220,0.15)]"
-                      title="打开目录"
+                      title={t('directory.library.openFolder')}
                     >
                       <FolderOpen className="h-5 w-5" />
                     </button>
@@ -447,11 +463,16 @@ export function ReceivedLibraryPage() {
           {!receivedLoading && !receivedError && visibleReceivedItems.length > 0 && (
             <div className="mt-6">
               <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-[#3d4653]">所有文件</h2>
+                <h2 className="text-sm font-semibold text-[#3d4653]">
+                  {t('directory.library.filesTitle')}
+                </h2>
                 <span className="text-xs font-semibold text-[#7b8490]">
                   {visibleReceivedItems.length >= totalFiles
-                    ? `${visibleReceivedItems.length} 个文件`
-                    : `已加载 ${visibleReceivedItems.length} / ${totalFiles}`}
+                    ? t('directory.library.loadedAll', { count: visibleReceivedItems.length })
+                    : t('directory.library.loadedPartial', {
+                        loaded: visibleReceivedItems.length,
+                        total: totalFiles,
+                      })}
                 </span>
               </div>
 
@@ -477,7 +498,9 @@ export function ReceivedLibraryPage() {
                     data-testid="received-library-load-more-sentinel"
                     className="flex h-12 items-center justify-center text-xs font-semibold text-[#7b8490]"
                   >
-                    {receivedLoadingMore ? '加载中...' : '加载更多同步记录'}
+                    {receivedLoadingMore
+                      ? t('directory.library.loadingMore')
+                      : t('directory.library.loadMore')}
                   </div>
                 ) : null}
               </div>

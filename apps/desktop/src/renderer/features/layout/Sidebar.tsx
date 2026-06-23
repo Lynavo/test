@@ -115,8 +115,8 @@ export function Sidebar() {
                 </span>
                 <span
                   className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/82 text-[#1b78c2] shadow-[0_4px_10px_rgba(38,128,190,0.14)] ring-1 ring-white/90"
-                  aria-label="商务会员"
-                  title="商务会员"
+                  aria-label={t('layout.account.businessMember')}
+                  title={t('layout.account.businessMember')}
                 >
                   <Crown className="h-2.5 w-2.5" />
                 </span>

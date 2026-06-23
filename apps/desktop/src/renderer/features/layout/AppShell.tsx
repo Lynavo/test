@@ -3,6 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Download, HelpCircle, Loader2, QrCode, RefreshCw, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Skeleton } from '@renderer/components/ui/skeleton';
+import { persistLocale } from '@renderer/i18n';
+import {
+  isSupportedLocale,
+  SUPPORTED_LOCALES,
+  type SupportedLocale,
+} from '@renderer/i18n/locale-resolver';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
@@ -58,6 +64,11 @@ const ReceivedLibraryPage = lazy(() =>
 
 const TITLE_BAR_OVERLAY_CONTROLS_FALLBACK_WIDTH = 128;
 const TITLE_BAR_OVERLAY_CONTROLS_GAP = 10;
+const setupLocaleLabels: Record<SupportedLocale, string> = {
+  en: 'English',
+  'zh-Hans': '简体中文',
+  'zh-Hant': '繁體中文',
+};
 
 export function getTopActionsRight(usesTitleBarOverlay: boolean): CSSProperties['right'] {
   if (!usesTitleBarOverlay) {
@@ -81,6 +92,7 @@ type ConnectionCodeSetupPageProps = {
 };
 
 function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPageProps) {
+  const { t, i18n } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const session = useAuthStore((s) => s.session);
@@ -93,21 +105,22 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const deviceName =
     settings.deviceName || window.electronAPI?.platform?.getHostName?.() || 'ViviDrop';
+  const currentLocale = isSupportedLocale(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'en';
   const setupSteps = [
     {
       icon: Download,
-      title: '扫码下载手机端',
-      description: '用手机扫描右侧二维码，下载并安装 ViviDrop 手机端',
+      title: t('layout.connectionSetup.steps.download.title'),
+      description: t('layout.connectionSetup.steps.download.description'),
     },
     {
       icon: Smartphone,
-      title: '输入连接码配对',
-      description: '在手机端输入此连接码即可连接此电脑，同一局域网下自动同步手机相册和文件到此电脑',
+      title: t('layout.connectionSetup.steps.pair.title'),
+      description: t('layout.connectionSetup.steps.pair.description'),
     },
     {
       icon: RefreshCw,
-      title: '远程访问电脑文件',
-      description: '连接码连接成功后，手机可远程访问这台电脑的文件',
+      title: t('layout.connectionSetup.steps.remoteAccess.title'),
+      description: t('layout.connectionSetup.steps.remoteAccess.description'),
     },
   ];
 
@@ -120,7 +133,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!/^\d{6}$/.test(draftCode)) {
-      setError('请输入 6 位数字连接码');
+      setError(t('layout.connectionSetup.errors.invalidCode'));
       return;
     }
 
@@ -132,7 +145,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
 
     const api = window.electronAPI;
     if (!api?.sidecar.setConnectionCode) {
-      setError('连接码服务暂不可用');
+      setError(t('layout.connectionSetup.errors.serviceUnavailable'));
       return;
     }
 
@@ -143,10 +156,15 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
       updateSettings({ ...settings, connectionCode: result.code });
       onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存连接码失败');
+      setError(err instanceof Error ? err.message : t('layout.connectionSetup.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleLanguageChange(locale: SupportedLocale) {
+    persistLocale(locale);
+    void i18n.changeLanguage(locale);
   }
 
   return (
@@ -166,22 +184,42 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
               <QrCode className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-[20px] font-semibold leading-6 text-[#17191c]">设置连接码</h1>
+              <h1 className="text-[20px] font-semibold leading-6 text-[#17191c]">
+                {t('layout.connectionSetup.title')}
+              </h1>
               <p className="mt-1 truncate text-xs text-[#7d8794]">{deviceName}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowLogoutConfirm(true)}
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-white/58 px-3 text-xs font-medium text-[#687380] transition hover:bg-white/90 hover:text-[#17191c]"
-          >
-            退出
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <label htmlFor="connection-setup-language" className="sr-only">
+              {t('settings.language.label')}
+            </label>
+            <select
+              id="connection-setup-language"
+              value={currentLocale}
+              onChange={(event) => handleLanguageChange(event.target.value as SupportedLocale)}
+              aria-label={t('settings.language.label')}
+              className="h-8 rounded-md border border-white/80 bg-white/58 px-2 text-xs font-medium text-[#687380] outline-none transition hover:bg-white/90 focus:border-[#66c6ff] focus:ring-2 focus:ring-[#66c6ff]/18"
+            >
+              {SUPPORTED_LOCALES.map((locale) => (
+                <option key={locale} value={locale}>
+                  {setupLocaleLabels[locale]}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(true)}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-white/58 px-3 text-xs font-medium text-[#687380] transition hover:bg-white/90 hover:text-[#17191c]"
+            >
+              {t('layout.account.logout')}
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           <label htmlFor="connection-code" className="text-xs font-medium text-[#778392]">
-            连接码
+            {t('layout.connectionSetup.connectionCodeLabel')}
           </label>
           <input
             id="connection-code"
@@ -204,12 +242,14 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
             className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#17191c] px-5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(23,25,28,0.18)] transition hover:bg-[#303740] disabled:cursor-not-allowed disabled:opacity-55"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            保存并进入ViviDrop
+            {t('layout.connectionSetup.saveAndEnter')}
           </button>
         </form>
 
         <div className="mt-4 rounded-lg border border-white/78 bg-white/58 p-5 shadow-[0_18px_54px_rgba(70,96,138,0.10)]">
-          <h2 className="text-[15px] font-semibold text-[#17191c]">使用与下载手机端</h2>
+          <h2 className="text-[15px] font-semibold text-[#17191c]">
+            {t('layout.connectionSetup.downloadSectionTitle')}
+          </h2>
 
           <div className="mt-4 space-y-4">
             {setupSteps.map((step) => {
@@ -237,7 +277,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
                 <p className="mb-2 text-xs font-semibold text-[#17191c]">{platform}</p>
                 <button
                   type="button"
-                  aria-label={`${platform} 下载二维码`}
+                  aria-label={t('layout.download.qrAriaLabel', { platform })}
                   onClick={() => void window.electronAPI?.files?.openExternal(url)}
                   className="flex h-[112px] w-[112px] cursor-pointer items-center justify-center rounded-lg bg-white p-2 shadow-[0_16px_44px_rgba(70,96,138,0.12)] transition hover:scale-[1.015]"
                 >
@@ -246,7 +286,7 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
                     size={88}
                     bgColor="#ffffff"
                     fgColor="#17191c"
-                    title={`${platform} 下载二维码`}
+                    title={t('layout.download.qrTitle', { platform })}
                   />
                 </button>
                 <p className="mt-2 text-xs text-[#7d8794]">{label}</p>
@@ -502,13 +542,15 @@ export function AppShell() {
               className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/64 px-3 text-xs font-semibold text-[#4f5b68] shadow-[0_10px_26px_rgba(70,96,138,0.12)] backdrop-blur-xl transition hover:bg-white/88 hover:text-[#17191c] active:scale-[0.985]"
             >
               <Smartphone className="h-3.5 w-3.5" />
-              下载移动端
+              {t('layout.download.openButton')}
             </button>
           </div>
 
           {downloadPanelOpen && (
             <div className="absolute right-0 top-10 w-[300px] rounded-lg border border-white/70 bg-[#f7fbff]/96 p-4 text-[#17191c] shadow-[0_30px_80px_rgba(70,96,138,0.22)] backdrop-blur-2xl">
-              <p className="text-sm font-semibold text-[#17191c]">扫码下载移动端</p>
+              <p className="text-sm font-semibold text-[#17191c]">
+                {t('layout.download.panelTitle')}
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <div className="flex flex-col items-center gap-2 rounded-md border border-white/80 bg-white/60 p-2.5">
                   <div className="text-xs font-semibold text-[#17191c]">iOS</div>
@@ -518,7 +560,7 @@ export function AppShell() {
                       size={74}
                       bgColor="#ffffff"
                       fgColor="#17191c"
-                      title="iOS 下载二维码"
+                      title={t('layout.download.qrTitle', { platform: 'iOS' })}
                     />
                   </div>
                   <button
@@ -541,7 +583,7 @@ export function AppShell() {
                       size={74}
                       bgColor="#ffffff"
                       fgColor="#17191c"
-                      title="Android 下载二维码"
+                      title={t('layout.download.qrTitle', { platform: 'Android' })}
                     />
                   </div>
                   <button

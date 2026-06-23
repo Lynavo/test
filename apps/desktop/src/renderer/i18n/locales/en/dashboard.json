@@ -27,5 +27,52 @@
       "failed": "Failed",
       "stopped": "Stopped"
     }
+  },
+  "share": {
+    "title": "Share Management",
+    "toast": {
+      "connectionCodeCopied": "Pairing code copied",
+      "copyFailed": "Copy failed",
+      "remoteAccessEnabled": "Remote access enabled",
+      "remoteAccessDisabled": "Remote access disabled",
+      "remoteAccessUpdateFailed": "Failed to update remote access",
+      "folderPermissionGranted": "Folder access permission granted",
+      "folderPermissionDenied": "Folder permission was not granted. Please authorize it manually in System Settings.",
+      "folderPermissionRequestFailed": "Permission request failed",
+      "showCodeBeforeRegenerate": "Show the pairing code before double-clicking to change it",
+      "connectionCodeRegenerated": "Pairing code regenerated. Previously paired devices are no longer valid.",
+      "regenerateFailed": "Failed to regenerate pairing code",
+      "transferActiveReceivePathLocked": "Files are transferring. The receive folder cannot be changed.",
+      "receivePathUpdated": "Receive folder updated",
+      "receivePathUpdateFailed": "Failed to save receive folder"
+    },
+    "connectionCode": {
+      "title": "Pairing code",
+      "regenerateTitle": "Double-click to regenerate pairing code",
+      "showBeforeRegenerateTitle": "Show the pairing code before double-clicking to change it",
+      "regenerateHint": "Double-click to change pairing code",
+      "show": "Show pairing code",
+      "hide": "Hide pairing code",
+      "copy": "Copy",
+      "showQr": "Show pairing QR code",
+      "collapseQr": "Collapse pairing QR code",
+      "qrTitle": "ViviDrop pairing QR code",
+      "qrDescription": "Scan with your phone to pair this computer",
+      "downloadApp": "Download App",
+      "downloadInstruction": ", scan on the same Wi-Fi, select this device, then scan or enter the pairing code to connect."
+    },
+    "remoteAccess": {
+      "title": "Remote access",
+      "description": "After enabling, your phone can remotely access files on this computer",
+      "toggle": "Remote access switch",
+      "folderPermissionWarning": "Folder access permission has not been granted. Phones cannot browse files on this computer.",
+      "authorize": "Authorize access"
+    },
+    "receiveFolder": {
+      "title": "Receive folder",
+      "defaultPath": "Created automatically by default",
+      "remaining": "Remaining {{space}}",
+      "changeFolder": "Change folder"
+    }
   }
 }

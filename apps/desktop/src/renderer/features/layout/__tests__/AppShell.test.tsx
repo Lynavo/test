@@ -233,6 +233,22 @@ describe('AppShell', () => {
     expect(screen.queryByText('DashboardPage')).not.toBeInTheDocument();
   });
 
+  it('allows changing language on the connection code setup page before entering the shell', async () => {
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    expect(await screen.findByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: '界面语言' }), {
+      target: { value: 'zh-Hant' },
+    });
+
+    expect(await screen.findByRole('heading', { name: '設定連線碼' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '儲存並進入 ViviDrop' })).toBeInTheDocument();
+    expect(screen.getByText('掃碼下載手機端')).toBeInTheDocument();
+  });
+
   it('saves the connection code setup before entering the dashboard', async () => {
     installElectronAPI();
 

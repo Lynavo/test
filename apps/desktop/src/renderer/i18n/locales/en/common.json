@@ -80,5 +80,40 @@
   },
   "toast": {
     "copied": "Copied to clipboard"
+  },
+  "authPage": {
+    "title": "Sign in",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithApple": "Continue with Apple",
+    "divider": "or",
+    "useEmailLogin": "Sign in with email",
+    "emailLabel": "Email",
+    "emailPlaceholder": "Enter email",
+    "codeLabel": "Verification code",
+    "codePlaceholder": "6-digit code",
+    "codeSentCountdown": "Sent ({{seconds}}s)",
+    "getCode": "Get code",
+    "backToOAuth": "Back to third-party sign-in",
+    "agreementAriaLabel": "I have read and agree to the Privacy Policy and User Agreement",
+    "agreementPrefix": "I have read and agree to ",
+    "privacyPolicy": "Privacy Policy",
+    "agreementConjunction": " and ",
+    "userAgreement": "User Agreement",
+    "agreementRequired": "Agree to the Privacy Policy before signing in",
+    "autoRegisterHint": "Unregistered accounts will be created automatically",
+    "toast": {
+      "googleLoginFailed": "Google sign-in failed",
+      "appleLoginFailed": "Apple sign-in failed",
+      "emailRequired": "Enter your email",
+      "invalidEmail": "Enter a valid email address",
+      "sendCodeUnavailable": "Verification code service is unavailable",
+      "codeSent": "Verification code sent to your email",
+      "sendCodeFailed": "Failed to send verification code",
+      "codeRequired": "Enter a 6-digit verification code",
+      "loginUnavailable": "Sign-in service is unavailable",
+      "loginSuccess": "Signed in successfully",
+      "emailLoginFailed": "Sign-in failed. The code may be incorrect or expired.",
+      "loginFailed": "Sign-in failed"
+    }
   }
 }
