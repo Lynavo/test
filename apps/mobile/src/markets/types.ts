@@ -17,6 +17,7 @@ export interface MobileMarketConfig {
   apiBaseUrl: string;
   reviewApiBaseUrl: string;
   appReviewPhone: string;
+  appReviewEmail: string;
   privacyUrl: string;
   termsUrl: string;
   loginProviders: readonly LoginProvider[];

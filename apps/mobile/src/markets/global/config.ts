@@ -1,6 +1,7 @@
 import {
   VIVIDROP_GLOBAL_API_BASE_URL,
   VIVIDROP_REVIEW_API_BASE_URL,
+  VIVIDROP_REVIEW_EMAIL,
   VIVIDROP_SUPPORT_EMAIL,
   VIVIDROP_WEB_BASE_URL,
 } from '@syncflow/contracts';
@@ -13,6 +14,7 @@ export const globalMarketConfig: MobileMarketConfig = {
   apiBaseUrl: VIVIDROP_GLOBAL_API_BASE_URL,
   reviewApiBaseUrl: VIVIDROP_REVIEW_API_BASE_URL,
   appReviewPhone: '17000000002',
+  appReviewEmail: VIVIDROP_REVIEW_EMAIL,
   privacyUrl: `${VIVIDROP_WEB_BASE_URL}/privacy`,
   termsUrl: `${VIVIDROP_WEB_BASE_URL}/terms`,
   loginProviders: ['apple', 'google'],

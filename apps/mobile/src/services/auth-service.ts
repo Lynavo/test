@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPost, apiPostNoAuth } from './api';
-import { resolveAuthBaseUrlForPhone, setSessionBaseUrl } from './config';
+import { resolveAuthBaseUrlForPhone, resolveAuthBaseUrlForEmail, setSessionBaseUrl } from './config';
 import type { SignedOutTransition, UserProfile } from '../stores/auth-store';
 
 // ---------------------------------------------------------------------------
@@ -156,23 +156,37 @@ interface AuthLoginResponse {
   merged: boolean;
 }
 
-export async function sendEmailCode(email: string): Promise<void> {
-  await apiPostNoAuth<Record<string, never>>('/auth/email/send', { email });
+export async function sendEmailCode(
+  email: string,
+  authBaseUrl = resolveAuthBaseUrlForEmail(email),
+): Promise<{ authBaseUrl: string }> {
+  await apiPostNoAuth<Record<string, never>>(
+    '/auth/email/send',
+    { email },
+    { baseUrlOverride: authBaseUrl },
+  );
+  return { authBaseUrl };
 }
 
 export async function emailLogin(
   email: string,
   code: string,
+  authBaseUrl = resolveAuthBaseUrlForEmail(email),
 ): Promise<{
   accessToken: string;
   refreshToken: string;
   isNewUser: boolean;
   merged: boolean;
 }> {
-  const data = await apiPostNoAuth<AuthLoginResponse>('/auth/email/login', {
-    email,
-    code,
-  });
+  const data = await apiPostNoAuth<AuthLoginResponse>(
+    '/auth/email/login',
+    {
+      email,
+      code,
+    },
+    { baseUrlOverride: authBaseUrl },
+  );
+  await setSessionBaseUrl(authBaseUrl);
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,

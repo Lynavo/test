@@ -75,7 +75,7 @@ Modes:
   upload          Upload an existing archive at ARCHIVE_PATH to TestFlight
   archive-upload  Increment, archive, and upload to TestFlight
   check-review-phone
-                  Verify mobile APP_REVIEW_PHONE matches SERVER_ENV_FILE
+                  Verify mobile APP_REVIEW_PHONE/APP_REVIEW_EMAIL matches SERVER_ENV_FILE
 
 Markets:
   cn              China market (default)
@@ -165,6 +165,47 @@ extract_mobile_review_phone() {
   echo "${raw_val}"
 }
 
+extract_server_review_email() {
+  local env_file="$1"
+  awk '
+    /^[[:space:]]*#/ { next }
+    /^[[:space:]]*$/ { next }
+    {
+      split($0, parts, "=")
+      key = parts[1]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      if (key == "APP_REVIEW_EMAIL") {
+        val = substr($0, index($0, "=") + 1)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+        gsub(/^'\''|'\''$/, "", val)
+        gsub(/^"|"$/, "", val)
+        print val
+        exit
+      }
+    }
+  ' "${env_file}"
+}
+
+extract_mobile_review_email() {
+  local config_file="$1"
+  local raw_val
+  raw_val="$(sed -n "s/^[[:space:]]*export const APP_REVIEW_EMAIL[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${config_file}" | head -n 1)"
+  
+  if [[ -z "${raw_val}" ]]; then
+    # Fallback to parsing from markets config based on SCHEME
+    local market_dir
+    market_dir="$(dirname "${config_file}")/../markets"
+    local market_config
+    if [[ "${SCHEME}" == "SyncFlowMobileGlobal" ]]; then
+      market_config="${market_dir}/global/config.ts"
+    fi
+    if [[ -f "${market_config}" ]]; then
+      raw_val="$(sed -n "s/^[[:space:]]*appReviewEmail[[:space:]]*:[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${market_config}" | head -n 1)"
+    fi
+  fi
+  echo "${raw_val}"
+}
+
 ensure_review_phone_matches() {
   if [[ -z "${SERVER_ENV_FILE:-}" ]]; then
     echo "ERROR: SERVER_ENV_FILE is required for TestFlight review-phone check." >&2
@@ -186,24 +227,52 @@ ensure_review_phone_matches() {
   server_phone="$(extract_server_review_phone "${SERVER_ENV_FILE}")"
   mobile_phone="$(extract_mobile_review_phone "${MOBILE_CONFIG_FILE}")"
 
-  if [[ -z "${server_phone}" ]]; then
-    echo "ERROR: APP_REVIEW_PHONE is missing from SERVER_ENV_FILE." >&2
+  local server_email mobile_email
+  server_email="$(extract_server_review_email "${SERVER_ENV_FILE}")"
+  mobile_email="$(extract_mobile_review_email "${MOBILE_CONFIG_FILE}")"
+
+  if [[ -z "${server_phone}" && -z "${server_email}" ]]; then
+    echo "ERROR: Both APP_REVIEW_PHONE and APP_REVIEW_EMAIL are missing from SERVER_ENV_FILE." >&2
     exit 1
   fi
 
-  if [[ -z "${mobile_phone}" ]]; then
-    echo "ERROR: APP_REVIEW_PHONE is missing from mobile config." >&2
-    exit 1
+  # Verify phone if it is configured
+  if [[ -n "${server_phone}" || -n "${mobile_phone}" ]]; then
+    if [[ -z "${server_phone}" ]]; then
+      echo "ERROR: APP_REVIEW_PHONE is missing from SERVER_ENV_FILE." >&2
+      exit 1
+    fi
+    if [[ -z "${mobile_phone}" ]]; then
+      echo "ERROR: APP_REVIEW_PHONE is missing from mobile config." >&2
+      exit 1
+    fi
+    if [[ "${server_phone}" != "${mobile_phone}" ]]; then
+      echo "ERROR: APP_REVIEW_PHONE mismatch." >&2
+      echo "Server: $(mask_phone "${server_phone}")" >&2
+      echo "Mobile: $(mask_phone "${mobile_phone}")" >&2
+      exit 1
+    fi
+    echo "Review phone check passed: $(mask_phone "${mobile_phone}")"
   fi
 
-  if [[ "${server_phone}" != "${mobile_phone}" ]]; then
-    echo "ERROR: APP_REVIEW_PHONE mismatch." >&2
-    echo "Server: $(mask_phone "${server_phone}")" >&2
-    echo "Mobile: $(mask_phone "${mobile_phone}")" >&2
-    exit 1
+  # Verify email if it is configured
+  if [[ -n "${server_email}" || -n "${mobile_email}" ]]; then
+    if [[ -z "${server_email}" ]]; then
+      echo "ERROR: APP_REVIEW_EMAIL is missing from SERVER_ENV_FILE." >&2
+      exit 1
+    fi
+    if [[ -z "${mobile_email}" ]]; then
+      echo "ERROR: APP_REVIEW_EMAIL is missing from mobile config." >&2
+      exit 1
+    fi
+    if [[ "${server_email}" != "${mobile_email}" ]]; then
+      echo "ERROR: APP_REVIEW_EMAIL mismatch." >&2
+      echo "Server: ${server_email}" >&2
+      echo "Mobile: ${mobile_email}" >&2
+      exit 1
+    fi
+    echo "Review email check passed: ${mobile_email}"
   fi
-
-  echo "Review phone check passed: $(mask_phone "${mobile_phone}")"
 }
 
 increment_build_number() {

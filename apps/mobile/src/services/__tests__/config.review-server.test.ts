@@ -7,6 +7,7 @@ jest.mock('../../markets', () => ({
     apiBaseUrl: 'https://api.vividrop.cn',
     reviewApiBaseUrl: 'https://review-api.vividrop.cn',
     appReviewPhone: '18812345678',
+    appReviewEmail: 'review@vividrop.cn',
   },
 }));
 
@@ -26,6 +27,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   APP_REVIEW_PHONE,
+  APP_REVIEW_EMAIL,
   DEV_API_BASE_URL,
   PROD_BASE_URL,
   REVIEW_API_BASE_URL,
@@ -34,6 +36,7 @@ import {
   getSessionBaseUrl,
   loadSessionBaseUrl,
   resolveAuthBaseUrlForPhone,
+  resolveAuthBaseUrlForEmail,
   setDebugBaseUrlOverride,
   setSessionBaseUrl,
 } from '../config';
@@ -65,8 +68,21 @@ describe('review server routing config', () => {
     );
   });
 
+  test('routes the App Review email to the review API server', () => {
+    expect(resolveAuthBaseUrlForEmail(APP_REVIEW_EMAIL)).toBe(
+      REVIEW_API_BASE_URL,
+    );
+    expect(resolveAuthBaseUrlForEmail(APP_REVIEW_EMAIL.toUpperCase())).toBe(
+      REVIEW_API_BASE_URL,
+    );
+  });
+
   test('routes normal phone numbers to the review API server by default', () => {
     expect(resolveAuthBaseUrlForPhone('13312341234')).toBe(DEV_API_BASE_URL);
+  });
+
+  test('routes normal emails to the review API server by default', () => {
+    expect(resolveAuthBaseUrlForEmail('normal@vividrop.cn')).toBe(DEV_API_BASE_URL);
   });
 
   test('routes normal phone numbers to the review API server on Android dev builds by default', () => {
@@ -91,6 +107,9 @@ describe('review server routing config', () => {
     await setDebugBaseUrlOverride('http://192.168.1.42:8080');
 
     expect(resolveAuthBaseUrlForPhone(APP_REVIEW_PHONE)).toBe(
+      'http://192.168.1.42:8080',
+    );
+    expect(resolveAuthBaseUrlForEmail(APP_REVIEW_EMAIL)).toBe(
       'http://192.168.1.42:8080',
     );
   });

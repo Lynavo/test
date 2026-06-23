@@ -10,6 +10,7 @@ import {
   VIVIDROP_API_BASE_URL,
   VIVIDROP_GLOBAL_API_BASE_URL,
   VIVIDROP_REVIEW_API_BASE_URL,
+  VIVIDROP_REVIEW_EMAIL,
 } from '@syncflow/contracts';
 import type {
   AddSharedResourcePayload,
@@ -51,6 +52,10 @@ const APP_REVIEW_PHONE =
   process.env.SYNCFLOW_APP_REVIEW_PHONE?.trim() ||
   process.env.APP_REVIEW_PHONE?.trim() ||
   '17000000002';
+const APP_REVIEW_EMAIL =
+  process.env.SYNCFLOW_APP_REVIEW_EMAIL?.trim() ||
+  process.env.APP_REVIEW_EMAIL?.trim() ||
+  VIVIDROP_REVIEW_EMAIL;
 const DEV_SANDBOX_AUTH_BASE_URL = 'dev-sandbox://auth';
 const DEV_SANDBOX_ACCESS_TOKEN_PREFIX = 'mock-sandbox-access-token';
 const DEV_SANDBOX_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
@@ -316,6 +321,16 @@ function resolveAuthBaseUrlForPhone(phone: string): string {
     return AUTH_BASE_URL;
   }
   if (normalizePhoneDigits(phone) === APP_REVIEW_PHONE) {
+    return AUTH_REVIEW_BASE_URL;
+  }
+  return AUTH_BASE_URL;
+}
+
+function resolveAuthBaseUrlForEmail(email: string): string {
+  if (process.env.SYNCFLOW_AUTH_BASE_URL?.trim()) {
+    return AUTH_BASE_URL;
+  }
+  if (email.trim().toLowerCase() === APP_REVIEW_EMAIL.toLowerCase()) {
     return AUTH_REVIEW_BASE_URL;
   }
   return AUTH_BASE_URL;
@@ -1057,12 +1072,12 @@ export const sidecarClient = {
     return persistAuthSession(response, { baseUrl: authBaseUrl, phone: payload.phone });
   },
   sendEmailCode: async (payload: SendEmailCodePayload) => {
-    const authBaseUrl = resolveOAuthAuthBaseUrl();
+    const authBaseUrl = resolveAuthBaseUrlForEmail(payload.email);
     const response = await request<unknown>('POST', AUTH_EMAIL_SEND_PATH, payload, authBaseUrl);
     return normalizeAuthResponse(response);
   },
   loginWithEmailCode: async (payload: EmailLoginPayload) => {
-    const authBaseUrl = resolveOAuthAuthBaseUrl();
+    const authBaseUrl = resolveAuthBaseUrlForEmail(payload.email);
     const response = await request<unknown>('POST', AUTH_EMAIL_LOGIN_PATH, payload, authBaseUrl);
     return persistAuthSession(response, { baseUrl: authBaseUrl, email: payload.email });
   },

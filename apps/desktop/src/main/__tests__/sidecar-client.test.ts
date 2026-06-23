@@ -1463,6 +1463,48 @@ describe('sidecarClient', () => {
     vi.resetModules();
   });
 
+  it('routes App Review email addresses to the App Review API server', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_EMAIL', 'review@vividrop.cn');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.sendEmailCode({ email: 'review@vividrop.cn' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('review-api.vividrop.cn');
+    expect(options.path).toBe('/api/v1/auth/email/send');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('lets explicit auth base URL overrides bypass App Review phone routing', async () => {
     const httpRequest = vi.fn();
     const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
@@ -1501,6 +1543,49 @@ describe('sidecarClient', () => {
     const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
     expect(options.hostname).toBe('auth.example.test');
     expect(options.path).toBe('/api/v1/auth/sms/send');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('lets explicit auth base URL overrides bypass App Review email routing', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(createResponse(200, JSON.stringify({ code: 0, message: 'success', data: {} })));
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_AUTH_BASE_URL', 'https://auth.example.test');
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_EMAIL', 'review@vividrop.cn');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(client.sendEmailCode({ email: 'review@vividrop.cn' })).resolves.toEqual({
+      ok: true,
+    });
+
+    expect(httpRequest).not.toHaveBeenCalled();
+    expect(httpsRequest).toHaveBeenCalledTimes(1);
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('auth.example.test');
+    expect(options.path).toBe('/api/v1/auth/email/send');
 
     vi.unstubAllEnvs();
     vi.resetModules();
@@ -1612,6 +1697,72 @@ describe('sidecarClient', () => {
     const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
     expect(options.hostname).toBe('review-api.vividrop.cn');
     expect(options.path).toBe('/api/v1/auth/sms/login');
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('persists the App Review email login base URL with the auth session', async () => {
+    const httpRequest = vi.fn();
+    const httpsRequest = vi.fn((options: RequestOptions, callback: (res: unknown) => void) => {
+      const req = new EventEmitter() as EventEmitter & {
+        on: typeof EventEmitter.prototype.on;
+        write: ReturnType<typeof vi.fn>;
+        end: ReturnType<typeof vi.fn>;
+      };
+      req.write = vi.fn();
+      req.end = vi.fn();
+      callback(
+        createResponse(
+          200,
+          JSON.stringify({
+            code: 0,
+            message: 'success',
+            data: {
+              access_token: 'review-access-token',
+              refresh_token: 'review-refresh-token',
+              user_id: 42,
+              is_new_user: false,
+              merged: false,
+            },
+          }),
+        ),
+      );
+      return req;
+    });
+
+    vi.doMock('node:http', () => ({
+      default: { request: httpRequest },
+      request: httpRequest,
+    }));
+    vi.doMock('node:https', () => ({
+      default: { request: httpsRequest },
+      request: httpsRequest,
+    }));
+
+    vi.resetModules();
+    vi.stubEnv('SYNCFLOW_APP_REVIEW_EMAIL', 'review@vividrop.cn');
+
+    const { sidecarClient: client } = await import('../sidecar-client');
+
+    await expect(
+      client.loginWithEmailCode({ email: 'review@vividrop.cn', code: '123456' }),
+    ).resolves.toEqual({
+      ok: true,
+      userId: 42,
+      isNewUser: false,
+      merged: false,
+    });
+
+    expect(client.getAuthSession()).toEqual({
+      accessToken: 'review-access-token',
+      refreshToken: 'review-refresh-token',
+      baseUrl: 'https://review-api.vividrop.cn',
+      email: 'review@vividrop.cn',
+    });
+    const [options] = httpsRequest.mock.calls[0] as [RequestOptions, (res: unknown) => void];
+    expect(options.hostname).toBe('review-api.vividrop.cn');
+    expect(options.path).toBe('/api/v1/auth/email/login');
 
     vi.unstubAllEnvs();
     vi.resetModules();

@@ -157,6 +157,7 @@ describe('@syncflow/contracts exports', () => {
     expect(contracts.VIVIDROP_GLOBAL_API_BASE_URL).toBe('https://global-api.vividrop.cn');
     expect(contracts.VIVIDROP_REVIEW_API_BASE_URL).toBe('https://review-api.vividrop.cn');
     expect(contracts.VIVIDROP_SUPPORT_EMAIL).toBe('support@vividrop.cn');
+    expect(contracts.VIVIDROP_REVIEW_EMAIL).toBe('review@vividrop.cn');
     expect(contracts.VIVIDROP_APPLE_GLOBAL_REDIRECT_URI).toBe(
       'https://global-api.vividrop.cn/auth/apple/callback',
     );

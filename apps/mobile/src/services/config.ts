@@ -34,6 +34,7 @@ import { releaseApiBaseUrl } from '../release-profile';
 export const PROD_BASE_URL = releaseApiBaseUrl ?? marketConfig.apiBaseUrl;
 export const REVIEW_API_BASE_URL = marketConfig.reviewApiBaseUrl;
 export const APP_REVIEW_PHONE = marketConfig.appReviewPhone;
+export const APP_REVIEW_EMAIL = marketConfig.appReviewEmail;
 
 // Default backend for normal debug sessions. Use setDebugBaseUrlOverride() for
 // temporary per-device overrides without changing this shared default.
@@ -92,6 +93,14 @@ export function getDebugBaseUrlOverride(): string | null {
 export function resolveAuthBaseUrlForPhone(phone: string): string {
   if (_debugOverride) return _debugOverride;
   if (normalizePhoneDigits(phone) === APP_REVIEW_PHONE) {
+    return REVIEW_API_BASE_URL;
+  }
+  return getBuiltInBaseUrl();
+}
+
+export function resolveAuthBaseUrlForEmail(email: string): string {
+  if (_debugOverride) return _debugOverride;
+  if (email.trim().toLowerCase() === APP_REVIEW_EMAIL.toLowerCase()) {
     return REVIEW_API_BASE_URL;
   }
   return getBuiltInBaseUrl();
