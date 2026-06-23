@@ -49,6 +49,9 @@ function setElectronPlatform(
       openFolder: vi.fn().mockResolvedValue(null),
       copyToClipboard: vi.fn().mockResolvedValue(null),
     },
+    sidecar: {
+      updateSettings: vi.fn(),
+    },
     events: {
       onSidecarEvent: vi.fn(() => vi.fn()),
       onSidecarRuntimeState: vi.fn(() => vi.fn()),
@@ -79,6 +82,7 @@ describe('SettingsPage', () => {
         shareAddress: '',
         shareStatus: 'unknown',
         shareName: 'SyncFlow',
+        allowCrossDeviceReceivedAccess: true,
       },
       shareStatusInfo: {
         enabled: false,
@@ -111,6 +115,28 @@ describe('SettingsPage', () => {
 
     const switchBtn = screen.getByRole('button', { name: '防止待机' });
     expect(switchBtn).toBeInTheDocument();
+  });
+
+  it('toggles cross-device received library access', async () => {
+    const updateSettings = vi.fn().mockResolvedValue({
+      ...useSettingsStore.getState().settings,
+      allowCrossDeviceReceivedAccess: false,
+    });
+    window.electronAPI!.sidecar.updateSettings = updateSettings;
+
+    render(<SettingsPage />);
+
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: '允許已配對手機瀏覽所有已接收檔案',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(updateSettings).toHaveBeenCalledWith({
+        allowCrossDeviceReceivedAccess: false,
+      });
+    });
   });
 
   it('does not render the connection devices section in settings', async () => {
