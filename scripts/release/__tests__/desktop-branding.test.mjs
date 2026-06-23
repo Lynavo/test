@@ -13,6 +13,27 @@ function readDesktopPackageJson() {
   return JSON.parse(readDesktopConfig('package.json'));
 }
 
+function readMobileIosVersions() {
+  const project = readFileSync(
+    resolve(repoRoot, 'apps/mobile/ios/SyncFlowMobile.xcodeproj/project.pbxproj'),
+    'utf8',
+  );
+  const marketingVersions = new Set(
+    Array.from(project.matchAll(/MARKETING_VERSION = ([^;]+);/g), (match) => match[1]),
+  );
+  const buildNumbers = new Set(
+    Array.from(project.matchAll(/CURRENT_PROJECT_VERSION = ([^;]+);/g), (match) => match[1]),
+  );
+
+  assert.equal(marketingVersions.size, 1);
+  assert.equal(buildNumbers.size, 1);
+
+  return {
+    version: [...marketingVersions][0],
+    buildNumber: [...buildNumbers][0],
+  };
+}
+
 function readTopLevelSection(config, sectionName) {
   const startMarker = `${sectionName}:`;
   const startIndex = config.indexOf(startMarker);
@@ -40,6 +61,28 @@ test('desktop app package metadata satisfies Linux deb packaging', () => {
     name: 'Vivi Drop',
     email: 'support@vividrop.cn',
   });
+});
+
+test('desktop package version and build number match the mobile iOS release train', () => {
+  const packageJson = readDesktopPackageJson();
+  const mobileVersion = readMobileIosVersions();
+
+  assert.equal(packageJson.version, mobileVersion.version);
+  assert.equal(packageJson.syncflowBuildNumber, mobileVersion.buildNumber);
+});
+
+test('desktop builder configs default bundle build version to the mobile iOS build number', () => {
+  const mobileVersion = readMobileIosVersions();
+
+  for (const name of [
+    'electron-builder.yml',
+    'electron-builder.cn.yml',
+    'electron-builder.global.yml',
+  ]) {
+    const config = readDesktopConfig(name);
+
+    assert.match(config, new RegExp(`^buildVersion: "${mobileVersion.buildNumber}"$`, 'm'));
+  }
 });
 
 test('global desktop builder config uses Vivi Drop for visible package branding', () => {
