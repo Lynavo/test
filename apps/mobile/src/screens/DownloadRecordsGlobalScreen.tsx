@@ -281,10 +281,26 @@ function getDownloadRecordThumbnailUri(record: DownloadRecord): string | null {
   if (kind !== 'photo' && kind !== 'video') return null;
 
   const candidate =
-    record.thumbnailUrl ?? record.previewUrl ?? record.streamUrl ?? null;
+    kind === 'photo'
+      ? record.previewUrl ?? record.streamUrl ?? record.thumbnailUrl ?? null
+      : record.thumbnailUrl ?? null;
   if (candidate?.trim()) return candidate.trim();
   if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   return null;
+}
+
+function getDownloadRecordThumbnailSource(record: DownloadRecord): string {
+  const kind = getDownloadRecordPreviewKind(record);
+  if (kind === 'photo') {
+    if (record.previewUrl?.trim()) return 'previewUrl';
+    if (record.streamUrl?.trim()) return 'streamUrl';
+    if (record.thumbnailUrl?.trim()) return 'thumbnailUrl';
+  }
+  if (kind === 'video') {
+    if (record.thumbnailUrl?.trim()) return 'thumbnailUrl';
+  }
+  if (record.localPath?.trim()) return 'localPath';
+  return 'none';
 }
 
 async function getBoundDesktop(): Promise<DesktopInfo> {
@@ -370,11 +386,6 @@ function extractReceivedFileKeyFromUrl(value?: string | null): string | null {
   }
 }
 
-function readNonEmptyUri(value?: string | null): string | null {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
-}
-
 function DownloadRecordPreviewThumbnail({
   record,
 }: {
@@ -382,7 +393,8 @@ function DownloadRecordPreviewThumbnail({
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const kind = getDownloadRecordPreviewKind(record);
-  const thumbnailUri = readNonEmptyUri(record.thumbnailUrl);
+  const thumbnailUri = getDownloadRecordThumbnailUri(record);
+  const thumbnailSource = getDownloadRecordThumbnailSource(record);
 
   useEffect(() => {
     if (kind !== 'photo' && kind !== 'video') {
@@ -396,14 +408,21 @@ function DownloadRecordPreviewThumbnail({
       hasThumbnailUrl: Boolean(thumbnailUri),
       renderingImage: Boolean(thumbnailUri && !thumbnailFailed),
       thumbnailFailed,
-      thumbnailUrl: thumbnailUri,
+      thumbnailSource,
+      hasPreviewUrl: Boolean(record.previewUrl?.trim()),
+      hasStreamUrl: Boolean(record.streamUrl?.trim()),
+      hasOriginalThumbnailUrl: Boolean(record.thumbnailUrl?.trim()),
     });
   }, [
     kind,
     record.filename,
     record.id,
     record.mediaType,
+    record.previewUrl,
+    record.streamUrl,
+    record.thumbnailUrl,
     thumbnailFailed,
+    thumbnailSource,
     thumbnailUri,
   ]);
 

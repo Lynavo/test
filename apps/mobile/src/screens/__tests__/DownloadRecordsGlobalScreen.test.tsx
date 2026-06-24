@@ -253,6 +253,32 @@ describe('DownloadRecordsGlobalScreen', () => {
     });
   });
 
+  it('renders image record thumbnails from the full preview source when available', async () => {
+    mockedListDownloadRecords.mockResolvedValueOnce([
+      {
+        id: 'image-1',
+        resourceId: 'image-1',
+        filename: 'Vacation-01.JPG',
+        mediaType: 'image/jpeg',
+        downloadedAt: '2026-06-16T02:42:00.000Z',
+        previewUrl: 'https://desktop.local/full.jpg',
+        thumbnailUrl: 'https://desktop.local/thumb.jpg',
+      },
+    ]);
+
+    const { getByTestId } = render(<DownloadRecordsGlobalScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId('download-record-thumbnail-image-1')).toBeTruthy();
+    });
+
+    expect(getByTestId('download-record-thumbnail-image-1').props.source).toEqual(
+      {
+        uri: 'https://desktop.local/full.jpg',
+      },
+    );
+  });
+
   it('opens QuickLook for previewable documents and share sheet for unsupported files', async () => {
     mockedListDownloadRecords.mockResolvedValueOnce([
       {
