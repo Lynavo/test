@@ -1,7 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Animated,
+  ActivityIndicator,
+  AppState,
   Easing,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,7 +20,9 @@ import { useTranslation } from 'react-i18next';
 function CameraQRScannerScreen() {
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const { t } = useTranslation();
-  const [hasPermission, setHasPermission] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<
+    'checking' | 'granted' | 'denied'
+  >('checking');
   const {
     Camera,
     useCameraDevice,
@@ -36,22 +41,39 @@ function CameraQRScannerScreen() {
       const currentStatus = Camera.getCameraPermissionStatus();
 
       if (currentStatus === 'granted') {
-        if (isMounted) setHasPermission(true);
+        if (isMounted) setPermissionStatus('granted');
         return;
       }
 
       if (currentStatus !== 'not-determined') {
-        if (isMounted) setHasPermission(false);
+        if (isMounted) setPermissionStatus('denied');
         return;
       }
 
       const requestStatus = await Camera.requestCameraPermission();
-      if (isMounted) setHasPermission(requestStatus === 'granted');
+      const refreshedStatus = Camera.getCameraPermissionStatus();
+      if (isMounted) {
+        setPermissionStatus(
+          requestStatus === 'granted' || refreshedStatus === 'granted'
+            ? 'granted'
+            : 'denied',
+        );
+      }
     })();
 
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      const currentStatus = Camera.getCameraPermissionStatus();
+      setPermissionStatus(currentStatus === 'granted' ? 'granted' : 'denied');
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -135,13 +157,31 @@ function CameraQRScannerScreen() {
     }
   });
 
-  if (!hasPermission) {
+  if (permissionStatus === 'checking') {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  }
+
+  if (permissionStatus === 'denied') {
     return (
       <View style={styles.center}>
         <Text style={styles.text}>{t('qrScanner.permissionDenied.text')}</Text>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
-          <Text style={styles.buttonText}>{t('common.back')}</Text>
-        </TouchableOpacity>
+        <View style={styles.deniedActions}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => {
+              void Linking.openSettings();
+            }}
+          >
+            <Text style={styles.buttonText}>{t('qrScanner.permissionDenied.openSettings')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.secondaryButtonText}>{t('common.back')}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -260,6 +300,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  deniedActions: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  secondaryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  secondaryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',

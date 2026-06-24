@@ -1,6 +1,6 @@
 import React from 'react';
-import { Platform } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AppState, Linking, Platform } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
@@ -63,6 +63,7 @@ describe('QRScannerScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers();
+    jest.spyOn(Linking, 'openSettings').mockResolvedValue(undefined);
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
       value: 'ios',
@@ -116,6 +117,81 @@ describe('QRScannerScreen', () => {
     fireEvent.press(getByText('查看詳細圖文教程 >'));
 
     expect(mockNavigate).toHaveBeenCalledWith('ConnectionTutorial');
+  });
+
+  it('does not show the denied permission copy while the permission request is pending', async () => {
+    let resolvePermission: (status: string) => void = () => {};
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('not-determined');
+    (Camera.requestCameraPermission as jest.Mock).mockImplementation(
+      () =>
+        new Promise(resolve => {
+          resolvePermission = resolve;
+        }),
+    );
+
+    const { queryByText, getByText } = render(<QRScannerScreen />);
+
+    expect(queryByText('需要相機權限來掃描二維碼')).toBeNull();
+
+    resolvePermission('denied');
+
+    await waitFor(() => {
+      expect(getByText('需要相機權限來掃描二維碼')).toBeTruthy();
+    });
+  });
+
+  it('uses the refreshed camera permission status after the Android permission prompt resolves', async () => {
+    (Camera.getCameraPermissionStatus as jest.Mock)
+      .mockReturnValueOnce('not-determined')
+      .mockReturnValueOnce('granted');
+    (Camera.requestCameraPermission as jest.Mock).mockResolvedValue('denied');
+
+    const { getByText, queryByText } = render(<QRScannerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('如何取得二維碼？')).toBeTruthy();
+    });
+    expect(queryByText('需要相機權限來掃描二維碼')).toBeNull();
+  });
+
+  it('opens system settings when camera permission has been denied', async () => {
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('denied');
+
+    const { getByText } = render(<QRScannerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('需要相機權限來掃描二維碼')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('開啟設定'));
+
+    expect(Linking.openSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes camera permission after returning from system settings', async () => {
+    let appStateHandler: ((state: string) => void) | null = null;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, handler) => {
+      appStateHandler = handler as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+    (Camera.getCameraPermissionStatus as jest.Mock)
+      .mockReturnValueOnce('denied')
+      .mockReturnValueOnce('granted');
+
+    const { getByText, queryByText } = render(<QRScannerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('需要相機權限來掃描二維碼')).toBeTruthy();
+    });
+
+    act(() => {
+      appStateHandler?.('active');
+    });
+
+    await waitFor(() => {
+      expect(getByText('如何取得二維碼？')).toBeTruthy();
+    });
+    expect(queryByText('需要相機權限來掃描二維碼')).toBeNull();
   });
 
   it('navigates to code verification after scanning a desktop connection QR', async () => {

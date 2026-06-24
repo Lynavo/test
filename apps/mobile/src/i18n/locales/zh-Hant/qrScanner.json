@@ -11,7 +11,8 @@
     "body": "返回設備列表，手動選擇設備並輸入連接碼"
   },
   "permissionDenied": {
-    "text": "需要相機權限來掃描二維碼"
+    "text": "需要相機權限來掃描二維碼",
+    "openSettings": "開啟設定"
   },
   "noCameraDevice": "未找到相機設備",
   "android": {

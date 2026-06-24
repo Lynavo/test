@@ -11,7 +11,8 @@
     "body": "返回设备列表，手动选择设备并输入连接码"
   },
   "permissionDenied": {
-    "text": "需要相机权限来扫描二维码"
+    "text": "需要相机权限来扫描二维码",
+    "openSettings": "打开设置"
   },
   "noCameraDevice": "未找到相机设备",
   "android": {

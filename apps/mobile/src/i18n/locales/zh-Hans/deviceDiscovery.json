@@ -180,6 +180,7 @@
     "deny": "不允许",
     "allow": "允许",
     "pairingCodePlaceholder": "例如 A8X2K9",
+    "cancel": "取消",
     "preview": {
       "skipGuide": "跳过引导",
       "autoUpload": "自动上传",

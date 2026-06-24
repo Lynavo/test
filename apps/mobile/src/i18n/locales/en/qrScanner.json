@@ -11,7 +11,8 @@
     "body": "Return to the device list, choose the device manually, then enter the pairing code."
   },
   "permissionDenied": {
-    "text": "Camera access is required to scan the QR code."
+    "text": "Camera access is required to scan the QR code.",
+    "openSettings": "Open Settings"
   },
   "noCameraDevice": "No camera found",
   "android": {
