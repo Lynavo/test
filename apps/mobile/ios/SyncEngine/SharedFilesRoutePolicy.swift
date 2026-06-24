@@ -374,6 +374,13 @@ enum SharedFilesRoutePolicy {
         "\(baseReason)_wake_full_resume_confirmed"
     }
 
+    static func shouldPromoteBindingConnectedFromReachability(
+        presenceConfirmed: Bool,
+        fullResumeConfirmed: Bool
+    ) -> Bool {
+        presenceConfirmed || fullResumeConfirmed
+    }
+
     static func isFullWakeConfirmed(
         lastResumeAt: Date,
         wakeAttemptStartedAt: Date

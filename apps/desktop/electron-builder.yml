@@ -1,6 +1,6 @@
 appId: com.vividrop.desktop.china
 productName: Vivi Drop
-buildVersion: "60"
+buildVersion: "61"
 mac:
   artifactName: ViviDrop-${version}-${arch}.${ext}
   target:

@@ -549,7 +549,7 @@ object AndroidSyncPrimitives {
     reachable: Boolean,
   ): String {
     val normalized = currentState.trim().ifBlank { "bound" }
-    if (normalized !in LIVE_BINDING_STATES && !(normalized == "offline" && reachable)) {
+    if (normalized !in LIVE_BINDING_STATES) {
       return normalized
     }
     return if (reachable) "connected" else "offline"
@@ -678,6 +678,24 @@ object AndroidSyncPrimitives {
 
   fun wakeFullResumeConfirmedReason(baseReason: String): String =
     "${baseReason}_wake_full_resume_confirmed"
+
+  fun bindingStateAfterLanWakeReachability(
+    presenceConfirmed: Boolean,
+  ): String =
+    if (presenceConfirmed) {
+      "connected"
+    } else {
+      "offline"
+    }
+
+  fun shouldUseLanWakeRecoveredHost(
+    presenceConfirmed: Boolean,
+  ): Boolean = presenceConfirmed
+
+  fun shouldUseDirectLanReconnect(
+    healthReachable: Boolean,
+    presenceConfirmed: Boolean,
+  ): Boolean = healthReachable && presenceConfirmed
 
   fun shouldAttemptWakeBeforeP2PFallback(
     allowWake: Boolean,

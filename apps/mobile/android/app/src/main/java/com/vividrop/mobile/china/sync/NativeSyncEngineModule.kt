@@ -4164,26 +4164,37 @@ class NativeSyncEngineModule(
       val probeHost = latestBinding.host.takeIf { it.isNotBlank() } ?: binding.host
       if (canReachSidecarHealth(probeHost, SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS)) {
         val lanReachableReason = AndroidSyncPrimitives.wakeLanReachableReason(reason)
-        val updated = updateBindingConnectionState(latestBinding, "connected", reason = lanReachableReason)
-        val recoveredHost = updated?.host?.takeIf { it.isNotBlank() } ?: probeHost
-        updateSharedFilesReachability(
-          state = "available",
-          route = null,
-          routeOverride = "lan",
-          reason = lanReachableReason,
-        )
+        val recoveredHost = latestBinding.host.takeIf { it.isNotBlank() } ?: probeHost
         recordNativeLog("SharedFiles", "wake LAN reachable host=$recoveredHost reason=$reason")
-        if (confirmDesktopFullResume(recoveredHost, latestBinding.deviceId, wakeAttemptStartedAt, reason)) {
+        val fullResumeConfirmed = confirmDesktopFullResume(
+          recoveredHost,
+          latestBinding.deviceId,
+          wakeAttemptStartedAt,
+          reason,
+        )
+        val nextConnectionState = AndroidSyncPrimitives.bindingStateAfterLanWakeReachability(
+          presenceConfirmed = fullResumeConfirmed,
+        )
+        val updated = updateBindingConnectionState(latestBinding, nextConnectionState, reason = lanReachableReason)
+        if (AndroidSyncPrimitives.shouldUseLanWakeRecoveredHost(fullResumeConfirmed)) {
           val fullResumeReason = AndroidSyncPrimitives.wakeFullResumeConfirmedReason(reason)
+          updateSharedFilesReachability(
+            state = "available",
+            route = null,
+            routeOverride = "lan",
+            reason = lanReachableReason,
+          )
           recordNativeLog("SharedFiles", "wake full resume confirmed host=$recoveredHost reason=$reason")
           updateBindingConnectionState(loadBinding() ?: updated ?: latestBinding, "connected", reason = fullResumeReason)
+          return recoveredHost
         } else {
+          clearSharedFilesReachability(reason = "${reason}_wake_presence_unconfirmed")
           recordNativeLog(
             "SharedFiles",
             "LAN reachable but desktop full wake not confirmed host=$recoveredHost reason=$reason",
           )
         }
-        return recoveredHost
+        return null
       }
 
       Thread.sleep(SHARED_LAN_WAKE_POLL_INTERVAL_MS)
@@ -4230,10 +4241,16 @@ class NativeSyncEngineModule(
       }
       val payload = JSONObject(body)
       val responseServerId = payload.optString("serverId").takeIf { it.isNotBlank() }
-      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(expectedDeviceId, responseServerId)) {
+      val responsePaired = if (payload.has("paired") && !payload.isNull("paired")) {
+        payload.optBoolean("paired")
+      } else {
+        null
+      }
+      val pairedPresent = responsePaired != null
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(expectedDeviceId, responseServerId, responsePaired)) {
         recordNativeLog(
           "SharedFiles",
-          "wake full resume unconfirmed host=$host reason=$reason expectedServerId=$expectedDeviceId responseServerId=${responseServerId ?: "nil"}",
+          "wake full resume unconfirmed host=$host reason=$reason expectedServerId=$expectedDeviceId responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"}",
         )
         return false
       }
@@ -4966,6 +4983,7 @@ class NativeSyncEngineModule(
       } else {
         null
       }
+      val pairedPresent = responsePaired != null
       if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId, responsePaired)) {
         val rejectionReason = if (responsePaired == false) {
           "${failureReason}_unpaired"
@@ -4974,7 +4992,7 @@ class NativeSyncEngineModule(
         }
         recordDiagnosticsLog(
           "Presence",
-          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} paired=${responsePaired ?: "nil"} reason=$rejectionReason",
+          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} reason=$rejectionReason",
         )
         if (updateStateOnFailure || responsePaired == false) {
           updateBindingConnectionState(loadBinding(), "offline", reason = rejectionReason)
@@ -4989,7 +5007,7 @@ class NativeSyncEngineModule(
       }
       recordDiagnosticsLog(
         "Presence",
-        "heartbeat succeeded host=${binding.host} status=$statusCode reason=$successReason hasWakePayload=$hasWakePayload ${wakeCapabilityLogSummary(responseWake)}",
+        "heartbeat succeeded host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} reason=$successReason hasWakePayload=$hasWakePayload ${wakeCapabilityLogSummary(responseWake)}",
       )
       true
     } catch (error: Throwable) {
@@ -5234,8 +5252,23 @@ class NativeSyncEngineModule(
       return
     }
     if (canReachSidecarHealth(binding.host, BINDING_PROBE_TIMEOUT_MS)) {
-      updateBindingConnectionState(binding, "connected", reason = "manual_lan_reconnect_succeeded")
-      startForegroundSyncRound(reason = "manual_trigger", threadName = "NativeSyncEngineSync")
+      val presenceConfirmed = sendPresenceHeartbeat(
+        binding = binding,
+        successReason = "manual_lan_reconnect_presence_confirmed",
+        failureReason = "manual_lan_reconnect_presence",
+        updateStateOnFailure = true,
+      )
+      if (
+        AndroidSyncPrimitives.shouldUseDirectLanReconnect(
+          healthReachable = true,
+          presenceConfirmed = presenceConfirmed,
+        )
+      ) {
+        updateBindingConnectionState(loadBinding() ?: binding, "connected", reason = "manual_lan_reconnect_succeeded")
+        startForegroundSyncRound(reason = "manual_trigger", threadName = "NativeSyncEngineSync")
+      } else {
+        recordDiagnosticsLog("SyncEngine", "retryLanReconnect LAN reachable but presence not confirmed")
+      }
       return
     }
     if (!allowWake) {
@@ -6254,10 +6287,6 @@ class NativeSyncEngineModule(
       return
     }
 
-    val nextState = AndroidSyncPrimitives.deriveBindingConnectionStateFromProbe(
-      currentState = binding.connectionState,
-      reachable = true,
-    )
     val nextHost = candidate.ip.takeIf { it.isNotBlank() } ?: binding.host
     val nextPort = candidate.port.takeIf { it > 0 } ?: binding.port
     val updated = binding.copy(
@@ -6266,30 +6295,24 @@ class NativeSyncEngineModule(
       deviceName = candidate.name.takeIf { it.isNotBlank() } ?: binding.deviceName,
       shareEnabled = candidate.shareEnabled,
       shareName = candidate.shareName,
-      connectionState = nextState,
     )
-    if (updated == binding) {
-      return
-    }
-
-    recordNativeLog(
-      "SyncEngine",
-      "bound device discovery refreshed ${binding.connectionState} -> ${updated.connectionState} host=${binding.host}:${binding.port} -> ${updated.host}:${updated.port}",
-    )
-    saveBinding(updated)
-    emitBindingStateChanged(updated)
-    if (!syncInProgress) {
-      emitIdleSyncState(updated)
-    }
-    if (updated.connectionState == "connected") {
-      cancelPresenceRecoveryProbe(reason = "discovery_refreshed_connected")
-      sendPresenceHeartbeatAsync(updated, reason = "bound_device_discovery_refreshed", recoverOnFailure = true)
-      startPresenceHeartbeatTimer(updated)
-      wakeManualUploadAfterDiscoveryReconnectIfNeeded(
-        previousConnectionState = binding.connectionState,
-        updatedBinding = updated,
-        reason = "bound_device_discovery_refreshed",
+    if (updated != binding) {
+      recordNativeLog(
+        "SyncEngine",
+        "bound device discovery refreshed state=${binding.connectionState} host=${binding.host}:${binding.port} -> ${updated.host}:${updated.port}",
       )
+      saveBinding(updated)
+      emitBindingStateChanged(updated)
+      if (!syncInProgress) {
+        emitIdleSyncState(updated)
+      }
+    }
+    if (updated.connectionState != "connected") {
+      recordDiagnosticsLog(
+        "SyncEngine",
+        "bound device reachable discovery triggered presence refresh state=${updated.connectionState} host=${updated.host}",
+      )
+      sendPresenceHeartbeatAsync(updated, reason = "bound_device_discovery_reachable", recoverOnFailure = true)
     }
   }
 

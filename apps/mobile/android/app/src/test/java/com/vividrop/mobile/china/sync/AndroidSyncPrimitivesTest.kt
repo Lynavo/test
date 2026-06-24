@@ -699,10 +699,32 @@ class AndroidSyncPrimitivesTest {
       ),
     )
     assertEquals(
-      "connected",
+      "offline",
       AndroidSyncPrimitives.deriveBindingConnectionStateFromProbe(
         currentState = "offline",
         reachable = true,
+      ),
+    )
+  }
+
+  @Test
+  fun directLanReachabilityDoesNotReconnectWithoutPresenceConfirmedPairing() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldUseDirectLanReconnect(
+        healthReachable = true,
+        presenceConfirmed = false,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldUseDirectLanReconnect(
+        healthReachable = false,
+        presenceConfirmed = true,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldUseDirectLanReconnect(
+        healthReachable = true,
+        presenceConfirmed = true,
       ),
     )
   }
@@ -832,6 +854,42 @@ class AndroidSyncPrimitivesTest {
         expectedDeviceId = "desktop-1",
         responseServerId = "desktop-1",
         responsePaired = false,
+      ),
+    )
+  }
+
+  @Test
+  fun lanWakeReachabilityDoesNotPromoteConnectionUntilPresenceConfirmsPairing() {
+    assertEquals(
+      "offline",
+      AndroidSyncPrimitives.bindingStateAfterLanWakeReachability(
+        presenceConfirmed = false,
+      ),
+    )
+    assertEquals(
+      "connected",
+      AndroidSyncPrimitives.bindingStateAfterLanWakeReachability(
+        presenceConfirmed = true,
+      ),
+    )
+    assertEquals(
+      "offline",
+      AndroidSyncPrimitives.bindingStateAfterLanWakeReachability(
+        presenceConfirmed = false,
+      ),
+    )
+  }
+
+  @Test
+  fun lanWakeRecoveredHostRequiresPresenceConfirmedPairing() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldUseLanWakeRecoveredHost(
+        presenceConfirmed = false,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldUseLanWakeRecoveredHost(
+        presenceConfirmed = true,
       ),
     )
   }

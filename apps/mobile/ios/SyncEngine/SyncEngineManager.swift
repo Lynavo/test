@@ -1919,6 +1919,16 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         emitBindingStateChanged()
     }
 
+    private func refreshBindingConnectionFromPresence(reason: String) {
+        guard uploadStore?.getBinding() != nil else { return }
+        sendPresenceHeartbeat(
+            clientId: bindingService.getOrCreateClientId(),
+            successReason: "\(reason)_presence_succeeded",
+            failureReason: "\(reason)_presence_failed",
+            updateStateOnFailure: false
+        )
+    }
+
     func setTunnelCredentials(signalingURL: String, accessToken: String, iceServersJSON: String) {
         let trimmedURL = signalingURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedToken = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -5813,8 +5823,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         if let usableBindingHost = SidecarHostResolutionPolicy.usableFallbackHost(binding.host),
            await canReachSharedFilesLANHost(usableBindingHost, timeout: 1.5) {
             sidecarHost = usableBindingHost
-            updateBindingConnectionState(.connected, reason: "manual_lan_reconnect_succeeded")
-            startSync()
+            sendPresenceHeartbeat(
+                clientId: bindingService.getOrCreateClientId(),
+                successReason: "manual_lan_reconnect_presence_succeeded",
+                failureReason: "manual_lan_reconnect_presence_failed",
+                updateStateOnFailure: false
+            ) { [weak self] success in
+                guard success else { return }
+                self?.startSync()
+            }
             return
         }
 
@@ -5830,9 +5847,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 successReason: "manual_lan_reconnect_presence_succeeded",
                 failureReason: "manual_lan_reconnect_presence_failed",
                 updateStateOnFailure: false
-            )
-            if current.deviceId == binding.deviceId {
-                startSync()
+            ) { [weak self] success in
+                guard success, current.deviceId == binding.deviceId else { return }
+                self?.startSync()
             }
         } else {
             syncDiagnosticsLog("SyncEngine", "retryLanReconnect wake did not recover LAN host")
@@ -7882,9 +7899,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 let tunnelReachableReason = SharedFilesRoutePolicy.wakeLANReachableReason(baseReason: reason)
                 syncDiagnosticsLog("SharedFiles", "wake early P2P tunnel reachable host=\(wokeHost) reason=\(reason)")
                 applySharedFilesTunnelRoute(reason: tunnelReachableReason)
-                if bindingConnectionState != .connected {
-                    updateBindingConnectionState(.connected, reason: tunnelReachableReason)
-                }
+                refreshBindingConnectionFromPresence(reason: tunnelReachableReason)
                 return wokeHost
             }
 
@@ -7893,20 +7908,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 syncDiagnosticsLog("SharedFiles", "wake LAN reachable host=\(host) reason=\(reason)")
                 sidecarHost = host
                 applySharedFilesLANRoute(host: host, reason: lanReachableReason)
-                if bindingConnectionState != .connected {
-                    updateBindingConnectionState(.connected, reason: lanReachableReason)
-                }
-                if await confirmDesktopFullResume(
+                let fullResumeConfirmed = await confirmDesktopFullResume(
                     host: host,
                     expectedDeviceId: binding.deviceId,
                     wakeAttemptStartedAt: wakeAttemptStartedAt,
                     reason: reason
+                )
+                if SharedFilesRoutePolicy.shouldPromoteBindingConnectedFromReachability(
+                    presenceConfirmed: false,
+                    fullResumeConfirmed: fullResumeConfirmed
                 ) {
                     let fullResumeReason = SharedFilesRoutePolicy.wakeFullResumeConfirmedReason(baseReason: reason)
                     syncDiagnosticsLog("SharedFiles", "wake full resume confirmed host=\(host) reason=\(reason)")
                     updateBindingConnectionState(.connected, reason: fullResumeReason)
                 } else {
                     syncDiagnosticsLog("SharedFiles", "LAN reachable but desktop full wake not confirmed host=\(host) reason=\(reason)")
+                    refreshBindingConnectionFromPresence(reason: lanReachableReason)
                 }
                 return host
             }
@@ -8406,7 +8423,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "browse_shared_files_success"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "browse_shared_files_success")
+            refreshBindingConnectionFromPresence(reason: "browse_shared_files_success")
         }
         let files: [[String: Any]] = directory.files.map { file in
             var fileDict: [String: Any] = [
@@ -8562,7 +8579,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "download_shared_file_success"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "download_shared_file_success")
+            refreshBindingConnectionFromPresence(reason: "download_shared_file_success")
         }
         return [
             "savedToPhotos": result.savedToPhotos,
@@ -8652,7 +8669,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "\(reason)_success"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "\(reason)_success")
+            refreshBindingConnectionFromPresence(reason: "\(reason)_success")
         }
 
         let clientId = getClientId()
@@ -8699,7 +8716,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "preview_received_file_route_selected"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "preview_received_file_route_selected")
+            refreshBindingConnectionFromPresence(reason: "preview_received_file_route_selected")
         }
         return try sharedFilesService.getReceivedFileMediaUrl(
             fileKey: trimmedFileKey,
@@ -8822,7 +8839,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "download_received_file_success"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "download_received_file_success")
+            refreshBindingConnectionFromPresence(reason: "download_received_file_success")
         }
         return [
             "savedToPhotos": result.savedToPhotos,
@@ -8934,7 +8951,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             reason: "preview_shared_file_success"
         )
         if !route.isTunnel && bindingConnectionState != .connected {
-            updateBindingConnectionState(.connected, reason: "preview_shared_file_success")
+            refreshBindingConnectionFromPresence(reason: "preview_shared_file_success")
         }
         return previewURL.absoluteString
     }

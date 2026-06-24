@@ -367,6 +367,30 @@ expect(
     "full wake success must require an explicit desktop resume confirmation"
 )
 
+expect(
+    !SharedFilesRoutePolicy.shouldPromoteBindingConnectedFromReachability(
+        presenceConfirmed: false,
+        fullResumeConfirmed: false
+    ),
+    "LAN or tunnel reachability alone must not mark a binding connected"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPromoteBindingConnectedFromReachability(
+        presenceConfirmed: true,
+        fullResumeConfirmed: false
+    ),
+    "presence confirmation may mark a binding connected"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPromoteBindingConnectedFromReachability(
+        presenceConfirmed: false,
+        fullResumeConfirmed: true
+    ),
+    "full desktop resume confirmation may mark a binding connected"
+)
+
 let wakeAttemptStartedAt = ISO8601DateFormatter().date(from: "2026-06-11T03:50:00Z")!
 let postWakeResumeAt = ISO8601DateFormatter().date(from: "2026-06-11T03:50:01Z")!
 let preWakeResumeAt = ISO8601DateFormatter().date(from: "2026-06-11T03:49:59Z")!
