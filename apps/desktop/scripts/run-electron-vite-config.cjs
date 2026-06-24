@@ -52,7 +52,7 @@ function resolveDefaultGoogleClientConfigDir({ command, env, existsSync, project
 
   const repoRoot = path.resolve(projectRoot, '..', '..');
   const workspaceRoot = path.resolve(repoRoot, '..');
-  const candidates = ['global-google-singin', 'global-google-signin'].map((name) =>
+  const candidates = ['global-google-singin', 'global-google-signin', 'google-client'].map((name) =>
     path.join(workspaceRoot, 'vivi-drop-server', '.config', name),
   );
   return candidates.find((candidate) => existsSync(candidate)) ?? '';

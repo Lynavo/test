@@ -29,6 +29,21 @@ test('resolves sibling server Google Desktop config for global dev when present'
   );
 });
 
+test('resolves sibling server google-client config for global dev when present', () => {
+  const projectRoot = path.join('/tmp/workspace/SyncFlow', 'apps', 'desktop');
+  const expected = path.join('/tmp/workspace', 'vivi-drop-server', '.config', 'google-client');
+
+  assert.equal(
+    resolveDefaultGoogleClientConfigDir({
+      command: 'dev',
+      env: { SYNCFLOW_MARKET: 'global' },
+      existsSync: (target) => target === expected,
+      projectRoot,
+    }),
+    expected,
+  );
+});
+
 test('does not resolve default Google config outside global dev', () => {
   const projectRoot = path.join('/tmp/workspace/SyncFlow', 'apps', 'desktop');
   const existsSync = () => true;
