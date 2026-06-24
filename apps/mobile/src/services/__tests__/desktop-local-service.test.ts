@@ -753,7 +753,7 @@ describe('desktop-local-service', () => {
     expect(mockedListReceivedFiles).not.toHaveBeenCalled();
   });
 
-  it('preserves server-generated media URLs for cross-device global received items', async () => {
+  it('normalizes server-generated media URLs for cross-device global received items', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       statusText: 'OK',
@@ -795,11 +795,11 @@ describe('desktop-local-service', () => {
       expect.objectContaining({
         fileKey: 'file-from-other-device',
         previewUrl:
-          '/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
+          'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
         thumbnailUrl:
-          '/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
+          'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
         streamUrl:
-          '/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
+          'http://192.168.10.20:39394/resources/mobile/received/stream?clientId=client-001&clientName=Alice%20iPhone&fileKey=file-from-other-device',
       }),
     );
 

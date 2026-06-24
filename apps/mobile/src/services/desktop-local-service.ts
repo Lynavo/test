@@ -473,12 +473,18 @@ function withReceivedMediaUrlsForPairedClient(
 
   return items.map(item => {
     const fileKey = item.fileKey?.trim();
-    if (!fileKey || (currentClientOnly && item.clientId !== clientId)) {
-      return item;
-    }
+    const previewUrl = absoluteDesktopUrl(desktop, item.previewUrl);
+    const thumbnailUrl = absoluteDesktopUrl(desktop, item.thumbnailUrl);
+    const streamUrl = absoluteDesktopUrl(desktop, item.streamUrl);
     const next: ReceivedLibraryMediaItem = {
       ...item,
+      ...(previewUrl ? { previewUrl } : {}),
+      ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      ...(streamUrl ? { streamUrl } : {}),
     };
+    if (!fileKey || (currentClientOnly && item.clientId !== clientId)) {
+      return next;
+    }
     if (isImageMedia(item.mediaType, item.filename)) {
       if (needsMediaUrl(next.previewUrl)) {
         next.previewUrl = buildReceivedMediaUrl(
