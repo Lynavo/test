@@ -30,6 +30,7 @@ vi.mock('qrcode.react', () => ({
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.confirm = vi.fn().mockReturnValue(true);
     useDashboardStore.setState({
       summary: {
         isDiskLow: false,
@@ -157,10 +158,26 @@ describe('Dashboard', () => {
     const codeSpan = screen.getByText('998877');
     fireEvent.doubleClick(codeSpan);
 
+    expect(window.confirm).toHaveBeenCalledWith(
+      '修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？',
+    );
     expect(window.electronAPI?.sidecar.regenerateConnectionCode).toHaveBeenCalled();
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('连接码已重新生成！旧配对设备已失效');
     });
+  });
+
+  it('cancels regenerate connection code when confirmation is declined', async () => {
+    window.confirm = vi.fn().mockReturnValue(false);
+    render(<Dashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: '显示连接码' }));
+    fireEvent.doubleClick(screen.getByText('998877'));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      '修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？',
+    );
+    expect(window.electronAPI?.sidecar.regenerateConnectionCode).not.toHaveBeenCalled();
   });
 
   it('displays the receive path and handles modify directory action', async () => {

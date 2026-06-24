@@ -250,6 +250,7 @@ describe('AppShell', () => {
   });
 
   it('saves the connection code setup before entering the dashboard', async () => {
+    window.confirm = vi.fn().mockReturnValue(true);
     installElectronAPI();
 
     render(<AppShell />);
@@ -262,11 +263,34 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(window.electronAPI?.sidecar.setConnectionCode).toHaveBeenCalledWith('238416');
     });
+    expect(window.confirm).toHaveBeenCalledWith(
+      '修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？',
+    );
     expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
     expect(await screen.findByText('DashboardPage')).toBeInTheDocument();
   });
 
+  it('stays on setup when connection code change confirmation is declined', async () => {
+    window.confirm = vi.fn().mockReturnValue(false);
+    installElectronAPI();
+
+    render(<AppShell />);
+
+    fireEvent.change(await screen.findByLabelText('连接码'), {
+      target: { value: '238416' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存并进入ViviDrop' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      '修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？',
+    );
+    expect(window.electronAPI?.sidecar.setConnectionCode).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
+    expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+  });
+
   it('enters the dashboard without revoking pairings when the connection code is unchanged', async () => {
+    window.confirm = vi.fn();
     installElectronAPI();
 
     render(<AppShell />);
@@ -276,6 +300,7 @@ describe('AppShell', () => {
     expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
     expect(await screen.findByText('DashboardPage')).toBeInTheDocument();
     expect(window.electronAPI?.sidecar.setConnectionCode).not.toHaveBeenCalled();
+    expect(window.confirm).not.toHaveBeenCalled();
   });
 
   it.each([

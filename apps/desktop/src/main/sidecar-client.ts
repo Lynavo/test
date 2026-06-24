@@ -828,6 +828,7 @@ export interface SidecarHealth {
   appCompatibilityVersion?: number;
   capabilities?: {
     connectionDeviceManagement?: boolean;
+    revokesPairingsOnCodeRotation?: boolean;
     wakeOnLanSupported?: boolean;
   };
   tunnel?: {

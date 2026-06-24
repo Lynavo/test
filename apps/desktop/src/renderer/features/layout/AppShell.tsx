@@ -143,6 +143,10 @@ function ConnectionCodeSetupPage({ onComplete, onLogout }: ConnectionCodeSetupPa
       return;
     }
 
+    if (!window.confirm(t('layout.connectionSetup.connectionCodeChangeConfirm'))) {
+      return;
+    }
+
     const api = window.electronAPI;
     if (!api?.sidecar.setConnectionCode) {
       setError(t('layout.connectionSetup.errors.serviceUnavailable'));

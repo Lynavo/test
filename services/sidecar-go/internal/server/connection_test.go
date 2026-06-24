@@ -67,14 +67,20 @@ func setupTestConnection(t *testing.T) (clientConn net.Conn, st *store.Store, cf
 }
 
 func setupTestConnectionWithDone(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
-	return setupTestConnectionWithDoneAndServer(t, false)
+	clientConn, st, cfg, _, done, cleanup = setupTestConnectionWithDoneAndServer(t, false)
+	return clientConn, st, cfg, done, cleanup
 }
 
 func setupTestConnectionWithTCPServerDone(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
+	clientConn, st, cfg, _, done, cleanup = setupTestConnectionWithDoneAndServer(t, true)
+	return clientConn, st, cfg, done, cleanup
+}
+
+func setupTestConnectionWithTCPServer(t *testing.T) (clientConn net.Conn, st *store.Store, cfg *config.Config, srv *TCPServer, done <-chan struct{}, cleanup func()) {
 	return setupTestConnectionWithDoneAndServer(t, true)
 }
 
-func setupTestConnectionWithDoneAndServer(t *testing.T, withTCPServer bool) (clientConn net.Conn, st *store.Store, cfg *config.Config, done <-chan struct{}, cleanup func()) {
+func setupTestConnectionWithDoneAndServer(t *testing.T, withTCPServer bool) (clientConn net.Conn, st *store.Store, cfg *config.Config, srv *TCPServer, done <-chan struct{}, cleanup func()) {
 	t.Helper()
 	tmpDir := t.TempDir()
 	cfg = &config.Config{
@@ -103,7 +109,6 @@ func setupTestConnectionWithDoneAndServer(t *testing.T, withTCPServer bool) (cli
 	hub := events.NewHub()
 
 	client, server := net.Pipe()
-	var srv *TCPServer
 	if withTCPServer {
 		srv = NewTCPServer(st, cfg, hub)
 	}
@@ -114,7 +119,7 @@ func setupTestConnectionWithDoneAndServer(t *testing.T, withTCPServer bool) (cli
 		conn.handle()
 	}()
 
-	return client, st, cfg, doneCh, func() {
+	return client, st, cfg, srv, doneCh, func() {
 		client.Close()
 		st.Close()
 	}
@@ -1106,7 +1111,7 @@ func TestReturningHelloIgnoresDesktopNameAsClientAlias(t *testing.T) {
 	}
 }
 
-func TestConnectionCodeRotationKeepsReturningDeviceAuthorized(t *testing.T) {
+func TestConnectionCodeRotationRequiresReturningDeviceToPairAgain(t *testing.T) {
 	client, st, cfg, cleanup := setupTestConnection(t)
 	defer cleanup()
 
@@ -1114,8 +1119,8 @@ func TestConnectionCodeRotationKeepsReturningDeviceAuthorized(t *testing.T) {
 	client.Close()
 	time.Sleep(50 * time.Millisecond)
 
-	if err := st.SetConnectionCode("654321"); err != nil {
-		t.Fatalf("SetConnectionCode: %v", err)
+	if err := st.RotateConnectionCode("654321"); err != nil {
+		t.Fatalf("RotateConnectionCode: %v", err)
 	}
 
 	client2, cleanup2 := setupTestConnectionWithStore(t, st, cfg)
@@ -1133,26 +1138,53 @@ func TestConnectionCodeRotationKeepsReturningDeviceAuthorized(t *testing.T) {
 
 	var helloRes protocol.HelloRes
 	recvJSON(t, client2, protocol.TypeHelloRes, &helloRes)
-	if helloRes.AuthRequired {
-		t.Fatal("expected authRequired=false after connection code rotation")
+	if !helloRes.AuthRequired {
+		t.Fatal("expected authRequired=true after connection code rotation")
 	}
-	if !helloRes.Bound {
-		t.Fatal("expected bound=true after connection code rotation")
+	if helloRes.Bound {
+		t.Fatal("expected bound=false after connection code rotation")
 	}
-	if helloRes.Nonce == "" {
-		t.Fatal("nonce is empty for returning device after connection code rotation")
+	if helloRes.Nonce != "" {
+		t.Fatal("expected nonce to be empty until returning device pairs again")
+	}
+	_ = pairingToken
+}
+
+func TestDisconnectClientsClosesActiveConnection(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	tcpSrv := NewTCPServer(nil, nil, events.NewHub())
+	tcpSrv.RegisterClientConnection(testClientID, server)
+	if disconnected := tcpSrv.DisconnectClients([]string{testClientID}, "connection_code_changed"); disconnected != 1 {
+		t.Fatalf("DisconnectClients closed %d connections, want 1", disconnected)
 	}
 
-	authHMAC := computeHMAC(t, pairingToken, helloRes.Nonce)
-	sendJSON(t, client2, protocol.TypeAuthReq, protocol.AuthReq{
-		ClientID: testClientID,
-		Auth:     authHMAC,
-	})
+	client.SetReadDeadline(time.Now().Add(testReadTimeout))
+	if hdr, _, err := protocol.ReadFrame(client); err == nil {
+		t.Fatalf("expected connection close, got frame 0x%04x", hdr.Type)
+	}
+}
 
-	var authRes map[string]any
-	recvJSON(t, client2, protocol.TypeAuthRes, &authRes)
-	if authRes["ok"] != true {
-		t.Fatal("expected auth to succeed after connection code rotation")
+func TestUnregisterOneOfMultipleConnectionsKeepsClientState(t *testing.T) {
+	firstClient, firstServer := net.Pipe()
+	defer firstClient.Close()
+	defer firstServer.Close()
+	secondClient, secondServer := net.Pipe()
+	defer secondClient.Close()
+	defer secondServer.Close()
+
+	tcpSrv := NewTCPServer(nil, nil, events.NewHub())
+	tcpSrv.RegisterClientConnection(testClientID, firstServer)
+	tcpSrv.RegisterClientConnection(testClientID, secondServer)
+	tcpSrv.SetClientState(testClientID, "connected")
+
+	tcpSrv.UnregisterClientConnection(testClientID, firstServer)
+	tcpSrv.RemoveClient(testClientID)
+
+	if got := tcpSrv.GetClientState(testClientID); got != "connected" {
+		t.Fatalf("client state after closing one of two connections=%q, want connected", got)
 	}
 }
 
@@ -1171,6 +1203,38 @@ func TestDisconnectBroadcastStatus_UsesPresenceState(t *testing.T) {
 	tcpSrv.SetPresenceProvider(fakePresenceStateProvider{alive: false})
 	if got := tcpSrv.DisconnectBroadcastStatus(testClientID); got != "offline" {
 		t.Fatalf("expected offline with stale presence, got %q", got)
+	}
+}
+
+func TestDisconnectBroadcastStatus_IgnoresPresenceForRevokedDevice(t *testing.T) {
+	tmpDir := t.TempDir()
+	st, err := store.New(filepath.Join(tmpDir, "test.db"))
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer st.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := st.UpsertPairedDevice(store.PairedDevice{
+		ClientID:         testClientID,
+		ClientName:       testClientName,
+		Platform:         "ios",
+		PairingID:        "pair-1",
+		PairingTokenHash: "hash-1",
+		CreatedAt:        now,
+		LastSeenAt:       now,
+	}); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+	if err := st.RevokePairedDevice(testClientID); err != nil {
+		t.Fatalf("RevokePairedDevice: %v", err)
+	}
+
+	tcpSrv := NewTCPServer(st, nil, events.NewHub())
+	tcpSrv.SetPresenceProvider(fakePresenceStateProvider{alive: true})
+
+	if got := tcpSrv.DisconnectBroadcastStatus(testClientID); got != "offline" {
+		t.Fatalf("expected offline for revoked device with live presence, got %q", got)
 	}
 }
 

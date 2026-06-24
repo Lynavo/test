@@ -595,9 +595,13 @@ object AndroidSyncPrimitives {
   fun presenceResponseMatchesBinding(
     expectedDeviceId: String,
     responseServerId: String?,
+    responsePaired: Boolean? = null,
   ): Boolean {
     val normalizedExpectedDeviceId = expectedDeviceId.trim()
     val normalizedResponseServerId = responseServerId?.trim().orEmpty()
+    if (responsePaired == false) {
+      return false
+    }
     return normalizedExpectedDeviceId.isNotBlank() &&
       normalizedResponseServerId.isNotBlank() &&
       normalizedExpectedDeviceId == normalizedResponseServerId

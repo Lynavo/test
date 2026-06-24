@@ -126,20 +126,23 @@ func (c *connection) handle() {
 		c.stopAckTimer()
 		c.conn.Close()
 		if c.clientID != "" && c.server != nil {
-			c.server.RemoveClient(c.clientID)
-			status := c.server.DisconnectBroadcastStatus(c.clientID)
+			hasActiveConnections := c.server.UnregisterClientConnection(c.clientID, c.conn)
+			if !hasActiveConnections {
+				c.server.RemoveClient(c.clientID)
+				status := c.server.DisconnectBroadcastStatus(c.clientID)
 
-			// Broadcast the derived post-disconnect state immediately so
-			// WebSocket consumers stay consistent with the dashboard API:
-			// presence-alive clients are still "connected_idle", otherwise offline.
-			c.hub.Broadcast(events.Event{
-				Type: "device.state.changed",
-				Payload: map[string]any{
-					"deviceId": c.clientID,
-					"status":   status,
-				},
-			})
-			c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
+				// Broadcast the derived post-disconnect state immediately so
+				// WebSocket consumers stay consistent with the dashboard API:
+				// presence-alive clients are still "connected_idle", otherwise offline.
+				c.hub.Broadcast(events.Event{
+					Type: "device.state.changed",
+					Payload: map[string]any{
+						"deviceId": c.clientID,
+						"status":   status,
+					},
+				})
+				c.hub.Broadcast(events.Event{Type: "dashboard.updated", Payload: nil})
+			}
 
 			// Clean up stale session state. If the client disconnects without
 			// sending SYNC_END_REQ, the session would otherwise stay

@@ -40,7 +40,7 @@ func PairDeviceWithDirName(st *store.Store, receiveDir string, device store.Pair
 	}
 
 	device.ReceiveDirName = &dirName
-	if err := st.UpsertPairedDevice(device); err != nil {
+	if err := st.UpsertAuthorizedPairedDevice(device); err != nil {
 		return "", fmt.Errorf("PairDeviceWithDirName: store %q: %w", device.ClientID, err)
 	}
 

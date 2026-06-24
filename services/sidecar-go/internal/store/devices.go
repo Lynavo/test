@@ -5,8 +5,25 @@ import (
 	"time"
 )
 
-// UpsertPairedDevice inserts or replaces a paired device record.
+// UpsertPairedDevice inserts or updates a paired device record without
+// implicitly restoring a revoked authorization.
 func (s *Store) UpsertPairedDevice(d PairedDevice) error {
+	return s.upsertPairedDevice(d, false)
+}
+
+// UpsertAuthorizedPairedDevice inserts or updates a paired device after a
+// successful pairing handshake. This is the only upsert path that clears a
+// previous revocation.
+func (s *Store) UpsertAuthorizedPairedDevice(d PairedDevice) error {
+	return s.upsertPairedDevice(d, true)
+}
+
+func (s *Store) upsertPairedDevice(d PairedDevice, clearRevocation bool) error {
+	var revokedAt any = d.RevokedAt
+	if clearRevocation {
+		revokedAt = nil
+	}
+
 	_, err := s.db.Exec(`
 		INSERT INTO paired_devices (client_id, client_name, device_alias, last_ip, platform, pairing_id, pairing_token_hash, created_at, last_seen_at, revoked_at, receive_dir_name, stable_device_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -18,12 +35,15 @@ func (s *Store) UpsertPairedDevice(d PairedDevice) error {
 			pairing_id = excluded.pairing_id,
 			pairing_token_hash = excluded.pairing_token_hash,
 			last_seen_at = excluded.last_seen_at,
-			revoked_at = excluded.revoked_at,
+			revoked_at = CASE
+				WHEN ? THEN NULL
+				ELSE COALESCE(paired_devices.revoked_at, excluded.revoked_at)
+			END,
 			receive_dir_name = COALESCE(excluded.receive_dir_name, paired_devices.receive_dir_name),
 			stable_device_id = COALESCE(excluded.stable_device_id, paired_devices.stable_device_id)`,
 		d.ClientID, d.ClientName, d.DeviceAlias, d.LastIP, d.Platform,
-		d.PairingID, d.PairingTokenHash, d.CreatedAt, d.LastSeenAt, d.RevokedAt,
-		d.ReceiveDirName, d.StableDeviceID,
+		d.PairingID, d.PairingTokenHash, d.CreatedAt, d.LastSeenAt, revokedAt,
+		d.ReceiveDirName, d.StableDeviceID, clearRevocation,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert paired device %q: %w", d.ClientID, err)

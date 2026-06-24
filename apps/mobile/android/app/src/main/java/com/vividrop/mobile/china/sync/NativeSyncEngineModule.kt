@@ -4934,13 +4934,23 @@ class NativeSyncEngineModule(
       val responseWake = AndroidSyncPrimitives.parseWakeCapability(payload.optJSONObject("wake"))
       val hasWakePayload = payload.has("wake") && !payload.isNull("wake")
       val responseServerId = payload.optString("serverId").takeIf { it.isNotBlank() }
-      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId)) {
+      val responsePaired = if (payload.has("paired") && !payload.isNull("paired")) {
+        payload.optBoolean("paired")
+      } else {
+        null
+      }
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId, responsePaired)) {
+        val rejectionReason = if (responsePaired == false) {
+          "${failureReason}_unpaired"
+        } else {
+          "${failureReason}_server_mismatch"
+        }
         recordDiagnosticsLog(
           "Presence",
-          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} reason=${failureReason}_server_mismatch",
+          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} paired=${responsePaired ?: "nil"} reason=$rejectionReason",
         )
-        if (updateStateOnFailure) {
-          updateBindingConnectionState(loadBinding(), "offline", reason = failureReason)
+        if (updateStateOnFailure || responsePaired == false) {
+          updateBindingConnectionState(loadBinding(), "offline", reason = rejectionReason)
         }
         return false
       }

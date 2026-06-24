@@ -70,15 +70,26 @@ expect(
 expect(
     PresenceReconnectPolicy.presenceResponseMatchesBinding(
         expectedDeviceId: "desktop-1",
-        responseServerId: "desktop-1"
+        responseServerId: "desktop-1",
+        responsePaired: true
     ),
     "presence responses from the bound desktop should pass identity validation"
 )
 
 expect(
+    PresenceReconnectPolicy.presenceResponseMatchesBinding(
+        expectedDeviceId: "desktop-1",
+        responseServerId: "desktop-1",
+        responsePaired: nil
+    ),
+    "presence responses from older desktops without paired must keep passing identity validation"
+)
+
+expect(
     !PresenceReconnectPolicy.presenceResponseMatchesBinding(
         expectedDeviceId: "desktop-1",
-        responseServerId: "desktop-2"
+        responseServerId: "desktop-2",
+        responsePaired: true
     ),
     "presence responses from a different desktop must not mark the binding connected"
 )
@@ -86,9 +97,19 @@ expect(
 expect(
     !PresenceReconnectPolicy.presenceResponseMatchesBinding(
         expectedDeviceId: "desktop-1",
-        responseServerId: nil
+        responseServerId: nil,
+        responsePaired: true
     ),
     "presence responses without serverId must not mark the binding connected"
+)
+
+expect(
+    !PresenceReconnectPolicy.presenceResponseMatchesBinding(
+        expectedDeviceId: "desktop-1",
+        responseServerId: "desktop-1",
+        responsePaired: false
+    ),
+    "presence responses from an unpaired desktop must not keep the mobile binding connected"
 )
 
 expect(

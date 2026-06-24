@@ -39,10 +39,14 @@ enum PresenceReconnectPolicy {
 
     static func presenceResponseMatchesBinding(
         expectedDeviceId: String,
-        responseServerId: String?
+        responseServerId: String?,
+        responsePaired: Bool? = nil
     ) -> Bool {
         let expected = expectedDeviceId.trimmingCharacters(in: .whitespacesAndNewlines)
         let actual = responseServerId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if responsePaired == false {
+            return false
+        }
         return !expected.isEmpty && actual == expected
     }
 

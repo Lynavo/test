@@ -1,6 +1,8 @@
 package server
 
 import (
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net"
 	"sync"
@@ -29,6 +31,7 @@ type TCPServer struct {
 
 	mu               sync.RWMutex
 	connectedClients map[string]string // clientID → state ("authenticated"|"syncing")
+	activeConns      map[string]map[net.Conn]struct{}
 
 	OnPairedDevicesChanged func(reason string)
 }
@@ -55,6 +58,7 @@ func NewTCPServer(s *store.Store, cfg *config.Config, hub *events.Hub) *TCPServe
 		hub:              hub,
 		wake:             defaultWakeProvider{},
 		connectedClients: make(map[string]string),
+		activeConns:      make(map[string]map[net.Conn]struct{}),
 	}
 }
 
@@ -85,11 +89,29 @@ func (s *TCPServer) DisconnectBroadcastStatus(clientID string) string {
 	presence := s.presence
 	s.mu.RUnlock()
 
+	if !s.clientCanUsePresence(clientID) {
+		return "offline"
+	}
 	if clientID != "" && presence != nil && presence.IsAlive(clientID, disconnectPresenceGraceWindow) {
 		return "connected_idle"
 	}
 
 	return "offline"
+}
+
+func (s *TCPServer) clientCanUsePresence(clientID string) bool {
+	if clientID == "" || s.store == nil {
+		return true
+	}
+	device, err := s.store.GetPairedDevice(clientID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false
+		}
+		slog.Warn("failed to check paired device before disconnect status", "clientID", clientID, "err", err)
+		return false
+	}
+	return device.RevokedAt == nil
 }
 
 // SetClientState marks a client as connected with the given state.
@@ -110,9 +132,46 @@ func (s *TCPServer) SetClientState(clientID, state string) {
 	}
 }
 
+func (s *TCPServer) RegisterClientConnection(clientID string, conn net.Conn) {
+	if clientID == "" || conn == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.activeConns == nil {
+		s.activeConns = make(map[string]map[net.Conn]struct{})
+	}
+	if s.activeConns[clientID] == nil {
+		s.activeConns[clientID] = make(map[net.Conn]struct{})
+	}
+	s.activeConns[clientID][conn] = struct{}{}
+	s.mu.Unlock()
+}
+
+func (s *TCPServer) UnregisterClientConnection(clientID string, conn net.Conn) bool {
+	if clientID == "" || conn == nil {
+		return false
+	}
+	s.mu.Lock()
+	hasActiveConnections := false
+	if conns := s.activeConns[clientID]; conns != nil {
+		delete(conns, conn)
+		if len(conns) == 0 {
+			delete(s.activeConns, clientID)
+		} else {
+			hasActiveConnections = true
+		}
+	}
+	s.mu.Unlock()
+	return hasActiveConnections
+}
+
 // RemoveClient removes a client from the connected map.
 func (s *TCPServer) RemoveClient(clientID string) {
 	s.mu.Lock()
+	if len(s.activeConns[clientID]) > 0 {
+		s.mu.Unlock()
+		return
+	}
 	wasGlobalActive := s.anyClientSyncingLocked()
 	delete(s.connectedClients, clientID)
 	isGlobalActive := s.anyClientSyncingLocked()
@@ -126,6 +185,28 @@ func (s *TCPServer) RemoveClient(clientID string) {
 			},
 		})
 	}
+}
+
+func (s *TCPServer) DisconnectClients(clientIDs []string, reason string) int {
+	if len(clientIDs) == 0 {
+		return 0
+	}
+
+	conns := make([]net.Conn, 0, len(clientIDs))
+	s.mu.RLock()
+	for _, clientID := range clientIDs {
+		for conn := range s.activeConns[clientID] {
+			conns = append(conns, conn)
+		}
+	}
+	s.mu.RUnlock()
+
+	for _, conn := range conns {
+		if err := conn.Close(); err != nil {
+			slog.Debug("failed to close client connection", "reason", reason, "remote", conn.RemoteAddr(), "err", err)
+		}
+	}
+	return len(conns)
 }
 
 // anyClientSyncingLocked checks if any connected client is in syncing state.

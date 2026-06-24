@@ -21,6 +21,10 @@ type ClientStateProvider interface {
 	ConnectedClientStates() map[string]string
 }
 
+type ClientDisconnectProvider interface {
+	DisconnectClients(clientIDs []string, reason string) int
+}
+
 type WakeProvider interface {
 	WakeCapability() *protocol.WakeCapability
 }

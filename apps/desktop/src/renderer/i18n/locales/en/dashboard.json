@@ -52,6 +52,7 @@
       "regenerateTitle": "Double-click to regenerate pairing code",
       "showBeforeRegenerateTitle": "Show the pairing code before double-clicking to change it",
       "regenerateHint": "Double-click to change pairing code",
+      "regenerateConfirm": "Changing the pairing code will invalidate all currently paired phones. They will need to pair again with the new code. Continue?",
       "show": "Show pairing code",
       "hide": "Hide pairing code",
       "copy": "Copy",

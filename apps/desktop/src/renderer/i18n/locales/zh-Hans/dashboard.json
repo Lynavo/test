@@ -52,6 +52,7 @@
       "regenerateTitle": "双击重新生成连接码",
       "showBeforeRegenerateTitle": "显示连接码后可双击修改",
       "regenerateHint": "双击修改连接码",
+      "regenerateConfirm": "修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？",
       "show": "显示连接码",
       "hide": "隐藏连接码",
       "copy": "复制",

@@ -28,7 +28,8 @@
     "lockedHint": "Files are being received. Rename after transfer finishes."
   },
   "connectionCode": {
-    "regenerate": "Regenerate"
+    "regenerate": "Regenerate",
+    "regenerateConfirm": "Changing the pairing code will invalidate all currently paired phones. They will need to pair again with the new code. Continue?"
   },
   "connectionDevices": {
     "title": "Connected devices",

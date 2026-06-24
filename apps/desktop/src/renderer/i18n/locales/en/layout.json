@@ -44,6 +44,7 @@
   "connectionSetup": {
     "title": "Set pairing code",
     "connectionCodeLabel": "Pairing code",
+    "connectionCodeChangeConfirm": "Changing the pairing code will invalidate all currently paired phones. They will need to pair again with the new code. Continue?",
     "saveAndEnter": "Save and enter ViviDrop",
     "downloadSectionTitle": "Use and download the mobile app",
     "errors": {

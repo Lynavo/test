@@ -77,6 +77,63 @@ func TestUpsertPairedDevice_UpdatesExisting(t *testing.T) {
 	}
 }
 
+func TestUpsertPairedDevicePreservesRevocationWhenMetadataRefreshOmitsRevokedAt(t *testing.T) {
+	s := newTestStore(t)
+	d := sampleDevice("client-revoked-refresh")
+	revokedAt := "2026-06-10T08:09:10Z"
+	d.RevokedAt = &revokedAt
+
+	if err := s.UpsertPairedDevice(d); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+
+	d.ClientName = "Updated iPhone"
+	d.RevokedAt = nil
+	if err := s.UpsertPairedDevice(d); err != nil {
+		t.Fatalf("UpsertPairedDevice metadata refresh: %v", err)
+	}
+
+	got, err := s.GetPairedDevice("client-revoked-refresh")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if got.ClientName != "Updated iPhone" {
+		t.Fatalf("expected refreshed metadata, got client_name=%q", got.ClientName)
+	}
+	if got.RevokedAt == nil || *got.RevokedAt != revokedAt {
+		t.Fatalf("expected revoked_at to remain %q, got %v", revokedAt, got.RevokedAt)
+	}
+}
+
+func TestUpsertAuthorizedPairedDeviceClearsPreviousRevocationAfterSuccessfulPairing(t *testing.T) {
+	s := newTestStore(t)
+	d := sampleDevice("client-repair")
+	revokedAt := "2026-06-10T08:09:10Z"
+	d.RevokedAt = &revokedAt
+
+	if err := s.UpsertPairedDevice(d); err != nil {
+		t.Fatalf("UpsertPairedDevice: %v", err)
+	}
+
+	d.PairingID = "pair-client-repair-new"
+	d.PairingTokenHash = "hash-client-repair-new"
+	d.RevokedAt = nil
+	if err := s.UpsertAuthorizedPairedDevice(d); err != nil {
+		t.Fatalf("UpsertAuthorizedPairedDevice: %v", err)
+	}
+
+	got, err := s.GetPairedDevice("client-repair")
+	if err != nil {
+		t.Fatalf("GetPairedDevice: %v", err)
+	}
+	if got.RevokedAt != nil {
+		t.Fatalf("expected successful pairing to clear revoked_at, got %q", *got.RevokedAt)
+	}
+	if got.PairingTokenHash != "hash-client-repair-new" {
+		t.Fatalf("expected refreshed token hash, got %q", got.PairingTokenHash)
+	}
+}
+
 func TestGetPairedDevice_NotFound(t *testing.T) {
 	s := newTestStore(t)
 

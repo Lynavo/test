@@ -132,6 +132,9 @@ export function Dashboard() {
     }
     const api = window.electronAPI;
     if (!api) return;
+    if (!window.confirm(t('dashboard.share.connectionCode.regenerateConfirm'))) {
+      return;
+    }
     try {
       const result = await api.sidecar.regenerateConnectionCode();
       useSettingsStore.getState().updateSettings({

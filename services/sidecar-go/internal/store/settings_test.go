@@ -108,6 +108,37 @@ func TestSetConnectionCodeKeepsAuthorizedDevices(t *testing.T) {
 	}
 }
 
+func TestRotateConnectionCodeRevokesAuthorizedDevices(t *testing.T) {
+	s := newTestStore(t)
+	for _, id := range []string{"client-a", "client-b"} {
+		if err := s.UpsertPairedDevice(sampleDevice(id)); err != nil {
+			t.Fatalf("UpsertPairedDevice %q: %v", id, err)
+		}
+	}
+
+	if err := s.RotateConnectionCode("654321"); err != nil {
+		t.Fatalf("RotateConnectionCode: %v", err)
+	}
+
+	code, err := s.GetConnectionCode()
+	if err != nil {
+		t.Fatalf("GetConnectionCode: %v", err)
+	}
+	if code != "654321" {
+		t.Fatalf("expected code 654321, got %q", code)
+	}
+
+	for _, id := range []string{"client-a", "client-b"} {
+		got, err := s.GetPairedDevice(id)
+		if err != nil {
+			t.Fatalf("GetPairedDevice %q: %v", id, err)
+		}
+		if got.RevokedAt == nil {
+			t.Fatalf("expected %q to be revoked", id)
+		}
+	}
+}
+
 func TestGetDeviceID_AfterMigration(t *testing.T) {
 	s := newTestStore(t)
 

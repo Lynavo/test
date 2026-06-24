@@ -6808,18 +6808,23 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 let responseServerId = payload?["serverId"] as? String
                 let responseWake = WakeCapability.fromJSONValue(payload?["wake"])
                 let responsePower = DesktopPowerSnapshot.fromJSONValue(payload?["power"])
+                let responsePaired = payload?["paired"] as? Bool
                 let hasWakePayload = payload?["wake"] != nil
                 let hasPowerPayload = payload?["power"] != nil
                 guard PresenceReconnectPolicy.presenceResponseMatchesBinding(
                     expectedDeviceId: expectedDeviceId,
-                    responseServerId: responseServerId
+                    responseServerId: responseServerId,
+                    responsePaired: responsePaired
                 ) else {
+                    let rejectionReason = responsePaired == false
+                        ? "\(failureReason)_unpaired"
+                        : "\(failureReason)_server_mismatch"
                     syncDiagnosticsLog(
                         "Presence",
-                        "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") reason=\(failureReason)_server_mismatch"
+                        "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") paired=\(responsePaired.map(String.init) ?? "nil") reason=\(rejectionReason)"
                     )
-                    if updateStateOnFailure {
-                        self.updateBindingConnectionState(.offline, reason: "\(failureReason)_server_mismatch")
+                    if updateStateOnFailure || responsePaired == false {
+                        self.updateBindingConnectionState(.offline, reason: rejectionReason)
                     }
                     completion?(false)
                     return

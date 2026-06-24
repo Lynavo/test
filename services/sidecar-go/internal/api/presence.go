@@ -43,16 +43,6 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing clientId")
 		return
 	}
-	s.presence.Touch(clientID)
-	if s.hub != nil {
-		s.hub.Broadcast(events.Event{
-			Type: "device.state.changed",
-			Payload: map[string]string{
-				"deviceId": clientID,
-				"status":   "connected_idle",
-			},
-		})
-	}
 
 	serverName, err := s.store.GetDeviceName()
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -77,6 +67,7 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 
 	body := map[string]any{
 		"ok":         true,
+		"paired":     false,
 		"serverId":   serverID,
 		"serverName": serverName,
 		"shareName":  shareName,
@@ -87,6 +78,17 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if device != nil && device.RevokedAt == nil {
+		body["paired"] = true
+		s.presence.Touch(clientID)
+		if s.hub != nil {
+			s.hub.Broadcast(events.Event{
+				Type: "device.state.changed",
+				Payload: map[string]string{
+					"deviceId": clientID,
+					"status":   "connected_idle",
+				},
+			})
+		}
 		capability := s.wakeCapability()
 		if capability != nil {
 			body["wake"] = capability

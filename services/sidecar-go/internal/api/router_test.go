@@ -379,6 +379,45 @@ func (f fakeClientStates) ConnectedClientStates() map[string]string {
 	return states
 }
 
+type fakeDisconnectingClientStates struct {
+	states       fakeClientStates
+	disconnected []string
+	reason       string
+}
+
+func (f *fakeDisconnectingClientStates) ConnectedClientStates() map[string]string {
+	return f.states.ConnectedClientStates()
+}
+
+func (f *fakeDisconnectingClientStates) DisconnectClients(clientIDs []string, reason string) int {
+	f.disconnected = append([]string(nil), clientIDs...)
+	f.reason = reason
+	return len(clientIDs)
+}
+
+type flippingDisconnectingClientStates struct {
+	store        *store.Store
+	disconnected []string
+	reason       string
+}
+
+func (f *flippingDisconnectingClientStates) ConnectedClientStates() map[string]string {
+	if f.store == nil {
+		return nil
+	}
+	device, err := f.store.GetPairedDevice("phone-a")
+	if err != nil || device.RevokedAt == nil {
+		return fakeClientStates{}.ConnectedClientStates()
+	}
+	return fakeClientStates{"phone-a": "connected"}.ConnectedClientStates()
+}
+
+func (f *flippingDisconnectingClientStates) DisconnectClients(clientIDs []string, reason string) int {
+	f.disconnected = append([]string(nil), clientIDs...)
+	f.reason = reason
+	return len(clientIDs)
+}
+
 type fixedWakeProvider struct {
 	capability *protocol.WakeCapability
 }
@@ -505,8 +544,8 @@ func TestHealthEndpoint(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected capabilities object, got %T", body["capabilities"])
 	}
-	if capabilities["revokesPairingsOnCodeRotation"] == true {
-		t.Fatal("health must not advertise revocation on code rotation")
+	if capabilities["revokesPairingsOnCodeRotation"] != true {
+		t.Fatalf("expected revokesPairingsOnCodeRotation=true, got %v", capabilities["revokesPairingsOnCodeRotation"])
 	}
 	if capabilities["connectionDeviceManagement"] != true {
 		t.Fatalf("expected connectionDeviceManagement=true, got %v", capabilities["connectionDeviceManagement"])
@@ -613,6 +652,9 @@ func TestPresenceIncludesWakeMetadataOnlyForPairedClient(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&pairedBody); err != nil {
 		t.Fatalf("decode paired presence: %v", err)
 	}
+	if pairedBody["paired"] != true {
+		t.Fatalf("paired presence paired=%v, want true", pairedBody["paired"])
+	}
 	wake, ok := pairedBody["wake"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected paired presence wake object, got %T", pairedBody["wake"])
@@ -637,6 +679,9 @@ func TestPresenceIncludesWakeMetadataOnlyForPairedClient(t *testing.T) {
 	var unpairedBody map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&unpairedBody); err != nil {
 		t.Fatalf("decode unpaired presence: %v", err)
+	}
+	if unpairedBody["paired"] != false {
+		t.Fatalf("unpaired presence paired=%v, want false", unpairedBody["paired"])
 	}
 	if _, ok := unpairedBody["wake"]; ok {
 		t.Fatal("unpaired presence must not expose full wake metadata")
@@ -1839,6 +1884,9 @@ func TestPresenceHeartbeatBroadcastsConnectedIdleEvent(t *testing.T) {
 	if err := st.SetDeviceName("Desk Renamed"); err != nil {
 		t.Fatalf("SetDeviceName: %v", err)
 	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", now)
+
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
@@ -1903,6 +1951,46 @@ func TestPresenceHeartbeatBroadcastsConnectedIdleEvent(t *testing.T) {
 	}
 	if event.Payload["status"] != "connected_idle" {
 		t.Fatalf("expected status connected_idle, got %v", event.Payload["status"])
+	}
+}
+
+func TestRevokedPresenceDoesNotBroadcastConnectedIdleEvent(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", now)
+	if err := st.RevokePairedDevice("client-1"); err != nil {
+		t.Fatalf("RevokePairedDevice: %v", err)
+	}
+
+	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial ws: %v", err)
+	}
+	defer conn.Close()
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/presence/client-1", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /presence: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, message, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("revoked presence must not broadcast connected_idle event, got %s", string(message))
 	}
 }
 
@@ -4314,8 +4402,8 @@ func TestRegenerateCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPairedDevice after regenerate: %v", err)
 	}
-	if device.RevokedAt != nil {
-		t.Fatal("expected existing paired device to remain authorized after connection code regeneration")
+	if device.RevokedAt == nil {
+		t.Fatal("expected existing paired device to be revoked after connection code regeneration")
 	}
 }
 
@@ -4517,7 +4605,7 @@ func TestClearBlockedClientEndpointClearsBlockOnly(t *testing.T) {
 	}
 }
 
-func TestRegenerateConnectionCodeDoesNotRevokeAuthorizedDevices(t *testing.T) {
+func TestRegenerateConnectionCodeRevokesAuthorizedDevices(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
@@ -4559,8 +4647,8 @@ func TestRegenerateConnectionCodeDoesNotRevokeAuthorizedDevices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPairedDevice: %v", err)
 	}
-	if device.RevokedAt != nil {
-		t.Fatal("regenerating connection code must not revoke authorized devices")
+	if device.RevokedAt == nil {
+		t.Fatal("regenerating connection code must revoke authorized devices")
 	}
 }
 
@@ -4616,8 +4704,190 @@ func TestSetConnectionCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPairedDevice after set: %v", err)
 	}
-	if device.RevokedAt != nil {
-		t.Fatal("setting connection code must not revoke authorized devices")
+	if device.RevokedAt == nil {
+		t.Fatal("setting connection code must revoke authorized devices")
+	}
+}
+
+func TestSetConnectionCodeRefreshesTunnelPairings(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	registerCh := make(chan map[string]any, 2)
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	signalingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/tunnel/signaling" {
+			http.NotFound(w, r)
+			return
+		}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(msg, &payload); err != nil {
+				continue
+			}
+			if payload["type"] == "register_desktop" {
+				registerCh <- payload
+			}
+		}
+	}))
+	defer signalingSrv.Close()
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	t.Cleanup(func() {
+		_, _ = http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(`{"signalingUrl":"","accessToken":"","iceServers":[]}`))
+	})
+
+	reqBody := `{"signalingUrl":"` + signalingSrv.URL + `","accessToken":"token","iceServers":[]}`
+	credentialsResp, err := http.Post(srv.URL+"/tunnel/credentials", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	credentialsResp.Body.Close()
+	if credentialsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected credentials 200, got %d", credentialsResp.StatusCode)
+	}
+
+	select {
+	case payload := <-registerCh:
+		paired, ok := payload["pairedDevices"].([]any)
+		if !ok || len(paired) != 1 {
+			t.Fatalf("initial pairedDevices=%#v, want one device", payload["pairedDevices"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial desktop registration was not sent")
+	}
+
+	resp, err := http.Post(
+		srv.URL+"/connection-code",
+		"application/json",
+		strings.NewReader(`{"code":"238416"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /connection-code: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	select {
+	case payload := <-registerCh:
+		paired, ok := payload["pairedDevices"].([]any)
+		if !ok || len(paired) != 0 {
+			t.Fatalf("refreshed pairedDevices=%#v, want no devices", payload["pairedDevices"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("refreshed desktop registration was not sent after connection code change")
+	}
+}
+
+func TestSetConnectionCodeDisconnectsConnectedClients(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	clientStates := &fakeDisconnectingClientStates{
+		states: fakeClientStates{
+			"phone-b": "syncing",
+			"phone-a": "connected",
+		},
+	}
+	_, handler := api.NewServer(st, cfg, hub, clientStates)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/connection-code",
+		"application/json",
+		strings.NewReader(`{"code":"238416"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /connection-code: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	want := []string{"phone-a", "phone-b"}
+	if strings.Join(clientStates.disconnected, ",") != strings.Join(want, ",") {
+		t.Fatalf("disconnected clients=%v, want %v", clientStates.disconnected, want)
+	}
+	if clientStates.reason != "connection_code_set" {
+		t.Fatalf("disconnect reason=%q, want connection_code_set", clientStates.reason)
+	}
+}
+
+func TestSetConnectionCodeDisconnectsClientsObservedAfterRotation(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	clientStates := &flippingDisconnectingClientStates{store: st}
+	_, handler := api.NewServer(st, cfg, hub, clientStates)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/connection-code",
+		"application/json",
+		strings.NewReader(`{"code":"238416"}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /connection-code: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	if strings.Join(clientStates.disconnected, ",") != "phone-a" {
+		t.Fatalf("disconnected clients=%v, want [phone-a]", clientStates.disconnected)
+	}
+	if clientStates.reason != "connection_code_set" {
+		t.Fatalf("disconnect reason=%q, want connection_code_set", clientStates.reason)
+	}
+}
+
+func TestRegenerateConnectionCodeDisconnectsConnectedClients(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	clientStates := &fakeDisconnectingClientStates{
+		states: fakeClientStates{"phone-a": "connected"},
+	}
+	_, handler := api.NewServer(st, cfg, hub, clientStates)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/connection-code/regenerate", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST /connection-code/regenerate: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	if strings.Join(clientStates.disconnected, ",") != "phone-a" {
+		t.Fatalf("disconnected clients=%v, want [phone-a]", clientStates.disconnected)
+	}
+	if clientStates.reason != "connection_code_regenerated" {
+		t.Fatalf("disconnect reason=%q, want connection_code_regenerated", clientStates.reason)
 	}
 }
 

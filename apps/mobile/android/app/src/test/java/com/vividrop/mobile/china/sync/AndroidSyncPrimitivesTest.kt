@@ -763,18 +763,35 @@ class AndroidSyncPrimitivesTest {
       AndroidSyncPrimitives.presenceResponseMatchesBinding(
         expectedDeviceId = " desktop-1 ",
         responseServerId = "desktop-1",
+        responsePaired = true,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = " desktop-1 ",
+        responseServerId = "desktop-1",
+        responsePaired = null,
       ),
     )
     assertFalse(
       AndroidSyncPrimitives.presenceResponseMatchesBinding(
         expectedDeviceId = "desktop-1",
         responseServerId = "other-desktop",
+        responsePaired = true,
       ),
     )
     assertFalse(
       AndroidSyncPrimitives.presenceResponseMatchesBinding(
         expectedDeviceId = "desktop-1",
         responseServerId = null,
+        responsePaired = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "desktop-1",
+        responsePaired = false,
       ),
     )
   }

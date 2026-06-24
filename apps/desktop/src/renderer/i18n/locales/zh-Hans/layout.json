@@ -44,6 +44,7 @@
   "connectionSetup": {
     "title": "设置连接码",
     "connectionCodeLabel": "连接码",
+    "connectionCodeChangeConfirm": "修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？",
     "saveAndEnter": "保存并进入ViviDrop",
     "downloadSectionTitle": "使用与下载手机端",
     "errors": {

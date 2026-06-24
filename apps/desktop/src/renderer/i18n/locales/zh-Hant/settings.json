@@ -28,7 +28,8 @@
     "lockedHint": "正在接收檔案，完成後再修改名稱"
   },
   "connectionCode": {
-    "regenerate": "重新產生"
+    "regenerate": "重新產生",
+    "regenerateConfirm": "修改配對碼會中斷目前已配對的手機，所有手機需使用新配對碼重新配對。要繼續嗎？"
   },
   "connectionDevices": {
     "title": "連接設備",

@@ -28,6 +28,10 @@ export function ConnectionCodeSection() {
   });
 
   const handleRegenerate = useCallback(async () => {
+    if (!window.confirm(t('settings.connectionCode.regenerateConfirm'))) {
+      return;
+    }
+
     try {
       const result = await window.electronAPI.sidecar.regenerateConnectionCode();
       updateSettings({ ...settings, connectionCode: result.code });
