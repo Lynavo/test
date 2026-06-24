@@ -95,11 +95,20 @@ config 內的 `APP_REVIEW_PHONE`。不一致會直接失敗，避免 App Review 
 
 ### 5.1 macOS signed DMG
 
-從倉庫根目錄執行：
+正式發佈必須從倉庫根目錄使用 release profile。例：
 
 ```bash
-pnpm package:desktop:signed
+pnpm release --profile global-review --targets mac
 ```
+
+macOS Developer ID Team ID 必須跟 release profile market 一致：
+
+| Profile market | Required Team ID |
+| --- | --- |
+| `global` | `S44ANBLMF9` |
+| `cn` | `GKN7JQNCMC` |
+
+`package-macos-signed.sh` 會根據 `SYNCFLOW_MARKET` 檢查 Team ID；找不到匹配的 `Developer ID Application` identity 時不能用其他 Team 代簽。
 
 如果只做本地驗籤：
 
@@ -116,6 +125,9 @@ pnpm package:desktop:signed:dir
 發佈前至少確認：
 
 ```bash
+for app in apps/desktop/release/mac*/Vivi\ Drop.app; do
+  codesign -dv --verbose=4 "$app" 2>&1 | grep TeamIdentifier
+done
 for app in apps/desktop/release/mac*/Vivi\ Drop.app; do
   spctl --assess --type execute -vv "$app"
 done

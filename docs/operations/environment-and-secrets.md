@@ -59,15 +59,19 @@ pnpm package:desktop:win
 
 ## 3. 本地密钥放置
 
-当前 macOS signed desktop 打包脚本默认会从仓库根目录读取：
+当前 macOS signed desktop 打包脚本会根据 release profile market 从仓库根目录读取：
 
-- `AuthKey_HY8CAHGPW9.p8`
+| Market | App Store Connect key | Required Developer ID Team ID |
+| --- | --- | --- |
+| `cn` | `AuthKey_HY8CAHGPW9.p8` | `GKN7JQNCMC` |
+| `global` | `AuthKey_Global_AMY9XVV3LD.p8` | `S44ANBLMF9` |
 
 注意：
 
 1. `.p8` 已加入 `.gitignore`
 2. 只允许存在于本机，不允许提交
 3. 如果路径不同，用环境变量覆盖，不要改脚本里的默认值作为多人共享方案
+4. global macOS 包必须由 Team ID `S44ANBLMF9` 的 `Developer ID Application` 证书签名，不能用 `GKN7JQNCMC` 代签
 
 ## 4. 关键环境变量
 
@@ -78,11 +82,14 @@ pnpm package:desktop:win
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
 - `SYNCFLOW_BUILD_NUMBER`
+- `SYNCFLOW_MARKET`
 
 说明：
 
 1. `CSC_NAME` 不要带 `Developer ID Application:` 前缀
 2. `SYNCFLOW_BUILD_NUMBER` 默认从 iOS `CURRENT_PROJECT_VERSION` 推导
+3. `SYNCFLOW_MARKET=global` 时，`CSC_NAME` 必须匹配 Team ID `S44ANBLMF9`
+4. `SYNCFLOW_MARKET=cn` 时，`CSC_NAME` 必须匹配 Team ID `GKN7JQNCMC`
 
 ## 4.2 Windows Desktop 打包
 

@@ -23,32 +23,35 @@
 
 ## 2. 当前默认签名材料
 
-当前本机默认值如下：
+macOS Desktop 签名材料必须跟随 release profile 的 market 选择，不允许用其他 Team 的 Developer ID 代签。
 
-1. Developer ID identity：
-   - `Developer ID Application: Shenzhen Kaiyun Information Technology Co., Ltd. (GKN7JQNCMC)`
-2. `APPLE_API_KEY_ID`：
-   - `HY8CAHGPW9`
-3. `APPLE_API_ISSUER`：
-   - `54cad458-4184-4fc6-a1c7-cb4b0c6ded0e`
-4. `APPLE_API_KEY` 默认路径：
-   - `/Volumes/T7/Dev/Web/sync-flow-pack/AuthKey_HY8CAHGPW9.p8`
+| Profile market | Developer ID Team ID | App Store Connect key |
+| --- | --- | --- |
+| `cn` | `GKN7JQNCMC` | `AuthKey_HY8CAHGPW9.p8` |
+| `global` | `S44ANBLMF9` | `AuthKey_Global_AMY9XVV3LD.p8` |
 
-脚本会自动探测当前 keychain 里的 `Developer ID Application` 证书，并自动去掉 electron-builder 不接受的前缀。
+脚本会根据 `SYNCFLOW_MARKET` 自动选择预期 Team ID，并从当前 keychain 中寻找对应的 `Developer ID Application` identity。找不到对应 Team ID 时会直接停止打包，并列出当前可用的 `Developer ID Application` identity。
+
+注意：DMG 内的 `.app` 必须使用 `Developer ID Application: ... (Team ID)` 签名。`Developer ID Installer: ... (Team ID)` 只适用于 `.pkg` installer，不能替代 `.app` 的 Developer ID Application 签名。
+
+`CSC_NAME` 覆盖仍然允许，但必须匹配当前 market 的 Team ID。举例：
+
+1. `global-review` / `global-prod` 必须匹配 `S44ANBLMF9`
+2. `cn-review` / `cn-prod` 必须匹配 `GKN7JQNCMC`
+3. `CSC_NAME` 不要带 `Developer ID Application:` 前缀
 
 ## 3. 一键打包
 
-从仓库根目录执行：
+正式打包优先从仓库根目录使用 release profile：
 
 ```bash
-cd /Volumes/T7/Dev/Web/sync-flow-pack
-pnpm --filter @syncflow/desktop package:signed
+pnpm release --profile global-review --targets mac
 ```
 
-等价脚本入口：
+单独验证 macOS 打包脚本时，可以先由 release profile 注入环境变量后再执行桌面打包入口：
 
 ```bash
-bash /Volumes/T7/Dev/Web/sync-flow-pack/apps/desktop/scripts/package-macos-signed.sh dmg
+pnpm package:desktop:signed
 ```
 
 这条路径会执行：
@@ -85,10 +88,11 @@ bash /Volumes/T7/Dev/Web/sync-flow-pack/apps/desktop/scripts/package-macos-signe
 如果本机签名材料变化，可以覆盖下面这些变量：
 
 ```bash
-export CSC_NAME='Shenzhen Kaiyun Information Technology Co., Ltd. (GKN7JQNCMC)'
+export SYNCFLOW_MARKET='global'
+export CSC_NAME='Example Developer ID Name (S44ANBLMF9)'
 export APPLE_API_KEY='/absolute/path/to/AuthKey_xxxxxx.p8'
-export APPLE_API_KEY_ID='HY8CAHGPW9'
-export APPLE_API_ISSUER='54cad458-4184-4fc6-a1c7-cb4b0c6ded0e'
+export APPLE_API_KEY_ID='AMY9XVV3LD'
+export APPLE_API_ISSUER='<global issuer id>'
 
 pnpm --filter @syncflow/desktop package:signed
 ```
@@ -114,7 +118,9 @@ done
 预期看到：
 
 1. `Authority=Developer ID Application: ...`
-2. `TeamIdentifier=GKN7JQNCMC`
+2. `TeamIdentifier` 与 release profile market 一致：
+   - `global`：`S44ANBLMF9`
+   - `cn`：`GKN7JQNCMC`
 3. `Runtime Version` 存在
 
 ### 6.2 sidecar 签名
