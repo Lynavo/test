@@ -76,6 +76,8 @@ type RemoteResourceItem = DesktopSharedResourceDTO & {
   modifiedLabel?: string;
   preview?: 'blue' | 'dark' | 'settings';
   thumbnailUrl?: string;
+  previewUrl?: string;
+  streamUrl?: string;
   sharedRootResourceId?: string;
   relativePath?: string;
 };
@@ -1060,6 +1062,8 @@ export function RemoteAccessGlobalScreen() {
           mediaType: item.mediaType,
           localPath: result.localPath,
           thumbnailUrl: item.thumbnailUrl,
+          previewUrl: item.previewUrl,
+          streamUrl: item.streamUrl,
           savedToPhotos: result.savedToPhotos,
         });
 

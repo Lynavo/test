@@ -1349,6 +1349,8 @@ describe('RemoteAccessGlobalScreen', () => {
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
         thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
+        previewUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
       },
     ]);
     mockDownloadGlobalRemoteAccessResource.mockResolvedValueOnce({
@@ -1380,6 +1382,8 @@ describe('RemoteAccessGlobalScreen', () => {
       mediaType: 'image',
       localPath: '/local/alpha.jpg',
       thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
+      previewUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
+      streamUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
       savedToPhotos: false,
     });
     expect(alertSpy).toHaveBeenCalledWith('下載完成', 'alpha.jpg 已儲存到檔案');
