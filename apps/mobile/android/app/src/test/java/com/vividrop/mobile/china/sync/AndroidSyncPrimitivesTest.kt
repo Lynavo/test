@@ -623,6 +623,46 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun fallbackHelloUsesPairingTokenOnlyForCurrentBindingHost() {
+    assertEquals(
+      "token-1",
+      AndroidSyncPrimitives.pairingTokenForFallbackHello(
+        probeHost = " 172.16.20.108 ",
+        bindingHost = "172.16.20.108",
+        pairingToken = " token-1 ",
+      ),
+    )
+    assertEquals(
+      null,
+      AndroidSyncPrimitives.pairingTokenForFallbackHello(
+        probeHost = "172.16.20.109",
+        bindingHost = "172.16.20.108",
+        pairingToken = "token-1",
+      ),
+    )
+    assertEquals(
+      null,
+      AndroidSyncPrimitives.pairingTokenForFallbackHello(
+        probeHost = "172.16.20.108",
+        bindingHost = "172.16.20.108",
+        pairingToken = " ",
+      ),
+    )
+  }
+
+  @Test
+  fun syncSocketReadTimeoutAllowsLongerUploadAckGapsThanControlConnections() {
+    assertTrue(AndroidSyncPrimitives.syncSocketReadTimeoutMs(5_000) >= 45_000)
+  }
+
+  @Test
+  fun uploadAckWaitSkipsPingFrames() {
+    assertFalse(AndroidSyncPrimitives.isTerminalUploadAckWaitFrame(0x000F))
+    assertTrue(AndroidSyncPrimitives.isTerminalUploadAckWaitFrame(0x000A))
+    assertTrue(AndroidSyncPrimitives.isTerminalUploadAckWaitFrame(0x0011))
+  }
+
+  @Test
   fun requireCompatibleDesktopAppVersionRejectsMismatch() {
     AndroidSyncPrimitives.requireCompatibleDesktopAppVersion(
       serverCompatibilityVersion = APP_COMPATIBILITY_VERSION,

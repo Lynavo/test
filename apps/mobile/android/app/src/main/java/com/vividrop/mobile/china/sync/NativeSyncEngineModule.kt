@@ -2748,44 +2748,56 @@ class NativeSyncEngineModule(
         }
         writeFileDataFrame(connection.output, item.fileKey, offset, buffer, read)
         offset += read
-        val frame = readJsonFrameAny(connection.input)
-        if (frame.type == TYPE_ERROR) {
-          throw IllegalStateException(frame.payload.optString("message", "Desktop returned protocol error"))
-        }
-        if (frame.type == TYPE_FILE_ACK) {
-          val committedOffset = frame.payload.optLong("committedOffset", offset)
-          uploadStore.updateOffset(item.fileKey, committedOffset, isoNow())
-          val nowElapsedMs = SystemClock.elapsedRealtime()
-          val transferredBytes = completedBytes + committedOffset
-          val elapsedMs = nowElapsedMs - speedLastCheckElapsedMs
-          if (elapsedMs >= SPEED_SAMPLE_INTERVAL_MS) {
-            currentSpeedMbps = AndroidSyncPrimitives.computeTransferSpeedMbps(
-              bytesDelta = transferredBytes - speedLastTransferredBytes,
-              elapsedMs = elapsedMs,
-            )
-            speedLastTransferredBytes = transferredBytes
-            speedLastCheckElapsedMs = nowElapsedMs
-          }
-          emitEvent(
-            "onSyncStateChanged",
-            buildActiveSyncSummary(
-              binding = binding,
-              item = item,
-              sessionId = sessionId,
-              completedCount = completedCount,
-              totalCount = queueTotalCount,
-              completedBytes = completedBytes,
-              totalBytes = totalBytes,
-              currentOffset = committedOffset,
-              currentSpeedMbps = currentSpeedMbps,
-            ),
+        val frame = readUploadAckWaitFrame(connection)
+        val committedOffset = frame.payload.optLong("committedOffset", offset)
+        uploadStore.updateOffset(item.fileKey, committedOffset, isoNow())
+        val nowElapsedMs = SystemClock.elapsedRealtime()
+        val transferredBytes = completedBytes + committedOffset
+        val elapsedMs = nowElapsedMs - speedLastCheckElapsedMs
+        if (elapsedMs >= SPEED_SAMPLE_INTERVAL_MS) {
+          currentSpeedMbps = AndroidSyncPrimitives.computeTransferSpeedMbps(
+            bytesDelta = transferredBytes - speedLastTransferredBytes,
+            elapsedMs = elapsedMs,
           )
+          speedLastTransferredBytes = transferredBytes
+          speedLastCheckElapsedMs = nowElapsedMs
         }
+        emitEvent(
+          "onSyncStateChanged",
+          buildActiveSyncSummary(
+            binding = binding,
+            item = item,
+            sessionId = sessionId,
+            completedCount = completedCount,
+            totalCount = queueTotalCount,
+            completedBytes = completedBytes,
+            totalBytes = totalBytes,
+            currentOffset = committedOffset,
+            currentSpeedMbps = currentSpeedMbps,
+          ),
+        )
       }
       if (offset < item.fileSize) {
         recordNativeLog("SyncUpload", "FILE_DATA stream incomplete fileKey=${item.fileKey} offset=$offset size=${item.fileSize}", Log.ERROR)
         throw IllegalStateException("FILE_DATA stream incomplete: $offset/${item.fileSize}")
       }
+    }
+  }
+
+  private fun readUploadAckWaitFrame(connection: ProtocolConnection): JsonFrame {
+    while (true) {
+      val frame = readJsonFrameAny(connection.input)
+      if (frame.type == TYPE_PING) {
+        writeEmptyFrame(connection.output, TYPE_PONG)
+        continue
+      }
+      if (frame.type == TYPE_ERROR) {
+        throw IllegalStateException(frame.payload.optString("message", "Desktop returned protocol error"))
+      }
+      if (!AndroidSyncPrimitives.isTerminalUploadAckWaitFrame(frame.type)) {
+        throw IllegalStateException("Unexpected frame type while waiting for FILE_ACK: ${frame.type}")
+      }
+      return frame
     }
   }
 
@@ -2881,6 +2893,21 @@ class NativeSyncEngineModule(
       .array()
     output.write(header)
     output.write(body)
+    output.flush()
+  }
+
+  private fun writeEmptyFrame(
+    output: DataOutputStream,
+    type: Int,
+  ) {
+    val header = ByteBuffer.allocate(HEADER_SIZE)
+      .order(ByteOrder.BIG_ENDIAN)
+      .put(MAGIC_BYTES)
+      .putShort(PROTOCOL_VERSION.toShort())
+      .putShort(type.toShort())
+      .putInt(0)
+      .array()
+    output.write(header)
     output.flush()
   }
 
@@ -6164,6 +6191,7 @@ class NativeSyncEngineModule(
 
       val input = DataInputStream(socket.getInputStream())
       val output = DataOutputStream(socket.getOutputStream())
+      val binding = loadBinding()
       val payload = JSONObject(
         AndroidSyncPrimitives.buildClientHelloPayloadFields(
           clientId = getOrCreateClientId(),
@@ -6173,6 +6201,11 @@ class NativeSyncEngineModule(
           appState = "active",
           stableDeviceId = getOrCreateStableDeviceId(),
           clientIp = currentClientIPv4(),
+          pairingToken = AndroidSyncPrimitives.pairingTokenForFallbackHello(
+            probeHost = host,
+            bindingHost = binding?.host,
+            pairingToken = binding?.pairingToken,
+          ),
         ),
       )
       writeJsonFrame(output, TYPE_HELLO_REQ, payload)
@@ -6447,7 +6480,7 @@ class NativeSyncEngineModule(
       fun open(binding: StoredBinding): ProtocolConnection {
         val socket = Socket()
         socket.connect(InetSocketAddress(binding.host, binding.port), SOCKET_TIMEOUT_MS)
-        socket.soTimeout = SOCKET_TIMEOUT_MS
+        socket.soTimeout = AndroidSyncPrimitives.syncSocketReadTimeoutMs(SOCKET_TIMEOUT_MS)
         return ProtocolConnection(
           socket = socket,
           input = DataInputStream(socket.getInputStream()),
@@ -6779,6 +6812,8 @@ class NativeSyncEngineModule(
     private const val TYPE_FILE_END_RES = 0x000C
     private const val TYPE_SYNC_END_REQ = 0x000D
     private const val TYPE_SYNC_END_RES = 0x000E
+    private const val TYPE_PING = 0x000F
+    private const val TYPE_PONG = 0x0010
     private const val TYPE_ERROR = 0x0011
     private const val TYPE_AUTH_REQ = 0x0012
     private const val TYPE_AUTH_RES = 0x0013

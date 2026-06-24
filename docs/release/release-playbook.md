@@ -14,10 +14,11 @@ desktop 桌面包可用根目錄指令碼分平台打包；正式打包仍必須
 
 目前統一規則：
 
-1. 對外版本：`0.1.0`
+1. 對外版本：使用 iOS `MARKETING_VERSION`
 2. beta build：使用 iOS `CURRENT_PROJECT_VERSION`
-3. desktop build number 跟隨 iOS build number
-4. beta tag 格式：`beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`
+3. Android `versionName` 跟隨 iOS `MARKETING_VERSION`，`versionCode` 跟隨 iOS `CURRENT_PROJECT_VERSION`
+4. desktop build number 跟隨 iOS build number
+5. beta tag 格式：`beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`
 
 例如：
 
@@ -322,6 +323,12 @@ Android APK & AAB 可加入 `android` target：
 ```bash
 pnpm release --profile global-review --targets android,mac,win,linux
 ```
+
+Android release target 會透過 Gradle 從
+`apps/mobile/ios/SyncFlowMobile.xcodeproj/project.pbxproj` 讀取
+`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`，不要在
+`apps/mobile/android/app/build.gradle` 另外手動維護 Android
+`versionName` / `versionCode`。
 
 可用 `--dry-run` 檢查實際會執行的 market、base URL 與命令，不會打包或上傳：
 

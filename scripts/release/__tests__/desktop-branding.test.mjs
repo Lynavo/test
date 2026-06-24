@@ -13,6 +13,10 @@ function readDesktopPackageJson() {
   return JSON.parse(readDesktopConfig('package.json'));
 }
 
+function readAndroidBuildGradle() {
+  return readFileSync(resolve(repoRoot, 'apps/mobile/android/app/build.gradle'), 'utf8');
+}
+
 function readMobileIosVersions() {
   const project = readFileSync(
     resolve(repoRoot, 'apps/mobile/ios/SyncFlowMobile.xcodeproj/project.pbxproj'),
@@ -69,6 +73,19 @@ test('desktop package version and build number match the mobile iOS release trai
 
   assert.equal(packageJson.version, mobileVersion.version);
   assert.equal(packageJson.syncflowBuildNumber, mobileVersion.buildNumber);
+});
+
+test('android package version and build number resolve from the mobile iOS release train', () => {
+  const buildGradle = readAndroidBuildGradle();
+
+  assert.match(
+    buildGradle,
+    /file\("\.\.\/\.\.\/ios\/SyncFlowMobile\.xcodeproj\/project\.pbxproj"\)/,
+  );
+  assert.match(buildGradle, /versionCode\s+resolveIosBuildNumber\(\)\.toInteger\(\)/);
+  assert.match(buildGradle, /versionName\s+resolveIosMarketingVersion\(\)/);
+  assert.doesNotMatch(buildGradle, /^\s*versionCode\s+\d+$/m);
+  assert.doesNotMatch(buildGradle, /^\s*versionName\s+"[^"]+"$/m);
 });
 
 test('desktop builder configs default bundle build version to the mobile iOS build number', () => {

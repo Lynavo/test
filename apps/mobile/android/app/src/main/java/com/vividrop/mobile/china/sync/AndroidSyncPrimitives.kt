@@ -515,6 +515,26 @@ object AndroidSyncPrimitives {
     return fields
   }
 
+  fun pairingTokenForFallbackHello(
+    probeHost: String,
+    bindingHost: String?,
+    pairingToken: String?,
+  ): String? {
+    val normalizedProbeHost = probeHost.trim()
+    val normalizedBindingHost = bindingHost?.trim().orEmpty()
+    val normalizedToken = pairingToken?.trim().orEmpty()
+    if (normalizedProbeHost.isBlank() || normalizedBindingHost.isBlank() || normalizedToken.isBlank()) {
+      return null
+    }
+    return normalizedToken.takeIf { normalizedProbeHost == normalizedBindingHost }
+  }
+
+  fun syncSocketReadTimeoutMs(connectTimeoutMs: Int): Int =
+    maxOf(connectTimeoutMs, 45_000)
+
+  fun isTerminalUploadAckWaitFrame(frameType: Int): Boolean =
+    frameType == 0x000A || frameType == 0x0011
+
   fun requireCompatibleDesktopAppVersion(serverCompatibilityVersion: Int) {
     require(serverCompatibilityVersion == APP_COMPATIBILITY_VERSION) {
       "手機與桌面 App 版本不相容，請同時更新兩端後再連線。"

@@ -26,6 +26,25 @@ process.stdout.write(require.resolve(`hermes-compiler/hermesc/\${osBin}`, {
     return output.toString().trim()
 }
 
+def resolveIosBuildSetting(String settingName) {
+    def projectFile = file("../../ios/SyncFlowMobile.xcodeproj/project.pbxproj")
+    def matcher = projectFile.text =~ /${settingName} = ([^;]+);/
+
+    if (!matcher.find()) {
+        throw new GradleException("Failed to resolve ${settingName} from ${projectFile}")
+    }
+
+    return matcher.group(1).trim()
+}
+
+def resolveIosMarketingVersion() {
+    return resolveIosBuildSetting("MARKETING_VERSION")
+}
+
+def resolveIosBuildNumber() {
+    return resolveIosBuildSetting("CURRENT_PROJECT_VERSION")
+}
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -105,8 +124,8 @@ android {
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "1.0.1"
+        versionCode resolveIosBuildNumber().toInteger()
+        versionName resolveIosMarketingVersion()
         missingDimensionStrategy "store", "play"
     }
     flavorDimensions "market"
