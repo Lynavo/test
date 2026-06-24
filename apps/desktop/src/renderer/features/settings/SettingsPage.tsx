@@ -177,7 +177,7 @@ export function SettingsPage() {
         updateSettings(updated);
       }
     } catch {
-      toast.error('修改已接收檔案瀏覽權限失敗');
+      toast.error(t('settings.profile.toasts.receivedAccessFailed'));
     }
   };
 
@@ -404,17 +404,17 @@ export function SettingsPage() {
               <SettingsItem
                 icon={Smartphone}
                 tone="sky"
-                title="允許已配對手機瀏覽所有已接收檔案"
+                title={t('settings.profile.receivedAccess.title')}
                 caption={
                   crossDeviceReceivedAccessEnabled
-                    ? '已配對手機可瀏覽與下載這台電腦的全部 received 內容'
-                    : '手機只能瀏覽同一實體設備同步到這台電腦的檔案'
+                    ? t('settings.profile.receivedAccess.captionEnabled')
+                    : t('settings.profile.receivedAccess.captionDisabled')
                 }
                 action={
                   <button
                     type="button"
                     role="switch"
-                    aria-label="允許已配對手機瀏覽所有已接收檔案"
+                    aria-label={t('settings.profile.receivedAccess.title')}
                     aria-checked={crossDeviceReceivedAccessEnabled}
                     onClick={() =>
                       void handleToggleCrossDeviceReceivedAccess(

@@ -215,6 +215,11 @@
       "title": "防止待机",
       "caption": "传输任务运行时保持电脑唤醒"
     },
+    "receivedAccess": {
+      "title": "允许已配对手机浏览所有已接收文件",
+      "captionEnabled": "已配对手机可浏览与下载这台电脑的全部 received 内容",
+      "captionDisabled": "手机只能浏览同一实体设备同步到这台电脑的文件"
+    },
     "version": {
       "caption": "v{{version}} · 当前版本已安装"
     },
@@ -242,6 +247,7 @@
       "preventSleepEnabled": "传输时将保持电脑唤醒",
       "preventSleepDisabled": "已关闭防止待机",
       "preventSleepFailed": "无法更新电源设置",
+      "receivedAccessFailed": "修改已接收文件浏览权限失败",
       "upToDate": "已是最新版本",
       "checkUpdateFailed": "暂时无法检查更新",
       "diagnosticsUploaded": "诊断包上传成功！感谢您的反馈",

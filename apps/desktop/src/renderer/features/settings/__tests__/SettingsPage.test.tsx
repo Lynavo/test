@@ -128,7 +128,7 @@ describe('SettingsPage', () => {
 
     fireEvent.click(
       screen.getByRole('switch', {
-        name: '允許已配對手機瀏覽所有已接收檔案',
+        name: '允许已配对手机浏览所有已接收文件',
       }),
     );
 
@@ -147,12 +147,12 @@ describe('SettingsPage', () => {
 
     fireEvent.click(
       screen.getByRole('switch', {
-        name: '允許已配對手機瀏覽所有已接收檔案',
+        name: '允许已配对手机浏览所有已接收文件',
       }),
     );
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('修改已接收檔案瀏覽權限失敗');
+      expect(toast.error).toHaveBeenCalledWith('修改已接收文件浏览权限失败');
     });
   });
 

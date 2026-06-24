@@ -215,6 +215,11 @@
       "title": "Prevent sleep",
       "caption": "Keep the computer awake while transfer jobs are running"
     },
+    "receivedAccess": {
+      "title": "Allow paired phones to browse all received files",
+      "captionEnabled": "Paired phones can browse and download all received content on this computer",
+      "captionDisabled": "Phones can only browse files synced from the same physical device to this computer"
+    },
     "version": {
       "caption": "v{{version}} · Current version installed"
     },
@@ -242,6 +247,7 @@
       "preventSleepEnabled": "Computer will stay awake during transfers",
       "preventSleepDisabled": "Computer sleep prevention disabled",
       "preventSleepFailed": "Unable to update power setting",
+      "receivedAccessFailed": "Failed to update received file browsing access",
       "upToDate": "You are up to date",
       "checkUpdateFailed": "Unable to check for updates",
       "diagnosticsUploaded": "Diagnostics bundle uploaded. Thanks for your feedback.",

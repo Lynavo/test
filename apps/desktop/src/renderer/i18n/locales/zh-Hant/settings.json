@@ -215,6 +215,11 @@
       "title": "防止待機",
       "caption": "傳輸任務執行時保持電腦喚醒"
     },
+    "receivedAccess": {
+      "title": "允許已配對手機瀏覽所有已接收檔案",
+      "captionEnabled": "已配對手機可瀏覽與下載這台電腦的全部 received 內容",
+      "captionDisabled": "手機只能瀏覽同一實體設備同步到這台電腦的檔案"
+    },
     "version": {
       "caption": "v{{version}} · 目前版本已安裝"
     },
@@ -242,6 +247,7 @@
       "preventSleepEnabled": "傳輸時將保持電腦喚醒",
       "preventSleepDisabled": "已關閉防止待機",
       "preventSleepFailed": "無法更新電源設定",
+      "receivedAccessFailed": "修改已接收檔案瀏覽權限失敗",
       "upToDate": "目前已是最新版本",
       "checkUpdateFailed": "暫時無法檢查更新",
       "diagnosticsUploaded": "診斷包上傳成功，感謝您的回饋",
