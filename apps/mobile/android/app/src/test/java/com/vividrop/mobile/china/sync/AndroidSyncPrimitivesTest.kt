@@ -915,6 +915,30 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun pairingInvalidationRequiresMatchingDesktopIdentityForAuthRejected() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = "desktop-1",
+        responseServerId = null,
+        responsePaired = null,
+        persistedBindingExists = true,
+        persistedPairingToken = "token-1",
+        authRejected = true,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "desktop-2",
+        responsePaired = null,
+        persistedBindingExists = true,
+        persistedPairingToken = "token-1",
+        authRejected = true,
+      ),
+    )
+  }
+
+  @Test
   fun pairingInvalidationIgnoresGenericOfflineInputs() {
     assertFalse(
       AndroidSyncPrimitives.shouldInvalidateCurrentPairing(

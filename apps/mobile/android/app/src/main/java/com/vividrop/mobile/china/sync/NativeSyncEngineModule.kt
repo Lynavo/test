@@ -623,7 +623,7 @@ class NativeSyncEngineModule(
             responsePaired = null,
             persistedBindingExists = previousBinding != null,
             persistedPairingToken = previousBinding?.pairingToken,
-            authRejected = previousBinding?.deviceId == fallbackDeviceId,
+            authRejected = true,
           )
         ) {
           invalidateCurrentPairing("pair_token_invalid")
@@ -2562,21 +2562,17 @@ class NativeSyncEngineModule(
           put("auth", AndroidSyncPrimitives.computeAuthHmac(refreshedBinding.pairingToken, nonce))
         },
       )
-      val authResponse = readJsonFrame(connection.input, TYPE_AUTH_RES)
+      val authResponse = try {
+        readJsonFrame(connection.input, TYPE_AUTH_RES, structuredErrors = true)
+      } catch (error: NativeStructuredError) {
+        handleSyncAuthStructuredRejection(error, refreshedBinding, helloResponse)
+        throw error
+      }
       if (!authResponse.optBoolean("ok", false)) {
         val errorCode = structuredErrorCode(authResponse.optString("errorCode"))
-        val responseServerId = helloResponse.optString("serverId").takeIf { it.isNotBlank() }
-        val authRejectedForCurrentBinding = responseServerId == null || responseServerId == refreshedBinding.deviceId
         if (
           errorCode == "PAIR_TOKEN_INVALID" &&
-          AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
-            expectedDeviceId = refreshedBinding.deviceId,
-            responseServerId = responseServerId,
-            responsePaired = null,
-            persistedBindingExists = true,
-            persistedPairingToken = refreshedBinding.pairingToken,
-            authRejected = authRejectedForCurrentBinding,
-          )
+          shouldInvalidateForSyncAuthRejected(refreshedBinding, helloResponse)
         ) {
           invalidateCurrentPairing("pair_token_invalid")
         }
@@ -2590,6 +2586,34 @@ class NativeSyncEngineModule(
       throw IllegalStateException("Desktop requires re-pairing")
     }
     return refreshedBinding
+  }
+
+  private fun handleSyncAuthStructuredRejection(
+    error: NativeStructuredError,
+    binding: StoredBinding,
+    helloResponse: JSONObject,
+  ) {
+    if (
+      error.nativeCode == "PAIR_TOKEN_INVALID" &&
+      shouldInvalidateForSyncAuthRejected(binding, helloResponse)
+    ) {
+      invalidateCurrentPairing("pair_token_invalid")
+    }
+  }
+
+  private fun shouldInvalidateForSyncAuthRejected(
+    binding: StoredBinding,
+    helloResponse: JSONObject,
+  ): Boolean {
+    val responseServerId = helloResponse.optString("serverId").takeIf { it.isNotBlank() }
+    return AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+      expectedDeviceId = binding.deviceId,
+      responseServerId = responseServerId,
+      responsePaired = null,
+      persistedBindingExists = true,
+      persistedPairingToken = binding.pairingToken,
+      authRejected = true,
+    )
   }
 
   private fun refreshBindingMetadataFromHello(

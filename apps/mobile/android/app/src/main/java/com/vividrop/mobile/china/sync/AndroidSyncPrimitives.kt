@@ -639,16 +639,18 @@ object AndroidSyncPrimitives {
       return true
     }
 
+    val normalizedExpectedDeviceId = expectedDeviceId?.trim().orEmpty()
+    val normalizedResponseServerId = responseServerId?.trim().orEmpty()
+    val responseMatchesExpected = normalizedExpectedDeviceId.isNotBlank() &&
+      normalizedResponseServerId.isNotBlank() &&
+      normalizedExpectedDeviceId == normalizedResponseServerId
+
     if (authRejected) {
-      return true
+      return responseMatchesExpected
     }
 
     if (responsePaired == false) {
-      val normalizedExpectedDeviceId = expectedDeviceId?.trim().orEmpty()
-      val normalizedResponseServerId = responseServerId?.trim().orEmpty()
-      return normalizedExpectedDeviceId.isNotBlank() &&
-        normalizedResponseServerId.isNotBlank() &&
-        normalizedExpectedDeviceId == normalizedResponseServerId
+      return responseMatchesExpected
     }
 
     return false
