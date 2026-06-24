@@ -1726,6 +1726,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func invalidateCurrentPairing(reason: String) {
+        let existingReason = UserDefaults.standard.string(forKey: Self.bindingInvalidationReasonKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasBindingToClear = uploadStore?.getBinding() != nil || currentBinding != nil
+        if existingReason == reason && !hasBindingToClear {
+            syncDiagnosticsLog("SyncEngine", "pairing invalidated already cleared reason=\(reason)")
+            return
+        }
+
         slog("[SyncEngine] pairing invalidated reason=%@", reason)
         syncDiagnosticsLog("SyncEngine", "pairing invalidated reason=\(reason)")
         persistBindingInvalidation(reason: reason)
@@ -6914,18 +6922,21 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     responseServerId: responseServerId,
                     responsePaired: responsePaired
                 ) else {
-                    let rejectionReason = responsePaired == false
+                    let shouldInvalidatePairing = PresenceReconnectPolicy.shouldInvalidatePairing(
+                        responsePaired: responsePaired,
+                        expectedDeviceId: expectedDeviceId,
+                        responseServerId: responseServerId,
+                        tokenMissingForPersistedBinding: false,
+                        authRejected: false
+                    )
+                    let rejectionReason = shouldInvalidatePairing
                         ? "\(failureReason)_unpaired"
                         : "\(failureReason)_server_mismatch"
                     syncDiagnosticsLog(
                         "Presence",
                         "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") paired=\(responsePaired.map(String.init) ?? "nil") reason=\(rejectionReason)"
                     )
-                    if PresenceReconnectPolicy.shouldInvalidatePairing(
-                        responsePaired: responsePaired,
-                        tokenMissingForPersistedBinding: false,
-                        authRejected: false
-                    ) {
+                    if shouldInvalidatePairing {
                         self.invalidateCurrentPairing(reason: rejectionReason)
                     } else if updateStateOnFailure {
                         self.updateBindingConnectionState(.offline, reason: rejectionReason)
@@ -9330,11 +9341,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     func getBindingInvalidationStateForBridge() -> [String: Any]? {
-        if let state = bindingInvalidationState() {
-            return state
-        }
         guard let binding = uploadStore?.getBinding() else {
-            return nil
+            return bindingInvalidationState()
         }
         guard resolvedPairingToken(for: binding)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true,
               PresenceReconnectPolicy.shouldInvalidatePairing(
@@ -9342,9 +9350,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                   tokenMissingForPersistedBinding: true,
                   authRejected: false
               ) else {
-            return nil
+            return bindingInvalidationState()
         }
-        persistBindingInvalidation(reason: "pairing_token_missing")
+        invalidateCurrentPairing(reason: "pairing_token_missing")
         return ["reason": "pairing_token_missing"]
     }
 }

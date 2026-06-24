@@ -115,10 +115,23 @@ expect(
 expect(
     PresenceReconnectPolicy.shouldInvalidatePairing(
         responsePaired: false,
+        expectedDeviceId: "desktop-1",
+        responseServerId: "desktop-1",
         tokenMissingForPersistedBinding: false,
         authRejected: false
     ),
     "presence paired:false is explicit invalidation evidence"
+)
+
+expect(
+    !PresenceReconnectPolicy.shouldInvalidatePairing(
+        responsePaired: false,
+        expectedDeviceId: "desktop-1",
+        responseServerId: "desktop-2",
+        tokenMissingForPersistedBinding: false,
+        authRejected: false
+    ),
+    "presence paired:false from a different desktop is server mismatch, not current binding invalidation"
 )
 
 expect(

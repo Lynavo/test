@@ -52,10 +52,18 @@ enum PresenceReconnectPolicy {
 
     static func shouldInvalidatePairing(
         responsePaired: Bool?,
+        expectedDeviceId: String? = nil,
+        responseServerId: String? = nil,
         tokenMissingForPersistedBinding: Bool,
         authRejected: Bool
     ) -> Bool {
-        responsePaired == false || tokenMissingForPersistedBinding || authRejected
+        (responsePaired == false &&
+            responseIdentityMatchesExpected(
+                expectedDeviceId: expectedDeviceId,
+                responseServerId: responseServerId
+            )) ||
+            tokenMissingForPersistedBinding ||
+            authRejected
     }
 
     static func authRejectionMatchesCurrentBinding(
@@ -69,6 +77,15 @@ enum PresenceReconnectPolicy {
 
     private static func isOfflineReconnectState(_ bindingState: String) -> Bool {
         bindingState == "offline" || bindingState == "bound"
+    }
+
+    private static func responseIdentityMatchesExpected(
+        expectedDeviceId: String?,
+        responseServerId: String?
+    ) -> Bool {
+        let expected = expectedDeviceId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let actual = responseServerId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !expected.isEmpty && actual == expected
     }
 
     private static func hasUsablePresenceHost(_ presenceHost: String?) -> Bool {
