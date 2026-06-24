@@ -51,7 +51,11 @@ export function isPairingInvalidatedEvent(
     return false;
   }
   const prototype = Object.getPrototypeOf(payload);
-  return prototype === Object.prototype || prototype === null;
+  if (prototype !== Object.prototype && prototype !== null) {
+    return false;
+  }
+  const reason = (payload as { reason?: unknown }).reason;
+  return reason === undefined || typeof reason === 'string';
 }
 
 // ---------------------------------------------------------------------------

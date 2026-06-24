@@ -13,6 +13,7 @@ import { NativeEventEmitter, NativeModules } from 'react-native';
 type NativeListener = (payload: unknown) => void;
 
 let nativeListeners: Record<string, NativeListener> = {};
+let currentMarket: 'global' | 'cn' = 'global';
 
 // ---------------------------------------------------------------------------
 // react-native-gesture-handler — must be mocked before @react-navigation/stack
@@ -104,38 +105,34 @@ jest.mock('../../services/iap-service', () => ({
   },
 }));
 
-jest.mock('../../services/SyncEngineModule', () => ({
-  PAIRING_INVALIDATED_EVENT: 'onPairingInvalidated',
-  PAIRING_INVALIDATED_ROUTE_REASON: 'pairing_invalidated',
-  isPairingInvalidatedEvent: (payload: unknown) => {
-    if (payload === null || payload === undefined) return true;
-    if (typeof payload !== 'object' || Array.isArray(payload)) return false;
-    const prototype = Object.getPrototypeOf(payload);
-    return prototype === Object.prototype || prototype === null;
-  },
-  wipeSyncIdentity: jest.fn(),
-  cancelAllManualUploads: jest.fn(),
-  interruptAutoUpload: jest.fn(),
-  enableAutoUpload: jest.fn(),
-  browseAlbum: jest.fn().mockResolvedValue([]),
-  getAlbumStats: jest.fn().mockResolvedValue({
-    totalCount: 0,
-    transferredCount: 0,
-    queuedCount: 0,
-    pendingCount: 0,
-  }),
-  submitManualUpload: jest.fn(),
-  getAutoUploadConfig: jest.fn().mockResolvedValue({
-    enabled: false,
-    state: 'disabled',
-    timeRangeMode: 'all',
-    customTimeFrom: null,
-  }),
-  saveAutoUploadConfig: jest.fn(),
-  getPhotoAuthorizationStatus: jest.fn().mockResolvedValue('authorized'),
-  presentLimitedPhotoPicker: jest.fn(),
-  getAlbumCollections: jest.fn().mockResolvedValue([]),
-}));
+jest.mock('../../services/SyncEngineModule', () => {
+  const actual = jest.requireActual('../../services/SyncEngineModule');
+  return {
+    ...actual,
+    wipeSyncIdentity: jest.fn(),
+    cancelAllManualUploads: jest.fn(),
+    interruptAutoUpload: jest.fn(),
+    enableAutoUpload: jest.fn(),
+    browseAlbum: jest.fn().mockResolvedValue([]),
+    getAlbumStats: jest.fn().mockResolvedValue({
+      totalCount: 0,
+      transferredCount: 0,
+      queuedCount: 0,
+      pendingCount: 0,
+    }),
+    submitManualUpload: jest.fn(),
+    getAutoUploadConfig: jest.fn().mockResolvedValue({
+      enabled: false,
+      state: 'disabled',
+      timeRangeMode: 'all',
+      customTimeFrom: null,
+    }),
+    saveAutoUploadConfig: jest.fn(),
+    getPhotoAuthorizationStatus: jest.fn().mockResolvedValue('authorized'),
+    presentLimitedPhotoPicker: jest.fn(),
+    getAlbumCollections: jest.fn().mockResolvedValue([]),
+  };
+});
 
 jest.mock('../../services/sidecar-reset-service', () => ({
   resetCurrentDesktopSidecarIfReachable: jest.fn(),
@@ -284,11 +281,12 @@ beforeAll(async () => {
 beforeEach(() => {
   jest.clearAllMocks();
   nativeListeners = {};
+  currentMarket = 'global';
   (NativeModules as Record<string, unknown>).AppleAuthModule = {
-    SYNCFLOW_MARKET: 'global',
+    getConstants: () => ({ SYNCFLOW_MARKET: currentMarket }),
   };
   (NativeModules as Record<string, unknown>).NativeSyncEngine = {
-    SYNCFLOW_MARKET: 'global',
+    getConstants: () => ({ SYNCFLOW_MARKET: currentMarket }),
     getBindingState: jest.fn().mockResolvedValue({ deviceId: 'desktop-1' }),
     getBindingInvalidationState: jest.fn().mockResolvedValue(null),
     addListener: jest.fn(),
@@ -349,6 +347,7 @@ describe('RootNavigator — pairing invalidation', () => {
     );
     expect(isPairingInvalidatedEvent(Object.create(null))).toBe(true);
 
+    expect(isPairingInvalidatedEvent({ reason: 123 })).toBe(false);
     expect(isPairingInvalidatedEvent(['desktop_reset_code'])).toBe(false);
     expect(isPairingInvalidatedEvent(new Date())).toBe(false);
     expect(isPairingInvalidatedEvent(new Map())).toBe(false);
@@ -406,6 +405,46 @@ describe('RootNavigator — pairing invalidation', () => {
     expect(resetSpy).toHaveBeenCalledTimes(2);
   });
 
+  test('watcher cleanup resets in-flight state before effect re-subscribes', async () => {
+    jest.useFakeTimers();
+    const view = renderRootNavigator();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('global-sync-activity-screen')).toBeTruthy(),
+    );
+
+    const resetSpy = jest.spyOn(CommonActions, 'reset');
+
+    act(() => {
+      nativeListeners.onPairingInvalidated?.({
+        reason: 'desktop_reset_code',
+      });
+    });
+
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+
+    currentMarket = 'cn';
+    view.rerender(
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>,
+    );
+    currentMarket = 'global';
+    view.rerender(
+      <NavigationContainer>
+        <RootNavigator />
+      </NavigationContainer>,
+    );
+
+    act(() => {
+      nativeListeners.onPairingInvalidated?.({
+        reason: 'desktop_reset_code',
+      });
+    });
+
+    expect(resetSpy).toHaveBeenCalledTimes(2);
+  });
+
   test('ordinary offline binding updates do not reset navigation', async () => {
     renderRootNavigator();
 
@@ -437,4 +476,24 @@ describe('RootNavigator — pairing invalidation', () => {
     expect(screen.getByText(/reason=pairing_invalidated/)).toBeTruthy();
     expect(screen.queryByTestId('global-sync-activity-screen')).toBeNull();
   });
+
+  test.each([
+    { reason: 123 },
+    new Date('2026-06-24T00:00:00.000Z'),
+    ['desktop_reset_code'],
+  ])(
+    'cold-start invalid persisted invalidation state falls back to bound default route: %p',
+    async invalidation => {
+      (
+        NativeModules.NativeSyncEngine.getBindingInvalidationState as jest.Mock
+      ).mockResolvedValue(invalidation);
+
+      renderRootNavigator();
+
+      await waitFor(() =>
+        expect(screen.getByTestId('global-sync-activity-screen')).toBeTruthy(),
+      );
+      expect(screen.queryByTestId('global-device-discovery-screen')).toBeNull();
+    },
+  );
 });

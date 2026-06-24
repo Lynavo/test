@@ -370,6 +370,7 @@ function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
         clearTimeout(resetInFlightTimerRef.current);
         resetInFlightTimerRef.current = null;
       }
+      resetInFlightRef.current = false;
       subscription.remove();
     };
   }, [enabled, navigation]);
@@ -465,7 +466,11 @@ function AuthedStack({
         const invalidation = await NativeModules.NativeSyncEngine
           ?.getBindingInvalidationState?.()
           .catch(() => null);
-        if (invalidation) {
+        if (
+          invalidation !== null &&
+          invalidation !== undefined &&
+          isPairingInvalidatedEvent(invalidation)
+        ) {
           if (!cancelled) {
             setInitialDeviceDiscoveryReason(PAIRING_INVALIDATED_ROUTE_REASON);
             setInitialRoute('DeviceDiscovery');
