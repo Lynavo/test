@@ -58,6 +58,15 @@ enum PresenceReconnectPolicy {
         responsePaired == false || tokenMissingForPersistedBinding || authRejected
     }
 
+    static func authRejectionMatchesCurrentBinding(
+        pairingTargetDeviceId: String,
+        currentBindingDeviceId: String?
+    ) -> Bool {
+        let target = pairingTargetDeviceId.trimmingCharacters(in: .whitespacesAndNewlines)
+        let current = currentBindingDeviceId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !target.isEmpty && target == current
+    }
+
     private static func isOfflineReconnectState(_ bindingState: String) -> Bool {
         bindingState == "offline" || bindingState == "bound"
     }

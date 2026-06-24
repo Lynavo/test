@@ -149,6 +149,30 @@ expect(
 )
 
 expect(
+    PresenceReconnectPolicy.authRejectionMatchesCurrentBinding(
+        pairingTargetDeviceId: "desktop-1",
+        currentBindingDeviceId: "desktop-1"
+    ),
+    "stored-token auth rejection for the current bound desktop should invalidate the current binding"
+)
+
+expect(
+    !PresenceReconnectPolicy.authRejectionMatchesCurrentBinding(
+        pairingTargetDeviceId: "desktop-2",
+        currentBindingDeviceId: "desktop-1"
+    ),
+    "stored-token auth rejection while switching to another desktop must not invalidate the current binding"
+)
+
+expect(
+    !PresenceReconnectPolicy.authRejectionMatchesCurrentBinding(
+        pairingTargetDeviceId: "desktop-2",
+        currentBindingDeviceId: nil
+    ),
+    "stored-token auth rejection without a current binding must not invalidate the current binding"
+)
+
+expect(
     PresenceReconnectPolicy.delayedProbeIntervalAfterRecoveryExhausted(consecutiveDelayedProbeFailures: 0) == 5,
     "first delayed LAN probe after recovery exhaustion should run quickly"
 )

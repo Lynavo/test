@@ -2192,6 +2192,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         guard let pairingToken = resolvedPairingToken(for: binding),
               !pairingToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             syncDiagnosticsLog("SyncEngine", "P2P tunnel skipped: pairing token missing target=\(binding.deviceId)")
+            if PresenceReconnectPolicy.shouldInvalidatePairing(
+                responsePaired: nil,
+                tokenMissingForPersistedBinding: true,
+                authRejected: false
+            ) {
+                invalidateCurrentPairing(reason: "pairing_token_missing")
+            }
             return
         }
 
@@ -6027,6 +6034,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             if storedToken != nil,
                case .structuredPairingError(let code, _, _) = error,
                code == "PAIR_TOKEN_INVALID",
+               PresenceReconnectPolicy.authRejectionMatchesCurrentBinding(
+                   pairingTargetDeviceId: deviceId,
+                   currentBindingDeviceId: uploadStore?.getBinding()?.deviceId
+               ),
                PresenceReconnectPolicy.shouldInvalidatePairing(
                    responsePaired: nil,
                    tokenMissingForPersistedBinding: false,
@@ -9319,6 +9330,21 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     func getBindingInvalidationStateForBridge() -> [String: Any]? {
-        bindingInvalidationState()
+        if let state = bindingInvalidationState() {
+            return state
+        }
+        guard let binding = uploadStore?.getBinding() else {
+            return nil
+        }
+        guard resolvedPairingToken(for: binding)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true,
+              PresenceReconnectPolicy.shouldInvalidatePairing(
+                  responsePaired: nil,
+                  tokenMissingForPersistedBinding: true,
+                  authRejected: false
+              ) else {
+            return nil
+        }
+        persistBindingInvalidation(reason: "pairing_token_missing")
+        return ["reason": "pairing_token_missing"]
     }
 }
