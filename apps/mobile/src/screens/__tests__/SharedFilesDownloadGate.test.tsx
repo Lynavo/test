@@ -1391,6 +1391,85 @@ describe('RemoteAccessGlobalScreen', () => {
     alertSpy.mockRestore();
   });
 
+  it('records folder image downloads with stream urls for recent download previews', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+      {
+        resourceId: 'personal-dir:Album',
+        desktopDeviceId: 'desktop-device-id',
+        displayName: 'Album',
+        kind: 'shared_folder',
+        status: 'available',
+        addedAt: '2026-06-16T08:00:00.000Z',
+        downloadCount: 0,
+      },
+    ]);
+    mockListGlobalRemoteAccessFolderContents.mockResolvedValueOnce({
+      path: 'Album',
+      files: [
+        {
+          name: 'photo.jpg',
+          path: 'Album/photo.jpg',
+          type: 'image',
+          size: 1024,
+          modifiedAt: '2026-06-16T08:31:00.000Z',
+          isDirectory: false,
+          thumbnailUrl:
+            'http://192.168.1.100:39394/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
+          streamUrl:
+            'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
+        },
+      ],
+      totalCount: 1,
+    });
+    mockDownloadGlobalRemoteAccessResource.mockResolvedValueOnce({
+      savedToPhotos: false,
+      localPath: '/local/photo.jpg',
+    });
+
+    const { getByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('Album')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByText('Album'));
+    });
+
+    await waitFor(() => {
+      expect(getByText('photo.jpg')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('download-outline'));
+
+    await waitFor(() => {
+      expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenCalledWith(
+        'personal-dir:Album/photo.jpg',
+      );
+    });
+    expect(mockRecordDownloadedFile).toHaveBeenCalledWith({
+      resourceId: 'personal-dir:Album/photo.jpg',
+      filename: 'photo.jpg',
+      fileSize: 1024,
+      mediaType: 'image',
+      localPath: '/local/photo.jpg',
+      thumbnailUrl:
+        'http://192.168.1.100:39394/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
+      previewUrl:
+        'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
+      streamUrl:
+        'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
+      savedToPhotos: false,
+    });
+
+    alertSpy.mockRestore();
+  });
+
   it('runs the global download gate for every selected file instead of only the first selection', async () => {
     mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
       {

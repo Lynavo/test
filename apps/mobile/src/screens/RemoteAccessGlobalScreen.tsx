@@ -772,6 +772,12 @@ function directoryFileToResourceItem({
   const resourceId = personalDirectoryResourceId(file.path);
   const mediaType =
     file.isDirectory || file.type === 'other' ? undefined : file.type;
+  const streamUrl =
+    !file.isDirectory &&
+    typeof file.streamUrl === 'string' &&
+    file.streamUrl.trim().length > 0
+      ? file.streamUrl.trim()
+      : undefined;
   return {
     resourceId,
     desktopDeviceId: desktopDisplayName ?? FALLBACK_DESKTOP_LABEL,
@@ -792,6 +798,8 @@ function directoryFileToResourceItem({
       file.thumbnailUrl.trim().length > 0
         ? file.thumbnailUrl.trim()
         : undefined,
+    previewUrl: streamUrl,
+    streamUrl,
   };
 }
 
