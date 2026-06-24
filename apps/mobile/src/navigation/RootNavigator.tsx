@@ -327,6 +327,9 @@ function AuthRouteTransition({
 function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
   const navigation = useNavigation();
   const resetInFlightRef = useRef(false);
+  const resetInFlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!enabled) return;
@@ -341,6 +344,13 @@ function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
           return;
         }
         resetInFlightRef.current = true;
+        if (resetInFlightTimerRef.current) {
+          clearTimeout(resetInFlightTimerRef.current);
+        }
+        resetInFlightTimerRef.current = setTimeout(() => {
+          resetInFlightRef.current = false;
+          resetInFlightTimerRef.current = null;
+        }, 500);
         navigation.dispatch(
           CommonActions.reset({
             index: 0,
@@ -355,7 +365,13 @@ function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
       },
     );
 
-    return () => subscription.remove();
+    return () => {
+      if (resetInFlightTimerRef.current) {
+        clearTimeout(resetInFlightTimerRef.current);
+        resetInFlightTimerRef.current = null;
+      }
+      subscription.remove();
+    };
   }, [enabled, navigation]);
 
   return null;

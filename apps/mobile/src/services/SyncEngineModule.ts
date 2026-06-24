@@ -44,11 +44,14 @@ export type PairingInvalidatedEvent = {
 export function isPairingInvalidatedEvent(
   payload: unknown,
 ): payload is PairingInvalidatedEvent {
-  return (
-    payload === null ||
-    payload === undefined ||
-    (typeof payload === 'object' && !Array.isArray(payload))
-  );
+  if (payload === null || payload === undefined) {
+    return true;
+  }
+  if (typeof payload !== 'object' || Array.isArray(payload)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(payload);
+  return prototype === Object.prototype || prototype === null;
 }
 
 // ---------------------------------------------------------------------------

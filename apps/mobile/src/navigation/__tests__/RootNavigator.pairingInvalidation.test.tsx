@@ -107,10 +107,12 @@ jest.mock('../../services/iap-service', () => ({
 jest.mock('../../services/SyncEngineModule', () => ({
   PAIRING_INVALIDATED_EVENT: 'onPairingInvalidated',
   PAIRING_INVALIDATED_ROUTE_REASON: 'pairing_invalidated',
-  isPairingInvalidatedEvent: (payload: unknown) =>
-    payload === null ||
-    payload === undefined ||
-    (typeof payload === 'object' && !Array.isArray(payload)),
+  isPairingInvalidatedEvent: (payload: unknown) => {
+    if (payload === null || payload === undefined) return true;
+    if (typeof payload !== 'object' || Array.isArray(payload)) return false;
+    const prototype = Object.getPrototypeOf(payload);
+    return prototype === Object.prototype || prototype === null;
+  },
   wipeSyncIdentity: jest.fn(),
   cancelAllManualUploads: jest.fn(),
   interruptAutoUpload: jest.fn(),
@@ -270,7 +272,7 @@ jest.mock('../../stores/auth-store', () => {
 // ---------------------------------------------------------------------------
 // Imports after mocks
 // ---------------------------------------------------------------------------
-import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions, NavigationContainer } from '@react-navigation/native';
 import { useAuth } from '../../stores/auth-store';
 import { RootNavigator } from '../RootNavigator';
 import i18n from '../../i18n';
@@ -319,6 +321,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -331,6 +334,27 @@ function renderRootNavigator() {
 }
 
 describe('RootNavigator — pairing invalidation', () => {
+  test('pairing invalidation event guard accepts only null, undefined, or plain object payloads', () => {
+    class CustomPayload {
+      reason = 'desktop_reset_code';
+    }
+    const { isPairingInvalidatedEvent } = jest.requireActual(
+      '../../services/SyncEngineModule',
+    ) as typeof import('../../services/SyncEngineModule');
+
+    expect(isPairingInvalidatedEvent(null)).toBe(true);
+    expect(isPairingInvalidatedEvent(undefined)).toBe(true);
+    expect(isPairingInvalidatedEvent({ reason: 'desktop_reset_code' })).toBe(
+      true,
+    );
+    expect(isPairingInvalidatedEvent(Object.create(null))).toBe(true);
+
+    expect(isPairingInvalidatedEvent(['desktop_reset_code'])).toBe(false);
+    expect(isPairingInvalidatedEvent(new Date())).toBe(false);
+    expect(isPairingInvalidatedEvent(new Map())).toBe(false);
+    expect(isPairingInvalidatedEvent(new CustomPayload())).toBe(false);
+  });
+
   test('global authenticated navigation resets when native emits onPairingInvalidated', async () => {
     renderRootNavigator();
 
@@ -347,6 +371,39 @@ describe('RootNavigator — pairing invalidation', () => {
     );
     expect(screen.getByText(/reason=pairing_invalidated/)).toBeTruthy();
     expect(screen.queryByTestId('global-sync-activity-screen')).toBeNull();
+  });
+
+  test('watcher suppresses immediate duplicate invalidation events but handles a later event', async () => {
+    renderRootNavigator();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('global-sync-activity-screen')).toBeTruthy(),
+    );
+
+    jest.useFakeTimers();
+    const resetSpy = jest.spyOn(CommonActions, 'reset');
+
+    act(() => {
+      nativeListeners.onPairingInvalidated?.({
+        reason: 'desktop_reset_code',
+      });
+      nativeListeners.onPairingInvalidated?.({
+        reason: 'desktop_reset_code',
+      });
+    });
+
+    expect(resetSpy).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      jest.advanceTimersByTime(600);
+    });
+    act(() => {
+      nativeListeners.onPairingInvalidated?.({
+        reason: 'desktop_reset_code',
+      });
+    });
+
+    expect(resetSpy).toHaveBeenCalledTimes(2);
   });
 
   test('ordinary offline binding updates do not reset navigation', async () => {
