@@ -163,11 +163,15 @@ export function SettingsPage() {
   };
 
   const handleToggleCrossDeviceReceivedAccess = async (next: boolean) => {
-    const updated = await window.electronAPI?.sidecar.updateSettings({
-      allowCrossDeviceReceivedAccess: next,
-    });
-    if (updated) {
-      updateSettings(updated);
+    try {
+      const updated = await window.electronAPI?.sidecar.updateSettings({
+        allowCrossDeviceReceivedAccess: next,
+      });
+      if (updated) {
+        updateSettings(updated);
+      }
+    } catch {
+      toast.error('修改已接收檔案瀏覽權限失敗');
     }
   };
 

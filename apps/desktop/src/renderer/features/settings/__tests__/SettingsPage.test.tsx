@@ -139,6 +139,23 @@ describe('SettingsPage', () => {
     });
   });
 
+  it('shows an error when cross-device received library access update fails', async () => {
+    const updateSettings = vi.fn().mockRejectedValue(new Error('sidecar unavailable'));
+    window.electronAPI!.sidecar.updateSettings = updateSettings;
+
+    render(<SettingsPage />);
+
+    fireEvent.click(
+      screen.getByRole('switch', {
+        name: '允許已配對手機瀏覽所有已接收檔案',
+      }),
+    );
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('修改已接收檔案瀏覽權限失敗');
+    });
+  });
+
   it('does not render the connection devices section in settings', async () => {
     render(<SettingsPage />);
 
