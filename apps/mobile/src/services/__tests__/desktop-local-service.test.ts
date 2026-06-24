@@ -1153,6 +1153,9 @@ describe('desktop-local-service', () => {
   });
 
   it('lists global remote access from the desktop personal directory root', async () => {
+    mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
+      'http://127.0.0.1:39394/personal/stream/cover.jpg',
+    );
     mockedBrowseDirectory.mockResolvedValueOnce({
       scope: 'personal',
       path: '',
@@ -1232,6 +1235,8 @@ describe('desktop-local-service', () => {
         mediaType: 'image',
         thumbnailUrl:
           'http://192.168.1.100:39394/personal/thumbnail/cover.jpg?v=2048-1780000',
+        previewUrl: 'http://127.0.0.1:39394/personal/stream/cover.jpg',
+        streamUrl: 'http://127.0.0.1:39394/personal/stream/cover.jpg',
         addedAt: '2026-06-17T08:02:00.000Z',
         downloadCount: 0,
       },
@@ -1254,6 +1259,10 @@ describe('desktop-local-service', () => {
       },
     ]);
     expect(mockedBrowseDirectory).toHaveBeenCalledWith('personal');
+    expect(mockedGetDirectoryFileStreamUrl).toHaveBeenCalledWith(
+      'personal',
+      'cover.jpg',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -1292,6 +1301,54 @@ describe('desktop-local-service', () => {
     expect(mockedBrowseDirectory).toHaveBeenCalledWith(
       'personal',
       'Desktop/Projects',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('adds stream preview urls to global remote access folder images that only have thumbnails', async () => {
+    mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
+      'http://127.0.0.1:39394/personal/stream/Desktop/photo.jpg',
+    );
+    mockedBrowseDirectory.mockResolvedValueOnce({
+      scope: 'personal',
+      path: 'Desktop',
+      files: [
+        {
+          name: 'photo.jpg',
+          path: 'Desktop/photo.jpg',
+          type: 'image',
+          size: 2048,
+          modifiedAt: '2026-06-17T09:01:00.000Z',
+          thumbnailUrl:
+            'http://192.168.1.100:39394/personal/thumbnail/Desktop/photo.jpg?v=2048-1780000',
+        },
+      ],
+      totalCount: 1,
+    });
+
+    await expect(
+      listGlobalRemoteAccessFolderContents('personal-dir:Desktop'),
+    ).resolves.toEqual({
+      scope: 'personal',
+      path: 'Desktop',
+      files: [
+        {
+          name: 'photo.jpg',
+          path: 'Desktop/photo.jpg',
+          type: 'image',
+          size: 2048,
+          modifiedAt: '2026-06-17T09:01:00.000Z',
+          thumbnailUrl:
+            'http://192.168.1.100:39394/personal/thumbnail/Desktop/photo.jpg?v=2048-1780000',
+          streamUrl:
+            'http://127.0.0.1:39394/personal/stream/Desktop/photo.jpg',
+        },
+      ],
+      totalCount: 1,
+    });
+    expect(mockedGetDirectoryFileStreamUrl).toHaveBeenCalledWith(
+      'personal',
+      'Desktop/photo.jpg',
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });

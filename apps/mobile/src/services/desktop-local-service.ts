@@ -336,6 +336,40 @@ function directoryFilePreviewUrls(
   };
 }
 
+async function withPersonalDirectoryImageStreamUrl(
+  file: DirectoryFileDTO,
+): Promise<DirectoryFileDTO> {
+  if (file.isDirectory || file.type !== 'image') {
+    return file;
+  }
+  if (typeof file.streamUrl === 'string' && file.streamUrl.trim().length > 0) {
+    return file;
+  }
+
+  try {
+    const streamUrl = await getDirectoryFileStreamUrl('personal', file.path);
+    const trimmed = streamUrl.trim();
+    return trimmed.length > 0 ? { ...file, streamUrl: trimmed } : file;
+  } catch (error) {
+    recordDiagnosticsLog(
+      'RemoteAccess',
+      'personal image stream url unavailable',
+      {
+        name: file.name,
+        path: file.path,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    );
+    return file;
+  }
+}
+
+async function withPersonalDirectoryImageStreamUrls(
+  files: DirectoryFileDTO[],
+): Promise<DirectoryFileDTO[]> {
+  return Promise.all(files.map(withPersonalDirectoryImageStreamUrl));
+}
+
 async function requestSharedDirectory(
   desktop: DesktopInfo,
   path?: string,
@@ -655,7 +689,8 @@ export async function listGlobalRemoteAccessResources(): Promise<
   GlobalRemoteAccessResource[]
 > {
   const listing = await browseDirectory('personal');
-  return listing.files.map(personalDirectoryFileToSharedResource);
+  const files = await withPersonalDirectoryImageStreamUrls(listing.files);
+  return files.map(personalDirectoryFileToSharedResource);
 }
 
 export async function listSharedFolderContents(
@@ -692,7 +727,14 @@ export async function listGlobalRemoteAccessFolderContents(
   path?: string,
 ): Promise<DirectoryListingDTO> {
   const rootPath = getPersonalDirectoryPathFromResourceId(resourceId);
-  return browseDirectory('personal', joinRemotePath(rootPath, path));
+  const listing = await browseDirectory(
+    'personal',
+    joinRemotePath(rootPath, path),
+  );
+  return {
+    ...listing,
+    files: await withPersonalDirectoryImageStreamUrls(listing.files),
+  };
 }
 
 async function listReceivedLibraryWithScope(
