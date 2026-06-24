@@ -30,6 +30,27 @@ import {
 
 const { NativeSyncEngine } = NativeModules;
 
+export const PAIRING_INVALIDATED_EVENT = 'onPairingInvalidated';
+
+export const PAIRING_INVALIDATED_ROUTE_REASON = 'pairing_invalidated' as const;
+
+export type PairingInvalidatedRouteReason =
+  typeof PAIRING_INVALIDATED_ROUTE_REASON;
+
+export type PairingInvalidatedEvent = {
+  reason?: string;
+};
+
+export function isPairingInvalidatedEvent(
+  payload: unknown,
+): payload is PairingInvalidatedEvent {
+  return (
+    payload === null ||
+    payload === undefined ||
+    (typeof payload === 'object' && !Array.isArray(payload))
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Album stats — returned by getAlbumStats bridge method
 // ---------------------------------------------------------------------------

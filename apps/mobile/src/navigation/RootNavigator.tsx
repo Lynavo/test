@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   NativeModules,
+  NativeEventEmitter,
   ActivityIndicator,
   Animated,
   Easing,
@@ -10,7 +11,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
 import {
   createBottomTabNavigator,
   type BottomTabBarProps,
@@ -56,7 +57,13 @@ import {
   AuthScreenShell,
 } from '../components/auth/AuthScreenShell';
 import { GlobalBottomTabBar } from '../components/GlobalBottomTabBar';
-import { wipeSyncIdentity } from '../services/SyncEngineModule';
+import {
+  PAIRING_INVALIDATED_EVENT,
+  PAIRING_INVALIDATED_ROUTE_REASON,
+  type PairingInvalidatedRouteReason,
+  isPairingInvalidatedEvent,
+  wipeSyncIdentity,
+} from '../services/SyncEngineModule';
 import { resetCurrentDesktopSidecarIfReachable } from '../services/sidecar-reset-service';
 import { clearUserScopedStorage } from '../utils/clearUserScopedStorage';
 import { resolveVisualQaInitialRoute } from '../dev/visualQa';
@@ -78,7 +85,9 @@ const GlobalMainTab = createBottomTabNavigator<GlobalMainTabParamList>();
 export type RootStackParamList = {
   Login: undefined;
   SmsVerify: { phone?: string; email?: string; authBaseUrl?: string };
-  DeviceDiscovery: { mode?: 'switch' } | undefined;
+  DeviceDiscovery:
+    | { mode?: 'switch'; reason?: PairingInvalidatedRouteReason }
+    | undefined;
   CodeVerify: {
     deviceId?: string;
     host: string;
@@ -315,6 +324,43 @@ function AuthRouteTransition({
 // under NavigationContainer and can call useNavigation() safely.
 // ---------------------------------------------------------------------------
 
+function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
+  const navigation = useNavigation();
+  const resetInFlightRef = useRef(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const nativeModule = NativeModules.NativeSyncEngine;
+    if (!nativeModule) return;
+
+    const emitter = new NativeEventEmitter(nativeModule);
+    const subscription = emitter.addListener(
+      PAIRING_INVALIDATED_EVENT,
+      payload => {
+        if (!isPairingInvalidatedEvent(payload) || resetInFlightRef.current) {
+          return;
+        }
+        resetInFlightRef.current = true;
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [
+              {
+                name: 'DeviceDiscovery',
+                params: { reason: PAIRING_INVALIDATED_ROUTE_REASON },
+              },
+            ],
+          }),
+        );
+      },
+    );
+
+    return () => subscription.remove();
+  }, [enabled, navigation]);
+
+  return null;
+}
+
 function ExpiryReminderWatcher({
   subscription,
 }: {
@@ -371,6 +417,8 @@ function AuthedStack({
   const [initialRoute, setInitialRoute] = useState<
     keyof RootStackParamList | null
   >(null);
+  const [initialDeviceDiscoveryReason, setInitialDeviceDiscoveryReason] =
+    useState<PairingInvalidatedRouteReason | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,22 +431,43 @@ function AuthedStack({
         FEATURES.SUBSCRIPTION_ENFORCEMENT &&
         !isFeatureAccessAllowed(effectiveStatus)
       ) {
-        if (!cancelled) setInitialRoute('Subscription');
+        if (!cancelled) {
+          setInitialDeviceDiscoveryReason(undefined);
+          setInitialRoute('Subscription');
+        }
         return;
       }
       const visualQaRoute = resolveVisualQaInitialRoute();
       if (visualQaRoute) {
-        if (!cancelled) setInitialRoute(visualQaRoute);
+        if (!cancelled) {
+          setInitialDeviceDiscoveryReason(undefined);
+          setInitialRoute(visualQaRoute);
+        }
         return;
       }
+      if (globalMarket) {
+        const invalidation = await NativeModules.NativeSyncEngine
+          ?.getBindingInvalidationState?.()
+          .catch(() => null);
+        if (invalidation) {
+          if (!cancelled) {
+            setInitialDeviceDiscoveryReason(PAIRING_INVALIDATED_ROUTE_REASON);
+            setInitialRoute('DeviceDiscovery');
+          }
+          return;
+        }
+      }
       const route = await resolveDefaultAuthedRoute();
-      if (!cancelled) setInitialRoute(route);
+      if (!cancelled) {
+        setInitialDeviceDiscoveryReason(undefined);
+        setInitialRoute(route);
+      }
     };
     decide();
     return () => {
       cancelled = true;
     };
-  }, [subscription?.status, userStatus]);
+  }, [globalMarket, subscription?.status, userStatus]);
 
   if (!initialRoute) {
     return <LoadingScreen />;
@@ -406,6 +475,7 @@ function AuthedStack({
 
   return (
     <>
+      <PairingInvalidationWatcher enabled={globalMarket} />
       <ExpiryReminderWatcher subscription={subscription} />
       <SubscriptionGateBlockWatcher
         subscription={subscription}
@@ -422,6 +492,11 @@ function AuthedStack({
         <Stack.Screen
           name="DeviceDiscovery"
           component={DeviceDiscoveryComponent}
+          initialParams={
+            globalMarket && initialDeviceDiscoveryReason
+              ? { reason: initialDeviceDiscoveryReason }
+              : undefined
+          }
         />
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
         <Stack.Screen
