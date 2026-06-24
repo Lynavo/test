@@ -859,6 +859,76 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun pairingInvalidationAllowsPairedFalseOnlyFromMatchingDesktopIdentity() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = " desktop-1 ",
+        responseServerId = "desktop-1",
+        responsePaired = false,
+        persistedBindingExists = true,
+        persistedPairingToken = "token-1",
+        authRejected = false,
+      ),
+    )
+  }
+
+  @Test
+  fun pairingInvalidationRejectsPairedFalseFromMismatchedDesktopIdentity() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "desktop-2",
+        responsePaired = false,
+        persistedBindingExists = true,
+        persistedPairingToken = "token-1",
+        authRejected = false,
+      ),
+    )
+  }
+
+  @Test
+  fun pairingInvalidationDetectsMissingPersistedBindingToken() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = null,
+        responseServerId = null,
+        responsePaired = null,
+        persistedBindingExists = true,
+        persistedPairingToken = " ",
+        authRejected = false,
+      ),
+    )
+  }
+
+  @Test
+  fun pairingInvalidationAllowsExplicitAuthRejected() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "desktop-1",
+        responsePaired = null,
+        persistedBindingExists = true,
+        persistedPairingToken = "token-1",
+        authRejected = true,
+      ),
+    )
+  }
+
+  @Test
+  fun pairingInvalidationIgnoresGenericOfflineInputs() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = null,
+        responseServerId = null,
+        responsePaired = null,
+        persistedBindingExists = false,
+        persistedPairingToken = null,
+        authRejected = false,
+      ),
+    )
+  }
+
+  @Test
   fun lanWakeReachabilityDoesNotPromoteConnectionUntilPresenceConfirmsPairing() {
     assertEquals(
       "offline",

@@ -604,14 +604,32 @@ class NativeSyncEngineModule(
         ),
       )
 
-      val resolvedBinding = performPairing(
-        host = host,
-        port = port,
-        fallbackDeviceId = fallbackDeviceId,
-        connectionCode = connectionCode,
-        storedPairingToken = storedPairingToken,
-        helloPayload = helloPayload,
-      )
+      val resolvedBinding = try {
+        performPairing(
+          host = host,
+          port = port,
+          fallbackDeviceId = fallbackDeviceId,
+          connectionCode = connectionCode,
+          storedPairingToken = storedPairingToken,
+          helloPayload = helloPayload,
+        )
+      } catch (error: NativeStructuredError) {
+        if (
+          error.nativeCode == "PAIR_TOKEN_INVALID" &&
+          storedPairingToken != null &&
+          AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+            expectedDeviceId = previousBinding?.deviceId,
+            responseServerId = fallbackDeviceId,
+            responsePaired = null,
+            persistedBindingExists = previousBinding != null,
+            persistedPairingToken = previousBinding?.pairingToken,
+            authRejected = previousBinding?.deviceId == fallbackDeviceId,
+          )
+        ) {
+          invalidateCurrentPairing("pair_token_invalid")
+        }
+        throw error
+      }
 
       resetAutoUploadAfterPairingDeviceSwitch(previousBinding, resolvedBinding)
       saveBinding(resolvedBinding)
@@ -655,6 +673,7 @@ class NativeSyncEngineModule(
     cancelPresenceRecoveryProbe(reason = "unbind")
     stopP2PTunnel()
     stopPresenceHeartbeatTimer()
+    clearBindingInvalidationReason()
     clearBinding()
     clearSharedFilesReachability(reason = "disconnectAndUnbind")
     emitBindingStateCleared()
@@ -667,6 +686,36 @@ class NativeSyncEngineModule(
   fun getBindingState(promise: Promise) {
     runAsync(promise) {
       promise.resolve(refreshBindingReachability(loadBinding())?.toWritableMapWithSharedFilesReachability())
+    }
+  }
+
+  @ReactMethod
+  fun getBindingInvalidationState(promise: Promise) {
+    runAsync(promise) {
+      val storedReason = loadBindingInvalidationReason()
+      if (storedReason != null) {
+        promise.resolve(bindingInvalidationState(storedReason))
+        return@runAsync
+      }
+
+      val binding = loadBinding()
+      if (
+        AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+          expectedDeviceId = binding?.deviceId,
+          responseServerId = null,
+          responsePaired = null,
+          persistedBindingExists = binding != null,
+          persistedPairingToken = binding?.pairingToken,
+          authRejected = false,
+        )
+      ) {
+        val reason = "pairing_token_missing"
+        invalidateCurrentPairing(reason)
+        promise.resolve(bindingInvalidationState(reason))
+        return@runAsync
+      }
+
+      promise.resolve(null)
     }
   }
 
@@ -1036,6 +1085,7 @@ class NativeSyncEngineModule(
   fun wipeSyncIdentity(promise: Promise) {
     try {
       stopP2PTunnel()
+      clearBindingInvalidationReason()
       performWipeSyncIdentity(prefs)
       emitBindingStateCleared()
       emitQueueUpdated(Arguments.createArray())
@@ -2501,6 +2551,7 @@ class NativeSyncEngineModule(
     val nonce = helloResponse.optString("nonce")
     if (nonce.isNotBlank()) {
       if (refreshedBinding.pairingToken.isBlank()) {
+        invalidateCurrentPairing("pairing_token_missing")
         throw IllegalStateException("Desktop requires re-pairing")
       }
       writeJsonFrame(
@@ -2513,10 +2564,29 @@ class NativeSyncEngineModule(
       )
       val authResponse = readJsonFrame(connection.input, TYPE_AUTH_RES)
       if (!authResponse.optBoolean("ok", false)) {
+        val errorCode = structuredErrorCode(authResponse.optString("errorCode"))
+        val responseServerId = helloResponse.optString("serverId").takeIf { it.isNotBlank() }
+        val authRejectedForCurrentBinding = responseServerId == null || responseServerId == refreshedBinding.deviceId
+        if (
+          errorCode == "PAIR_TOKEN_INVALID" &&
+          AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+            expectedDeviceId = refreshedBinding.deviceId,
+            responseServerId = responseServerId,
+            responsePaired = null,
+            persistedBindingExists = true,
+            persistedPairingToken = refreshedBinding.pairingToken,
+            authRejected = authRejectedForCurrentBinding,
+          )
+        ) {
+          invalidateCurrentPairing("pair_token_invalid")
+        }
         throw IllegalStateException("Desktop authentication failed")
       }
       recordNativeLog("SyncPipeline", "auth successful", Log.INFO)
     } else if (helloResponse.optBoolean("authRequired", false)) {
+      if (refreshedBinding.pairingToken.isBlank()) {
+        invalidateCurrentPairing("pairing_token_missing")
+      }
       throw IllegalStateException("Desktop requires re-pairing")
     }
     return refreshedBinding
@@ -4541,6 +4611,10 @@ class NativeSyncEngineModule(
     emitEvent("onBindingStateChanged", null)
   }
 
+  private fun emitPairingInvalidated(reason: String) {
+    emitEvent("onPairingInvalidated", bindingInvalidationState(reason))
+  }
+
   private fun updateSharedFilesReachability(
     state: String,
     route: SharedFileRoute?,
@@ -4803,6 +4877,33 @@ class NativeSyncEngineModule(
     return updated
   }
 
+  private fun invalidateCurrentPairing(reason: String) {
+    val normalizedReason = reason.trim().ifBlank { "pairing_invalidated" }
+    val binding = loadBinding()
+    recordDiagnosticsLog(
+      "Pairing",
+      "invalidating current pairing reason=$normalizedReason deviceId=${binding?.deviceId ?: "nil"}",
+    )
+    cancelPresenceRecoveryProbe(reason = normalizedReason)
+    stopPresenceHeartbeatTimer()
+    stopP2PTunnel()
+    clearSharedFilesReachability(reason = normalizedReason)
+    clearBinding()
+    persistBindingInvalidationReason(normalizedReason)
+    emitPairingInvalidated(normalizedReason)
+    emitBindingStateCleared()
+    if (syncInProgress) {
+      emitSyncState(
+        binding = null,
+        uploadState = "idle",
+        lastErrorCode = normalizedReason,
+        lastErrorMessage = "Pairing invalidated",
+      )
+    } else {
+      emitIdleSyncState(null)
+    }
+  }
+
   private fun wakeManualUploadAfterReconnectIfNeeded(
     previousConnectionState: String,
     updatedBinding: StoredBinding,
@@ -4947,6 +5048,19 @@ class NativeSyncEngineModule(
     failureReason: String,
     updateStateOnFailure: Boolean,
   ): Boolean {
+    if (
+      AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+        expectedDeviceId = binding.deviceId,
+        responseServerId = null,
+        responsePaired = null,
+        persistedBindingExists = true,
+        persistedPairingToken = binding.pairingToken,
+        authRejected = false,
+      )
+    ) {
+      invalidateCurrentPairing("pairing_token_missing")
+      return false
+    }
     if (binding.host.isBlank()) {
       return false
     }
@@ -4985,6 +5099,23 @@ class NativeSyncEngineModule(
       }
       val pairedPresent = responsePaired != null
       if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId, responsePaired)) {
+        if (
+          AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
+            expectedDeviceId = binding.deviceId,
+            responseServerId = responseServerId,
+            responsePaired = responsePaired,
+            persistedBindingExists = true,
+            persistedPairingToken = binding.pairingToken,
+            authRejected = false,
+          )
+        ) {
+          recordDiagnosticsLog(
+            "Presence",
+            "heartbeat invalidated pairing host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"}",
+          )
+          invalidateCurrentPairing("presence_unpaired")
+          return false
+        }
         val rejectionReason = if (responsePaired == false) {
           "${failureReason}_unpaired"
         } else {
@@ -5402,7 +5533,10 @@ class NativeSyncEngineModule(
   }
 
   private fun saveBinding(binding: StoredBinding) {
-    prefs.edit().putString(PREF_BINDING, binding.toJson().toString()).apply()
+    prefs.edit()
+      .putString(PREF_BINDING, binding.toJson().toString())
+      .remove(PREF_BINDING_INVALIDATION_REASON)
+      .apply()
     rememberKnownDeviceId(binding.deviceId)
   }
 
@@ -5412,6 +5546,24 @@ class NativeSyncEngineModule(
     clearSharedFilesReachability(reason = "binding_cleared")
     prefs.edit().remove(PREF_BINDING).apply()
   }
+
+  private fun loadBindingInvalidationReason(): String? =
+    prefs.getString(PREF_BINDING_INVALIDATION_REASON, null)
+      ?.trim()
+      ?.takeIf { it.isNotBlank() }
+
+  private fun persistBindingInvalidationReason(reason: String) {
+    prefs.edit().putString(PREF_BINDING_INVALIDATION_REASON, reason.trim()).apply()
+  }
+
+  private fun clearBindingInvalidationReason() {
+    prefs.edit().remove(PREF_BINDING_INVALIDATION_REASON).apply()
+  }
+
+  private fun bindingInvalidationState(reason: String): WritableMap =
+    Arguments.createMap().apply {
+      putString("reason", reason)
+    }
 
   private fun isoNow(): String {
     val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
@@ -6770,6 +6922,7 @@ class NativeSyncEngineModule(
       "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
     const val PREFS_NAME = "syncflow.android.native_sync_engine"
     private const val PREF_BINDING = "binding"
+    private const val PREF_BINDING_INVALIDATION_REASON = "binding_invalidation_reason"
     private const val PREF_CLIENT_ID = "client_id"
     private const val PREF_CLIENT_DISPLAY_NAME = "client_display_name"
     private const val PREF_KNOWN_DEVICE_IDS = "known_device_ids"

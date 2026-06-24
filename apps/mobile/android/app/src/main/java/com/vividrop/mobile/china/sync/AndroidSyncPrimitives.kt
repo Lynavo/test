@@ -627,6 +627,33 @@ object AndroidSyncPrimitives {
       normalizedExpectedDeviceId == normalizedResponseServerId
   }
 
+  fun shouldInvalidateCurrentPairing(
+    expectedDeviceId: String?,
+    responseServerId: String?,
+    responsePaired: Boolean?,
+    persistedBindingExists: Boolean,
+    persistedPairingToken: String?,
+    authRejected: Boolean,
+  ): Boolean {
+    if (persistedBindingExists && persistedPairingToken?.trim().isNullOrBlank()) {
+      return true
+    }
+
+    if (authRejected) {
+      return true
+    }
+
+    if (responsePaired == false) {
+      val normalizedExpectedDeviceId = expectedDeviceId?.trim().orEmpty()
+      val normalizedResponseServerId = responseServerId?.trim().orEmpty()
+      return normalizedExpectedDeviceId.isNotBlank() &&
+        normalizedResponseServerId.isNotBlank() &&
+        normalizedExpectedDeviceId == normalizedResponseServerId
+    }
+
+    return false
+  }
+
   fun resolveDiscoveryProbeCandidate(
     probeGeneration: Long,
     currentGeneration: Long,
