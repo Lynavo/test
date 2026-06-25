@@ -2,7 +2,7 @@
   "title": "Device Management",
   "stats": {
     "total": "Total devices",
-    "disabled": "Disabled",
+    "disabled": "Blocked",
     "connected": "Connected"
   },
   "empty": {
@@ -14,21 +14,21 @@
   },
   "status": {
     "connected": "Connected",
-    "disabled": "Disabled",
+    "disabled": "Blocked",
     "offline": "Offline",
     "connectedWaitingSync": "Connected, waiting to sync"
   },
   "blockReason": {
-    "tooManyFailedAttempts": "Pairing code entered incorrectly 3 times. Device disabled automatically."
+    "tooManyFailedAttempts": "Pairing code entered incorrectly 3 times. Device blocked automatically."
   },
   "actions": {
-    "block": "Disable",
-    "unblock": "Enable",
+    "block": "Block",
+    "unblock": "Unblock",
     "cancel": "Cancel",
-    "confirmBlock": "Confirm disable"
+    "confirmBlock": "Confirm block"
   },
   "dialog": {
-    "disableTitle": "Disable device",
-    "disableDescription": "After disabling, {{deviceName}} will disconnect and stop all transfers. Disable this device?"
+    "disableTitle": "Block device",
+    "disableDescription": "After blocking, {{deviceName}} will disconnect and stop all transfers. Block this device?"
   }
 }
