@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Route global mobile users back to device pairing when the current desktop explicitly invalidates the old pairing token, while keeping ordinary offline states on the sync UI.
+**Goal:** Route global mobile users back to device pairing immediately when desktop resets the pairing code, while keeping ordinary offline states on the sync UI.
 
-**Architecture:** Native sync engines produce one explicit pairing invalidation signal when the current binding is rejected. React Native handles that signal centrally inside the authenticated navigator, resets to `DeviceDiscovery`, and passes a route reason so `DeviceDiscoveryGlobalScreen` can show re-pairing guidance. The implementation keeps `offline` and `pairing_invalidated` separate so network loss does not force re-pairing.
+**Architecture:** Desktop sidecar sends an LMUP `PAIRING_INVALIDATED` control frame to authenticated clients before closing sockets during pairing-code reset/set. Native sync engines treat that frame, `/presence paired:false`, and token auth rejection as explicit pairing invalidation evidence, then emit the existing JS invalidation event so global navigation resets to `DeviceDiscovery`. Mobile keeps a lightweight authenticated LMUP control session while a binding is `connected` and idle, so reset/set pairing code can push invalidation immediately even when no upload is active. Heartbeat remains the fallback for older clients/desktops or control-session delivery failures.
 
-**Tech Stack:** React Native, React Navigation, Jest / Testing Library, Swift iOS SyncEngine, Kotlin Android SyncEngine, Gradle unit tests.
+**Tech Stack:** Go sidecar LMUP server, React Native, React Navigation, Jest / Testing Library, Swift iOS SyncEngine, Kotlin Android SyncEngine, Gradle unit tests.
 
 ---
 
@@ -32,6 +32,8 @@
 - Modify `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
   - Add `invalidateCurrentPairing(reason:)`.
   - Call it for `/presence paired:false`, missing token with existing binding, and token-invalid auth errors.
+  - Maintain an idle authenticated LMUP control session while connected and not uploading.
+  - Suppress generic sync pipeline errors after `PAIRING_INVALIDATED` has invalidated the binding.
 - Modify `apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift`
   - Add pure policy helpers for identifying explicit invalidation.
 - Modify `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
@@ -40,8 +42,121 @@
   - Add equivalent pure policy helpers.
 - Modify `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
   - Add native invalidation helper and emit the JS event.
+  - Invalidate the current binding when an authenticated LMUP session receives `PAIRING_INVALIDATED`.
+  - Maintain an idle authenticated LMUP control session while connected and not uploading.
 - Modify `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
   - Cover explicit invalidation vs generic offline.
+- Modify `services/sidecar-go/internal/protocol/frame.go`
+  - Add LMUP `TypePairingInvalidated = 0x0014`.
+- Modify `services/sidecar-go/internal/server/listener.go`
+  - Track authenticated `connection` objects so disconnect can serialize the invalidation write through `connection.writeMu`.
+- Modify `services/sidecar-go/internal/server/connection.go`
+  - Add `sendPairingInvalidated(reason string)`.
+- Modify `services/sidecar-go/internal/server/handler_hello.go`
+  - Register authenticated connections with the `connection` object.
+- Modify `services/sidecar-go/internal/server/connection_test.go`
+  - Cover send-before-close for reset/set reasons and no-frame close for ordinary disconnect reasons.
+- Modify `apps/mobile/ios/SyncEngine/TcpTransport.swift`
+  - Add LMUP `.pairingInvalidated = 0x0014`.
+- Modify `apps/mobile/ios/SyncEngine/ProtocolSession.swift`
+  - Surface incoming `PAIRING_INVALIDATED` frames as a typed error with the desktop reason.
+
+## Active Invalidation Increment
+
+This increment extends the already-planned mobile pairing invalidation flow so desktop reset/set pairing code can push the invalidation immediately instead of waiting for the next `/presence` heartbeat.
+
+### Task A: Sidecar Active Invalidation Frame
+
+**Files:**
+- Modify: `services/sidecar-go/internal/protocol/frame.go`
+- Modify: `services/sidecar-go/internal/server/listener.go`
+- Modify: `services/sidecar-go/internal/server/connection.go`
+- Modify: `services/sidecar-go/internal/server/handler_hello.go`
+- Test: `services/sidecar-go/internal/server/connection_test.go`
+
+- [x] **Step 1: Write failing sidecar tests**
+
+Add tests that register an authenticated connection, call `DisconnectClients(..., "connection_code_regenerated")`, read `TypePairingInvalidated` with the same reason on the client side, then verify the socket closes. Keep an ordinary close test for non-reset reasons.
+
+- [x] **Step 2: Run the failing sidecar tests**
+
+Run:
+
+```bash
+cd services/sidecar-go && go test ./internal/server -run 'TestDisconnectClients'
+```
+
+Expected: FAIL because `TypePairingInvalidated` and the send-before-close behavior do not exist.
+
+- [x] **Step 3: Implement minimal sidecar protocol support**
+
+Add `TypePairingInvalidated = 0x0014`, track `*connection` in `TCPServer.activeConns`, register `c` after auth/pair success, and call `conn.sendPairingInvalidated(reason)` before closing the transport for reset/set reasons.
+
+- [x] **Step 4: Run focused sidecar tests**
+
+Run:
+
+```bash
+cd services/sidecar-go && go test ./internal/protocol ./internal/server ./internal/api
+```
+
+### Task B: Android Active Invalidation Frame
+
+**Files:**
+- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
+- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
+- Test: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
+
+- [x] **Step 1: Write failing Android policy tests**
+
+Add a policy test proving `connection_code_regenerated` and `connection_code_set` are accepted control-frame invalidation reasons, while blank/generic offline reasons are not.
+
+- [x] **Step 2: Implement frame handling**
+
+Add `TYPE_PAIRING_INVALIDATED = 0x0014`. When an authenticated sync read receives this frame, parse the reason, call `invalidateCurrentPairing(reason, expectedDeviceId=binding.deviceId, expectedPairingToken=binding.pairingToken)`, and abort the current session.
+
+### Task C: iOS Active Invalidation Frame
+
+**Files:**
+- Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift`
+- Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
+- Modify: `apps/mobile/ios/SyncEngine/TcpTransport.swift`
+- Modify: `apps/mobile/ios/SyncEngine/ProtocolSession.swift`
+- Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
+
+- [x] **Step 1: Write failing iOS policy tests**
+
+Add a policy test proving `connection_code_regenerated` and `connection_code_set` are accepted control-frame invalidation reasons, while blank/generic offline reasons are not.
+
+- [x] **Step 2: Implement frame handling**
+
+Add `.pairingInvalidated = 0x0014`, convert that frame into a typed `PairingInvalidatedControlFrameError`, catch it in authenticated sync paths, call `invalidateCurrentPairing(reason, expectedDeviceId, expectedPairingToken)`, and stop the current protocol session.
+
+### Task D: Idle Mobile Control Session
+
+**Files:**
+- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
+- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
+- Test: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
+- Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift`
+- Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
+- Test: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
+
+- [x] **Step 1: Write failing mobile policy tests**
+
+Add policy tests proving an idle control connection should be maintained only when the binding is `connected`, no sync/upload is active, and the active control identity matches the current binding. Add iOS coverage proving `PAIRING_INVALIDATED` does not surface as a generic sync pipeline error after the binding has been invalidated.
+
+- [x] **Step 2: Add iOS idle control session**
+
+Start a lightweight LMUP session after `connected` state or heartbeat resume, authenticate with the current binding token, then wait for pushed control frames. Stop it on upload start, binding invalidation, background idle transition, non-connected state, or binding clear. Ordinary socket drops should not force offline; schedule a guarded restart if the same binding identity is still current.
+
+- [x] **Step 3: Add Android idle control session**
+
+Mirror the iOS lifecycle in `NativeSyncEngineModule`: start after `connected` state or heartbeat resume, stop before upload and on non-connected state, and call `invalidateCurrentPairing(...)` when the control reader receives `PAIRING_INVALIDATED`.
+
+- [x] **Step 4: Verify targeted regressions**
+
+Run focused Android/iOS/sidecar tests, then compile Android global debug and Swift policy tests where available.
 
 ## Task 1: JS Contract And Central Navigation Watcher
 
@@ -50,7 +165,7 @@
 - Modify: `apps/mobile/src/navigation/RootNavigator.tsx`
 - Test: `apps/mobile/src/navigation/__tests__/RootNavigator.pairingInvalidation.test.tsx`
 
-- [ ] **Step 1: Write the failing navigation tests**
+- [x] **Step 1: Write the failing navigation tests**
 
 Create `apps/mobile/src/navigation/__tests__/RootNavigator.pairingInvalidation.test.tsx` with:
 
@@ -218,7 +333,7 @@ describe('RootNavigator pairing invalidation routing', () => {
 });
 ```
 
-- [ ] **Step 2: Run the failing navigation tests**
+- [x] **Step 2: Run the failing navigation tests**
 
 Run:
 
@@ -228,7 +343,7 @@ pnpm --filter @syncflow/mobile test -- RootNavigator.pairingInvalidation.test.ts
 
 Expected: FAIL because `onPairingInvalidated`, `getBindingInvalidationState`, and `reason` initial params are not wired.
 
-- [ ] **Step 3: Add JS event constants and payload guard**
+- [x] **Step 3: Add JS event constants and payload guard**
 
 In `apps/mobile/src/services/SyncEngineModule.ts`, add near the existing bridge types:
 
@@ -255,7 +370,7 @@ export function isPairingInvalidatedEvent(
 }
 ```
 
-- [ ] **Step 4: Add the central watcher and cold-start route check**
+- [x] **Step 4: Add the central watcher and cold-start route check**
 
 In `apps/mobile/src/navigation/RootNavigator.tsx`, import:
 
@@ -369,7 +484,7 @@ Render the watcher before the navigator:
 <PairingInvalidationWatcher enabled={globalMarket} />
 ```
 
-- [ ] **Step 5: Run the navigation tests**
+- [x] **Step 5: Run the navigation tests**
 
 Run:
 
@@ -379,7 +494,7 @@ pnpm --filter @syncflow/mobile test -- RootNavigator.pairingInvalidation.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add apps/mobile/src/services/SyncEngineModule.ts apps/mobile/src/navigation/RootNavigator.tsx apps/mobile/src/navigation/__tests__/RootNavigator.pairingInvalidation.test.tsx
@@ -394,7 +509,7 @@ git commit -m "feat(mobile): route pairing invalidation globally"
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json`
 - Test: `apps/mobile/src/screens/__tests__/DeviceDiscoveryGlobalScreen.onboarding.test.tsx`
 
-- [ ] **Step 1: Write the failing UI tests**
+- [x] **Step 1: Write the failing UI tests**
 
 Append to `DeviceDiscoveryGlobalScreen.onboarding.test.tsx`:
 
@@ -420,7 +535,7 @@ it('shows a pairing invalidated message while keeping pairing choices available'
 });
 ```
 
-- [ ] **Step 2: Run the failing UI test**
+- [x] **Step 2: Run the failing UI test**
 
 Run:
 
@@ -430,7 +545,7 @@ pnpm --filter @syncflow/mobile test -- DeviceDiscoveryGlobalScreen.onboarding.te
 
 Expected: FAIL because the route reason and copy are not implemented.
 
-- [ ] **Step 3: Add i18n keys**
+- [x] **Step 3: Add i18n keys**
 
 In `apps/mobile/src/i18n/locales/en/deviceDiscovery.json`, under `global`, add:
 
@@ -446,7 +561,7 @@ In `apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json`, under `global`, 
 "pairingInvalidatedDesc": "这台电脑已更新连接码。请重新配对后继续同步。"
 ```
 
-- [ ] **Step 4: Render the invalidation state card without hiding device choices**
+- [x] **Step 4: Render the invalidation state card without hiding device choices**
 
 In `DeviceDiscoveryGlobalScreen.tsx`, include `route` in the props type if needed:
 
@@ -485,7 +600,7 @@ Render this before the devices card:
 
 Do not fold this into `connectionStateContent`; that object hides device rows and recent desktops when present.
 
-- [ ] **Step 5: Run the UI tests**
+- [x] **Step 5: Run the UI tests**
 
 Run:
 
@@ -495,7 +610,7 @@ pnpm --filter @syncflow/mobile test -- DeviceDiscoveryGlobalScreen.onboarding.te
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add apps/mobile/src/screens/DeviceDiscoveryGlobalScreen.tsx apps/mobile/src/i18n/locales/en/deviceDiscovery.json apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json apps/mobile/src/screens/__tests__/DeviceDiscoveryGlobalScreen.onboarding.test.tsx
@@ -509,7 +624,7 @@ git commit -m "feat(mobile): explain invalidated pairing in discovery"
 - Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 
-- [ ] **Step 1: Write the failing policy tests**
+- [x] **Step 1: Write the failing policy tests**
 
 In `PresenceReconnectPolicyTests/main.swift`, add:
 
@@ -551,7 +666,7 @@ expect(
 )
 ```
 
-- [ ] **Step 2: Run the failing iOS policy test**
+- [x] **Step 2: Run the failing iOS policy test**
 
 Run:
 
@@ -562,7 +677,7 @@ swiftc PresenceReconnectPolicy.swift PresenceReconnectPolicyTests/main.swift -o 
 
 Expected: FAIL because `shouldInvalidatePairing` does not exist.
 
-- [ ] **Step 3: Implement the pure iOS policy helper**
+- [x] **Step 3: Implement the pure iOS policy helper**
 
 In `PresenceReconnectPolicy.swift`, add:
 
@@ -576,7 +691,7 @@ static func shouldInvalidatePairing(
 }
 ```
 
-- [ ] **Step 4: Implement `invalidateCurrentPairing(reason:)`**
+- [x] **Step 4: Implement `invalidateCurrentPairing(reason:)`**
 
 In `SyncEngineManager.swift`, add a private helper near binding state helpers:
 
@@ -600,7 +715,7 @@ private func invalidateCurrentPairing(reason: String) {
 
 Use these existing method names from `SyncEngineManager.swift`: `stopPresenceHeartbeatTimer()`, `cancelPresenceRecoveryProbe(reason:)`, `stopP2PTunnel(reason:)`, `bindingService.clearPairingToken(forKey:)`, `uploadStore?.clearBinding()`, `clearSharedFilesReachability(reason:)`, and `NativeSyncEngineModule.shared?.emitBindingStateChanged(nil)`.
 
-- [ ] **Step 5: Call the helper from explicit invalidation sites**
+- [x] **Step 5: Call the helper from explicit invalidation sites**
 
 In `sendPresenceHeartbeat`, where `responsePaired == false` currently updates state to offline, replace that branch with:
 
@@ -628,7 +743,7 @@ In HMAC/auth rejection paths where the sidecar explicitly rejects the current st
 invalidateCurrentPairing(reason: "pairing_auth_rejected")
 ```
 
-- [ ] **Step 6: Add native module event emitter**
+- [x] **Step 6: Add native module event emitter**
 
 In `apps/mobile/ios/SyncEngine/RNBridge.swift`, add `"onPairingInvalidated"` to `supportedEvents()` immediately after `"onBindingStateChanged"`.
 
@@ -640,7 +755,7 @@ func emitPairingInvalidated(_ payload: [String: Any]) {
 }
 ```
 
-- [ ] **Step 7: Run iOS tests and build**
+- [x] **Step 7: Run iOS tests and build**
 
 Run:
 
@@ -654,7 +769,7 @@ xcodebuild -workspace apps/mobile/ios/SyncFlowMobile.xcworkspace -scheme SyncFlo
 
 Expected: both Swift policy commands exit 0 and the Xcode build prints `BUILD SUCCEEDED`.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 ```bash
 git add apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift apps/mobile/ios/SyncEngine/SyncEngineManager.swift apps/mobile/ios
@@ -668,7 +783,7 @@ git commit -m "feat(ios): emit pairing invalidation on token rejection"
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 - Modify: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
 
-- [ ] **Step 1: Write the failing Android policy tests**
+- [x] **Step 1: Write the failing Android policy tests**
 
 Add to `AndroidSyncPrimitivesTest.kt`:
 
@@ -706,7 +821,7 @@ fun explicitPairingInvalidationSignalsRequireRePairing() {
 }
 ```
 
-- [ ] **Step 2: Run the failing Android policy test**
+- [x] **Step 2: Run the failing Android policy test**
 
 Run:
 
@@ -717,7 +832,7 @@ cd apps/mobile/android
 
 Expected: FAIL because `shouldInvalidatePairing` does not exist.
 
-- [ ] **Step 3: Implement the Android policy helper**
+- [x] **Step 3: Implement the Android policy helper**
 
 In `AndroidSyncPrimitives.kt`, add:
 
@@ -730,7 +845,7 @@ fun shouldInvalidatePairing(
   responsePaired == false || tokenMissingForPersistedBinding || authRejected
 ```
 
-- [ ] **Step 4: Implement Android native invalidation helper**
+- [x] **Step 4: Implement Android native invalidation helper**
 
 In `NativeSyncEngineModule.kt`, add:
 
@@ -760,7 +875,7 @@ private fun emitPairingInvalidated(reason: String) {
 
 Use these existing method names from `NativeSyncEngineModule.kt`: `stopPresenceHeartbeatTimer()`, `cancelPresenceRecoveryProbe(reason = reason)`, `stopP2PTunnel()`, `clearBinding()`, `clearSharedFilesReachability(reason)`, `emitBindingStateCleared()`, and `emitEvent(eventName, payload)`.
 
-- [ ] **Step 5: Call Android invalidation only from explicit rejection sites**
+- [x] **Step 5: Call Android invalidation only from explicit rejection sites**
 
 In `sendPresenceHeartbeat`, replace the `responsePaired == false` offline update with:
 
@@ -790,7 +905,7 @@ invalidateCurrentPairing("pairing_auth_rejected")
 
 Do not call this helper for health timeouts, discovery misses, tunnel unavailable, or generic IO exceptions.
 
-- [ ] **Step 6: Run Android tests**
+- [x] **Step 6: Run Android tests**
 
 Run:
 
@@ -801,7 +916,7 @@ cd apps/mobile/android
 
 Expected: `BUILD SUCCESSFUL`.
 
-- [ ] **Step 7: Commit Task 4**
+- [x] **Step 7: Commit Task 4**
 
 ```bash
 git add apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt
@@ -824,7 +939,7 @@ pnpm --filter @syncflow/mobile test -- RootNavigator.pairingInvalidation.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 2: Run focused native tests**
+- [x] **Step 2: Run focused native tests**
 
 Run:
 
@@ -838,7 +953,7 @@ cd /Volumes/T7/Dev/Web/SyncFlow/apps/mobile/android
 
 Expected: all commands exit 0.
 
-- [ ] **Step 3: Run mobile TypeScript check**
+- [x] **Step 3: Run mobile TypeScript check**
 
 Run:
 
@@ -848,7 +963,7 @@ pnpm --filter @syncflow/mobile exec tsc --noEmit
 
 Expected: exit 0.
 
-- [ ] **Step 4: Run iOS global simulator build**
+- [x] **Step 4: Run iOS global simulator build**
 
 Run:
 
@@ -858,7 +973,7 @@ xcodebuild -workspace apps/mobile/ios/SyncFlowMobile.xcworkspace -scheme SyncFlo
 
 Expected: `BUILD SUCCEEDED`.
 
-- [ ] **Step 5: Run diff hygiene checks**
+- [x] **Step 5: Run diff hygiene checks**
 
 Run:
 
@@ -869,7 +984,7 @@ git status --short
 
 Expected: no whitespace errors. `git status --short` should show only intended files before the final commit.
 
-- [ ] **Step 6: Final self-review**
+- [x] **Step 6: Final self-review**
 
 Check:
 
