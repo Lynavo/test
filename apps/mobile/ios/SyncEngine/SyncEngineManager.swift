@@ -9337,6 +9337,33 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         )?.absoluteString
     }
 
+    /// Async variant that first establishes an active sidecar route, then returns
+    /// a fresh signed thumbnail URL for a personal-dir file.  Unlike
+    /// `getSharedFileStreamUrl`, this guarantees that `sharedFilesService.sidecarHost`
+    /// is populated before the URL is built, so the result is always non-nil when
+    /// the desktop is reachable.
+    func getPersonalFileThumbnailUrl(path: String, accessToken: String) async throws -> String {
+        let scope = SharedDirectoryScope.personal
+        let allowWake = SharedFilesRoutePolicy.shouldAttemptWake(
+            scope: scope.rawValue,
+            path: path,
+            operation: "thumbnail"
+        )
+        _ = try await prepareSharedFilesRoute(reason: "personal_thumbnail_url", allowWake: allowWake)
+        let accessPairingToken = personalAccessPairingToken(for: scope)
+        guard let url = sharedFilesService.getThumbnailUrl(
+            scope: scope,
+            path: path,
+            accessToken: accessToken,
+            pairingToken: accessPairingToken,
+            clientID: getClientId(),
+            clientName: getClientDisplayName()
+        ) else {
+            throw SyncEngineError.networkError("Failed to build thumbnail URL for path: \(path)")
+        }
+        return url.absoluteString
+    }
+
     func prepareSharedFilePreview(scope scopeRaw: String, path: String, accessToken: String, filename: String) async throws -> String {
         let scope = SharedDirectoryScope(rawValue: scopeRaw) ?? .team
         let allowWake = SharedFilesRoutePolicy.shouldAttemptWake(

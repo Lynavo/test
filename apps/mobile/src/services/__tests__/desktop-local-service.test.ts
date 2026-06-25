@@ -6,6 +6,7 @@ import {
   downloadResource,
   downloadResourceForGlobal,
   getGlobalRemoteAccessPreviewUrl,
+  getGlobalRemoteAccessThumbnailUrl,
   getReceivedLibraryPreviewUrl,
   getResourcePreviewUrl,
   listGlobalReceivedLibraryPage,
@@ -29,6 +30,7 @@ import {
   downloadReceivedFile,
   downloadDirectoryFile,
   getDirectoryFileStreamUrl,
+  getPersonalFileThumbnailUrl,
   getClientId,
   getReceivedFilePreviewUrl,
   listGlobalReceivedFiles,
@@ -56,6 +58,7 @@ jest.mock('../SyncEngineModule', () => ({
   downloadReceivedFile: jest.fn(),
   downloadDirectoryFile: jest.fn(),
   getDirectoryFileStreamUrl: jest.fn(),
+  getPersonalFileThumbnailUrl: jest.fn(),
   getReceivedFilePreviewUrl: jest.fn(),
   listGlobalReceivedFiles: jest.fn(),
   listReceivedFiles: jest.fn(),
@@ -89,6 +92,10 @@ const mockedListReceivedFiles = listReceivedFiles as jest.MockedFunction<
 const mockedPrepareDirectoryFilePreview =
   prepareDirectoryFilePreview as jest.MockedFunction<
     typeof prepareDirectoryFilePreview
+  >;
+const mockedGetPersonalFileThumbnailUrl =
+  getPersonalFileThumbnailUrl as jest.MockedFunction<
+    typeof getPersonalFileThumbnailUrl
   >;
 const mockGetClientDisplayName = NativeModules.NativeSyncEngine
   ?.getClientDisplayName as jest.MockedFunction<() => Promise<string>>;
@@ -1362,6 +1369,9 @@ describe('desktop-local-service', () => {
     mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
       'http://127.0.0.1:39394/personal/stream/Desktop/notes.txt',
     );
+    mockedGetPersonalFileThumbnailUrl.mockResolvedValueOnce(
+      'http://127.0.0.1:39394/personal/thumbnail/Desktop/notes.txt',
+    );
     mockedPrepareDirectoryFilePreview.mockResolvedValueOnce('/cache/notes.txt');
 
     await expect(
@@ -1375,6 +1385,9 @@ describe('desktop-local-service', () => {
       getGlobalRemoteAccessPreviewUrl('personal-dir:Desktop/notes.txt'),
     ).resolves.toBe('http://127.0.0.1:39394/personal/stream/Desktop/notes.txt');
     await expect(
+      getGlobalRemoteAccessThumbnailUrl('personal-dir:Desktop/notes.txt'),
+    ).resolves.toBe('http://127.0.0.1:39394/personal/thumbnail/Desktop/notes.txt');
+    await expect(
       prepareGlobalRemoteAccessPreview(
         'personal-dir:Desktop/notes.txt',
         'notes.txt',
@@ -1387,6 +1400,9 @@ describe('desktop-local-service', () => {
     );
     expect(mockedGetDirectoryFileStreamUrl).toHaveBeenCalledWith(
       'personal',
+      'Desktop/notes.txt',
+    );
+    expect(mockedGetPersonalFileThumbnailUrl).toHaveBeenCalledWith(
       'Desktop/notes.txt',
     );
     expect(mockedPrepareDirectoryFilePreview).toHaveBeenCalledWith(

@@ -14,6 +14,7 @@ import {
   downloadReceivedFile,
   getClientId,
   getDirectoryFileStreamUrl,
+  getPersonalFileThumbnailUrl,
   getReceivedFilePreviewUrl as getNativeReceivedFilePreviewUrl,
   listGlobalReceivedFiles,
   listReceivedFiles,
@@ -1111,6 +1112,14 @@ export async function getGlobalRemoteAccessPreviewUrl(
 ): Promise<string> {
   return getDirectoryFileStreamUrl(
     'personal',
+    getPersonalDirectoryPathFromResourceId(resourceId),
+  );
+}
+
+export async function getGlobalRemoteAccessThumbnailUrl(
+  resourceId: string,
+): Promise<string> {
+  return getPersonalFileThumbnailUrl(
     getPersonalDirectoryPathFromResourceId(resourceId),
   );
 }

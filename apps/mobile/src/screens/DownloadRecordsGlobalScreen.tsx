@@ -30,12 +30,15 @@ import {
   downloadGlobalRemoteAccessResource,
   downloadReceivedLibraryItem,
   downloadResourceForGlobal,
+  getGlobalRemoteAccessPreviewUrl,
+  getGlobalRemoteAccessThumbnailUrl,
   isDownloadSavedLocally,
   isDownloadSavedToPhotos,
   type DesktopInfo,
   type ResourceDownloadResult,
 } from '../services/desktop-local-service';
 import {
+  isPersonalDirRecord,
   listDownloadRecords,
   type DownloadRecord,
 } from '../services/download-records-service';
@@ -102,9 +105,20 @@ export function DownloadRecordsGlobalScreen() {
 
   const handleOpenRecord = useCallback(async (record: DownloadRecord) => {
     const kind = getDownloadRecordPreviewKind(record);
-    const previewUrl = getDownloadRecordPreviewUri(record);
+    let previewUrl = getDownloadRecordPreviewUri(record);
 
     if (kind === 'photo' || kind === 'video') {
+      // personal-dir: records no longer cache signed URLs; fetch a fresh one.
+      if (!previewUrl && isPersonalDirRecord(record.resourceId)) {
+        try {
+          previewUrl = await getGlobalRemoteAccessPreviewUrl(record.resourceId);
+        } catch (err) {
+          console.warn(
+            '[DownloadRecordsGlobalScreen] Failed to fetch personal-dir preview URL',
+            err,
+          );
+        }
+      }
       if (!previewUrl) {
         Alert.alert('無法預覽', '這筆紀錄沒有可用的本機或預覽來源。');
         return;
@@ -270,10 +284,10 @@ function getDownloadRecordTypeLabel(record: DownloadRecord): string {
 }
 
 function getDownloadRecordPreviewUri(record: DownloadRecord): string | null {
+  if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   const candidate =
     record.previewUrl ?? record.streamUrl ?? record.thumbnailUrl ?? null;
   if (candidate?.trim()) return candidate.trim();
-  if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   return null;
 }
 
@@ -281,17 +295,18 @@ function getDownloadRecordThumbnailUri(record: DownloadRecord): string | null {
   const kind = getDownloadRecordPreviewKind(record);
   if (kind !== 'photo' && kind !== 'video') return null;
 
+  if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   const candidate =
     kind === 'photo'
       ? record.previewUrl ?? record.streamUrl ?? record.thumbnailUrl ?? null
       : record.thumbnailUrl ?? null;
   if (candidate?.trim()) return candidate.trim();
-  if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   return null;
 }
 
 function getDownloadRecordThumbnailSource(record: DownloadRecord): string {
   const kind = getDownloadRecordPreviewKind(record);
+  if (record.localPath?.trim()) return 'localPath';
   if (kind === 'photo') {
     if (record.previewUrl?.trim()) return 'previewUrl';
     if (record.streamUrl?.trim()) return 'streamUrl';
@@ -300,7 +315,6 @@ function getDownloadRecordThumbnailSource(record: DownloadRecord): string {
   if (kind === 'video') {
     if (record.thumbnailUrl?.trim()) return 'thumbnailUrl';
   }
-  if (record.localPath?.trim()) return 'localPath';
   return 'none';
 }
 
@@ -393,9 +407,43 @@ function DownloadRecordPreviewThumbnail({
   record: DownloadRecord;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  // For personal-dir: records, signed URLs are not cached. Fetch a fresh one
+  // from the native layer on mount (and whenever the record changes).
+  const [liveUri, setLiveUri] = useState<string | null>(null);
+
   const kind = getDownloadRecordPreviewKind(record);
-  const thumbnailUri = getDownloadRecordThumbnailUri(record);
+  const cachedUri = getDownloadRecordThumbnailUri(record);
   const thumbnailSource = getDownloadRecordThumbnailSource(record);
+
+  useEffect(() => {
+    if ((kind !== 'photo' && kind !== 'video') || cachedUri) {
+      setLiveUri(null);
+      return;
+    }
+    if (!isPersonalDirRecord(record.resourceId)) {
+      setLiveUri(null);
+      return;
+    }
+    // Reset failure state so the new URL gets a fresh attempt.
+    setThumbnailFailed(false);
+    setLiveUri(null);
+    let cancelled = false;
+    getGlobalRemoteAccessThumbnailUrl(record.resourceId)
+      .then(url => {
+        if (!cancelled) setLiveUri(url);
+      })
+      .catch(err => {
+        console.warn(
+          '[video-thumbnail][mobile] personal-dir live URL fetch failed',
+          { id: record.id, err },
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cachedUri, kind, record.id, record.resourceId]);
+
+  const thumbnailUri = cachedUri ?? liveUri;
 
   useEffect(() => {
     if (kind !== 'photo' && kind !== 'video') {
@@ -466,32 +514,6 @@ function DownloadRecordPreviewThumbnail({
         }}
       />
     );
-  }
-
-  if (!thumbnailUri && kind === 'photo') {
-    const photoUri = getDownloadRecordThumbnailUri(record);
-    if (photoUri && !thumbnailFailed) {
-      return (
-        <Image
-          testID={`download-record-thumbnail-${record.id}`}
-          source={{ uri: photoUri }}
-          style={styles.previewMedia}
-          resizeMode="cover"
-          onError={() => {
-            console.warn(
-              '[video-thumbnail][mobile] download record photo fallback load failed',
-              {
-                id: record.id,
-                filename: record.filename,
-                mediaType: record.mediaType,
-                photoUri,
-              },
-            );
-            setThumbnailFailed(true);
-          }}
-        />
-      );
-    }
   }
 
   return <GlobalMediaPreviewIcon type={kind} />;

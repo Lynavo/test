@@ -57,6 +57,7 @@ RCT_EXTERN_METHOD(listReceivedFiles:(RCTPromiseResolveBlock)resolve reject:(RCTP
 RCT_EXTERN_METHOD(listGlobalReceivedFiles:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getReceivedFilePreviewUrl:(NSString *)fileKey kind:(NSString *)kind resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getSharedFileStreamUrl:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getPersonalFileThumbnailUrl:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(prepareSharedFilePreview:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken filename:(NSString *)filename resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadUrlToShareCache:(NSString *)url filename:(NSString *)filename resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadUrlToLocal:(NSString *)url filename:(NSString *)filename mediaType:(NSString *)mediaType resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

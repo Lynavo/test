@@ -44,12 +44,21 @@ jest.mock('../components/GlobalSyncActivityHomeSections', () => ({
 
 jest.mock('../../services/download-records-service', () => ({
   listDownloadRecords: jest.fn(),
+  isPersonalDirRecord: jest.fn((resourceId: string) =>
+    resourceId.startsWith('personal-dir:'),
+  ),
 }));
 
 jest.mock('../../services/desktop-local-service', () => ({
   downloadGlobalRemoteAccessResource: jest.fn(),
   downloadReceivedLibraryItem: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
+  getGlobalRemoteAccessPreviewUrl: jest
+    .fn()
+    .mockResolvedValue('http://192.168.1.100:39394/personal/stream/live'),
+  getGlobalRemoteAccessThumbnailUrl: jest
+    .fn()
+    .mockResolvedValue('http://192.168.1.100:39394/personal/thumbnail/live'),
   isDownloadSavedLocally: jest.fn(
     (result: {
       savedToPhotos?: boolean;

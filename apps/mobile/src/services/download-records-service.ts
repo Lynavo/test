@@ -32,6 +32,17 @@ export const DOWNLOAD_RECORDS_STORAGE_KEY = 'syncflow:download-records:v1';
 const MAX_RECORDS = 50;
 const LEGACY_MOCK_PATH_PREFIX = '/mock/path/';
 
+/**
+ * personal-dir: records carry time-limited HMAC signatures
+ * (X-SyncFlow-Auth / X-SyncFlow-Auth-Timestamp) that expire after
+ * 5 minutes.  Persisting those URLs causes permanent thumbnail and
+ * preview failures once the signature window closes.  For these
+ * records we rely on localPath for display instead.
+ */
+export function isPersonalDirRecord(resourceId: string): boolean {
+  return resourceId.startsWith('personal-dir:');
+}
+
 function isDownloadRecord(value: unknown): value is DownloadRecord {
   if (!value || typeof value !== 'object') return false;
   const record = value as Partial<DownloadRecord>;
@@ -67,9 +78,19 @@ function normalizeOptionalString(value?: string | null): string | undefined {
 
 function normalizeDownloadRecord(record: DownloadRecord): DownloadRecord {
   const localPath = normalizeLocalPath(record.localPath);
-  const thumbnailUrl = normalizeOptionalString(record.thumbnailUrl);
-  const previewUrl = normalizeOptionalString(record.previewUrl);
-  const streamUrl = normalizeOptionalString(record.streamUrl);
+  // personal-dir: URLs carry short-lived HMAC signatures — strip them even
+  // when reading from storage, so stale data written by older app versions
+  // does not cause permanent thumbnail failures.
+  const isPersonalDir = isPersonalDirRecord(record.resourceId);
+  const thumbnailUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(record.thumbnailUrl);
+  const previewUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(record.previewUrl);
+  const streamUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(record.streamUrl);
   const {
     localPath: _localPath,
     thumbnailUrl: _thumbnailUrl,
@@ -113,9 +134,17 @@ export async function listDownloadRecords(): Promise<DownloadRecord[]> {
 export async function recordDownloadedFile(
   input: RecordDownloadedFileInput,
 ): Promise<DownloadRecord> {
-  const thumbnailUrl = normalizeOptionalString(input.thumbnailUrl);
-  const previewUrl = normalizeOptionalString(input.previewUrl);
-  const streamUrl = normalizeOptionalString(input.streamUrl);
+  // personal-dir: URLs carry short-lived HMAC signatures — do not persist.
+  const isPersonalDir = isPersonalDirRecord(input.resourceId);
+  const thumbnailUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(input.thumbnailUrl);
+  const previewUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(input.previewUrl);
+  const streamUrl = isPersonalDir
+    ? undefined
+    : normalizeOptionalString(input.streamUrl);
   const record: DownloadRecord = {
     id: input.resourceId,
     resourceId: input.resourceId,

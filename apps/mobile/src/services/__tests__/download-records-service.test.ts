@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearDownloadRecords,
   DOWNLOAD_RECORDS_STORAGE_KEY,
+  isPersonalDirRecord,
   listDownloadRecords,
   recordDownloadedFile,
 } from '../download-records-service';
@@ -226,5 +227,77 @@ describe('download-records-service', () => {
       DOWNLOAD_RECORDS_STORAGE_KEY,
     ]);
     expect(mockedAsyncStorage.removeItem).not.toHaveBeenCalled();
+  });
+
+  it('strips signed URLs from personal-dir records before persistence', async () => {
+    mockedAsyncStorage.getItem.mockResolvedValueOnce('[]');
+
+    const record = await recordDownloadedFile({
+      resourceId: 'personal-dir:Desktop/photo.jpg',
+      filename: 'photo.jpg',
+      mediaType: 'image/jpeg',
+      thumbnailUrl:
+        'http://172.16.20.108:39394/personal/thumbnail/Desktop/photo.jpg?v=1&X-SyncFlow-Auth=abc&X-SyncFlow-Auth-Timestamp=2026-06-24T06:48:27.303Z&X-SyncFlow-Auth-Nonce=xyz',
+      previewUrl:
+        'http://172.16.20.108:39394/personal/stream/Desktop/photo.jpg?access_token=tok&X-SyncFlow-Auth=abc&X-SyncFlow-Auth-Timestamp=2026-06-24T06:48:27.303Z&X-SyncFlow-Auth-Nonce=xyz',
+      streamUrl:
+        'http://172.16.20.108:39394/personal/stream/Desktop/photo.jpg?access_token=tok&X-SyncFlow-Auth=abc&X-SyncFlow-Auth-Timestamp=2026-06-24T06:48:27.303Z&X-SyncFlow-Auth-Nonce=xyz',
+      localPath: '/var/mobile/Containers/photo.jpg',
+      savedToPhotos: true,
+    });
+
+    expect(record.thumbnailUrl).toBeUndefined();
+    expect(record.previewUrl).toBeUndefined();
+    expect(record.streamUrl).toBeUndefined();
+    expect(record.localPath).toBe('/var/mobile/Containers/photo.jpg');
+    expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
+      DOWNLOAD_RECORDS_STORAGE_KEY,
+      JSON.stringify([record]),
+    );
+  });
+
+  it('strips signed URLs from existing personal-dir records when reading from storage', async () => {
+    mockedAsyncStorage.getItem.mockResolvedValueOnce(
+      JSON.stringify([
+        {
+          id: 'personal-dir:Desktop/old.jpg',
+          resourceId: 'personal-dir:Desktop/old.jpg',
+          filename: 'old.jpg',
+          downloadedAt: '2026-06-24T06:48:27.303Z',
+          thumbnailUrl:
+            'http://172.16.20.108:39394/personal/thumbnail/Desktop/old.jpg?v=1&X-SyncFlow-Auth=stale',
+          previewUrl:
+            'http://172.16.20.108:39394/personal/stream/Desktop/old.jpg?access_token=tok&X-SyncFlow-Auth=stale',
+          streamUrl:
+            'http://172.16.20.108:39394/personal/stream/Desktop/old.jpg?access_token=tok&X-SyncFlow-Auth=stale',
+          localPath: '/var/mobile/Containers/old.jpg',
+        },
+      ]),
+    );
+
+    const records = await listDownloadRecords();
+
+    expect(records).toHaveLength(1);
+    expect(records[0].thumbnailUrl).toBeUndefined();
+    expect(records[0].previewUrl).toBeUndefined();
+    expect(records[0].streamUrl).toBeUndefined();
+    expect(records[0].localPath).toBe('/var/mobile/Containers/old.jpg');
+  });
+
+  describe('isPersonalDirRecord', () => {
+    it('returns true for personal-dir: prefixed resourceIds', () => {
+      expect(isPersonalDirRecord('personal-dir:Desktop/photo.jpg')).toBe(true);
+      expect(isPersonalDirRecord('personal-dir:')).toBe(true);
+    });
+
+    it('returns false for non personal-dir resourceIds', () => {
+      expect(
+        isPersonalDirRecord(
+          'abfd5c9298dd380a1442009f6685277b94d33a6e95817354b74d8de2a5ea4cf8',
+        ),
+      ).toBe(false);
+      expect(isPersonalDirRecord('shared-dir:Documents')).toBe(false);
+      expect(isPersonalDirRecord('')).toBe(false);
+    });
   });
 });

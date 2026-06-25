@@ -100,25 +100,28 @@ private func persistDownloadedURLToLocalStorage(
     let tempURL = uniqueShareCacheURL(directory: tempDir, filename: safeFilename)
     try FileManager.default.moveItem(at: downloadedURL, to: tempURL)
 
-    let mediaType = localDownloadMediaType(filename: safeFilename, mediaType: rawMediaType)
-    if mediaType == "image" || mediaType == "video" {
-        do {
-            try await saveLocalDownloadToPhotos(fileURL: tempURL, mediaType: mediaType)
-            try? FileManager.default.removeItem(at: tempURL)
-            return [
-                "savedToPhotos": true,
-                "localPath": NSNull(),
-                "savedLocation": "Photos",
-            ]
-        } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            throw error
-        }
-    }
-
     let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let finalURL = uniqueShareCacheURL(directory: documentsURL, filename: safeFilename)
     try FileManager.default.moveItem(at: tempURL, to: finalURL)
+
+    let mediaType = localDownloadMediaType(filename: safeFilename, mediaType: rawMediaType)
+    if mediaType == "image" || mediaType == "video" {
+        do {
+            try await saveLocalDownloadToPhotos(fileURL: finalURL, mediaType: mediaType)
+            return [
+                "savedToPhotos": true,
+                "localPath": finalURL.path,
+                "savedLocation": "Photos",
+            ]
+        } catch {
+            return [
+                "savedToPhotos": false,
+                "localPath": finalURL.path,
+                "savedLocation": "Files",
+            ]
+        }
+    }
+
     return [
         "savedToPhotos": false,
         "localPath": finalURL.path,
@@ -898,6 +901,21 @@ class NativeSyncEngineModule: RCTEventEmitter {
     func getSharedFileStreamUrl(_ scope: NSString, path: NSString, accessToken: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         let url = SyncEngineManager.shared.getSharedFileStreamUrl(scope: scope as String, path: path as String, accessToken: accessToken as String)
         resolve(url)
+    }
+
+    @objc
+    func getPersonalFileThumbnailUrl(_ path: NSString, accessToken: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+        Task {
+            do {
+                let url = try await SyncEngineManager.shared.getPersonalFileThumbnailUrl(
+                    path: path as String,
+                    accessToken: accessToken as String
+                )
+                resolve(url)
+            } catch {
+                reject("THUMBNAIL_URL_ERROR", error.localizedDescription, error)
+            }
+        }
     }
 
     @objc

@@ -1712,6 +1712,26 @@ class NativeSyncEngineModule(
   }
 
   @ReactMethod
+  fun getPersonalFileThumbnailUrl(path: String, accessToken: String, promise: Promise) {
+    runAsync(promise) {
+      val route = resolveSharedFileRoute(
+        scope = "personal",
+        kind = "thumbnail",
+        path = path,
+        requestAccessToken = accessToken,
+        reason = "personal_thumbnail_url",
+      )
+      logSharedFileRoute("getPersonalFileThumbnailUrl", route)
+      val thumbnailUrl = sharedFileUrlForRoute("thumbnail", path, route)
+      recordNativeLog(
+        "SharedFiles",
+        "getPersonalFileThumbnailUrl resolved path=$path url_host=${thumbnailUrl.host} url_path=${thumbnailUrl.path}",
+      )
+      promise.resolve(thumbnailUrl.toString())
+    }
+  }
+
+  @ReactMethod
   fun prepareSharedFilePreview(scope: String, path: String, accessToken: String, filename: String, promise: Promise) {
     runAsync(promise) {
       recordNativeLog("SharedFiles", "prepareSharedFilePreview requested scope=$scope path=$path")
@@ -1869,47 +1889,71 @@ class NativeSyncEngineModule(
           ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
         val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
 
+        val destDir = File(reactApplicationContext.filesDir, "syncflow_local_downloads")
+        if (!destDir.exists()) {
+          destDir.mkdirs()
+        }
+        val destFile = uniqueShareCacheFile(destDir, safeFilename)
+        destFile.outputStream().use { output ->
+          connection.inputStream.use { input ->
+            copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
+          }
+        }
+
         if (localMediaType == "image" || localMediaType == "video") {
-          val collection = if (localMediaType == "video") {
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-          } else {
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-          }
-          val savedLocation = if (localMediaType == "video") {
-            "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
-          } else {
-            "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
-          }
-          val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
-            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          try {
+            val collection = if (localMediaType == "video") {
+              MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            } else {
+              MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            }
+            val savedLocation = if (localMediaType == "video") {
+              "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+            } else {
+              "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+            }
+            val values = ContentValues().apply {
+              put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+              put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+              }
+            }
+            val uri = reactApplicationContext.contentResolver.insert(collection, values)
+              ?: throw IllegalStateException("Unable to create MediaStore item")
+            reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+              destFile.inputStream().use { input ->
+                input.copyTo(output)
+              }
+            } ?: throw IllegalStateException("Unable to write MediaStore item")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-              put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
-              put(MediaStore.MediaColumns.IS_PENDING, 1)
+              values.clear()
+              values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+              reactApplicationContext.contentResolver.update(uri, values, null, null)
             }
+            recordNativeLog(
+              "SharedFiles",
+              "downloadUrlToLocal saved_to_photos filename=$safeFilename media_type=$localMediaType saved_location=$savedLocation uri=$uri local_path=${destFile.absolutePath}",
+            )
+            promise.resolve(Arguments.createMap().apply {
+              putBoolean("savedToPhotos", true)
+              putString("localPath", destFile.absolutePath)
+              putString("savedLocation", savedLocation)
+            })
+            return@runAsync
+          } catch (e: Exception) {
+            recordNativeLog(
+              "SharedFiles",
+              "downloadUrlToLocal saved_to_photos failed, keeping in app files: ${e.message}",
+            )
+            promise.resolve(Arguments.createMap().apply {
+              putBoolean("savedToPhotos", false)
+              putString("localPath", destFile.absolutePath)
+              putNull("savedLocation")
+            })
+            return@runAsync
           }
-          val uri = reactApplicationContext.contentResolver.insert(collection, values)
-            ?: throw IllegalStateException("Unable to create MediaStore item")
-          reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-            connection.inputStream.use { input ->
-              copySharedDownloadWithProgress(safeFilename, input, output, totalBytes)
-            }
-          } ?: throw IllegalStateException("Unable to write MediaStore item")
-          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.clear()
-            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-            reactApplicationContext.contentResolver.update(uri, values, null, null)
-          }
-          recordNativeLog(
-            "SharedFiles",
-            "downloadUrlToLocal saved_to_photos filename=$safeFilename media_type=$localMediaType saved_location=$savedLocation uri=$uri",
-          )
-          promise.resolve(Arguments.createMap().apply {
-            putBoolean("savedToPhotos", true)
-            putNull("localPath")
-            putString("savedLocation", savedLocation)
-          })
-          return@runAsync
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -3556,51 +3600,74 @@ class NativeSyncEngineModule(
     val mimeType = connection.contentType?.substringBefore(';')
       ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
     val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
-    if (mediaType == "image" || mediaType == "video") {
-      val collection = if (mediaType == "video") {
-        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-      } else {
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-      }
-      val savedLocation = if (mediaType == "video") {
-        "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
-      } else {
-        "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
-      }
-      val values = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
-        put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          put(
-            MediaStore.MediaColumns.RELATIVE_PATH,
-            savedLocation,
-          )
-          put(MediaStore.MediaColumns.IS_PENDING, 1)
-        }
-      }
-      val uri = reactApplicationContext.contentResolver.insert(collection, values)
-        ?: throw IllegalStateException("Unable to create MediaStore item")
-      reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-        connection.inputStream.use { input ->
-          copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
-        }
-      } ?: throw IllegalStateException("Unable to write MediaStore item")
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        values.clear()
-        values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-        reactApplicationContext.contentResolver.update(uri, values, null, null)
-      }
-      recordNativeLog(
-        "SharedFiles",
-        "persistHttpDownload saved_to_photos filename=$safeFilename media_type=$mediaType saved_location=$savedLocation uri=$uri",
-      )
-      return Arguments.createMap().apply {
-        putBoolean("savedToPhotos", true)
-        putNull("localPath")
-        putString("savedLocation", savedLocation)
+
+    // 1. 一律先下载至 App 内部私有沙盒中
+    val tempDir = File(reactApplicationContext.filesDir, "syncflow_shared_downloads")
+    if (!tempDir.exists()) {
+      tempDir.mkdirs()
+    }
+    val tempFile = uniqueShareCacheFile(tempDir, safeFilename)
+    tempFile.outputStream().use { output ->
+      connection.inputStream.use { input ->
+        copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
       }
     }
 
+    if (mediaType == "image" || mediaType == "video") {
+      try {
+        val collection = if (mediaType == "video") {
+          MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        } else {
+          MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        val savedLocation = if (mediaType == "video") {
+          "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+        } else {
+          "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+        }
+        val values = ContentValues().apply {
+          put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
+          put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.MediaColumns.RELATIVE_PATH, savedLocation)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+          }
+        }
+        val uri = reactApplicationContext.contentResolver.insert(collection, values)
+          ?: throw IllegalStateException("Unable to create MediaStore item")
+        reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+          tempFile.inputStream().use { input ->
+            input.copyTo(output)
+          }
+        } ?: throw IllegalStateException("Unable to write MediaStore item")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          values.clear()
+          values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+          reactApplicationContext.contentResolver.update(uri, values, null, null)
+        }
+        recordNativeLog(
+          "SharedFiles",
+          "persistHttpDownload saved_to_photos filename=$safeFilename media_type=$mediaType saved_location=$savedLocation uri=$uri local_path=${tempFile.absolutePath}",
+        )
+        return Arguments.createMap().apply {
+          putBoolean("savedToPhotos", true)
+          putString("localPath", tempFile.absolutePath)
+          putString("savedLocation", savedLocation)
+        }
+      } catch (e: Exception) {
+        recordNativeLog(
+          "SharedFiles",
+          "persistHttpDownload saved_to_photos failed, keeping in sandbox: ${e.message}",
+        )
+        return Arguments.createMap().apply {
+          putBoolean("savedToPhotos", false)
+          putString("localPath", tempFile.absolutePath)
+          putNull("savedLocation")
+        }
+      }
+    }
+
+    // 2. 对于普通文件，保存到公共 Downloads 文件夹
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
       val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
@@ -3613,16 +3680,17 @@ class NativeSyncEngineModule(
       val uri = reactApplicationContext.contentResolver.insert(collection, values)
         ?: throw IllegalStateException("Unable to create MediaStore item")
       reactApplicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-        connection.inputStream.use { input ->
-          copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
+        tempFile.inputStream().use { input ->
+          input.copyTo(output)
         }
       } ?: throw IllegalStateException("Unable to write MediaStore item")
       values.clear()
       values.put(MediaStore.MediaColumns.IS_PENDING, 0)
       reactApplicationContext.contentResolver.update(uri, values, null, null)
+      tempFile.delete() // 已存入公共 Downloads，删除私有临时备份
       recordNativeLog(
         "SharedFiles",
-        "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=$savedLocation local_path=${if (exposeDownloadsUri) uri.toString() else "hidden"} expose_downloads_uri=$exposeDownloadsUri",
+        "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=$savedLocation local_path=$uri expose_uri=true",
       )
       return Arguments.createMap().apply {
         putBoolean("savedToPhotos", false)
@@ -3644,11 +3712,12 @@ class NativeSyncEngineModule(
       destDir.mkdirs()
     }
     val destFile = uniqueShareCacheFile(destDir, safeFilename)
-    destFile.outputStream().use { output ->
-      connection.inputStream.use { input ->
-        copySharedDownloadWithProgress(progressKey, input, output, totalBytes)
+    tempFile.inputStream().use { input ->
+      destFile.outputStream().use { output ->
+        input.copyTo(output)
       }
     }
+    tempFile.delete() // 已存入公共 Downloads，删除私有临时备份
     recordNativeLog(
       "SharedFiles",
       "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop local_path=${destFile.absolutePath}",

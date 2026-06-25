@@ -724,26 +724,31 @@ class SharedFilesService {
         try? FileManager.default.removeItem(at: destURL)
         try FileManager.default.moveItem(at: downloadedURL, to: destURL)
 
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let finalURL = documentsURL.appendingPathComponent(safeFilename)
+        try? FileManager.default.removeItem(at: finalURL)
+        try FileManager.default.moveItem(at: destURL, to: finalURL)
+
         let fileType = normalizedLocalFileType(filename: safeFilename, mediaType: mediaType)
         syncDiagnosticsLog(
             "SharedFiles",
             "persistDownloadedFile target filename=\(safeFilename) media_type=\(mediaType ?? "nil") normalized_type=\(fileType)"
         )
         if fileType == "image" || fileType == "video" {
-            try await saveToPhotoLibrary(fileURL: destURL, isVideo: fileType == "video")
-            try? FileManager.default.removeItem(at: destURL)
-            slog("[SharedFilesService] saved %@ to Camera Roll", safeFilename)
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "persistDownloadedFile saved_to_photos filename=\(safeFilename) normalized_type=\(fileType) saved_location=Photos"
-            )
-            return DownloadResult(localPath: nil, savedToPhotos: true, savedLocation: "Photos")
+            do {
+                try await saveToPhotoLibrary(fileURL: finalURL, isVideo: fileType == "video")
+                slog("[SharedFilesService] saved %@ to Camera Roll", safeFilename)
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "persistDownloadedFile saved_to_photos filename=\(safeFilename) normalized_type=\(fileType) saved_location=Photos"
+                )
+                return DownloadResult(localPath: finalURL.path, savedToPhotos: true, savedLocation: "Photos")
+            } catch {
+                slog("[SharedFilesService] failed to save %@ to Camera Roll, keeping in documents", safeFilename)
+                return DownloadResult(localPath: finalURL.path, savedToPhotos: false, savedLocation: nil)
+            }
         }
 
-        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let finalURL = documentsURL.appendingPathComponent(safeFilename)
-        try? FileManager.default.removeItem(at: finalURL)
-        try FileManager.default.moveItem(at: destURL, to: finalURL)
         syncDiagnosticsLog(
             "SharedFiles",
             "persistDownloadedFile saved_to_documents filename=\(safeFilename) local_path=\(finalURL.path)"

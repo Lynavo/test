@@ -555,6 +555,16 @@ export async function getDirectoryFileStreamUrl(
   return result as string;
 }
 
+export async function getPersonalFileThumbnailUrl(
+  path: string,
+): Promise<string> {
+  const result = await NativeSyncEngine.getPersonalFileThumbnailUrl(
+    path,
+    getCurrentAccessToken(),
+  );
+  return result as string;
+}
+
 export async function prepareDirectoryFilePreview(
   scope: DirectoryScope,
   path: string,

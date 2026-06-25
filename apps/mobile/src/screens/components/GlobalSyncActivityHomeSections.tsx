@@ -15,6 +15,9 @@ import { colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
 import { androidBoxShadow } from '../../utils/androidShadow';
 import { formatBytes } from '../../utils/format';
+import { getGlobalRemoteAccessThumbnailUrl } from '../../services/desktop-local-service';
+import { isPersonalDirRecord } from '../../services/download-records-service';
+
 
 const BLUE = colors.accent;
 const DARK = colors.primary;
@@ -252,6 +255,7 @@ export function RecentDownloadsSection({
                     type={
                       item.previewType ?? getPreviewTypeFromIcon(item.iconName)
                     }
+                    recordId={item.key}
                   />
                 ) : (
                   <Icon name={item.iconName} size={28} color={item.iconColor} />
@@ -282,14 +286,51 @@ function RecentDownloadPreview({
   label,
   thumbnailSource,
   type,
+  recordId,
 }: {
   label: string;
   thumbnailSource?: RecentDownloadThumbnailSource;
   type: GlobalMediaPreviewKind;
+  recordId?: string;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = React.useState(false);
+  const [liveUri, setLiveUri] = React.useState<string | null>(null);
   const { t } = useTranslation();
 
+  React.useEffect(() => {
+    setLiveUri(null);
+    setThumbnailFailed(false);
+
+    if (type !== 'photo' && type !== 'video') {
+      return;
+    }
+    if (thumbnailSource) {
+      return;
+    }
+    if (!recordId || !isPersonalDirRecord(recordId)) {
+      return;
+    }
+
+    let cancelled = false;
+    getGlobalRemoteAccessThumbnailUrl(recordId)
+      .then(url => {
+        if (!cancelled && url) {
+          setLiveUri(url);
+        }
+      })
+      .catch(err => {
+        console.warn(
+          '[video-thumbnail][mobile] global home recent download personal-dir live URL fetch failed',
+          { recordId, err },
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recordId, thumbnailSource, type]);
+
+  const activeUri = thumbnailSource?.uri ?? liveUri ?? undefined;
 
   React.useEffect(() => {
     if (type !== 'photo' && type !== 'video') {
@@ -299,26 +340,25 @@ function RecentDownloadPreview({
       label,
       type,
       hasThumbnailSource: Boolean(thumbnailSource),
-      renderer: thumbnailSource?.renderer ?? null,
+      hasLiveUri: Boolean(liveUri),
+      activeUri: activeUri ?? null,
+      renderer: thumbnailSource?.renderer ?? (liveUri ? 'image' : null),
       renderingImage: Boolean(
-        thumbnailSource &&
-        !thumbnailFailed &&
-        thumbnailSource.renderer === 'image',
+        activeUri &&
+        !thumbnailFailed,
       ),
       thumbnailFailed,
-      uri: thumbnailSource?.uri ?? null,
     });
-  }, [label, thumbnailFailed, thumbnailSource, type]);
+  }, [label, thumbnailFailed, thumbnailSource, liveUri, activeUri, type]);
 
   if (
-    thumbnailSource &&
-    !thumbnailFailed &&
-    thumbnailSource.renderer === 'image'
+    activeUri &&
+    !thumbnailFailed
   ) {
     return (
       <Image
         testID="recent-download-thumbnail-image"
-        source={{ uri: thumbnailSource.uri }}
+        source={{ uri: activeUri }}
         style={styles.recentDownloadThumbnailImage}
         resizeMode="cover"
         accessibilityLabel={`${label} ${t('common.thumbnail')}`}
@@ -328,7 +368,7 @@ function RecentDownloadPreview({
             {
               label,
               type,
-              uri: thumbnailSource.uri,
+              uri: activeUri,
             },
           );
           setThumbnailFailed(true);
@@ -802,6 +842,15 @@ function getRecentDownloadThumbnailSource(
     return undefined;
   }
 
+  // 1. 对于图片，如果已经成功下载到本地（有 localPath），优先使用本地物理文件
+  if (previewType === 'photo') {
+    const localUri = readLocalPathUri(record.localPath);
+    if (localUri) {
+      return { uri: localUri, renderer: 'image' };
+    }
+  }
+
+  // 2. 其次使用远端缩略图，视频和图片皆是如此
   const thumbnailUrl = readNonEmptyUri(record.thumbnailUrl);
   if (thumbnailUrl) {
     return { uri: thumbnailUrl, renderer: 'image' };
@@ -811,10 +860,10 @@ function getRecentDownloadThumbnailSource(
     return undefined;
   }
 
+  // 3. 对于图片类型，如果在本地没有文件，可以使用远端的 previewUrl 或 streamUrl
   const mediaUri =
     readNonEmptyUri(record.previewUrl) ??
-    readNonEmptyUri(record.streamUrl) ??
-    readLocalPathUri(record.localPath);
+    readNonEmptyUri(record.streamUrl);
   if (!mediaUri) {
     return undefined;
   }
