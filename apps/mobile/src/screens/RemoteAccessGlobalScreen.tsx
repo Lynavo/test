@@ -103,6 +103,7 @@ type RouteStatusViewModel = {
   label: string;
   tone: RouteStatusTone;
 };
+type RemoteAccountIssue = 'desktopLoggedOut' | 'accountMismatch';
 
 const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
   { id: 'name', label: '名称' },
@@ -420,6 +421,37 @@ function isRemoteAccessTimeoutError(error: unknown) {
   );
 }
 
+function getNormalizedErrorMessage(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : String(error ?? '');
+  return message.toLowerCase();
+}
+
+function isRemoteAccessDisabledError(error: unknown) {
+  return getNormalizedErrorMessage(error).includes(
+    'remote access is disabled',
+  );
+}
+
+function getRemoteAccountIssue(error: unknown): RemoteAccountIssue | null {
+  const normalizedMessage = getNormalizedErrorMessage(error);
+  if (normalizedMessage.includes('desktop account identity is unavailable')) {
+    return 'desktopLoggedOut';
+  }
+  if (normalizedMessage.includes('account mismatch')) {
+    return 'accountMismatch';
+  }
+  return null;
+}
+
+function isRemoteAccessReadyRetryableError(error: unknown) {
+  const normalizedMessage = getNormalizedErrorMessage(error);
+  return (
+    normalizedMessage.includes('shared files route unavailable') ||
+    normalizedMessage.includes('no shared files route available')
+  );
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => {
     setTimeout(resolve, ms);
@@ -440,7 +472,10 @@ async function withRemoteAccessReadyRetry<T>(
     } catch (error) {
       lastError = error;
       if (
+        getRemoteAccountIssue(error) ||
+        isRemoteAccessDisabledError(error) ||
         isRemoteAccessTimeoutError(error) ||
+        !isRemoteAccessReadyRetryableError(error) ||
         attempt >= REMOTE_ACCESS_READY_RETRY_ATTEMPTS
       ) {
         throw error;
@@ -840,6 +875,9 @@ export function RemoteAccessGlobalScreen() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [networkDisconnected, setNetworkDisconnected] = useState(false);
+  const [remoteAccessDisabled, setRemoteAccessDisabled] = useState(false);
+  const [remoteAccountIssue, setRemoteAccountIssue] =
+    useState<RemoteAccountIssue | null>(null);
   const [rootItems, setRootItems] = useState<RemoteResourceItem[]>([]);
   const [folderItemsByKey, setFolderItemsByKey] = useState<
     Record<string, RemoteResourceItem[]>
@@ -893,6 +931,8 @@ export function RemoteAccessGlobalScreen() {
 
   const loadData = useCallback(async () => {
     setNetworkDisconnected(false);
+    setRemoteAccessDisabled(false);
+    setRemoteAccountIssue(null);
     setFolderLoadError(false);
     setFolderLoading(false);
     setFolderItemsByKey({});
@@ -970,7 +1010,14 @@ export function RemoteAccessGlobalScreen() {
       } else {
         setPreviewMode(false);
         setRootItems([]);
-        setNetworkDisconnected(true);
+        const accountIssue = getRemoteAccountIssue(e);
+        if (accountIssue) {
+          setRemoteAccountIssue(accountIssue);
+        } else if (isRemoteAccessDisabledError(e)) {
+          setRemoteAccessDisabled(true);
+        } else {
+          setNetworkDisconnected(true);
+        }
       }
     } finally {
       setLoading(false);
@@ -1333,7 +1380,7 @@ export function RemoteAccessGlobalScreen() {
     t,
   });
   const routeStatus = getRouteStatusViewModel(
-    networkDisconnected
+    networkDisconnected || remoteAccessDisabled || remoteAccountIssue
       ? null
       : getDisplayedSharedFilesReachability(
           sharedFilesReachability,
@@ -1536,6 +1583,13 @@ export function RemoteAccessGlobalScreen() {
               {t('sharedFiles.remoteAccess.loadingSubtitle') || '正在读取电脑端共享目录。'}
             </Text>
           </View>
+        ) : remoteAccountIssue ? (
+          <RemoteAccountIssueState
+            issue={remoteAccountIssue}
+            onRetry={retryLoadData}
+          />
+        ) : remoteAccessDisabled ? (
+          <RemoteAccessDisabledState onRetry={retryLoadData} />
         ) : networkDisconnected ? (
           <NetworkDisconnectedState onRetry={retryLoadData} />
         ) : folderLoading ? (
@@ -1655,6 +1709,91 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
         onPress={onRetry}
       >
         <Text style={styles.retryButtonText}>{t('sharedFiles.remoteAccess.retryConnection') || '重试连接'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RemoteAccessDisabledState({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.centeredCard}>
+      <View style={styles.disconnectedIcon}>
+        <Icon name="lock-closed-outline" size={28} color="#DC2626" />
+      </View>
+      <Text style={styles.centeredTitle}>
+        {t('sharedFiles.remoteAccess.remoteAccessDisabledTitle') ||
+          '尚未開啟遠端存取'}
+      </Text>
+      <Text style={styles.centeredSubtitle}>
+        {t('sharedFiles.remoteAccess.remoteAccessDisabledSubtitle') ||
+          '請到電腦端開啟「遠端存取」後，再回到手機端重新整理。'}
+      </Text>
+      <TouchableOpacity
+        style={styles.retryButton}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        onPress={onRetry}
+      >
+        <Text style={styles.retryButtonText}>
+          {t('sharedFiles.remoteAccess.recheckPermission') || '重新檢查'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function RemoteAccountIssueState({
+  issue,
+  onRetry,
+}: {
+  issue: RemoteAccountIssue;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const titleKey =
+    issue === 'desktopLoggedOut'
+      ? 'sharedFiles.remoteAccess.desktopLoggedOutTitle'
+      : 'sharedFiles.remoteAccess.accountMismatchTitle';
+  const subtitleKey =
+    issue === 'desktopLoggedOut'
+      ? 'sharedFiles.remoteAccess.desktopLoggedOutSubtitle'
+      : 'sharedFiles.remoteAccess.accountMismatchSubtitle';
+  const fallbackTitle =
+    issue === 'desktopLoggedOut' ? '電腦端未登入' : '帳號不一致';
+  const fallbackSubtitle =
+    issue === 'desktopLoggedOut'
+      ? '請先在電腦端登入同一個帳號，並確認已開啟「遠端存取」。'
+      : '請確認手機與電腦端登入同一個帳號後，再重新檢查。';
+
+  return (
+    <View style={styles.centeredCard}>
+      <View style={styles.disconnectedIcon}>
+        <Icon
+          name={
+            issue === 'desktopLoggedOut'
+              ? 'person-circle-outline'
+              : 'people-outline'
+          }
+          size={28}
+          color="#DC2626"
+        />
+      </View>
+      <Text style={styles.centeredTitle}>
+        {t(titleKey) || fallbackTitle}
+      </Text>
+      <Text style={styles.centeredSubtitle}>
+        {t(subtitleKey) || fallbackSubtitle}
+      </Text>
+      <TouchableOpacity
+        style={styles.retryButton}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        onPress={onRetry}
+      >
+        <Text style={styles.retryButtonText}>
+          {t('sharedFiles.remoteAccess.recheckPermission') || '重新檢查'}
+        </Text>
       </TouchableOpacity>
     </View>
   );

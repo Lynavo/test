@@ -66,6 +66,17 @@ jest.mock('react-i18next', () => {
             'sharedFiles.remoteAccess.title': '遠端訪問電腦',
             'sharedFiles.remoteAccess.desc': '流覽電腦端共享的目錄結構並下載文件',
             'sharedFiles.remoteAccess.empty': '此資料夾為空',
+            'sharedFiles.remoteAccess.remoteAccessDisabledTitle':
+              '尚未開啟遠端存取',
+            'sharedFiles.remoteAccess.remoteAccessDisabledSubtitle':
+              '請到電腦端開啟「遠端存取」後，再回到手機端重新整理。',
+            'sharedFiles.remoteAccess.desktopLoggedOutTitle': '電腦端未登入',
+            'sharedFiles.remoteAccess.desktopLoggedOutSubtitle':
+              '請先在電腦端登入同一個帳號，並確認已開啟「遠端存取」。',
+            'sharedFiles.remoteAccess.accountMismatchTitle': '帳號不一致',
+            'sharedFiles.remoteAccess.accountMismatchSubtitle':
+              '請確認手機與電腦端登入同一個帳號後，再重新檢查。',
+            'sharedFiles.remoteAccess.recheckPermission': '重新檢查',
             'sharedFiles.remoteAccess.select': '選擇',
             'sharedFiles.remoteAccess.done': '完成',
             'sharedFiles.remoteAccess.download': '下載',
@@ -888,6 +899,106 @@ describe('RemoteAccessGlobalScreen', () => {
     await act(async () => {
       jest.runOnlyPendingTimers();
     });
+  });
+
+  it('shows desktop remote-access disabled instead of network disconnected when the desktop rejects browsing', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+      new Error('remote access is disabled'),
+    );
+
+    const { getByText, queryByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
+    });
+    expect(
+      getByText(
+        '請到電腦端開啟「遠端存取」後，再回到手機端重新整理。',
+      ),
+    ).toBeTruthy();
+    expect(getByText('重新檢查')).toBeTruthy();
+    expect(queryByText('网络断开')).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[RemoteAccessScreen] Failed to load data:',
+      expect.any(Error),
+    );
+  });
+
+  it('shows desktop logged-out guidance instead of network disconnected when the desktop account is unavailable', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+      new Error('desktop account identity is unavailable'),
+    );
+
+    const { getByText, queryByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('電腦端未登入')).toBeTruthy();
+    });
+    expect(
+      getByText(
+        '請先在電腦端登入同一個帳號，並確認已開啟「遠端存取」。',
+      ),
+    ).toBeTruthy();
+    expect(getByText('重新檢查')).toBeTruthy();
+    expect(
+      queryByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
+    ).toBeNull();
+    expect(queryByText('尚未開啟遠端存取')).toBeNull();
+  });
+
+  it('shows account mismatch guidance instead of network disconnected when mobile and desktop accounts differ', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+      new Error('account mismatch'),
+    );
+
+    const { getByText, queryByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('帳號不一致')).toBeTruthy();
+    });
+    expect(
+      getByText('請確認手機與電腦端登入同一個帳號後，再重新檢查。'),
+    ).toBeTruthy();
+    expect(getByText('重新檢查')).toBeTruthy();
+    expect(
+      queryByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
+    ).toBeNull();
+    expect(queryByText('尚未開啟遠端存取')).toBeNull();
+  });
+
+  it('treats generic personal directory HTTP 403 as network disconnected', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+      new Error('Sidecar returned HTTP 403 for /personal/list'),
+    );
+
+    const { getByText, queryByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(
+        getByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
+      ).toBeTruthy();
+    });
+    expect(queryByText('尚未開啟遠端存取')).toBeNull();
   });
 
   it('silently retries the first global remote list while the shared-files route is becoming ready', async () => {
