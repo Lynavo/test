@@ -50,9 +50,21 @@ struct SharedFileLocalSaveError: Error, LocalizedError {
 struct SharedFileHTTPStatusError: Error, LocalizedError {
     let statusCode: Int
     let path: String
+    let responseBody: String?
+
+    init(statusCode: Int, path: String, responseBody: String? = nil) {
+        self.statusCode = statusCode
+        self.path = path
+        self.responseBody = responseBody
+    }
 
     var errorDescription: String? {
-        "Sidecar returned HTTP \(statusCode) for \(path)"
+        let fallback = "Sidecar returned HTTP \(statusCode) for \(path)"
+        let body = responseBody?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let body, !body.isEmpty else {
+            return fallback
+        }
+        return "\(fallback): \(body)"
     }
 }
 
@@ -319,7 +331,7 @@ class SharedFilesService {
         )
 
         let (data, response) = try await urlSession.data(for: request)
-        try validateHTTPResponse(response, path: endpoint)
+        try validateHTTPResponse(response, data: data, path: endpoint)
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         return parseSharedDirectory(json)
@@ -407,7 +419,7 @@ class SharedFilesService {
         request.timeoutInterval = SharedFilesRoutePolicy.sharedFileListRequestTimeout
 
         let (data, response) = try await urlSession.data(for: request)
-        try validateHTTPResponse(response, path: "/resources/mobile/received")
+        try validateHTTPResponse(response, data: data, path: "/resources/mobile/received")
 
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         let items = json["items"] as? [[String: Any]] ?? []
@@ -1096,14 +1108,16 @@ class SharedFilesService {
         return formatter.string(from: date)
     }
 
-    private func validateHTTPResponse(_ response: URLResponse, path: String) throws {
+    private func validateHTTPResponse(_ response: URLResponse, data: Data? = nil, path: String) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SyncEngineError.networkError("Missing HTTP response for \(path)")
         }
         guard (200..<300).contains(httpResponse.statusCode) else {
+            let responseBody = data.flatMap { String(data: $0, encoding: .utf8) }
             throw SharedFileHTTPStatusError(
                 statusCode: httpResponse.statusCode,
-                path: path
+                path: path,
+                responseBody: responseBody
             )
         }
     }
