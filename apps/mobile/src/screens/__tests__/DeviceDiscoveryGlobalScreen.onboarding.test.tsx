@@ -628,6 +628,19 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryByText('已发现 1 台')).toBeNull();
   });
 
+  it('shows recent desktop host without the sync port in initial mode', async () => {
+    mockHasSeenUnconnectedGuide.mockResolvedValue(true);
+
+    const screen = render(<DeviceDiscoveryGlobalScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Studio Mac')).toBeTruthy();
+    });
+
+    expect(screen.getByText('192.168.31.8')).toBeTruthy();
+    expect(screen.queryByText('192.168.31.8:39393')).toBeNull();
+  });
+
   it('direct-reconnects a known discovered desktop in switch mode', async () => {
     mockRouteParams = { mode: 'switch' };
     mockGetBindingState.mockResolvedValue({

@@ -220,6 +220,14 @@ function getConnectionCodeErrorMessage(failure: ConnectionFailure, t: any): stri
   return t('deviceDiscovery.global.connectionCodeWrong');
 }
 
+function displayHostWithoutPort(host: string): string {
+  const trimmed = host.trim();
+  const ipv4WithPort = /^(\d{1,3}(?:\.\d{1,3}){3}):\d{1,5}$/.exec(
+    trimmed,
+  );
+  return ipv4WithPort ? ipv4WithPort[1] : trimmed;
+}
+
 function getConnectionFailureCopy(
   failure: ConnectionFailure | null,
   t: any,
@@ -1242,7 +1250,7 @@ export function DeviceDiscoveryGlobalScreen() {
                           <DeviceRow
                             key={recent.desktopDeviceId}
                             title={recent.desktopName}
-                            subtitle={`${recent.host}:${recent.port}`}
+                            subtitle={displayHostWithoutPort(recent.host)}
                             status={
                               isCurrentDevice
                                 ? t('deviceDiscovery.switch.badge.current')
