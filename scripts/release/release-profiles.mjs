@@ -110,7 +110,6 @@ function buildProfileEnv(profile) {
     SYNCFLOW_API_BASE_URL: profile.apiBaseUrl,
     VIVIDROP_API_BASE_URL: profile.apiBaseUrl,
     SYNCFLOW_GIFTCARD_REDEEM_BASE_URL: profile.apiBaseUrl,
-    SYNCFLOW_AUTH_BASE_URL: profile.apiBaseUrl,
     SYNCFLOW_CLIENT_CONFIG_BASE_URL: profile.apiBaseUrl,
     ELECTRON_BUILDER_CONFIG: profile.electronBuilderConfig,
   };

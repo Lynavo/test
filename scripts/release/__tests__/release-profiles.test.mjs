@@ -45,6 +45,17 @@ test('keeps review profiles on the review server while preserving market', () =>
   );
 });
 
+test('does not bake an explicit auth base URL into production release env', () => {
+  const plan = buildReleasePlan({
+    profileName: 'global-prod',
+    targets: ['mac'],
+  });
+
+  assert.equal(plan.env.SYNCFLOW_API_BASE_URL, 'https://global-api.vividrop.cn');
+  assert.equal(plan.env.SYNCFLOW_GIFTCARD_REDEEM_BASE_URL, 'https://global-api.vividrop.cn');
+  assert.equal(Object.hasOwn(plan.env, 'SYNCFLOW_AUTH_BASE_URL'), false);
+});
+
 test('parses targets predictably', () => {
   assert.deepEqual(parseTargets('ios,android,mac,win,linux'), [
     'ios',
