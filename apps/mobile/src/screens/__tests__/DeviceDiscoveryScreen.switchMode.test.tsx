@@ -168,7 +168,9 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
 
     await waitFor(() => {
       expect(getByText('Studio Mac')).toBeTruthy();
+      expect(getByText('已連過')).toBeTruthy();
     });
+    expect(queryByText('直接切換')).toBeNull();
 
     fireEvent.press(getByText('Studio Mac'));
 
@@ -227,7 +229,11 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
       ]);
     });
 
-    await waitFor(() => getByText('Studio Mac'));
+    await waitFor(() => {
+      expect(getByText('Studio Mac')).toBeTruthy();
+      expect(getByText('已連過')).toBeTruthy();
+    });
+    expect(queryByText('直接切換')).toBeNull();
     fireEvent.press(getByText('Studio Mac'));
 
     await waitFor(() => {

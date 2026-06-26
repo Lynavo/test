@@ -654,8 +654,9 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     const screen = render(<DeviceDiscoveryGlobalScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('直接切换')).toBeTruthy();
+      expect(screen.getByText('已连过')).toBeTruthy();
     });
+    expect(screen.queryByText('直接切换')).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByText('Studio Mac'));
@@ -714,8 +715,9 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     const screen = render(<DeviceDiscoveryGlobalScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('直接切换')).toBeTruthy();
+      expect(screen.getByText('已连过')).toBeTruthy();
     });
+    expect(screen.queryByText('直接切换')).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByText('Studio Mac'));
