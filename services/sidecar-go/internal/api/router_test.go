@@ -5075,6 +5075,62 @@ func TestShareValidate(t *testing.T) {
 	}
 }
 
+func TestRemoteAccessSettingUpdateRestartsBonjour(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	shareStatusChangeCount := 0
+	handler := func() http.Handler {
+		srv, h := api.NewServer(st, cfg, hub, nil)
+		srv.OnShareStatusChanged = func() {
+			shareStatusChangeCount++
+		}
+		return h
+	}()
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	req, err := http.NewRequest(
+		http.MethodPut,
+		srv.URL+"/settings",
+		strings.NewReader(`{"remoteAccessEnabled":false}`),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PUT /settings: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if shareStatusChangeCount != 1 {
+		t.Fatalf("share status change count=%d, want 1", shareStatusChangeCount)
+	}
+
+	req, err = http.NewRequest(
+		http.MethodPut,
+		srv.URL+"/settings",
+		strings.NewReader(`{"remoteAccessEnabled":true}`),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PUT /settings: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if shareStatusChangeCount != 2 {
+		t.Fatalf("share status change count=%d, want 2", shareStatusChangeCount)
+	}
+}
+
 func TestSyncTunnelCredentials(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()

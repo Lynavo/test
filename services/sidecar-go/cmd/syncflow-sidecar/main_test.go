@@ -260,6 +260,39 @@ func TestEnsureCoreRuntimeDirsSkipsUnavailableStorageRoot(t *testing.T) {
 	}
 }
 
+func TestBonjourShareMetadataFollowsRemoteAccessSetting(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.New(filepath.Join(dir, "sidecar.db"))
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer st.Close()
+
+	enabled, shareName := bonjourShareMetadata(st)
+	if !enabled {
+		t.Fatal("default remote access should advertise share enabled")
+	}
+	if shareName == "" {
+		t.Fatal("expected non-empty share name")
+	}
+
+	if err := st.SetSetting("remote_access_enabled", "false"); err != nil {
+		t.Fatalf("SetSetting false: %v", err)
+	}
+	enabled, _ = bonjourShareMetadata(st)
+	if enabled {
+		t.Fatal("disabled remote access should advertise share disabled")
+	}
+
+	if err := st.SetSetting("remote_access_enabled", "true"); err != nil {
+		t.Fatalf("SetSetting true: %v", err)
+	}
+	enabled, _ = bonjourShareMetadata(st)
+	if !enabled {
+		t.Fatal("enabled remote access should advertise share enabled")
+	}
+}
+
 func TestEnsureStorageDirsAtStartupReturnsFalseForUnavailableStorage(t *testing.T) {
 	dir := t.TempDir()
 	missingMount := filepath.Join(dir, "MissingExternalDisk")

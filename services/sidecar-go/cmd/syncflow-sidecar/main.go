@@ -24,7 +24,6 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/mdns"
 	"github.com/nicksyncflow/sidecar/internal/runtimefs"
 	"github.com/nicksyncflow/sidecar/internal/server"
-	"github.com/nicksyncflow/sidecar/internal/share"
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
@@ -140,14 +139,7 @@ func main() {
 			broadcaster.Shutdown()
 			broadcaster = nil
 		}
-		shareEnabled := false
-		shareName := "Vivi Drop"
-		if shareConfig, err := st.GetShareConfig(); err == nil && shareConfig != nil {
-			shareEnabled = share.IsAccessibleConfig(shareConfig.ShareStatus, shareConfig.ShareURL)
-			if strings.TrimSpace(shareConfig.ShareName) != "" {
-				shareName = shareConfig.ShareName
-			}
-		}
+		shareEnabled, shareName := bonjourShareMetadata(st)
 
 		var err error
 		broadcaster, err = mdns.NewBroadcaster(mdns.BroadcastConfig{
@@ -274,6 +266,25 @@ func shouldRestartBonjourForIPChange(configuredIP, advertisedIP, currentIP strin
 	advertisedIP = strings.TrimSpace(advertisedIP)
 	currentIP = strings.TrimSpace(currentIP)
 	return currentIP != "" && advertisedIP != currentIP
+}
+
+func bonjourShareMetadata(st *store.Store) (bool, string) {
+	shareEnabled := true
+	shareName := "Vivi Drop"
+	if shareConfig, err := st.GetShareConfig(); err == nil && shareConfig != nil {
+		if strings.TrimSpace(shareConfig.ShareName) != "" {
+			shareName = shareConfig.ShareName
+		}
+	} else if err != nil {
+		slog.Warn("failed to read share config for bonjour", "err", err)
+	}
+	if val, err := st.GetSetting("remote_access_enabled"); err == nil {
+		shareEnabled = val == "true"
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		slog.Warn("failed to read remote access setting for bonjour", "err", err)
+		shareEnabled = false
+	}
+	return shareEnabled, shareName
 }
 
 // bootstrapReconciliation ensures essential config values are populated after

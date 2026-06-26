@@ -224,6 +224,9 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Info("remote access setting updated", "enabled", val)
+		if s.OnShareStatusChanged != nil {
+			s.OnShareStatusChanged()
+		}
 	}
 
 	if req.AllowCrossDeviceReceivedAccess != nil {
