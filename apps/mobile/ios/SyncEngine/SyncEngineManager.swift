@@ -1975,6 +1975,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 startP2PTunnelIfNeeded(reason: "state_connected")
             }
         } else {
+            let retryPresenceWhileOffline = newState == .offline &&
+                PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(reason: reason)
             stopPresenceHeartbeatTimer()
             stopPairingControlSession(reason: "state_\(newState.rawValue)")
             if newState == .offline {
@@ -1985,6 +1987,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                     )
                 } else {
                     stopP2PTunnel(reason: "state_offline")
+                }
+                if retryPresenceWhileOffline {
+                    syncDiagnosticsLog(
+                        "Presence",
+                        "keeping offline presence heartbeat retry reason=\(reason)"
+                    )
+                    startPresenceHeartbeatTimer(allowOfflineDesktopUnavailableRetry: true)
                 }
             }
         }
@@ -2444,17 +2453,28 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     /// Runs independently of the sync pipeline so we detect desktop disappearance
     /// even when no upload is in progress.
-    private func startPresenceHeartbeatTimer() {
+    private func startPresenceHeartbeatTimer(allowOfflineDesktopUnavailableRetry: Bool = false) {
         stopPresenceHeartbeatTimer()
         guard uploadStore?.getBinding() != nil else { return }
+        let retryWhileOffline = allowOfflineDesktopUnavailableRetry && bindingConnectionState == .offline
+        guard bindingConnectionState == .connected || bindingConnectionState == .bound || retryWhileOffline else { return }
         let clientId = bindingService.getOrCreateClientId()
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
         timer.schedule(deadline: .now() + 2, repeating: 30, leeway: .seconds(5))
         timer.setEventHandler { [weak self] in
             guard let self = self else { return }
+            let isOfflineRetry = retryWhileOffline && self.bindingConnectionState == .offline
+            guard self.bindingConnectionState == .connected ||
+                    self.bindingConnectionState == .bound ||
+                    isOfflineRetry else {
+                self.stopPresenceHeartbeatTimer()
+                return
+            }
             // Skip if sync pipeline is running — it has its own heartbeat loop
             guard !self.isSyncing else { return }
-            self.startP2PTunnelIfNeeded(reason: "presence_heartbeat_timer")
+            if !isOfflineRetry {
+                self.startP2PTunnelIfNeeded(reason: "presence_heartbeat_timer")
+            }
             // A single HTTP timeout on the presence port can be a transient Wi-Fi
             // hiccup; the DiscoveryService's TCP probe on the protocol port often
             // still sees the desktop. Don't flip the UI to offline on one miss —
@@ -2465,19 +2485,25 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 updateStateOnFailure: false
             ) { [weak self] success in
                 guard let self = self, !success else { return }
+                if isOfflineRetry {
+                    return
+                }
                 self.startPresenceRecoveryProbe(clientId: clientId)
             }
         }
         timer.resume()
         presenceHeartbeatTimer = timer
         if let binding = uploadStore?.getBinding() {
-            startPairingControlSessionIfNeeded(
-                binding: binding,
-                reason: "presence_heartbeat_started"
-            )
+            if !retryWhileOffline {
+                startPairingControlSessionIfNeeded(
+                    binding: binding,
+                    reason: "presence_heartbeat_started"
+                )
+            }
         }
-        slog("[SyncEngine] standalone presence heartbeat timer started")
-        syncDiagnosticsLog("SyncEngine", "standalone presence heartbeat timer started")
+        let mode = retryWhileOffline ? "offline_desktop_unavailable_retry" : "connected"
+        slog("[SyncEngine] standalone presence heartbeat timer started mode=%@", mode)
+        syncDiagnosticsLog("SyncEngine", "standalone presence heartbeat timer started mode=\(mode)")
     }
 
     private func stopPresenceHeartbeatTimer() {
@@ -7289,12 +7315,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 let responseWake = WakeCapability.fromJSONValue(payload?["wake"])
                 let responsePower = DesktopPowerSnapshot.fromJSONValue(payload?["power"])
                 let responsePaired = payload?["paired"] as? Bool
+                let responseDesktopAvailable = payload?["desktopAvailable"] as? Bool
                 let hasWakePayload = payload?["wake"] != nil
                 let hasPowerPayload = payload?["power"] != nil
                 guard PresenceReconnectPolicy.presenceResponseMatchesBinding(
                     expectedDeviceId: expectedDeviceId,
                     responseServerId: responseServerId,
-                    responsePaired: responsePaired
+                    responsePaired: responsePaired,
+                    responseDesktopAvailable: responseDesktopAvailable
                 ) else {
                     let shouldInvalidatePairing = PresenceReconnectPolicy.shouldInvalidatePairing(
                         responsePaired: responsePaired,
@@ -7303,12 +7331,17 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         tokenMissingForPersistedBinding: false,
                         authRejected: false
                     )
-                    let rejectionReason = shouldInvalidatePairing
-                        ? "\(failureReason)_unpaired"
-                        : "\(failureReason)_server_mismatch"
+                    let rejectionReason: String
+                    if shouldInvalidatePairing {
+                        rejectionReason = "\(failureReason)_unpaired"
+                    } else if responseDesktopAvailable == false {
+                        rejectionReason = "\(failureReason)_desktop_unavailable"
+                    } else {
+                        rejectionReason = "\(failureReason)_server_mismatch"
+                    }
                     syncDiagnosticsLog(
                         "Presence",
-                        "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") paired=\(responsePaired.map(String.init) ?? "nil") reason=\(rejectionReason)"
+                        "heartbeat rejected host=\(host) status=\(statusCode.map(String.init) ?? "nil") expectedServerId=\(expectedDeviceId) responseServerId=\(responseServerId ?? "nil") paired=\(responsePaired.map(String.init) ?? "nil") desktopAvailable=\(responseDesktopAvailable.map(String.init) ?? "nil") reason=\(rejectionReason)"
                     )
                     if shouldInvalidatePairing {
                         self.invalidateCurrentPairing(
@@ -7316,7 +7349,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                             expectedDeviceId: expectedDeviceId,
                             expectedPairingToken: expectedPairingToken
                         )
-                    } else if updateStateOnFailure {
+                    } else if updateStateOnFailure || responseDesktopAvailable == false {
                         self.updateBindingConnectionState(.offline, reason: rejectionReason)
                     }
                     completion?(false)

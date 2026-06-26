@@ -446,6 +446,38 @@ object AndroidSyncPrimitives {
   fun shouldUseStoredPairingToken(connectionCode: String): Boolean =
     connectionCode.trim().isEmpty()
 
+  fun pairingTokenForKnownDevice(
+    requestedDeviceId: String,
+    currentBindingDeviceId: String?,
+    currentBindingPairingToken: String?,
+    cachedTokens: Map<String, String>,
+  ): String? {
+    val requested = requestedDeviceId.trim()
+    if (requested.isBlank()) {
+      return null
+    }
+
+    cachedTokens[requested]?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+
+    val currentDeviceId = currentBindingDeviceId?.trim().orEmpty()
+    if (currentDeviceId != requested) {
+      return null
+    }
+
+    return currentBindingPairingToken?.trim()?.takeIf { it.isNotBlank() }
+  }
+
+  fun knownDevicePairingTokensAfterRemoval(
+    cachedTokens: Map<String, String>,
+    deviceId: String?,
+  ): Map<String, String> {
+    val normalizedDeviceId = deviceId?.trim().orEmpty()
+    if (normalizedDeviceId.isBlank()) {
+      return cachedTokens
+    }
+    return cachedTokens.filterKeys { it != normalizedDeviceId }
+  }
+
   fun shouldResetAutoUploadAfterPairing(
     previousDeviceId: String?,
     nextDeviceId: String,
@@ -616,16 +648,23 @@ object AndroidSyncPrimitives {
     expectedDeviceId: String,
     responseServerId: String?,
     responsePaired: Boolean? = null,
+    responseDesktopAvailable: Boolean? = null,
   ): Boolean {
     val normalizedExpectedDeviceId = expectedDeviceId.trim()
     val normalizedResponseServerId = responseServerId?.trim().orEmpty()
     if (responsePaired == false) {
       return false
     }
+    if (responseDesktopAvailable == false) {
+      return false
+    }
     return normalizedExpectedDeviceId.isNotBlank() &&
       normalizedResponseServerId.isNotBlank() &&
       normalizedExpectedDeviceId == normalizedResponseServerId
   }
+
+  fun shouldRetryPresenceHeartbeatWhileOffline(reason: String?): Boolean =
+    reason?.trim()?.endsWith("_desktop_unavailable") == true
 
   fun shouldInvalidateCurrentPairing(
     expectedDeviceId: String?,

@@ -981,7 +981,7 @@ describe('RemoteAccessGlobalScreen', () => {
     expect(queryByText('尚未開啟遠端存取')).toBeNull();
   });
 
-  it('treats generic personal directory HTTP 403 as network disconnected', async () => {
+  it('shows desktop remote-access disabled for generic personal directory HTTP 403', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
       new Error('Sidecar returned HTTP 403 for /personal/list'),
@@ -994,11 +994,29 @@ describe('RemoteAccessGlobalScreen', () => {
     );
 
     await waitFor(() => {
-      expect(
-        getByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
-      ).toBeTruthy();
+      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
     });
-    expect(queryByText('尚未開啟遠端存取')).toBeNull();
+    expect(queryByText('网络断开')).toBeNull();
+  });
+
+  it('shows desktop remote-access disabled when sidecar returns personal directory HTTP 403 with body', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+      new Error(
+        'Sidecar returned HTTP 403 for /personal/list: remote access is disabled',
+      ),
+    );
+
+    const { getByText, queryByText } = render(
+      <TestErrorBoundary>
+        <RemoteAccessGlobalScreen />
+      </TestErrorBoundary>,
+    );
+
+    await waitFor(() => {
+      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
+    });
+    expect(queryByText('网络断开')).toBeNull();
   });
 
   it('silently retries the first global remote list while the shared-files route is becoming ready', async () => {

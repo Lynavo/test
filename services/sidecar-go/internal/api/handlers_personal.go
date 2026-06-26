@@ -27,14 +27,23 @@ const personalAccessSignatureMaxSkew = 5 * time.Minute
 func (s *Server) setDesktopAuthContext(accountID string, authBaseURL string) {
 	s.accountMu.Lock()
 	defer s.accountMu.Unlock()
-	s.desktopAccountID = strings.TrimSpace(accountID)
-	s.authBaseURL = strings.TrimRight(strings.TrimSpace(authBaseURL), "/")
+	trimmedAccountID := strings.TrimSpace(accountID)
+	trimmedAuthBaseURL := strings.TrimRight(strings.TrimSpace(authBaseURL), "/")
+	s.desktopAccountID = trimmedAccountID
+	s.authBaseURL = trimmedAuthBaseURL
+	s.desktopAuthAvailable = trimmedAuthBaseURL != ""
 }
 
 func (s *Server) getDesktopAuthContext() (string, string) {
 	s.accountMu.RLock()
 	defer s.accountMu.RUnlock()
 	return s.desktopAccountID, s.authBaseURL
+}
+
+func (s *Server) isDesktopAuthAvailable() bool {
+	s.accountMu.RLock()
+	defer s.accountMu.RUnlock()
+	return s.desktopAuthAvailable
 }
 
 func (s *Server) authorizePersonalRequest(w http.ResponseWriter, r *http.Request) bool {

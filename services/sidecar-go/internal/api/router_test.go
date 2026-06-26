@@ -1954,6 +1954,112 @@ func TestPresenceHeartbeatBroadcastsConnectedIdleEvent(t *testing.T) {
 	}
 }
 
+func TestPresenceHeartbeatKeepsPairingButDoesNotConnectWhenDesktopLoggedOut(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", now)
+
+	apiSrv, handler := api.NewServer(st, cfg, hub, nil)
+	apiSrv.SetWakeProvider(fixedWakeProvider{capability: testWakeCapability()})
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/events/stream"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial ws: %v", err)
+	}
+	defer conn.Close()
+
+	resp, err := http.Post(srv.URL+"/account/context", "application/json", strings.NewReader(`{"authBaseUrl":"","accessToken":""}`))
+	if err != nil {
+		t.Fatalf("clear account context: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("clear account context status=%d, want 200", resp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/presence/client-1", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /presence: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode presence response: %v", err)
+	}
+	if body["paired"] != true {
+		t.Fatalf("paired=%v, want true", body["paired"])
+	}
+	if body["desktopAvailable"] != false {
+		t.Fatalf("desktopAvailable=%v, want false", body["desktopAvailable"])
+	}
+	if _, ok := body["wake"]; ok {
+		t.Fatal("logged-out presence must not expose wake metadata")
+	}
+	if apiSrv.PresenceTracker().IsAlive("client-1", time.Second) {
+		t.Fatal("logged-out presence must not keep the client alive")
+	}
+
+	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, message, err := conn.ReadMessage(); err == nil {
+		t.Fatalf("logged-out presence must not broadcast connected_idle event, got %s", string(message))
+	}
+}
+
+func TestPresenceHeartbeatAllowsDesktopWithSyncedAuthBaseURLAndOpaqueToken(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", now)
+
+	_, handler := api.NewServer(st, cfg, hub, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/account/context",
+		"application/json",
+		strings.NewReader(`{"authBaseUrl":"https://api.vividrop.test","accessToken":"opaque-token"}`),
+	)
+	if err != nil {
+		t.Fatalf("sync account context: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("sync account context status=%d, want 200", resp.StatusCode)
+	}
+
+	resp, err = http.Post(srv.URL+"/presence/client-1", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatalf("POST /presence: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode presence response: %v", err)
+	}
+	if body["paired"] != true {
+		t.Fatalf("paired=%v, want true", body["paired"])
+	}
+	if body["desktopAvailable"] != true {
+		t.Fatalf("desktopAvailable=%v, want true", body["desktopAvailable"])
+	}
+}
+
 func TestRevokedPresenceDoesNotBroadcastConnectedIdleEvent(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -4888,6 +4994,72 @@ func TestRegenerateConnectionCodeDisconnectsConnectedClients(t *testing.T) {
 	}
 	if clientStates.reason != "connection_code_regenerated" {
 		t.Fatalf("disconnect reason=%q, want connection_code_regenerated", clientStates.reason)
+	}
+}
+
+func TestClearingAccountContextDisconnectsConnectedClientsWithoutInvalidatingPairing(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	clientStates := &fakeDisconnectingClientStates{
+		states: fakeClientStates{"phone-a": "connected"},
+	}
+	_, handler := api.NewServer(st, cfg, hub, clientStates)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/account/context",
+		"application/json",
+		strings.NewReader(`{"authBaseUrl":"","accessToken":""}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /account/context: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	if strings.Join(clientStates.disconnected, ",") != "phone-a" {
+		t.Fatalf("disconnected clients=%v, want [phone-a]", clientStates.disconnected)
+	}
+	if clientStates.reason != "desktop_signed_out" {
+		t.Fatalf("disconnect reason=%q, want desktop_signed_out", clientStates.reason)
+	}
+}
+
+func TestClearingTunnelCredentialsDisconnectsConnectedClientsWithoutInvalidatingPairing(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	insertPairedDeviceWithStableID(t, st, "phone-a", "Nick iPhone", "phone-a", "stable-a", now)
+
+	clientStates := &fakeDisconnectingClientStates{
+		states: fakeClientStates{"phone-a": "connected"},
+	}
+	_, handler := api.NewServer(st, cfg, hub, clientStates)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Post(
+		srv.URL+"/tunnel/credentials",
+		"application/json",
+		strings.NewReader(`{"signalingUrl":"","accessToken":"","iceServers":[]}`),
+	)
+	if err != nil {
+		t.Fatalf("POST /tunnel/credentials: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	if strings.Join(clientStates.disconnected, ",") != "phone-a" {
+		t.Fatalf("disconnected clients=%v, want [phone-a]", clientStates.disconnected)
+	}
+	if clientStates.reason != "desktop_signed_out" {
+		t.Fatalf("disconnect reason=%q, want desktop_signed_out", clientStates.reason)
 	}
 }
 

@@ -60,11 +60,34 @@ struct SharedFileHTTPStatusError: Error, LocalizedError {
 
     var errorDescription: String? {
         let fallback = "Sidecar returned HTTP \(statusCode) for \(path)"
-        let body = responseBody?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = Self.normalizedResponseBody(responseBody)
         guard let body, !body.isEmpty else {
             return fallback
         }
         return "\(fallback): \(body)"
+    }
+
+    private static func normalizedResponseBody(_ body: String?) -> String? {
+        guard let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !body.isEmpty else {
+            return nil
+        }
+
+        guard let data = body.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let payload = object as? [String: Any] else {
+            return body
+        }
+
+        for key in ["error", "message"] {
+            if let value = payload[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+        return body
     }
 }
 

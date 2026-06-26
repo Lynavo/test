@@ -65,12 +65,14 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 		shareName = shareConfig.ShareName
 	}
 
+	desktopAvailable := s.isDesktopAuthAvailable()
 	body := map[string]any{
-		"ok":         true,
-		"paired":     false,
-		"serverId":   serverID,
-		"serverName": serverName,
-		"shareName":  shareName,
+		"ok":               true,
+		"paired":           false,
+		"serverId":         serverID,
+		"serverName":       serverName,
+		"shareName":        shareName,
+		"desktopAvailable": desktopAvailable,
 	}
 	device, err := s.store.GetPairedDevice(clientID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -79,6 +81,11 @@ func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
 	}
 	if device != nil && device.RevokedAt == nil {
 		body["paired"] = true
+		if !desktopAvailable {
+			slog.Info("presence response desktop unavailable", "clientID", clientID, "paired", true)
+			writeJSON(w, http.StatusOK, body)
+			return
+		}
 		s.presence.Touch(clientID)
 		if s.hub != nil {
 			s.hub.Broadcast(events.Event{

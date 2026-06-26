@@ -42,6 +42,7 @@ type updateSettingsRequest struct {
 const personalShareRootSettingKey = "personal_share_root"
 const remoteAccessEnabledSettingKey = "remote_access_enabled"
 const allowCrossDeviceReceivedAccessSettingKey = "allow_cross_device_received_access"
+const desktopSignedOutDisconnectReason = "desktop_signed_out"
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	dto, err := s.assembleSettingsDTO()
@@ -354,6 +355,7 @@ func (s *Server) handleSyncAccountContext(w http.ResponseWriter, r *http.Request
 	accessToken := strings.TrimSpace(req.AccessToken)
 	if authBaseURL == "" || accessToken == "" {
 		s.setDesktopAuthContext("", "")
+		s.disconnectClients(s.connectedClientIDs(), desktopSignedOutDisconnectReason)
 		slog.Info("sync account context cleared")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "account context cleared"})
 		return
@@ -385,6 +387,7 @@ func (s *Server) handleSyncTunnelCredentials(w http.ResponseWriter, r *http.Requ
 	if signalingURL == "" || accessToken == "" {
 		s.StopTunnel()
 		s.setDesktopAuthContext("", "")
+		s.disconnectClients(s.connectedClientIDs(), desktopSignedOutDisconnectReason)
 		slog.Info("sync tunnel credentials cleared")
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "message": "credentials cleared"})
 		return

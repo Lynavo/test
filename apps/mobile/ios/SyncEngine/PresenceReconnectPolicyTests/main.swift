@@ -113,6 +113,56 @@ expect(
 )
 
 expect(
+    !PresenceReconnectPolicy.presenceResponseMatchesBinding(
+        expectedDeviceId: "desktop-1",
+        responseServerId: "desktop-1",
+        responsePaired: true,
+        responseDesktopAvailable: false
+    ),
+    "presence responses from a logged-out desktop must not keep the mobile binding connected"
+)
+
+expect(
+    PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(
+        reason: "presence_heartbeat_timer_desktop_unavailable"
+    ),
+    "desktop unavailable offline should keep lightweight presence retry eligible"
+)
+
+expect(
+    PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(
+        reason: " presence_recovery_failed_desktop_unavailable "
+    ),
+    "trimmed desktop unavailable offline should keep lightweight presence retry eligible"
+)
+
+expect(
+    !PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(
+        reason: "presence_heartbeat_timer_unpaired"
+    ),
+    "unpaired offline must not keep presence retry eligible"
+)
+
+expect(
+    !PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(
+        reason: "presence_heartbeat_timer_server_mismatch"
+    ),
+    "server mismatch offline must not keep presence retry eligible"
+)
+
+expect(
+    !PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(
+        reason: "presence_recovery_exhausted"
+    ),
+    "generic recovery exhaustion must not keep presence retry eligible"
+)
+
+expect(
+    !PresenceReconnectPolicy.shouldRetryPresenceHeartbeatWhileOffline(reason: ""),
+    "blank offline reason must not keep presence retry eligible"
+)
+
+expect(
     PresenceReconnectPolicy.shouldInvalidatePairing(
         responsePaired: false,
         expectedDeviceId: "desktop-1",

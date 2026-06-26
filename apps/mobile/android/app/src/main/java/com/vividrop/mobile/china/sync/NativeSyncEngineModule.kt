@@ -628,6 +628,9 @@ class NativeSyncEngineModule(
           helloPayload = helloPayload,
         )
       } catch (error: NativeStructuredError) {
+        if (error.nativeCode == "PAIR_TOKEN_INVALID" && storedPairingToken != null) {
+          forgetKnownDevicePairingToken(fallbackDeviceId)
+        }
         if (
           error.nativeCode == "PAIR_TOKEN_INVALID" &&
           storedPairingToken != null &&
@@ -691,11 +694,13 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun disconnectAndUnbind(promise: Promise) {
     recordNativeLog("Pairing", "disconnectAndUnbind requested")
+    val binding = loadBinding()
     cancelPresenceRecoveryProbe(reason = "unbind")
     stopP2PTunnel()
     stopPresenceHeartbeatTimer()
     stopPairingControlSession(reason = "unbind")
     clearBindingInvalidationReason()
+    forgetKnownDevicePairingToken(binding?.deviceId)
     clearBinding()
     clearSharedFilesReachability(reason = "disconnectAndUnbind")
     emitBindingStateCleared()
@@ -2196,12 +2201,13 @@ class NativeSyncEngineModule(
       return null
     }
 
-    val binding = loadBinding() ?: return null
-    if (binding.deviceId != normalizedDeviceId) {
-      return null
-    }
-
-    return binding.pairingToken.takeIf { it.isNotBlank() }
+    val binding = loadBinding()
+    return AndroidSyncPrimitives.pairingTokenForKnownDevice(
+      requestedDeviceId = normalizedDeviceId,
+      currentBindingDeviceId = binding?.deviceId,
+      currentBindingPairingToken = binding?.pairingToken,
+      cachedTokens = loadKnownDevicePairingTokens(),
+    )
   }
 
   private fun currentClientIPv4(): String? {
@@ -4486,11 +4492,16 @@ class NativeSyncEngineModule(
       } else {
         null
       }
+      val responseDesktopAvailable = if (payload.has("desktopAvailable") && !payload.isNull("desktopAvailable")) {
+        payload.optBoolean("desktopAvailable")
+      } else {
+        null
+      }
       val pairedPresent = responsePaired != null
-      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(expectedDeviceId, responseServerId, responsePaired)) {
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(expectedDeviceId, responseServerId, responsePaired, responseDesktopAvailable)) {
         recordNativeLog(
           "SharedFiles",
-          "wake full resume unconfirmed host=$host reason=$reason expectedServerId=$expectedDeviceId responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"}",
+          "wake full resume unconfirmed host=$host reason=$reason expectedServerId=$expectedDeviceId responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} desktopAvailable=${responseDesktopAvailable ?: "nil"}",
         )
         return false
       }
@@ -5031,6 +5042,8 @@ class NativeSyncEngineModule(
         reason = reason ?: "state_connected",
       )
     } else if (connectionState == "offline") {
+      val retryPresenceWhileOffline =
+        AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(reason)
       cancelPresenceRecoveryProbe(reason = reason ?: "state_offline")
       stopPresenceHeartbeatTimer()
       stopPairingControlSession(reason = reason ?: "state_offline")
@@ -5038,6 +5051,13 @@ class NativeSyncEngineModule(
         recordNativeLog("SharedFiles", "retained P2P tunnel while binding offline (${reason ?: "state_offline"})")
       } else {
         stopP2PTunnel()
+      }
+      if (retryPresenceWhileOffline) {
+        recordDiagnosticsLog(
+          "Presence",
+          "keeping offline presence heartbeat retry deviceId=${updated.deviceId} reason=${reason ?: "state_offline"}",
+        )
+        startPresenceHeartbeatTimer(updated, allowOfflineDesktopUnavailableRetry = true)
       }
     } else if (connectionState != "connecting") {
       stopPresenceHeartbeatTimer()
@@ -5084,6 +5104,7 @@ class NativeSyncEngineModule(
     stopPairingControlSession(reason = normalizedReason)
     stopP2PTunnel()
     clearSharedFilesReachability(reason = normalizedReason)
+    forgetKnownDevicePairingToken(binding?.deviceId ?: expectedDeviceId)
     clearBinding()
     persistBindingInvalidationReason(normalizedReason)
     emitPairingInvalidated(normalizedReason)
@@ -5177,8 +5198,12 @@ class NativeSyncEngineModule(
     startPresenceHeartbeatTimer(binding)
   }
 
-  private fun startPresenceHeartbeatTimer(binding: StoredBinding) {
-    if (binding.connectionState != "connected") {
+  private fun startPresenceHeartbeatTimer(
+    binding: StoredBinding,
+    allowOfflineDesktopUnavailableRetry: Boolean = false,
+  ) {
+    val retryWhileOffline = allowOfflineDesktopUnavailableRetry && binding.connectionState == "offline"
+    if (binding.connectionState != "connected" && !retryWhileOffline) {
       return
     }
     synchronized(presenceHeartbeatLock) {
@@ -5187,16 +5212,28 @@ class NativeSyncEngineModule(
       presenceHeartbeatFuture = presenceHeartbeatExecutorLocked().scheduleWithFixedDelay(
         {
           val current = loadBinding()
-          if (current == null || current.deviceId != deviceId || current.connectionState != "connected") {
+          val currentAllowsOfflineRetry = retryWhileOffline && current?.connectionState == "offline"
+          if (
+            current == null ||
+            current.deviceId != deviceId ||
+            (current.connectionState != "connected" && !currentAllowsOfflineRetry)
+          ) {
             stopPresenceHeartbeatTimer()
             return@scheduleWithFixedDelay
           }
           if (syncInProgress) {
             return@scheduleWithFixedDelay
           }
-          startP2PTunnelIfNeeded(current)
-          val succeeded = sendPresenceHeartbeat(current, reason = "presence_heartbeat_timer", updateStateOnFailure = false)
-          if (!succeeded) {
+          if (current.connectionState == "connected") {
+            startP2PTunnelIfNeeded(current)
+          }
+          val heartbeatReason = if (currentAllowsOfflineRetry) {
+            "presence_offline_desktop_unavailable_retry"
+          } else {
+            "presence_heartbeat_timer"
+          }
+          val succeeded = sendPresenceHeartbeat(current, reason = heartbeatReason, updateStateOnFailure = false)
+          if (!succeeded && current.connectionState == "connected") {
             startPresenceRecoveryProbeIfNeeded(current)
           }
         },
@@ -5205,8 +5242,11 @@ class NativeSyncEngineModule(
         TimeUnit.MILLISECONDS,
       )
     }
-    recordDiagnosticsLog("Presence", "heartbeat timer started deviceId=${binding.deviceId}")
-    startPairingControlSessionIfNeeded(binding, reason = "presence_heartbeat_started")
+    val mode = if (retryWhileOffline) "offline_desktop_unavailable_retry" else "connected"
+    recordDiagnosticsLog("Presence", "heartbeat timer started deviceId=${binding.deviceId} mode=$mode")
+    if (binding.connectionState == "connected") {
+      startPairingControlSessionIfNeeded(binding, reason = "presence_heartbeat_started")
+    }
   }
 
   private fun stopPresenceHeartbeatTimer() {
@@ -5528,8 +5568,13 @@ class NativeSyncEngineModule(
       } else {
         null
       }
+      val responseDesktopAvailable = if (payload.has("desktopAvailable") && !payload.isNull("desktopAvailable")) {
+        payload.optBoolean("desktopAvailable")
+      } else {
+        null
+      }
       val pairedPresent = responsePaired != null
-      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId, responsePaired)) {
+      if (!AndroidSyncPrimitives.presenceResponseMatchesBinding(binding.deviceId, responseServerId, responsePaired, responseDesktopAvailable)) {
         if (
           AndroidSyncPrimitives.shouldInvalidateCurrentPairing(
             expectedDeviceId = binding.deviceId,
@@ -5551,16 +5596,16 @@ class NativeSyncEngineModule(
           )
           return false
         }
-        val rejectionReason = if (responsePaired == false) {
-          "${failureReason}_unpaired"
-        } else {
-          "${failureReason}_server_mismatch"
+        val rejectionReason = when {
+          responsePaired == false -> "${failureReason}_unpaired"
+          responseDesktopAvailable == false -> "${failureReason}_desktop_unavailable"
+          else -> "${failureReason}_server_mismatch"
         }
         recordDiagnosticsLog(
           "Presence",
-          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} reason=$rejectionReason",
+          "heartbeat rejected host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} desktopAvailable=${responseDesktopAvailable ?: "nil"} reason=$rejectionReason",
         )
-        if (updateStateOnFailure || responsePaired == false) {
+        if (updateStateOnFailure || responsePaired == false || responseDesktopAvailable == false) {
           updateBindingConnectionState(loadBinding(), "offline", reason = rejectionReason)
         }
         return false
@@ -5573,7 +5618,7 @@ class NativeSyncEngineModule(
       }
       recordDiagnosticsLog(
         "Presence",
-        "heartbeat succeeded host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} reason=$successReason hasWakePayload=$hasWakePayload ${wakeCapabilityLogSummary(responseWake)}",
+        "heartbeat succeeded host=${binding.host} status=$statusCode expectedServerId=${binding.deviceId} responseServerId=${responseServerId ?: "nil"} pairedPresent=$pairedPresent paired=${responsePaired ?: "nil"} desktopAvailable=${responseDesktopAvailable ?: "nil"} reason=$successReason hasWakePayload=$hasWakePayload ${wakeCapabilityLogSummary(responseWake)}",
       )
       true
     } catch (error: Throwable) {
@@ -5975,6 +6020,7 @@ class NativeSyncEngineModule(
         .remove(PREF_BINDING_INVALIDATION_REASON)
         .apply()
       rememberKnownDeviceId(binding.deviceId)
+      rememberKnownDevicePairingToken(binding.deviceId, binding.pairingToken)
     }
   }
 
@@ -6091,6 +6137,72 @@ class NativeSyncEngineModule(
     val updated = getKnownDeviceIdsValue().toMutableSet()
     updated.add(normalized)
     prefs.edit().putStringSet(PREF_KNOWN_DEVICE_IDS, updated).apply()
+  }
+
+  private fun loadKnownDevicePairingTokens(): Map<String, String> =
+    synchronized(bindingMutationLock) {
+      val raw = prefs.getString(PREF_KNOWN_DEVICE_PAIRING_TOKENS, null) ?: return@synchronized emptyMap()
+      try {
+        val json = JSONObject(raw)
+        val tokens = mutableMapOf<String, String>()
+        val keys = json.keys()
+        while (keys.hasNext()) {
+          val rawDeviceId = keys.next()
+          val deviceId = rawDeviceId.trim()
+          val pairingToken = json.optString(rawDeviceId).trim()
+          if (deviceId.isNotBlank() && pairingToken.isNotBlank()) {
+            tokens[deviceId] = pairingToken
+          }
+        }
+        tokens
+      } catch (_: Throwable) {
+        emptyMap()
+      }
+    }
+
+  private fun rememberKnownDevicePairingToken(deviceId: String, pairingToken: String) {
+    val normalizedDeviceId = deviceId.trim()
+    val normalizedPairingToken = pairingToken.trim()
+    if (normalizedDeviceId.isBlank() || normalizedPairingToken.isBlank()) {
+      return
+    }
+
+    synchronized(bindingMutationLock) {
+      val updated = loadKnownDevicePairingTokens().toMutableMap()
+      updated[normalizedDeviceId] = normalizedPairingToken
+      val json = JSONObject().apply {
+        updated.toSortedMap().forEach { (knownDeviceId, knownPairingToken) ->
+          put(knownDeviceId, knownPairingToken)
+        }
+      }
+      prefs.edit().putString(PREF_KNOWN_DEVICE_PAIRING_TOKENS, json.toString()).apply()
+    }
+  }
+
+  private fun forgetKnownDevicePairingToken(deviceId: String?) {
+    val normalizedDeviceId = deviceId?.trim().orEmpty()
+    if (normalizedDeviceId.isBlank()) {
+      return
+    }
+
+    synchronized(bindingMutationLock) {
+      val updated = AndroidSyncPrimitives.knownDevicePairingTokensAfterRemoval(
+        cachedTokens = loadKnownDevicePairingTokens(),
+        deviceId = normalizedDeviceId,
+      )
+      val editor = prefs.edit()
+      if (updated.isEmpty()) {
+        editor.remove(PREF_KNOWN_DEVICE_PAIRING_TOKENS)
+      } else {
+        val json = JSONObject().apply {
+          updated.toSortedMap().forEach { (knownDeviceId, knownPairingToken) ->
+            put(knownDeviceId, knownPairingToken)
+          }
+        }
+        editor.putString(PREF_KNOWN_DEVICE_PAIRING_TOKENS, json.toString())
+      }
+      editor.apply()
+    }
   }
 
   private fun loadAutoUploadConfig(): AutoUploadConfig {
@@ -7380,6 +7492,7 @@ class NativeSyncEngineModule(
     private const val PREF_CLIENT_ID = "client_id"
     private const val PREF_CLIENT_DISPLAY_NAME = "client_display_name"
     private const val PREF_KNOWN_DEVICE_IDS = "known_device_ids"
+    private const val PREF_KNOWN_DEVICE_PAIRING_TOKENS = "known_device_pairing_tokens"
     private const val PREF_AUTO_UPLOAD_ENABLED = "auto_upload_enabled"
     private const val PREF_AUTO_UPLOAD_STATE = "auto_upload_state"
     private const val PREF_AUTO_UPLOAD_TIME_RANGE_MODE = "auto_upload_time_range_mode"

@@ -115,6 +115,43 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
+  fun pairingTokenForKnownDeviceUsesCachedTokenForPreviousDesktop() {
+    val token = AndroidSyncPrimitives.pairingTokenForKnownDevice(
+      requestedDeviceId = " desktop-a ",
+      currentBindingDeviceId = "desktop-b",
+      currentBindingPairingToken = "token-b",
+      cachedTokens = mapOf("desktop-a" to "token-a"),
+    )
+
+    assertEquals("token-a", token)
+  }
+
+  @Test
+  fun pairingTokenForKnownDeviceFallsBackToCurrentBindingForLegacyState() {
+    val token = AndroidSyncPrimitives.pairingTokenForKnownDevice(
+      requestedDeviceId = "desktop-b",
+      currentBindingDeviceId = " desktop-b ",
+      currentBindingPairingToken = " token-b ",
+      cachedTokens = emptyMap(),
+    )
+
+    assertEquals("token-b", token)
+  }
+
+  @Test
+  fun knownDevicePairingTokensAfterRemovalDropsOnlyRequestedDevice() {
+    val tokens = AndroidSyncPrimitives.knownDevicePairingTokensAfterRemoval(
+      cachedTokens = mapOf(
+        "desktop-a" to "token-a",
+        "desktop-b" to "token-b",
+      ),
+      deviceId = " desktop-a ",
+    )
+
+    assertEquals(mapOf("desktop-b" to "token-b"), tokens)
+  }
+
+  @Test
   fun buildWakeOnLanMagicPacketRepeatsMacSixteenTimesAfterSyncStream() {
     val packet = AndroidSyncPrimitives.buildWakeOnLanMagicPacket("aa:bb:cc:dd:ee:ff")
 
@@ -951,6 +988,48 @@ class AndroidSyncPrimitivesTest {
         responsePaired = false,
       ),
     )
+    assertFalse(
+      AndroidSyncPrimitives.presenceResponseMatchesBinding(
+        expectedDeviceId = "desktop-1",
+        responseServerId = "desktop-1",
+        responsePaired = true,
+        responseDesktopAvailable = false,
+      ),
+    )
+  }
+
+  @Test
+  fun desktopUnavailableOfflineReasonKeepsPresenceRetryEligible() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(
+        "presence_heartbeat_timer_desktop_unavailable",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(
+        " presence_recovery_failed_desktop_unavailable ",
+      ),
+    )
+  }
+
+  @Test
+  fun nonDesktopUnavailableOfflineReasonDoesNotKeepPresenceRetryEligible() {
+    assertFalse(
+      AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(
+        "presence_heartbeat_timer_unpaired",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(
+        "presence_heartbeat_timer_server_mismatch",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(
+        "presence_recovery_exhausted",
+      ),
+    )
+    assertFalse(AndroidSyncPrimitives.shouldRetryPresenceHeartbeatWhileOffline(""))
   }
 
   @Test

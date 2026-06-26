@@ -22,12 +22,23 @@ func makeHTTPStatusError(
 let desktopLoggedOutError = makeHTTPStatusError(
     statusCode: 401,
     path: "/personal/list",
-    responseBody: "desktop account identity is unavailable"
+    responseBody: #"{"error":"desktop account identity is unavailable"}"#
 )
 
 expect(
-    desktopLoggedOutError.errorDescription?.contains("desktop account identity is unavailable") == true,
-    "sidecar response body must be preserved so JS can classify desktop logout"
+    desktopLoggedOutError.errorDescription == "Sidecar returned HTTP 401 for /personal/list: desktop account identity is unavailable",
+    "sidecar JSON error body must be normalized so JS can classify desktop logout"
+)
+
+let remoteAccessDisabledError = makeHTTPStatusError(
+    statusCode: 403,
+    path: "/personal/list",
+    responseBody: #"{"error":"remote access is disabled"}"#
+)
+
+expect(
+    remoteAccessDisabledError.errorDescription == "Sidecar returned HTTP 403 for /personal/list: remote access is disabled",
+    "sidecar JSON error body must be normalized so JS can classify disabled remote access"
 )
 
 let emptyBodyError = makeHTTPStatusError(

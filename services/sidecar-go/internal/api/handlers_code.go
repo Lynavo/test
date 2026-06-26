@@ -95,6 +95,6 @@ func (s *Server) disconnectClients(clientIDs []string, reason string) {
 	}
 	count := disconnecter.DisconnectClients(clientIDs, reason)
 	if count > 0 {
-		slog.Info("disconnected clients after connection code rotation", "reason", reason, "clients", count)
+		slog.Info("disconnected clients", "reason", reason, "clients", count)
 	}
 }

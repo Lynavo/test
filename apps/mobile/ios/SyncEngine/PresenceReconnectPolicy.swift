@@ -40,14 +40,22 @@ enum PresenceReconnectPolicy {
     static func presenceResponseMatchesBinding(
         expectedDeviceId: String,
         responseServerId: String?,
-        responsePaired: Bool? = nil
+        responsePaired: Bool? = nil,
+        responseDesktopAvailable: Bool? = nil
     ) -> Bool {
         let expected = expectedDeviceId.trimmingCharacters(in: .whitespacesAndNewlines)
         let actual = responseServerId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if responsePaired == false {
             return false
         }
+        if responseDesktopAvailable == false {
+            return false
+        }
         return !expected.isEmpty && actual == expected
+    }
+
+    static func shouldRetryPresenceHeartbeatWhileOffline(reason: String?) -> Bool {
+        reason?.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("_desktop_unavailable") == true
     }
 
     static func shouldInvalidatePairing(

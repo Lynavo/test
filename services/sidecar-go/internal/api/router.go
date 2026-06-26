@@ -74,6 +74,7 @@ type Server struct {
 	accountMu              sync.RWMutex
 	desktopAccountID       string
 	authBaseURL            string
+	desktopAuthAvailable   bool
 	personalAccessNonceMu  sync.Mutex
 	personalAccessNonces   map[string]time.Time
 	OnDeviceRenamed        func(newName string) // called when device name changes, to restart Bonjour
@@ -215,6 +216,7 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 		power:                  NewPowerTracker(),
 		thumbnailLimiter:       make(chan struct{}, 2),
 		videoThumbnailInflight: make(map[string]*videoThumbnailInflight),
+		desktopAuthAvailable:   true,
 		personalAccessNonces:   make(map[string]time.Time),
 	}
 	mux := http.NewServeMux()

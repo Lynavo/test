@@ -428,8 +428,10 @@ function getNormalizedErrorMessage(error: unknown) {
 }
 
 function isRemoteAccessDisabledError(error: unknown) {
-  return getNormalizedErrorMessage(error).includes(
-    'remote access is disabled',
+  const normalizedMessage = getNormalizedErrorMessage(error);
+  return (
+    normalizedMessage.includes('remote access is disabled') ||
+    normalizedMessage.includes('sidecar returned http 403 for /personal/list')
   );
 }
 
