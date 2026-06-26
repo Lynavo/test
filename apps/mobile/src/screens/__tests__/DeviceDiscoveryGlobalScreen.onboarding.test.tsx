@@ -628,7 +628,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryByText('已发现 1 台')).toBeNull();
   });
 
-  it('opens connection code entry for a known discovered desktop in switch mode', async () => {
+  it('direct-reconnects a known discovered desktop in switch mode', async () => {
     mockRouteParams = { mode: 'switch' };
     mockGetBindingState.mockResolvedValue({
       deviceId: 'other-desktop',
@@ -662,15 +662,30 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('例如 A8X2K9')).toBeTruthy();
+      expect(mockPairDevice).toHaveBeenCalledWith({
+        deviceId: 'studio-mac',
+        host: '192.168.31.8',
+        port: 39393,
+        connectionCode: '',
+      });
     });
-    expect(mockPairDevice).not.toHaveBeenCalled();
-    expect(mockAddDesktop).not.toHaveBeenCalled();
+    expect(mockAddDesktop).toHaveBeenCalledWith({
+      desktopDeviceId: 'studio-mac',
+      desktopName: 'Studio Mac',
+      host: '192.168.31.8',
+      port: 39393,
+      authorizationStatus: 'authorized',
+    });
+    expect(mockDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'RESET',
+      }),
+    );
     expect(screen.queryByText('选择连接方式')).toBeNull();
-    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText('例如 A8X2K9')).toBeNull();
   });
 
-  it('does not direct-reconnect a discovered desktop before entering a code', async () => {
+  it('falls back to code entry when known discovered desktop direct reconnect fails', async () => {
     mockRouteParams = { mode: 'switch' };
     mockGetBindingState.mockResolvedValue({
       deviceId: 'other-desktop',
@@ -678,6 +693,9 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
       connectionState: 'connected',
     });
     mockGetKnownDeviceIds.mockResolvedValue(['studio-mac']);
+    mockPairDevice.mockRejectedValueOnce(
+      new PairingError('Pair token invalid', 'unknown'),
+    );
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
       .mockImplementation((_event, listener) => {
@@ -706,7 +724,13 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     await waitFor(() => {
       expect(screen.getByPlaceholderText('例如 A8X2K9')).toBeTruthy();
     });
-    expect(mockPairDevice).not.toHaveBeenCalled();
+    expect(mockPairDevice).toHaveBeenCalledWith({
+      deviceId: 'studio-mac',
+      host: '192.168.31.8',
+      port: 39393,
+      connectionCode: '',
+    });
+    expect(mockAddDesktop).not.toHaveBeenCalled();
     expect(screen.queryByText('选择连接方式')).toBeNull();
     expect(mockDispatch).not.toHaveBeenCalled();
   });

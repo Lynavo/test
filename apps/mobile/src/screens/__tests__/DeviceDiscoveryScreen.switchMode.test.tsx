@@ -28,6 +28,7 @@ jest.mock('react-native-localize', () => ({
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
+const mockAddDesktop = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (cb: () => void | (() => void)) => {
@@ -74,7 +75,7 @@ jest.mock('../../stores/recent-desktops-store', () => ({
   useRecentDesktops: () => ({
     recentDesktops: [],
     isLoading: false,
-    addDesktop: jest.fn(),
+    addDesktop: mockAddDesktop,
     forgetDesktop: jest.fn(),
     updateAuthStatus: jest.fn(),
   }),
@@ -110,6 +111,7 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValue([]);
     mockNativeSyncEngine.getBindingState.mockResolvedValue(null);
     mockNativeSyncEngine.pairDevice.mockResolvedValue(undefined);
+    mockAddDesktop.mockResolvedValue(undefined);
     NativeModules.NativeSyncEngine = mockNativeSyncEngine;
     jest
       .spyOn(NativeEventEmitter.prototype, 'addListener')
@@ -138,11 +140,11 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     });
   });
 
-  it('pairs device with connection code and resets to SyncActivity', async () => {
+  it('direct-reconnects a known discovered device and resets to SyncActivity', async () => {
     mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
     mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
 
-    const { getByText, getByPlaceholderText, queryByText } = render(
+    const { getByText, queryByPlaceholderText, queryByText } = render(
       <DeviceDiscoveryScreen />,
     );
 
@@ -171,22 +173,23 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     fireEvent.press(getByText('Studio Mac'));
 
     await waitFor(() => {
-      expect(getByPlaceholderText('輸入連接碼')).toBeTruthy();
-    });
-    expect(queryByText('選擇連接方式')).toBeNull();
-    expect(queryByText('掃碼連接')).toBeNull();
-
-    fireEvent.changeText(getByPlaceholderText('輸入連接碼'), '123456');
-    fireEvent.press(getByText('連接'));
-
-    await waitFor(() => {
       expect(mockNativeSyncEngine.pairDevice).toHaveBeenCalledWith({
         deviceId: 'server-known',
         host: '192.168.1.8',
         port: 39393,
-        connectionCode: '123456',
+        connectionCode: '',
       });
     });
+    expect(mockAddDesktop).toHaveBeenCalledWith({
+      desktopDeviceId: 'server-known',
+      desktopName: 'Studio Mac',
+      host: '192.168.1.8',
+      port: 39393,
+      authorizationStatus: 'authorized',
+    });
+    expect(queryByPlaceholderText('輸入連接碼')).toBeNull();
+    expect(queryByText('選擇連接方式')).toBeNull();
+    expect(queryByText('掃碼連接')).toBeNull();
     expect(mockDispatch).toHaveBeenCalledWith({
       type: 'RESET',
       payload: {
@@ -197,10 +200,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('shows error when pairing fails', async () => {
+  it('falls back to code entry when known device direct reconnect fails', async () => {
     mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
     mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
-    mockNativeSyncEngine.pairDevice.mockRejectedValueOnce(new Error('PAIR_CODE_REQUIRED'));
+    mockNativeSyncEngine.pairDevice
+      .mockRejectedValueOnce(new Error('PAIR_CODE_REQUIRED'))
+      .mockResolvedValueOnce(undefined);
 
     const { getByText, getByPlaceholderText, queryByText } = render(
       <DeviceDiscoveryScreen />,
@@ -228,6 +233,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     await waitFor(() => {
       expect(getByPlaceholderText('輸入連接碼')).toBeTruthy();
     });
+    expect(mockNativeSyncEngine.pairDevice).toHaveBeenCalledWith({
+      deviceId: 'server-known',
+      host: '192.168.1.8',
+      port: 39393,
+      connectionCode: '',
+    });
     expect(queryByText('選擇連接方式')).toBeNull();
     expect(queryByText('掃碼連接')).toBeNull();
 
@@ -241,10 +252,14 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
         port: 39393,
         connectionCode: '111111',
       });
-      // Should show the error message inside the modal
-      expect(getByText('PAIR_CODE_REQUIRED')).toBeTruthy();
     });
-    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'RESET',
+      payload: {
+        index: 0,
+        routes: [{ name: 'SyncActivity' }],
+      },
+    });
   });
 
   it('pairs unknown device by opening connection code directly', async () => {

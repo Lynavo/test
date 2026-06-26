@@ -745,7 +745,7 @@ export function DeviceDiscoveryGlobalScreen() {
   }, [mode, navigation]);
 
   const openDeviceCodeModal = useCallback(
-    (device: DiscoveredDevice) => {
+    async (device: DiscoveredDevice) => {
       if (showGuide) {
         return;
       }
@@ -763,9 +763,63 @@ export function DeviceDiscoveryGlobalScreen() {
       }
 
       setConnectionStatus('ready');
+      if (mode === 'switch' && knownDeviceIds.has(device.deviceId)) {
+        setVerifying(true);
+
+        try {
+          await pairDevice({
+            deviceId: device.deviceId,
+            host: device.ip,
+            port: device.port || 39393,
+            connectionCode: '',
+          });
+          await addDesktop({
+            desktopDeviceId: device.deviceId,
+            desktopName: device.name,
+            host: device.ip,
+            port: device.port || 39393,
+            authorizationStatus: 'authorized',
+          });
+          setVerifying(false);
+          setConnectionModalStep(null);
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'SyncActivity' }],
+            }),
+          );
+          return;
+        } catch (error) {
+          if (error instanceof PairingError) {
+            console.info(
+              '[DeviceDiscoveryGlobalScreen] known discovered desktop reconnect requires pairing',
+              {
+                code: error.code,
+                nativeCode: error.nativeCode,
+                message: describeLogError(error),
+              },
+            );
+          } else {
+            console.warn(
+              '[DeviceDiscoveryGlobalScreen] known discovered desktop reconnect failed, requiring pairing',
+              error,
+            );
+          }
+          setVerifying(false);
+        }
+      }
+
       setConnectionModalStep('code');
     },
-    [currentDeviceId, mode, showGuide],
+    [
+      addDesktop,
+      currentDeviceId,
+      knownDeviceIds,
+      mode,
+      navigation,
+      showGuide,
+      t,
+    ],
   );
 
   const openRecentDesktop = useCallback(

@@ -444,9 +444,47 @@ export function DeviceDiscoveryScreen() {
       setSelectedDevice(device);
       setConnectionCode('');
       setCodeError(null);
+
+      if (mode === 'switch' && knownDeviceIds.has(device.deviceId)) {
+        try {
+          const { NativeSyncEngine } = NativeModules;
+          if (!NativeSyncEngine) {
+            throw new Error('NativeSyncEngine unavailable');
+          }
+
+          await NativeSyncEngine.pairDevice({
+            deviceId: device.deviceId,
+            host: device.ip,
+            port: device.port || 39393,
+            connectionCode: '',
+          });
+
+          await addDesktop({
+            desktopDeviceId: device.deviceId,
+            desktopName: device.name,
+            host: device.ip,
+            port: device.port || 39393,
+            authorizationStatus: 'authorized',
+          });
+
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 0,
+              routes: [{ name: 'SyncActivity' }],
+            }),
+          );
+          return;
+        } catch (error) {
+          console.warn(
+            '[DiscoveryScreen] known discovered device direct reconnect failed, requiring code verification',
+            error,
+          );
+        }
+      }
+
       setShowCodeModal(true);
     },
-    [currentDeviceId, t],
+    [addDesktop, currentDeviceId, knownDeviceIds, mode, navigation, t],
   );
 
   const handleRecentDevicePress = useCallback(
