@@ -9,117 +9,6 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
-func TestBootstrapReconciliationUpdatesLegacyDefaultReceiveRoot(t *testing.T) {
-	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Lynavo Drive")
-	dbPath := filepath.Join(dataDir, "sidecar.db")
-	legacyReceiveRoot := filepath.Join(dir, "小豹闪传", "received")
-
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll(dataDir): %v", err)
-	}
-	if err := os.MkdirAll(legacyReceiveRoot, 0o755); err != nil {
-		t.Fatalf("MkdirAll(legacyReceiveRoot): %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyReceiveRoot, "old.txt"), []byte("old"), 0o644); err != nil {
-		t.Fatalf("WriteFile legacy receive file: %v", err)
-	}
-
-	st, err := store.New(dbPath)
-	if err != nil {
-		t.Fatalf("store.New: %v", err)
-	}
-	defer st.Close()
-
-	cfg, err := st.GetShareConfig()
-	if err != nil {
-		t.Fatalf("GetShareConfig: %v", err)
-	}
-	cfg.ReceiveRoot = legacyReceiveRoot
-	if err := st.UpdateShareConfig(*cfg); err != nil {
-		t.Fatalf("UpdateShareConfig: %v", err)
-	}
-
-	runtimeConfig := &config.Config{
-		DataDir:    dataDir,
-		ReceiveDir: filepath.Join(dataDir, "received"),
-		DeviceName: "test-device",
-	}
-
-	bootstrapReconciliation(st, runtimeConfig)
-
-	updated, err := st.GetShareConfig()
-	if err != nil {
-		t.Fatalf("GetShareConfig(updated): %v", err)
-	}
-	if updated.ReceiveRoot != filepath.Join(dataDir, "received") {
-		t.Fatalf("ReceiveRoot = %q, want %q", updated.ReceiveRoot, filepath.Join(dataDir, "received"))
-	}
-	if runtimeConfig.ReceiveDir != filepath.Join(dataDir, "received") {
-		t.Fatalf("runtime ReceiveDir = %q, want %q", runtimeConfig.ReceiveDir, filepath.Join(dataDir, "received"))
-	}
-	if _, err := os.Stat(filepath.Join(dataDir, "received", "old.txt")); err != nil {
-		t.Fatalf("expected legacy receive file copied into new receive root: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(legacyReceiveRoot, "old.txt")); err != nil {
-		t.Fatalf("expected legacy receive file to remain in old receive root: %v", err)
-	}
-}
-
-func TestBootstrapReconciliationUpdatesViviDropDefaultReceiveRoot(t *testing.T) {
-	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Lynavo Drive")
-	dbPath := filepath.Join(dataDir, "sidecar.db")
-	legacyReceiveRoot := filepath.Join(dir, "Vivi Drop", "received")
-
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll(dataDir): %v", err)
-	}
-	if err := os.MkdirAll(legacyReceiveRoot, 0o755); err != nil {
-		t.Fatalf("MkdirAll(legacyReceiveRoot): %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyReceiveRoot, "old.txt"), []byte("old"), 0o644); err != nil {
-		t.Fatalf("WriteFile legacy receive file: %v", err)
-	}
-
-	st, err := store.New(dbPath)
-	if err != nil {
-		t.Fatalf("store.New: %v", err)
-	}
-	defer st.Close()
-
-	cfg, err := st.GetShareConfig()
-	if err != nil {
-		t.Fatalf("GetShareConfig: %v", err)
-	}
-	cfg.ReceiveRoot = legacyReceiveRoot
-	if err := st.UpdateShareConfig(*cfg); err != nil {
-		t.Fatalf("UpdateShareConfig: %v", err)
-	}
-
-	runtimeConfig := &config.Config{
-		DataDir:    dataDir,
-		ReceiveDir: filepath.Join(dataDir, "received"),
-		DeviceName: "test-device",
-	}
-
-	bootstrapReconciliation(st, runtimeConfig)
-
-	updated, err := st.GetShareConfig()
-	if err != nil {
-		t.Fatalf("GetShareConfig(updated): %v", err)
-	}
-	if updated.ReceiveRoot != filepath.Join(dataDir, "received") {
-		t.Fatalf("ReceiveRoot = %q, want %q", updated.ReceiveRoot, filepath.Join(dataDir, "received"))
-	}
-	if _, err := os.Stat(filepath.Join(dataDir, "received", "old.txt")); err != nil {
-		t.Fatalf("expected legacy receive file copied into new receive root: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(legacyReceiveRoot, "old.txt")); err != nil {
-		t.Fatalf("expected legacy receive file to remain in old receive root: %v", err)
-	}
-}
-
 func TestBootstrapReconciliationKeepsCurrentBrandDefaultReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "Lynavo Drive")
@@ -171,18 +60,18 @@ func TestBootstrapReconciliationKeepsCurrentBrandDefaultReceiveRoot(t *testing.T
 	}
 }
 
-func TestBootstrapReconciliationMovesObsoletePersonalReceiveRoot(t *testing.T) {
+func TestBootstrapReconciliationKeepsStoredPersonalReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "Lynavo Drive")
 	dbPath := filepath.Join(dataDir, "sidecar.db")
-	obsoleteReceiveRoot := filepath.Join(dataDir, "personal", "received")
+	storedReceiveRoot := filepath.Join(dataDir, "personal", "received")
 	currentReceiveRoot := filepath.Join(dataDir, "received")
 
-	if err := os.MkdirAll(obsoleteReceiveRoot, 0o755); err != nil {
-		t.Fatalf("MkdirAll(obsoleteReceiveRoot): %v", err)
+	if err := os.MkdirAll(storedReceiveRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(storedReceiveRoot): %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(obsoleteReceiveRoot, "old.txt"), []byte("old"), 0o644); err != nil {
-		t.Fatalf("WriteFile obsolete receive file: %v", err)
+	if err := os.WriteFile(filepath.Join(storedReceiveRoot, "stored.txt"), []byte("stored"), 0o644); err != nil {
+		t.Fatalf("WriteFile stored receive file: %v", err)
 	}
 
 	st, err := store.New(dbPath)
@@ -195,7 +84,7 @@ func TestBootstrapReconciliationMovesObsoletePersonalReceiveRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShareConfig: %v", err)
 	}
-	cfg.ReceiveRoot = obsoleteReceiveRoot
+	cfg.ReceiveRoot = storedReceiveRoot
 	if err := st.UpdateShareConfig(*cfg); err != nil {
 		t.Fatalf("UpdateShareConfig: %v", err)
 	}
@@ -212,23 +101,23 @@ func TestBootstrapReconciliationMovesObsoletePersonalReceiveRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShareConfig(updated): %v", err)
 	}
-	if updated.ReceiveRoot != currentReceiveRoot {
-		t.Fatalf("ReceiveRoot = %q, want %q", updated.ReceiveRoot, currentReceiveRoot)
+	if updated.ReceiveRoot != storedReceiveRoot {
+		t.Fatalf("ReceiveRoot = %q, want %q", updated.ReceiveRoot, storedReceiveRoot)
 	}
-	if runtimeConfig.ReceiveDir != currentReceiveRoot {
-		t.Fatalf("runtime ReceiveDir = %q, want %q", runtimeConfig.ReceiveDir, currentReceiveRoot)
+	if runtimeConfig.ReceiveDir != storedReceiveRoot {
+		t.Fatalf("runtime ReceiveDir = %q, want %q", runtimeConfig.ReceiveDir, storedReceiveRoot)
 	}
-	if _, err := os.Stat(filepath.Join(currentReceiveRoot, "old.txt")); err != nil {
-		t.Fatalf("expected receive file copied into current receive root: %v", err)
+	if _, err := os.Stat(filepath.Join(currentReceiveRoot, "stored.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected stored receive file not to be copied into default receive root, stat err=%v", err)
 	}
-	if _, err := os.Stat(filepath.Join(obsoleteReceiveRoot, "old.txt")); err != nil {
-		t.Fatalf("expected obsolete receive root file to remain after copy: %v", err)
+	if _, err := os.Stat(filepath.Join(storedReceiveRoot, "stored.txt")); err != nil {
+		t.Fatalf("expected stored receive root file to remain: %v", err)
 	}
 }
 
 func TestBootstrapReconciliationKeepsCustomReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Vivi Drop")
+	dataDir := filepath.Join(dir, "Lynavo Drive")
 	dbPath := filepath.Join(dataDir, "sidecar.db")
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -318,32 +207,6 @@ func TestBootstrapReconciliationKeepsExternalPersonalReceivedCustomRoot(t *testi
 	}
 }
 
-func TestCopyMissingReceiveEntriesSkipsSourceSubtreeWhenTargetPathIsFile(t *testing.T) {
-	dir := t.TempDir()
-	from := filepath.Join(dir, "from")
-	to := filepath.Join(dir, "to")
-
-	if err := os.MkdirAll(filepath.Join(from, "album"), 0o755); err != nil {
-		t.Fatalf("MkdirAll source album: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(from, "album", "photo.jpg"), []byte("source"), 0o644); err != nil {
-		t.Fatalf("WriteFile source photo: %v", err)
-	}
-	if err := os.MkdirAll(to, 0o755); err != nil {
-		t.Fatalf("MkdirAll target: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(to, "album"), []byte("target file"), 0o644); err != nil {
-		t.Fatalf("WriteFile target album file: %v", err)
-	}
-
-	if err := copyMissingReceiveEntries(from, to); err != nil {
-		t.Fatalf("copyMissingReceiveEntries: %v", err)
-	}
-	if got, err := os.ReadFile(filepath.Join(to, "album")); err != nil || string(got) != "target file" {
-		t.Fatalf("target file was changed, got=%q err=%v", string(got), err)
-	}
-}
-
 func TestEnsureRuntimeDirsCreatesSharedDirAtStartup(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
@@ -378,8 +241,8 @@ func TestEnsureCoreRuntimeDirsSkipsUnavailableStorageRoot(t *testing.T) {
 	dir := t.TempDir()
 	missingMount := filepath.Join(dir, "MissingExternalDisk")
 	cfg := &config.Config{
-		DataDir:    filepath.Join(dir, "Vivi Drop"),
-		ReceiveDir: filepath.Join(missingMount, "ViviDrop", "received"),
+		DataDir:    filepath.Join(dir, "Lynavo Drive"),
+		ReceiveDir: filepath.Join(missingMount, "LynavoDrive", "received"),
 		DeviceName: "test-device",
 	}
 
@@ -416,6 +279,22 @@ func TestBonjourShareMetadataIgnoresRemoteAccessSettingInOSS(t *testing.T) {
 	if shareName == "" {
 		t.Fatal("expected non-empty share name")
 	}
+	if shareName != "Lynavo Drive" {
+		t.Fatalf("shareName = %q, want Lynavo Drive", shareName)
+	}
+
+	shareConfig, err := st.GetShareConfig()
+	if err != nil {
+		t.Fatalf("GetShareConfig: %v", err)
+	}
+	shareConfig.ShareName = "DeskShare"
+	if err := st.UpdateShareConfig(*shareConfig); err != nil {
+		t.Fatalf("UpdateShareConfig: %v", err)
+	}
+	_, shareName = bonjourShareMetadata(st)
+	if shareName != "DeskShare" {
+		t.Fatalf("custom shareName = %q, want DeskShare", shareName)
+	}
 
 	if err := st.SetSetting("remote_access_enabled", "false"); err != nil {
 		t.Fatalf("SetSetting false: %v", err)
@@ -438,8 +317,8 @@ func TestEnsureStorageDirsAtStartupReturnsFalseForUnavailableStorage(t *testing.
 	dir := t.TempDir()
 	missingMount := filepath.Join(dir, "MissingExternalDisk")
 	cfg := &config.Config{
-		DataDir:    filepath.Join(dir, "Vivi Drop"),
-		ReceiveDir: filepath.Join(missingMount, "ViviDrop", "received"),
+		DataDir:    filepath.Join(dir, "Lynavo Drive"),
+		ReceiveDir: filepath.Join(missingMount, "LynavoDrive", "received"),
 		DeviceName: "test-device",
 	}
 
@@ -448,67 +327,6 @@ func TestEnsureStorageDirsAtStartupReturnsFalseForUnavailableStorage(t *testing.
 	}
 	if _, err := os.Stat(missingMount); !os.IsNotExist(err) {
 		t.Fatalf("expected missing storage root not to be created, err=%v", err)
-	}
-}
-
-func TestCleanupLegacyStagingDirRemovesObsoletePartFiles(t *testing.T) {
-	dir := t.TempDir()
-	cfg := &config.Config{
-		DataDir:    filepath.Join(dir, "Vivi Drop"),
-		ReceiveDir: filepath.Join(dir, "external", "received"),
-		DeviceName: "test-device",
-	}
-
-	legacyStaging := cfg.LegacyStagingDir()
-	if err := os.MkdirAll(legacyStaging, 0o755); err != nil {
-		t.Fatalf("MkdirAll(legacyStaging): %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(legacyStaging, "old.part"), []byte("partial"), 0o644); err != nil {
-		t.Fatalf("WriteFile(old.part): %v", err)
-	}
-
-	if err := ensureRuntimeDirs(cfg); err != nil {
-		t.Fatalf("ensureRuntimeDirs: %v", err)
-	}
-	activeStaging := cfg.StagingDir()
-	if activeStaging == legacyStaging {
-		t.Fatalf("test setup expected distinct staging dirs")
-	}
-
-	if err := cleanupLegacyStagingDir(cfg); err != nil {
-		t.Fatalf("cleanupLegacyStagingDir: %v", err)
-	}
-
-	if _, err := os.Stat(legacyStaging); !os.IsNotExist(err) {
-		t.Fatalf("expected legacy staging to be removed, stat err=%v", err)
-	}
-	if info, err := os.Stat(activeStaging); err != nil || !info.IsDir() {
-		t.Fatalf("expected active staging to remain, info=%v err=%v", info, err)
-	}
-}
-
-func TestCleanupLegacyStagingDirSkipsActiveStaging(t *testing.T) {
-	dir := t.TempDir()
-	cfg := &config.Config{
-		DataDir:    filepath.Join(dir, "Vivi Drop"),
-		ReceiveDir: filepath.Join(dir, "Vivi Drop", "received"),
-		DeviceName: "test-device",
-	}
-
-	if err := ensureRuntimeDirs(cfg); err != nil {
-		t.Fatalf("ensureRuntimeDirs: %v", err)
-	}
-	partPath := filepath.Join(cfg.StagingDir(), "active.part")
-	if err := os.WriteFile(partPath, []byte("partial"), 0o644); err != nil {
-		t.Fatalf("WriteFile(active.part): %v", err)
-	}
-
-	if err := cleanupLegacyStagingDir(cfg); err != nil {
-		t.Fatalf("cleanupLegacyStagingDir: %v", err)
-	}
-
-	if _, err := os.Stat(partPath); err != nil {
-		t.Fatalf("expected active staging part to remain: %v", err)
 	}
 }
 

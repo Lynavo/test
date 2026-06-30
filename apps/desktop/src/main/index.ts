@@ -11,13 +11,12 @@ import { requestMacFilesAndFoldersPermissionsOnStartup } from './macos-files-fol
 import { attachRendererLogging } from './renderer-logging';
 import { SidecarManager } from './sidecar-manager';
 import { sidecarClient } from './sidecar-client';
-import { configureElectronStorageIdentity } from './storage-identity';
 import { checkForUpdatesOnStartup } from './startup-update-check';
 import { createVideoThumbnailEventHandler } from './video-thumbnail-generator';
 import { WsBridge } from './ws-bridge';
 import { getMainWindowChromeOptions, getMainWindowSizeOptions } from './window-chrome';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
-import { getProductName } from '../shared/product';
+import { APP_STORAGE_IDENTITY_NAME, getProductName } from '../shared/product';
 import { shouldHideApplicationMenu } from '../shared/platform-capabilities';
 
 // Prevent crash on broken pipe (sidecar stdout/stderr)
@@ -28,7 +27,7 @@ process.on('uncaughtException', (err) => {
 
 let mainWindow: BrowserWindow | null = null;
 
-configureElectronStorageIdentity(app, (message, err) => log.warn(message, err));
+app.setPath('userData', join(app.getPath('appData'), APP_STORAGE_IDENTITY_NAME));
 const sidecar = new SidecarManager();
 let wsBridge: WsBridge;
 const powerSaveManager = new PowerSaveManager(powerSaveBlocker);

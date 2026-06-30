@@ -6,12 +6,15 @@ describe('desktop Electron identity', () => {
   it('sets the Lynavo userData path explicitly before Electron startup', () => {
     const source = readFileSync(resolve(__dirname, '../index.ts'), 'utf8');
 
+    expect(source).toContain('APP_STORAGE_IDENTITY_NAME');
     expect(source).toContain(
-      "import { configureElectronStorageIdentity } from './storage-identity';",
+      "app.setPath('userData', join(app.getPath('appData'), APP_STORAGE_IDENTITY_NAME));",
     );
-    expect(source.indexOf('configureElectronStorageIdentity(app')).toBeLessThan(
+    expect(source.indexOf("app.setPath('userData'")).toBeLessThan(
       source.indexOf('app.whenReady()'),
     );
+    expect(source).not.toContain('storage-identity');
     expect(source).not.toMatch(/app\.setName\(/);
+    expect(source).not.toContain(['Vivi', 'Drop'].join(' '));
   });
 });

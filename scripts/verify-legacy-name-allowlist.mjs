@@ -195,6 +195,21 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowTerms(['syncflow'], 'Sidecar health service compatibility test coverage.'),
   ],
   [
+    'services/sidecar-go/internal/config/config.go',
+    allowTerms(['SYNCFLOW'], 'Device IP override env name remains before env rename.'),
+  ],
+  [
+    'services/sidecar-go/cmd/syncflow-sidecar/main.go',
+    allowTerms(
+      ['syncflow', 'SYNCFLOW'],
+      'Go module path and sidecar config entrypoint names remain before cmd/module rename.',
+    ),
+  ],
+  [
+    'services/sidecar-go/cmd/syncflow-sidecar/main_test.go',
+    allowTerms(['syncflow'], 'Go module import path remains before module rename.'),
+  ],
+  [
     'apps/mobile/ios/SyncFlowMobile/AuthKeychainCleaner.swift',
     allowAny('Keychain migration strings preserve access to existing credentials.'),
   ],
@@ -209,32 +224,6 @@ const ALLOWED_EXACT_PATHS = new Map([
   [
     'apps/mobile/src/utils/__tests__/clearUserScopedStorage.test.ts',
     allowAny('Shared-preference migration test coverage.'),
-  ],
-  [
-    'apps/desktop/src/main/storage-identity.ts',
-    allowAny(
-      'Electron userData copy migration reads legacy Vivi Drop storage without deleting it.',
-    ),
-  ],
-  [
-    'apps/desktop/src/main/__tests__/storage-identity.test.ts',
-    allowAny('Electron userData copy migration test coverage.'),
-  ],
-  [
-    'services/sidecar-go/internal/config/config.go',
-    allowAny('Old data-dir migration paths preserve existing desktop installs.'),
-  ],
-  [
-    'services/sidecar-go/internal/config/config_test.go',
-    allowAny('Old data-dir migration test coverage.'),
-  ],
-  [
-    'services/sidecar-go/cmd/syncflow-sidecar/main.go',
-    allowAny('Go cmd path and old data-dir migration compatibility.'),
-  ],
-  [
-    'services/sidecar-go/cmd/syncflow-sidecar/main_test.go',
-    allowAny('Sidecar compatibility and old data-dir migration test coverage.'),
   ],
 ]);
 

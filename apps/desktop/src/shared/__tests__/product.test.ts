@@ -26,15 +26,15 @@ describe('desktop product helper', () => {
     expect(APP_STORAGE_IDENTITY_NAME).toBe(getProductName());
   });
 
-  it('does not let the legacy market env affect product identity', () => {
-    vi.stubEnv('SYNCFLOW_MARKET', 'cn');
+  it('does not let unrelated market env affect product identity', () => {
+    vi.stubEnv('OTHER_PRODUCT_MARKET', 'cn');
 
     expect(getProductName()).toBe('Lynavo Drive');
     expect(isLynavoGlobalProduct()).toBe(true);
   });
 
   it('resolves release channel from Lynavo env only', () => {
-    vi.stubEnv('SYNCFLOW_MARKET', 'global');
+    vi.stubEnv('OTHER_PRODUCT_MARKET', 'global');
     vi.stubEnv('LYNAVO_RELEASE_CHANNEL', 'review');
 
     expect(getProductReleaseChannel()).toBe('review');
@@ -45,21 +45,19 @@ describe('desktop product helper', () => {
     expect(
       resolveLynavoApiBaseUrl({
         LYNAVO_API_BASE_URL: 'https://api.lynavo.example',
-        VIVIDROP_API_BASE_URL: 'https://api.vividrop-legacy.example',
-        SYNCFLOW_API_BASE_URL: 'https://api.syncflow-legacy.example',
+        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
       }),
     ).toBe('https://api.lynavo.example');
 
     expect(
       resolveLynavoApiBaseUrl({
-        VIVIDROP_API_BASE_URL: 'https://api.vividrop-legacy.example',
-        SYNCFLOW_API_BASE_URL: 'https://api.syncflow-legacy.example',
+        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
       }),
     ).toBe('https://api.lynavo.com');
 
     expect(
       resolveLynavoApiBaseUrl({
-        SYNCFLOW_API_BASE_URL: 'https://api.syncflow-legacy.example',
+        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
       }),
     ).toBe('https://api.lynavo.com');
   });
@@ -72,11 +70,9 @@ describe('desktop product helper', () => {
 
     expect(
       shouldUseLynavoReviewTarget({
-        SYNCFLOW_RELEASE_PROFILE: 'global-review',
-        VIVIDROP_API_BASE_URL: 'https://review-api.vividrop.cn',
-        SYNCFLOW_API_BASE_URL: 'https://review-api.vividrop.cn',
-        SYNCFLOW_AUTH_BASE_URL: 'https://review-api.vividrop.cn',
-        SYNCFLOW_AUTH_REVIEW_BASE_URL: 'https://review-api.vividrop.cn',
+        OTHER_RELEASE_PROFILE: 'review',
+        OTHER_PRODUCT_API_BASE_URL: 'https://review-api.other-product.example',
+        OTHER_AUTH_BASE_URL: 'https://review-api.other-product.example',
       }),
     ).toBe(false);
   });

@@ -3808,14 +3808,6 @@ func TestResetState(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cfg.StagingDir(), "resume.part"), []byte("partial"), 0o644); err != nil {
 		t.Fatalf("write staging file: %v", err)
 	}
-	if cfg.LegacyStagingDir() != cfg.StagingDir() {
-		if err := os.MkdirAll(cfg.LegacyStagingDir(), 0o755); err != nil {
-			t.Fatalf("mkdir legacy staging path: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(cfg.LegacyStagingDir(), "legacy.part"), []byte("legacy partial"), 0o644); err != nil {
-			t.Fatalf("write legacy staging file: %v", err)
-		}
-	}
 
 	resp, err := http.Post(srv.URL+"/settings/reset-state", "application/json", strings.NewReader("{}"))
 	if err != nil {
@@ -3899,22 +3891,12 @@ func TestResetState(t *testing.T) {
 	if len(stagingEntries) != 0 {
 		t.Fatalf("expected staging dir to be empty, got %d entries", len(stagingEntries))
 	}
-
-	if cfg.LegacyStagingDir() != cfg.StagingDir() {
-		legacyEntries, err := os.ReadDir(cfg.LegacyStagingDir())
-		if err != nil {
-			t.Fatalf("ReadDir legacy staging: %v", err)
-		}
-		if len(legacyEntries) != 0 {
-			t.Fatalf("expected legacy staging dir to be empty, got %d entries", len(legacyEntries))
-		}
-	}
 }
 
 func TestResetStateReturnsUnavailableWhenStorageParentMissing(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	missingMount := filepath.Join(t.TempDir(), "MissingExternalDisk")
-	cfg.ReceiveDir = filepath.Join(missingMount, "ViviDrop", "received")
+	cfg.ReceiveDir = filepath.Join(missingMount, "LynavoDrive", "received")
 
 	handler := func() http.Handler { _, h := api.NewServer(st, cfg, hub, nil); return h }()
 	srv := httptest.NewServer(handler)

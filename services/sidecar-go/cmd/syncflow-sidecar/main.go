@@ -5,14 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -29,7 +26,10 @@ import (
 	"github.com/nicksyncflow/sidecar/internal/store"
 )
 
-const bonjourIPPollInterval = 5 * time.Second
+const (
+	bonjourIPPollInterval   = 5 * time.Second
+	bonjourDefaultShareName = "Lynavo Drive"
+)
 
 func main() {
 	cfgPath := "syncflow-sidecar.yml"
@@ -79,9 +79,6 @@ func main() {
 	// Bootstrap reconciliation: ensure DB has config defaults
 	bootstrapReconciliation(st, cfg)
 	storageReady := ensureStorageDirsAtStartup(cfg)
-	if err := cleanupLegacyStagingDir(cfg); err != nil {
-		slog.Warn("cleanup legacy staging dir failed", "path", cfg.LegacyStagingDir(), "err", err)
-	}
 
 	if storageReady {
 		// Backfill receive_dir_name for any legacy devices that lack it.
@@ -271,10 +268,10 @@ func shouldRestartBonjourForIPChange(configuredIP, advertisedIP, currentIP strin
 
 func bonjourShareMetadata(st *store.Store) (bool, string) {
 	shareEnabled := true
-	shareName := "Vivi Drop"
+	shareName := bonjourDefaultShareName
 	if shareConfig, err := st.GetShareConfig(); err == nil && shareConfig != nil {
-		if strings.TrimSpace(shareConfig.ShareName) != "" {
-			shareName = shareConfig.ShareName
+		if configuredShareName := strings.TrimSpace(shareConfig.ShareName); configuredShareName != "" {
+			shareName = configuredShareName
 		}
 	} else if err != nil {
 		slog.Warn("failed to read share config for bonjour", "err", err)
@@ -296,20 +293,6 @@ func bootstrapReconciliation(st *store.Store, cfg *config.Config) {
 				slog.Warn("bootstrap: failed to set receive_root", "err", err)
 			} else {
 				slog.Info("bootstrap: set receive_root", "path", cfg.ReceiveDir)
-			}
-		} else if rewriteTarget, ok := receiveRootRewriteTarget(cfg, receiveRoot); ok {
-			previousRoot := receiveRoot
-			if err := migrateReceiveRootIfSafe(previousRoot, rewriteTarget); err != nil {
-				cfg.ReceiveDir = receiveRoot
-				slog.Warn("bootstrap: kept legacy receive_root because migration was unsafe", "from", previousRoot, "to", cfg.ReceiveDir, "err", err)
-			} else {
-				cfg.ReceiveDir = rewriteTarget
-				shareConfig.ReceiveRoot = rewriteTarget
-				if err := st.UpdateShareConfig(*shareConfig); err != nil {
-					slog.Warn("bootstrap: failed to rewrite legacy receive_root", "from", previousRoot, "to", rewriteTarget, "err", err)
-				} else {
-					slog.Info("bootstrap: rewrote legacy receive_root", "from", previousRoot, "to", rewriteTarget)
-				}
 			}
 		} else {
 			cfg.ReceiveDir = receiveRoot
@@ -432,143 +415,4 @@ func ensureStorageDirsAtStartup(cfg *config.Config) bool {
 		slog.Info("startup storage dirs created", "paths", result.Recreated)
 	}
 	return true
-}
-
-func cleanupLegacyStagingDir(cfg *config.Config) error {
-	legacyStagingDir := filepath.Clean(cfg.LegacyStagingDir())
-	activeStagingDir := filepath.Clean(cfg.StagingDir())
-	if legacyStagingDir == activeStagingDir {
-		return nil
-	}
-
-	entries, err := os.ReadDir(legacyStagingDir)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read legacy staging dir: %w", err)
-	}
-	if len(entries) == 0 {
-		return nil
-	}
-
-	if err := os.RemoveAll(legacyStagingDir); err != nil {
-		return fmt.Errorf("remove legacy staging dir: %w", err)
-	}
-	slog.Info("legacy staging dir cleaned", "path", legacyStagingDir, "entries", len(entries))
-	return nil
-}
-
-func receiveRootRewriteTarget(cfg *config.Config, currentReceiveRoot string) (string, bool) {
-	currentReceiveRoot = filepath.Clean(currentReceiveRoot)
-	currentDataDir := filepath.Clean(cfg.DataDir)
-	targetReceiveDir := filepath.Clean(cfg.ReceiveDir)
-
-	managedDataDirs := []string{currentDataDir}
-	for _, legacyDataDirName := range []string{"Vivi Drop", "小豹闪传"} {
-		managedDataDirs = append(managedDataDirs, filepath.Join(filepath.Dir(currentDataDir), legacyDataDirName))
-	}
-
-	for _, managedDataDir := range managedDataDirs {
-		for _, legacyReceiveRoot := range []string{
-			filepath.Join(managedDataDir, "received"),
-			filepath.Join(managedDataDir, "personal", "received"),
-		} {
-			if currentReceiveRoot == filepath.Clean(legacyReceiveRoot) {
-				return targetReceiveDir, targetReceiveDir != currentReceiveRoot
-			}
-		}
-	}
-
-	return "", false
-}
-
-func migrateReceiveRootIfSafe(from string, to string) error {
-	from = filepath.Clean(from)
-	to = filepath.Clean(to)
-	if from == to {
-		return nil
-	}
-
-	if _, err := os.Stat(from); os.IsNotExist(err) {
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("stat legacy receive root: %w", err)
-	}
-
-	if err := os.MkdirAll(to, 0o755); err != nil {
-		return fmt.Errorf("create receive root: %w", err)
-	}
-	return copyMissingReceiveEntries(from, to)
-}
-
-func copyMissingReceiveEntries(from string, to string) error {
-	return filepath.WalkDir(from, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if path == from {
-			return nil
-		}
-		rel, err := filepath.Rel(from, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(to, rel)
-		if targetInfo, err := os.Stat(target); err == nil {
-			if entry.IsDir() {
-				if !targetInfo.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			return nil
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("stat target: %w", err)
-		}
-
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			return os.MkdirAll(target, info.Mode().Perm())
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(path)
-			if err != nil {
-				return err
-			}
-			return os.Symlink(linkTarget, target)
-		}
-		if !entry.Type().IsRegular() {
-			return nil
-		}
-		return copyReceiveFile(path, target, info.Mode().Perm())
-	})
-}
-
-func copyReceiveFile(from string, to string, perm fs.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
-		return err
-	}
-	source, err := os.Open(from)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	target, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
-	if os.IsExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	defer target.Close()
-
-	if _, err := io.Copy(target, source); err != nil {
-		return err
-	}
-	return target.Chmod(perm)
 }
