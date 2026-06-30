@@ -11,6 +11,214 @@ import type {
   UploadTaskSource,
 } from './enums';
 
+// ── Product / Entitlements ──
+
+export type ReleaseChannel = 'dev' | 'review' | 'prod';
+
+export type Distribution = 'community' | 'official';
+
+export type DriveFeatureKey =
+  | 'lan_foreground_auto_upload'
+  | 'background_continuation'
+  | 'remote_tunnel';
+
+export type EntitlementSource =
+  | 'guest'
+  | 'free_account'
+  | 'subscription'
+  | 'trial'
+  | 'gift_card'
+  | 'legacy'
+  | 'official_override'
+  | 'unknown';
+
+export interface DriveEntitlements {
+  canUseLanForegroundAutoUpload: boolean;
+  canUseBackgroundContinuation: boolean;
+  canUseRemoteTunnel: boolean;
+  source: EntitlementSource;
+  expiresAt: string | null;
+  checkedAt: string | null;
+}
+
+export interface ResolveDriveEntitlementsInput {
+  isAuthenticated: boolean;
+  serverEntitlements: unknown;
+  officialCapabilitiesAvailable: boolean;
+  now: string | Date;
+}
+
+interface ServerDriveEntitlements {
+  canUseLanForegroundAutoUpload?: unknown;
+  canUseBackgroundContinuation?: unknown;
+  canUseRemoteTunnel?: unknown;
+  source?: unknown;
+  expiresAt?: unknown;
+  checkedAt?: unknown;
+}
+
+const MAX_PAID_ENTITLEMENT_CHECKED_AT_AGE_MS = 24 * 60 * 60 * 1000;
+
+function isServerDriveEntitlements(value: unknown): value is ServerDriveEntitlements {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const entitlements = value as ServerDriveEntitlements;
+
+  return (
+    typeof entitlements.canUseLanForegroundAutoUpload === 'boolean' ||
+    typeof entitlements.canUseBackgroundContinuation === 'boolean' ||
+    typeof entitlements.canUseRemoteTunnel === 'boolean' ||
+    typeof entitlements.source === 'string' ||
+    typeof entitlements.expiresAt === 'string' ||
+    typeof entitlements.checkedAt === 'string'
+  );
+}
+
+function normalizeCheckedAt(now: string | Date): string | null {
+  if (now instanceof Date) {
+    return Number.isFinite(now.getTime()) ? now.toISOString() : null;
+  }
+
+  return Number.isFinite(Date.parse(now)) ? now : null;
+}
+
+function parseTime(value: string | Date): number | null {
+  const time = value instanceof Date ? value.getTime() : Date.parse(value);
+
+  return Number.isFinite(time) ? time : null;
+}
+
+function normalizeEntitlementSource(source: unknown): EntitlementSource {
+  switch (source) {
+    case 'guest':
+    case 'free_account':
+    case 'subscription':
+    case 'trial':
+    case 'gift_card':
+    case 'legacy':
+    case 'official_override':
+    case 'unknown':
+      return source;
+    default:
+      return 'unknown';
+  }
+}
+
+function isPaidEntitlementSource(source: EntitlementSource): boolean {
+  return (
+    source === 'subscription' ||
+    source === 'trial' ||
+    source === 'gift_card' ||
+    source === 'legacy' ||
+    source === 'official_override'
+  );
+}
+
+function hasFreshCheckedAt(checkedAtValue: unknown, nowTime: number | null): boolean {
+  if (nowTime === null || typeof checkedAtValue !== 'string') {
+    return false;
+  }
+
+  const checkedAtTime = Date.parse(checkedAtValue);
+
+  if (!Number.isFinite(checkedAtTime)) {
+    return false;
+  }
+
+  return (
+    checkedAtTime <= nowTime && nowTime - checkedAtTime <= MAX_PAID_ENTITLEMENT_CHECKED_AT_AGE_MS
+  );
+}
+
+function canUsePaidFeatures(
+  source: EntitlementSource,
+  expiresAtValue: unknown,
+  checkedAtValue: unknown,
+  nowTime: number | null,
+): boolean {
+  if (nowTime === null) {
+    return false;
+  }
+
+  if (!isPaidEntitlementSource(source) || !hasFreshCheckedAt(checkedAtValue, nowTime)) {
+    return false;
+  }
+
+  if (typeof expiresAtValue !== 'string') {
+    return false;
+  }
+
+  const expiresAtTime = Date.parse(expiresAtValue);
+
+  if (!Number.isFinite(expiresAtTime)) {
+    return false;
+  }
+
+  return expiresAtTime > nowTime;
+}
+
+export function resolveDriveEntitlements(input: ResolveDriveEntitlementsInput): DriveEntitlements {
+  const checkedAt = normalizeCheckedAt(input.now);
+
+  if (!input.isAuthenticated) {
+    return {
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'guest',
+      expiresAt: null,
+      checkedAt,
+    };
+  }
+
+  if (input.serverEntitlements === null) {
+    return {
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'free_account',
+      expiresAt: null,
+      checkedAt,
+    };
+  }
+
+  if (!isServerDriveEntitlements(input.serverEntitlements)) {
+    return {
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'unknown',
+      expiresAt: null,
+      checkedAt,
+    };
+  }
+
+  const expiresAtValue = input.serverEntitlements.expiresAt;
+  const expiresAt = typeof expiresAtValue === 'string' ? expiresAtValue : null;
+  const source = normalizeEntitlementSource(input.serverEntitlements.source);
+  const paidFeaturesAvailable =
+    input.officialCapabilitiesAvailable &&
+    canUsePaidFeatures(
+      source,
+      expiresAtValue,
+      input.serverEntitlements.checkedAt,
+      parseTime(input.now),
+    );
+
+  return {
+    canUseLanForegroundAutoUpload: true,
+    canUseBackgroundContinuation:
+      paidFeaturesAvailable && input.serverEntitlements.canUseBackgroundContinuation === true,
+    canUseRemoteTunnel:
+      paidFeaturesAvailable && input.serverEntitlements.canUseRemoteTunnel === true,
+    source,
+    expiresAt,
+    checkedAt,
+  };
+}
+
 // ── Device Discovery ──
 
 export interface DiscoveredDeviceDTO {

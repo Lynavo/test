@@ -11,6 +11,11 @@ import {
 import * as contracts from '../index';
 import {
   SIDECAR_EVENT_TYPES,
+  type Distribution,
+  type DriveEntitlements,
+  type DriveFeatureKey,
+  type EntitlementSource,
+  type ReleaseChannel,
   type DesktopDeviceAuthorizationStatus,
   type DesktopDeviceBlockStatus,
   type DesktopResourceKind,
@@ -170,19 +175,587 @@ describe('@syncflow/contracts exports', () => {
     expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'CN')?.code).toBe('+86');
     expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'TW')?.code).toBe('+886');
   });
-  it('exports Vivi Drop service endpoints on vividrop.cn domains', () => {
-    expect(contracts.VIVIDROP_WEB_BASE_URL).toBe('https://www.vividrop.cn');
-    expect(contracts.VIVIDROP_API_BASE_URL).toBe('https://api.vividrop.cn');
-    expect(contracts.VIVIDROP_GLOBAL_API_BASE_URL).toBe('https://global-api.vividrop.cn');
-    expect(contracts.VIVIDROP_REVIEW_API_BASE_URL).toBe('https://review-api.vividrop.cn');
-    expect(contracts.VIVIDROP_SUPPORT_EMAIL).toBe('support@vividrop.cn');
-    expect(contracts.VIVIDROP_REVIEW_EMAIL).toBe('review@vividrop.cn');
-    expect(contracts.VIVIDROP_APPLE_GLOBAL_REDIRECT_URI).toBe(
-      'https://global-api.vividrop.cn/auth/apple/callback',
-    );
-    expect(JSON.stringify(contracts.VIVIDROP_SERVICE_ENDPOINTS)).not.toContain(
-      ['vividrop', 'com'].join('.'),
-    );
+  it('does not export legacy Vivi Drop commercial endpoint constants', () => {
+    expect(Object.keys(contracts).filter((key) => key.startsWith('VIVIDROP_'))).toEqual([]);
+    expect('VIVIDROP_SERVICE_ENDPOINTS' in contracts).toBe(false);
+  });
+
+  it('exports Lynavo Drive service endpoints on lynavo.com domains', () => {
+    expect(contracts.LYNAVO_ROOT_DOMAIN).toBe('lynavo.com');
+    expect(contracts.LYNAVO_WEB_BASE_URL).toBe('https://www.lynavo.com');
+    expect(contracts.LYNAVO_API_BASE_URL).toBe('https://api.lynavo.com');
+    expect(contracts.LYNAVO_REVIEW_API_BASE_URL).toBe('https://review-api.lynavo.com');
+    expect(contracts.LYNAVO_SUPPORT_EMAIL).toBe('support@lynavo.com');
+    expect(contracts.LYNAVO_REVIEW_EMAIL).toBe('review@lynavo.com');
+    expect(contracts.LYNAVO_APPLE_REDIRECT_URI).toBe('https://api.lynavo.com/auth/apple/callback');
+    expect('LYNAVO_TURN_URL' in contracts).toBe(false);
+    expect(contracts.LYNAVO_SERVICE_ENDPOINTS).toEqual({
+      webBaseUrl: 'https://www.lynavo.com',
+      apiBaseUrl: 'https://api.lynavo.com',
+      reviewApiBaseUrl: 'https://review-api.lynavo.com',
+      supportEmail: 'support@lynavo.com',
+      reviewEmail: 'review@lynavo.com',
+      appleRedirectUri: 'https://api.lynavo.com/auth/apple/callback',
+    });
+  });
+
+  it('exports Lynavo Drive release, distribution, feature, and entitlement types', () => {
+    const channel: ReleaseChannel = 'prod';
+    const distribution: Distribution = 'official';
+    const features: DriveFeatureKey[] = [
+      'lan_foreground_auto_upload',
+      'background_continuation',
+      'remote_tunnel',
+    ];
+    const sources: EntitlementSource[] = [
+      'guest',
+      'free_account',
+      'subscription',
+      'trial',
+      'gift_card',
+      'legacy',
+      'official_override',
+      'unknown',
+    ];
+    const entitlements: DriveEntitlements = {
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: true,
+      canUseRemoteTunnel: true,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    };
+
+    expect(channel).toBe('prod');
+    expect(distribution).toBe('official');
+    expect(features).toEqual([
+      'lan_foreground_auto_upload',
+      'background_continuation',
+      'remote_tunnel',
+    ]);
+    expect(sources).toEqual([
+      'guest',
+      'free_account',
+      'subscription',
+      'trial',
+      'gift_card',
+      'legacy',
+      'official_override',
+      'unknown',
+    ]);
+    expect(entitlements.canUseRemoteTunnel).toBe(true);
+  });
+
+  it('resolves guest entitlements with foreground LAN fail-open and paid features fail-closed', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: false,
+        serverEntitlements: null,
+        officialCapabilitiesAvailable: false,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'guest',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('resolves free authenticated users without server entitlements as foreground-only', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: null,
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'free_account',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('resolves active paid server entitlements when official capabilities are available', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: true,
+      canUseRemoteTunnel: true,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed for expired server entitlements', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'trial',
+          expiresAt: '2026-06-28T23:59:59.999Z',
+          checkedAt: '2026-06-28T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'trial',
+      expiresAt: '2026-06-28T23:59:59.999Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when expiresAt is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: 'not-a-date',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: 'not-a-date',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when now is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: new Date('not-a-date'),
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: null,
+    });
+  });
+
+  it('fails subscription paid features closed when expiresAt is null', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails trial paid features closed when expiresAt is null', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'trial',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'trial',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  const nullablePaidSources: EntitlementSource[] = ['gift_card', 'legacy', 'official_override'];
+
+  for (const source of nullablePaidSources) {
+    it(`fails ${source} paid features closed when expiresAt is missing`, () => {
+      expect(
+        contracts.resolveDriveEntitlements({
+          isAuthenticated: true,
+          serverEntitlements: {
+            canUseBackgroundContinuation: true,
+            canUseRemoteTunnel: true,
+            source,
+            checkedAt: '2026-06-29T00:00:00.000Z',
+          },
+          officialCapabilitiesAvailable: true,
+          now: '2026-06-29T00:00:00.000Z',
+        }),
+      ).toEqual({
+        canUseLanForegroundAutoUpload: true,
+        canUseBackgroundContinuation: false,
+        canUseRemoteTunnel: false,
+        source,
+        expiresAt: null,
+        checkedAt: '2026-06-29T00:00:00.000Z',
+      });
+    });
+  }
+
+  it('fails gift card paid features closed when expiresAt is null', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'gift_card',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'gift_card',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails legacy paid features closed when expiresAt is null', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'legacy',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'legacy',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails official override paid features closed when expiresAt is null', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'official_override',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'official_override',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails gift card paid features closed when expiresAt is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'gift_card',
+          expiresAt: 'not-a-date',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'gift_card',
+      expiresAt: 'not-a-date',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when now string is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'gift_card',
+          expiresAt: null,
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: 'not-a-date',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'gift_card',
+      expiresAt: null,
+      checkedAt: null,
+    });
+  });
+
+  it('fails paid features closed when expiresAt equals now', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'gift_card',
+          expiresAt: '2026-06-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'gift_card',
+      expiresAt: '2026-06-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when checkedAt is missing', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when checkedAt is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: 'not-a-date',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when checkedAt is stale', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-27T23:59:59.999Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when checkedAt is in the future', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.001Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('treats unknown server entitlement data as free foreground-only access', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: { plan: 'unknown' },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'unknown',
+      expiresAt: null,
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails paid features closed when server source is invalid', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: '__invalid__',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: true,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'unknown',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
+  });
+
+  it('fails official-only capabilities closed when the module is unavailable', () => {
+    expect(
+      contracts.resolveDriveEntitlements({
+        isAuthenticated: true,
+        serverEntitlements: {
+          canUseBackgroundContinuation: true,
+          canUseRemoteTunnel: true,
+          source: 'subscription',
+          expiresAt: '2026-07-29T00:00:00.000Z',
+          checkedAt: '2026-06-29T00:00:00.000Z',
+        },
+        officialCapabilitiesAvailable: false,
+        now: '2026-06-29T00:00:00.000Z',
+      }),
+    ).toEqual({
+      canUseLanForegroundAutoUpload: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'subscription',
+      expiresAt: '2026-07-29T00:00:00.000Z',
+      checkedAt: '2026-06-29T00:00:00.000Z',
+    });
   });
 
   it('exports wake metadata DTOs and wake reachability states', () => {
@@ -243,9 +816,7 @@ describe('desktop-local product exports', () => {
   });
 
   it('exports the video thumbnail request event type', () => {
-    expect(SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST).toBe(
-      'video.thumbnail.request',
-    );
+    expect(SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST).toBe('video.thumbnail.request');
 
     const event: SidecarEvent = {
       type: SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST,
