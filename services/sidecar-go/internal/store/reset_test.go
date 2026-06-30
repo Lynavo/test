@@ -18,7 +18,7 @@ func TestResetStateClearsRuntimeDataButPreservesConfig(t *testing.T) {
 	validatedAt := "2026-03-31T10:00:00Z"
 	shareErr := "share unavailable"
 	if err := s.UpdateShareConfig(ShareConfig{
-		ReceiveRoot:     "/tmp/SyncFlow",
+		ReceiveRoot:     "/tmp/LynavoDrive",
 		ShareName:       "DeskShare",
 		ShareURL:        "smb://desk/DeskShare",
 		ShareStatus:     "error",
@@ -116,7 +116,7 @@ func TestResetStateClearsRuntimeDataButPreservesConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShareConfig: %v", err)
 	}
-	if shareConfig.ReceiveRoot != "/tmp/SyncFlow" {
+	if shareConfig.ReceiveRoot != "/tmp/LynavoDrive" {
 		t.Fatalf("expected receive root to be preserved, got %q", shareConfig.ReceiveRoot)
 	}
 	if shareConfig.ShareName != "DeskShare" {

@@ -139,7 +139,9 @@ describe('DeviceDiscoveryScreen pairing options', () => {
     await waitFor(() => {
       expect(getByText('去哪裡找連接碼和 IP？')).toBeTruthy();
       expect(
-        getByText('請在電腦端 Vivi Drop 左側導覽列點擊「全域設定」，即可查看 6 位連接碼、設備 IP 或顯示二維碼。'),
+        getByText(
+          '請在電腦端 Lynavo Drive 左側導覽列點擊「全域設定」，即可查看 6 位連接碼、設備 IP 或顯示二維碼。',
+        ),
       ).toBeTruthy();
     });
     expect(queryByText('掃碼配對')).toBeNull();
@@ -187,7 +189,8 @@ describe('DeviceDiscoveryScreen pairing options', () => {
       );
     });
 
-    const promptButtons = (Alert.prompt as jest.Mock).mock.calls[0][2] as Array<{
+    const promptButtons = (Alert.prompt as jest.Mock).mock
+      .calls[0][2] as Array<{
       text: string;
       onPress?: (note?: string) => void;
     }>;
@@ -218,7 +221,9 @@ describe('DeviceDiscoveryScreen pairing options', () => {
       value: 'android',
     });
 
-    const { getByPlaceholderText, getByText } = render(<DeviceDiscoveryScreen />);
+    const { getByPlaceholderText, getByText } = render(
+      <DeviceDiscoveryScreen />,
+    );
 
     fireEvent.press(getByText('手動配對'));
     await waitFor(() => expect(getByText('上傳診斷包')).toBeTruthy());
@@ -263,7 +268,9 @@ describe('DeviceDiscoveryScreen pairing options', () => {
 
     const onDiscoveredDevicesChangedCallback = (
       NativeEventEmitter.prototype.addListener as jest.Mock
-    ).mock.calls.find(([event]: [string]) => event === 'onDiscoveredDevicesChanged')?.[1];
+    ).mock.calls.find(
+      ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
+    )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
     act(() => {

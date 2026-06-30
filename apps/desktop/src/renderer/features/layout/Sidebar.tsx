@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import vividropLogo from '@renderer/assets/vividrop-logo-cutout.png';
+import lynavoLogo from '@renderer/assets/lynavo-logo-cutout.png';
 import { useAppStore, type AppView } from '@renderer/stores/app-store';
 import { getProductName } from '../../../shared/product';
 
@@ -45,7 +45,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5" style={dragRegionStyle}>
         <img
-          src={vividropLogo}
+          src={lynavoLogo}
           alt={getProductName()}
           draggable={false}
           className="h-7 w-auto object-contain"
@@ -77,7 +77,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
     </aside>
   );
 }

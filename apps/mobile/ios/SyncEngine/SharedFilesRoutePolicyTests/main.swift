@@ -232,7 +232,7 @@ expect(
 )
 
 let wrappedTunnelOptions = SharedFilesRoutePolicy.tunnelOptionsJSON(
-    iceServersJSON: #"[{"urls":["turn:turn.vividrop.cn:3478?transport=udp"],"username":"u","credential":"p"}]"#,
+    iceServersJSON: #"[{"urls":["turn:turn.lynavo.com:3478?transport=udp"],"username":"u","credential":"p"}]"#,
     routeMode: "wan"
 )
 let wrappedTunnelOptionsData = wrappedTunnelOptions.data(using: .utf8)!
@@ -243,7 +243,7 @@ expect(
 )
 expect(
     ((wrappedTunnelOptionsObject["iceServers"] as? [[String: Any]])?.first?["urls"] as? [String])?.first
-        == "turn:turn.vividrop.cn:3478?transport=udp",
+        == "turn:turn.lynavo.com:3478?transport=udp",
     "tunnel options JSON must preserve the TURN URL including transport"
 )
 
@@ -285,7 +285,7 @@ expect(
 
 let peerProxySkipReasonsWithoutSources = SharedFilesRoutePolicy.peerProxySkipReasons(
     hasMultiDesktopBindingSource: false,
-    hasOnlineViviDropDesktopPeer: false,
+    hasOnlineLynavoDriveDesktopPeer: false,
     hasThirdPartyHelperConfigured: false
 )
 
@@ -295,8 +295,8 @@ expect(
 )
 
 expect(
-    peerProxySkipReasonsWithoutSources.contains("no_online_vividrop_desktop_peer"),
-    "peer proxy diagnostics must report when no online Vivi Drop desktop peer exists"
+    peerProxySkipReasonsWithoutSources.contains("no_online_lynavo_drive_desktop_peer"),
+    "peer proxy diagnostics must report when no online Lynavo Drive desktop peer exists"
 )
 
 expect(
@@ -307,7 +307,7 @@ expect(
 expect(
     !SharedFilesRoutePolicy.peerProxySkipReasons(
         hasMultiDesktopBindingSource: true,
-        hasOnlineViviDropDesktopPeer: false,
+        hasOnlineLynavoDriveDesktopPeer: false,
         hasThirdPartyHelperConfigured: false
     ).contains("no_multi_desktop_binding_source"),
     "peer proxy diagnostics must not report missing multi-desktop source when the source exists"
@@ -316,16 +316,16 @@ expect(
 expect(
     !SharedFilesRoutePolicy.peerProxySkipReasons(
         hasMultiDesktopBindingSource: false,
-        hasOnlineViviDropDesktopPeer: true,
+        hasOnlineLynavoDriveDesktopPeer: true,
         hasThirdPartyHelperConfigured: false
-    ).contains("no_online_vividrop_desktop_peer"),
-    "peer proxy diagnostics must not report missing Vivi Drop peer when an online peer exists"
+    ).contains("no_online_lynavo_drive_desktop_peer"),
+    "peer proxy diagnostics must not report missing Lynavo Drive peer when an online peer exists"
 )
 
 expect(
     !SharedFilesRoutePolicy.peerProxySkipReasons(
         hasMultiDesktopBindingSource: false,
-        hasOnlineViviDropDesktopPeer: false,
+        hasOnlineLynavoDriveDesktopPeer: false,
         hasThirdPartyHelperConfigured: true
     ).contains("third_party_helper_not_configured"),
     "peer proxy diagnostics must not report missing third-party helper when one is explicitly configured"
@@ -334,7 +334,7 @@ expect(
 expect(
     !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource: false,
-        hasOnlineViviDropDesktopPeer: true
+        hasOnlineLynavoDriveDesktopPeer: true
     ),
     "peer proxy wake must remain disabled without a durable multi-desktop binding source"
 )
@@ -342,15 +342,15 @@ expect(
 expect(
     !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource: true,
-        hasOnlineViviDropDesktopPeer: false
+        hasOnlineLynavoDriveDesktopPeer: false
     ),
-    "peer proxy wake must remain disabled without an online authenticated Vivi Drop desktop peer"
+    "peer proxy wake must remain disabled without an online authenticated Lynavo Drive desktop peer"
 )
 
 expect(
     SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource: true,
-        hasOnlineViviDropDesktopPeer: true
+        hasOnlineLynavoDriveDesktopPeer: true
     ),
     "peer proxy wake may be attempted only when both durable multi-desktop source and online desktop peer exist"
 )

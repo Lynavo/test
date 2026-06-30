@@ -25,19 +25,19 @@
   "troubleshooting": {
     "title": "找不到設備或不知道怎麼連？",
     "sameWifi": "確保手機與電腦連接在同一個 Wi-Fi（區域網路）下。",
-    "desktopApp": "請在電腦端瀏覽器訪問 www.vividrop.cn 下載並打開 PC 端。",
+    "desktopApp": "請在電腦端瀏覽器訪問 www.lynavo.com 下載並打開 PC 端。",
     "cta": "查看詳細圖文教程 >",
     "notReadyTitle": "電腦端還沒有準備好？",
-    "notReadyDesc": "請先在官網 ViviDrop.cn 下載並打開用戶端，然後返回此頁面掃碼或輸入連線碼進行連線。"
+    "notReadyDesc": "請先在官網 www.lynavo.com 下載並打開用戶端，然後返回此頁面掃碼或輸入連線碼進行連線。"
   },
   "onboarding": {
     "unconnected": {
       "skip": "跳過",
-      "title": "開始使用 Vivi Drop",
+      "title": "開始使用 Lynavo Drive",
       "subtitle": "手機與電腦無線同步素材，三步搞定",
       "downloadStep": {
         "title": "下載 PC 端",
-        "body": "在電腦上安裝 Vivi Drop"
+        "body": "在電腦上安裝 Lynavo Drive"
       },
       "connectStep": {
         "title": "手機連接",
@@ -64,7 +64,7 @@
       "title": "手動輸入 IP 配對",
       "description": "如果掃描不到電腦，尤其是 Windows 設備，可直接輸入電腦端 IPv4 地址繼續配對。",
       "guideTitle": "去哪裡找連接碼和 IP？",
-      "guideBody": "請在電腦端 Vivi Drop 左側導覽列點擊「全域設定」，即可查看 6 位連接碼、設備 IP 或顯示二維碼。",
+      "guideBody": "請在電腦端 Lynavo Drive 左側導覽列點擊「全域設定」，即可查看 6 位連接碼、設備 IP 或顯示二維碼。",
       "hostLabel": "伺服器地址",
       "confirm": "繼續",
       "hint": "預設使用同步端口 39393，輸入後仍需在下一步填寫 6 位連接碼。",
@@ -106,7 +106,7 @@
     "pairingBlockedDesc": "這台電腦已阻止此手機配對，請先在電腦端解除阻止後再試。",
     "reenter": "重新輸入",
     "versionIncompatibleTitle": "版本不相容",
-    "versionIncompatibleDesc": "手機和電腦端版本不相容，請更新兩端 Vivi Drop 後再試。",
+    "versionIncompatibleDesc": "手機和電腦端版本不相容，請更新兩端 Lynavo Drive 後再試。",
     "rescan": "重新掃描",
     "connectionCodeError": "連線碼錯誤",
     "connectionFailed": "連線失敗",
@@ -151,9 +151,9 @@
     "lanDeviceTitle": "區域網路內的電腦",
     "verifyingCode": "正在驗證連線碼…",
     "connect": "連接",
-    "demoMacStudio": "ViviDrop 演示 Mac Studio",
-    "demoMacBook": "ViviDrop 演示 MacBook Pro",
-    "demoWindows": "ViviDrop 演示 Windows 工作站",
+    "demoMacStudio": "Lynavo Drive 演示 Mac Studio",
+    "demoMacBook": "Lynavo Drive 演示 MacBook Pro",
+    "demoWindows": "Lynavo Drive 演示 Windows 工作站",
     "connectionStatus": {
       "scanning": "正在掃描…",
       "ready": "掃描完成",

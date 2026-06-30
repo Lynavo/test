@@ -147,8 +147,8 @@
     "openWithOtherApp": "用其他 App 打开",
     "cancel": "取消",
     "savedLocationPhotos": "相册",
-    "savedLocationDocuments": "iOS“文件”App -> Vivi Drop 目录",
-    "savedLocationDownloads": "系统 Downloads -> Vivi Drop 目录"
+    "savedLocationDocuments": "iOS“文件”App -> Lynavo Drive 目录",
+    "savedLocationDownloads": "系统 Downloads -> Lynavo Drive 目录"
   },
   "localSaveUnsupported": {
     "title": "暂不支持保存",

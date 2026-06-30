@@ -10,9 +10,9 @@ import { Icon } from '../components/Icon';
 import { colors } from '../theme/globalColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'Subscription'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'OpenSourceInfo'>;
 
-export function SubscriptionGlobalScreen() {
+export function OpenSourceInfoScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
 

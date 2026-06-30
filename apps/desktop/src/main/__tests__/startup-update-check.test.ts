@@ -29,7 +29,7 @@ describe('checkForUpdatesOnStartup', () => {
       updateAvailable: true,
       latestVersion: '0.2.0',
       minimumRequired: true,
-      downloadUrl: 'https://www.vividrop.cn/download',
+      downloadUrl: 'https://www.lynavo.com/download',
       releaseNotes: '修正同步中斷問題',
       checkedAt: '2026-05-08T07:00:00Z',
     });
@@ -49,7 +49,7 @@ describe('checkForUpdatesOnStartup', () => {
         buttons: ['開啟下載頁', '稍後'],
       }),
     );
-    expect(shell.openExternal).toHaveBeenCalledWith('https://www.vividrop.cn/download');
+    expect(shell.openExternal).toHaveBeenCalledWith('https://www.lynavo.com/download');
   });
 
   it('does not prompt when current desktop version is up to date', async () => {
@@ -70,7 +70,7 @@ describe('checkForUpdatesOnStartup', () => {
       updateAvailable: true,
       latestVersion: '0.2.0',
       minimumRequired: false,
-      downloadUrl: 'https://www.vividrop.cn/download',
+      downloadUrl: 'https://www.lynavo.com/download',
       releaseNotes: '   ',
       checkedAt: '2026-05-08T07:00:00Z',
     });

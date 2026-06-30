@@ -193,15 +193,15 @@ object AndroidSyncPrimitives {
 
   fun peerProxySkipReasons(
     hasMultiDesktopBindingSource: Boolean,
-    hasOnlineVividropDesktopPeer: Boolean,
+    hasOnlineLynavoDriveDesktopPeer: Boolean,
     hasThirdPartyHelperConfigured: Boolean,
   ): List<String> {
     val reasons = mutableListOf<String>()
     if (!hasMultiDesktopBindingSource) {
       reasons.add("no_multi_desktop_binding_source")
     }
-    if (!hasOnlineVividropDesktopPeer) {
-      reasons.add("no_online_vividrop_desktop_peer")
+    if (!hasOnlineLynavoDriveDesktopPeer) {
+      reasons.add("no_online_lynavo_drive_desktop_peer")
     }
     if (!hasThirdPartyHelperConfigured) {
       reasons.add("third_party_helper_not_configured")
@@ -211,9 +211,9 @@ object AndroidSyncPrimitives {
 
   fun shouldAttemptPeerProxyWake(
     hasMultiDesktopBindingSource: Boolean,
-    hasOnlineVividropDesktopPeer: Boolean,
+    hasOnlineLynavoDriveDesktopPeer: Boolean,
   ): Boolean =
-    hasMultiDesktopBindingSource && hasOnlineVividropDesktopPeer
+    hasMultiDesktopBindingSource && hasOnlineLynavoDriveDesktopPeer
 
   fun mergeWakeCapability(
     newWake: AndroidWakeCapability?,
@@ -604,7 +604,7 @@ object AndroidSyncPrimitives {
     if (normalizedServerName.isNotBlank()) {
       return normalizedServerName
     }
-    return "Vivi Drop ${host.trim()}"
+    return "Lynavo Drive ${host.trim()}"
   }
 
   fun presenceResponseMatchesBinding(

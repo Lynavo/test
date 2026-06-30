@@ -112,7 +112,7 @@ const electronMockState = vi.hoisted(() => {
 
 vi.mock('electron', () => ({
   app: {
-    getName: () => 'Vivi Drop',
+    getName: () => 'Lynavo Drive',
     getPath: () => '/tmp/vivi-drop-test',
     getVersion: () => '0.1.0',
   },
@@ -186,7 +186,7 @@ function compatibleHealth(capabilities?: { connectionDeviceManagement?: boolean 
 vi.mock('../diagnostics', () => ({
   exportDiagnostics: vi.fn(),
   uploadDiagnostics: vi.fn(),
-  getAppInfo: vi.fn(() => ({ name: 'Vivi Drop', version: '0.1.0', buildNumber: '1' })),
+  getAppInfo: vi.fn(() => ({ name: 'Lynavo Drive', version: '0.1.0', buildNumber: '1' })),
   checkForUpdates: vi.fn(),
 }));
 

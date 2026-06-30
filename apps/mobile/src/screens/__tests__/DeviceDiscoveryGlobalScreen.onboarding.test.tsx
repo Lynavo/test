@@ -68,7 +68,10 @@ jest.mock('react-i18next', () => {
           if (options) {
             let res = current;
             for (const k of Object.keys(options)) {
-              res = res.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), options[k]);
+              res = res.replace(
+                new RegExp(`\\{\\{${k}\\}\\}`, 'g'),
+                options[k],
+              );
             }
             return res;
           }
@@ -295,7 +298,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.getByText('Studio Mac')).toBeTruthy();
     expect(screen.getByText('已发现 1 台')).toBeTruthy();
     expect(screen.queryByText('扫描中...')).toBeNull();
-    expect(screen.queryByText('开始使用 Vivi Drop')).toBeNull();
+    expect(screen.queryByText('开始使用 Lynavo Drive')).toBeNull();
   });
 
   it('hides the back button in the initial connection flow', async () => {
@@ -331,13 +334,13 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText('ViviDrop 演示 Mac Studio')).toBeTruthy();
+        expect(screen.getByText('Lynavo Drive 演示 Mac Studio')).toBeTruthy();
       },
       { timeout: 2000 },
     );
 
-    expect(screen.getByText('ViviDrop 演示 MacBook Pro')).toBeTruthy();
-    expect(screen.getByText('ViviDrop 演示 Windows 工作站')).toBeTruthy();
+    expect(screen.getByText('Lynavo Drive 演示 MacBook Pro')).toBeTruthy();
+    expect(screen.getByText('Lynavo Drive 演示 Windows 工作站')).toBeTruthy();
     expect(screen.queryByText('openimdeMac-mini')).toBeNull();
     expect(mockNativeSyncEngine.stopDiscovery).not.toHaveBeenCalled();
     expect(mockNativeSyncEngine.startDiscovery).not.toHaveBeenCalled();
@@ -952,7 +955,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     {
       label: 'version_incompatible',
       error: new PairingError('Version incompatible', 'version_incompatible'),
-      message: '手机和电脑端版本不兼容，请更新两端 Vivi Drop 后再试。',
+      message: '手机和电脑端版本不兼容，请更新两端 Lynavo Drive 后再试。',
     },
     {
       label: 'unknown',

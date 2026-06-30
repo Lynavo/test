@@ -1,6 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeModules } from 'react-native';
-import type { AutoUploadState, UploadTaskSource } from '@lynavo-drive/contracts';
+import type {
+  AutoUploadState,
+  UploadTaskSource,
+} from '@lynavo-drive/contracts';
 
 export interface AutoUploadRoundOverview {
   uploadState: string;
@@ -34,7 +37,7 @@ const AUTO_UPLOAD_ROUND_STATES = new Set([
   'completed',
 ]);
 
-const AUTO_UPLOAD_SESSION_STORAGE_KEY = '@vividrop/auto-upload-session/v1';
+const AUTO_UPLOAD_SESSION_STORAGE_KEY = '@lynavo-drive/auto-upload-session/v1';
 
 let cachedSnapshot: AutoUploadRoundSnapshot | null = null;
 let cachedSessionBaseline: AutoUploadSessionBaseline | null | undefined;

@@ -30,7 +30,7 @@ const ionicons: Record<string, number> = {
   'scan-outline': 61019,
   'videocam-outline': 61202,
   'image-outline': 60560,
-  // Vivi Drop: additional icons
+  // Lynavo Drive: additional icons
   'albums-outline': 60046,
   'grid-outline': 60468,
   'list-outline': 60623,
@@ -154,10 +154,7 @@ function CustomSvgIcon({ name, size, color }: Required<IconProps>) {
     >
       {name === 'crown-outline' ? (
         <>
-          <Path
-            d="M3 6l4.5 6L12 4l4.5 8L21 6l-2 12H5L3 6z"
-            {...strokeProps}
-          />
+          <Path d="M3 6l4.5 6L12 4l4.5 8L21 6l-2 12H5L3 6z" {...strokeProps} />
           <Path d="M7 20h10" {...strokeProps} />
         </>
       ) : name === 'message-square-outline' ? (

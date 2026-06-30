@@ -47,10 +47,7 @@ export function GlobalBottomTabBar({
       testID="global-bottom-tab-bar-outer"
       style={styles.outer}
     >
-      <View
-        testID="global-bottom-tab-bar-container"
-        style={styles.container}
-      >
+      <View testID="global-bottom-tab-bar-container" style={styles.container}>
         <TouchableOpacity
           testID="global-bottom-tab-home"
           style={[

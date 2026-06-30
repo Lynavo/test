@@ -421,14 +421,14 @@ class AndroidSyncPrimitivesTest {
   fun peerProxySkipReasonsReportMissingPeerProxyCapabilities() {
     val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
       hasMultiDesktopBindingSource = false,
-      hasOnlineVividropDesktopPeer = false,
+      hasOnlineLynavoDriveDesktopPeer = false,
       hasThirdPartyHelperConfigured = false,
     )
 
     assertEquals(
       listOf(
         "no_multi_desktop_binding_source",
-        "no_online_vividrop_desktop_peer",
+        "no_online_lynavo_drive_desktop_peer",
         "third_party_helper_not_configured",
       ),
       reasons,
@@ -439,7 +439,7 @@ class AndroidSyncPrimitivesTest {
   fun peerProxySkipReasonsDoNotReportAvailableCapabilities() {
     val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
       hasMultiDesktopBindingSource = true,
-      hasOnlineVividropDesktopPeer = true,
+      hasOnlineLynavoDriveDesktopPeer = true,
       hasThirdPartyHelperConfigured = true,
     )
 
@@ -447,23 +447,23 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
-  fun peerProxyWakeRequiresMultiDesktopSourceAndOnlineVividropPeer() {
+  fun peerProxyWakeRequiresMultiDesktopSourceAndOnlineLynavoDrivePeer() {
     assertTrue(
       AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource = true,
-        hasOnlineVividropDesktopPeer = true,
+        hasOnlineLynavoDriveDesktopPeer = true,
       ),
     )
     assertFalse(
       AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource = false,
-        hasOnlineVividropDesktopPeer = true,
+        hasOnlineLynavoDriveDesktopPeer = true,
       ),
     )
     assertFalse(
       AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource = true,
-        hasOnlineVividropDesktopPeer = false,
+        hasOnlineLynavoDriveDesktopPeer = false,
       ),
     )
   }
@@ -1543,7 +1543,7 @@ class AndroidSyncPrimitivesTest {
   @Test
   fun fallbackDiscoveryNameFallsBackToHostWhenServerNameIsBlank() {
     assertEquals(
-      "Vivi Drop 172.16.21.43",
+      "Lynavo Drive 172.16.21.43",
       AndroidSyncPrimitives.fallbackDiscoveryName(" ", "172.16.21.43"),
     )
   }
@@ -1717,7 +1717,7 @@ class AndroidSyncPrimitivesTest {
   @Test
   fun writeZipArchiveCreatesReadableDiagnosticsJsonEntry() {
     val archive = kotlin.io.path.createTempFile(
-      prefix = "syncflow-diagnostics-test-",
+      prefix = "lynavo-drive-diagnostics-test-",
       suffix = ".zip",
     ).toFile()
 

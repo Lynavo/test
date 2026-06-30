@@ -1,8 +1,5 @@
 import type { TFunction } from 'i18next';
-import type {
-  BonjourRuntimeState,
-  SidecarRuntimeState,
-} from '../../shared/sidecar-runtime';
+import type { BonjourRuntimeState, SidecarRuntimeState } from '../../shared/sidecar-runtime';
 
 export function getBonjourRuntimeMessage(
   bonjour: BonjourRuntimeState,

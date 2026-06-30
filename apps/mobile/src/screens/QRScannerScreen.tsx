@@ -23,11 +23,8 @@ function CameraQRScannerScreen() {
   const [permissionStatus, setPermissionStatus] = useState<
     'checking' | 'granted' | 'denied'
   >('checking');
-  const {
-    Camera,
-    useCameraDevice,
-    useCodeScanner,
-  } = require('react-native-vision-camera') as typeof import('react-native-vision-camera');
+  const { Camera, useCameraDevice, useCodeScanner } =
+    require('react-native-vision-camera') as typeof import('react-native-vision-camera');
   const device = useCameraDevice('back');
   // Use a ref instead of state so that the onCodeScanned callback (fired on a
   // native thread) always reads the latest value rather than a stale closure.
@@ -122,7 +119,7 @@ function CameraQRScannerScreen() {
               isValid = true;
             }
           } catch {
-            // Fallback to URI match (e.g. syncflow://pair?ip=...&code=...)
+            // Fallback to URI match (e.g. lynavodrive://connect?ip=...&code=...)
             const ipMatch = value.match(/ip=([^&"]+)/);
             const codeMatch = value.match(/code=([^&"]+)/);
             const nameMatch = value.match(/name=([^&"]+)/);
@@ -138,7 +135,14 @@ function CameraQRScannerScreen() {
           }
 
           if (isValid && ip && code) {
-            console.log('[QRScanner] parsed QR — ip:', ip, 'code:', code, 'name:', deviceName);
+            console.log(
+              '[QRScanner] parsed QR — ip:',
+              ip,
+              'code:',
+              code,
+              'name:',
+              deviceName,
+            );
             // Immediately mark as scanned via ref to block all further callbacks
             scannedRef.current = true;
             // Delay slightly to allow camera viewfinder to settle before navigating
@@ -148,13 +152,13 @@ function CameraQRScannerScreen() {
                 host: ip,
                 port: 39393,
                 deviceName,
-                prefilledCode: code
+                prefilledCode: code,
               });
             }, 200);
           }
         }
       }
-    }
+    },
   });
 
   if (permissionStatus === 'checking') {
@@ -176,9 +180,14 @@ function CameraQRScannerScreen() {
               void Linking.openSettings();
             }}
           >
-            <Text style={styles.buttonText}>{t('qrScanner.permissionDenied.openSettings')}</Text>
+            <Text style={styles.buttonText}>
+              {t('qrScanner.permissionDenied.openSettings')}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => navigation.goBack()}
+          >
             <Text style={styles.secondaryButtonText}>{t('common.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -190,7 +199,10 @@ function CameraQRScannerScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.text}>{t('qrScanner.noCameraDevice')}</Text>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={styles.buttonText}>{t('common.back')}</Text>
         </TouchableOpacity>
       </View>
@@ -207,7 +219,10 @@ function CameraQRScannerScreen() {
       />
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
             <Icon name="chevron-back" size={20} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.title}>{t('qrScanner.title')}</Text>
@@ -235,15 +250,21 @@ function CameraQRScannerScreen() {
               ]}
             />
           </View>
-          <Text style={styles.scanInstructionPill}>{t('qrScanner.instruction')}</Text>
+          <Text style={styles.scanInstructionPill}>
+            {t('qrScanner.instruction')}
+          </Text>
 
           <View style={styles.qrGuideCard}>
             <View style={styles.qrGuideIcon}>
               <Icon name="desktop-outline" size={18} color="#7dd3fc" />
             </View>
             <View style={styles.qrGuideCopy}>
-              <Text style={styles.qrGuideTitle}>{t('qrScanner.guide.title')}</Text>
-              <Text style={styles.qrGuideBody}>{t('qrScanner.guide.body')}</Text>
+              <Text style={styles.qrGuideTitle}>
+                {t('qrScanner.guide.title')}
+              </Text>
+              <Text style={styles.qrGuideBody}>
+                {t('qrScanner.guide.body')}
+              </Text>
               <TouchableOpacity
                 style={styles.qrGuideAction}
                 activeOpacity={0.72}
@@ -262,10 +283,18 @@ function CameraQRScannerScreen() {
             onPress={() => navigation.goBack()}
           >
             <View style={styles.scanTroubleCopy}>
-              <Text style={styles.scanTroubleTitle}>{t('qrScanner.trouble.title')}</Text>
-              <Text style={styles.scanTroubleBody}>{t('qrScanner.trouble.body')}</Text>
+              <Text style={styles.scanTroubleTitle}>
+                {t('qrScanner.trouble.title')}
+              </Text>
+              <Text style={styles.scanTroubleBody}>
+                {t('qrScanner.trouble.body')}
+              </Text>
             </View>
-            <Icon name="chevron-forward" size={18} color="rgba(255,255,255,0.32)" />
+            <Icon
+              name="chevron-forward"
+              size={18}
+              color="rgba(255,255,255,0.32)"
+            />
           </TouchableOpacity>
         </View>
       </View>

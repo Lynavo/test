@@ -165,12 +165,7 @@ export function FilePathSection() {
           )}
         </div>
         <div className="mb-3 flex items-center gap-2">
-          <Input
-            type="text"
-            value={receivePath}
-            readOnly
-            className="flex-1"
-          />
+          <Input type="text" value={receivePath} readOnly className="flex-1" />
           <Button
             variant="outline"
             size="icon"
@@ -202,12 +197,7 @@ export function FilePathSection() {
           {t('settings.filePath.personalAddress')}
         </label>
         <div className="mb-3 flex items-center gap-2">
-          <Input
-            type="text"
-            value={personalPathDisplay}
-            readOnly
-            className="flex-1"
-          />
+          <Input type="text" value={personalPathDisplay} readOnly className="flex-1" />
           <Button
             variant="outline"
             size="icon"
@@ -254,23 +244,13 @@ export function FilePathSection() {
           {t('settings.filePath.sharedAddress')}
         </label>
         <div className="mb-3 flex items-center gap-2">
-          <Input
-            type="text"
-            value={sharedPath}
-            readOnly
-            className="flex-1"
-          />
+          <Input type="text" value={sharedPath} readOnly className="flex-1" />
           <CopyButton
             text={sharedPath}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
           />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleOpenSharedFolder}
-          disabled={!sharedPath}
-        >
+        <Button variant="outline" size="sm" onClick={handleOpenSharedFolder} disabled={!sharedPath}>
           <FolderOpen className="h-4 w-4" />
           {t('settings.filePath.openShared')}
         </Button>

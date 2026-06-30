@@ -31,7 +31,7 @@
     "title": "Set pairing code",
     "connectionCodeLabel": "Pairing code",
     "connectionCodeChangeConfirm": "Changing the pairing code will invalidate all currently paired phones. They will need to pair again with the new code. Continue?",
-    "saveAndEnter": "Save and enter ViviDrop",
+    "saveAndEnter": "Save and enter Lynavo Drive",
     "downloadSectionTitle": "Use and download the mobile app",
     "errors": {
       "invalidCode": "Enter a 6-digit pairing code",
@@ -41,7 +41,7 @@
     "steps": {
       "download": {
         "title": "Scan to download the mobile app",
-        "description": "Scan the QR code on the right with your phone, then download and install the ViviDrop mobile app"
+        "description": "Scan the QR code on the right with your phone, then download and install the Lynavo Drive mobile app"
       },
       "pair": {
         "title": "Enter pairing code",

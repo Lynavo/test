@@ -56,7 +56,7 @@ var (
 
 func sidecarUploadPerfLoggingEnabled() bool {
 	uploadPerfLoggingOnce.Do(func() {
-		raw := strings.TrimSpace(os.Getenv("SYNCFLOW_UPLOAD_PERF_LOG"))
+		raw := strings.TrimSpace(os.Getenv("LYNAVO_UPLOAD_PERF_LOG"))
 		switch strings.ToLower(raw) {
 		case "1", "true", "yes", "on":
 			uploadPerfLoggingEnabled = true

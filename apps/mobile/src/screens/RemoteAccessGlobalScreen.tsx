@@ -231,7 +231,7 @@ const MOCK_ROOT_ITEMS: RemoteResourceItem[] = [
   resource({
     resourceId: 'promo-video',
     kind: 'shared_folder',
-    displayName: 'vividrop 宣传视频',
+    displayName: 'Lynavo Drive demo video',
     countLabel: '文件夹',
     addedOffsetHours: 38,
   }),
@@ -385,13 +385,13 @@ const MOCK_FOLDER_CONTENTS: Record<string, RemoteResourceItem[]> = {
 };
 
 type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __SYNCFLOW_REMOTE_RESOURCES_PREVIEW__?: boolean;
+  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
 };
 
 function isRemoteResourcesPreviewMode() {
   return (
     (globalThis as RemoteResourcesPreviewGlobal)
-      .__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ === true
+      .__LYNAVO_REMOTE_RESOURCES_PREVIEW__ === true
   );
 }
 
@@ -422,8 +422,7 @@ function isRemoteAccessTimeoutError(error: unknown) {
 }
 
 function getNormalizedErrorMessage(error: unknown) {
-  const message =
-    error instanceof Error ? error.message : String(error ?? '');
+  const message = error instanceof Error ? error.message : String(error ?? '');
   return message.toLowerCase();
 }
 
@@ -534,13 +533,19 @@ function getItemMeta(item: RemoteResourceItem, t: any) {
   const size = formatBytes(item.fileSize ?? 0);
   let modified = t('sharedFiles.files.justNow') || '刚刚';
   if (item.modifiedLabel) {
-    if (item.modifiedLabel.includes('今天') || item.modifiedLabel.includes('Today')) {
+    if (
+      item.modifiedLabel.includes('今天') ||
+      item.modifiedLabel.includes('Today')
+    ) {
       modified = t('sharedFiles.files.modifiedToday') || '今天';
     } else {
       const match = item.modifiedLabel.match(/(\d+)/);
       if (match) {
         const days = match[1];
-        modified = t('sharedFiles.files.modifiedDaysAgo', { count: parseInt(days, 10) }) || `${days}天前`;
+        modified =
+          t('sharedFiles.files.modifiedDaysAgo', {
+            count: parseInt(days, 10),
+          }) || `${days}天前`;
       }
     }
   } else if (item.addedAt) {
@@ -552,7 +557,9 @@ function getItemMeta(item: RemoteResourceItem, t: any) {
         modified = t('sharedFiles.files.modifiedToday') || '今天';
       } else {
         const days = Math.floor(diffMs / dayMs);
-        modified = t('sharedFiles.files.modifiedDaysAgo', { count: days }) || `${days}天前`;
+        modified =
+          t('sharedFiles.files.modifiedDaysAgo', { count: days }) ||
+          `${days}天前`;
       }
     }
   }
@@ -705,7 +712,10 @@ function getRouteStatusViewModel(
 
   if (reachability.state === 'available') {
     if (reachability.route === 'lan') {
-      return { label: t('sharedFiles.connectionStatus.lan') || '局域网', tone: 'online' };
+      return {
+        label: t('sharedFiles.connectionStatus.lan') || '局域网',
+        tone: 'online',
+      };
     }
     return null;
   }
@@ -714,7 +724,10 @@ function getRouteStatusViewModel(
     reachability.state === 'unavailable' ||
     reachability.state === 'wake_unavailable'
   ) {
-    return { label: t('sharedFiles.connectionStatus.unavailable') || '不可达', tone: 'offline' };
+    return {
+      label: t('sharedFiles.connectionStatus.unavailable') || '不可达',
+      tone: 'offline',
+    };
   }
 
   return null;
@@ -819,9 +832,14 @@ function getRemoteAccessSubtitle({
   previewMode: boolean;
   t: any;
 }) {
-  const rootDirectoryLabel = t('sharedFiles.remoteAccess.rootDirectoryLabel') || ROOT_DIRECTORY_LABEL;
-  const fallbackDesktopLabel = t('sharedFiles.remoteAccess.fallbackDesktopLabel') || FALLBACK_DESKTOP_LABEL;
-  const unboundRemoteSubtitle = t('sharedFiles.remoteAccess.unboundRemoteSubtitle') || UNBOUND_REMOTE_SUBTITLE;
+  const rootDirectoryLabel =
+    t('sharedFiles.remoteAccess.rootDirectoryLabel') || ROOT_DIRECTORY_LABEL;
+  const fallbackDesktopLabel =
+    t('sharedFiles.remoteAccess.fallbackDesktopLabel') ||
+    FALLBACK_DESKTOP_LABEL;
+  const unboundRemoteSubtitle =
+    t('sharedFiles.remoteAccess.unboundRemoteSubtitle') ||
+    UNBOUND_REMOTE_SUBTITLE;
   const directoryLabel = currentFolder?.name ?? rootDirectoryLabel;
 
   if (previewMode) {
@@ -1069,8 +1087,10 @@ export function RemoteAccessGlobalScreen() {
         );
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
-            t('sharedFiles.localSaveUnsupported.title') || LOCAL_SAVE_UNSUPPORTED_TITLE,
-            t('sharedFiles.localSaveUnsupported.message') || LOCAL_SAVE_UNSUPPORTED_MESSAGE,
+            t('sharedFiles.localSaveUnsupported.title') ||
+              LOCAL_SAVE_UNSUPPORTED_TITLE,
+            t('sharedFiles.localSaveUnsupported.message') ||
+              LOCAL_SAVE_UNSUPPORTED_MESSAGE,
           );
           return;
         }
@@ -1325,11 +1345,17 @@ export function RemoteAccessGlobalScreen() {
     }
   }, [currentFolder, loadFolderContents]);
 
-  const localizedSortOptions = useMemo(() => [
-    { id: 'name' as SortKey, label: t('sharedFiles.sortBy.name') || '名称' },
-    { id: 'time' as SortKey, label: t('sharedFiles.sortBy.time') || '时间' },
-    { id: 'size' as SortKey, label: t('sharedFiles.sortBy.size') || '文件大小' },
-  ], [t]);
+  const localizedSortOptions = useMemo(
+    () => [
+      { id: 'name' as SortKey, label: t('sharedFiles.sortBy.name') || '名称' },
+      { id: 'time' as SortKey, label: t('sharedFiles.sortBy.time') || '时间' },
+      {
+        id: 'size' as SortKey,
+        label: t('sharedFiles.sortBy.size') || '文件大小',
+      },
+    ],
+    [t],
+  );
 
   const sortLabel =
     localizedSortOptions.find(option => option.id === sortBy)?.label ?? '名称';
@@ -1414,7 +1440,7 @@ export function RemoteAccessGlobalScreen() {
                 ]}
               >
                 {selectionMode
-                  ? (t('sharedFiles.remoteAccess.done') || '完成')
+                  ? t('sharedFiles.remoteAccess.done') || '完成'
                   : t('sharedFiles.remoteAccess.select') || '選擇'}
               </Text>
             </TouchableOpacity>
@@ -1427,7 +1453,13 @@ export function RemoteAccessGlobalScreen() {
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder={currentFolder ? (t('sharedFiles.remoteAccess.searchFolderPlaceholder') || '搜索当前文件夹') : (t('sharedFiles.remoteAccess.searchFilesPlaceholder') || '搜索电脑文件')}
+            placeholder={
+              currentFolder
+                ? t('sharedFiles.remoteAccess.searchFolderPlaceholder') ||
+                  '搜索当前文件夹'
+                : t('sharedFiles.remoteAccess.searchFilesPlaceholder') ||
+                  '搜索电脑文件'
+            }
             placeholderTextColor="#9AA3AE"
             autoCapitalize="none"
             autoCorrect={false}
@@ -1508,7 +1540,9 @@ export function RemoteAccessGlobalScreen() {
                   styles.layoutButton,
                   layoutMode === 'list' ? styles.layoutButtonActive : null,
                 ]}
-                accessibilityLabel={t('sharedFiles.remoteAccess.listView') || '列表视图'}
+                accessibilityLabel={
+                  t('sharedFiles.remoteAccess.listView') || '列表视图'
+                }
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('list')}
               >
@@ -1524,7 +1558,9 @@ export function RemoteAccessGlobalScreen() {
                   styles.layoutButton,
                   layoutMode === 'grid' ? styles.layoutButtonActive : null,
                 ]}
-                accessibilityLabel={t('sharedFiles.remoteAccess.gridView') || '网格视图'}
+                accessibilityLabel={
+                  t('sharedFiles.remoteAccess.gridView') || '网格视图'
+                }
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('grid')}
               >
@@ -1542,9 +1578,12 @@ export function RemoteAccessGlobalScreen() {
         {loading ? (
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.loadingTitle') || '远程资源加载中'}</Text>
+            <Text style={styles.centeredTitle}>
+              {t('sharedFiles.remoteAccess.loadingTitle') || '远程资源加载中'}
+            </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.remoteAccess.loadingSubtitle') || '正在读取电脑端共享目录。'}
+              {t('sharedFiles.remoteAccess.loadingSubtitle') ||
+                '正在读取电脑端共享目录。'}
             </Text>
           </View>
         ) : remoteAccessDisabledReason ? (
@@ -1557,9 +1596,13 @@ export function RemoteAccessGlobalScreen() {
         ) : folderLoading ? (
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.folderLoadingTitle') || '文件夹加载中'}</Text>
+            <Text style={styles.centeredTitle}>
+              {t('sharedFiles.remoteAccess.folderLoadingTitle') ||
+                '文件夹加载中'}
+            </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.remoteAccess.folderLoadingSubtitle') || '正在读取电脑端目录内容。'}
+              {t('sharedFiles.remoteAccess.folderLoadingSubtitle') ||
+                '正在读取电脑端目录内容。'}
             </Text>
           </View>
         ) : folderLoadError ? (
@@ -1660,9 +1703,12 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
       <View style={styles.disconnectedIcon}>
         <Icon name="cloud-offline-outline" size={28} color="#DC2626" />
       </View>
-      <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.networkDisconnectedTitle') || '网络断开'}</Text>
+      <Text style={styles.centeredTitle}>
+        {t('sharedFiles.remoteAccess.networkDisconnectedTitle') || '网络断开'}
+      </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.networkDisconnectedSubtitle') || '当前路径会保留，恢复网络或电脑端在线后可以继续访问。'}
+        {t('sharedFiles.remoteAccess.networkDisconnectedSubtitle') ||
+          '当前路径会保留，恢复网络或电脑端在线后可以继续访问。'}
       </Text>
       <TouchableOpacity
         style={styles.retryButton}
@@ -1670,7 +1716,9 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
         accessibilityRole="button"
         onPress={onRetry}
       >
-        <Text style={styles.retryButtonText}>{t('sharedFiles.remoteAccess.retryConnection') || '重试连接'}</Text>
+        <Text style={styles.retryButtonText}>
+          {t('sharedFiles.remoteAccess.retryConnection') || '重试连接'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -1729,9 +1777,12 @@ function FolderLoadErrorState({ onRetry }: { onRetry: () => void }) {
       <View style={styles.disconnectedIcon}>
         <Icon name="alert-circle-outline" size={28} color="#DC2626" />
       </View>
-      <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.folderLoadErrorTitle') || '目录加载失败'}</Text>
+      <Text style={styles.centeredTitle}>
+        {t('sharedFiles.remoteAccess.folderLoadErrorTitle') || '目录加载失败'}
+      </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.folderLoadErrorSubtitle') || '无法读取这个共享文件夹，请确认电脑端文件仍然存在。'}
+        {t('sharedFiles.remoteAccess.folderLoadErrorSubtitle') ||
+          '无法读取这个共享文件夹，请确认电脑端文件仍然存在。'}
       </Text>
       <TouchableOpacity
         style={styles.retryButton}
@@ -1739,7 +1790,9 @@ function FolderLoadErrorState({ onRetry }: { onRetry: () => void }) {
         accessibilityRole="button"
         onPress={onRetry}
       >
-        <Text style={styles.retryButtonText}>{t('sharedFiles.remoteAccess.reload') || '重新加载'}</Text>
+        <Text style={styles.retryButtonText}>
+          {t('sharedFiles.remoteAccess.reload') || '重新加载'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -2090,7 +2143,9 @@ function RemoteResourcePreviewModal({
           <TouchableOpacity
             style={styles.mediaPreviewCloseButton}
             accessibilityRole="button"
-            accessibilityLabel={t('sharedFiles.remoteAccess.closePreview') || '关闭预览'}
+            accessibilityLabel={
+              t('sharedFiles.remoteAccess.closePreview') || '关闭预览'
+            }
             activeOpacity={0.7}
             onPress={onClose}
           >
@@ -2158,8 +2213,13 @@ function EmptyState({
     return (
       <View style={styles.centeredCard}>
         <RemoteEmptyArtwork variant="search" />
-        <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.noMatchTitle') || '没有匹配结果'}</Text>
-        <Text style={styles.centeredSubtitle}>{t('sharedFiles.remoteAccess.noMatchSubtitle') || '换个关键词再试一次'}</Text>
+        <Text style={styles.centeredTitle}>
+          {t('sharedFiles.remoteAccess.noMatchTitle') || '没有匹配结果'}
+        </Text>
+        <Text style={styles.centeredSubtitle}>
+          {t('sharedFiles.remoteAccess.noMatchSubtitle') ||
+            '换个关键词再试一次'}
+        </Text>
       </View>
     );
   }
@@ -2168,9 +2228,12 @@ function EmptyState({
     return (
       <View style={styles.centeredCard}>
         <RemoteEmptyArtwork variant="folder" />
-        <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.emptyFolderTitle') || '空文件夹'}</Text>
+        <Text style={styles.centeredTitle}>
+          {t('sharedFiles.remoteAccess.emptyFolderTitle') || '空文件夹'}
+        </Text>
         <Text style={styles.centeredSubtitle}>
-          {t('sharedFiles.remoteAccess.emptyFolderSubtitle') || '这个目录暂时没有可下载或分享的文件。'}
+          {t('sharedFiles.remoteAccess.emptyFolderSubtitle') ||
+            '这个目录暂时没有可下载或分享的文件。'}
         </Text>
       </View>
     );
@@ -2179,9 +2242,12 @@ function EmptyState({
   return (
     <View style={styles.centeredCard}>
       <RemoteEmptyArtwork variant="remote" />
-      <Text style={styles.centeredTitle}>{t('sharedFiles.remoteAccess.noFilesTitle') || '暂无文件'}</Text>
+      <Text style={styles.centeredTitle}>
+        {t('sharedFiles.remoteAccess.noFilesTitle') || '暂无文件'}
+      </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.noFilesSubtitle') || '电脑端还没有开放可访问的文件目录。'}
+        {t('sharedFiles.remoteAccess.noFilesSubtitle') ||
+          '电脑端还没有开放可访问的文件目录。'}
       </Text>
     </View>
   );
@@ -2283,7 +2349,9 @@ function SortSheet({
           <ModalBlurBackdrop overlayColor="rgba(23,25,28,0.18)" />
         </Pressable>
         <View style={styles.sheetCard}>
-          <Text style={styles.sheetTitle}>{t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}</Text>
+          <Text style={styles.sheetTitle}>
+            {t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}
+          </Text>
           {options.map(option => {
             const active = option.id === value;
             return (
@@ -2333,9 +2401,13 @@ function ShareSheet({
           <ModalBlurBackdrop overlayColor="rgba(23,25,28,0.18)" />
         </Pressable>
         <View style={styles.shareCard}>
-          <Text style={styles.shareTitle}>{t('sharedFiles.remoteAccess.shareTitle') || '分享所选文件'}</Text>
+          <Text style={styles.shareTitle}>
+            {t('sharedFiles.remoteAccess.shareTitle') || '分享所选文件'}
+          </Text>
           <Text style={styles.shareSubtitle}>
-            {t('sharedFiles.remoteAccess.shareSubtitle', { count: selectedCount }) || `已选择 ${selectedCount} 个文件`}
+            {t('sharedFiles.remoteAccess.shareSubtitle', {
+              count: selectedCount,
+            }) || `已选择 ${selectedCount} 个文件`}
           </Text>
           <View style={styles.shareTargets}>
             {targets.map(target => (

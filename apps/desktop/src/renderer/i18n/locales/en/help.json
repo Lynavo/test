@@ -1,6 +1,6 @@
 {
   "title": "Help Center",
-  "subtitle": "Guidance for understanding and using Vivi Drop",
+  "subtitle": "Guidance for understanding and using Lynavo Drive",
   "dialog": {
     "navLabel": "Help categories",
     "nav": {
@@ -14,12 +14,12 @@
       "intro": {
         "items": [
           {
-            "title": "What is ViviDrop",
-            "body": "ViviDrop is a LAN media sync tool that helps short video teams move phone media to the desktop seamlessly. When the phone and computer are on the same Wi-Fi network, you can connect once and sync automatically."
+            "title": "What is Lynavo Drive",
+            "body": "Lynavo Drive is a LAN media sync tool that helps short video teams move phone media to the desktop seamlessly. When the phone and computer are on the same Wi-Fi network, you can connect once and sync automatically."
           },
           {
             "title": "How to connect to the computer",
-            "body": "After opening the app, scan for the ViviDrop desktop on the LAN, or scan the QR code shown on the desktop to connect directly. Uploading is available after connection succeeds."
+            "body": "After opening the app, scan for the Lynavo Drive desktop on the LAN, or scan the QR code shown on the desktop to connect directly. Uploading is available after connection succeeds."
           },
           {
             "title": "How to upload media",
@@ -35,7 +35,7 @@
         "items": [
           {
             "title": "Connect to the computer",
-            "body": "Make sure the phone and computer are on the same Wi-Fi network. Open ViviDrop on the desktop, then tap Scan Devices on the phone to find and connect to the computer, or scan the desktop QR code."
+            "body": "Make sure the phone and computer are on the same Wi-Fi network. Open Lynavo Drive on the desktop, then tap Scan Devices on the phone to find and connect to the computer, or scan the desktop QR code."
           },
           {
             "title": "Enable automatic upload",
@@ -71,7 +71,7 @@
         "items": [
           {
             "title": "What if the device is offline?",
-            "body": "Confirm the phone and computer are on the same Wi-Fi network and that ViviDrop is running on the desktop. If the computer is asleep or the desktop app is closed, restart the desktop app and tap Refresh on the phone to scan again."
+            "body": "Confirm the phone and computer are on the same Wi-Fi network and that Lynavo Drive is running on the desktop. If the computer is asleep or the desktop app is closed, restart the desktop app and tap Refresh on the phone to scan again."
           },
           {
             "title": "What if upload fails?",
@@ -79,11 +79,11 @@
           },
           {
             "title": "What if the shared folder is empty?",
-            "body": "In ViviDrop desktop settings, confirm that the shared folder path is set and contains files. After setting it, pull to refresh on the phone."
+            "body": "In Lynavo Drive desktop settings, confirm that the shared folder path is set and contains files. After setting it, pull to refresh on the phone."
           },
           {
             "title": "What if I cannot connect to the computer?",
-            "body": "Confirm the phone and computer are on the same LAN, check whether the desktop firewall blocks ViviDrop, then try restarting the desktop app or connecting with the QR code."
+            "body": "Confirm the phone and computer are on the same LAN, check whether the desktop firewall blocks Lynavo Drive, then try restarting the desktop app or connecting with the QR code."
           },
           {
             "title": "Do I need an account or subscription?",
@@ -99,7 +99,7 @@
         "items": [
           {
             "title": "Support email",
-            "body": "support@vividrop.cn. We reply within 24 hours on business days."
+            "body": "support@lynavo.com. We reply within 24 hours on business days."
           },
           {
             "title": "Export diagnostics package",
@@ -117,12 +117,12 @@
     "title": "Introduction",
     "items": [
       {
-        "title": "What is ViviDrop",
-        "description": "ViviDrop is a LAN media incremental synchronization tool designed for creators and teams. Without internet access, you can sync media seamlessly, at high speed, and incrementally from mobile devices to computers on the same Wi-Fi."
+        "title": "What is Lynavo Drive",
+        "description": "Lynavo Drive is a LAN media incremental synchronization tool designed for creators and teams. Without internet access, you can sync media seamlessly, at high speed, and incrementally from mobile devices to computers on the same Wi-Fi."
       },
       {
         "title": "How to connect to the computer",
-        "description": "Open ViviDrop on the computer to get a 6-digit pairing code. Enter the code on the mobile device to pair. Make sure both devices are on the same Wi-Fi network."
+        "description": "Open Lynavo Drive on the computer to get a 6-digit pairing code. Enter the code on the mobile device to pair. Make sure both devices are on the same Wi-Fi network."
       },
       {
         "title": "How to upload media",
@@ -139,7 +139,7 @@
     "steps": [
       {
         "title": "Choose a sync folder",
-        "description": "Open Vivi Drop and choose a local folder as the sync root (for example ~/ViviDrop on macOS or D:\\ViviDrop on Windows)"
+        "description": "Open Lynavo Drive and choose a local folder as the sync root (for example ~/Lynavo Drive on macOS or D:\\Lynavo Drive on Windows)"
       },
       {
         "title": "Get the pairing code and connect",
@@ -165,7 +165,7 @@
     "globalSteps": [
       {
         "title": "Choose a sync folder",
-        "description": "Open Vivi Drop and choose a local folder as the sync root (for example ~/ViviDrop on macOS or D:\\ViviDrop on Windows)"
+        "description": "Open Lynavo Drive and choose a local folder as the sync root (for example ~/Lynavo Drive on macOS or D:\\Lynavo Drive on Windows)"
       },
       {
         "title": "Get the pairing code and connect",
@@ -235,8 +235,8 @@
         ]
       }
     ],
-    "tree": "ViviDrop/\n├── received/      (media uploaded from LAN phones)\n└── shared/        (team files shared to LAN devices)\n\nPersonalShare/    (personal shared folder, independently configurable)",
-    "globalTree": "ViviDrop/\n└── received/      (media uploaded from LAN phones)\n\nMy Computer/      (local desktop folder or disk selected for phone access)"
+    "tree": "Lynavo Drive/\n├── received/      (media uploaded from LAN phones)\n└── shared/        (team files shared to LAN devices)\n\nPersonalShare/    (personal shared folder, independently configurable)",
+    "globalTree": "Lynavo Drive/\n└── received/      (media uploaded from LAN phones)\n\nMy Computer/      (local desktop folder or disk selected for phone access)"
   },
   "permissions": {
     "title": "🔐 System Permissions",
@@ -245,7 +245,7 @@
         "title": "Firewall",
         "steps": [
           "System Settings → Network → Firewall",
-          "If Firewall is enabled, click “Options…” and make sure Vivi Drop is set to “Allow incoming connections”",
+          "If Firewall is enabled, click “Options…” and make sure Lynavo Drive is set to “Allow incoming connections”",
           "When macOS prompts on first launch, click “Allow”"
         ]
       },
@@ -253,7 +253,7 @@
         "title": "Local Network",
         "steps": [
           "System Settings → Privacy & Security → Local Network",
-          "Make sure Vivi Drop is enabled. Phone discovery depends on this permission.",
+          "Make sure Lynavo Drive is enabled. Phone discovery depends on this permission.",
           "If the phone cannot find the computer, check this item first"
         ]
       },
@@ -261,7 +261,7 @@
         "title": "Files and folders",
         "steps": [
           "System Settings → Privacy & Security → Files and Folders",
-          "Make sure Vivi Drop can access the selected sync root folder",
+          "Make sure Lynavo Drive can access the selected sync root folder",
           "If the sync folder is on an external drive, also grant Full Disk Access"
         ]
       },
@@ -278,8 +278,8 @@
         "steps": [
           "Open System Settings → Battery or Energy Saver, then enable “Wake for network access” when available",
           "Prefer Ethernet. Wi-Fi wake during sleep depends on the Mac model, power state, and router",
-          "Make sure the firewall allows incoming Vivi Drop connections and Local Network permission is enabled",
-          "Vivi Drop can send wake packets, but it cannot automatically enable macOS power settings for you"
+          "Make sure the firewall allows incoming Lynavo Drive connections and Local Network permission is enabled",
+          "Lynavo Drive can send wake packets, but it cannot automatically enable macOS power settings for you"
         ]
       }
     ],
@@ -289,7 +289,7 @@
         "steps": [
           "Windows may show a firewall prompt on first launch. Choose “Allow access”.",
           "If blocked: Settings → Privacy & security → Windows Security → Firewall & network protection",
-          "Click “Allow an app through firewall” and make sure Vivi Drop is checked for both private and public networks"
+          "Click “Allow an app through firewall” and make sure Lynavo Drive is checked for both private and public networks"
         ]
       },
       {
@@ -324,7 +324,7 @@
           "If available, also enable “Only allow a magic packet to wake the computer”",
           "On the Advanced tab, enable “Wake on Magic Packet” or the vendor-equivalent option",
           "Prefer Ethernet. Modern Standby, hibernate, fast startup, shutdown, and Wi-Fi wake vary by device and driver",
-          "Vivi Drop can send wake packets, but it cannot automatically change BIOS/UEFI or every network adapter driver setting"
+          "Lynavo Drive can send wake packets, but it cannot automatically change BIOS/UEFI or every network adapter driver setting"
         ]
       }
     ]
@@ -344,7 +344,7 @@
     "items": [
       {
         "question": "What if my phone cannot find the computer?",
-        "answer": "Check these in order: 1) computer and phone are on the same Wi-Fi; 2) macOS users have granted Local Network permission to Vivi Drop; 3) Windows users have a Private network with Network discovery enabled; 4) firewall is not blocking incoming connections; 5) close and reopen Vivi Drop."
+        "answer": "Check these in order: 1) computer and phone are on the same Wi-Fi; 2) macOS users have granted Local Network permission to Lynavo Drive; 3) Windows users have a Private network with Network discovery enabled; 4) firewall is not blocking incoming connections; 5) close and reopen Lynavo Drive."
       },
       {
         "question": "Why do I need to manually resume sync after reconnecting?",
@@ -364,7 +364,7 @@
       },
       {
         "question": "Can the sync folder be on an external drive?",
-        "answer": "Yes. Choose a folder on the external drive as the root folder. Keep the drive connected during transfer. macOS users may also need to grant Vivi Drop Full Disk Access."
+        "answer": "Yes. Choose a folder on the external drive as the root folder. Keep the drive connected during transfer. macOS users may also need to grant Lynavo Drive Full Disk Access."
       },
       {
         "question": "Will transfer stop if the computer sleeps?",

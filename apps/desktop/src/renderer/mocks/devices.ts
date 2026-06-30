@@ -11,8 +11,8 @@ export const mockDevices: DashboardDeviceDTO[] = [
     todayFileCount: 12,
     todayBytes: 24.5 * 1024 ** 3,
     storageLeft: '1.2 TB',
-    storagePath: '/Users/alice/SyncFlow',
-    devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+    storagePath: '/Users/alice/LynavoDrive',
+    devicePath: '/Users/alice/LynavoDrive/iPhone_15_Pro',
     currentFile: {
       filename: 'DJI_0421_4K_RAW.mp4',
       progress: 67,
@@ -29,8 +29,8 @@ export const mockDevices: DashboardDeviceDTO[] = [
     todayFileCount: 8,
     todayBytes: 16.3 * 1024 ** 3,
     storageLeft: '860 GB',
-    storagePath: '/Users/alice/SyncFlow',
-    devicePath: '/Users/alice/SyncFlow/GalaxyS24',
+    storagePath: '/Users/alice/LynavoDrive',
+    devicePath: '/Users/alice/LynavoDrive/GalaxyS24',
   },
   {
     deviceId: 'd3',
@@ -42,8 +42,8 @@ export const mockDevices: DashboardDeviceDTO[] = [
     todayFileCount: 5,
     todayBytes: 10.2 * 1024 ** 3,
     storageLeft: '2.4 TB',
-    storagePath: '/Users/alice/SyncFlow',
-    devicePath: '/Users/alice/SyncFlow/iPadPro',
+    storagePath: '/Users/alice/LynavoDrive',
+    devicePath: '/Users/alice/LynavoDrive/iPadPro',
   },
   {
     deviceId: 'd4',
@@ -55,8 +55,8 @@ export const mockDevices: DashboardDeviceDTO[] = [
     todayFileCount: 0,
     todayBytes: 0,
     storageLeft: '--',
-    storagePath: '/Users/alice/SyncFlow',
-    devicePath: '/Users/alice/SyncFlow/GoPro12',
+    storagePath: '/Users/alice/LynavoDrive',
+    devicePath: '/Users/alice/LynavoDrive/GoPro12',
   },
   {
     deviceId: 'd5',
@@ -68,7 +68,7 @@ export const mockDevices: DashboardDeviceDTO[] = [
     todayFileCount: 3,
     todayBytes: 6.8 * 1024 ** 3,
     storageLeft: '--',
-    storagePath: '/Users/alice/SyncFlow',
-    devicePath: '/Users/alice/SyncFlow/iPhone14',
+    storagePath: '/Users/alice/LynavoDrive',
+    devicePath: '/Users/alice/LynavoDrive/iPhone14',
   },
 ];

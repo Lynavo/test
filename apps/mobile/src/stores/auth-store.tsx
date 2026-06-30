@@ -7,9 +7,7 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
-import {
-  setTunnelCredentials as nativeSetTunnelCredentials,
-} from '../services/SyncEngineModule';
+import { setTunnelCredentials as nativeSetTunnelCredentials } from '../services/SyncEngineModule';
 import {
   applyVisualQaRemotePreviewFlag,
   getDevSkipAuthMockTokens,
@@ -76,12 +74,12 @@ export interface AuthState {
 // Module-level token storage so api.ts can read tokens without React context
 // ---------------------------------------------------------------------------
 
-// Legacy official-auth token locations. OSS startup always clears these so
-// old commercial sessions cannot re-enable account state.
-const KEYCHAIN_SERVICE = 'cn.vividrop.auth';
+// OSS token location. Community startup only hydrates explicit visual QA/dev
+// mock tokens and clears everything else fail-closed.
+const KEYCHAIN_SERVICE = 'com.lynavo.drive.auth';
 const KEYCHAIN_USER = 'tokens';
-const LEGACY_STORAGE_KEY_ACCESS = '@vividrop/auth/access_token';
-const LEGACY_STORAGE_KEY_REFRESH = '@vividrop/auth/refresh_token';
+const STORAGE_KEY_ACCESS = '@lynavo-drive/auth/access_token';
+const STORAGE_KEY_REFRESH = '@lynavo-drive/auth/refresh_token';
 const DEV_SANDBOX_ACCESS_TOKEN_PREFIX = 'mock-sandbox-access-token';
 const DEV_SANDBOX_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
 
@@ -114,7 +112,10 @@ function loadAuthService(): Promise<typeof import('../services/auth-service')> {
 
 // Persist tokens to the Keychain. Fire-and-forget: in-memory tokens drive the
 // current session, the Keychain copy is only consulted on cold start.
-function isAllowedOssRuntimeTokenPair(access: string, refresh: string): boolean {
+function isAllowedOssRuntimeTokenPair(
+  access: string,
+  refresh: string,
+): boolean {
   return (
     access.startsWith(DEV_SANDBOX_ACCESS_TOKEN_PREFIX) &&
     refresh === DEV_SANDBOX_REFRESH_TOKEN
@@ -151,8 +152,8 @@ async function clearPersistedOfficialTokens(): Promise<void> {
 
   try {
     await Promise.all([
-      AsyncStorage.removeItem(LEGACY_STORAGE_KEY_ACCESS),
-      AsyncStorage.removeItem(LEGACY_STORAGE_KEY_REFRESH),
+      AsyncStorage.removeItem(STORAGE_KEY_ACCESS),
+      AsyncStorage.removeItem(STORAGE_KEY_REFRESH),
     ]);
   } catch (err) {
     console.warn('[auth-store] legacy official-token cleanup failed', err);
@@ -243,14 +244,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     syncTokensToModule(state.accessToken, state.refreshToken);
 
     let cancelled = false;
-    void nativeSetTunnelCredentials('', '', '')
-      .catch(err => {
-        if (cancelled) return;
-        console.warn(
-          '[auth-store] failed to clear tunnel credentials from native:',
-          err,
-        );
-      });
+    void nativeSetTunnelCredentials('', '', '').catch(err => {
+      if (cancelled) return;
+      console.warn(
+        '[auth-store] failed to clear tunnel credentials from native:',
+        err,
+      );
+    });
 
     return () => {
       cancelled = true;

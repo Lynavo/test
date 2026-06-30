@@ -49,9 +49,9 @@ export function AutoUploadSettingsScreen() {
 
   const handleAddMockFile = () => {
     const mockFileNames = [
-      'ViviDrop_Readme.pdf',
-      'SyncFlow_Overview.docx',
-      'SyncFlow_Logo.png',
+      'Lynavo Drive_Readme.pdf',
+      'LynavoDrive_Overview.docx',
+      'LynavoDrive_Logo.png',
       'Vacation_Photo.jpg',
       'Project_Spec.pdf',
     ];

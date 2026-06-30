@@ -134,7 +134,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Probe writability with a unique temp file to avoid clobbering existing files.
-			f, err := os.CreateTemp(dir, ".syncflow_probe_*")
+			f, err := os.CreateTemp(dir, ".lynavo_probe_*")
 			if err != nil {
 				slog.Error("directory not writable", "path", dir, "err", err)
 				writeError(w, http.StatusBadRequest, "directory is not writable: "+dir)
@@ -190,7 +190,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "cannot create directory: "+newPersonalPath)
 				return
 			}
-			f, err := os.CreateTemp(newPersonalPath, ".syncflow_probe_*")
+			f, err := os.CreateTemp(newPersonalPath, ".lynavo_probe_*")
 			if err != nil {
 				slog.Error("personal directory not writable", "path", newPersonalPath, "err", err)
 				writeError(w, http.StatusBadRequest, "directory is not writable: "+newPersonalPath)

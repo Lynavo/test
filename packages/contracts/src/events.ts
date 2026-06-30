@@ -1,9 +1,5 @@
 import type { DeviceDashboardStatus } from './enums';
-import type {
-  DashboardSummaryDTO,
-  ShareStatusDTO,
-  SyncSummaryDTO,
-} from './types';
+import type { DashboardSummaryDTO, ShareStatusDTO, SyncSummaryDTO } from './types';
 
 export const SIDECAR_EVENT_TYPES = {
   DEVICE_STATE_CHANGED: 'device.state.changed',

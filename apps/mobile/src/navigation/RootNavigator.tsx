@@ -29,7 +29,7 @@ import { HistoryGlobalScreen } from '../screens/HistoryGlobalScreen';
 import { SettingsGlobalScreen } from '../screens/SettingsGlobalScreen';
 import { HelpGlobalScreen } from '../screens/HelpGlobalScreen';
 import { QRScannerScreen } from '../screens/QRScannerScreen';
-import { SubscriptionGlobalScreen } from '../screens/SubscriptionGlobalScreen';
+import { OpenSourceInfoScreen } from '../screens/OpenSourceInfoScreen';
 import { AutoUploadSettingsGlobalScreen } from '../screens/AutoUploadSettingsGlobalScreen';
 import { GlobalBottomTabBar } from '../components/GlobalBottomTabBar';
 import {
@@ -76,7 +76,7 @@ export type RootStackParamList = {
   History: undefined;
   Settings: undefined;
   Help: undefined;
-  Subscription: { isNewUser?: boolean } | undefined;
+  OpenSourceInfo: { isNewUser?: boolean } | undefined;
   AutoUploadSettings: undefined;
 };
 
@@ -207,9 +207,10 @@ function LanSyncStack() {
         }
         return;
       }
-      const invalidation = await NativeModules.NativeSyncEngine
-        ?.getBindingInvalidationState?.()
-        .catch(() => null);
+      const invalidation =
+        await NativeModules.NativeSyncEngine?.getBindingInvalidationState?.().catch(
+          () => null,
+        );
       if (
         invalidation !== null &&
         invalidation !== undefined &&
@@ -266,7 +267,10 @@ function LanSyncStack() {
           name="PhoneSyncSpace"
           component={PhoneSyncSpaceGlobalScreen}
         />
-        <Stack.Screen name="RemoteAccess" component={RemoteAccessGlobalScreen} />
+        <Stack.Screen
+          name="RemoteAccess"
+          component={RemoteAccessGlobalScreen}
+        />
         <Stack.Screen
           name="DownloadRecords"
           component={DownloadRecordsGlobalScreen}
@@ -274,7 +278,7 @@ function LanSyncStack() {
         <Stack.Screen name="History" component={HistoryGlobalScreen} />
         <Stack.Screen name="Settings" component={GlobalMainTabsScreen} />
         <Stack.Screen name="Help" component={HelpGlobalScreen} />
-        <Stack.Screen name="Subscription" component={SubscriptionGlobalScreen} />
+        <Stack.Screen name="OpenSourceInfo" component={OpenSourceInfoScreen} />
         <Stack.Screen
           name="AutoUploadSettings"
           component={AutoUploadSettingsGlobalScreen}

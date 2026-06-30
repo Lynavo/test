@@ -5,7 +5,7 @@ import SyncFlowMobileTunnel
 class LocalTCPProxy {
     private var activePort: Int?
     private var diagnosticsDrainTimer: DispatchSourceTimer?
-    private let diagnosticsDrainQueue = DispatchQueue(label: "com.syncflow.mobileTunnelDiagnostics", qos: .utility)
+    private let diagnosticsDrainQueue = DispatchQueue(label: "com.lynavo.drive.mobileTunnelDiagnostics", qos: .utility)
 
     private func flushMobileTunnelDiagnostics(reason: String) {
         let snapshot = MobiletunnelTakeDiagnosticsLog()

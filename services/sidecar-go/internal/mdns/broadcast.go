@@ -21,7 +21,7 @@ const (
 	serviceDomain   = "local."
 	backendDNSSD    = "dns-sd"
 	backendZeroconf = "zeroconf"
-	dnsSDPathEnv    = "SYNCFLOW_DNSSD_PATH"
+	dnsSDPathEnv    = "LYNAVO_DNSSD_PATH"
 )
 
 var (
@@ -114,7 +114,7 @@ func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
 		slog.Warn(
 			"dns-sd unavailable, falling back to zeroconf",
 			"platform", runtime.GOOS,
-			"hint", "install Bonjour for Windows or provide SYNCFLOW_DNSSD_PATH for best iOS discovery compatibility",
+			"hint", "install Bonjour for Windows or provide LYNAVO_DNSSD_PATH for best iOS discovery compatibility",
 		)
 	}
 	return newCrossPlatformBroadcaster(cfg, txt)

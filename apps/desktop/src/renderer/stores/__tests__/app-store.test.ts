@@ -12,8 +12,8 @@ const mockDevice: DashboardDeviceDTO = {
   todayFileCount: 12,
   todayBytes: 24.5 * 1024 ** 3,
   storageLeft: '1.2 TB',
-  storagePath: '/Users/alice/SyncFlow',
-  devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+  storagePath: '/Users/alice/LynavoDrive',
+  devicePath: '/Users/alice/LynavoDrive/iPhone_15_Pro',
   currentFile: {
     filename: 'DJI_0421_4K_RAW.mp4',
     progress: 67,

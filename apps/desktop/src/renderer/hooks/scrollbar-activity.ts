@@ -2,7 +2,7 @@ type ScrollbarActivityTrackerOptions = {
   idleMs?: number;
 };
 
-const ACTIVE_CLASS = 'vividrop-scrollbar-active';
+const ACTIVE_CLASS = 'lynavo-scrollbar-active';
 const DEFAULT_IDLE_MS = 900;
 
 function resolveScrollElement(target: EventTarget | null): HTMLElement {
@@ -39,7 +39,10 @@ export function installScrollbarActivityTracker(
     }
 
     target.classList.add(ACTIVE_CLASS);
-    activeTargets.set(target, window.setTimeout(() => clearTarget(target), idleMs));
+    activeTargets.set(
+      target,
+      window.setTimeout(() => clearTarget(target), idleMs),
+    );
   };
 
   const handleScroll = (event: Event) => {

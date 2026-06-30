@@ -44,8 +44,6 @@ export function Dashboard() {
     }
   };
 
-
-
   // macOS folder permission state (null = unknown / not mac)
   const [folderPermissionGranted, setFolderPermissionGranted] = useState<boolean | null>(null);
 
@@ -154,19 +152,15 @@ export function Dashboard() {
   };
 
   const handleDownloadApp = () => {
-    window.dispatchEvent(new Event('vividrop:open-download'));
+    window.dispatchEvent(new Event('lynavo-drive:open-download'));
   };
 
   const connectionCode = settings.connectionCode || '000000';
-  const localDeviceName = settings.deviceName || 'ViviDrop';
-  const localIp =
-    window.electronAPI?.platform?.getLocalIPs?.()[0] || '127.0.0.1';
-  const connectionQrPayload = `vividrop://connect?ip=${encodeURIComponent(
+  const localDeviceName = settings.deviceName || 'Lynavo Drive';
+  const localIp = window.electronAPI?.platform?.getLocalIPs?.()[0] || '127.0.0.1';
+  const connectionQrPayload = `lynavodrive://connect?ip=${encodeURIComponent(
     localIp,
-  )}&device=${encodeURIComponent(localDeviceName)}&code=${connectionCode.replace(
-    /\s/g,
-    '',
-  )}`;
+  )}&device=${encodeURIComponent(localDeviceName)}&code=${connectionCode.replace(/\s/g, '')}`;
 
   return (
     <div className="h-full overflow-auto">
@@ -319,7 +313,6 @@ export function Dashboard() {
                   </p>
                 </div>
               </div>
-
             </div>
 
             {/* macOS Files & Folders permission banner */}

@@ -120,7 +120,7 @@ function installElectronAPI(
 }
 
 async function completeConnectionCodeSetup() {
-  fireEvent.click(await screen.findByRole('button', { name: '保存并进入ViviDrop' }));
+  fireEvent.click(await screen.findByRole('button', { name: '保存并进入Lynavo Drive' }));
   await waitFor(() => {
     expect(screen.queryByRole('heading', { name: '设置连接码' })).not.toBeInTheDocument();
   });
@@ -129,8 +129,8 @@ async function completeConnectionCodeSetup() {
 describe('AppShell', () => {
   beforeEach(() => {
     Reflect.deleteProperty(window, 'electronAPI');
-    delete process.env.SYNCFLOW_DEV_SKIP_AUTH;
-    delete process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL;
+    delete process.env.LYNAVO_DEV_SKIP_AUTH;
+    delete process.env.LYNAVO_DEV_SKIP_AUTH_EMAIL;
     useAppStore.setState({
       currentView: 'dashboard',
       selectedDevice: null,
@@ -190,8 +190,8 @@ describe('AppShell', () => {
   });
 
   it('ignores dev skip-auth for official auth while keeping local pairing setup available', async () => {
-    process.env.SYNCFLOW_DEV_SKIP_AUTH = '1';
-    process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
+    process.env.LYNAVO_DEV_SKIP_AUTH = '1';
+    process.env.LYNAVO_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
     const { onSidecarEvent } = installElectronAPI(null);
 
     render(<AppShell />);
@@ -223,9 +223,9 @@ describe('AppShell', () => {
     const { container } = render(<AppShell />);
 
     expect(await screen.findByRole('heading', { name: '设置连接码' })).toBeInTheDocument();
-    expect(container.firstElementChild).toHaveClass('vividrop-window-drag-region');
+    expect(container.firstElementChild).toHaveClass('lynavo-window-drag-region');
     expect(screen.getByRole('heading', { name: '设置连接码' }).closest('section')).toHaveClass(
-      'vividrop-window-no-drag-region',
+      'lynavo-window-no-drag-region',
     );
     expect(screen.getByDisplayValue(mockSettings.connectionCode)).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
@@ -244,7 +244,7 @@ describe('AppShell', () => {
     });
 
     expect(await screen.findByRole('heading', { name: '設定連線碼' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '儲存並進入 ViviDrop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '儲存並進入 Lynavo Drive' })).toBeInTheDocument();
     expect(screen.getByText('掃碼下載手機端')).toBeInTheDocument();
   });
 
@@ -257,7 +257,7 @@ describe('AppShell', () => {
     fireEvent.change(await screen.findByLabelText('连接码'), {
       target: { value: '238416' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存并进入ViviDrop' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存并进入Lynavo Drive' }));
 
     await waitFor(() => {
       expect(window.electronAPI?.sidecar.setConnectionCode).toHaveBeenCalledWith('238416');
@@ -278,7 +278,7 @@ describe('AppShell', () => {
     fireEvent.change(await screen.findByLabelText('连接码'), {
       target: { value: '238416' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '保存并进入ViviDrop' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存并进入Lynavo Drive' }));
 
     expect(window.confirm).toHaveBeenCalledWith(
       '修改配对码会中断当前已配对的手机，所有手机需使用新配对码重新配对。要继续吗？',
@@ -294,7 +294,7 @@ describe('AppShell', () => {
 
     render(<AppShell />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '保存并进入ViviDrop' }));
+    fireEvent.click(await screen.findByRole('button', { name: '保存并进入Lynavo Drive' }));
 
     expect(await screen.findByTestId('sidebar')).toBeInTheDocument();
     expect(await screen.findByText('DashboardPage')).toBeInTheDocument();
@@ -314,9 +314,7 @@ describe('AppShell', () => {
     render(<AppShell />);
 
     await completeConnectionCodeSetup();
-    expect(screen.getByTestId('global-window-drag-strip')).toHaveClass(
-      'vividrop-window-drag-region',
-    );
+    expect(screen.getByTestId('global-window-drag-strip')).toHaveClass('lynavo-window-drag-region');
     expect(await screen.findByText(pageText)).toBeInTheDocument();
   });
 
@@ -407,7 +405,7 @@ describe('AppShell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Android' }));
 
     expect(openExternal).toHaveBeenLastCalledWith('https://www.lynavo.com/download/android');
-    expect(openExternal).not.toHaveBeenCalledWith(expect.stringContaining('vividrop.app'));
+    expect(openExternal).not.toHaveBeenCalledWith(expect.stringContaining('old-product.example'));
   });
 
   it('keeps top actions clear of non-macOS native caption buttons', async () => {

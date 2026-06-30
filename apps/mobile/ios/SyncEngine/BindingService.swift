@@ -2,14 +2,13 @@ import Foundation
 import Security
 
 class BindingService {
-    private static let keychainServiceName = "com.vividrop.mobile.china"
-    private static let legacyKeychainServiceName = "com.syncflow.mobile"
-    private static let authDeviceIdKeychainServiceName = "cn.vividrop.auth-device-id"
+    private static let keychainServiceName = "com.lynavo.drive.mobile"
+    private static let authDeviceIdKeychainServiceName = "com.lynavo.drive.auth-device-id"
     private static let authDeviceIdKey = "auth-device-id"
-    private static let clientIdKey = "syncflow_client_id"
-    private static let pairingTokenKey = "syncflow_pairing_token"
-    private static let clientDisplayNameKey = "syncflow_client_display_name"
-    private static let keychainMigrationDoneKey = "keychain_migration_done_v1"
+    private static let clientIdKey = "lynavo_client_id"
+    private static let pairingTokenKey = "lynavo_pairing_token"
+    private static let clientDisplayNameKey = "lynavo_client_display_name"
+    private static let keychainMigrationDoneKey = "lynavo_keychain_initialized_v1"
 
     weak var uploadStore: UploadStore?
 
@@ -17,44 +16,15 @@ class BindingService {
     /// Exposed so callers can detect and fall back to legacy tokens.
     static let legacyPairingTokenKey = pairingTokenKey
 
-    // MARK: - Keychain Migration (com.syncflow.mobile → com.vividrop.mobile.china)
+    // MARK: - Keychain Initialization
 
-    /// Migrate keychain entries from the old bundle service name to the new one.
-    /// Called once on first access; idempotent via a UserDefaults flag.
+    /// OSS builds do not migrate pre-Lynavo keychain entries. This method is
+    /// retained as a lifecycle hook for callers that expect one-time setup.
     func migrateKeychainIfNeeded() {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: Self.keychainMigrationDoneKey) else { return }
-
-        let keysToMigrate = [Self.clientIdKey, Self.pairingTokenKey, Self.clientDisplayNameKey]
-        var migratedCount = 0
-
-        for key in keysToMigrate {
-            if let value = readKeychainFromService(Self.legacyKeychainServiceName, key: key),
-               readKeychain(key: key) == nil {
-                writeKeychain(key: key, value: value)
-                migratedCount += 1
-                slog("[BindingService] migrated keychain key '%@' from legacy service", key)
-            }
-        }
-
-        // Also migrate any per-device pairing tokens (keys starting with "pairing_token_")
-        // These are discovered by querying all items under the legacy service.
-        let allLegacyKeys = listKeychainKeys(service: Self.legacyKeychainServiceName)
-        for legacyKey in allLegacyKeys where legacyKey.hasPrefix("pairing_token_") && !keysToMigrate.contains(legacyKey) {
-            if let value = readKeychainFromService(Self.legacyKeychainServiceName, key: legacyKey),
-               readKeychain(key: legacyKey) == nil {
-                writeKeychain(key: legacyKey, value: value)
-                migratedCount += 1
-                slog("[BindingService] migrated per-device token '%@' from legacy service", legacyKey)
-            }
-        }
-
         defaults.set(true, forKey: Self.keychainMigrationDoneKey)
-        if migratedCount > 0 {
-            slog("[BindingService] keychain migration complete: %d entries migrated", migratedCount)
-        } else {
-            slog("[BindingService] keychain migration: no legacy entries found")
-        }
+        slog("[BindingService] keychain initialized for Lynavo Drive")
     }
 
     /// Read a value from a specific keychain service (for migration).
@@ -123,9 +93,9 @@ class BindingService {
     }
 
     /// Enumerate every keychain account stored under the current
-    /// (`com.vividrop.mobile.china`) service. Exposed so the wipe orchestrator
+    /// (`com.lynavo.drive.mobile`) service. Exposed so the wipe orchestrator
     /// can discover per-device pairing tokens whose names are not known at
-    /// compile time (`syncflow_pairing_token_<serverId>`).
+    /// compile time (`lynavo_pairing_token_<serverId>`).
     func listStoredKeychainKeys() -> [String] {
         return listKeychainKeys(service: Self.keychainServiceName)
     }

@@ -148,7 +148,8 @@ function getLanguageLabel(preference: LanguagePreference, t: any): string {
 
 function getVersionLabel(appInfo: AppInfo | null, t: any): string {
   const version = firstNonEmptyString(appInfo?.version);
-  if (!version) return t('settings.global.versionEmpty', { value: NEUTRAL_VALUE });
+  if (!version)
+    return t('settings.global.versionEmpty', { value: NEUTRAL_VALUE });
   const build = firstNonEmptyString(appInfo?.build);
   return build
     ? t('settings.global.versionWithBuild', { version, build })
@@ -321,10 +322,16 @@ export function SettingsGlobalScreen({
       );
       setShowDiagnosticsModal(false);
       setDiagnosticsNote('');
-      Alert.alert(t('settings.global.uploadSuccessTitle'), t('settings.global.uploadSuccessMsg'));
+      Alert.alert(
+        t('settings.global.uploadSuccessTitle'),
+        t('settings.global.uploadSuccessMsg'),
+      );
     } catch (error) {
       console.warn('[SettingsGlobal] uploadDiagnostics failed:', error);
-      Alert.alert(t('settings.global.uploadFailureTitle'), t('settings.global.uploadFailureMsg'));
+      Alert.alert(
+        t('settings.global.uploadFailureTitle'),
+        t('settings.global.uploadFailureMsg'),
+      );
     } finally {
       setIsUploadingDiagnostics(false);
     }
@@ -362,7 +369,9 @@ export function SettingsGlobalScreen({
         >
           <View style={styles.header}>
             <Text style={styles.title}>{t('settings.global.my')}</Text>
-            <Text style={styles.subtitle}>{t('settings.global.mySubtitle')}</Text>
+            <Text style={styles.subtitle}>
+              {t('settings.global.mySubtitle')}
+            </Text>
           </View>
 
           <SettingsSection title={t('settings.sections.device')}>
@@ -395,7 +404,11 @@ export function SettingsGlobalScreen({
               iconColor="#746AA8"
               title={getDesktopTitle(bindingState, t)}
               subtitle={getDesktopSubtitle(bindingState, t)}
-              badge={bindingState ? t('deviceDiscovery.switch.badge.current') : undefined}
+              badge={
+                bindingState
+                  ? t('deviceDiscovery.switch.badge.current')
+                  : undefined
+              }
               badgeTone="green"
             />
             <SettingsRow
@@ -441,7 +454,9 @@ export function SettingsGlobalScreen({
               rightAccessory={
                 Platform.OS !== 'ios' ? (
                   <View style={styles.updateBadge}>
-                    <Text style={styles.updateBadgeText}>{t('settings.global.update')}</Text>
+                    <Text style={styles.updateBadgeText}>
+                      {t('settings.global.update')}
+                    </Text>
                   </View>
                 ) : null
               }
@@ -495,7 +510,9 @@ export function SettingsGlobalScreen({
               activeOpacity={0.72}
               onPress={() => setShowEditDevice(false)}
             >
-              <Text style={styles.modalSecondaryButtonText}>{t('settings.global.cancel')}</Text>
+              <Text style={styles.modalSecondaryButtonText}>
+                {t('settings.global.cancel')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalPrimaryButton}
@@ -507,7 +524,9 @@ export function SettingsGlobalScreen({
               }}
             >
               <Text style={styles.modalPrimaryButtonText}>
-                {isSavingDeviceName ? t('settings.global.saving') : t('settings.global.save')}
+                {isSavingDeviceName
+                  ? t('settings.global.saving')
+                  : t('settings.global.save')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -546,7 +565,9 @@ export function SettingsGlobalScreen({
               disabled={isUploadingDiagnostics}
               onPress={() => setShowDiagnosticsModal(false)}
             >
-              <Text style={styles.modalSecondaryButtonText}>{t('settings.global.cancel')}</Text>
+              <Text style={styles.modalSecondaryButtonText}>
+                {t('settings.global.cancel')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalPrimaryButton}
@@ -558,7 +579,9 @@ export function SettingsGlobalScreen({
               }}
             >
               <Text style={styles.modalPrimaryButtonText}>
-                {isUploadingDiagnostics ? t('settings.global.uploading') : t('settings.global.upload')}
+                {isUploadingDiagnostics
+                  ? t('settings.global.uploading')
+                  : t('settings.global.upload')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -599,7 +622,9 @@ function LanguageGlobalView({
           >
             <ChevronLeft size={20} color="#17191C" strokeWidth={1.9} />
           </TouchableOpacity>
-          <Text style={styles.childTitle}>{t('settings.global.languageTitle')}</Text>
+          <Text style={styles.childTitle}>
+            {t('settings.global.languageTitle')}
+          </Text>
         </View>
 
         <ScrollView
@@ -678,7 +703,9 @@ function LanguageModeRow({
           selected ? styles.radioSelected : styles.radioUnselected,
         ]}
       >
-        {selected ? <Check size={14} color="#FFFFFF" strokeWidth={2.6} /> : null}
+        {selected ? (
+          <Check size={14} color="#FFFFFF" strokeWidth={2.6} />
+        ) : null}
       </View>
     </TouchableOpacity>
   );

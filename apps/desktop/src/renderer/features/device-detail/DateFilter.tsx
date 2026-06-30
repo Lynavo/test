@@ -101,7 +101,9 @@ export function DateFilter({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">{t('deviceDetail.filter.completedDate')}</span>
+      <span className="text-xs text-muted-foreground">
+        {t('deviceDetail.filter.completedDate')}
+      </span>
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">{t('deviceDetail.filter.from')}</span>
         <DateSelect

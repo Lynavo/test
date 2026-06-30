@@ -60,7 +60,7 @@ class TcpTransport {
             return nil
         }
     }
-    private let queue = DispatchQueue(label: "com.syncflow.tcp")
+    private let queue = DispatchQueue(label: "com.lynavo.drive.tcp")
     weak var delegate: TcpTransportDelegate?
 
     // MARK: - Connect / Disconnect

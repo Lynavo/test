@@ -41,7 +41,9 @@ describe('SyncEngineModule background service bridge', () => {
       'manual_upload',
     );
     expect(nativeSyncEngine.stopBackgroundSyncService).toHaveBeenCalledTimes(1);
-    expect(nativeSyncEngine.setBackgroundSilentAudioEnabled).not.toHaveBeenCalled();
+    expect(
+      nativeSyncEngine.setBackgroundSilentAudioEnabled,
+    ).not.toHaveBeenCalled();
   });
 
   it('keeps the iOS silent audio bridge separate from Android foreground sync', async () => {
@@ -53,8 +55,8 @@ describe('SyncEngineModule background service bridge', () => {
 
     expect(nativeSyncEngine.startBackgroundSyncService).not.toHaveBeenCalled();
     expect(nativeSyncEngine.stopBackgroundSyncService).not.toHaveBeenCalled();
-    expect(nativeSyncEngine.setBackgroundSilentAudioEnabled).toHaveBeenCalledWith(
-      true,
-    );
+    expect(
+      nativeSyncEngine.setBackgroundSilentAudioEnabled,
+    ).toHaveBeenCalledWith(true);
   });
 });

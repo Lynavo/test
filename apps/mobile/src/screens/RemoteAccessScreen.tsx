@@ -633,7 +633,9 @@ export function RemoteAccessScreen() {
               onPress={navigateBackFolder}
             >
               <Icon name="arrow-up" size={14} color="#475569" />
-              <Text style={styles.upButtonText}>{t('sharedFiles.files.parentFolder')}</Text>
+              <Text style={styles.upButtonText}>
+                {t('sharedFiles.files.parentFolder')}
+              </Text>
             </TouchableOpacity>
           )}
         </View>

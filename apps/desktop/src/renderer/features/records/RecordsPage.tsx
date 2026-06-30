@@ -335,7 +335,9 @@ export function RecordsPage() {
                 <div className="mt-4 rounded-md border border-white/70 bg-white/52">
                   <div className="flex items-center gap-1.5 px-4 py-3 text-xs font-semibold text-[#4f5b68]">
                     <Download className="h-3.5 w-3.5 shrink-0 text-[#7b8794]" />
-                    <span>{t('directory.records.accessCount', { count: session.files.length })}</span>
+                    <span>
+                      {t('directory.records.accessCount', { count: session.files.length })}
+                    </span>
                   </div>
 
                   <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 border-t border-white/70 px-4 py-3 sm:grid-cols-2">

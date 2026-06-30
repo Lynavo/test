@@ -15,8 +15,8 @@ const mockDevice: DashboardDeviceDTO = {
   todayFileCount: 3,
   todayBytes: 5_000_000_000,
   storageLeft: '1.2 TB',
-  storagePath: '/Users/alice/SyncFlow',
-  devicePath: '/Users/alice/SyncFlow/iPhone_15_Pro',
+  storagePath: '/Users/alice/LynavoDrive',
+  devicePath: '/Users/alice/LynavoDrive/iPhone_15_Pro',
 };
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ beforeEach(() => {
         createdAtRemote: '2026-03-19T08:14:00Z',
         completedAt: '2026-03-19T14:29:00Z',
         activeTransmissionMs: 195_000,
-        finalPath: '/Users/alice/SyncFlow/DJI_0021_PRO.mp4',
+        finalPath: '/Users/alice/LynavoDrive/DJI_0021_PRO.mp4',
       },
       {
         fileKey: 'f2',
@@ -44,7 +44,7 @@ beforeEach(() => {
         createdAtRemote: '2026-03-19T11:33:00Z',
         completedAt: '2026-03-19T14:27:00Z',
         activeTransmissionMs: 5_000,
-        finalPath: '/Users/alice/SyncFlow/IMG_8493.HEIC',
+        finalPath: '/Users/alice/LynavoDrive/IMG_8493.HEIC',
       },
     ],
     selectedDate: '2026-03-19',

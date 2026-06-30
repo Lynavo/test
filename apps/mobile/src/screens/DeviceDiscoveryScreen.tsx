@@ -773,7 +773,7 @@ export function DeviceDiscoveryScreen() {
           <View style={styles.troubleshootingBullet} />
           <Text style={styles.troubleshootingText}>
             {t('deviceDiscovery.troubleshooting.desktopApp').replace(
-              'www.vividrop.cn',
+              'www.lynavo.com',
               desktopDownloadHost,
             )}
           </Text>

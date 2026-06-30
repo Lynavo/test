@@ -233,7 +233,9 @@ describe('DownloadRecordsGlobalScreen', () => {
     ).toEqual({
       uri: 'http://192.168.1.100:39394/personal/thumbnail/clip.mov?v=2048-1780000',
     });
-    expect(queryByTestId('download-record-thumbnail-video-no-thumb')).toBeNull();
+    expect(
+      queryByTestId('download-record-thumbnail-video-no-thumb'),
+    ).toBeNull();
     expect(getByText('preview-video')).toBeTruthy();
   });
 
@@ -283,11 +285,11 @@ describe('DownloadRecordsGlobalScreen', () => {
       expect(getByTestId('download-record-thumbnail-image-1')).toBeTruthy();
     });
 
-    expect(getByTestId('download-record-thumbnail-image-1').props.source).toEqual(
-      {
-        uri: 'https://desktop.local/full.jpg',
-      },
-    );
+    expect(
+      getByTestId('download-record-thumbnail-image-1').props.source,
+    ).toEqual({
+      uri: 'https://desktop.local/full.jpg',
+    });
     expect(recordDiagnosticsLog).toHaveBeenCalledWith(
       'DownloadRecords',
       expect.stringContaining('thumbnail render state'),
@@ -361,7 +363,7 @@ describe('DownloadRecordsGlobalScreen', () => {
     mockedDownloadResourceForGlobal.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/downloads/Missing.pdf',
-      savedLocation: 'Downloads/Vivi Drop',
+      savedLocation: 'Downloads/Lynavo Drive',
     });
 
     const { getByTestId } = render(<DownloadRecordsGlobalScreen />);

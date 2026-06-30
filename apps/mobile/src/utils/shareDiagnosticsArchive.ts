@@ -2,7 +2,8 @@ import { NativeModules, Share } from 'react-native';
 import i18next from 'i18next';
 import { AppError } from './app-error';
 
-const EXPORT_DIAGNOSTICS_UNAVAILABLE_CODE = 'errors.exportDiagnosticsUnavailable';
+const EXPORT_DIAGNOSTICS_UNAVAILABLE_CODE =
+  'errors.exportDiagnosticsUnavailable';
 
 export async function shareDiagnosticsArchive(): Promise<string> {
   const { NativeSyncEngine } = NativeModules;
@@ -24,5 +25,8 @@ export async function shareDiagnosticsArchive(): Promise<string> {
 }
 
 export function isDiagnosticsExportUnavailable(error: unknown): boolean {
-  return error instanceof AppError && error.code === EXPORT_DIAGNOSTICS_UNAVAILABLE_CODE;
+  return (
+    error instanceof AppError &&
+    error.code === EXPORT_DIAGNOSTICS_UNAVAILABLE_CODE
+  );
 }

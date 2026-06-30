@@ -1,4 +1,10 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from 'react';
 import {
   View,
   Text,
@@ -128,7 +134,9 @@ function getDocumentUploadFileKey(file: DocumentUploadFile): string {
 }
 
 function formatFileSkippedMessage(count: number, t: any): string {
-  const template = t('syncActivity.autoUploadSettings.fileSkippedMessage') || FALLBACK_COPY.fileSkippedMessage;
+  const template =
+    t('syncActivity.autoUploadSettings.fileSkippedMessage') ||
+    FALLBACK_COPY.fileSkippedMessage;
   return template.replace('{{count}}', String(count));
 }
 
@@ -155,43 +163,112 @@ export function AutoUploadSettingsGlobalScreen() {
   const navigation = useNavigation();
   const { t } = useTranslation();
 
-  const copy = useMemo(() => ({
-    title: t('syncActivity.autoUploadSettings.title') || FALLBACK_COPY.title,
-    subtitle: t('syncActivity.autoUploadSettings.subtitle') || FALLBACK_COPY.subtitle,
-    planTitle: t('syncActivity.autoUploadSettings.planTitle') || FALLBACK_COPY.planTitle,
-    enableSwitchTitle: t('syncActivity.autoUploadSettings.enableSwitchTitle') || FALLBACK_COPY.enableSwitchTitle,
-    enableSwitchDescOn: t('syncActivity.autoUploadSettings.enableSwitchDescOn') || FALLBACK_COPY.enableSwitchDescOn,
-    enableSwitchDescOff: t('syncActivity.autoUploadSettings.enableSwitchDescOff') || FALLBACK_COPY.enableSwitchDescOff,
-    sourcesTitle: t('syncActivity.autoUploadSettings.sourcesTitle') || FALLBACK_COPY.sourcesTitle,
-    albumTitle: t('syncActivity.autoUploadSettings.albumTitle') || FALLBACK_COPY.albumTitle,
-    albumDesc: t('syncActivity.autoUploadSettings.albumDesc') || FALLBACK_COPY.albumDesc,
-    fileTitle: t('syncActivity.autoUploadSettings.fileTitle') || FALLBACK_COPY.fileTitle,
-    fileDescEmpty: t('syncActivity.autoUploadSettings.fileDescEmpty') || FALLBACK_COPY.fileDescEmpty,
-    addFile: t('syncActivity.autoUploadSettings.addFile') || FALLBACK_COPY.addFile,
-    addMoreFile: t('syncActivity.autoUploadSettings.addMoreFile') || FALLBACK_COPY.addMoreFile,
-    selectedFilesTitle: t('syncActivity.autoUploadSettings.selectedFilesTitle') || FALLBACK_COPY.selectedFilesTitle,
-    filePickCancelled: t('syncActivity.autoUploadSettings.filePickCancelled') || FALLBACK_COPY.filePickCancelled,
-    filePickFailedTitle: t('syncActivity.autoUploadSettings.filePickFailedTitle') || FALLBACK_COPY.filePickFailedTitle,
-    filePickFailedBody: t('syncActivity.autoUploadSettings.filePickFailedBody') || FALLBACK_COPY.filePickFailedBody,
-    fileQueuedMessage: t('syncActivity.autoUploadSettings.fileQueuedMessage') || FALLBACK_COPY.fileQueuedMessage,
-    fileSkippedMessage: t('syncActivity.autoUploadSettings.fileSkippedMessage') || FALLBACK_COPY.fileSkippedMessage,
-    rangeTitle: t('syncActivity.autoUploadSettings.rangeTitle') || FALLBACK_COPY.rangeTitle,
-    rangeAllTitle: t('syncActivity.autoUploadSettings.rangeAllTitle') || FALLBACK_COPY.rangeAllTitle,
-    rangeAllDesc: t('syncActivity.autoUploadSettings.rangeAllDesc') || FALLBACK_COPY.rangeAllDesc,
-    rangeNowTitle: t('syncActivity.autoUploadSettings.rangeNowTitle') || FALLBACK_COPY.rangeNowTitle,
-    rangeNowDesc: t('syncActivity.autoUploadSettings.rangeNowDesc') || FALLBACK_COPY.rangeNowDesc,
-    rangeCustomTitle: t('syncActivity.autoUploadSettings.rangeCustomTitle') || FALLBACK_COPY.rangeCustomTitle,
-    rangeCustomDesc: t('syncActivity.autoUploadSettings.rangeCustomDesc') || FALLBACK_COPY.rangeCustomDesc,
-    confirmEnable: t('syncActivity.autoUploadSettings.confirmEnable') || FALLBACK_COPY.confirmEnable,
-    confirmDisable: t('syncActivity.autoUploadSettings.confirmDisable') || FALLBACK_COPY.confirmDisable,
-    customPickerSave: t('syncActivity.autoUploadSettings.customPickerSave') || FALLBACK_COPY.customPickerSave,
-    infoAlbum: t('syncActivity.autoUploadSettings.infoAlbum') || FALLBACK_COPY.infoAlbum,
-    infoAutoOff: t('syncActivity.autoUploadSettings.infoAutoOff') || FALLBACK_COPY.infoAutoOff,
-    infoEmpty: t('syncActivity.autoUploadSettings.infoEmpty') || FALLBACK_COPY.infoEmpty,
-    loadingConfig: t('syncActivity.autoUploadSettings.loadingConfig') || FALLBACK_COPY.loadingConfig,
-    loadConfigFailed: t('syncActivity.autoUploadSettings.loadConfigFailed') || FALLBACK_COPY.loadConfigFailed,
-    disabledSuccess: t('syncActivity.autoUploadSettings.disabledSuccess') || FALLBACK_COPY.disabledSuccess,
-  }), [t]);
+  const copy = useMemo(
+    () => ({
+      title: t('syncActivity.autoUploadSettings.title') || FALLBACK_COPY.title,
+      subtitle:
+        t('syncActivity.autoUploadSettings.subtitle') || FALLBACK_COPY.subtitle,
+      planTitle:
+        t('syncActivity.autoUploadSettings.planTitle') ||
+        FALLBACK_COPY.planTitle,
+      enableSwitchTitle:
+        t('syncActivity.autoUploadSettings.enableSwitchTitle') ||
+        FALLBACK_COPY.enableSwitchTitle,
+      enableSwitchDescOn:
+        t('syncActivity.autoUploadSettings.enableSwitchDescOn') ||
+        FALLBACK_COPY.enableSwitchDescOn,
+      enableSwitchDescOff:
+        t('syncActivity.autoUploadSettings.enableSwitchDescOff') ||
+        FALLBACK_COPY.enableSwitchDescOff,
+      sourcesTitle:
+        t('syncActivity.autoUploadSettings.sourcesTitle') ||
+        FALLBACK_COPY.sourcesTitle,
+      albumTitle:
+        t('syncActivity.autoUploadSettings.albumTitle') ||
+        FALLBACK_COPY.albumTitle,
+      albumDesc:
+        t('syncActivity.autoUploadSettings.albumDesc') ||
+        FALLBACK_COPY.albumDesc,
+      fileTitle:
+        t('syncActivity.autoUploadSettings.fileTitle') ||
+        FALLBACK_COPY.fileTitle,
+      fileDescEmpty:
+        t('syncActivity.autoUploadSettings.fileDescEmpty') ||
+        FALLBACK_COPY.fileDescEmpty,
+      addFile:
+        t('syncActivity.autoUploadSettings.addFile') || FALLBACK_COPY.addFile,
+      addMoreFile:
+        t('syncActivity.autoUploadSettings.addMoreFile') ||
+        FALLBACK_COPY.addMoreFile,
+      selectedFilesTitle:
+        t('syncActivity.autoUploadSettings.selectedFilesTitle') ||
+        FALLBACK_COPY.selectedFilesTitle,
+      filePickCancelled:
+        t('syncActivity.autoUploadSettings.filePickCancelled') ||
+        FALLBACK_COPY.filePickCancelled,
+      filePickFailedTitle:
+        t('syncActivity.autoUploadSettings.filePickFailedTitle') ||
+        FALLBACK_COPY.filePickFailedTitle,
+      filePickFailedBody:
+        t('syncActivity.autoUploadSettings.filePickFailedBody') ||
+        FALLBACK_COPY.filePickFailedBody,
+      fileQueuedMessage:
+        t('syncActivity.autoUploadSettings.fileQueuedMessage') ||
+        FALLBACK_COPY.fileQueuedMessage,
+      fileSkippedMessage:
+        t('syncActivity.autoUploadSettings.fileSkippedMessage') ||
+        FALLBACK_COPY.fileSkippedMessage,
+      rangeTitle:
+        t('syncActivity.autoUploadSettings.rangeTitle') ||
+        FALLBACK_COPY.rangeTitle,
+      rangeAllTitle:
+        t('syncActivity.autoUploadSettings.rangeAllTitle') ||
+        FALLBACK_COPY.rangeAllTitle,
+      rangeAllDesc:
+        t('syncActivity.autoUploadSettings.rangeAllDesc') ||
+        FALLBACK_COPY.rangeAllDesc,
+      rangeNowTitle:
+        t('syncActivity.autoUploadSettings.rangeNowTitle') ||
+        FALLBACK_COPY.rangeNowTitle,
+      rangeNowDesc:
+        t('syncActivity.autoUploadSettings.rangeNowDesc') ||
+        FALLBACK_COPY.rangeNowDesc,
+      rangeCustomTitle:
+        t('syncActivity.autoUploadSettings.rangeCustomTitle') ||
+        FALLBACK_COPY.rangeCustomTitle,
+      rangeCustomDesc:
+        t('syncActivity.autoUploadSettings.rangeCustomDesc') ||
+        FALLBACK_COPY.rangeCustomDesc,
+      confirmEnable:
+        t('syncActivity.autoUploadSettings.confirmEnable') ||
+        FALLBACK_COPY.confirmEnable,
+      confirmDisable:
+        t('syncActivity.autoUploadSettings.confirmDisable') ||
+        FALLBACK_COPY.confirmDisable,
+      customPickerSave:
+        t('syncActivity.autoUploadSettings.customPickerSave') ||
+        FALLBACK_COPY.customPickerSave,
+      infoAlbum:
+        t('syncActivity.autoUploadSettings.infoAlbum') ||
+        FALLBACK_COPY.infoAlbum,
+      infoAutoOff:
+        t('syncActivity.autoUploadSettings.infoAutoOff') ||
+        FALLBACK_COPY.infoAutoOff,
+      infoEmpty:
+        t('syncActivity.autoUploadSettings.infoEmpty') ||
+        FALLBACK_COPY.infoEmpty,
+      loadingConfig:
+        t('syncActivity.autoUploadSettings.loadingConfig') ||
+        FALLBACK_COPY.loadingConfig,
+      loadConfigFailed:
+        t('syncActivity.autoUploadSettings.loadConfigFailed') ||
+        FALLBACK_COPY.loadConfigFailed,
+      disabledSuccess:
+        t('syncActivity.autoUploadSettings.disabledSuccess') ||
+        FALLBACK_COPY.disabledSuccess,
+    }),
+    [t],
+  );
 
   const [albumEnabled, setAlbumEnabled] = useState(true);
   const [autoUploadEnabled, setAutoUploadEnabled] = useState(false);
@@ -289,10 +366,7 @@ export function AutoUploadSettingsGlobalScreen() {
         return;
       }
       console.warn('[AutoUploadSettings] pickDocumentUploads failed:', e);
-      Alert.alert(
-        copy.filePickFailedTitle,
-        copy.filePickFailedBody,
-      );
+      Alert.alert(copy.filePickFailedTitle, copy.filePickFailedBody);
     } finally {
       setPickingFiles(false);
     }
@@ -506,7 +580,9 @@ export function AutoUploadSettingsGlobalScreen() {
         ? copy.rangeNowTitle
         : copy.rangeCustomTitle;
   const planRangeLabel =
-    autoUploadEnabled && albumEnabled ? activeRangeLabel : (t('common.notApplicable') || '不适用');
+    autoUploadEnabled && albumEnabled
+      ? activeRangeLabel
+      : t('common.notApplicable') || '不适用';
   const infoText = renderInfoText();
   const confirmLabel = t('sharedFiles.remoteAccess.done') || '完成';
 
@@ -560,15 +636,21 @@ export function AutoUploadSettingsGlobalScreen() {
             </View>
             <View style={styles.planStatsRow}>
               <View style={styles.planStatItem}>
-                <Text style={styles.planStatLabel}>{t('syncActivity.autoUploadSettings.planSource') || '来源'}</Text>
+                <Text style={styles.planStatLabel}>
+                  {t('syncActivity.autoUploadSettings.planSource') || '来源'}
+                </Text>
                 <Text style={styles.planStatValue}>{planSourceCount}</Text>
               </View>
               <View style={styles.planStatItem}>
-                <Text style={styles.planStatLabel}>{t('syncActivity.autoUploadSettings.planFile') || '文件'}</Text>
+                <Text style={styles.planStatLabel}>
+                  {t('syncActivity.autoUploadSettings.planFile') || '文件'}
+                </Text>
                 <Text style={styles.planStatValue}>{planFileCount}</Text>
               </View>
               <View style={styles.planStatItem}>
-                <Text style={styles.planStatLabel}>{t('syncActivity.autoUploadSettings.planRange') || '范围'}</Text>
+                <Text style={styles.planStatLabel}>
+                  {t('syncActivity.autoUploadSettings.planRange') || '范围'}
+                </Text>
                 <Text style={styles.planStatValue} numberOfLines={1}>
                   {planRangeLabel}
                 </Text>
@@ -604,9 +686,7 @@ export function AutoUploadSettingsGlobalScreen() {
               {/* Synchronize Source */}
               <View style={styles.section}>
                 <View style={styles.sectionHeaderRow}>
-                  <Text style={styles.sectionTitle}>
-                    {copy.sourcesTitle}
-                  </Text>
+                  <Text style={styles.sectionTitle}>{copy.sourcesTitle}</Text>
                 </View>
                 <View style={styles.cardContainer}>
                   {/* Option 1: Album */}
@@ -637,12 +717,8 @@ export function AutoUploadSettingsGlobalScreen() {
                       />
                     </View>
                     <View style={styles.optionInfo}>
-                      <Text style={styles.optionTitle}>
-                        {copy.albumTitle}
-                      </Text>
-                      <Text style={styles.optionDesc}>
-                        {copy.albumDesc}
-                      </Text>
+                      <Text style={styles.optionTitle}>{copy.albumTitle}</Text>
+                      <Text style={styles.optionDesc}>{copy.albumDesc}</Text>
                     </View>
                     <SelectionIndicator
                       selected={albumEnabled}
@@ -664,12 +740,13 @@ export function AutoUploadSettingsGlobalScreen() {
                         />
                       </View>
                       <View style={styles.optionInfo}>
-                        <Text style={styles.optionTitle}>
-                          {copy.fileTitle}
-                        </Text>
+                        <Text style={styles.optionTitle}>{copy.fileTitle}</Text>
                         <Text style={styles.optionDesc}>
                           {fileSourceSelected
-                            ? (t('syncActivity.autoUploadSettings.sourceFileDescSelected', { count: selectedFiles.length }) || `已选择 ${selectedFiles.length} 个文件`)
+                            ? t(
+                                'syncActivity.autoUploadSettings.sourceFileDescSelected',
+                                { count: selectedFiles.length },
+                              ) || `已选择 ${selectedFiles.length} 个文件`
                             : copy.fileDescEmpty}
                         </Text>
                       </View>
@@ -686,9 +763,7 @@ export function AutoUploadSettingsGlobalScreen() {
                         onPress={handleAddFileSource}
                       >
                         <Text style={styles.addFileButtonText}>
-                          {fileSourceSelected
-                            ? copy.addMoreFile
-                            : copy.addFile}
+                          {fileSourceSelected ? copy.addMoreFile : copy.addFile}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -699,7 +774,11 @@ export function AutoUploadSettingsGlobalScreen() {
                             {copy.selectedFilesTitle}
                           </Text>
                           <Text style={styles.filesPreviewMeta}>
-                            {t('syncActivity.autoUploadSettings.selectedCountLabel', { count: selectedFiles.length }) || `${selectedFiles.length} 个`} · {selectedFileSizeLabel}
+                            {t(
+                              'syncActivity.autoUploadSettings.selectedCountLabel',
+                              { count: selectedFiles.length },
+                            ) || `${selectedFiles.length} 个`}{' '}
+                            · {selectedFileSizeLabel}
                           </Text>
                         </View>
                         {lastFileSkipMessage ? (
@@ -734,7 +813,12 @@ export function AutoUploadSettingsGlobalScreen() {
                               activeOpacity={0.75}
                               testID={`auto-upload-remove-file-${index}`}
                               accessibilityRole="button"
-                              accessibilityLabel={t('syncActivity.autoUploadSettings.removeFileLabel', { name: file.name }) || `移除 ${file.name}`}
+                              accessibilityLabel={
+                                t(
+                                  'syncActivity.autoUploadSettings.removeFileLabel',
+                                  { name: file.name },
+                                ) || `移除 ${file.name}`
+                              }
                               onPress={() =>
                                 handleRemoveSelectedFile(
                                   getDocumentUploadFileKey(file),

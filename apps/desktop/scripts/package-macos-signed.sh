@@ -109,7 +109,7 @@ configure_app_store_connect_key() {
 configure_app_store_connect_key
 EXPECTED_CSC_TEAM_ID="$(resolve_expected_csc_team_id)"
 export CSC_NAME="${CSC_NAME:-$(detect_identity_for_team "${EXPECTED_CSC_TEAM_ID}")}"
-export SYNCFLOW_BUILD_NUMBER="${SYNCFLOW_BUILD_NUMBER:-$(resolve_ios_build_number)}"
+export LYNAVO_BUILD_NUMBER="${LYNAVO_BUILD_NUMBER:-$(resolve_ios_build_number)}"
 DESKTOP_PRODUCT_NAME="$(resolve_desktop_package_field productName)"
 DESKTOP_VERSION="$(resolve_desktop_package_field version)"
 DMG_CREATE_VOLUME_NAME="${DESKTOP_PRODUCT_NAME} DMG"
@@ -138,7 +138,7 @@ if [[ "${CSC_NAME}" != *"(${EXPECTED_CSC_TEAM_ID})"* ]]; then
   exit 1
 fi
 
-if [[ -z "${SYNCFLOW_BUILD_NUMBER}" ]]; then
+if [[ -z "${LYNAVO_BUILD_NUMBER}" ]]; then
   echo "Failed to resolve desktop build number from iOS CURRENT_PROJECT_VERSION." >&2
   exit 1
 fi
@@ -159,7 +159,7 @@ chmod 600 "${APPLE_API_KEY}" 2>/dev/null || true
 echo "Signing identity: ${CSC_NAME}"
 echo "Expected Team ID: ${EXPECTED_CSC_TEAM_ID}"
 echo "API key path: ${APPLE_API_KEY}"
-echo "Build number: ${SYNCFLOW_BUILD_NUMBER}"
+echo "Build number: ${LYNAVO_BUILD_NUMBER}"
 echo "Target: ${TARGET}"
 echo "Electron builder config: ${ELECTRON_BUILDER_CONFIG}"
 
@@ -171,8 +171,8 @@ pnpm --filter @lynavo-drive/desktop build:sidecar:mac
 BUILD_ARGS=(
   "--config"
   "${ELECTRON_BUILDER_CONFIG}"
-  "-c.buildVersion=${SYNCFLOW_BUILD_NUMBER}"
-  "-c.extraMetadata.syncflowBuildNumber=${SYNCFLOW_BUILD_NUMBER}"
+  "-c.buildVersion=${LYNAVO_BUILD_NUMBER}"
+  "-c.extraMetadata.lynavoDriveBuildNumber=${LYNAVO_BUILD_NUMBER}"
 )
 
 build_macos_arch() {

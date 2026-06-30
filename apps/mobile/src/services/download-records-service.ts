@@ -28,7 +28,7 @@ interface RecordDownloadedFileInput {
   savedToPhotos?: boolean;
 }
 
-export const DOWNLOAD_RECORDS_STORAGE_KEY = 'syncflow:download-records:v1';
+export const DOWNLOAD_RECORDS_STORAGE_KEY = 'lynavo-drive:download-records:v1';
 const MAX_RECORDS = 50;
 const LEGACY_MOCK_PATH_PREFIX = '/mock/path/';
 

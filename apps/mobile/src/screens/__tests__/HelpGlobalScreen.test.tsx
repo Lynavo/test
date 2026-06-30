@@ -68,7 +68,9 @@ describe('HelpGlobalScreen OSS copy', () => {
   it('describes local LAN operation instead of trial, subscription, or purchase flows', () => {
     const { getByText, queryByText } = render(<HelpGlobalScreen />);
 
-    expect(getByText('Does the open-source edition require a subscription?')).toBeTruthy();
+    expect(
+      getByText('Does the open-source edition require a subscription?'),
+    ).toBeTruthy();
     expect(
       getByText(
         'No. The OSS edition keeps local LAN pairing, foreground sync, and shared-folder browsing available without an official account.',

@@ -142,11 +142,11 @@ describe('directory-store', () => {
 
   it('fetchSharedFiles populates shared file entries', async () => {
     const mockSharedDir: SharedDirectoryDTO = {
-      path: '/Users/alice/SyncFlow/shared',
+      path: '/Users/alice/LynavoDrive/shared',
       files: [
         {
           name: 'notes.pdf',
-          path: '/Users/alice/SyncFlow/shared/notes.pdf',
+          path: '/Users/alice/LynavoDrive/shared/notes.pdf',
           type: 'document',
           size: 4096,
           modifiedAt: '2026-04-09T15:00:00Z',
@@ -154,7 +154,7 @@ describe('directory-store', () => {
         },
         {
           name: 'subdir',
-          path: '/Users/alice/SyncFlow/shared/subdir',
+          path: '/Users/alice/LynavoDrive/shared/subdir',
           type: 'other',
           size: 0,
           modifiedAt: '2026-04-09T14:00:00Z',
@@ -217,7 +217,9 @@ describe('directory-store', () => {
       sidecar: {
         getSharedList: vi
           .fn()
-          .mockRejectedValue(new Error('Sidecar GET /shared/list: 503 {"error":"storage path unavailable"}')),
+          .mockRejectedValue(
+            new Error('Sidecar GET /shared/list: 503 {"error":"storage path unavailable"}'),
+          ),
       },
     } as unknown as Window['electronAPI'];
 
@@ -234,7 +236,9 @@ describe('directory-store', () => {
       sidecar: {
         getDashboardDevices: vi
           .fn()
-          .mockRejectedValue(new Error('Sidecar GET /dashboard/devices: 503 {"error":"storage path unavailable"}')),
+          .mockRejectedValue(
+            new Error('Sidecar GET /dashboard/devices: 503 {"error":"storage path unavailable"}'),
+          ),
       },
     } as unknown as Window['electronAPI'];
 

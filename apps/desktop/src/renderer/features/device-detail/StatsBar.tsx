@@ -16,11 +16,7 @@ interface StatsBarProps {
   activeTransmissionMs: number;
 }
 
-export function StatsBar({
-  fileCount,
-  totalBytes,
-  activeTransmissionMs,
-}: StatsBarProps) {
+export function StatsBar({ fileCount, totalBytes, activeTransmissionMs }: StatsBarProps) {
   const { t } = useTranslation();
   if (fileCount === 0) return null;
 
@@ -42,10 +38,7 @@ export function StatsBar({
         </span>
       </div>
 
-      <div
-        className="h-3 w-px"
-        style={{ background: 'rgba(59,130,246,0.15)' }}
-      />
+      <div className="h-3 w-px" style={{ background: 'rgba(59,130,246,0.15)' }} />
 
       <div className="flex items-center gap-2">
         <HardDrive className="h-3.5 w-3.5" style={{ color: colors.storageIcon }} />
@@ -54,10 +47,7 @@ export function StatsBar({
         </span>
       </div>
 
-      <div
-        className="h-3 w-px"
-        style={{ background: 'rgba(59,130,246,0.15)' }}
-      />
+      <div className="h-3 w-px" style={{ background: 'rgba(59,130,246,0.15)' }} />
 
       <div className="flex items-center gap-2">
         <Clock className="h-3.5 w-3.5" style={{ color: colors.clockIcon }} />

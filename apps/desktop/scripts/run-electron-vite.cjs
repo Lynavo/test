@@ -73,10 +73,7 @@ function buildElectronViteEnv({ command, parentEnv }) {
 
 function bridgeLynavoDevEnv(env) {
   const releaseChannel = firstNonEmpty(env.LYNAVO_RELEASE_CHANNEL);
-  const apiBaseUrl = firstNonEmpty(
-    env.LYNAVO_API_BASE_URL,
-    DEFAULT_LYNAVO_DEV_API_BASE_URL,
-  );
+  const apiBaseUrl = firstNonEmpty(env.LYNAVO_API_BASE_URL, DEFAULT_LYNAVO_DEV_API_BASE_URL);
 
   if (releaseChannel) {
     env.LYNAVO_RELEASE_CHANNEL = releaseChannel;

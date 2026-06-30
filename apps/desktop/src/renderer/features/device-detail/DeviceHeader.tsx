@@ -18,15 +18,9 @@ interface DeviceHeaderProps {
   onClose: () => void;
 }
 
-export function DeviceHeader({
-  device,
-  selectedDate,
-  availableDates,
-  onClose,
-}: DeviceHeaderProps) {
+export function DeviceHeader({ device, selectedDate, availableDates, onClose }: DeviceHeaderProps) {
   const { t } = useTranslation();
-  const isPhone =
-    device.platform === 'ios' || /android|mobile/i.test(device.platform);
+  const isPhone = device.platform === 'ios' || /android|mobile/i.test(device.platform);
   const DeviceIcon = isPhone ? Smartphone : Monitor;
   const hasMaterializedDateDir = availableDates.includes(selectedDate);
   const selectedFolderPath =
@@ -70,10 +64,7 @@ export function DeviceHeader({
       <div className="min-w-0 flex-1">
         <h2 className="text-base font-bold" style={{ color: colors.titleText }}>
           {device.displayName}
-          <span
-            className="ml-2 text-xs font-normal"
-            style={{ color: colors.subtitleText }}
-          >
+          <span className="ml-2 text-xs font-normal" style={{ color: colors.subtitleText }}>
             {device.ip}
           </span>
         </h2>

@@ -98,8 +98,8 @@ export const previewDashboardDevices: DashboardDeviceDTO[] = [
     todayFileCount: 8,
     todayBytes: 3456102400,
     storageLeft: '66.6 GB',
-    storagePath: '/Users/vividrop/Receive',
-    devicePath: '/Users/vividrop/Receive/iPhone 15 Pro',
+    storagePath: '/Users/lynavo/Receive',
+    devicePath: '/Users/lynavo/Receive/iPhone 15 Pro',
     currentFile: {
       filename: 'IMG_20260610_Office.mov',
       progress: 64,
@@ -117,8 +117,8 @@ export const previewDashboardDevices: DashboardDeviceDTO[] = [
     todayFileCount: 3,
     todayBytes: 1429200896,
     storageLeft: '88.2 GB',
-    storagePath: '/Users/vividrop/Receive',
-    devicePath: '/Users/vividrop/Receive/Galaxy S24 Ultra',
+    storagePath: '/Users/lynavo/Receive',
+    devicePath: '/Users/lynavo/Receive/Galaxy S24 Ultra',
   },
 ];
 

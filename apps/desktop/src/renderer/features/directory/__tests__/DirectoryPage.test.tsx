@@ -55,7 +55,7 @@ function setupElectronAPI() {
       exportDiagnostics: vi.fn().mockResolvedValue(null),
       getAppInfo: vi
         .fn()
-        .mockResolvedValue({ name: 'SyncFlow', version: '0.1.0', buildNumber: '1' }),
+        .mockResolvedValue({ name: 'LynavoDrive', version: '0.1.0', buildNumber: '1' }),
     },
   } as unknown as Window['electronAPI'];
 }
@@ -194,7 +194,7 @@ describe('DirectoryPathCard', () => {
   });
 
   it('renders root path derived from receivePath', () => {
-    // receivePath = '/Users/alice/SyncFlow/Received' — derivePaths checks for lowercase 'received'
+    // receivePath = '/Users/alice/LynavoDrive/Received' — derivePaths checks for lowercase 'received'
     // Since the mock has 'Received' (capitalized), the whole path is treated as root
     render(<DirectoryPathCard />);
     // Root path appears in the root card and also as received sub-card — use getAllByText
@@ -356,7 +356,6 @@ describe('DirectoryPathCard', () => {
   });
 
   it('does not render account login or logout controls in the personal directory card', () => {
-
     render(<DirectoryPathCard />);
 
     const personalCard = screen.getByText('我的电脑').closest('.rounded-2xl');
@@ -381,15 +380,15 @@ describe('DirectoryPathCard', () => {
     useSettingsStore.setState({
       settings: {
         ...mockSettings,
-        receivePath: '/Users/alice/SyncFlow/received',
+        receivePath: '/Users/alice/LynavoDrive/received',
       },
     });
 
     render(<DirectoryPathCard />);
 
-    // Root should be /Users/alice/SyncFlow
-    expect(screen.getByText('/Users/alice/SyncFlow')).toBeInTheDocument();
-    expect(screen.getByText('/Users/alice/SyncFlow/shared')).toBeInTheDocument();
+    // Root should be /Users/alice/LynavoDrive
+    expect(screen.getByText('/Users/alice/LynavoDrive')).toBeInTheDocument();
+    expect(screen.getByText('/Users/alice/LynavoDrive/shared')).toBeInTheDocument();
   });
 
   it('blocks root directory changes while a transfer is active', async () => {
@@ -483,7 +482,7 @@ describe('ReceivedFileList', () => {
     useSettingsStore.setState({
       settings: {
         ...mockSettings,
-        receivePath: '/Users/alice/SyncFlow/Received',
+        receivePath: '/Users/alice/LynavoDrive/Received',
       },
     });
     useDirectoryStore.setState({
@@ -508,7 +507,7 @@ describe('ReceivedFileList', () => {
     fireEvent.click(screen.getByRole('button', { name: '打开' }));
 
     expect(openFile).toHaveBeenCalledWith(
-      '/Users/alice/SyncFlow/Received/iPhone 15/2026-04-10/vacation clip.mp4',
+      '/Users/alice/LynavoDrive/Received/iPhone 15/2026-04-10/vacation clip.mp4',
     );
   });
 });
@@ -562,7 +561,7 @@ describe('SharedFileList', () => {
     useSettingsStore.setState({
       settings: {
         ...mockSettings,
-        sharedPath: '/Users/alice/SyncFlow/shared',
+        sharedPath: '/Users/alice/LynavoDrive/shared',
       },
     });
     useDirectoryStore.setState({
@@ -580,6 +579,6 @@ describe('SharedFileList', () => {
     render(<SharedFileList />);
     fireEvent.click(screen.getByRole('button', { name: '打开' }));
 
-    expect(openFile).toHaveBeenCalledWith('/Users/alice/SyncFlow/shared/nested/report.pdf');
+    expect(openFile).toHaveBeenCalledWith('/Users/alice/LynavoDrive/shared/nested/report.pdf');
   });
 });

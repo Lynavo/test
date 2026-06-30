@@ -32,7 +32,10 @@ import {
   X,
 } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { SIDECAR_HTTP_PORT, type BindingStateDTO } from '@lynavo-drive/contracts';
+import {
+  SIDECAR_HTTP_PORT,
+  type BindingStateDTO,
+} from '@lynavo-drive/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { colors } from '../theme/globalColors';
@@ -240,13 +243,13 @@ const MOCK_RECEIVED_ITEMS: ReceivedLibraryMediaItem[] = [
 ];
 
 type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __SYNCFLOW_REMOTE_RESOURCES_PREVIEW__?: boolean;
+  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
 };
 
 function isRemoteResourcesPreviewMode() {
   return (
     (globalThis as RemoteResourcesPreviewGlobal)
-      .__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ === true
+      .__LYNAVO_REMOTE_RESOURCES_PREVIEW__ === true
   );
 }
 
@@ -256,14 +259,17 @@ function getPreviewReceivedItems() {
 
 function getSectionTitle(isoString: string, t: any) {
   const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return t('common.unknownTime') || '未知时间';
+  if (Number.isNaN(date.getTime()))
+    return t('common.unknownTime') || '未知时间';
 
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
 
-  if (date.toDateString() === today.toDateString()) return t('common.today') || '今天';
-  if (date.toDateString() === yesterday.toDateString()) return t('common.yesterday') || '昨天';
+  if (date.toDateString() === today.toDateString())
+    return t('common.today') || '今天';
+  if (date.toDateString() === yesterday.toDateString())
+    return t('common.yesterday') || '昨天';
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
     2,
     '0',
@@ -286,8 +292,10 @@ function isImage(mediaType: string, filename: string) {
 }
 
 function getFileTypeText(mediaType: string, filename: string, t: any) {
-  if (isVideo(mediaType, filename)) return t('sharedFiles.phoneSyncSpace.mediaTypes.video') || '视频';
-  if (isImage(mediaType, filename)) return t('sharedFiles.phoneSyncSpace.mediaTypes.photo') || '照片';
+  if (isVideo(mediaType, filename))
+    return t('sharedFiles.phoneSyncSpace.mediaTypes.video') || '视频';
+  if (isImage(mediaType, filename))
+    return t('sharedFiles.phoneSyncSpace.mediaTypes.photo') || '照片';
   return t('sharedFiles.phoneSyncSpace.mediaTypes.file') || '文件';
 }
 
@@ -301,7 +309,12 @@ function getFileIconType(
 }
 
 function getReceivedFileTitle(item: ReceivedLibraryMediaItem, t?: any) {
-  return item.filename || item.displayName || item.fileKey || (t ? t('sharedFiles.phoneSyncSpace.unnamedFile') : '未命名文件');
+  return (
+    item.filename ||
+    item.displayName ||
+    item.fileKey ||
+    (t ? t('sharedFiles.phoneSyncSpace.unnamedFile') : '未命名文件')
+  );
 }
 
 function getReceivedItemKey(item: ReceivedLibraryMediaItem, index: number) {
@@ -516,11 +529,15 @@ export function PhoneSyncSpaceGlobalScreen() {
     setLoadingMore(true);
     try {
       const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen next page request', {
-        host: desktop.host,
-        page: currentPage + 1,
-        pageSize: RECEIVED_LIBRARY_PAGE_SIZE,
-      });
+      recordDiagnosticsLog(
+        'PhoneSyncSpace',
+        'global screen next page request',
+        {
+          host: desktop.host,
+          page: currentPage + 1,
+          pageSize: RECEIVED_LIBRARY_PAGE_SIZE,
+        },
+      );
       const result = await listGlobalReceivedLibraryPage(desktop, {
         page: currentPage + 1,
         pageSize: RECEIVED_LIBRARY_PAGE_SIZE,
@@ -577,7 +594,8 @@ export function PhoneSyncSpaceGlobalScreen() {
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
             t('sharedFiles.localSaveUnsupported.title') || '暂不支持保存',
-            t('sharedFiles.localSaveUnsupported.message') || '当前版本还没有接入客户端本地保存能力，请等待后续版本。',
+            t('sharedFiles.localSaveUnsupported.message') ||
+              '当前版本还没有接入客户端本地保存能力，请等待后续版本。',
           );
           return;
         }
@@ -713,8 +731,7 @@ export function PhoneSyncSpaceGlobalScreen() {
 
   const totalSizeLabel = formatBytes(libraryTotalBytes);
   const totalItemCount = libraryTotalItems;
-  const sortLabel =
-    t(`sharedFiles.sortBy.${sortBy}`) || '时间';
+  const sortLabel = t(`sharedFiles.sortBy.${sortBy}`) || '时间';
   const showBlockingLoading = loading && !hasLoadedOnce;
   const showBlockingError = loadError && sortedItems.length === 0;
   const listFooter = loadingMore ? (
@@ -738,7 +755,9 @@ export function PhoneSyncSpaceGlobalScreen() {
         onPress={() => handleOpenReceivedItem(item)}
         disabled={isDeleted}
         accessibilityRole="button"
-        accessibilityLabel={t('sharedFiles.phoneSyncSpace.previewSyncedFile') || '预览已同步文件'}
+        accessibilityLabel={
+          t('sharedFiles.phoneSyncSpace.previewSyncedFile') || '预览已同步文件'
+        }
         accessibilityState={{ disabled: isDeleted }}
       >
         <ReceivedMediaThumbnail
@@ -758,8 +777,7 @@ export function PhoneSyncSpaceGlobalScreen() {
           {isDeleted ? (
             <View style={styles.deletedBadge}>
               <Text style={styles.deletedBadgeText}>
-                {t('sharedFiles.phoneSyncSpace.desktopDeleted') ||
-                  '電腦已刪除'}
+                {t('sharedFiles.phoneSyncSpace.desktopDeleted') || '電腦已刪除'}
               </Text>
             </View>
           ) : null}
@@ -770,7 +788,10 @@ export function PhoneSyncSpaceGlobalScreen() {
             (isDownloading || isDeleted) && styles.downloadButtonDisabled,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={t('sharedFiles.phoneSyncSpace.downloadSyncedFile') || '下载已同步文件'}
+          accessibilityLabel={
+            t('sharedFiles.phoneSyncSpace.downloadSyncedFile') ||
+            '下载已同步文件'
+          }
           accessibilityState={{ disabled: isDeleted || isDownloading }}
           disabled={isDeleted || isDownloading || downloadingId !== null}
           onPress={() => handleDownload(item)}
@@ -846,7 +867,10 @@ export function PhoneSyncSpaceGlobalScreen() {
               />
             ) : null}
             <Text style={styles.summaryText}>
-              {t('sharedFiles.phoneSyncSpace.summary', { count: totalItemCount, size: totalSizeLabel }) || `${totalItemCount} 个 · ${totalSizeLabel}`}
+              {t('sharedFiles.phoneSyncSpace.summary', {
+                count: totalItemCount,
+                size: totalSizeLabel,
+              }) || `${totalItemCount} 个 · ${totalSizeLabel}`}
             </Text>
           </View>
         </View>
@@ -858,7 +882,8 @@ export function PhoneSyncSpaceGlobalScreen() {
               {t('sharedFiles.phoneSyncSpace.loadingTitle') || '正在加载'}
             </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.phoneSyncSpace.loadingSubtitle') || '同步空间列表会在这里刷新。'}
+              {t('sharedFiles.phoneSyncSpace.loadingSubtitle') ||
+                '同步空间列表会在这里刷新。'}
             </Text>
           </View>
         ) : showBlockingError ? (
@@ -877,7 +902,8 @@ export function PhoneSyncSpaceGlobalScreen() {
               {t('sharedFiles.phoneSyncSpace.empty') || '尚無同步檔案'}
             </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.phoneSyncSpace.emptySubtitle') || '开启自动上传后，同步到电脑的素材会出现在这里。'}
+              {t('sharedFiles.phoneSyncSpace.emptySubtitle') ||
+                '开启自动上传后，同步到电脑的素材会出现在这里。'}
             </Text>
           </View>
         ) : (
@@ -890,7 +916,9 @@ export function PhoneSyncSpaceGlobalScreen() {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>{section.title}</Text>
                 <Text style={styles.sectionCount}>
-                  {t('sharedFiles.phoneSyncSpace.filesCount', { count: section.data.length }) || `${section.data.length} 个文件`}
+                  {t('sharedFiles.phoneSyncSpace.filesCount', {
+                    count: section.data.length,
+                  }) || `${section.data.length} 个文件`}
                 </Text>
               </View>
             )}
@@ -1106,7 +1134,9 @@ function SortSheet({
         <ModalBlurBackdrop overlayColor="rgba(23,25,28,0.18)" />
       </Pressable>
       <View style={styles.sheetCard}>
-        <Text style={styles.sheetTitle}>{t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}</Text>
+        <Text style={styles.sheetTitle}>
+          {t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}
+        </Text>
         {options.map(option => {
           const active = option.id === value;
           return (
@@ -1116,7 +1146,9 @@ function SortSheet({
               activeOpacity={0.7}
               onPress={() => onSelect(option.id)}
             >
-              <Text style={styles.sheetOptionText}>{t(`sharedFiles.sortBy.${option.id}`) || option.label}</Text>
+              <Text style={styles.sheetOptionText}>
+                {t(`sharedFiles.sortBy.${option.id}`) || option.label}
+              </Text>
               {active ? (
                 <Check
                   testID="phone-sync-sort-check-icon"
@@ -1180,7 +1212,9 @@ function ReceivedMediaPreviewModal({
           <TouchableOpacity
             style={styles.mediaPreviewCloseButton}
             accessibilityRole="button"
-            accessibilityLabel={t('sharedFiles.remoteAccess.closePreview') || '关闭预览'}
+            accessibilityLabel={
+              t('sharedFiles.remoteAccess.closePreview') || '关闭预览'
+            }
             activeOpacity={0.7}
             onPress={onClose}
           >

@@ -683,7 +683,7 @@ class SharedFilesService {
         filename: String
     ) throws -> URL {
         let previewDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_shared_previews", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_shared_previews", isDirectory: true)
             .appendingPathComponent(previewCacheToken(scope: scope, path: path), isDirectory: true)
         try FileManager.default.createDirectory(at: previewDir, withIntermediateDirectories: true)
         return previewDir.appendingPathComponent(previewFilename(scope: scope, path: path, filename: filename))
@@ -753,7 +753,7 @@ class SharedFilesService {
             ? "remote-file"
             : filename.trimmingCharacters(in: .whitespacesAndNewlines)
         let destDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_shared_downloads", isDirectory: true)
         try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
         let destURL = destDir.appendingPathComponent(safeFilename)
         try? FileManager.default.removeItem(at: destURL)
@@ -856,7 +856,7 @@ class SharedFilesService {
 
     private func partialDownloadURL(path: String) throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_shared_downloads_tmp", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_shared_downloads_tmp", isDirectory: true)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let token = Data(path.utf8)
             .base64EncodedString()

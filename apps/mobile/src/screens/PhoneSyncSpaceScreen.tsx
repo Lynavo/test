@@ -338,8 +338,7 @@ export function PhoneSyncSpaceScreen() {
           {isDeleted && (
             <View style={styles.missingBadge}>
               <Text style={styles.missingText}>
-                {t('sharedFiles.phoneSyncSpace.desktopDeleted') ||
-                  '電腦已刪除'}
+                {t('sharedFiles.phoneSyncSpace.desktopDeleted') || '電腦已刪除'}
               </Text>
             </View>
           )}

@@ -1,6 +1,6 @@
 {
   "title": "Connection Tutorial",
-  "prerequisite": "Before you start: install and open Vivi Drop on your computer.",
+  "prerequisite": "Before you start: install and open Lynavo Drive on your computer.",
   "tabs": {
     "lan": "Search",
     "qr": "QR",
@@ -10,19 +10,19 @@
   "cards": {
     "lan": {
       "title": "Local Network Search",
-      "description": "Let the phone find Vivi Drop on a computer connected to the same Wi-Fi.",
+      "description": "Let the phone find Lynavo Drive on a computer connected to the same Wi-Fi.",
       "steps": {
         "0": "Connect your phone and computer to the same Wi-Fi or local network.",
-        "1": "Open Vivi Drop on your computer and keep it running.",
+        "1": "Open Lynavo Drive on your computer and keep it running.",
         "2": "Open device search on your phone and wait for the computer to appear."
       },
-      "warning": "Need the desktop app? Open www.vividrop.cn in your computer browser to download it."
+      "warning": "Need the desktop app? Open www.lynavo.com in your computer browser to download it."
     },
     "qr": {
       "title": "Scan QR Code",
       "description": "Scan the QR Code shown by the desktop app to fill in the IP and pairing code automatically.",
       "steps": {
-        "0": "Show the QR Code from Global Settings in Vivi Drop on your computer.",
+        "0": "Show the QR Code from Global Settings in Lynavo Drive on your computer.",
         "1": "Tap Scan QR Code on your phone to open the camera.",
         "2": "Aim at the QR Code on the screen. The app will continue pairing after it is recognized."
       }
@@ -57,6 +57,6 @@
     },
     "supportTitle": "Still stuck?",
     "supportBody": "Export diagnostics or contact support so we can help investigate.",
-    "supportEmail": "support@vividrop.cn"
+    "supportEmail": "support@lynavo.com"
   }
 }

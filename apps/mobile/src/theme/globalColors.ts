@@ -22,9 +22,9 @@ export const colors = {
   destructiveForeground: '#FFFFFF',
   screenBackground: '#F7FBFF',
   screenTitle: '#17191C',
-  vividropInk: '#1D314A',
-  vividropBlue: '#42A7E2',
-  vividropBlueSoft: '#EAF5FF',
+  lynavoInk: '#1D314A',
+  lynavoBlue: '#42A7E2',
+  lynavoBlueSoft: '#EAF5FF',
   tabbarBackground: '#FFFFFF',
   glassSurface: 'rgba(255,255,255,0.92)',
 } as const;

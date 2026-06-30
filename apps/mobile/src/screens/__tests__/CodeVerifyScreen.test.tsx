@@ -157,7 +157,7 @@ describe('CodeVerifyScreen', () => {
     expect(getByText('去哪裡找連接碼？')).toBeTruthy();
     expect(
       getByText(
-        '請在電腦端 Vivi Drop 左側導覽列點擊「全域設定」，即可查看 6 位數字連接碼。',
+        '請在電腦端 Lynavo Drive 左側導覽列點擊「全域設定」，即可查看 6 位數字連接碼。',
       ),
     ).toBeTruthy();
     expect(

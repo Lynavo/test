@@ -51,9 +51,7 @@ export function DeviceDetailPage() {
     if (!selectedDevice) return;
 
     const interval = setInterval(() => {
-      useDeviceDetailStore
-        .getState()
-        .fetchDeviceFiles(selectedDevice.deviceId, { silent: true });
+      useDeviceDetailStore.getState().fetchDeviceFiles(selectedDevice.deviceId, { silent: true });
     }, DETAIL_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
@@ -70,8 +68,7 @@ export function DeviceDetailPage() {
   if (!selectedDevice) return null;
 
   const isPhone =
-    selectedDevice.platform === 'ios' ||
-    /android|mobile/i.test(selectedDevice.platform);
+    selectedDevice.platform === 'ios' || /android|mobile/i.test(selectedDevice.platform);
   const DeviceIcon = isPhone ? Smartphone : Monitor;
 
   const hasMaterializedDateDir = availableDates.includes(selectedDate);
@@ -127,10 +124,7 @@ export function DeviceDetailPage() {
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-bold" style={{ color: colors.titleText }}>
                 {selectedDevice.displayName}
-                <span
-                  className="ml-2 text-xs font-normal"
-                  style={{ color: colors.subtitleText }}
-                >
+                <span className="ml-2 text-xs font-normal" style={{ color: colors.subtitleText }}>
                   {selectedDevice.ip}
                 </span>
               </h1>
@@ -203,9 +197,7 @@ export function DeviceDetailPage() {
               <ErrorState
                 message={error}
                 onRetry={() =>
-                  useDeviceDetailStore
-                    .getState()
-                    .fetchDeviceFiles(selectedDevice.deviceId)
+                  useDeviceDetailStore.getState().fetchDeviceFiles(selectedDevice.deviceId)
                 }
               />
             ) : (

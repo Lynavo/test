@@ -3,8 +3,8 @@ import UIKit
 import BackgroundTasks
 
 class BackgroundExecutionService {
-    static let continuedTaskId = "com.syncflow.sync.continued"
-    static let maintenanceTaskId = "com.syncflow.sync.maintenance"
+    static let continuedTaskId = "com.lynavo.drive.sync.continued"
+    static let maintenanceTaskId = "com.lynavo.drive.sync.maintenance"
 
     /// Register background task handlers — call in AppDelegate didFinishLaunchingWithOptions
     func registerBackgroundTasks() {

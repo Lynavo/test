@@ -7,18 +7,13 @@ interface ErrorStateProps {
   onRetry?: () => void;
 }
 
-export function ErrorState({
-  message,
-  onRetry,
-}: ErrorStateProps) {
+export function ErrorState({ message, onRetry }: ErrorStateProps) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-center py-16">
       <GlassCard variant="muted" className="flex flex-col items-center gap-4 px-8 py-8">
         <AlertCircle className="h-8 w-8 text-slate-400" />
-        <p className="text-sm text-muted-foreground">
-          {message ?? t('errors.common.loadFailed')}
-        </p>
+        <p className="text-sm text-muted-foreground">{message ?? t('errors.common.loadFailed')}</p>
         {onRetry && (
           <button
             onClick={onRetry}

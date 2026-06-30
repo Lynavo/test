@@ -72,11 +72,7 @@ export function BonjourRuntimeSection() {
             <p className="text-xs text-muted-foreground">
               {runtime.bonjour.status === 'not_applicable'
                 ? t('settings.bonjour.defaultMessage')
-                : getBonjourRuntimeMessage(
-                    runtime.bonjour,
-                    t,
-                    'settings.bonjour.defaultMessage',
-                  )}
+                : getBonjourRuntimeMessage(runtime.bonjour, t, 'settings.bonjour.defaultMessage')}
             </p>
           </div>
 

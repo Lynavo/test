@@ -75,7 +75,7 @@ func TestHelloResWithResume(t *testing.T) {
 		},
 		ServerCapabilities: ServerCapabilities{
 			ShareEnabled:        true,
-			ShareName:           "SyncFlow",
+			ShareName:           "LynavoDrive",
 			LowDiskPauseEnabled: true,
 		},
 		Nonce: "deadbeef",
@@ -280,7 +280,7 @@ func TestPairResWithServerInfo(t *testing.T) {
 		ServerInfo: ServerInfo{
 			ServerID:   "server-1",
 			ServerName: "My MacBook",
-			ShareName:  "SyncFlow",
+			ShareName:  "LynavoDrive",
 		},
 	}
 

@@ -25,7 +25,7 @@ export type NativeModalBlurStyle =
   | 'systemUltraThinMaterialLight'
   | 'systemUltraThinMaterialDark';
 
-interface NativeVividropBlurViewProps extends ViewProps {
+interface NativeLynavoBlurViewProps extends ViewProps {
   blurStyle?: NativeModalBlurStyle;
   intensity?: number;
 }
@@ -37,14 +37,14 @@ interface NativeModalBlurViewProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const nativeComponentName = 'VividropBlurView';
+const nativeComponentName = 'LynavoBlurView';
 const hasNativeBlurView =
   (Platform.OS === 'ios' || Platform.OS === 'android') &&
   typeof UIManager.getViewManagerConfig === 'function' &&
   UIManager.getViewManagerConfig(nativeComponentName) != null;
 
-const NativeVividropBlurView = hasNativeBlurView
-  ? requireNativeComponent<NativeVividropBlurViewProps>(nativeComponentName)
+const NativeLynavoBlurView = hasNativeBlurView
+  ? requireNativeComponent<NativeLynavoBlurViewProps>(nativeComponentName)
   : null;
 
 export function NativeModalBlurView({
@@ -53,9 +53,9 @@ export function NativeModalBlurView({
   intensity = 0.08,
   style,
 }: NativeModalBlurViewProps) {
-  if (NativeVividropBlurView) {
+  if (NativeLynavoBlurView) {
     return (
-      <NativeVividropBlurView
+      <NativeLynavoBlurView
         blurStyle={blurStyle}
         intensity={intensity}
         pointerEvents="none"

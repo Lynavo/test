@@ -5,7 +5,13 @@ import { act } from '@testing-library/react-native';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
-    { languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN', languageTag: 'zh-Hans-CN', isRTL: false },
+    {
+      languageCode: 'zh',
+      scriptCode: 'Hans',
+      countryCode: 'CN',
+      languageTag: 'zh-Hans-CN',
+      isRTL: false,
+    },
   ],
 }));
 

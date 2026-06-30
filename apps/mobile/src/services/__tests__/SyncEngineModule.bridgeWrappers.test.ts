@@ -166,7 +166,7 @@ describe('SyncEngineModule shared bridge wrappers', () => {
 
   it('forwards optional display-name and app-info bridge methods when available', async () => {
     const appInfo = {
-      appName: 'Vivi Drop',
+      appName: 'Lynavo Drive',
       version: '1.0.0',
       build: '37',
     };

@@ -6,13 +6,13 @@
     "contact": "聯絡支援"
   },
   "product": {
-    "title": "Vivi Drop",
+    "title": "Lynavo Drive",
     "description": "區域網路素材無線同步工具，手機照片和影片高速傳至電腦"
   },
   "steps": {
     "step0": {
       "title": "下載 PC 端",
-      "description": "電腦瀏覽器訪問 vividrop.cn 下載安裝"
+      "description": "電腦瀏覽器訪問 lynavo.com 下載安裝"
     },
     "step1": {
       "title": "連接設備",
@@ -24,16 +24,16 @@
     }
   },
   "download": {
-    "label": "PC 端下載：www.vividrop.cn"
+    "label": "PC 端下載：www.lynavo.com"
   },
   "faq": {
     "item0": {
       "title": "一直顯示尋找設備怎麼辦？",
-      "answer": "請確認手機和電腦處於同一 Wi-Fi 網路，且 Vivi Drop PC 端正在執行。嘗試重新啟動 PC 端後，在手機端點擊重新掃描，或改用 6 位連接碼手動連接。"
+      "answer": "請確認手機和電腦處於同一 Wi-Fi 網路，且 Lynavo Drive PC 端正在執行。嘗試重新啟動 PC 端後，在手機端點擊重新掃描，或改用 6 位連接碼手動連接。"
     },
     "item1": {
       "title": "自動上傳為什麼會暫停？",
-      "answer": "自動上傳在切換 Wi-Fi 或電腦睡眠後會暫停。電腦喚醒且網路恢復後，Vivi Drop 會保留已完成檔案並自動繼續未完成佇列。背景權限受限時也會暫停，請在手機系統設定中確認 Vivi Drop 有背景刷新權限。"
+      "answer": "自動上傳在切換 Wi-Fi 或電腦睡眠後會暫停。電腦喚醒且網路恢復後，Lynavo Drive 會保留已完成檔案並自動繼續未完成佇列。背景權限受限時也會暫停，請在手機系統設定中確認 Lynavo Drive 有背景刷新權限。"
     },
     "item2": {
       "title": "上傳失敗怎麼處理？",
@@ -49,7 +49,7 @@
     },
     "item5": {
       "title": "共享目錄顯示為空怎麼辦？",
-      "answer": "請在 PC 端 Vivi Drop 設定中確認共享目錄路徑可用，並確認該目錄下有檔案。設定後在手機端下拉刷新即可看到內容。"
+      "answer": "請在 PC 端 Lynavo Drive 設定中確認共享目錄路徑可用，並確認該目錄下有檔案。設定後在手機端下拉刷新即可看到內容。"
     }
   },
   "contact": {

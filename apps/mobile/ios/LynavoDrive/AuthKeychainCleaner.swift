@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Minimal utility that wipes every generic-password Keychain item stored by
-/// the JS auth layer (react-native-keychain, service name `cn.vividrop.auth`).
+/// the JS auth layer (react-native-keychain, service name `com.lynavo.drive.auth`).
 ///
 /// The JS auth-store keeps the access/refresh-token blob under this service
 /// (see `apps/mobile/src/stores/auth-store.tsx`). Keychain entries survive
@@ -13,7 +13,7 @@ import Security
 /// reaches into the auth-layer's keychain service rather than the SyncEngine's.
 enum AuthKeychainCleaner {
     /// `KEYCHAIN_SERVICE` from `apps/mobile/src/stores/auth-store.tsx` (line 63).
-    private static let authKeychainService = "cn.vividrop.auth"
+    private static let authKeychainService = "com.lynavo.drive.auth"
 
     /// Remove every `kSecClassGenericPassword` entry filed under the auth
     /// service name. Best-effort: missing entries are treated as success.

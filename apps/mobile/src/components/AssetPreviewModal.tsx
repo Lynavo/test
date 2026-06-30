@@ -12,7 +12,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import type { AlbumAssetDTO, AssetPreviewSourceDTO } from '@lynavo-drive/contracts';
+import type {
+  AlbumAssetDTO,
+  AssetPreviewSourceDTO,
+} from '@lynavo-drive/contracts';
 import { Icon } from './Icon';
 import { getAssetPreviewSource } from '../services/SyncEngineModule';
 
@@ -36,7 +39,11 @@ interface PreviewPageProps {
   width: number;
 }
 
-const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive, width }) => {
+const PreviewPage: React.FC<PreviewPageProps> = ({
+  asset,
+  isActive,
+  width,
+}) => {
   const { t } = useTranslation();
   const [source, setSource] = useState<AssetPreviewSourceDTO | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +60,11 @@ const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive, width }) => 
       })
       .catch(() => {
         if (!cancelled) {
-          setSource({ uri: '', mediaType: asset.mediaType, error: 'not_found' });
+          setSource({
+            uri: '',
+            mediaType: asset.mediaType,
+            error: 'not_found',
+          });
           setLoading(false);
         }
       });
@@ -176,7 +187,11 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = ({
             setActiveIndex(newIndex);
           }}
           renderItem={({ item, index }) => (
-            <PreviewPage asset={item} isActive={index === activeIndex} width={width} />
+            <PreviewPage
+              asset={item}
+              isActive={index === activeIndex}
+              width={width}
+            />
           )}
           extraData={`${width}-${activeIndex}`}
         />

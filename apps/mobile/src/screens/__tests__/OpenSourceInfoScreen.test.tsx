@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { SubscriptionGlobalScreen } from '../SubscriptionGlobalScreen';
+import { OpenSourceInfoScreen } from '../OpenSourceInfoScreen';
 
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
@@ -68,14 +68,14 @@ jest.mock('../../components/GlobalGradientBackground', () => ({
   ),
 }));
 
-describe('SubscriptionGlobalScreen OSS information route', () => {
+describe('OpenSourceInfoScreen OSS information route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(true);
   });
 
   it('renders local LAN OSS copy with no purchase, restore, or gift-card actions', () => {
-    const { getByText, queryByText } = render(<SubscriptionGlobalScreen />);
+    const { getByText, queryByText } = render(<OpenSourceInfoScreen />);
 
     expect(getByText('Lynavo Drive Community')).toBeTruthy();
     expect(

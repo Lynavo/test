@@ -53,7 +53,7 @@ struct DiscoveredDevice {
 
 class DiscoveryService {
     private var browser: NWBrowser?
-    private let queue = DispatchQueue(label: "com.syncflow.discovery")
+    private let queue = DispatchQueue(label: "com.lynavo.drive.discovery")
     private var devices: [String: DiscoveredDevice] = [:]
     private var reachableDevices: [String: DiscoveredDevice] = [:]
     private var probeConnections: [String: NWConnection] = [:]

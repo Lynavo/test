@@ -12,10 +12,7 @@ import {
 } from '@renderer/components/ui/table';
 import { FileIcon } from '@renderer/components/shared/FileIcon';
 import { formatBytes, formatDuration, formatSmartDate } from '@renderer/lib/format';
-import {
-  useDeviceDetailStore,
-  type SortField,
-} from '@renderer/stores/device-detail-store';
+import { useDeviceDetailStore, type SortField } from '@renderer/stores/device-detail-store';
 import { useAppStore } from '@renderer/stores/app-store';
 
 const colors = {
@@ -69,9 +66,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
           cmp = (a.completedAt ?? '').localeCompare(b.completedAt ?? '');
           break;
         case 'createdAt':
-          cmp = (a.createdAtRemote ?? '').localeCompare(
-            b.createdAtRemote ?? '',
-          );
+          cmp = (a.createdAtRemote ?? '').localeCompare(b.createdAtRemote ?? '');
           break;
         case 'duration':
           cmp = a.activeTransmissionMs - b.activeTransmissionMs;
@@ -143,10 +138,7 @@ export function FileLedgerTable({ storagePath }: { storagePath: string }) {
           </TableRow>
         ) : (
           sortedFiles.map((file) => (
-            <TableRow
-              key={file.fileKey}
-              className="transition-colors hover:bg-blue-50/40"
-            >
+            <TableRow key={file.fileKey} className="transition-colors hover:bg-blue-50/40">
               <TableCell className="pr-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <FileIcon name={file.originalFilename} />

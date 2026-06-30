@@ -5,7 +5,13 @@ import { I18nextProvider, useTranslation } from 'react-i18next';
 
 jest.mock('react-native-localize', () => ({
   getLocales: () => [
-    { languageCode: 'zh', scriptCode: 'Hans', countryCode: 'CN', languageTag: 'zh-Hans-CN', isRTL: false },
+    {
+      languageCode: 'zh',
+      scriptCode: 'Hans',
+      countryCode: 'CN',
+      languageTag: 'zh-Hans-CN',
+      isRTL: false,
+    },
   ],
 }));
 

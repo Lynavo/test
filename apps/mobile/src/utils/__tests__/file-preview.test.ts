@@ -27,20 +27,22 @@ describe('file-preview', () => {
   });
 
   it('encodes filesystem paths before converting them to file URIs', () => {
-    expect(documentPreviewUri('/tmp/syncflow previews/客戶 報告#Q2.pdf')).toBe(
-      'file:///tmp/syncflow%20previews/%E5%AE%A2%E6%88%B6%20%E5%A0%B1%E5%91%8A%23Q2.pdf',
+    expect(
+      documentPreviewUri('/tmp/lynavo-drive previews/客戶 報告#Q2.pdf'),
+    ).toBe(
+      'file:///tmp/lynavo-drive%20previews/%E5%AE%A2%E6%88%B6%20%E5%A0%B1%E5%91%8A%23Q2.pdf',
     );
   });
 
   it('passes a sanitized filename and metadata to the share sheet', async () => {
     await openFileWithOtherApp(
-      '/tmp/syncflow_shared_downloads/cache-item',
+      '/tmp/lynavo-drive_shared_downloads/cache-item',
       '  客戶/報告:Q2.pdf  ',
     );
 
     expect(shareOpenMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'file:///tmp/syncflow_shared_downloads/cache-item',
+        url: 'file:///tmp/lynavo-drive_shared_downloads/cache-item',
         filename: '客戶_報告_Q2.pdf',
         title: '客戶_報告_Q2.pdf',
         subject: '客戶_報告_Q2.pdf',
@@ -64,7 +66,8 @@ describe('file-preview', () => {
 
     let moduleUnderTest: typeof import('../file-preview') | undefined;
     expect(() => {
-      moduleUnderTest = require('../file-preview') as typeof import('../file-preview');
+      moduleUnderTest =
+        require('../file-preview') as typeof import('../file-preview');
     }).not.toThrow();
     if (!moduleUnderTest) {
       throw new Error('file-preview module did not load');

@@ -31,7 +31,7 @@
     "title": "設定連線碼",
     "connectionCodeLabel": "連線碼",
     "connectionCodeChangeConfirm": "修改配對碼會中斷目前已配對的手機，所有手機需使用新配對碼重新配對。要繼續嗎？",
-    "saveAndEnter": "儲存並進入 ViviDrop",
+    "saveAndEnter": "儲存並進入 Lynavo Drive",
     "downloadSectionTitle": "使用與下載手機端",
     "errors": {
       "invalidCode": "請輸入 6 位數字連線碼",
@@ -41,7 +41,7 @@
     "steps": {
       "download": {
         "title": "掃碼下載手機端",
-        "description": "用手機掃描右側 QR Code，下載並安裝 ViviDrop 手機端"
+        "description": "用手機掃描右側 QR Code，下載並安裝 Lynavo Drive 手機端"
       },
       "pair": {
         "title": "輸入連線碼配對",

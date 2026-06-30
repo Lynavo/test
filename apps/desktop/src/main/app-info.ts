@@ -28,9 +28,9 @@ export function resolveBuildNumber(): string {
 
   try {
     const packaged = JSON.parse(readFileSync(packagedPackageJson, 'utf8')) as {
-      syncflowBuildNumber?: unknown;
+      lynavoDriveBuildNumber?: unknown;
     };
-    const packagedBuildNumber = normalizeBuildNumber(packaged.syncflowBuildNumber);
+    const packagedBuildNumber = normalizeBuildNumber(packaged.lynavoDriveBuildNumber);
     if (packagedBuildNumber) return packagedBuildNumber;
   } catch {
     // Fall through to repo build settings in development.
@@ -57,7 +57,7 @@ export function getAppInfo(): AppInfo {
 export function desktopClientHeaders(): Record<string, string> {
   const appInfo = getAppInfo();
   return {
-    'X-Client-App': 'vividrop-desktop',
+    'X-Client-App': 'lynavo-drive-desktop',
     'X-Client-Platform': process.platform,
     'X-Client-Version': appInfo.version,
     ...(appInfo.buildNumber ? { 'X-Client-Build': appInfo.buildNumber } : {}),

@@ -30,7 +30,7 @@ describe('settings-store', () => {
   it('initializes with mock settings', () => {
     const state = useSettingsStore.getState();
     expect(state.settings.connectionCode).toBe('839274');
-    expect(state.settings.receivePath).toBe('/Users/alice/SyncFlow/Received');
+    expect(state.settings.receivePath).toBe('/Users/alice/LynavoDrive/Received');
     expect(state.settings.shareStatus).toBe('ready');
   });
 
@@ -94,9 +94,9 @@ describe('settings-store', () => {
       receivePath: '/tmp/studio',
       personalPath: '/tmp/personal',
       sharedPath: '/tmp/shared',
-      shareAddress: '\\\\STUDIO\\SyncFlow',
+      shareAddress: '\\\\STUDIO\\LynavoDrive',
       shareStatus: 'ready',
-      shareName: 'SyncFlow',
+      shareName: 'LynavoDrive',
     };
 
     (window as Window & { electronAPI?: unknown }).electronAPI = {

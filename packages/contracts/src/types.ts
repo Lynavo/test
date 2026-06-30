@@ -57,8 +57,6 @@ interface ServerDriveEntitlements {
   checkedAt?: unknown;
 }
 
-const MAX_PAID_ENTITLEMENT_CHECKED_AT_AGE_MS = 24 * 60 * 60 * 1000;
-
 function isServerDriveEntitlements(value: unknown): value is ServerDriveEntitlements {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -84,12 +82,6 @@ function normalizeCheckedAt(now: string | Date): string | null {
   return Number.isFinite(Date.parse(now)) ? now : null;
 }
 
-function parseTime(value: string | Date): number | null {
-  const time = value instanceof Date ? value.getTime() : Date.parse(value);
-
-  return Number.isFinite(time) ? time : null;
-}
-
 function normalizeEntitlementSource(source: unknown): EntitlementSource {
   switch (source) {
     case 'guest':
@@ -104,59 +96,6 @@ function normalizeEntitlementSource(source: unknown): EntitlementSource {
     default:
       return 'unknown';
   }
-}
-
-function isPaidEntitlementSource(source: EntitlementSource): boolean {
-  return (
-    source === 'subscription' ||
-    source === 'trial' ||
-    source === 'gift_card' ||
-    source === 'legacy' ||
-    source === 'official_override'
-  );
-}
-
-function hasFreshCheckedAt(checkedAtValue: unknown, nowTime: number | null): boolean {
-  if (nowTime === null || typeof checkedAtValue !== 'string') {
-    return false;
-  }
-
-  const checkedAtTime = Date.parse(checkedAtValue);
-
-  if (!Number.isFinite(checkedAtTime)) {
-    return false;
-  }
-
-  return (
-    checkedAtTime <= nowTime && nowTime - checkedAtTime <= MAX_PAID_ENTITLEMENT_CHECKED_AT_AGE_MS
-  );
-}
-
-function canUsePaidFeatures(
-  source: EntitlementSource,
-  expiresAtValue: unknown,
-  checkedAtValue: unknown,
-  nowTime: number | null,
-): boolean {
-  if (nowTime === null) {
-    return false;
-  }
-
-  if (!isPaidEntitlementSource(source) || !hasFreshCheckedAt(checkedAtValue, nowTime)) {
-    return false;
-  }
-
-  if (typeof expiresAtValue !== 'string') {
-    return false;
-  }
-
-  const expiresAtTime = Date.parse(expiresAtValue);
-
-  if (!Number.isFinite(expiresAtTime)) {
-    return false;
-  }
-
-  return expiresAtTime > nowTime;
 }
 
 export function resolveDriveEntitlements(input: ResolveDriveEntitlementsInput): DriveEntitlements {
@@ -198,21 +137,11 @@ export function resolveDriveEntitlements(input: ResolveDriveEntitlementsInput): 
   const expiresAtValue = input.serverEntitlements.expiresAt;
   const expiresAt = typeof expiresAtValue === 'string' ? expiresAtValue : null;
   const source = normalizeEntitlementSource(input.serverEntitlements.source);
-  const paidFeaturesAvailable =
-    input.officialCapabilitiesAvailable &&
-    canUsePaidFeatures(
-      source,
-      expiresAtValue,
-      input.serverEntitlements.checkedAt,
-      parseTime(input.now),
-    );
 
   return {
     canUseLanForegroundAutoUpload: true,
-    canUseBackgroundContinuation:
-      paidFeaturesAvailable && input.serverEntitlements.canUseBackgroundContinuation === true,
-    canUseRemoteTunnel:
-      paidFeaturesAvailable && input.serverEntitlements.canUseRemoteTunnel === true,
+    canUseBackgroundContinuation: false,
+    canUseRemoteTunnel: false,
     source,
     expiresAt,
     checkedAt,
@@ -665,7 +594,7 @@ export interface HistoryLedgerCardDTO {
   activeTransmissionSeconds: number;
 }
 
-// ── Vivi Drop: Album & Shared Files ──
+// ── Lynavo Drive: Album & Shared Files ──
 
 /** Album asset item for the album workbench browser */
 export interface AlbumAssetDTO {
@@ -750,7 +679,7 @@ export type SubscriptionPlanTier = 'monthly' | 'yearly';
  */
 export interface SubscriptionPlanDto {
   id: number;
-  /** Apple IAP product identifier, e.g. "com.vividrop.mobile.china.monthly.999". */
+  /** Apple IAP product identifier, retained only for legacy diagnostic payload shape. */
   product_id: string;
   /** Backend entitlement tier this SKU grants. Configured by admin, not inferred from SKU text. */
   plan: SubscriptionPlanTier;

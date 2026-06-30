@@ -11,7 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.mrousavy.camera.react.CameraPackage
 import com.lynavo.drive.mobile.sync.NativeSyncEngineModule
 import com.lynavo.drive.mobile.sync.NativeSyncEnginePackage
-import com.lynavo.drive.mobile.ui.VividropUiPackage
+import com.lynavo.drive.mobile.ui.LynavoUiPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -22,7 +22,7 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           add(CameraPackage())
           add(NativeSyncEnginePackage())
-          add(VividropUiPackage())
+          add(LynavoUiPackage())
         },
     )
   }

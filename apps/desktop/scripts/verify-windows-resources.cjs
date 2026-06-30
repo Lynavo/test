@@ -13,7 +13,7 @@ const required = [
     file: 'dns-sd.exe',
     hint:
       'Bonjour runtime missing. Either install Apple Bonjour Print Services on a Windows host, or drop\n' +
-      '      dns-sd.exe + dnssd.dll into apps/desktop/resources-vendor/bonjour/, or set SYNCFLOW_BONJOUR_DIR.',
+      '      dns-sd.exe + dnssd.dll into apps/desktop/resources-vendor/bonjour/, or set LYNAVO_BONJOUR_DIR.',
   },
   {
     file: 'dnssd.dll',
@@ -28,7 +28,9 @@ if (missing.length === 0) {
   process.exit(0);
 }
 
-console.error('\n[verify-windows-resources] refusing to package — required Windows resources missing:');
+console.error(
+  '\n[verify-windows-resources] refusing to package — required Windows resources missing:',
+);
 for (const { file, hint } of missing) {
   console.error(`  ✗ apps/desktop/resources/${file}`);
   console.error(`    → ${hint}`);

@@ -345,15 +345,15 @@ enum SharedFilesRoutePolicy {
 
     static func peerProxySkipReasons(
         hasMultiDesktopBindingSource: Bool,
-        hasOnlineViviDropDesktopPeer: Bool,
+        hasOnlineLynavoDriveDesktopPeer: Bool,
         hasThirdPartyHelperConfigured: Bool
     ) -> [String] {
         var reasons: [String] = []
         if !hasMultiDesktopBindingSource {
             reasons.append("no_multi_desktop_binding_source")
         }
-        if !hasOnlineViviDropDesktopPeer {
-            reasons.append("no_online_vividrop_desktop_peer")
+        if !hasOnlineLynavoDriveDesktopPeer {
+            reasons.append("no_online_lynavo_drive_desktop_peer")
         }
         if !hasThirdPartyHelperConfigured {
             reasons.append("third_party_helper_not_configured")
@@ -363,9 +363,9 @@ enum SharedFilesRoutePolicy {
 
     static func shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource: Bool,
-        hasOnlineViviDropDesktopPeer: Bool
+        hasOnlineLynavoDriveDesktopPeer: Bool
     ) -> Bool {
-        hasMultiDesktopBindingSource && hasOnlineViviDropDesktopPeer
+        hasMultiDesktopBindingSource && hasOnlineLynavoDriveDesktopPeer
     }
 
     static func wakeLANReachableReason(baseReason: String) -> String {

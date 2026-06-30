@@ -23,7 +23,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import {
   ErrorCode,
-  type ErrorCode as SyncFlowErrorCode,
+  type ErrorCode as NativeSyncErrorCode,
   type PairingErrorMetadataDTO,
 } from '@lynavo-drive/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -49,7 +49,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function getNativeErrorCode(error: unknown): SyncFlowErrorCode | null {
+function getNativeErrorCode(error: unknown): NativeSyncErrorCode | null {
   if (!isRecord(error)) {
     return null;
   }
@@ -62,8 +62,8 @@ function getNativeErrorCode(error: unknown): SyncFlowErrorCode | null {
   if (!rawCode) {
     return null;
   }
-  return Object.values(ErrorCode).includes(rawCode as SyncFlowErrorCode)
-    ? (rawCode as SyncFlowErrorCode)
+  return Object.values(ErrorCode).includes(rawCode as NativeSyncErrorCode)
+    ? (rawCode as NativeSyncErrorCode)
     : null;
 }
 

@@ -9,10 +9,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type {
-  DashboardDeviceDTO,
-  DeviceDashboardStatus,
-} from '@lynavo-drive/contracts';
+import type { DashboardDeviceDTO, DeviceDashboardStatus } from '@lynavo-drive/contracts';
 import { DeviceNameSection } from '../DeviceNameSection';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
@@ -41,8 +38,8 @@ function makeDevice(
     todayFileCount: 0,
     todayBytes: 0,
     storageLeft: '256 GB',
-    storagePath: '/Users/x/Downloads/SyncFlow',
-    devicePath: '/Users/x/Downloads/SyncFlow/received/mobile-1',
+    storagePath: '/Users/x/Downloads/LynavoDrive',
+    devicePath: '/Users/x/Downloads/LynavoDrive/received/mobile-1',
   };
 }
 
@@ -69,19 +66,17 @@ function seedDevices(devices: DashboardDeviceDTO[]) {
 describe('DeviceNameSection — transfer lock', () => {
   beforeEach(() => {
     mockUpdateSettings.mockReset();
-    mockUpdateSettings.mockImplementation(
-      async (patch: { deviceName: string }) => ({
-        deviceName: patch.deviceName,
-        connectionCode: '',
-        rootPath: '',
-        receivePath: '',
-        personalPath: '',
-        sharedPath: '',
-        shareAddress: '',
-        shareStatus: 'unknown',
-        shareName: '',
-      }),
-    );
+    mockUpdateSettings.mockImplementation(async (patch: { deviceName: string }) => ({
+      deviceName: patch.deviceName,
+      connectionCode: '',
+      rootPath: '',
+      receivePath: '',
+      personalPath: '',
+      sharedPath: '',
+      shareAddress: '',
+      shareStatus: 'unknown',
+      shareName: '',
+    }));
     setElectronAPI();
     seedSettings();
     seedDevices([]);
@@ -108,10 +103,7 @@ describe('DeviceNameSection — transfer lock', () => {
   });
 
   it('locks input + save button + shows hint while any device is transferring', () => {
-    seedDevices([
-      makeDevice('connected_idle', 'mobile-1'),
-      makeDevice('transferring', 'mobile-2'),
-    ]);
+    seedDevices([makeDevice('connected_idle', 'mobile-1'), makeDevice('transferring', 'mobile-2')]);
 
     render(<DeviceNameSection />);
 
@@ -147,9 +139,7 @@ describe('DeviceNameSection — transfer lock', () => {
 
     render(<DeviceNameSection />);
 
-    expect(
-      (screen.getByTestId('device-name-input') as HTMLInputElement).disabled,
-    ).toBe(false);
+    expect((screen.getByTestId('device-name-input') as HTMLInputElement).disabled).toBe(false);
     expect(screen.queryByTestId('device-name-locked-hint')).toBeNull();
   });
 });

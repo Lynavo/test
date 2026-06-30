@@ -47,11 +47,11 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
 }
 
 const REMOTE_REQUEST_TIMEOUT_MS = parsePositiveInteger(
-  process.env.SYNCFLOW_REMOTE_REQUEST_TIMEOUT_MS,
+  process.env.LYNAVO_REMOTE_REQUEST_TIMEOUT_MS,
   DEFAULT_REMOTE_REQUEST_TIMEOUT_MS,
 );
 const SIDECAR_REQUEST_TIMEOUT_MS = parsePositiveInteger(
-  process.env.SYNCFLOW_SIDECAR_REQUEST_TIMEOUT_MS,
+  process.env.LYNAVO_SIDECAR_REQUEST_TIMEOUT_MS,
   DEFAULT_SIDECAR_REQUEST_TIMEOUT_MS,
 );
 

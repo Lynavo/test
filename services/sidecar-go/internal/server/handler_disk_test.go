@@ -183,7 +183,7 @@ func moveReceiveRootForRuntimeStorageTest(t *testing.T, cfg *config.Config) {
 	t.Helper()
 
 	rootParent := t.TempDir()
-	cfg.ReceiveDir = filepath.Join(rootParent, "ViviDrop", "received")
+	cfg.ReceiveDir = filepath.Join(rootParent, "Lynavo Drive", "received")
 	for _, dir := range []string{cfg.ReceiveDir, cfg.StagingDir(), cfg.SharedDir()} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("MkdirAll(%q): %v", dir, err)

@@ -36,7 +36,7 @@ function setElectronPlatform(
     },
     support: {
       getAppInfo: vi.fn().mockResolvedValue({
-        name: 'ViviDrop Desktop',
+        name: 'Lynavo Drive Desktop',
         version: '1.0.1',
         buildNumber: '56',
       }),
@@ -68,19 +68,19 @@ describe('SettingsPage', () => {
         deviceName: 'Studio PC',
         connectionCode: '',
         rootPath: '',
-        receivePath: '/Users/alice/Vivi Drop/received',
-        personalPath: '/Users/alice/Vivi Drop/personal',
-        sharedPath: '/Users/alice/Vivi Drop/shared',
+        receivePath: '/Users/alice/Lynavo Drive/received',
+        personalPath: '/Users/alice/Lynavo Drive/personal',
+        sharedPath: '/Users/alice/Lynavo Drive/shared',
         shareAddress: '',
         shareStatus: 'unknown',
-        shareName: 'SyncFlow',
+        shareName: 'LynavoDrive',
         allowCrossDeviceReceivedAccess: true,
       },
       shareStatusInfo: {
         enabled: false,
         smbUrl: null,
         status: 'unknown',
-        shareName: 'SyncFlow',
+        shareName: 'LynavoDrive',
       },
       validatingShare: false,
       copiedField: null,
@@ -98,7 +98,7 @@ describe('SettingsPage', () => {
     expect(screen.getByText('开源本地同步')).toBeInTheDocument();
     expect(screen.getByText('同一局域网内可直接配对、发现并自动同步。')).toBeInTheDocument();
     expect(screen.queryByText('我的账户')).not.toBeInTheDocument();
-    expect(screen.queryByText('test@vividrop.app')).not.toBeInTheDocument();
+    expect(screen.queryByText('test@old-product.example')).not.toBeInTheDocument();
     expect(screen.queryByText('会员状态')).not.toBeInTheDocument();
     expect(screen.queryByText('Pro')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '登入' })).not.toBeInTheDocument();
@@ -230,16 +230,14 @@ describe('SettingsPage', () => {
   it('renders the installed desktop version from app info', async () => {
     render(<SettingsPage />);
 
-    expect(
-      await screen.findByText('v1.0.1 (56) · 当前版本已安装'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('v1.0.1 (56) · 当前版本已安装')).toBeInTheDocument();
   });
 
   it('renders the product helper name in the version card', async () => {
     render(<SettingsPage />);
 
     expect(await screen.findByText('Lynavo Drive')).toBeInTheDocument();
-    expect(screen.queryByText('ViviDrop Desktop')).not.toBeInTheDocument();
+    expect(screen.queryByText('Lynavo Drive Desktop')).not.toBeInTheDocument();
   });
 
   it('renders support section and handles log upload', async () => {
@@ -282,7 +280,10 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
     expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
-      expect.stringContaining('mailto:developer@vividrop.app'),
+      expect.stringContaining('mailto:support@lynavo.com'),
+    );
+    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
+      expect.stringContaining(encodeURIComponent('Lynavo Drive Desktop 问题反馈 v1.0.1 (56)')),
     );
     expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
       expect.stringContaining(encodeURIComponent('手机无法连接电脑')),

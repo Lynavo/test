@@ -125,7 +125,7 @@ describe('AuthProvider guest local mode bootstrap', () => {
     });
 
     expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
-      service: 'cn.vividrop.auth',
+      service: 'com.lynavo.drive.auth',
     });
     expect(getOwnerUserId).not.toHaveBeenCalled();
     expect(setOwnerUserId).not.toHaveBeenCalled();
@@ -137,10 +137,10 @@ describe('AuthProvider guest local mode bootstrap', () => {
 
   test('clears legacy AsyncStorage official tokens without hydrating them', async () => {
     (AsyncStorage.getItem as jest.Mock).mockImplementation((key: string) => {
-      if (key === '@vividrop/auth/access_token') {
+      if (key === '@lynavo-drive/auth/access_token') {
         return Promise.resolve('legacy-access-token');
       }
-      if (key === '@vividrop/auth/refresh_token') {
+      if (key === '@lynavo-drive/auth/refresh_token') {
         return Promise.resolve('legacy-refresh-token');
       }
       return Promise.resolve(null);
@@ -171,10 +171,10 @@ describe('AuthProvider guest local mode bootstrap', () => {
     });
 
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
-      '@vividrop/auth/access_token',
+      '@lynavo-drive/auth/access_token',
     );
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith(
-      '@vividrop/auth/refresh_token',
+      '@lynavo-drive/auth/refresh_token',
     );
     expect(Keychain.setGenericPassword).not.toHaveBeenCalled();
   });

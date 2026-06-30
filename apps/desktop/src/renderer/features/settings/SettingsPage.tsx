@@ -39,7 +39,7 @@ import { SystemGuideSection } from './SystemGuideSection';
 type Tone = 'blue' | 'sky' | 'green' | 'amber' | 'rose' | 'slate';
 type AppInfo = Awaited<ReturnType<NonNullable<Window['electronAPI']>['support']['getAppInfo']>>;
 
-const developerFeedbackEmail = 'developer@vividrop.app';
+const developerFeedbackEmail = 'support@lynavo.com';
 const installedVersionFallback = '0.1.0';
 
 const localeLabels: Record<SupportedLocale, { label: string; caption: string }> = {
@@ -373,9 +373,7 @@ export function SettingsPage() {
                     aria-label={t('settings.profile.receivedAccess.title')}
                     aria-checked={crossDeviceReceivedAccessEnabled}
                     onClick={() =>
-                      void handleToggleCrossDeviceReceivedAccess(
-                        !crossDeviceReceivedAccessEnabled,
-                      )
+                      void handleToggleCrossDeviceReceivedAccess(!crossDeviceReceivedAccessEnabled)
                     }
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       crossDeviceReceivedAccessEnabled ? 'bg-[#17191c]' : 'bg-slate-200'

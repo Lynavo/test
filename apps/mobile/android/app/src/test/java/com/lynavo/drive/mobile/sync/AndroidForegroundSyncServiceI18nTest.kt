@@ -40,13 +40,13 @@ class AndroidForegroundSyncServiceI18nTest {
       .readText()
 
     val blockedCopy = listOf(
-      "Vivi Drop 正在背景同步",
-      "Vivi Drop 正在停止同步",
+      "Lynavo Drive 正在背景同步",
+      "Lynavo Drive 正在停止同步",
       "背景同步",
       "背景上傳",
       "正在上傳佇列中的檔案",
       "正在自動上傳新的相簿檔案",
-      "Vivi Drop is syncing in the background",
+      "Lynavo Drive is syncing in the background",
     )
 
     for (copy in blockedCopy) {

@@ -52,7 +52,7 @@ vi.mock('electron-log', () => ({
 describe('video-thumbnail-generator', () => {
   beforeEach(() => {
     rmSync(electronMockState.userDataPath, { recursive: true, force: true });
-    electronMockState.userDataPath = mkdtempSync(join(tmpdir(), 'vividrop-video-thumb-'));
+    electronMockState.userDataPath = mkdtempSync(join(tmpdir(), 'lynavo-drive-video-thumb-'));
     vi.resetModules();
     vi.clearAllMocks();
     electronMockState.thumbnail.getSize.mockReturnValue({ width: 256, height: 144 });
@@ -257,7 +257,7 @@ describe('video-thumbnail-generator', () => {
     const root = electronMockState.userDataPath;
     const sourcePath = join(root, 'clip.mov');
     const cacheRoot = join(root, 'thumbnail-cache');
-    const outsideDir = mkdtempSync(join(tmpdir(), 'vividrop-video-thumb-outside-'));
+    const outsideDir = mkdtempSync(join(tmpdir(), 'lynavo-drive-video-thumb-outside-'));
     const cacheDir = join(cacheRoot, 'aa');
     const cachePath = join(cacheDir, 'cache.jpg');
     writeFileSync(sourcePath, 'video');
@@ -287,7 +287,7 @@ describe('video-thumbnail-generator', () => {
     const root = electronMockState.userDataPath;
     const sourcePath = join(root, 'clip.mov');
     const cacheRoot = join(root, 'thumbnail-cache');
-    const outsideDir = mkdtempSync(join(tmpdir(), 'vividrop-video-thumb-outside-'));
+    const outsideDir = mkdtempSync(join(tmpdir(), 'lynavo-drive-video-thumb-outside-'));
     const cachePath = join(cacheRoot, 'aa', 'cache.jpg');
     writeFileSync(sourcePath, 'video');
     symlinkSync(outsideDir, cacheRoot, 'dir');

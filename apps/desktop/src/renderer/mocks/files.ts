@@ -9,7 +9,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T08:14:00Z',
     completedAt: '2026-03-19T14:29:00Z',
     activeTransmissionMs: 195_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/DJI_0021_PRO.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/DJI_0021_PRO.mp4',
   },
   {
     fileKey: 'f2',
@@ -19,7 +19,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T09:02:00Z',
     completedAt: '2026-03-19T14:28:00Z',
     activeTransmissionMs: 270_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/GoPro_Scene12_Take3.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/GoPro_Scene12_Take3.mp4',
   },
   {
     fileKey: 'f3',
@@ -29,7 +29,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T11:33:00Z',
     completedAt: '2026-03-19T14:27:00Z',
     activeTransmissionMs: 5_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/IMG_8493.HEIC',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/IMG_8493.HEIC',
   },
   {
     fileKey: 'f4',
@@ -39,7 +39,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-18T22:10:00Z',
     completedAt: '2026-03-19T13:44:00Z',
     activeTransmissionMs: 510_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/Sony_A7S3_Interview.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/Sony_A7S3_Interview.mp4',
   },
   {
     fileKey: 'f5',
@@ -49,7 +49,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T10:45:00Z',
     completedAt: '2026-03-19T14:26:00Z',
     activeTransmissionMs: 360_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/DJI_0024_PRO.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/DJI_0024_PRO.mp4',
   },
   {
     fileKey: 'f6',
@@ -59,7 +59,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-18T17:22:00Z',
     completedAt: '2026-03-19T14:20:00Z',
     activeTransmissionMs: 612_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/A001_C012_1024.braw',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/A001_C012_1024.braw',
   },
   {
     fileKey: 'f7',
@@ -69,7 +69,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T13:58:00Z',
     completedAt: '2026-03-19T14:10:00Z',
     activeTransmissionMs: 45_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/IMG_8492.HEIC',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/IMG_8492.HEIC',
   },
   {
     fileKey: 'f8',
@@ -79,7 +79,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T06:55:00Z',
     completedAt: '2026-03-19T09:32:00Z',
     activeTransmissionMs: 110_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/GoPro_Scene01.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/GoPro_Scene01.mp4',
   },
   {
     fileKey: 'f9',
@@ -89,7 +89,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-19T09:28:00Z',
     completedAt: '2026-03-19T09:30:00Z',
     activeTransmissionMs: 22_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-19/IMG_7801.HEIC',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-19/IMG_7801.HEIC',
   },
   {
     fileKey: 'f10',
@@ -99,7 +99,7 @@ export const mockFiles: DeviceFileLedgerDTO[] = [
     createdAtRemote: '2026-03-18T15:30:00Z',
     completedAt: '2026-03-18T18:00:00Z',
     activeTransmissionMs: 98_000,
-    finalPath: '/Users/alice/SyncFlow/iPhone_15_Pro/2026-03-18/Drone_Sunset_Clip.mp4',
+    finalPath: '/Users/alice/LynavoDrive/iPhone_15_Pro/2026-03-18/Drone_Sunset_Clip.mp4',
   },
 ];
 

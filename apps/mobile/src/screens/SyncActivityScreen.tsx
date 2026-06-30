@@ -64,10 +64,7 @@ import {
   getSyncActivityProgressPercent,
   type SyncActivityMainCardState,
 } from '../utils/syncActivityTransferState';
-import {
-  useAuth,
-  isFeatureAccessAllowed,
-} from '../stores/auth-store';
+import { useAuth, isFeatureAccessAllowed } from '../stores/auth-store';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 // ---------------------------------------------------------------------------
@@ -2067,7 +2064,6 @@ export function SyncActivityScreen() {
             t={t}
             totalBytes={todayStats.totalBytes}
           />
-
         </ScrollView>
         <SyncActivityTour
           visible={showSyncActivityTour}

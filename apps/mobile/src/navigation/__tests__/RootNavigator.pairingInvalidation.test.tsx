@@ -168,8 +168,8 @@ jest.mock('../../screens/SettingsGlobalScreen', () => ({
 jest.mock('../../screens/HelpGlobalScreen', () => ({
   HelpGlobalScreen: () => null,
 }));
-jest.mock('../../screens/SubscriptionGlobalScreen', () => ({
-  SubscriptionGlobalScreen: () => null,
+jest.mock('../../screens/OpenSourceInfoScreen', () => ({
+  OpenSourceInfoScreen: () => null,
 }));
 jest.mock('../../screens/AutoUploadSettingsGlobalScreen', () => ({
   AutoUploadSettingsGlobalScreen: () => null,

@@ -33,7 +33,7 @@ const (
 
 func main() {
 	cfgPath := "syncflow-sidecar.yml"
-	if v := os.Getenv("SYNCFLOW_CONFIG"); v != "" {
+	if v := os.Getenv("LYNAVO_CONFIG"); v != "" {
 		cfgPath = v
 	}
 
@@ -51,7 +51,7 @@ func main() {
 	}
 
 	logging.Setup(cfg.LogLevel, cfg.LogDir())
-	slog.Info("starting vivi-drop-sidecar",
+	slog.Info("starting lynavo-drive-sidecar",
 		"http_port", cfg.HTTPPort,
 		"tcp_port", cfg.TCPPort,
 		"platform", runtime.GOOS,

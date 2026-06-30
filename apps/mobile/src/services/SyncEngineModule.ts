@@ -2,7 +2,7 @@ import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import type { DocumentPickerResponse } from '@react-native-documents/picker';
 import {
   ErrorCode,
-  type ErrorCode as SyncFlowErrorCode,
+  type ErrorCode as NativeSyncErrorCode,
 } from '@lynavo-drive/contracts';
 import type {
   AlbumAssetDTO,
@@ -107,7 +107,7 @@ export interface AndroidBackgroundKeepaliveStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Typed wrappers for Vivi Drop native bridge methods
+// Typed wrappers for Lynavo Drive native bridge methods
 // ---------------------------------------------------------------------------
 
 export interface HistoryDaysResult {
@@ -485,11 +485,7 @@ export async function downloadDirectoryFile(
   scope: DirectoryScope,
   path: string,
 ): Promise<DownloadResult> {
-  const result = await NativeSyncEngine.downloadSharedFile(
-    scope,
-    path,
-    '',
-  );
+  const result = await NativeSyncEngine.downloadSharedFile(scope, path, '');
   return result as DownloadResult;
 }
 
@@ -533,21 +529,14 @@ export async function getDirectoryFileStreamUrl(
   scope: DirectoryScope,
   path: string,
 ): Promise<string> {
-  const result = await NativeSyncEngine.getSharedFileStreamUrl(
-    scope,
-    path,
-    '',
-  );
+  const result = await NativeSyncEngine.getSharedFileStreamUrl(scope, path, '');
   return result as string;
 }
 
 export async function getPersonalFileThumbnailUrl(
   path: string,
 ): Promise<string> {
-  const result = await NativeSyncEngine.getPersonalFileThumbnailUrl(
-    path,
-    '',
-  );
+  const result = await NativeSyncEngine.getPersonalFileThumbnailUrl(path, '');
   return result as string;
 }
 
@@ -774,7 +763,7 @@ export class PairingError extends Error {
   code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown';
   remainingAttempts?: number;
   blocked?: boolean;
-  nativeCode?: SyncFlowErrorCode;
+  nativeCode?: NativeSyncErrorCode;
   meta?: PairingErrorMetadataDTO;
 
   constructor(
@@ -782,7 +771,7 @@ export class PairingError extends Error {
     code: 'wrong_code' | 'blocked' | 'version_incompatible' | 'unknown',
     remainingAttempts?: number,
     blocked?: boolean,
-    nativeCode?: SyncFlowErrorCode,
+    nativeCode?: NativeSyncErrorCode,
     meta?: PairingErrorMetadataDTO,
   ) {
     super(message);
@@ -810,9 +799,9 @@ export async function pairDevice(params: {
 
     const rawCode = err?.code || '';
     const nativeCode = Object.values(ErrorCode).includes(
-      rawCode as SyncFlowErrorCode,
+      rawCode as NativeSyncErrorCode,
     )
-      ? (rawCode as SyncFlowErrorCode)
+      ? (rawCode as NativeSyncErrorCode)
       : undefined;
     const rawMeta = err?.meta ?? err?.userInfo?.meta ?? err?.userInfo;
     const meta: PairingErrorMetadataDTO | undefined = rawMeta

@@ -72,12 +72,12 @@ describe('App OSS startup settings', () => {
 
   it('refreshes local feature settings on launch and foreground without public wake activation', async () => {
     let appStateListener: ((state: AppStateStatus) => void) | null = null;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation(
-      (_event, listener) => {
+    jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_event, listener) => {
         appStateListener = listener;
         return { remove: jest.fn() } as unknown as EmitterSubscription;
-      },
-    );
+      });
 
     render(<App />);
 

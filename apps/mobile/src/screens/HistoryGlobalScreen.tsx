@@ -11,7 +11,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from 'react-i18next';
-import type { BindingStateDTO, DesktopSyncRecordDTO } from '@lynavo-drive/contracts';
+import type {
+  BindingStateDTO,
+  DesktopSyncRecordDTO,
+} from '@lynavo-drive/contracts';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
@@ -94,7 +97,9 @@ function buildHistoryGroups(
 ): HistoryDayGroup[] {
   const completedRecords = records
     .filter(item => item.status === 'completed')
-    .sort((a, b) => getRecordTime(b.completedAt) - getRecordTime(a.completedAt));
+    .sort(
+      (a, b) => getRecordTime(b.completedAt) - getRecordTime(a.completedAt),
+    );
   const groups: HistoryDayGroup[] = [];
 
   completedRecords.forEach(record => {
@@ -295,10 +300,7 @@ export function HistoryGlobalScreen() {
 
     if (groups.length === 0) {
       return (
-        <View
-          testID="history-empty-state-section"
-          style={styles.emptySection}
-        >
+        <View testID="history-empty-state-section" style={styles.emptySection}>
           <StateCard
             icon="cloud-download-outline"
             title={

@@ -85,7 +85,9 @@ const mockedGetReceivedFilePreviewUrl =
     typeof getReceivedFilePreviewUrl
   >;
 const mockedListGlobalReceivedFiles =
-  listGlobalReceivedFiles as jest.MockedFunction<typeof listGlobalReceivedFiles>;
+  listGlobalReceivedFiles as jest.MockedFunction<
+    typeof listGlobalReceivedFiles
+  >;
 const mockedListReceivedFiles = listReceivedFiles as jest.MockedFunction<
   typeof listReceivedFiles
 >;
@@ -256,7 +258,7 @@ describe('desktop-local-service', () => {
     mockedDownloadReceivedFile.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: null,
-      savedLocation: 'Pictures/Vivi Drop',
+      savedLocation: 'Pictures/Lynavo Drive',
     });
 
     await expect(
@@ -278,7 +280,7 @@ describe('desktop-local-service', () => {
     ).resolves.toEqual({
       savedToPhotos: true,
       localPath: null,
-      savedLocation: 'Pictures/Vivi Drop',
+      savedLocation: 'Pictures/Lynavo Drive',
     });
   });
 
@@ -1259,8 +1261,7 @@ describe('desktop-local-service', () => {
           'http://192.168.1.100:39394/personal/thumbnail/walkthrough.mov?v=4096-1780000',
         previewUrl:
           'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
-        streamUrl:
-          'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
+        streamUrl: 'http://192.168.1.100:39394/personal/stream/walkthrough.mov',
         addedAt: '2026-06-17T08:03:00.000Z',
         downloadCount: 0,
       },
@@ -1347,8 +1348,7 @@ describe('desktop-local-service', () => {
           modifiedAt: '2026-06-17T09:01:00.000Z',
           thumbnailUrl:
             'http://192.168.1.100:39394/personal/thumbnail/Desktop/photo.jpg?v=2048-1780000',
-          streamUrl:
-            'http://127.0.0.1:39394/personal/stream/Desktop/photo.jpg',
+          streamUrl: 'http://127.0.0.1:39394/personal/stream/Desktop/photo.jpg',
         },
       ],
       totalCount: 1,
@@ -1386,7 +1386,9 @@ describe('desktop-local-service', () => {
     ).resolves.toBe('http://127.0.0.1:39394/personal/stream/Desktop/notes.txt');
     await expect(
       getGlobalRemoteAccessThumbnailUrl('personal-dir:Desktop/notes.txt'),
-    ).resolves.toBe('http://127.0.0.1:39394/personal/thumbnail/Desktop/notes.txt');
+    ).resolves.toBe(
+      'http://127.0.0.1:39394/personal/thumbnail/Desktop/notes.txt',
+    );
     await expect(
       prepareGlobalRemoteAccessPreview(
         'personal-dir:Desktop/notes.txt',
@@ -1417,7 +1419,7 @@ describe('desktop-local-service', () => {
     mockedDownloadDirectoryFile.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: null,
-      savedLocation: 'Movies/Vivi Drop',
+      savedLocation: 'Movies/Lynavo Drive',
     });
 
     await expect(
@@ -1425,7 +1427,7 @@ describe('desktop-local-service', () => {
     ).resolves.toEqual({
       savedToPhotos: true,
       localPath: null,
-      savedLocation: 'Movies/Vivi Drop',
+      savedLocation: 'Movies/Lynavo Drive',
     });
   });
 
@@ -1528,7 +1530,7 @@ describe('desktop-local-service', () => {
       isDownloadSavedLocally({
         savedToPhotos: false,
         localPath: null,
-        savedLocation: 'Downloads/Vivi Drop',
+        savedLocation: 'Downloads/Lynavo Drive',
       }),
     ).toBe(true);
     expect(

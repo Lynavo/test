@@ -11,7 +11,7 @@ func TestGetLocalIP_NonEmpty(t *testing.T) {
 }
 
 func TestDetect_ReturnsValidResult(t *testing.T) {
-	result := Detect("/tmp/syncflow", "SyncFlow")
+	result := Detect("/tmp/lynavo-drive", "LynavoDrive")
 
 	// In a CI/test environment smbd is likely not running, so we expect
 	// needs_manual_enable. On a dev Mac with File Sharing enabled, we
@@ -32,9 +32,9 @@ func TestDetect_ReturnsValidResult(t *testing.T) {
 func TestDetectFromSharePoints_Ready_WhenNameAndPathMatch(t *testing.T) {
 	result := detectFromSharePoints(
 		"/Volumes/workspace/temp/syncFolwData",
-		"SyncFlow",
+		"LynavoDrive",
 		[]sharePoint{
-			{Name: "SyncFlow", Path: "/Volumes/workspace/temp/syncFolwData", SMBShared: true},
+			{Name: "LynavoDrive", Path: "/Volumes/workspace/temp/syncFolwData", SMBShared: true},
 		},
 		"192.168.1.10",
 	)
@@ -45,7 +45,7 @@ func TestDetectFromSharePoints_Ready_WhenNameAndPathMatch(t *testing.T) {
 	if !result.Enabled {
 		t.Fatal("expected enabled=true")
 	}
-	if result.SmbURL == nil || *result.SmbURL != "smb://192.168.1.10/SyncFlow" {
+	if result.SmbURL == nil || *result.SmbURL != "smb://192.168.1.10/LynavoDrive" {
 		t.Fatalf("unexpected smb url: %v", result.SmbURL)
 	}
 }
@@ -53,7 +53,7 @@ func TestDetectFromSharePoints_Ready_WhenNameAndPathMatch(t *testing.T) {
 func TestDetectFromSharePoints_Ready_WhenPathMatchesButNameDiffers(t *testing.T) {
 	result := detectFromSharePoints(
 		"/Volumes/workspace/temp/syncFolwData",
-		"SyncFlow",
+		"LynavoDrive",
 		[]sharePoint{
 			{Name: "syncFolwData", Path: "/Volumes/workspace/temp/syncFolwData", SMBShared: true},
 		},
@@ -77,7 +77,7 @@ func TestDetectFromSharePoints_Ready_WhenPathMatchesButNameDiffers(t *testing.T)
 func TestDetectFromSharePoints_ShareRegistered_WhenOtherShareExistsButPathMismatch(t *testing.T) {
 	result := detectFromSharePoints(
 		"/Volumes/workspace/temp/syncFolwData",
-		"SyncFlow",
+		"LynavoDrive",
 		[]sharePoint{
 			{Name: "OtherShare", Path: "/Users/example/Public", SMBShared: true},
 		},
@@ -97,8 +97,8 @@ func TestDetectFromSharePoints_ShareRegistered_WhenOtherShareExistsButPathMismat
 
 func TestDetectFromSharePoints_NeedsManualEnable_WhenNoSMBShares(t *testing.T) {
 	result := detectFromSharePoints(
-		"/tmp/syncflow",
-		"SyncFlow",
+		"/tmp/lynavo-drive",
+		"LynavoDrive",
 		[]sharePoint{
 			{Name: "Public", Path: "/Users/example/Public", SMBShared: false},
 		},
@@ -149,7 +149,7 @@ func TestParseWindowsSmbShares_FiltersSystemShares(t *testing.T) {
 	output := []byte(`[
 		{"Name":"ADMIN$","Path":"C:\\Windows","Special":true},
 		{"Name":"C$","Path":"C:\\","Special":true},
-		{"Name":"SyncFlow","Path":"C:\\Users\\Alice\\SyncFlow\\shared","Special":false}
+		{"Name":"LynavoDrive","Path":"C:\\Users\\Alice\\LynavoDrive\\shared","Special":false}
 	]`)
 
 	shares, err := parseWindowsSmbShares(output)
@@ -159,10 +159,10 @@ func TestParseWindowsSmbShares_FiltersSystemShares(t *testing.T) {
 	if len(shares) != 1 {
 		t.Fatalf("expected 1 user share, got %d", len(shares))
 	}
-	if shares[0].Name != "SyncFlow" {
+	if shares[0].Name != "LynavoDrive" {
 		t.Fatalf("unexpected share name: %q", shares[0].Name)
 	}
-	if shares[0].Path != `C:\Users\Alice\SyncFlow\shared` {
+	if shares[0].Path != `C:\Users\Alice\LynavoDrive\shared` {
 		t.Fatalf("unexpected share path: %q", shares[0].Path)
 	}
 	if !shares[0].SMBShared {
@@ -171,7 +171,7 @@ func TestParseWindowsSmbShares_FiltersSystemShares(t *testing.T) {
 }
 
 func TestParseWindowsSmbShares_SingleObject(t *testing.T) {
-	output := []byte(`{"Name":"SyncFlow","Path":"C:\\Users\\Alice\\SyncFlow\\shared","Special":false}`)
+	output := []byte(`{"Name":"LynavoDrive","Path":"C:\\Users\\Alice\\LynavoDrive\\shared","Special":false}`)
 
 	shares, err := parseWindowsSmbShares(output)
 	if err != nil {
@@ -180,15 +180,15 @@ func TestParseWindowsSmbShares_SingleObject(t *testing.T) {
 	if len(shares) != 1 {
 		t.Fatalf("expected 1 share, got %d", len(shares))
 	}
-	if shares[0].Name != "SyncFlow" {
+	if shares[0].Name != "LynavoDrive" {
 		t.Fatalf("unexpected share name: %q", shares[0].Name)
 	}
 }
 
 func TestSharePathCoversReceivePath_WindowsCaseInsensitiveParent(t *testing.T) {
 	if !sharePathCoversReceivePathForGOOS(
-		`C:\Users\Alice\SyncFlow`,
-		`c:/users/alice/syncflow/shared`,
+		`C:\Users\Alice\LynavoDrive`,
+		`c:/users/alice/lynavodrive/shared`,
 		"windows",
 	) {
 		t.Fatal("expected Windows parent share path to cover receive path")
@@ -196,16 +196,16 @@ func TestSharePathCoversReceivePath_WindowsCaseInsensitiveParent(t *testing.T) {
 }
 
 func TestIsAccessibleConfig(t *testing.T) {
-	if !IsAccessibleConfig("ready", "smb://192.168.1.10/SyncFlow") {
+	if !IsAccessibleConfig("ready", "smb://192.168.1.10/LynavoDrive") {
 		t.Fatal("expected ready share with URL to be accessible")
 	}
-	if !IsAccessibleConfig("share_registered", "smb://192.168.1.10/SyncFlow") {
+	if !IsAccessibleConfig("share_registered", "smb://192.168.1.10/LynavoDrive") {
 		t.Fatal("expected registered share with URL to be accessible")
 	}
 	if IsAccessibleConfig("ready", "") {
 		t.Fatal("expected ready share without URL to be inaccessible")
 	}
-	if IsAccessibleConfig("needs_manual_enable", "smb://192.168.1.10/SyncFlow") {
+	if IsAccessibleConfig("needs_manual_enable", "smb://192.168.1.10/LynavoDrive") {
 		t.Fatal("expected manual-enable share to be inaccessible")
 	}
 }

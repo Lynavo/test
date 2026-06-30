@@ -1,6 +1,6 @@
-appId: com.vividrop.desktop.china
+appId: com.lynavo.drive.desktop
 productName: Lynavo Drive
-buildVersion: "62"
+buildVersion: '62'
 mac:
   artifactName: LynavoDrive-${version}-${arch}.${ext}
   target:
@@ -56,7 +56,7 @@ win:
     - target: zip
       arch:
         - x64
-  executableName: Vivi Drop
+  executableName: Lynavo Drive
   extraResources:
     - from: resources
       filter:
@@ -71,7 +71,7 @@ linux:
         - x64
         - arm64
   category: Utility
-  executableName: vivi-drop
+  executableName: lynavo-drive
   icon: resources/icon-1024.png
   extraResources:
     - from: resources/lynavo-drive-sidecar

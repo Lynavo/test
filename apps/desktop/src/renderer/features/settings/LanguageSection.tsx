@@ -22,9 +22,7 @@ const localeLabelKeys: Record<SupportedLocale, string> = {
 
 export function LanguageSection() {
   const { t, i18n } = useTranslation();
-  const currentLocale = isSupportedLocale(i18n.resolvedLanguage)
-    ? i18n.resolvedLanguage
-    : 'en';
+  const currentLocale = isSupportedLocale(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'en';
 
   const handleLanguageChange = (value: string) => {
     if (!isSupportedLocale(value)) return;

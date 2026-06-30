@@ -23,7 +23,7 @@ class MainActivity : ReactActivity() {
    * Returns the name of the main component registered from JavaScript. This is used to schedule
    * rendering of the component.
    */
-  override fun getMainComponentName(): String = "SyncFlow"
+  override fun getMainComponentName(): String = "LynavoDrive"
 
   /**
    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]
@@ -41,13 +41,13 @@ class MainActivity : ReactActivity() {
   companion object {
     private val VISUAL_QA_KEYS =
         listOf(
-            "SYNCFLOW_VISUAL_QA",
-            "SYNCFLOW_VISUAL_QA_EMAIL",
-            "SYNCFLOW_VISUAL_QA_HOME_EMPTY",
-            "SYNCFLOW_VISUAL_QA_ROUTE",
-            "SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW",
-            "SYNCFLOW_DEV_SKIP_AUTH",
-            "SYNCFLOW_DEV_SKIP_AUTH_EMAIL",
+            "LYNAVO_VISUAL_QA",
+            "LYNAVO_VISUAL_QA_EMAIL",
+            "LYNAVO_VISUAL_QA_HOME_EMPTY",
+            "LYNAVO_VISUAL_QA_ROUTE",
+            "LYNAVO_VISUAL_QA_REMOTE_PREVIEW",
+            "LYNAVO_DEV_SKIP_AUTH",
+            "LYNAVO_DEV_SKIP_AUTH_EMAIL",
         )
 
     @Volatile private var visualQaLaunchExtras: Map<String, String> = emptyMap()

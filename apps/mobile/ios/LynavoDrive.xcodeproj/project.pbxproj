@@ -19,7 +19,7 @@
 		A02C8AC4F1D2121BB74AD3E9 /* AutoUploadConfigStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D380A808E5707AB54A6BAD29 /* AutoUploadConfigStore.swift */; };
 		BEA438F6884C0C6D0918C25E /* ManualUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42E22EE10B6D2552C83E31BB /* ManualUploadService.swift */; };
 		D4E1C9F42F92000100000001 /* BackgroundHandoffPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9F32F92000100000001 /* BackgroundHandoffPolicy.swift */; };
-		D4E1C9F62F7A000100000001 /* SyncFlowVersion.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9F52F7A000100000001 /* SyncFlowVersion.generated.swift */; };
+		D4E1C9F62F7A000100000001 /* LynavoVersion.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9F52F7A000100000001 /* LynavoVersion.generated.swift */; };
 		D4E1C9F82F8B000100000001 /* SharedFilesRoutePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9F72F8B000100000001 /* SharedFilesRoutePolicy.swift */; };
 		D4E1C9FA2F94000100000001 /* PresenceReconnectPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9F92F94000100000001 /* PresenceReconnectPolicy.swift */; };
 		D4E1C9FC2F95000100000001 /* WakeOnLanService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1C9FB2F95000100000001 /* WakeOnLanService.swift */; };
@@ -54,7 +54,7 @@
 		FC3ECF3E2F6F0C55000460F8 /* SyncFlowMobileTunnel.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC3ECF3F2F6F0D00000460F8 /* SyncFlowMobileTunnel.xcframework */; };
 		FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000001 /* AppleAuthModule.swift */; };
 		FFFF00000000000000000004 /* AppleAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000003 /* AppleAuthModuleBridge.m */; };
-		VD0000000000000000000002 /* VividropBlurViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = VD0000000000000000000001 /* VividropBlurViewManager.m */; };
+		VD0000000000000000000002 /* LynavoBlurViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = VD0000000000000000000001 /* LynavoBlurViewManager.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,7 +77,7 @@
 		D2C0A4C610F1EE6DEAF9DAB0 /* SharedFilesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFilesService.swift; sourceTree = "<group>"; };
 		D380A808E5707AB54A6BAD29 /* AutoUploadConfigStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoUploadConfigStore.swift; sourceTree = "<group>"; };
 		D4E1C9F32F92000100000001 /* BackgroundHandoffPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundHandoffPolicy.swift; sourceTree = "<group>"; };
-		D4E1C9F52F7A000100000001 /* SyncFlowVersion.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncFlowVersion.generated.swift; sourceTree = "<group>"; };
+		D4E1C9F52F7A000100000001 /* LynavoVersion.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LynavoVersion.generated.swift; sourceTree = "<group>"; };
 		D4E1C9F72F8B000100000001 /* SharedFilesRoutePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFilesRoutePolicy.swift; sourceTree = "<group>"; };
 		D4E1C9F92F94000100000001 /* PresenceReconnectPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceReconnectPolicy.swift; sourceTree = "<group>"; };
 		D4E1C9FB2F95000100000001 /* WakeOnLanService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakeOnLanService.swift; sourceTree = "<group>"; };
@@ -111,7 +111,7 @@
 		FC3ECF3F2F6F0D00000460F8 /* SyncFlowMobileTunnel.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = SyncFlowMobileTunnel.xcframework; path = Frameworks/SyncFlowMobileTunnel.xcframework; sourceTree = "<group>"; };
 		FFFF00000000000000000001 /* AppleAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleAuthModule.swift; path = LynavoDrive/AppleAuthModule.swift; sourceTree = "<group>"; };
 		FFFF00000000000000000003 /* AppleAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = AppleAuthModuleBridge.m; path = LynavoDrive/AppleAuthModuleBridge.m; sourceTree = "<group>"; };
-		VD0000000000000000000001 /* VividropBlurViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = VividropBlurViewManager.m; path = LynavoDrive/VividropBlurViewManager.m; sourceTree = "<group>"; };
+		VD0000000000000000000001 /* LynavoBlurViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LynavoBlurViewManager.m; path = LynavoDrive/LynavoBlurViewManager.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,7 +135,7 @@
 				5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */,
 				FFFF00000000000000000001 /* AppleAuthModule.swift */,
 				FFFF00000000000000000003 /* AppleAuthModuleBridge.m */,
-				VD0000000000000000000001 /* VividropBlurViewManager.m */,
+				VD0000000000000000000001 /* LynavoBlurViewManager.m */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
 				13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */,
@@ -220,7 +220,7 @@
 				D4E1CA032FA0000100000001 /* SidecarHostResolutionPolicy.swift */,
 				FC3ECC282F6F05B5000460F8 /* SyncEngineError.swift */,
 				FC3ECC292F6F05B5000460F8 /* SyncEngineManager.swift */,
-				D4E1C9F52F7A000100000001 /* SyncFlowVersion.generated.swift */,
+				D4E1C9F52F7A000100000001 /* LynavoVersion.generated.swift */,
 				FC3ECC2A2F6F05B5000460F8 /* TcpTransport.swift */,
 				FC3ECC2C2F6F05B5000460F8 /* UploadStore.swift */,
 				D4E1C9FD2F95000100000001 /* WakeMetadata.swift */,
@@ -393,7 +393,7 @@
 				5A2D2F6B3480DB6500C3A12F /* AuthKeychainCleaner.swift in Sources */,
 				FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */,
 				FFFF00000000000000000004 /* AppleAuthModuleBridge.m in Sources */,
-				VD0000000000000000000002 /* VividropBlurViewManager.m in Sources */,
+				VD0000000000000000000002 /* LynavoBlurViewManager.m in Sources */,
 				FC3ECC2E2F6F05B5000460F8 /* RNBridge.m in Sources */,
 				FC3ECC302F6F05B5000460F8 /* RNBridge.swift in Sources */,
 				FC3ECC312F6F05B5000460F8 /* BindingService.swift in Sources */,
@@ -414,7 +414,7 @@
 				D4E1CA112F96000100000001 /* ReceivedLibraryMediaURLPolicy.swift in Sources */,
 				FC3ECC3B2F6F05B5000460F8 /* SyncEngineError.swift in Sources */,
 				FC3ECC3C2F6F05B5000460F8 /* ProtocolSession.swift in Sources */,
-				D4E1C9F62F7A000100000001 /* SyncFlowVersion.generated.swift in Sources */,
+				D4E1C9F62F7A000100000001 /* LynavoVersion.generated.swift in Sources */,
 				D4E1CA012F91000100000001 /* SilentAudioService.swift in Sources */,
 				9AAE6A8410E525480D8CD473 /* AlbumBrowserService.swift in Sources */,
 				A02C8AC4F1D2121BB74AD3E9 /* AutoUploadConfigStore.swift in Sources */,
@@ -475,7 +475,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.global;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lynavo.drive.mobile;
 				PRODUCT_NAME = LynavoDrive;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -516,7 +516,7 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.vividrop.mobile.global;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lynavo.drive.mobile;
 				PRODUCT_NAME = LynavoDrive;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;

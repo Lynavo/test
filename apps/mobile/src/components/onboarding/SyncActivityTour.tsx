@@ -15,7 +15,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../Icon';
 
-
 interface SyncActivityTourProps {
   visible: boolean;
   onSkip: () => void;
@@ -105,7 +104,6 @@ const TOUR_BACKGROUND_IMAGES_GLOBAL: Record<TourTarget, ImageSourcePropType> = {
   settings: require('../../assets/onboarding/global/sync-activity-settings.png'),
   help: require('../../assets/onboarding/global/sync-activity-help.png'),
 };
-
 
 const TARGET_PADDING: Record<TourTarget, number> = {
   album: 12,

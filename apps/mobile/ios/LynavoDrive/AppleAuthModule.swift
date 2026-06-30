@@ -12,13 +12,13 @@ class AppleAuthModule: NSObject {
     var constants: [AnyHashable: Any] = [:]
     let environment = ProcessInfo.processInfo.environment
     [
-      "SYNCFLOW_VISUAL_QA",
-      "SYNCFLOW_VISUAL_QA_EMAIL",
-      "SYNCFLOW_VISUAL_QA_HOME_EMPTY",
-      "SYNCFLOW_VISUAL_QA_ROUTE",
-      "SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW",
-      "SYNCFLOW_DEV_SKIP_AUTH",
-      "SYNCFLOW_DEV_SKIP_AUTH_EMAIL",
+      "LYNAVO_VISUAL_QA",
+      "LYNAVO_VISUAL_QA_EMAIL",
+      "LYNAVO_VISUAL_QA_HOME_EMPTY",
+      "LYNAVO_VISUAL_QA_ROUTE",
+      "LYNAVO_VISUAL_QA_REMOTE_PREVIEW",
+      "LYNAVO_DEV_SKIP_AUTH",
+      "LYNAVO_DEV_SKIP_AUTH_EMAIL",
     ].forEach { key in
       if let value = environment[key] {
         constants[key] = value

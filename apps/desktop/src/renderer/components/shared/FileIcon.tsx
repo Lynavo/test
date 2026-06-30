@@ -14,12 +14,9 @@ interface FileIconConfig {
 function getFileIconConfig(filename: string): FileIconConfig {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
 
-  if (videoExts.has(ext))
-    return { icon: FileVideo, color: '#3b82f6', bg: 'rgba(59,130,246,0.09)' };
-  if (imageExts.has(ext))
-    return { icon: Image, color: '#0ea5c9', bg: 'rgba(14,165,201,0.09)' };
-  if (audioExts.has(ext))
-    return { icon: FileAudio, color: '#a855f7', bg: 'rgba(168,85,247,0.09)' };
+  if (videoExts.has(ext)) return { icon: FileVideo, color: '#3b82f6', bg: 'rgba(59,130,246,0.09)' };
+  if (imageExts.has(ext)) return { icon: Image, color: '#0ea5c9', bg: 'rgba(14,165,201,0.09)' };
+  if (audioExts.has(ext)) return { icon: FileAudio, color: '#a855f7', bg: 'rgba(168,85,247,0.09)' };
 
   return { icon: File, color: '#6b7a8d', bg: 'rgba(107,122,141,0.09)' };
 }
@@ -34,10 +31,7 @@ export function FileIcon({ name, className }: FileIconProps) {
 
   return (
     <div
-      className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-        className,
-      )}
+      className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', className)}
       style={{ background: bg }}
     >
       <Icon className="h-4 w-4" style={{ color }} />

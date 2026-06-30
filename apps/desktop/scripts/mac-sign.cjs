@@ -28,7 +28,10 @@ function buildCodesignArgs(identity, target, signOptions = {}, extraArgs = []) {
     args.push('--requirements', signOptions.requirements);
   }
 
-  if (Array.isArray(signOptions.additionalArguments) && signOptions.additionalArguments.length > 0) {
+  if (
+    Array.isArray(signOptions.additionalArguments) &&
+    signOptions.additionalArguments.length > 0
+  ) {
     args.push(...signOptions.additionalArguments);
   }
 
@@ -51,8 +54,7 @@ async function runCodesign(identity, target, signOptions, extraArgs = []) {
     } catch (error) {
       const stderr = `${error.stderr || ''}`;
       const shouldRetry =
-        attempt < attempts &&
-        stderr.includes('The timestamp service is not available.');
+        attempt < attempts && stderr.includes('The timestamp service is not available.');
 
       if (!shouldRetry) {
         throw error;
@@ -139,16 +141,32 @@ async function signTarget(opts, target, extraArgs = []) {
   // For MAS: Ensure helpers and nested executables have at least the inherit entitlements (which includes sandbox)
   if (!signOptions.entitlements && target !== opts.app) {
     if (target.includes('LoginItems') && target.endsWith('.app')) {
-      signOptions.entitlements = path.join(__dirname, '..', 'resources', 'entitlements.mas.login-helper.plist');
-      console.log(`[Sign] Applied specialized LoginHelper entitlements for: ${path.relative(opts.app, target)}`);
+      signOptions.entitlements = path.join(
+        __dirname,
+        '..',
+        'resources',
+        'entitlements.mas.login-helper.plist',
+      );
+      console.log(
+        `[Sign] Applied specialized LoginHelper entitlements for: ${path.relative(opts.app, target)}`,
+      );
     } else {
-      const defaultInherit = path.join(__dirname, '..', 'resources', 'entitlements.mas.inherit.plist');
+      const defaultInherit = path.join(
+        __dirname,
+        '..',
+        'resources',
+        'entitlements.mas.inherit.plist',
+      );
       signOptions.entitlements = opts.entitlementsInherit || defaultInherit;
-      console.log(`[Sign] Applied fallback inherit entitlements for: ${path.relative(opts.app, target)}`);
+      console.log(
+        `[Sign] Applied fallback inherit entitlements for: ${path.relative(opts.app, target)}`,
+      );
     }
   }
 
-  console.log(`[Sign] ${path.relative(opts.app, target) || 'Main App'} with entitlements: ${signOptions.entitlements || 'NONE'}`);
+  console.log(
+    `[Sign] ${path.relative(opts.app, target) || 'Main App'} with entitlements: ${signOptions.entitlements || 'NONE'}`,
+  );
   await runCodesign(opts.identity, target, signOptions, extraArgs);
 }
 

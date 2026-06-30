@@ -141,8 +141,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
   });
 
   it('direct-reconnects a known discovered device and resets to SyncActivity', async () => {
-    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
-    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
+    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce([
+      'server-known',
+    ]);
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'server-current',
+    });
 
     const { getByText, queryByPlaceholderText, queryByText } = render(
       <DeviceDiscoveryScreen />,
@@ -155,14 +159,21 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
       expect(mockNativeSyncEngine.getBindingState).toHaveBeenCalled();
     });
 
-    const onDiscoveredDevicesChangedCallback = mockEmitter.addListener.mock.calls.find(
-      ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
-    )?.[1];
+    const onDiscoveredDevicesChangedCallback =
+      mockEmitter.addListener.mock.calls.find(
+        ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
+      )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
     act(() => {
       onDiscoveredDevicesChangedCallback([
-        { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+        {
+          deviceId: 'server-known',
+          name: 'Studio Mac',
+          ip: '192.168.1.8',
+          port: 39393,
+          type: 'mac',
+        },
       ]);
     });
 
@@ -203,8 +214,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
   });
 
   it('falls back to code entry when known device direct reconnect fails', async () => {
-    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-known']);
-    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
+    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce([
+      'server-known',
+    ]);
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'server-current',
+    });
     mockNativeSyncEngine.pairDevice
       .mockRejectedValueOnce(new Error('PAIR_CODE_REQUIRED'))
       .mockResolvedValueOnce(undefined);
@@ -218,14 +233,21 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
       expect(mockNativeSyncEngine.getBindingState).toHaveBeenCalled();
     });
 
-    const onDiscoveredDevicesChangedCallback = mockEmitter.addListener.mock.calls.find(
-      ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
-    )?.[1];
+    const onDiscoveredDevicesChangedCallback =
+      mockEmitter.addListener.mock.calls.find(
+        ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
+      )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
     act(() => {
       onDiscoveredDevicesChangedCallback([
-        { deviceId: 'server-known', name: 'Studio Mac', ip: '192.168.1.8', port: 39393, type: 'mac' },
+        {
+          deviceId: 'server-known',
+          name: 'Studio Mac',
+          ip: '192.168.1.8',
+          port: 39393,
+          type: 'mac',
+        },
       ]);
     });
 
@@ -280,14 +302,21 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
       expect(mockNativeSyncEngine.getKnownDeviceIds).toHaveBeenCalled();
     });
 
-    const onDiscoveredDevicesChangedCallback = mockEmitter.addListener.mock.calls.find(
-      ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
-    )?.[1];
+    const onDiscoveredDevicesChangedCallback =
+      mockEmitter.addListener.mock.calls.find(
+        ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
+      )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
     act(() => {
       onDiscoveredDevicesChangedCallback([
-        { deviceId: 'server-new', name: 'New PC', ip: '192.168.1.9', port: 39393, type: 'win' },
+        {
+          deviceId: 'server-new',
+          name: 'New PC',
+          ip: '192.168.1.9',
+          port: 39393,
+          type: 'win',
+        },
       ]);
     });
 
@@ -314,8 +343,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
   });
 
   it('shows alert when tapping current device', async () => {
-    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce(['server-current']);
-    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({ deviceId: 'server-current' });
+    mockNativeSyncEngine.getKnownDeviceIds.mockResolvedValueOnce([
+      'server-current',
+    ]);
+    mockNativeSyncEngine.getBindingState.mockResolvedValueOnce({
+      deviceId: 'server-current',
+    });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
     const { getByText } = render(<DeviceDiscoveryScreen />);
@@ -325,14 +358,21 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
       expect(mockNativeSyncEngine.getBindingState).toHaveBeenCalled();
     });
 
-    const onDiscoveredDevicesChangedCallback = mockEmitter.addListener.mock.calls.find(
-      ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
-    )?.[1];
+    const onDiscoveredDevicesChangedCallback =
+      mockEmitter.addListener.mock.calls.find(
+        ([event]: [string]) => event === 'onDiscoveredDevicesChanged',
+      )?.[1];
     expect(onDiscoveredDevicesChangedCallback).toBeDefined();
 
     act(() => {
       onDiscoveredDevicesChangedCallback([
-        { deviceId: 'server-current', name: 'My Mac', ip: '192.168.1.5', port: 39393, type: 'mac' },
+        {
+          deviceId: 'server-current',
+          name: 'My Mac',
+          ip: '192.168.1.5',
+          port: 39393,
+          type: 'mac',
+        },
       ]);
     });
 

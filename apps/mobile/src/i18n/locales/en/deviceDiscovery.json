@@ -25,19 +25,19 @@
   "troubleshooting": {
     "title": "Can't find a device or not sure how to connect?",
     "sameWifi": "Make sure your phone and computer are connected to the same Wi-Fi or local network.",
-    "desktopApp": "Open www.vividrop.cn in your computer browser, download the desktop app, and keep it open.",
+    "desktopApp": "Open www.lynavo.com in your computer browser, download the desktop app, and keep it open.",
     "cta": "View full illustrated tutorial >",
     "notReadyTitle": "Computer app not ready yet?",
-    "notReadyDesc": "Download and open Vivi Drop on your computer from vividrop.cn first, then return to scan QR or enter code."
+    "notReadyDesc": "Download and open Lynavo Drive on your computer from lynavo.com first, then return to scan QR or enter code."
   },
   "onboarding": {
     "unconnected": {
       "skip": "Skip",
-      "title": "Start using Vivi Drop",
+      "title": "Start using Lynavo Drive",
       "subtitle": "Sync media wirelessly from phone to computer in three steps.",
       "downloadStep": {
         "title": "Install PC App",
-        "body": "Install Vivi Drop on your computer"
+        "body": "Install Lynavo Drive on your computer"
       },
       "connectStep": {
         "title": "Connect Phone",
@@ -64,7 +64,7 @@
       "title": "Enter IP to Pair",
       "description": "If the scan can't find your computer — especially Windows — enter the desktop app's IPv4 address directly.",
       "guideTitle": "Where do I find the code and IP?",
-      "guideBody": "Open Vivi Drop on your computer, choose Global Settings from the sidebar, then check the 6-digit code, device IP, or QR code.",
+      "guideBody": "Open Lynavo Drive on your computer, choose Global Settings from the sidebar, then check the 6-digit code, device IP, or QR code.",
       "hostLabel": "Server address",
       "confirm": "Continue",
       "hint": "Uses sync port 39393 by default. You'll still need to enter the 6-digit pairing code in the next step.",
@@ -106,7 +106,7 @@
     "pairingBlockedDesc": "This computer has blocked this phone from pairing. Please unblock it on the computer first.",
     "reenter": "Re-enter",
     "versionIncompatibleTitle": "Incompatible Version",
-    "versionIncompatibleDesc": "App versions are incompatible. Please update Vivi Drop on both devices.",
+    "versionIncompatibleDesc": "App versions are incompatible. Please update Lynavo Drive on both devices.",
     "rescan": "Scan Again",
     "connectionCodeError": "Connection Code Error",
     "connectionFailed": "Connection Failed",
@@ -151,9 +151,9 @@
     "lanDeviceTitle": "Computers on Local Network",
     "verifyingCode": "Verifying code...",
     "connect": "Connect",
-    "demoMacStudio": "ViviDrop Demo Mac Studio",
-    "demoMacBook": "ViviDrop Demo MacBook Pro",
-    "demoWindows": "ViviDrop Demo Windows Workstation",
+    "demoMacStudio": "Lynavo Drive Demo Mac Studio",
+    "demoMacBook": "Lynavo Drive Demo MacBook Pro",
+    "demoWindows": "Lynavo Drive Demo Windows Workstation",
     "connectionStatus": {
       "scanning": "Scanning...",
       "ready": "Scan complete",

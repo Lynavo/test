@@ -13,10 +13,7 @@ describe('device-detail-store', () => {
       pageSize: 200,
       totalItems: mockFiles.length,
       totalBytes: mockFiles.reduce((sum, file) => sum + file.fileSize, 0),
-      totalTransmissionMs: mockFiles.reduce(
-        (sum, file) => sum + file.activeTransmissionMs,
-        0,
-      ),
+      totalTransmissionMs: mockFiles.reduce((sum, file) => sum + file.activeTransmissionMs, 0),
       sortField: 'completedAt',
       sortDirection: 'desc',
       loading: false,

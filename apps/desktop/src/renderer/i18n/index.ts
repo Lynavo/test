@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import { isSupportedLocale, resolveLocale, type SupportedLocale } from './locale-resolver';
 import { resources } from './resources';
 
-export const LOCALE_STORAGE_KEY = 'syncflow.desktop.locale';
+export const LOCALE_STORAGE_KEY = 'lynavo-drive.desktop.locale';
 
 export function getPersistedLocale(): SupportedLocale | null {
   const value = window.localStorage.getItem(LOCALE_STORAGE_KEY);
@@ -28,12 +28,11 @@ void i18next.use(initReactI18next).init({
   fallbackLng: 'zh-Hans',
   interpolation: { escapeValue: false },
   returnNull: false,
-  missingInterpolationHandler:
-    import.meta.env.DEV
-      ? (text, value, _options) => {
-          console.warn('[i18n] missing interpolation', { text, value });
-        }
-      : undefined,
+  missingInterpolationHandler: import.meta.env.DEV
+    ? (text, value, _options) => {
+        console.warn('[i18n] missing interpolation', { text, value });
+      }
+    : undefined,
 });
 
 export default i18next;

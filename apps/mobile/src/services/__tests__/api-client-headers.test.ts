@@ -59,7 +59,7 @@ describe('api client headers', () => {
 
   test('builds app version headers for API requests', async () => {
     await expect(clientInfoHeaders()).resolves.toEqual({
-      'X-Client-App': 'vividrop-mobile',
+      'X-Client-App': 'lynavo-drive-mobile',
       'X-Client-Platform': 'android',
       'X-Client-Version': '1.0.0',
       'X-Client-Build': '9',
@@ -83,7 +83,7 @@ describe('api client headers', () => {
       expect.objectContaining({
         'Content-Type': 'application/json',
         'X-Auth-Device-Id': 'device-1',
-        'X-Client-App': 'vividrop-mobile',
+        'X-Client-App': 'lynavo-drive-mobile',
         'X-Client-Platform': 'android',
       }),
     );

@@ -6,7 +6,7 @@ import { resolveLocale, type SupportedLocale } from './locale-resolver';
 export type LanguagePreference = 'system' | SupportedLocale;
 
 export const LANGUAGE_PREFERENCE_STORAGE_KEY =
-  '@vividrop/i18n/language_preference';
+  '@lynavo-drive/i18n/language_preference';
 
 const LANGUAGE_PREFERENCES: readonly LanguagePreference[] = [
   'system',

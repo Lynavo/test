@@ -4,15 +4,15 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.syncflow.sync.continued</string>
-		<string>com.syncflow.sync.maintenance</string>
+		<string>com.lynavo.drive.sync.continued</string>
+		<string>com.lynavo.drive.sync.maintenance</string>
 	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>zh-Hans</string>
 	<key>CFBundleDisplayName</key>
-	<string>Vivi Drop</string>
+	<string>Lynavo Drive</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,7 +25,7 @@
 		<string>en</string>
 	</array>
 	<key>CFBundleName</key>
-	<string>Vivi Drop</string>
+	<string>Lynavo Drive</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -61,13 +61,13 @@
 		<string>_lynavodrive._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Vivi Drop 需要相机权限来扫描桌面端的二维码连接码</string>
+	<string>Lynavo Drive 需要相机权限来扫描桌面端的二维码连接码</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Vivi Drop 需要访问本地网络以发现和连接同一局域网内的电脑</string>
+	<string>Lynavo Drive 需要访问本地网络以发现和连接同一局域网内的电脑</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Vivi Drop 仅在需要识别附近设备时使用定位相关能力，不会采集您的位置信息</string>
+	<string>Lynavo Drive 仅在需要识别附近设备时使用定位相关能力，不会采集您的位置信息</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Vivi Drop 需要访问您的照片库以同步媒体文件到电脑</string>
+	<string>Lynavo Drive 需要访问您的照片库以同步媒体文件到电脑</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UIAppFonts</key>

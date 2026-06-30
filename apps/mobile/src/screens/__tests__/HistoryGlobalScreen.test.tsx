@@ -68,7 +68,9 @@ import { getBindingState } from '../../services/SyncEngineModule';
 import { HistoryGlobalScreen } from '../HistoryGlobalScreen';
 import type { DesktopSyncRecordDTO } from '@lynavo-drive/contracts';
 
-const mockedListHistory = listHistory as jest.MockedFunction<typeof listHistory>;
+const mockedListHistory = listHistory as jest.MockedFunction<
+  typeof listHistory
+>;
 const mockedGetBindingState = getBindingState as jest.MockedFunction<
   typeof getBindingState
 >;

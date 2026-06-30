@@ -138,7 +138,7 @@ class NativeSyncEngineModule(
   }
   private val p2pTunnelLock = Any()
   private val p2pTunnelExecutor = Executors.newSingleThreadExecutor { runnable ->
-    Thread(runnable, "ViviP2PTunnel").apply { isDaemon = true }
+    Thread(runnable, "LynavoP2PTunnel").apply { isDaemon = true }
   }
   private var tunnelGeneration = 0L
   private var tunnelPort: Int? = null
@@ -792,7 +792,7 @@ class NativeSyncEngineModule(
       val timestamp = diagnosticsArchiveTimestamp()
       val archive = File(
         reactApplicationContext.cacheDir,
-        "SyncFlow-Mobile-Diagnostics-$timestamp.zip",
+        "LynavoDrive-Mobile-Diagnostics-$timestamp.zip",
       )
       val binding = loadBinding()
       val queueItems = uploadStore.getPendingItems(limit = 10_000)
@@ -1810,7 +1810,7 @@ class NativeSyncEngineModule(
           ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
         val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
 
-        val destDir = File(reactApplicationContext.filesDir, "syncflow_local_downloads")
+        val destDir = File(reactApplicationContext.filesDir, "lynavo_local_downloads")
         if (!destDir.exists()) {
           destDir.mkdirs()
         }
@@ -1829,9 +1829,9 @@ class NativeSyncEngineModule(
               MediaStore.Images.Media.EXTERNAL_CONTENT_URI
             }
             val savedLocation = if (localMediaType == "video") {
-              "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+              "${Environment.DIRECTORY_MOVIES}/Lynavo Drive"
             } else {
-              "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+              "${Environment.DIRECTORY_PICTURES}/Lynavo Drive"
             }
             val values = ContentValues().apply {
               put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
@@ -1878,7 +1878,7 @@ class NativeSyncEngineModule(
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
+          val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive"
           val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
             put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
@@ -1909,7 +1909,7 @@ class NativeSyncEngineModule(
         } else {
           val destDir = File(
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "Vivi Drop",
+            "Lynavo Drive",
           )
           if (!destDir.exists()) {
             destDir.mkdirs()
@@ -1922,12 +1922,12 @@ class NativeSyncEngineModule(
           }
           recordNativeLog(
             "SharedFiles",
-            "downloadUrlToLocal saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop local_path=${destFile.absolutePath}",
+            "downloadUrlToLocal saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive local_path=${destFile.absolutePath}",
           )
           promise.resolve(Arguments.createMap().apply {
             putBoolean("savedToPhotos", false)
             putString("localPath", destFile.absolutePath)
-            putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop")
+            putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive")
           })
         }
       } finally {
@@ -3478,7 +3478,7 @@ class NativeSyncEngineModule(
       if (statusCode !in 200..299) {
         throw IllegalStateException("Sidecar returned HTTP $statusCode")
       }
-      val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_previews")
+      val destDir = File(reactApplicationContext.cacheDir, "lynavo_shared_previews")
       if (!destDir.exists()) {
         destDir.mkdirs()
       }
@@ -3520,7 +3520,7 @@ class NativeSyncEngineModule(
     val totalBytes = connection.contentLengthLong.takeIf { it > 0L } ?: 0L
 
     // 1. 一律先下载至 App 内部私有沙盒中
-    val tempDir = File(reactApplicationContext.filesDir, "syncflow_shared_downloads")
+    val tempDir = File(reactApplicationContext.filesDir, "lynavo_shared_downloads")
     if (!tempDir.exists()) {
       tempDir.mkdirs()
     }
@@ -3539,9 +3539,9 @@ class NativeSyncEngineModule(
           MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         }
         val savedLocation = if (mediaType == "video") {
-          "${Environment.DIRECTORY_MOVIES}/Vivi Drop"
+          "${Environment.DIRECTORY_MOVIES}/Lynavo Drive"
         } else {
-          "${Environment.DIRECTORY_PICTURES}/Vivi Drop"
+          "${Environment.DIRECTORY_PICTURES}/Lynavo Drive"
         }
         val values = ContentValues().apply {
           put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
@@ -3588,7 +3588,7 @@ class NativeSyncEngineModule(
     // 2. 对于普通文件，保存到公共 Downloads 文件夹
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
       val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-      val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop"
+      val savedLocation = "${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive"
       val values = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, safeFilename)
         put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
@@ -3624,7 +3624,7 @@ class NativeSyncEngineModule(
 
     val destDir = File(
       Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-      "Vivi Drop"
+      "Lynavo Drive"
     )
     if (!destDir.exists()) {
       destDir.mkdirs()
@@ -3638,12 +3638,12 @@ class NativeSyncEngineModule(
     tempFile.delete() // 已存入公共 Downloads，删除私有临时备份
     recordNativeLog(
       "SharedFiles",
-      "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop local_path=${destFile.absolutePath}",
+      "persistHttpDownload saved_to_downloads filename=$safeFilename saved_location=${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive local_path=${destFile.absolutePath}",
     )
     return Arguments.createMap().apply {
       putBoolean("savedToPhotos", false)
       putString("localPath", destFile.absolutePath)
-      putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Vivi Drop")
+      putString("savedLocation", "${Environment.DIRECTORY_DOWNLOADS}/Lynavo Drive")
     }
   }
 
@@ -3950,15 +3950,15 @@ class NativeSyncEngineModule(
 
   private fun logPeerProxySkipDiagnostics() {
     val hasMultiDesktopBindingSource = false
-    val hasOnlineVividropDesktopPeer = false
+    val hasOnlineLynavoDriveDesktopPeer = false
     if (!AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
         hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
-        hasOnlineVividropDesktopPeer = hasOnlineVividropDesktopPeer,
+        hasOnlineLynavoDriveDesktopPeer = hasOnlineLynavoDriveDesktopPeer,
       )
     ) {
       AndroidSyncPrimitives.peerProxySkipReasons(
         hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
-        hasOnlineVividropDesktopPeer = hasOnlineVividropDesktopPeer,
+        hasOnlineLynavoDriveDesktopPeer = hasOnlineLynavoDriveDesktopPeer,
         hasThirdPartyHelperConfigured = false,
       ).forEach { skipReason ->
         recordDiagnosticsLog("SharedFiles", "peer proxy skipped reason=$skipReason")
@@ -6273,7 +6273,7 @@ class NativeSyncEngineModule(
       throw NativeBridgeException("FILE_NOT_FOUND", "Diagnostics archive does not exist")
     }
 
-    val boundary = "syncflow-${UUID.randomUUID()}"
+    val boundary = "lynavo-drive-${UUID.randomUUID()}"
     val connection = URL(uploadUrl).openConnection() as HttpURLConnection
     try {
       connection.requestMethod = "POST"
@@ -6602,7 +6602,7 @@ class NativeSyncEngineModule(
     val advertisedIp = attributes["ip"].orEmpty()
     val initialIp = preferredDisplayHost(advertisedIp, resolvedHost)
     val probeHost = preferredProbeHost(advertisedIp, resolvedHost)
-    val serviceName = serviceInfo.serviceName.takeIf { it.isNotBlank() } ?: "SyncFlow Desktop"
+    val serviceName = serviceInfo.serviceName.takeIf { it.isNotBlank() } ?: "Lynavo Drive Desktop"
 
     return DiscoveredServiceCandidate(
       serviceKey = serviceKey,
@@ -7110,7 +7110,7 @@ class NativeSyncEngineModule(
       ?: return
 
     try {
-      multicastLock = wifiManager.createMulticastLock("syncflow:discovery").apply {
+      multicastLock = wifiManager.createMulticastLock("lynavo-drive:discovery").apply {
         setReferenceCounted(false)
         acquire()
       }
@@ -7459,8 +7459,8 @@ class NativeSyncEngineModule(
     private const val PREF_AUTO_UPLOAD_TIME_RANGE_MODE = "auto_upload_time_range_mode"
     private const val PREF_AUTO_UPLOAD_CUSTOM_TIME_FROM = "auto_upload_custom_time_from"
     /** Auth-layer EncryptedSharedPreferences file (react-native-keychain service).
-     *  Mirror of the iOS Keychain service `cn.vividrop.auth`. */
-    const val AUTH_KEYCHAIN_PREFS_NAME = "cn.vividrop.auth"
+     *  Mirror of the iOS Keychain service `com.lynavo.drive.auth`. */
+    const val AUTH_KEYCHAIN_PREFS_NAME = "com.lynavo.drive.auth"
     /** UserDefaults/SharedPrefs key — seeded on first launch, survives only as
      *  long as the app install does, so a missing marker uniquely identifies
      *  a fresh / reinstalled app. */

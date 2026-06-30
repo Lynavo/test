@@ -71,10 +71,7 @@ export function DeviceNameSection() {
         </Button>
       </div>
       {isLocked ? (
-        <p
-          className="mt-2 text-xs text-muted-foreground"
-          data-testid="device-name-locked-hint"
-        >
+        <p className="mt-2 text-xs text-muted-foreground" data-testid="device-name-locked-hint">
           {t('settings.deviceName.lockedHint')}
         </p>
       ) : null}

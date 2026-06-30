@@ -36,7 +36,7 @@ export const REVIEW_API_BASE_URL = appConfig.endpoints.reviewApiBaseUrl;
 // temporary per-device overrides without changing this shared default.
 export const DEV_API_BASE_URL: string = appConfig.endpoints.reviewApiBaseUrl;
 
-const DEBUG_OVERRIDE_STORAGE_KEY = '@vividrop/debug/api_base_url';
+const DEBUG_OVERRIDE_STORAGE_KEY = '@lynavo-drive/debug/api_base_url';
 
 // In-memory cache of the AsyncStorage override; set by loadDebugBaseUrlOverride()
 // at app startup so the very first request can see it without a sync read.

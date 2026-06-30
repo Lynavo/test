@@ -5,7 +5,7 @@ jest.mock('../api', () => ({
   authHeaders: () => ({ Authorization: 'Bearer test-token' }),
   clientInfoHeaders: () =>
     Promise.resolve({
-      'X-Client-App': 'vividrop-mobile',
+      'X-Client-App': 'lynavo-drive-mobile',
       'X-Client-Platform': 'ios',
       'X-Client-Version': '1.0.0',
       'X-Client-Build': '9',
@@ -101,16 +101,14 @@ describe('diagnosticUploadService.upload', () => {
     );
     expect(lastXHR.setRequestHeader).toHaveBeenCalledWith(
       'Content-Type',
-      expect.stringMatching(/^multipart\/form-data; boundary=syncflow-/),
+      expect.stringMatching(/^multipart\/form-data; boundary=lynavo-drive-/),
     );
     const sentBody = lastXHR.send.mock.calls[0][0] as unknown as {
       text(): Promise<string>;
     };
     const multipartText = await sentBody.text();
     expect(multipartText).toContain('name="client_id"\r\n\r\nclient-1');
-    expect(multipartText).toContain(
-      'name="bundle"; filename="diagnostics-',
-    );
+    expect(multipartText).toContain('name="bundle"; filename="diagnostics-');
     expect(multipartText).toContain('Content-Type: application/zip');
     expect(multipartText).toContain('fake-zip');
   });
@@ -209,7 +207,10 @@ describe('diagnosticUploadService.upload', () => {
   });
 
   test('DiagnosticUploadError has correct name and message for SERVER_ERROR', () => {
-    const err = new DiagnosticUploadError({ kind: 'SERVER_ERROR', status: 422 });
+    const err = new DiagnosticUploadError({
+      kind: 'SERVER_ERROR',
+      status: 422,
+    });
     expect(err.name).toBe('DiagnosticUploadError');
     expect(err.message).toBe('server error 422');
     expect(err.detail).toEqual({ kind: 'SERVER_ERROR', status: 422 });

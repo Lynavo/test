@@ -197,7 +197,7 @@ async function copyDiagnosticLogFile(
   const content = await readFile(sourcePath);
   const tail = content.subarray(content.byteLength - DIAGNOSTICS_UPLOAD_LOG_TAIL_BYTES);
   const notice = Buffer.from(
-    `[Vivi Drop diagnostics] This log was truncated for upload. Original size: ${info.size} bytes. Included tail bytes: ${tail.byteLength}.\n\n`,
+    `[Lynavo Drive diagnostics] This log was truncated for upload. Original size: ${info.size} bytes. Included tail bytes: ${tail.byteLength}.\n\n`,
     'utf8',
   );
   await writeFile(destinationPath, Buffer.concat([notice, tail]));
@@ -279,7 +279,7 @@ export async function writePowerDiagnostics(
     await writeFile(
       targetPath,
       [
-        'Vivi Drop macOS power diagnostics',
+        'Lynavo Drive macOS power diagnostics',
         `collectedAt=${collectedAt}`,
         'source=pmset -g log',
         '',
@@ -298,7 +298,7 @@ export async function writePowerDiagnostics(
     await writeFile(
       targetPath,
       [
-        'Vivi Drop macOS power diagnostics',
+        'Lynavo Drive macOS power diagnostics',
         `collectedAt=${collectedAt}`,
         'source=pmset -g log',
         `error=${message}`,
@@ -519,9 +519,7 @@ function updateCheckUrl(): string {
 
 function optionalApiToken(): string | null {
   return (
-    process.env.LYNAVO_DIAGNOSTICS_TOKEN?.trim() ||
-    process.env.LYNAVO_API_TOKEN?.trim() ||
-    null
+    process.env.LYNAVO_DIAGNOSTICS_TOKEN?.trim() || process.env.LYNAVO_API_TOKEN?.trim() || null
   );
 }
 
@@ -576,7 +574,7 @@ async function createDiagnosticsBundle(
   mode: DiagnosticsBundleMode = 'export',
 ): Promise<{ tempRoot: string; bundleDir: string }> {
   const strings = getMainStrings(locale);
-  const tempRoot = join(tmpdir(), `syncflow-diagnostics-${timestamp}`);
+  const tempRoot = join(tmpdir(), `lynavo-drive-diagnostics-${timestamp}`);
   const bundleDir = join(tempRoot, `${strings.diagnostics.filenamePrefix}-${timestamp}`);
   const filesDir = join(bundleDir, 'files');
   const sidecarDataDir = app.getPath('userData');

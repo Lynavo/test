@@ -38,20 +38,29 @@ export function SharedResourceTable({ resources, onRemove }: SharedResourceTable
     switch (status) {
       case 'available':
         return (
-          <Badge variant="default" className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15">
+          <Badge
+            variant="default"
+            className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15"
+          >
             {t('common.shared.statusAvailable')}
           </Badge>
         );
       case 'missing':
         return (
-          <Badge variant="destructive" className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 flex items-center gap-1">
+          <Badge
+            variant="destructive"
+            className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/15 flex items-center gap-1"
+          >
             <AlertCircle className="h-3 w-3" />
             {t('common.shared.statusMissing')}
           </Badge>
         );
       case 'removed':
         return (
-          <Badge variant="secondary" className="bg-slate-500/10 text-slate-700 hover:bg-slate-500/15">
+          <Badge
+            variant="secondary"
+            className="bg-slate-500/10 text-slate-700 hover:bg-slate-500/15"
+          >
             {t('common.shared.statusRemoved')}
           </Badge>
         );
@@ -73,14 +82,30 @@ export function SharedResourceTable({ resources, onRemove }: SharedResourceTable
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-100/50 hover:bg-slate-100/50">
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableName')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableKind')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableSize')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableStatus')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableDownloads')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableLastAccessed')}</TableHead>
-            <TableHead className="font-semibold text-slate-800">{t('common.shared.tableAddedAt')}</TableHead>
-            <TableHead className="text-right font-semibold text-slate-800">{t('common.shared.tableActions')}</TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableName')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableKind')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableSize')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableStatus')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableDownloads')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableLastAccessed')}
+            </TableHead>
+            <TableHead className="font-semibold text-slate-800">
+              {t('common.shared.tableAddedAt')}
+            </TableHead>
+            <TableHead className="text-right font-semibold text-slate-800">
+              {t('common.shared.tableActions')}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

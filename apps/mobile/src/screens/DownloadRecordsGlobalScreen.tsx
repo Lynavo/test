@@ -298,8 +298,8 @@ function getDownloadRecordThumbnailUri(record: DownloadRecord): string | null {
   if (record.localPath?.trim()) return documentPreviewUri(record.localPath);
   const candidate =
     kind === 'photo'
-      ? record.previewUrl ?? record.streamUrl ?? record.thumbnailUrl ?? null
-      : record.thumbnailUrl ?? null;
+      ? (record.previewUrl ?? record.streamUrl ?? record.thumbnailUrl ?? null)
+      : (record.thumbnailUrl ?? null);
   if (candidate?.trim()) return candidate.trim();
   return null;
 }

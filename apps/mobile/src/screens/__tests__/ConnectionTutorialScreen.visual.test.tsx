@@ -21,7 +21,7 @@ jest.mock('react-i18next', () => ({
         'common.back': '返回',
         'connectionTutorial.title': '連接教程',
         'connectionTutorial.prerequisite':
-          '前提：請確保電腦已安裝並打開 Vivi Drop 客戶端',
+          '前提：請確保電腦已安裝並打開 Lynavo Drive 客戶端',
         'connectionTutorial.tabs.lan': '搜尋',
         'connectionTutorial.tabs.qr': '掃碼',
         'connectionTutorial.tabs.code': '連接碼',
@@ -29,13 +29,13 @@ jest.mock('react-i18next', () => ({
         'connectionTutorial.cards.lan.steps.0':
           '確保手機與電腦接入同一個 Wi-Fi 或區域網路',
         'connectionTutorial.cards.lan.steps.1':
-          '在電腦打開 Vivi Drop 客戶端並保持執行',
+          '在電腦打開 Lynavo Drive 客戶端並保持執行',
         'connectionTutorial.cards.lan.steps.2':
           '手機端進入搜尋設備，稍等片刻即可發現電腦',
         'connectionTutorial.cards.lan.warning':
-          '還沒有電腦端？請在電腦瀏覽器訪問 www.vividrop.cn 下載安裝。',
+          '還沒有電腦端？請在電腦瀏覽器訪問 www.lynavo.com 下載安裝。',
         'connectionTutorial.cards.qr.steps.0':
-          '在電腦端 Vivi Drop「全域設定」中顯示二維碼',
+          '在電腦端 Lynavo Drive「全域設定」中顯示二維碼',
         'connectionTutorial.cards.qr.steps.1':
           '手機端點擊「掃碼配對」打開攝像頭',
         'connectionTutorial.cards.qr.steps.2':
@@ -64,7 +64,7 @@ jest.mock('react-i18next', () => ({
         'connectionTutorial.troubleshoot.supportTitle': '仍然無法解決？',
         'connectionTutorial.troubleshoot.supportBody':
           '請匯出診斷包或聯絡客服。',
-        'connectionTutorial.troubleshoot.supportEmail': 'support@vividrop.cn',
+        'connectionTutorial.troubleshoot.supportEmail': 'support@lynavo.com',
       })[key] ?? key,
   }),
 }));

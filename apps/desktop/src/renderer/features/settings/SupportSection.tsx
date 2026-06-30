@@ -322,9 +322,7 @@ export function SupportSection() {
                   <ActivitySquare className="h-4 w-4 text-sky-500" />
                   {t('settings.support.desktopVersion')}
                 </div>
-                <p className="text-sm font-medium text-foreground">
-                  {desktopVersionLabel}
-                </p>
+                <p className="text-sm font-medium text-foreground">{desktopVersionLabel}</p>
               </div>
               <Button
                 type="button"

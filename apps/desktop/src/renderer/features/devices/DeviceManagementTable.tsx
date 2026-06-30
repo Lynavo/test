@@ -128,20 +128,20 @@ export function DeviceManagementTable({
                       isTransferring
                         ? 'bg-[#1677d2] shadow-[0_0_0_4px_rgba(22,119,210,0.12)]'
                         : isConnected
-                        ? 'bg-[#2d8f54] shadow-[0_0_0_4px_rgba(45,143,84,0.12)]'
-                        : isBlocked
-                          ? 'bg-[#d92d20] shadow-[0_0_0_4px_rgba(217,45,32,0.12)]'
-                          : 'bg-[#b5bdc8]'
+                          ? 'bg-[#2d8f54] shadow-[0_0_0_4px_rgba(45,143,84,0.12)]'
+                          : isBlocked
+                            ? 'bg-[#d92d20] shadow-[0_0_0_4px_rgba(217,45,32,0.12)]'
+                            : 'bg-[#b5bdc8]'
                     }`}
                   />
                   <span className="text-[11px] font-semibold text-[#626a76]">
                     {isTransferring
                       ? t('common.status.transferring')
                       : isConnected
-                      ? t('devices.status.connected')
-                      : isBlocked
-                        ? t('devices.status.disabled')
-                        : t('devices.status.offline')}
+                        ? t('devices.status.connected')
+                        : isBlocked
+                          ? t('devices.status.disabled')
+                          : t('devices.status.offline')}
                   </span>
                 </div>
 
@@ -169,10 +169,7 @@ export function DeviceManagementTable({
                             ) : null}
                           </div>
                           {currentFile ? (
-                            <Progress
-                              value={currentFile.progress}
-                              className="h-1.5 bg-[#d7ecff]"
-                            />
+                            <Progress value={currentFile.progress} className="h-1.5 bg-[#d7ecff]" />
                           ) : null}
                         </div>
                       ) : (
@@ -236,8 +233,7 @@ export function DeviceManagementTable({
               <DialogDescription className="mt-1 text-xs leading-5 text-[#7b8490]">
                 {blockTarget
                   ? t('devices.dialog.disableDescription', {
-                      deviceName:
-                        blockTarget.displayName || t('devices.table.unnamedDevice'),
+                      deviceName: blockTarget.displayName || t('devices.table.unnamedDevice'),
                     })
                   : ''}
               </DialogDescription>

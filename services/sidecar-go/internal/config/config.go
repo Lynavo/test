@@ -26,7 +26,7 @@ type Config struct {
 	// record.  Leave empty to let the sidecar auto-detect the best LAN address.
 	// Useful on multi-homed Windows machines where auto-detection picks the
 	// wrong interface (e.g. wired vs. WiFi on different subnets).
-	// Can also be set via the SYNCFLOW_DEVICE_IP environment variable.
+	// Can also be set via the LYNAVO_DEVICE_IP environment variable.
 	DeviceIP              string `yaml:"device_ip"`
 	LowDiskThresholdBytes int64  `yaml:"low_disk_threshold_bytes"`
 }
@@ -70,7 +70,7 @@ func (c *Config) setDefaults() {
 	}
 	// Environment variable takes precedence over the YAML value so that
 	// developers can override the IP without touching the config file.
-	if env := strings.TrimSpace(os.Getenv("SYNCFLOW_DEVICE_IP")); env != "" {
+	if env := strings.TrimSpace(os.Getenv("LYNAVO_DEVICE_IP")); env != "" {
 		c.DeviceIP = env
 	}
 }

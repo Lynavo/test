@@ -18,4 +18,3 @@ export function resolveAbsolutePath(basePath: string, targetPath: string): strin
 
   return `${normalizedBase}${separator}${normalizedTarget}`;
 }
-

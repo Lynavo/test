@@ -24,12 +24,28 @@ import type { ReceivedLibraryItemDTO } from '@lynavo-drive/contracts';
 function getMediaLabel(mediaType: string): { labelKey: string; color: string; bg: string } {
   const t = mediaType.toLowerCase();
   if (t.startsWith('video/'))
-    return { labelKey: 'directory.library.media.video', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' };
+    return {
+      labelKey: 'directory.library.media.video',
+      color: '#3b82f6',
+      bg: 'rgba(59,130,246,0.08)',
+    };
   if (t.startsWith('image/'))
-    return { labelKey: 'directory.library.media.photo', color: '#0ea5c9', bg: 'rgba(14,165,201,0.08)' };
+    return {
+      labelKey: 'directory.library.media.photo',
+      color: '#0ea5c9',
+      bg: 'rgba(14,165,201,0.08)',
+    };
   if (t.startsWith('audio/'))
-    return { labelKey: 'directory.library.media.audio', color: '#a855f7', bg: 'rgba(168,85,247,0.08)' };
-  return { labelKey: 'directory.library.media.file', color: '#6b7a8d', bg: 'rgba(107,122,141,0.08)' };
+    return {
+      labelKey: 'directory.library.media.audio',
+      color: '#a855f7',
+      bg: 'rgba(168,85,247,0.08)',
+    };
+  return {
+    labelKey: 'directory.library.media.file',
+    color: '#6b7a8d',
+    bg: 'rgba(107,122,141,0.08)',
+  };
 }
 
 function getShareStatusBadge(shareStatus: ReceivedLibraryItemDTO['shareStatus']): {

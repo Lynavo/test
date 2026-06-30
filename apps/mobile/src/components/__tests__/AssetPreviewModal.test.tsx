@@ -73,7 +73,11 @@ describe('AssetPreviewModal', () => {
     });
     const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
     expect(texts).toEqual(expect.arrayContaining(['1 / 2']));
-    expect(texts.some((t: unknown) => typeof t === 'string' && t.includes('IMG_0001'))).toBe(true);
+    expect(
+      texts.some(
+        (t: unknown) => typeof t === 'string' && t.includes('IMG_0001'),
+      ),
+    ).toBe(true);
   });
 
   it('calls onClose when close button pressed', async () => {
@@ -146,8 +150,12 @@ describe('AssetPreviewModal', () => {
     await ReactTestRenderer.act(async () => {
       await Promise.resolve();
     });
-    const videos = tree!.root.findAllByType('Video' as unknown as React.ComponentType);
-    const video = videos.find(v => v.props.source?.uri === 'file:///tmp/a2.mov');
+    const videos = tree!.root.findAllByType(
+      'Video' as unknown as React.ComponentType,
+    );
+    const video = videos.find(
+      v => v.props.source?.uri === 'file:///tmp/a2.mov',
+    );
     expect(video).toBeDefined();
     expect(video?.props.paused).toBe(true);
   });
@@ -174,7 +182,10 @@ describe('AssetPreviewModal', () => {
     });
     const texts = tree!.root.findAllByType(Text).map(n => n.props.children);
     expect(
-      texts.some((t: unknown) => typeof t === 'string' && t.toLowerCase().includes('icloud')),
+      texts.some(
+        (t: unknown) =>
+          typeof t === 'string' && t.toLowerCase().includes('icloud'),
+      ),
     ).toBe(true);
   });
 });

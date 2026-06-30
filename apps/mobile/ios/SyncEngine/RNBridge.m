@@ -27,19 +27,19 @@ RCT_EXTERN_METHOD(renameBoundDeviceAlias:(NSString *)alias resolve:(RCTPromiseRe
 RCT_EXTERN_METHOD(triggerSync:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(resetAllStatus:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 
-// Vivi Drop: Album Browser
+// Lynavo Drive: Album Browser
 RCT_EXTERN_METHOD(browseAlbum:(NSDictionary *)params resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getAlbumStats:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getAlbumCollections:(NSString *)mediaFilter resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getAssetPreviewSource:(NSString *)assetLocalId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 
-// Vivi Drop: Manual Upload
+// Lynavo Drive: Manual Upload
 RCT_EXTERN_METHOD(submitManualUpload:(NSDictionary *)params resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(submitDocumentUploads:(NSDictionary *)params resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(cancelManualBatch:(NSString *)batchId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(cancelAllManualUploads:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 
-// Vivi Drop: Auto Upload Control
+// Lynavo Drive: Auto Upload Control
 // DEPRECATED: pauseAutoUpload/resumeAutoUpload to be removed, use enableAutoUpload/interruptAutoUpload instead
 RCT_EXTERN_METHOD(pauseAutoUpload:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(disableAutoUpload:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
@@ -48,7 +48,7 @@ RCT_EXTERN_METHOD(getAutoUploadConfig:(RCTPromiseResolveBlock)resolve reject:(RC
 RCT_EXTERN_METHOD(saveAutoUploadConfig:(NSDictionary *)params resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(setBackgroundSilentAudioEnabled:(BOOL)enabled resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 
-// Vivi Drop: Shared Files
+// Lynavo Drive: Shared Files
 RCT_EXTERN_METHOD(browseSharedFiles:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadSharedFile:(NSString *)scope path:(NSString *)path accessToken:(NSString *)accessToken resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(downloadReceivedFile:(NSString *)fileKey filename:(NSString *)filename mediaType:(NSString *)mediaType resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

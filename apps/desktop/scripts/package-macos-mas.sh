@@ -20,14 +20,14 @@ resolve_build_number() {
 export APPLE_API_KEY="${APPLE_API_KEY:-${DEFAULT_API_KEY}}"
 export APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-${DEFAULT_API_KEY_ID}}"
 export APPLE_API_ISSUER="${APPLE_API_ISSUER:-${DEFAULT_API_ISSUER}}"
-export SYNCFLOW_BUILD_NUMBER="${SYNCFLOW_BUILD_NUMBER:-$(resolve_build_number)}"
+export LYNAVO_BUILD_NUMBER="${LYNAVO_BUILD_NUMBER:-$(resolve_build_number)}"
 
-if [[ -z "${SYNCFLOW_BUILD_NUMBER}" ]]; then
+if [[ -z "${LYNAVO_BUILD_NUMBER}" ]]; then
   echo "Failed to resolve build number from iOS project." >&2
   exit 1
 fi
 
-echo "Build number: ${SYNCFLOW_BUILD_NUMBER}"
+echo "Build number: ${LYNAVO_BUILD_NUMBER}"
 echo "Building sidecar..."
 
 cd "${REPO_ROOT}"
@@ -36,9 +36,9 @@ pnpm --filter @lynavo-drive/desktop build:sidecar
 echo "Packaging for Mac App Store (MAS)..."
 # No explicit identities passed - letting electron-builder auto-detect
 pnpm --filter @lynavo-drive/desktop exec electron-builder --mac mas \
-  "-c.buildVersion=${SYNCFLOW_BUILD_NUMBER}" \
-  "-c.mas.bundleVersion=${SYNCFLOW_BUILD_NUMBER}" \
-  "-c.extraMetadata.syncflowBuildNumber=${SYNCFLOW_BUILD_NUMBER}" \
+  "-c.buildVersion=${LYNAVO_BUILD_NUMBER}" \
+  "-c.mas.bundleVersion=${LYNAVO_BUILD_NUMBER}" \
+  "-c.extraMetadata.lynavoDriveBuildNumber=${LYNAVO_BUILD_NUMBER}" \
   -c.mac.notarize=false
 
 echo "MAS Packaging complete. PKG should be in apps/desktop/release/"

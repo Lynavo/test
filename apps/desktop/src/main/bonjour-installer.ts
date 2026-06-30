@@ -60,7 +60,7 @@ export async function installBonjourForWindows(
 }
 
 async function downloadBonjourInstaller(): Promise<string> {
-  const installerDir = join(tmpdir(), 'SyncFlow', 'bonjour-installer');
+  const installerDir = join(tmpdir(), 'LynavoDrive', 'bonjour-installer');
   const installerPath = join(installerDir, BONJOUR_WINDOWS_INSTALLER_NAME);
 
   await mkdir(installerDir, { recursive: true });
@@ -70,7 +70,11 @@ async function downloadBonjourInstaller(): Promise<string> {
   return installerPath;
 }
 
-async function downloadFile(url: string, destinationPath: string, redirectsRemaining: number): Promise<void> {
+async function downloadFile(
+  url: string,
+  destinationPath: string,
+  redirectsRemaining: number,
+): Promise<void> {
   const response = await request(url);
 
   if (

@@ -6,13 +6,13 @@
     "contact": "Contact Support"
   },
   "product": {
-    "title": "Vivi Drop",
+    "title": "Lynavo Drive",
     "description": "A LAN media sync tool that sends photos and videos from your phone to your computer at high speed."
   },
   "steps": {
     "step0": {
       "title": "Download the PC App",
-      "description": "Visit vividrop.cn on your computer to download and install."
+      "description": "Visit lynavo.com on your computer to download and install."
     },
     "step1": {
       "title": "Connect Your Device",
@@ -24,16 +24,16 @@
     }
   },
   "download": {
-    "label": "PC app download: www.vividrop.cn"
+    "label": "PC app download: www.lynavo.com"
   },
   "faq": {
     "item0": {
       "title": "What if the app keeps looking for devices?",
-      "answer": "Make sure your phone and computer are on the same Wi-Fi network, and that Vivi Drop for PC is running. Try restarting the desktop app, then tap scan again on your phone, or connect manually with the 6-digit pairing code."
+      "answer": "Make sure your phone and computer are on the same Wi-Fi network, and that Lynavo Drive for PC is running. Try restarting the desktop app, then tap scan again on your phone, or connect manually with the 6-digit pairing code."
     },
     "item1": {
       "title": "Why does auto upload pause?",
-      "answer": "Auto upload pauses after Wi-Fi changes or when the computer sleeps. After the computer wakes and the network returns, Vivi Drop keeps completed files and resumes unfinished queued tasks automatically. It can also pause when background permissions are limited; check that Vivi Drop has background refresh permission in system settings."
+      "answer": "Auto upload pauses after Wi-Fi changes or when the computer sleeps. After the computer wakes and the network returns, Lynavo Drive keeps completed files and resumes unfinished queued tasks automatically. It can also pause when background permissions are limited; check that Lynavo Drive has background refresh permission in system settings."
     },
     "item2": {
       "title": "What should I do if an upload fails?",
@@ -49,7 +49,7 @@
     },
     "item5": {
       "title": "What if the shared folder is empty?",
-      "answer": "Confirm the shared folder path is available in Vivi Drop on the PC, and that the folder contains files. After setting it, pull to refresh on your phone to see the contents."
+      "answer": "Confirm the shared folder path is available in Lynavo Drive on the PC, and that the folder contains files. After setting it, pull to refresh on your phone to see the contents."
     }
   },
   "contact": {

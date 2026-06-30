@@ -66,8 +66,10 @@ NativeModules.NativeSyncEngine = {
 jest.mock('react-native-vision-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
-  const Camera = (props) => React.createElement(View, props);
-  Camera.getCameraPermissionStatus = jest.fn().mockReturnValue('not-determined');
+  const Camera = props => React.createElement(View, props);
+  Camera.getCameraPermissionStatus = jest
+    .fn()
+    .mockReturnValue('not-determined');
   Camera.requestCameraPermission = jest.fn().mockResolvedValue('granted');
 
   return {
@@ -76,4 +78,3 @@ jest.mock('react-native-vision-camera', () => {
     useCodeScanner: jest.fn(config => config),
   };
 });
-

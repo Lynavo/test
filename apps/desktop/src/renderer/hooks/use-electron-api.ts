@@ -4,7 +4,7 @@ import { BONJOUR_WINDOWS_SUPPORT_URL } from '../../shared/bonjour';
 import { INITIAL_SIDECAR_RUNTIME_STATE } from '../../shared/sidecar-runtime';
 
 const defaultSettings: SettingsDTO = {
-  deviceName: 'SyncFlow',
+  deviceName: 'LynavoDrive',
   connectionCode: '000000',
   rootPath: '',
   receivePath: '',
@@ -12,12 +12,12 @@ const defaultSettings: SettingsDTO = {
   sharedPath: '',
   shareAddress: '',
   shareStatus: 'unknown',
-  shareName: 'SyncFlow',
+  shareName: 'LynavoDrive',
   allowCrossDeviceReceivedAccess: true,
 };
 
 const mockSidecar: ElectronAPI['sidecar'] = {
-  getHealth: async () => ({ ok: true, service: 'syncflow-sidecar' }),
+  getHealth: async () => ({ ok: true, service: 'lynavo-drive-sidecar' }),
   getDashboardSummary: async () => ({
     todayUploadCount: 0,
     todayOccupiedBytes: 0,
@@ -64,13 +64,13 @@ const mockSidecar: ElectronAPI['sidecar'] = {
     enabled: false,
     smbUrl: null,
     status: 'unknown' as const,
-    shareName: 'SyncFlow',
+    shareName: 'LynavoDrive',
   }),
   validateShare: async () => ({
     enabled: false,
     smbUrl: null,
     status: 'unknown' as const,
-    shareName: 'SyncFlow',
+    shareName: 'LynavoDrive',
   }),
   getTransferActive: async () => ({ active: false }),
   getSharedList: async () => ({ path: '', files: [], totalCount: 0 }),
@@ -158,7 +158,7 @@ const mockAPI: ElectronAPI = {
       latestVersion: '0.1.1',
       checkedAt: new Date().toISOString(),
     }),
-    getAppInfo: async () => ({ name: 'SyncFlow', version: '0.1.1', buildNumber: '5' }),
+    getAppInfo: async () => ({ name: 'LynavoDrive', version: '0.1.1', buildNumber: '5' }),
   },
 };
 

@@ -4,7 +4,7 @@ import { installScrollbarActivityTracker } from '../scrollbar-activity';
 describe('installScrollbarActivityTracker', () => {
   afterEach(() => {
     vi.useRealTimers();
-    document.documentElement.classList.remove('vividrop-scrollbar-active');
+    document.documentElement.classList.remove('lynavo-scrollbar-active');
     document.body.innerHTML = '';
   });
 
@@ -16,13 +16,13 @@ describe('installScrollbarActivityTracker', () => {
     const cleanup = installScrollbarActivityTracker({ idleMs: 300 });
     scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
 
-    expect(scroller).toHaveClass('vividrop-scrollbar-active');
+    expect(scroller).toHaveClass('lynavo-scrollbar-active');
 
     vi.advanceTimersByTime(299);
-    expect(scroller).toHaveClass('vividrop-scrollbar-active');
+    expect(scroller).toHaveClass('lynavo-scrollbar-active');
 
     vi.advanceTimersByTime(1);
-    expect(scroller).not.toHaveClass('vividrop-scrollbar-active');
+    expect(scroller).not.toHaveClass('lynavo-scrollbar-active');
 
     cleanup();
   });
@@ -33,9 +33,9 @@ describe('installScrollbarActivityTracker', () => {
 
     document.dispatchEvent(new Event('scroll', { bubbles: true }));
 
-    expect(document.documentElement).toHaveClass('vividrop-scrollbar-active');
+    expect(document.documentElement).toHaveClass('lynavo-scrollbar-active');
 
     cleanup();
-    expect(document.documentElement).not.toHaveClass('vividrop-scrollbar-active');
+    expect(document.documentElement).not.toHaveClass('lynavo-scrollbar-active');
   });
 });

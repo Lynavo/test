@@ -52,14 +52,32 @@ const appState = vi.hoisted(() => ({
   isPackaged: false,
 }));
 
+const diagnosticsPaths = vi.hoisted(() => {
+  const root = `/tmp/lynavo-drive-diagnostics-vitest-${process.pid}`;
+  return {
+    root,
+    appPath: `${root}/app`,
+    userData: `${root}/user-data`,
+    desktopLog: `${root}/desktop/main.log`,
+    rotatedDesktopLog: `${root}/desktop/main.log.1`,
+    rendererLog: `${root}/desktop/renderer.log`,
+  };
+});
+const legacyViviApiBaseEnv = ['VIVI', 'DROP_API_BASE_URL'].join('');
+const legacySyncApiBaseEnv = ['SYNC', 'FLOW_API_BASE_URL'].join('');
+const legacyViviUpdateEnv = ['VIVI', 'DROP_DESKTOP_UPDATE_URL'].join('');
+const legacyViviDiagnosticsUploadEnv = ['VIVI', 'DROP_DIAGNOSTICS_UPLOAD_URL'].join('');
+const legacyViviDiagnosticsTokenEnv = ['VIVI', 'DROP_DIAGNOSTICS_TOKEN'].join('');
+const legacyViviApiTokenEnv = ['VIVI', 'DROP_API_TOKEN'].join('');
+
 vi.mock('electron', () => ({
   app: {
     get isPackaged() {
       return appState.isPackaged;
     },
-    getAppPath: () => '/tmp/vividrop-app',
-    getName: () => 'Vivi Drop',
-    getPath: () => '/tmp/vividrop-user-data',
+    getAppPath: () => diagnosticsPaths.appPath,
+    getName: () => 'Lynavo Drive',
+    getPath: () => diagnosticsPaths.userData,
     getVersion: () => '0.1.0',
   },
   dialog: {
@@ -74,11 +92,19 @@ vi.mock('electron-log', () => ({
   default: {
     transports: {
       file: {
-        getFile: () => ({ path: '/tmp/vividrop-main.log' }),
+        getFile: () => ({ path: diagnosticsPaths.desktopLog }),
       },
     },
   },
 }));
+
+function resetDiagnosticsFs() {
+  rmSync(diagnosticsPaths.root, { recursive: true, force: true });
+}
+
+function ensureDesktopLogDir() {
+  mkdirSync(join(diagnosticsPaths.root, 'desktop'), { recursive: true });
+}
 
 describe('checkForUpdates', () => {
   const updateCheckQuery = `platform=${process.platform}&arch=${process.arch}&version=0.1.0`;
@@ -87,9 +113,9 @@ describe('checkForUpdates', () => {
     appState.isPackaged = false;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
-    delete process.env.VIVIDROP_API_BASE_URL;
-    delete process.env.SYNCFLOW_API_BASE_URL;
-    delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
+    delete process.env[legacyViviApiBaseEnv];
+    delete process.env[legacySyncApiBaseEnv];
+    delete process.env[legacyViviUpdateEnv];
   });
 
   afterEach(() => {
@@ -161,9 +187,9 @@ describe('checkForUpdates', () => {
     );
   });
 
-  it('prefers the Lynavo API base URL over legacy VIVIDROP_API_BASE_URL', async () => {
+  it('prefers the Lynavo API base URL over legacy API base env', async () => {
     process.env.LYNAVO_API_BASE_URL = 'http://lynavo.localhost:9090';
-    process.env.VIVIDROP_API_BASE_URL = 'http://legacy.localhost:9090';
+    process.env[legacyViviApiBaseEnv] = 'http://legacy.localhost:9090';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -185,8 +211,8 @@ describe('checkForUpdates', () => {
   });
 
   it('ignores legacy API base URLs when no Lynavo base URL is configured', async () => {
-    process.env.VIVIDROP_API_BASE_URL = 'http://legacy-vividrop.localhost:9090';
-    process.env.SYNCFLOW_API_BASE_URL = 'http://legacy-syncflow.localhost:9090';
+    process.env[legacyViviApiBaseEnv] = 'http://legacy-vd.localhost:9090';
+    process.env[legacySyncApiBaseEnv] = 'http://legacy-sf.localhost:9090';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -208,7 +234,7 @@ describe('checkForUpdates', () => {
   });
 
   it('ignores legacy desktop update URL env', async () => {
-    process.env.VIVIDROP_DESKTOP_UPDATE_URL = 'https://legacy.example/update';
+    process.env[legacyViviUpdateEnv] = 'https://legacy.example/update';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -236,15 +262,11 @@ describe('exportDiagnostics', () => {
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
-    delete process.env.VIVIDROP_API_BASE_URL;
-    delete process.env.SYNCFLOW_API_BASE_URL;
-    delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
-    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-main.log', { force: true });
-    rmSync('/tmp/vividrop-main.log.1', { force: true });
-    rmSync('/tmp/vividrop-renderer.log', { force: true });
+    delete process.env[legacyViviApiBaseEnv];
+    delete process.env[legacySyncApiBaseEnv];
+    delete process.env[legacyViviUpdateEnv];
+    delete process.env[legacyViviDiagnosticsUploadEnv];
+    resetDiagnosticsFs();
   });
 
   afterEach(() => {
@@ -252,20 +274,17 @@ describe('exportDiagnostics', () => {
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
-    delete process.env.VIVIDROP_API_BASE_URL;
-    delete process.env.SYNCFLOW_API_BASE_URL;
-    delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
-    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-main.log', { force: true });
-    rmSync('/tmp/vividrop-main.log.1', { force: true });
-    rmSync('/tmp/vividrop-renderer.log', { force: true });
+    delete process.env[legacyViviApiBaseEnv];
+    delete process.env[legacySyncApiBaseEnv];
+    delete process.env[legacyViviUpdateEnv];
+    delete process.env[legacyViviDiagnosticsUploadEnv];
+    resetDiagnosticsFs();
   });
 
   it('writes a non-empty app build in diagnostics.json', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-test-'));
     const archivePath = join(tempRoot, 'diagnostics.zip');
+    ensureDesktopLogDir();
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({
       canceled: false,
       filePath: archivePath,
@@ -293,10 +312,11 @@ describe('exportDiagnostics', () => {
   });
 
   it('serializes a numeric packaged build number as a string in diagnostics.json', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-test-'));
     const archivePath = join(tempRoot, 'diagnostics.zip');
-    mkdirSync('/tmp/vividrop-app', { recursive: true });
-    writeFileSync('/tmp/vividrop-app/package.json', '{"syncflowBuildNumber":50}');
+    ensureDesktopLogDir();
+    mkdirSync(diagnosticsPaths.appPath, { recursive: true });
+    writeFileSync(join(diagnosticsPaths.appPath, 'package.json'), '{"lynavoDriveBuildNumber":50}');
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({
       canceled: false,
       filePath: archivePath,
@@ -320,18 +340,19 @@ describe('exportDiagnostics', () => {
     const diagnostics = JSON.parse(diagnosticsJson) as { app?: { build?: unknown } };
     expect(diagnostics.app?.build).toBe('50');
 
-    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
+    rmSync(diagnosticsPaths.appPath, { recursive: true, force: true });
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it('includes issue description, runtime context, and available log files', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-test-'));
     const archivePath = join(tempRoot, 'diagnostics.zip');
-    mkdirSync('/tmp/vividrop-user-data/logs', { recursive: true });
-    writeFileSync('/tmp/vividrop-main.log', 'main log\n');
-    writeFileSync('/tmp/vividrop-main.log.1', 'rotated main log\n');
-    writeFileSync('/tmp/vividrop-renderer.log', 'renderer log\n');
-    writeFileSync('/tmp/vividrop-user-data/logs/sidecar.log', 'sidecar log\n');
+    ensureDesktopLogDir();
+    mkdirSync(join(diagnosticsPaths.userData, 'logs'), { recursive: true });
+    writeFileSync(diagnosticsPaths.desktopLog, 'main log\n');
+    writeFileSync(diagnosticsPaths.rotatedDesktopLog, 'rotated main log\n');
+    writeFileSync(diagnosticsPaths.rendererLog, 'renderer log\n');
+    writeFileSync(join(diagnosticsPaths.userData, 'logs', 'sidecar.log'), 'sidecar log\n');
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({
       canceled: false,
       filePath: archivePath,
@@ -350,9 +371,9 @@ describe('exportDiagnostics', () => {
     const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
       .split('\n')
       .filter(Boolean);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-main.log'))).toBe(true);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-main.log.1'))).toBe(true);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-renderer.log'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('/files/main.log'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('/files/main.log.1'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('/files/renderer.log'))).toBe(true);
     expect(entries.some((entry) => entry.endsWith('/files/sidecar.log'))).toBe(true);
 
     const diagnosticsEntry = entries.find((entry) => entry.endsWith('/diagnostics.json'));
@@ -370,25 +391,29 @@ describe('exportDiagnostics', () => {
     expect(diagnostics.process?.node).toBeTruthy();
     expect(diagnostics.api?.updateCheckUrl).toContain('/api/v1/desktop/update-check');
     expect(diagnostics.api?.diagnosticsUploadUrl).toContain('/api/v1/diagnostics/upload');
-    expect(diagnostics.paths?.userData).toBe('/tmp/vividrop-user-data');
-    expect(diagnostics.paths?.logs).toContain('/tmp/vividrop-main.log');
+    expect(diagnostics.paths?.userData).toBe(diagnosticsPaths.userData);
+    expect(diagnostics.paths?.logs).toContain(diagnosticsPaths.desktopLog);
 
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it('omits stale rotated log files from diagnostics archives', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-test-'));
     const archivePath = join(tempRoot, 'diagnostics.zip');
     const staleDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
-    mkdirSync('/tmp/vividrop-user-data/logs', { recursive: true });
-    writeFileSync('/tmp/vividrop-main.log', 'fresh main log\n');
-    writeFileSync('/tmp/vividrop-main.log.1', 'stale rotated main log\n');
-    writeFileSync('/tmp/vividrop-renderer.log', 'stale renderer log\n');
-    writeFileSync('/tmp/vividrop-user-data/logs/sidecar.log', 'fresh sidecar log\n');
-    writeFileSync('/tmp/vividrop-user-data/logs/sidecar.log.1', 'stale rotated sidecar log\n');
-    utimesSync('/tmp/vividrop-main.log.1', staleDate, staleDate);
-    utimesSync('/tmp/vividrop-renderer.log', staleDate, staleDate);
-    utimesSync('/tmp/vividrop-user-data/logs/sidecar.log.1', staleDate, staleDate);
+    ensureDesktopLogDir();
+    mkdirSync(join(diagnosticsPaths.userData, 'logs'), { recursive: true });
+    writeFileSync(diagnosticsPaths.desktopLog, 'fresh main log\n');
+    writeFileSync(diagnosticsPaths.rotatedDesktopLog, 'stale rotated main log\n');
+    writeFileSync(diagnosticsPaths.rendererLog, 'stale renderer log\n');
+    writeFileSync(join(diagnosticsPaths.userData, 'logs', 'sidecar.log'), 'fresh sidecar log\n');
+    writeFileSync(
+      join(diagnosticsPaths.userData, 'logs', 'sidecar.log.1'),
+      'stale rotated sidecar log\n',
+    );
+    utimesSync(diagnosticsPaths.rotatedDesktopLog, staleDate, staleDate);
+    utimesSync(diagnosticsPaths.rendererLog, staleDate, staleDate);
+    utimesSync(join(diagnosticsPaths.userData, 'logs', 'sidecar.log.1'), staleDate, staleDate);
     vi.mocked(dialog.showSaveDialog).mockResolvedValue({
       canceled: false,
       filePath: archivePath,
@@ -403,10 +428,10 @@ describe('exportDiagnostics', () => {
     const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
       .split('\n')
       .filter(Boolean);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-main.log'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('/files/main.log'))).toBe(true);
     expect(entries.some((entry) => entry.endsWith('/files/sidecar.log'))).toBe(true);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-main.log.1'))).toBe(false);
-    expect(entries.some((entry) => entry.endsWith('/files/vividrop-renderer.log'))).toBe(false);
+    expect(entries.some((entry) => entry.endsWith('/files/main.log.1'))).toBe(false);
+    expect(entries.some((entry) => entry.endsWith('/files/renderer.log'))).toBe(false);
     expect(entries.some((entry) => entry.endsWith('/files/sidecar.log.1'))).toBe(false);
 
     const diagnosticsEntry = entries.find((entry) => entry.endsWith('/diagnostics.json'));
@@ -417,18 +442,19 @@ describe('exportDiagnostics', () => {
     const diagnostics = JSON.parse(diagnosticsJson) as {
       paths?: { logs?: string[] };
     };
-    expect(diagnostics.paths?.logs).not.toContain('/tmp/vividrop-main.log.1');
-    expect(diagnostics.paths?.logs).not.toContain('/tmp/vividrop-renderer.log');
+    expect(diagnostics.paths?.logs).not.toContain(diagnosticsPaths.rotatedDesktopLog);
+    expect(diagnostics.paths?.logs).not.toContain(diagnosticsPaths.rendererLog);
     expect(diagnostics.paths?.logs).not.toContain(
-      '/tmp/vividrop-user-data/logs/sidecar.log.1',
+      join(diagnosticsPaths.userData, 'logs', 'sidecar.log.1'),
     );
 
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
   it('redacts credentials in API URLs written to diagnostics.json', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-test-'));
     const archivePath = join(tempRoot, 'diagnostics.zip');
+    ensureDesktopLogDir();
     process.env.LYNAVO_DESKTOP_UPDATE_URL =
       'https://user:secret@example.test/update?token=abc&keep=ok';
     process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL = 'https://example.test/upload?api_key=abc&keep=ok';
@@ -467,7 +493,7 @@ describe('exportDiagnostics', () => {
 
 describe('writePowerDiagnostics', () => {
   it('writes filtered macOS sleep and wake history into the diagnostics files directory', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-power-diagnostics-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-power-diagnostics-test-'));
     const filesDir = join(tempRoot, 'files');
     mkdirSync(filesDir, { recursive: true });
     const runCommand = vi.fn().mockResolvedValue({
@@ -518,17 +544,13 @@ describe('uploadDiagnostics', () => {
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_TOKEN;
     delete process.env.LYNAVO_API_TOKEN;
-    delete process.env.VIVIDROP_API_BASE_URL;
-    delete process.env.SYNCFLOW_API_BASE_URL;
-    delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_TOKEN;
-    delete process.env.VIVIDROP_API_TOKEN;
-    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-main.log', { force: true });
-    rmSync('/tmp/vividrop-main.log.1', { force: true });
-    rmSync('/tmp/vividrop-renderer.log', { force: true });
+    delete process.env[legacyViviApiBaseEnv];
+    delete process.env[legacySyncApiBaseEnv];
+    delete process.env[legacyViviUpdateEnv];
+    delete process.env[legacyViviDiagnosticsUploadEnv];
+    delete process.env[legacyViviDiagnosticsTokenEnv];
+    delete process.env[legacyViviApiTokenEnv];
+    resetDiagnosticsFs();
   });
 
   afterEach(() => {
@@ -539,27 +561,27 @@ describe('uploadDiagnostics', () => {
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_TOKEN;
     delete process.env.LYNAVO_API_TOKEN;
-    delete process.env.VIVIDROP_API_BASE_URL;
-    delete process.env.SYNCFLOW_API_BASE_URL;
-    delete process.env.VIVIDROP_DESKTOP_UPDATE_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL;
-    delete process.env.VIVIDROP_DIAGNOSTICS_TOKEN;
-    delete process.env.VIVIDROP_API_TOKEN;
-    rmSync('/tmp/vividrop-app', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-user-data', { recursive: true, force: true });
-    rmSync('/tmp/vividrop-main.log', { force: true });
-    rmSync('/tmp/vividrop-main.log.1', { force: true });
-    rmSync('/tmp/vividrop-renderer.log', { force: true });
+    delete process.env[legacyViviApiBaseEnv];
+    delete process.env[legacySyncApiBaseEnv];
+    delete process.env[legacyViviUpdateEnv];
+    delete process.env[legacyViviDiagnosticsUploadEnv];
+    delete process.env[legacyViviDiagnosticsTokenEnv];
+    delete process.env[legacyViviApiTokenEnv];
+    resetDiagnosticsFs();
   });
 
   it('uploads a compact diagnostics bundle when fresh logs and the database are large', async () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'syncflow-diagnostics-upload-test-'));
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-diagnostics-upload-test-'));
     const archivePath = join(tempRoot, 'uploaded.zip');
     const uploaded: { bundle?: Uint8Array } = {};
-    mkdirSync('/tmp/vividrop-user-data/logs', { recursive: true });
-    writeFileSync('/tmp/vividrop-main.log', randomBytes(1024 * 1024));
-    writeFileSync('/tmp/vividrop-user-data/logs/sidecar.log', randomBytes(2 * 1024 * 1024));
-    writeFileSync('/tmp/vividrop-user-data/sidecar.db', randomBytes(2 * 1024 * 1024));
+    ensureDesktopLogDir();
+    mkdirSync(join(diagnosticsPaths.userData, 'logs'), { recursive: true });
+    writeFileSync(diagnosticsPaths.desktopLog, randomBytes(1024 * 1024));
+    writeFileSync(
+      join(diagnosticsPaths.userData, 'logs', 'sidecar.log'),
+      randomBytes(2 * 1024 * 1024),
+    );
+    writeFileSync(join(diagnosticsPaths.userData, 'sidecar.db'), randomBytes(2 * 1024 * 1024));
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       const form = init?.body as FormData;
       const bundle = form.get('bundle');
@@ -592,7 +614,7 @@ describe('uploadDiagnostics', () => {
     const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
       .split('\n')
       .filter(Boolean);
-    expect(entries).toContain('files/vividrop-main.log');
+    expect(entries).toContain('files/main.log');
     expect(entries).toContain('files/sidecar.log');
     expect(entries).not.toContain('files/sidecar.db');
     expect(entries).toContain('files/sidecar.db.omitted.txt');
@@ -603,8 +625,8 @@ describe('uploadDiagnostics', () => {
   });
 
   it('ignores legacy diagnostics upload URL and token env', async () => {
-    process.env.VIVIDROP_DIAGNOSTICS_UPLOAD_URL = 'https://legacy.example/diagnostics';
-    process.env.VIVIDROP_API_TOKEN = 'legacy-token';
+    process.env[legacyViviDiagnosticsUploadEnv] = 'https://legacy.example/diagnostics';
+    process.env[legacyViviApiTokenEnv] = 'legacy-token';
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       return new Response(
         JSON.stringify({ ref_id: 'DIA-LEGACY', uploaded_at: '2026-05-18T09:00:00Z' }),

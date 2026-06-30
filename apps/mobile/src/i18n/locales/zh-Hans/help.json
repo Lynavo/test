@@ -6,13 +6,13 @@
     "contact": "联系支持"
   },
   "product": {
-    "title": "Vivi Drop",
+    "title": "Lynavo Drive",
     "description": "局域网素材无线同步工具，手机照片和视频极速传至电脑"
   },
   "steps": {
     "step0": {
       "title": "下载 PC 端",
-      "description": "电脑浏览器访问 vividrop.cn 下载安装"
+      "description": "电脑浏览器访问 lynavo.com 下载安装"
     },
     "step1": {
       "title": "连接设备",
@@ -24,16 +24,16 @@
     }
   },
   "download": {
-    "label": "PC 端下载：www.vividrop.cn"
+    "label": "PC 端下载：www.lynavo.com"
   },
   "faq": {
     "item0": {
       "title": "一直显示寻找设备怎么办？",
-      "answer": "请确认手机和电脑处于同一 Wi-Fi 网络，且 Vivi Drop PC 端正在运行。尝试重启 PC 端后，在手机端点击刷新重新扫描，或改用 6 位连接码手动连接。"
+      "answer": "请确认手机和电脑处于同一 Wi-Fi 网络，且 Lynavo Drive PC 端正在运行。尝试重启 PC 端后，在手机端点击刷新重新扫描，或改用 6 位连接码手动连接。"
     },
     "item1": {
       "title": "自动上传为什么会暂停？",
-      "answer": "自动上传在切换 Wi-Fi 或电脑睡眠后会暂停。电脑唤醒且网络恢复后，Vivi Drop 会保留已完成文件并自动继续未完成队列。后台权限受限时也会暂停，请在手机系统设置中确认 Vivi Drop 有后台刷新权限。"
+      "answer": "自动上传在切换 Wi-Fi 或电脑睡眠后会暂停。电脑唤醒且网络恢复后，Lynavo Drive 会保留已完成文件并自动继续未完成队列。后台权限受限时也会暂停，请在手机系统设置中确认 Lynavo Drive 有后台刷新权限。"
     },
     "item2": {
       "title": "上传失败怎么处理？",
@@ -49,7 +49,7 @@
     },
     "item5": {
       "title": "共享目录显示为空怎么办？",
-      "answer": "请在 PC 端 Vivi Drop 设置中确认共享目录路径可用，并确认该目录下有文件。设置后在手机端下拉刷新即可看到内容。"
+      "answer": "请在 PC 端 Lynavo Drive 设置中确认共享目录路径可用，并确认该目录下有文件。设置后在手机端下拉刷新即可看到内容。"
     }
   },
   "contact": {

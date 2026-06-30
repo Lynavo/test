@@ -1,4 +1,4 @@
-// DEPRECATED: Replaced by SyncActivityScreen in Vivi Drop update
+// DEPRECATED: Replaced by SyncActivityScreen in Lynavo Drive update
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -259,8 +259,9 @@ function buildOverviewFromPayload(
       previous.currentSpeedMbps,
     uploadState: nextUploadState,
     performanceHint:
-      (payload.performanceHint as SyncOverview['performanceHint'] | undefined) ??
-      previous.performanceHint,
+      (payload.performanceHint as
+        | SyncOverview['performanceHint']
+        | undefined) ?? previous.performanceHint,
     performanceMessage:
       typeof payload.performanceMessage === 'string'
         ? payload.performanceMessage
@@ -354,9 +355,18 @@ function formatDateTimeLabel(iso: string | undefined, t: TFunction): string {
     return t('settings.dates.todayAt', { time });
   }
   if (date.getFullYear() === now.getFullYear()) {
-    return t('settings.dates.monthDayAt', { month: date.getMonth() + 1, day: date.getDate(), time });
+    return t('settings.dates.monthDayAt', {
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      time,
+    });
   }
-  return t('settings.dates.fullDate', { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate(), time });
+  return t('settings.dates.fullDate', {
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    time,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -382,16 +392,20 @@ function CompletionCard({
       <View style={styles.completionCircle}>
         <Icon name="checkmark-circle" size={64} color="#22c55e" />
       </View>
-      <Text style={styles.completionTitle}>{t('syncStatus.completion.title')}</Text>
+      <Text style={styles.completionTitle}>
+        {t('syncStatus.completion.title')}
+      </Text>
       <View style={styles.completionMeta}>
         <Text style={styles.completionStats}>
           {fileCount} {t('syncStatus.completion.filesUnit')} {'·'} {totalSize}
         </Text>
-        <Text style={styles.completionSubtext}>{t('syncStatus.completion.subtitle')}</Text>
+        <Text style={styles.completionSubtext}>
+          {t('syncStatus.completion.subtitle')}
+        </Text>
         {latestSyncLabel ? (
-          <Text
-            style={styles.lastSyncText}
-          >{t('syncStatus.completion.latestSync', { label: latestSyncLabel })}</Text>
+          <Text style={styles.lastSyncText}>
+            {t('syncStatus.completion.latestSync', { label: latestSyncLabel })}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -423,17 +437,24 @@ function SyncSummaryCard({
         {summaryTitleForUploadState(uploadState, t)}
       </Text>
       <Text style={styles.summaryTitle}>
-        {t('syncStatus.summary.filesCompleted', { completed: completedCount, total: totalCount })}
+        {t('syncStatus.summary.filesCompleted', {
+          completed: completedCount,
+          total: totalCount,
+        })}
       </Text>
       <View style={styles.summaryStats}>
         <View style={styles.summaryStatCard}>
-          <Text style={styles.summaryStatLabel}>{t('syncStatus.summary.transferred')}</Text>
+          <Text style={styles.summaryStatLabel}>
+            {t('syncStatus.summary.transferred')}
+          </Text>
           <Text style={styles.summaryStatValue}>
             {`${formatBytes(transferredBytes)} / ${formatBytes(totalBytes)}`}
           </Text>
         </View>
         <View style={styles.summaryStatCard}>
-          <Text style={styles.summaryStatLabel}>{t('syncStatus.summary.speed')}</Text>
+          <Text style={styles.summaryStatLabel}>
+            {t('syncStatus.summary.speed')}
+          </Text>
           <Text style={styles.summaryStatValue}>
             {formatSpeedMbps(currentSpeedMbps)}
           </Text>
@@ -470,7 +491,9 @@ function QueueItemRow({
     (item.fileKey.length > 0 && item.fileKey === activeFileKey);
   const showItemProgress = isActive && activeTotalBytes > 0;
   const itemStatusLabel = showItemProgress
-    ? t('syncStatus.queue.itemStatus.transferring', { percent: activeProgressPercent })
+    ? t('syncStatus.queue.itemStatus.transferring', {
+        percent: activeProgressPercent,
+      })
     : item.status === 'cloud_downloading'
       ? t('syncStatus.queue.itemStatus.cloudDownloading')
       : item.status === 'preparing'
@@ -597,38 +620,42 @@ export function SyncStatusScreen() {
     return null;
   }, []);
 
-  const loadLatestSync = useCallback(async (engine?: any) => {
-    try {
-      const mod = engine || NativeModules.NativeSyncEngine;
-      if (!mod) return;
-      const history = await mod.getHistoryDays('');
-      const items = history?.items as
-        | Array<Record<string, unknown>>
-        | undefined;
-      if (!items?.length) {
-        setLatestSync(null);
-        return;
-      }
-
-      let latest: LatestSyncInfo | null = null;
-      for (const item of items) {
-        const updatedAt = item.updatedAt as string | undefined;
-        if (!updatedAt) continue;
-        if (
-          !latest ||
-          new Date(updatedAt).getTime() > new Date(latest.updatedAt).getTime()
-        ) {
-          latest = {
-            updatedAt,
-            deviceName: (item.deviceName as string) || t('common.deviceNames.default'),
-          };
+  const loadLatestSync = useCallback(
+    async (engine?: any) => {
+      try {
+        const mod = engine || NativeModules.NativeSyncEngine;
+        if (!mod) return;
+        const history = await mod.getHistoryDays('');
+        const items = history?.items as
+          | Array<Record<string, unknown>>
+          | undefined;
+        if (!items?.length) {
+          setLatestSync(null);
+          return;
         }
+
+        let latest: LatestSyncInfo | null = null;
+        for (const item of items) {
+          const updatedAt = item.updatedAt as string | undefined;
+          if (!updatedAt) continue;
+          if (
+            !latest ||
+            new Date(updatedAt).getTime() > new Date(latest.updatedAt).getTime()
+          ) {
+            latest = {
+              updatedAt,
+              deviceName:
+                (item.deviceName as string) || t('common.deviceNames.default'),
+            };
+          }
+        }
+        setLatestSync(latest);
+      } catch {
+        /* ignore */
       }
-      setLatestSync(latest);
-    } catch {
-      /* ignore */
-    }
-  }, [t]);
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (!retryBanner) {
@@ -743,8 +770,7 @@ export function SyncStatusScreen() {
           initialOverview.autoUploadState === 'interrupted' ||
           initialOverview.autoUploadState === 'disabled';
         const initialDone =
-          !initialAutoOff &&
-          initialOverview.uploadState === 'completed';
+          !initialAutoOff && initialOverview.uploadState === 'completed';
         if (initialDone) {
           setHoldCompletionCardUntilMs(Date.now() + COMPLETION_CARD_HOLD_MS);
         }
@@ -925,9 +951,7 @@ export function SyncStatusScreen() {
     overview.uploadState === 'paused_auto_upload' ||
     overview.autoUploadState === 'interrupted' ||
     overview.autoUploadState === 'disabled';
-  const isDone =
-    !isAutoUploadOff &&
-    overview.uploadState === 'completed';
+  const isDone = !isAutoUploadOff && overview.uploadState === 'completed';
   const holdCompletionCard =
     holdCompletionCardUntilMs !== null &&
     Date.now() < holdCompletionCardUntilMs &&
@@ -938,7 +962,9 @@ export function SyncStatusScreen() {
   const boundDeviceName =
     bindingState?.deviceAlias ||
     bindingState?.deviceName ||
-    (bindingState?.deviceType === 'win' ? t('common.deviceNames.windows') : t('common.deviceNames.default'));
+    (bindingState?.deviceType === 'win'
+      ? t('common.deviceNames.windows')
+      : t('common.deviceNames.default'));
   const effectiveConnectionState = getEffectiveConnectionState(
     bindingState?.connectionState,
     {
@@ -988,7 +1014,8 @@ export function SyncStatusScreen() {
   const isBannerError =
     isPermissionBlocked ||
     isConnectionError ||
-    (isTransferInterrupted && reconnectInterruptionReason !== 'transient_reconnect');
+    (isTransferInterrupted &&
+      reconnectInterruptionReason !== 'transient_reconnect');
   const enableConnectionBanner = true;
   const retryAttempt = retryBanner?.attempt ?? overview.retryAttempt ?? 0;
   const transferred = formatBytes(summaryTransferredBytes);
@@ -999,10 +1026,14 @@ export function SyncStatusScreen() {
       ? null
       : isTransferInterrupted
         ? reconnectInterruptionReason === 'windows_host_interrupted'
-          ? t('syncStatus.banners.windowsInterrupted', { device: boundDeviceName })
+          ? t('syncStatus.banners.windowsInterrupted', {
+              device: boundDeviceName,
+            })
           : reconnectInterruptionReason === 'network_recovery'
             ? t('syncStatus.banners.networkPaused')
-            : t('syncStatus.banners.networkReconnecting', { device: boundDeviceName })
+            : t('syncStatus.banners.networkReconnecting', {
+                device: boundDeviceName,
+              })
         : isConnectionError
           ? t('syncStatus.banners.notConnected', { device: boundDeviceName })
           : isConnectingState
@@ -1015,15 +1046,39 @@ export function SyncStatusScreen() {
       : isTransferInterrupted
         ? reconnectInterruptionReason === 'windows_host_interrupted'
           ? retryCountdownSec > 0
-            ? t('syncStatus.banners.progressWindowsRetry', { transferred, total, seconds: retryCountdownSec, attempt: retryAttempt })
-            : t('syncStatus.banners.progressWindowsNoRetry', { transferred, total })
+            ? t('syncStatus.banners.progressWindowsRetry', {
+                transferred,
+                total,
+                seconds: retryCountdownSec,
+                attempt: retryAttempt,
+              })
+            : t('syncStatus.banners.progressWindowsNoRetry', {
+                transferred,
+                total,
+              })
           : reconnectInterruptionReason === 'network_recovery'
             ? retryCountdownSec > 0
-              ? t('syncStatus.banners.networkWithRetry', { transferred, total, seconds: retryCountdownSec, attempt: retryAttempt })
-              : t('syncStatus.banners.networkAutoResume', { transferred, total })
+              ? t('syncStatus.banners.networkWithRetry', {
+                  transferred,
+                  total,
+                  seconds: retryCountdownSec,
+                  attempt: retryAttempt,
+                })
+              : t('syncStatus.banners.networkAutoResume', {
+                  transferred,
+                  total,
+                })
             : retryCountdownSec > 0
-              ? t('syncStatus.banners.progressWithRetry', { transferred, total, seconds: retryCountdownSec, attempt: retryAttempt })
-              : t('syncStatus.banners.retryingReconnect', { transferred, total })
+              ? t('syncStatus.banners.progressWithRetry', {
+                  transferred,
+                  total,
+                  seconds: retryCountdownSec,
+                  attempt: retryAttempt,
+                })
+              : t('syncStatus.banners.retryingReconnect', {
+                  transferred,
+                  total,
+                })
         : isConnectionError
           ? t('syncStatus.banners.connectionErrorResume')
           : isConnectingState
@@ -1183,7 +1238,9 @@ export function SyncStatusScreen() {
           {/* ---- Queue card ---- */}
           <View style={styles.queueCard}>
             <View style={styles.queueHeader}>
-              <Text style={styles.queueTitle}>{t('albumWorkbench.badges.queued')}</Text>
+              <Text style={styles.queueTitle}>
+                {t('albumWorkbench.badges.queued')}
+              </Text>
               <View style={styles.queueBadge}>
                 <Text style={styles.queueBadgeText}>{queueCountDisplay}</Text>
               </View>

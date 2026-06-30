@@ -179,12 +179,8 @@ export function DevicesPage() {
           {!loading && !error && filteredDevices.length === 0 && (
             <div className="flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-white/70 bg-white/24 px-6 text-center">
               <Smartphone className="h-8 w-8 text-slate-400" />
-              <h2 className="mt-3 text-sm font-bold text-slate-800">
-                {t('devices.empty.title')}
-              </h2>
-              <p className="mt-1 text-xs text-slate-400">
-                {t('devices.empty.description')}
-              </p>
+              <h2 className="mt-3 text-sm font-bold text-slate-800">{t('devices.empty.title')}</h2>
+              <p className="mt-1 text-xs text-slate-400">{t('devices.empty.description')}</p>
             </div>
           )}
 

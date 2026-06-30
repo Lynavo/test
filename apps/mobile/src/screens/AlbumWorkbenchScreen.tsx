@@ -45,7 +45,10 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import type { AlbumAssetDTO, AutoUploadConfigDTO } from '@lynavo-drive/contracts';
+import type {
+  AlbumAssetDTO,
+  AutoUploadConfigDTO,
+} from '@lynavo-drive/contracts';
 import { AssetPreviewModal } from '../components/AssetPreviewModal';
 import { Icon } from '../components/Icon';
 import {
@@ -1546,7 +1549,6 @@ export function AlbumWorkbenchScreen() {
                 <Icon name="play-circle-outline" size={16} color="#fff" />
               </View>
             )}
-
           </TouchableOpacity>
         </View>
       );
@@ -1606,7 +1608,6 @@ export function AlbumWorkbenchScreen() {
               )}
             </View>
           </View>
-
         </TouchableOpacity>
       );
     },
@@ -1633,7 +1634,7 @@ export function AlbumWorkbenchScreen() {
           autoUploadSessionTransferredCount,
           autoUploadRoundCompletedCount,
         )
-      : autoUploadSessionTransferredCount ?? autoUploadRoundCompletedCount;
+      : (autoUploadSessionTransferredCount ?? autoUploadRoundCompletedCount);
   const autoUploadTransferredThisRound =
     resolvedAutoUploadTransferredCount ??
     (isAutoUploadActive && stats
@@ -2135,7 +2136,6 @@ export function AlbumWorkbenchScreen() {
           }
         />
       )}
-
 
       {/* Date/time picker modal for custom time range */}
       <Modal

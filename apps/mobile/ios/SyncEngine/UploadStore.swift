@@ -99,7 +99,7 @@ struct DailyLedgerRecord {
 
 class UploadStore {
     private var db: OpaquePointer?
-    private let queue = DispatchQueue(label: "com.syncflow.uploadstore", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "com.lynavo.drive.uploadstore", qos: .userInitiated)
 
     init() throws {
         let dbPath = UploadStore.dbPath()
@@ -126,18 +126,18 @@ class UploadStore {
     static func dbPath() -> String {
         let libraryDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
         let appSupportDir = libraryDir.appendingPathComponent("Application Support", isDirectory: true)
-        let newDBURL = appSupportDir.appendingPathComponent("syncflow.db")
+        let newDBURL = appSupportDir.appendingPathComponent("lynavo-drive.db")
         
         let oldDocs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let oldDBURL = oldDocs.appendingPathComponent("syncflow.db")
+        let oldDBURL = oldDocs.appendingPathComponent("lynavo-drive.db")
         
         if FileManager.default.fileExists(atPath: oldDBURL.path) && !FileManager.default.fileExists(atPath: newDBURL.path) {
             try? FileManager.default.createDirectory(at: appSupportDir, withIntermediateDirectories: true)
             
-            let oldWalURL = oldDocs.appendingPathComponent("syncflow.db-wal")
-            let newWalURL = appSupportDir.appendingPathComponent("syncflow.db-wal")
-            let oldShmURL = oldDocs.appendingPathComponent("syncflow.db-shm")
-            let newShmURL = appSupportDir.appendingPathComponent("syncflow.db-shm")
+            let oldWalURL = oldDocs.appendingPathComponent("lynavo-drive.db-wal")
+            let newWalURL = appSupportDir.appendingPathComponent("lynavo-drive.db-wal")
+            let oldShmURL = oldDocs.appendingPathComponent("lynavo-drive.db-shm")
+            let newShmURL = appSupportDir.appendingPathComponent("lynavo-drive.db-shm")
             
             try? FileManager.default.moveItem(at: oldDBURL, to: newDBURL)
             try? FileManager.default.moveItem(at: oldWalURL, to: newWalURL)
@@ -248,7 +248,7 @@ class UploadStore {
             slog("[UploadStore] migration complete")
         }
 
-        // Migration: add source, batch_id, priority columns to upload_items (Vivi Drop)
+        // Migration: add source, batch_id, priority columns to upload_items (Lynavo Drive)
         let columnCheck = queryInternal(
             "SELECT COUNT(*) AS cnt FROM pragma_table_info('upload_items') WHERE name = 'source'",
             bind: []
@@ -259,7 +259,7 @@ class UploadStore {
             try executeInternal("ALTER TABLE upload_items ADD COLUMN source TEXT NOT NULL DEFAULT 'auto'")
             try executeInternal("ALTER TABLE upload_items ADD COLUMN batch_id TEXT")
             try executeInternal("ALTER TABLE upload_items ADD COLUMN priority INTEGER NOT NULL DEFAULT 0")
-            slog("[UploadStore] Vivi Drop columns migration complete")
+            slog("[UploadStore] Lynavo Drive columns migration complete")
         }
 
         // Create auto_upload_config table (single-row config)

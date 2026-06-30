@@ -17,8 +17,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
   ) -> Bool {
     // Phase 3 — Reinstall sentinel.
     //
-    // The auth Keychain item (`cn.vividrop.auth`) and the SyncEngine Keychain
-    // items (`com.vividrop.mobile.china`) survive app deletion on iOS. Without
+    // The auth Keychain item (`com.lynavo.drive.auth`) and the SyncEngine Keychain
+    // items (`com.lynavo.drive.mobile`) survive app deletion on iOS. Without
     // this, a user who deletes and reinstalls the app silently restores the
     // previous account's tokens / bindings. We drive detection off a marker
     // in UserDefaults — which IS cleared by app deletion — so `marker == nil`
@@ -81,7 +81,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     factory.startReactNative(
-      withModuleName: "SyncFlow",
+      withModuleName: "LynavoDrive",
       in: window,
       launchOptions: launchOptions
     )

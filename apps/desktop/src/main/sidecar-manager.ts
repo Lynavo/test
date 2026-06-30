@@ -79,7 +79,7 @@ export class SidecarManager extends EventEmitter {
       };
     }
 
-    const explicitPath = process.env.SYNCFLOW_DNSSD_PATH;
+    const explicitPath = process.env.LYNAVO_DNSSD_PATH;
     const pathEntries = (process.env.PATH ?? process.env.Path ?? '')
       .split(delimiter)
       .map((entry) => entry.trim())
@@ -211,11 +211,11 @@ export class SidecarManager extends EventEmitter {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        SYNCFLOW_CONFIG: '',
+        LYNAVO_CONFIG: '',
         CGO_ENABLED: '1',
-        SYNCFLOW_DESKTOP_APP_VERSION: app.getVersion(),
-        SYNCFLOW_APP_COMPATIBILITY_VERSION: String(APP_COMPATIBILITY_VERSION),
-        ...(bonjour.path ? { SYNCFLOW_DNSSD_PATH: bonjour.path } : {}),
+        LYNAVO_DESKTOP_APP_VERSION: app.getVersion(),
+        LYNAVO_APP_COMPATIBILITY_VERSION: String(APP_COMPATIBILITY_VERSION),
+        ...(bonjour.path ? { LYNAVO_DNSSD_PATH: bonjour.path } : {}),
       },
     });
     this.process = child;

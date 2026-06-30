@@ -58,7 +58,10 @@ jest.mock('react-i18next', () => {
           if (options) {
             let res = current;
             for (const k of Object.keys(options)) {
-              res = res.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), options[k]);
+              res = res.replace(
+                new RegExp(`\\{\\{${k}\\}\\}`, 'g'),
+                options[k],
+              );
             }
             return res;
           }
@@ -175,7 +178,7 @@ describe('SettingsGlobalScreen', () => {
     mockedGetClientDisplayName.mockResolvedValue('Field iPhone');
     mockedSetClientDisplayName.mockResolvedValue(undefined);
     mockedGetAppInfo.mockResolvedValue({
-      appName: 'Vivi Drop',
+      appName: 'Lynavo Drive',
       version: '3.4.5',
       build: '67',
     });
@@ -250,7 +253,7 @@ describe('SettingsGlobalScreen', () => {
     const { getByText, queryByTestId, queryByText } =
       await renderSettingsGlobalScreen();
 
-    expect(mockNavigate).not.toHaveBeenCalledWith('Subscription');
+    expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo');
     expect(queryByText('会员状态')).toBeNull();
     expect(queryByTestId('global-settings-logout')).toBeNull();
     expect(queryByTestId('global-settings-delete-account')).toBeNull();
@@ -337,5 +340,4 @@ describe('SettingsGlobalScreen', () => {
     fireEvent.press(getByTestId('global-language-back'));
     expect(getByText('English')).toBeTruthy();
   });
-
 });

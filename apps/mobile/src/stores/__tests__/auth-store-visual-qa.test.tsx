@@ -58,10 +58,10 @@ describe('AuthProvider visual QA bootstrap', () => {
     jest.clearAllMocks();
     testGlobal.__DEV__ = true;
     process.env = { ...originalEnv };
-    delete process.env.SYNCFLOW_VISUAL_QA;
-    delete process.env.SYNCFLOW_VISUAL_QA_EMAIL;
-    delete process.env.SYNCFLOW_DEV_SKIP_AUTH;
-    delete process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL;
+    delete process.env.LYNAVO_VISUAL_QA;
+    delete process.env.LYNAVO_VISUAL_QA_EMAIL;
+    delete process.env.LYNAVO_DEV_SKIP_AUTH;
+    delete process.env.LYNAVO_DEV_SKIP_AUTH_EMAIL;
     (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
     (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(false);
   });
@@ -72,8 +72,8 @@ describe('AuthProvider visual QA bootstrap', () => {
   });
 
   test('hydrates mock tokens only when enabled and no persisted tokens exist', async () => {
-    process.env.SYNCFLOW_VISUAL_QA = '1';
-    process.env.SYNCFLOW_VISUAL_QA_EMAIL = 'designer@example.com';
+    process.env.LYNAVO_VISUAL_QA = '1';
+    process.env.LYNAVO_VISUAL_QA_EMAIL = 'designer@example.com';
 
     render(
       <AuthProvider>
@@ -107,9 +107,9 @@ describe('AuthProvider visual QA bootstrap', () => {
   });
 
   test('hydrates dev skip-auth tokens without enabling visual QA route mocks', async () => {
-    process.env.SYNCFLOW_DEV_SKIP_AUTH = '1';
-    process.env.SYNCFLOW_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
-    process.env.SYNCFLOW_VISUAL_QA_ROUTE = 'DeviceDiscovery';
+    process.env.LYNAVO_DEV_SKIP_AUTH = '1';
+    process.env.LYNAVO_DEV_SKIP_AUTH_EMAIL = 'functional@example.com';
+    process.env.LYNAVO_VISUAL_QA_ROUTE = 'DeviceDiscovery';
 
     render(
       <AuthProvider>
@@ -143,8 +143,8 @@ describe('AuthProvider visual QA bootstrap', () => {
   });
 
   test('clears stale persisted official tokens before hydrating visual QA tokens', async () => {
-    process.env.SYNCFLOW_VISUAL_QA = '1';
-    process.env.SYNCFLOW_VISUAL_QA_EMAIL = 'designer@example.com';
+    process.env.LYNAVO_VISUAL_QA = '1';
+    process.env.LYNAVO_VISUAL_QA_EMAIL = 'designer@example.com';
     (Keychain.getGenericPassword as jest.Mock).mockResolvedValue({
       username: 'tokens',
       password: JSON.stringify({
@@ -173,7 +173,7 @@ describe('AuthProvider visual QA bootstrap', () => {
       expect(state.refreshToken).toBe('mock-sandbox-refresh-token');
     });
     expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
-      service: 'cn.vividrop.auth',
+      service: 'com.lynavo.drive.auth',
     });
     expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
       'tokens',

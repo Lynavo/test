@@ -9,14 +9,21 @@ type SyncPerformanceHintProps = {
   performanceMessage?: string | null;
 };
 
-const ACTIVE_UPLOAD_STATES = new Set(['preparing', 'uploading', 'reconnecting']);
+const ACTIVE_UPLOAD_STATES = new Set([
+  'preparing',
+  'uploading',
+  'reconnecting',
+]);
 
 export function getSyncPerformanceHintMessage(
   props: SyncPerformanceHintProps,
   t: TFunction,
 ): string | null {
   const { uploadState, performanceHint, performanceMessage } = props;
-  if (!ACTIVE_UPLOAD_STATES.has(uploadState) || performanceHint !== 'thermal_limited') {
+  if (
+    !ACTIVE_UPLOAD_STATES.has(uploadState) ||
+    performanceHint !== 'thermal_limited'
+  ) {
     return null;
   }
 

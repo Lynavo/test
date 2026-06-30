@@ -20,7 +20,7 @@ final class NetworkPathObserver {
     static let shared = NetworkPathObserver()
 
     private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "com.syncflow.network-path-observer", qos: .utility)
+    private let queue = DispatchQueue(label: "com.lynavo.drive.network-path-observer", qos: .utility)
     private var lastPathDescription: String = ""
     private var isRunning = false
     private let lock = NSLock()

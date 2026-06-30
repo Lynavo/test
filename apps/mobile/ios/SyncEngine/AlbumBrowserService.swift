@@ -430,7 +430,7 @@ class AlbumBrowserService {
 
     static func previewCacheDir() -> URL {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_album_previews", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_album_previews", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

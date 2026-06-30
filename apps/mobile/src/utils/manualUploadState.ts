@@ -8,5 +8,8 @@ export interface ManualUploadSnapshot {
 export function hasPendingManualWork(
   snapshot: ManualUploadSnapshot | null | undefined,
 ): boolean {
-  return (snapshot?.manualPending ?? 0) > 0 || snapshot?.currentTaskSource === 'manual';
+  return (
+    (snapshot?.manualPending ?? 0) > 0 ||
+    snapshot?.currentTaskSource === 'manual'
+  );
 }

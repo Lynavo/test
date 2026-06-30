@@ -77,10 +77,9 @@ export const useDeviceDetailStore = create<DeviceDetailState>((set, get) => ({
           ? currentSelectedDate
           : dates.includes(today)
             ? today
-            : dates[0] ?? today);
+            : (dates[0] ?? today));
       const nextPage =
-        options?.page ??
-        (nextDate && nextDate !== currentSelectedDate ? 1 : get().page || 1);
+        options?.page ?? (nextDate && nextDate !== currentSelectedDate ? 1 : get().page || 1);
       // Use date range if both start and end are set
       const currentStartDate = get().startDate;
       const currentEndDate = get().endDate;
@@ -128,9 +127,7 @@ export const useDeviceDetailStore = create<DeviceDetailState>((set, get) => ({
   toggleSort: async (deviceId, field) => {
     const state = get();
     const nextDirection: SortDirection =
-      state.sortField === field && state.sortDirection === 'asc'
-        ? 'desc'
-        : 'asc';
+      state.sortField === field && state.sortDirection === 'asc' ? 'desc' : 'asc';
     set({
       sortField: field,
       sortDirection: nextDirection,

@@ -67,7 +67,7 @@ describe('download-records-service', () => {
       downloadedAt: '2026-06-16T08:30:00.000Z',
     });
     expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
-      'syncflow:download-records:v1',
+      'lynavo-drive:download-records:v1',
       JSON.stringify([
         record,
         {
@@ -100,7 +100,7 @@ describe('download-records-service', () => {
 
     expect(record.localPath).toBeNull();
     expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
-      'syncflow:download-records:v1',
+      'lynavo-drive:download-records:v1',
       JSON.stringify([record]),
     );
   });
@@ -125,7 +125,7 @@ describe('download-records-service', () => {
       localPath: '/tmp/Preview.mov',
     });
     expect(mockedAsyncStorage.setItem).toHaveBeenCalledWith(
-      'syncflow:download-records:v1',
+      'lynavo-drive:download-records:v1',
       JSON.stringify([record]),
     );
   });

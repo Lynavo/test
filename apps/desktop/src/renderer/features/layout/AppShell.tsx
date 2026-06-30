@@ -111,7 +111,7 @@ function ConnectionCodeSetupPage({ onComplete }: ConnectionCodeSetupPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const deviceName =
-    settings.deviceName || window.electronAPI?.platform?.getHostName?.() || 'ViviDrop';
+    settings.deviceName || window.electronAPI?.platform?.getHostName?.() || 'Lynavo Drive';
   const currentLocale = isSupportedLocale(i18n.resolvedLanguage) ? i18n.resolvedLanguage : 'en';
   const setupSteps = [
     {
@@ -180,7 +180,7 @@ function ConnectionCodeSetupPage({ onComplete }: ConnectionCodeSetupPageProps) {
 
   return (
     <div
-      className="vividrop-window-drag-region flex min-h-screen items-center justify-center overflow-y-auto px-6 py-10 text-[#17191c]"
+      className="lynavo-window-drag-region flex min-h-screen items-center justify-center overflow-y-auto px-6 py-10 text-[#17191c]"
       style={{
         backgroundColor: '#f7fbff',
         backgroundImage:
@@ -188,7 +188,7 @@ function ConnectionCodeSetupPage({ onComplete }: ConnectionCodeSetupPageProps) {
         backgroundBlendMode: 'normal, overlay',
       }}
     >
-      <section className="vividrop-window-no-drag-region w-full max-w-[560px] rounded-lg border border-white/70 bg-white/66 p-5 shadow-[0_34px_110px_rgba(70,96,138,0.18)] backdrop-blur-2xl">
+      <section className="lynavo-window-no-drag-region w-full max-w-[560px] rounded-lg border border-white/70 bg-white/66 p-5 shadow-[0_34px_110px_rgba(70,96,138,0.18)] backdrop-blur-2xl">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#17191c] text-white shadow-[0_12px_28px_rgba(23,25,28,0.18)]">
@@ -296,7 +296,6 @@ function ConnectionCodeSetupPage({ onComplete }: ConnectionCodeSetupPageProps) {
           </div>
         </div>
       </section>
-
     </div>
   );
 }
@@ -409,9 +408,9 @@ export function AppShell() {
 
   useEffect(() => {
     const openDownloadPanel = () => setDownloadPanelOpen(true);
-    window.addEventListener('vividrop:open-download', openDownloadPanel);
+    window.addEventListener('lynavo-drive:open-download', openDownloadPanel);
     return () => {
-      window.removeEventListener('vividrop:open-download', openDownloadPanel);
+      window.removeEventListener('lynavo-drive:open-download', openDownloadPanel);
     };
   }, []);
 
@@ -529,7 +528,7 @@ export function AppShell() {
 
         <div
           data-testid="global-window-drag-strip"
-          className="vividrop-window-drag-region shrink-0 px-6 pt-2 pb-2"
+          className="lynavo-window-drag-region shrink-0 px-6 pt-2 pb-2"
         />
         <SidecarStatusBanner />
         <Suspense fallback={<PageFallback />}>

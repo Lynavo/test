@@ -7,10 +7,7 @@ import {
   getBonjourInstallErrorMessage,
   getBonjourInstallSuccessMessage,
 } from '@renderer/lib/bonjour-install';
-import {
-  getBonjourRuntimeMessage,
-  getSidecarRuntimeMessage,
-} from '@renderer/lib/runtime-messages';
+import { getBonjourRuntimeMessage, getSidecarRuntimeMessage } from '@renderer/lib/runtime-messages';
 import { useAppStore } from '@renderer/stores/app-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 

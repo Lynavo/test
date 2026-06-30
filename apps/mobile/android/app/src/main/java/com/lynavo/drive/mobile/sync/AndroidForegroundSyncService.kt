@@ -85,7 +85,7 @@ class AndroidForegroundSyncService : Service() {
     )
 
     return NotificationCompat.Builder(this, CHANNEL_ID)
-      .setSmallIcon(R.drawable.ic_stat_vividrop_sync)
+      .setSmallIcon(R.drawable.ic_stat_lynavo_sync)
       .setContentTitle(title)
       .setContentText(text)
       .setContentIntent(openIntent)
@@ -94,7 +94,7 @@ class AndroidForegroundSyncService : Service() {
       .setCategory(NotificationCompat.CATEGORY_PROGRESS)
       .setPriority(NotificationCompat.PRIORITY_LOW)
       .addAction(
-        R.drawable.ic_stat_vividrop_sync,
+        R.drawable.ic_stat_lynavo_sync,
         getString(R.string.background_sync_notification_stop_action),
         stopIntent,
       )

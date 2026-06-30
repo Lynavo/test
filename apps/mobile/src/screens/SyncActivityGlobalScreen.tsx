@@ -283,7 +283,9 @@ export function SyncActivityGlobalScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>{t('syncActivity.title') || '同步工作台'}</Text>
+            <Text style={styles.title}>
+              {t('syncActivity.title') || '同步工作台'}
+            </Text>
             <Text style={styles.subtitle}>
               {t('syncActivity.desc') || '查看当前连接、传输进度和最近文件。'}
             </Text>
@@ -297,7 +299,9 @@ export function SyncActivityGlobalScreen({
                     <Icon name="desktop-outline" size={22} color={BLUE} />
                   </View>
                   <View style={styles.autoCopyBlock}>
-                    <Text style={styles.autoTitle}>{t('syncActivity.home.autoSyncTitle') || '自动同步'}</Text>
+                    <Text style={styles.autoTitle}>
+                      {t('syncActivity.home.autoSyncTitle') || '自动同步'}
+                    </Text>
                     <View
                       testID="sync-activity-auto-meta-row"
                       style={styles.autoMetaRow}
@@ -328,27 +332,42 @@ export function SyncActivityGlobalScreen({
                   onPress={() => navigation.navigate('AutoUploadSettings')}
                 >
                   <Text style={styles.autoButtonText}>
-                    {autoUploadActive ? t('syncActivity.home.adjust') || '调整' : t('syncActivity.home.enableAuto') || '开启'}
+                    {autoUploadActive
+                      ? t('syncActivity.home.adjust') || '调整'
+                      : t('syncActivity.home.enableAuto') || '开启'}
                   </Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.phonePanel}>
-                <Text style={styles.phoneTitle}>{t('syncActivity.home.currentPhoneStatus') || '当前手机状态'}</Text>
+                <Text style={styles.phoneTitle}>
+                  {t('syncActivity.home.currentPhoneStatus') || '当前手机状态'}
+                </Text>
                 <Text style={styles.phoneStatus}>
                   {autoUploadActive
                     ? shouldShowUploadCompleted
-                      ? t('syncActivity.home.uploadedCount', { completed: uploadProgress.completedCount, total: uploadProgress.totalCount }) || `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
+                      ? t('syncActivity.home.uploadedCount', {
+                          completed: uploadProgress.completedCount,
+                          total: uploadProgress.totalCount,
+                        }) ||
+                        `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
                       : uploadProgress.totalCount > 0
-                        ? t('syncActivity.home.uploadedCount', { completed: uploadProgress.completedCount, total: uploadProgress.totalCount }) || `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
-                        : t('syncActivity.home.waitingForSync') || '等待自动同步'
+                        ? t('syncActivity.home.uploadedCount', {
+                            completed: uploadProgress.completedCount,
+                            total: uploadProgress.totalCount,
+                          }) ||
+                          `已上传${uploadProgress.completedCount}/${uploadProgress.totalCount}`
+                        : t('syncActivity.home.waitingForSync') ||
+                          '等待自动同步'
                     : t('syncActivity.home.autoDisabled') || '自动同步未开启'}
                 </Text>
                 {shouldShowUploadProgress ? (
                   <View style={styles.uploadProgressCard}>
                     <View style={styles.uploadProgressHeader}>
                       <Text style={styles.uploadProgressTitle}>
-                        {t('syncActivity.home.syncing') || '上传中'} · {t('syncActivity.home.currentTransferProgress') || '本次传输进度'}
+                        {t('syncActivity.home.syncing') || '上传中'} ·{' '}
+                        {t('syncActivity.home.currentTransferProgress') ||
+                          '本次传输进度'}
                       </Text>
                       <Text style={styles.uploadProgressPercent}>
                         {uploadProgress.percent}%
@@ -364,7 +383,9 @@ export function SyncActivityGlobalScreen({
                     </View>
                     <View style={styles.uploadProgressGrid}>
                       <View style={styles.uploadProgressStat}>
-                        <Text style={styles.uploadProgressLabel}>{t('syncActivity.stats.transferSpeed') || '传输速度'}</Text>
+                        <Text style={styles.uploadProgressLabel}>
+                          {t('syncActivity.stats.transferSpeed') || '传输速度'}
+                        </Text>
                         <Text style={styles.uploadProgressValue}>
                           {formatSpeedMbps(uploadProgress.speedMbps)}
                         </Text>
@@ -375,14 +396,18 @@ export function SyncActivityGlobalScreen({
                           styles.uploadProgressStatRight,
                         ]}
                       >
-                        <Text style={styles.uploadProgressLabel}>{t('syncActivity.stats.progress') || '传输进度'}</Text>
+                        <Text style={styles.uploadProgressLabel}>
+                          {t('syncActivity.stats.progress') || '传输进度'}
+                        </Text>
                         <Text style={styles.uploadProgressValue}>
                           {uploadProgress.completedCount} /{' '}
                           {uploadProgress.totalCount}
                         </Text>
                       </View>
                       <View style={styles.uploadProgressStat}>
-                        <Text style={styles.uploadProgressLabel}>{t('syncActivity.stats.fileSize') || '文件大小'}</Text>
+                        <Text style={styles.uploadProgressLabel}>
+                          {t('syncActivity.stats.fileSize') || '文件大小'}
+                        </Text>
                         <Text style={styles.uploadProgressValue}>
                           {formatBytes(uploadProgress.completedBytes)} /{' '}
                           {formatBytes(uploadProgress.totalBytes)}
@@ -394,9 +419,13 @@ export function SyncActivityGlobalScreen({
                           styles.uploadProgressStatRight,
                         ]}
                       >
-                        <Text style={styles.uploadProgressLabel}>{t('syncActivity.stats.currentFile') || '当前文件'}</Text>
+                        <Text style={styles.uploadProgressLabel}>
+                          {t('syncActivity.stats.currentFile') || '当前文件'}
+                        </Text>
                         <Text style={styles.uploadProgressValue}>
-                          {uploadProgress.currentFilename || t('syncActivity.phases.defaultTitle') || '准备中'}
+                          {uploadProgress.currentFilename ||
+                            t('syncActivity.phases.defaultTitle') ||
+                            '准备中'}
                         </Text>
                       </View>
                     </View>
@@ -412,20 +441,27 @@ export function SyncActivityGlobalScreen({
                       </View>
                       <View style={styles.uploadCompletedCopy}>
                         <Text style={styles.uploadCompletedTitle}>
-                          {t('syncActivity.completed.auto.title') || '本次同步已完成'}
+                          {t('syncActivity.completed.auto.title') ||
+                            '本次同步已完成'}
                         </Text>
                         <Text style={styles.uploadCompletedMeta}>
-                          {t('syncActivity.home.completedSummary', { count: uploadProgress.completedCount, size: formatBytes(uploadProgress.completedBytes) }) || `已同步 ${uploadProgress.completedCount} 个 · ${formatBytes(uploadProgress.completedBytes)}`}
+                          {t('syncActivity.home.completedSummary', {
+                            count: uploadProgress.completedCount,
+                            size: formatBytes(uploadProgress.completedBytes),
+                          }) ||
+                            `已同步 ${uploadProgress.completedCount} 个 · ${formatBytes(uploadProgress.completedBytes)}`}
                         </Text>
                       </View>
                     </View>
                     <Text style={styles.uploadCompletedHint}>
-                      {t('syncActivity.home.waitingForNewAssets') || '等待新增素材自动同步'}
+                      {t('syncActivity.home.waitingForNewAssets') ||
+                        '等待新增素材自动同步'}
                     </Text>
                   </View>
                 ) : null}
                 <Text style={styles.latestSyncText}>
-                  {t('syncActivity.home.latestSyncTimeLabel') || '最近同步时间'}：{latestSyncLabel}
+                  {t('syncActivity.home.latestSyncTimeLabel') || '最近同步时间'}
+                  ：{latestSyncLabel}
                 </Text>
               </View>
             </View>
@@ -437,7 +473,9 @@ export function SyncActivityGlobalScreen({
             t={t}
             onPressViewAll={() => navigation.navigate('DownloadRecords')}
             title={t('syncActivity.recentDownload.title') || '最近下载'}
-            viewAllLabel={t('syncActivity.recentDownload.viewAll') || '查看全部'}
+            viewAllLabel={
+              t('syncActivity.recentDownload.viewAll') || '查看全部'
+            }
             sectionIconColor={BLUE}
             sectionIconName="arrow-down-circle-outline"
             variant="globalPreview"
@@ -763,7 +801,11 @@ function toGlobalSyncRecordTimelineDay(
     records: [
       {
         id: `${item.dateKey}-${item.deviceId}`,
-        deviceName: item.deviceName || item.deviceId || t('common.connectionStates.boundDeviceFallback') || '已绑定电脑',
+        deviceName:
+          item.deviceName ||
+          item.deviceId ||
+          t('common.connectionStates.boundDeviceFallback') ||
+          '已绑定电脑',
         duration: formatGlobalHistoryDuration(item.activeTransmissionSeconds),
         fileCount: item.totalFileCount,
         status: 'completed',
@@ -800,8 +842,10 @@ function formatHistoryDayLabel(dateKey: string, t: any): string {
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
 
-  if (date.toDateString() === today.toDateString()) return t('common.today') || '今天';
-  if (date.toDateString() === yesterday.toDateString()) return t('common.yesterday') || '昨天';
+  if (date.toDateString() === today.toDateString())
+    return t('common.today') || '今天';
+  if (date.toDateString() === yesterday.toDateString())
+    return t('common.yesterday') || '昨天';
   if (date.getFullYear() === today.getFullYear()) {
     return t('history.dates.monthDay', { month, day }) || `${month}月${day}日`;
   }
@@ -822,7 +866,9 @@ function getLatestSyncLabel(
     .map(item => item.dateKey)
     .filter(Boolean)
     .sort((a, b) => b.localeCompare(a))[0];
-  return latestDateKey ? formatHistoryDayLabel(latestDateKey, t) : t('syncActivity.home.latestSyncTimeEmpty') || '暂无';
+  return latestDateKey
+    ? formatHistoryDayLabel(latestDateKey, t)
+    : t('syncActivity.home.latestSyncTimeEmpty') || '暂无';
 }
 
 function formatDateTimeLabel(isoString?: string): string | null {

@@ -1,4 +1,7 @@
-import type { AutoUploadState, UploadTaskSource } from '@lynavo-drive/contracts';
+import type {
+  AutoUploadState,
+  UploadTaskSource,
+} from '@lynavo-drive/contracts';
 
 import { hasPendingManualWork } from './manualUploadState';
 

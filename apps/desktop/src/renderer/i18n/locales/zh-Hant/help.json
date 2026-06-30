@@ -1,6 +1,6 @@
 {
   "title": "說明中心",
-  "subtitle": "為您了解和使用 Vivi Drop 提供完整的指引資訊",
+  "subtitle": "為您了解和使用 Lynavo Drive 提供完整的指引資訊",
   "dialog": {
     "navLabel": "說明分類",
     "nav": {
@@ -14,12 +14,12 @@
       "intro": {
         "items": [
           {
-            "title": "ViviDrop 是什麼",
-            "body": "ViviDrop 是一款區域網路素材同步工具，協助短影音團隊將手機素材無縫傳輸到電腦端。只要手機和電腦位於同一個 Wi-Fi 環境，即可一鍵連線、自動同步。"
+            "title": "Lynavo Drive 是什麼",
+            "body": "Lynavo Drive 是一款區域網路素材同步工具，協助短影音團隊將手機素材無縫傳輸到電腦端。只要手機和電腦位於同一個 Wi-Fi 環境，即可一鍵連線、自動同步。"
           },
           {
             "title": "如何連接電腦",
-            "body": "開啟 App 後掃描區域網路內的 ViviDrop 電腦端，或使用電腦端的 QR Code 掃碼直連。連線成功後即可開始上傳。"
+            "body": "開啟 App 後掃描區域網路內的 Lynavo Drive 電腦端，或使用電腦端的 QR Code 掃碼直連。連線成功後即可開始上傳。"
           },
           {
             "title": "如何上傳素材",
@@ -35,7 +35,7 @@
         "items": [
           {
             "title": "連接電腦",
-            "body": "確保手機和電腦在同一個 Wi-Fi 下，開啟 ViviDrop 電腦端，在手機端點擊「掃描裝置」找到電腦並連線，或使用電腦端 QR Code 掃碼。"
+            "body": "確保手機和電腦在同一個 Wi-Fi 下，開啟 Lynavo Drive 電腦端，在手機端點擊「掃描裝置」找到電腦並連線，或使用電腦端 QR Code 掃碼。"
           },
           {
             "title": "開啟自動上傳",
@@ -71,7 +71,7 @@
         "items": [
           {
             "title": "裝置離線怎麼辦？",
-            "body": "請確認手機和電腦位於同一個 Wi-Fi 網路，且 ViviDrop 電腦端正在執行。若電腦已休眠或電腦端已關閉，請重新啟動電腦端後，手機端點擊「重新整理」重新掃描。"
+            "body": "請確認手機和電腦位於同一個 Wi-Fi 網路，且 Lynavo Drive 電腦端正在執行。若電腦已休眠或電腦端已關閉，請重新啟動電腦端後，手機端點擊「重新整理」重新掃描。"
           },
           {
             "title": "上傳失敗怎麼辦？",
@@ -79,11 +79,11 @@
           },
           {
             "title": "共享目錄為空怎麼辦？",
-            "body": "請在電腦端 ViviDrop 的設定中確認已設定共享目錄路徑，並確認該目錄下有檔案。設定完成後在手機端下拉重新整理即可。"
+            "body": "請在電腦端 Lynavo Drive 的設定中確認已設定共享目錄路徑，並確認該目錄下有檔案。設定完成後在手機端下拉重新整理即可。"
           },
           {
             "title": "無法連接電腦怎麼辦？",
-            "body": "確認手機和電腦在同一個區域網路；檢查電腦防火牆是否阻擋 ViviDrop；嘗試重新啟動電腦端或使用 QR Code 掃碼連線。"
+            "body": "確認手機和電腦在同一個區域網路；檢查電腦防火牆是否阻擋 Lynavo Drive；嘗試重新啟動電腦端或使用 QR Code 掃碼連線。"
           },
           {
             "title": "是否需要帳號或訂閱？",
@@ -99,7 +99,7 @@
         "items": [
           {
             "title": "客服信箱",
-            "body": "support@vividrop.cn，工作日 24 小時內回覆。"
+            "body": "support@lynavo.com，工作日 24 小時內回覆。"
           },
           {
             "title": "匯出診斷包",
@@ -117,12 +117,12 @@
     "title": "基礎功能介紹",
     "items": [
       {
-        "title": "ViviDrop 是什麼",
-        "description": "ViviDrop 是一款專為創作者和團隊打造的區域網路素材增量同步工具。無需網際網路，在同一個 Wi-Fi 下即可實現手機端到電腦端素材的無感、高速、增量同步。"
+        "title": "Lynavo Drive 是什麼",
+        "description": "Lynavo Drive 是一款專為創作者和團隊打造的區域網路素材增量同步工具。無需網際網路，在同一個 Wi-Fi 下即可實現手機端到電腦端素材的無感、高速、增量同步。"
       },
       {
         "title": "如何連接電腦",
-        "description": "開啟電腦端 ViviDrop 取得 6 位數連線碼。在手機端輸入此連線碼即可配對。請確保兩端連接同一個 Wi-Fi 網路。"
+        "description": "開啟電腦端 Lynavo Drive 取得 6 位數連線碼。在手機端輸入此連線碼即可配對。請確保兩端連接同一個 Wi-Fi 網路。"
       },
       {
         "title": "如何上傳素材",
@@ -139,7 +139,7 @@
     "steps": [
       {
         "title": "選擇同步目錄",
-        "description": "開啟 Vivi Drop，選擇一個本機資料夾作為同步根目錄（macOS 如 ~/ViviDrop，Windows 如 D:\\ViviDrop）"
+        "description": "開啟 Lynavo Drive，選擇一個本機資料夾作為同步根目錄（macOS 如 ~/Lynavo Drive，Windows 如 D:\\Lynavo Drive）"
       },
       {
         "title": "取得連線碼並連線",
@@ -165,7 +165,7 @@
     "globalSteps": [
       {
         "title": "選擇同步目錄",
-        "description": "開啟 Vivi Drop，選擇一個本機資料夾作為同步根目錄（macOS 如 ~/ViviDrop，Windows 如 D:\\ViviDrop）"
+        "description": "開啟 Lynavo Drive，選擇一個本機資料夾作為同步根目錄（macOS 如 ~/Lynavo Drive，Windows 如 D:\\Lynavo Drive）"
       },
       {
         "title": "取得連線碼並連線",
@@ -235,8 +235,8 @@
         ]
       }
     ],
-    "tree": "ViviDrop/\n├── received/      （接收局域網手機上傳的素材）\n└── shared/        （團隊共享給區域網路裝置查看的成品）\n\nPersonalShare/    （個人共享目錄，可獨立指向其他磁碟或資料夾）",
-    "globalTree": "ViviDrop/\n└── received/      （接收局域網手機上傳的素材）\n\n我的電腦/         （供手機端存取的桌面本機資料夾或磁碟）"
+    "tree": "Lynavo Drive/\n├── received/      （接收局域網手機上傳的素材）\n└── shared/        （團隊共享給區域網路裝置查看的成品）\n\nPersonalShare/    （個人共享目錄，可獨立指向其他磁碟或資料夾）",
+    "globalTree": "Lynavo Drive/\n└── received/      （接收局域網手機上傳的素材）\n\n我的電腦/         （供手機端存取的桌面本機資料夾或磁碟）"
   },
   "permissions": {
     "title": "🔐 系統權限指引",
@@ -245,7 +245,7 @@
         "title": "防火牆",
         "steps": [
           "系統設定 → 網路 → 防火牆",
-          "如防火牆已開啟，點擊「選項…」確保 Vivi Drop 被設為「允許傳入連線」",
+          "如防火牆已開啟，點擊「選項…」確保 Lynavo Drive 被設為「允許傳入連線」",
           "首次啟動時 macOS 會彈出防火牆提示，請點擊「允許」"
         ]
       },
@@ -253,7 +253,7 @@
         "title": "本機網路權限",
         "steps": [
           "系統設定 → 隱私權與安全性 → 本機網路",
-          "確保 Vivi Drop 的開關已打開（手機發現電腦依賴此權限）",
+          "確保 Lynavo Drive 的開關已打開（手機發現電腦依賴此權限）",
           "如果手機搜尋不到電腦，請先檢查此項"
         ]
       },
@@ -261,7 +261,7 @@
         "title": "檔案與資料夾存取",
         "steps": [
           "系統設定 → 隱私權與安全性 → 檔案和資料夾",
-          "確保 Vivi Drop 有權限存取所選的同步根目錄",
+          "確保 Lynavo Drive 有權限存取所選的同步根目錄",
           "若同步目錄在外接硬碟上，還需在「完整磁碟存取權」中授權"
         ]
       },
@@ -278,8 +278,8 @@
         "steps": [
           "系統設定 → 電池或節能，開啟「喚醒以供網路存取」（Wake for network access）",
           "優先使用 Ethernet；Wi-Fi 睡眠喚醒會依 Mac 型號、供電狀態與路由器而不同",
-          "確認防火牆允許 Vivi Drop 傳入連線，且本機網路權限已開啟",
-          "Vivi Drop 可以送出喚醒封包，但不能自動替您開啟 macOS 電源設定"
+          "確認防火牆允許 Lynavo Drive 傳入連線，且本機網路權限已開啟",
+          "Lynavo Drive 可以送出喚醒封包，但不能自動替您開啟 macOS 電源設定"
         ]
       }
     ],
@@ -289,7 +289,7 @@
         "steps": [
           "首次啟動時系統可能彈出防火牆提示，請選擇「允許存取」",
           "如被阻擋：設定 → 隱私權與安全性 → Windows 安全性 → 防火牆與網路保護",
-          "點擊「允許應用程式通過防火牆」，確保 Vivi Drop 的「私人」和「公用」均已勾選"
+          "點擊「允許應用程式通過防火牆」，確保 Lynavo Drive 的「私人」和「公用」均已勾選"
         ]
       },
       {
@@ -324,7 +324,7 @@
           "若有「只允許 Magic Packet 喚醒電腦」，建議一併勾選",
           "在進階分頁啟用「Wake on Magic Packet」或廠商等效選項",
           "優先使用 Ethernet；Modern Standby、休眠、快速啟動、Wi-Fi 喚醒會依機型與驅動而不同",
-          "Vivi Drop 可以送出喚醒封包，但不能自動替您修改 BIOS/UEFI 或所有網卡驅動設定"
+          "Lynavo Drive 可以送出喚醒封包，但不能自動替您修改 BIOS/UEFI 或所有網卡驅動設定"
         ]
       }
     ]
@@ -344,7 +344,7 @@
     "items": [
       {
         "question": "手機找不到電腦怎麼辦？",
-        "answer": "請依序檢查：1) 電腦和手機是否連接同一 Wi-Fi；2) macOS 使用者檢查「本機網路」權限是否已授予 Vivi Drop（系統設定 → 隱私權與安全性 → 本機網路）；3) Windows 使用者確認網路類型為「私人網路」且「網路探索」已開啟；4) 檢查防火牆是否阻擋了傳入連線；5) 嘗試關閉後重新開啟 Vivi Drop"
+        "answer": "請依序檢查：1) 電腦和手機是否連接同一 Wi-Fi；2) macOS 使用者檢查「本機網路」權限是否已授予 Lynavo Drive（系統設定 → 隱私權與安全性 → 本機網路）；3) Windows 使用者確認網路類型為「私人網路」且「網路探索」已開啟；4) 檢查防火牆是否阻擋了傳入連線；5) 嘗試關閉後重新開啟 Lynavo Drive"
       },
       {
         "question": "為什麼斷線重連後需要手動恢復同步？",
@@ -364,7 +364,7 @@
       },
       {
         "question": "同步目錄可以放在外接硬碟上嗎？",
-        "answer": "可以。選擇外接硬碟上的資料夾作為根目錄即可。請確保硬碟在傳輸過程中保持連接。macOS 使用者還需在「完整磁碟存取權」中授權 Vivi Drop"
+        "answer": "可以。選擇外接硬碟上的資料夾作為根目錄即可。請確保硬碟在傳輸過程中保持連接。macOS 使用者還需在「完整磁碟存取權」中授權 Lynavo Drive"
       },
       {
         "question": "電腦休眠後傳輸會中斷嗎？",

@@ -280,14 +280,14 @@ jest.mock('../../screens/SettingsGlobalScreen', () => ({
   },
 }));
 
-jest.mock('../../screens/SubscriptionGlobalScreen', () => ({
-  SubscriptionGlobalScreen: () => {
+jest.mock('../../screens/OpenSourceInfoScreen', () => ({
+  OpenSourceInfoScreen: () => {
     const R = require('react');
     const { Text } = require('react-native');
     return R.createElement(
       Text,
-      { testID: 'subscription-screen' },
-      'Subscription',
+      { testID: 'open-source-info-screen' },
+      'OpenSourceInfo',
     );
   },
 }));
@@ -374,8 +374,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   testGlobal.__DEV__ = true;
   process.env = { ...originalEnv };
-  delete process.env.SYNCFLOW_VISUAL_QA;
-  delete process.env.SYNCFLOW_VISUAL_QA_ROUTE;
+  delete process.env.LYNAVO_VISUAL_QA;
+  delete process.env.LYNAVO_VISUAL_QA_ROUTE;
 
   // NativeSyncEngine.getBindingState returns null → falls through to DeviceDiscovery
   (NativeModules as Record<string, unknown>).NativeSyncEngine = {
@@ -395,20 +395,20 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe('RootNavigator — entitlement fail-open routing', () => {
-  test('routes trial_expired user to foreground LAN discovery, not SubscriptionScreen', async () => {
+  test('routes trial_expired user to foreground LAN discovery, not OpenSourceInfoScreen', async () => {
     renderWith('trial_expired');
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('routes sub_expired user to foreground LAN discovery, not SubscriptionScreen', async () => {
+  test('routes sub_expired user to foreground LAN discovery, not OpenSourceInfoScreen', async () => {
     renderWith('sub_expired');
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
   test('routes trialing user to main app (not paywall)', async () => {
@@ -416,7 +416,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
   test('routes subscribed user to main app (not paywall)', async () => {
@@ -424,7 +424,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
   test('expired status with an existing binding still routes to SyncActivity', async () => {
@@ -441,7 +441,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     await waitFor(() =>
       expect(screen.getByTestId('global-sync-activity-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
   test('active subscription snapshot over stale expired user status also routes to LAN discovery', async () => {
@@ -449,10 +449,10 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('does not reset foreground LAN route to SubscriptionScreen when subscription expires after entering the app', async () => {
+  test('does not reset foreground LAN route to OpenSourceInfoScreen when subscription expires after entering the app', async () => {
     const view = renderWith('subscribed');
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
@@ -468,12 +468,12 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('subscription-screen')).toBeNull();
+    expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
   test('uses visual QA whitelisted authed route as initial route', async () => {
-    process.env.SYNCFLOW_VISUAL_QA = '1';
-    process.env.SYNCFLOW_VISUAL_QA_ROUTE = 'History';
+    process.env.LYNAVO_VISUAL_QA = '1';
+    process.env.LYNAVO_VISUAL_QA_ROUTE = 'History';
 
     renderWith('subscribed');
 

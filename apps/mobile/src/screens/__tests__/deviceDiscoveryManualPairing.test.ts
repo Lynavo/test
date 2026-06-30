@@ -16,7 +16,9 @@ describe('deviceDiscoveryManualPairing', () => {
 
   it('normalizes a valid hostname/local domain name', () => {
     expect(normalizeManualPairHost('desktop.local')).toBe('desktop.local');
-    expect(normalizeManualPairHost('macbook.tailscale.net')).toBe('macbook.tailscale.net');
+    expect(normalizeManualPairHost('macbook.tailscale.net')).toBe(
+      'macbook.tailscale.net',
+    );
     expect(normalizeManualPairHost(' localhost ')).toBe('localhost');
   });
 
@@ -46,7 +48,9 @@ describe('deviceDiscoveryManualPairing', () => {
   });
 
   it('builds a manual pairing device from a valid IPv6 address', () => {
-    expect(buildManualPairDevice('[240e:476:3c0:9f3b:105e:1834:396d:dbaa]')).toEqual({
+    expect(
+      buildManualPairDevice('[240e:476:3c0:9f3b:105e:1834:396d:dbaa]'),
+    ).toEqual({
       deviceId: 'manual-240e:476:3c0:9f3b:105e:1834:396d:dbaa',
       name: '240e:476:3c0:9f3b:105e:1834:396d:dbaa',
       ip: '240e:476:3c0:9f3b:105e:1834:396d:dbaa',

@@ -11,7 +11,8 @@ import {
 import type { RecentDesktopDTO } from '@lynavo-drive/contracts';
 
 function TestComponent() {
-  const { recentDesktops, addDesktop, forgetDesktop, updateAuthStatus } = useRecentDesktops();
+  const { recentDesktops, addDesktop, forgetDesktop, updateAuthStatus } =
+    useRecentDesktops();
   return (
     <>
       <Text testID="desktop-count">{recentDesktops.length}</Text>
@@ -34,7 +35,10 @@ function TestComponent() {
       >
         <Text>Add</Text>
       </TouchableOpacity>
-      <TouchableOpacity testID="forget-btn" onPress={() => forgetDesktop('device-new')}>
+      <TouchableOpacity
+        testID="forget-btn"
+        onPress={() => forgetDesktop('device-new')}
+      >
         <Text>Forget</Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -86,7 +90,7 @@ describe('RecentDesktopsProvider and useRecentDesktops', () => {
     const { getByTestId, queryByTestId } = render(
       <RecentDesktopsProvider>
         <TestComponent />
-      </RecentDesktopsProvider>
+      </RecentDesktopsProvider>,
     );
 
     // Initial state after mount (AsyncStorage hydration)
@@ -102,14 +106,18 @@ describe('RecentDesktopsProvider and useRecentDesktops', () => {
     });
 
     expect(getByTestId('desktop-count').children[0]).toBe('1');
-    expect(getByTestId('device-device-new').children[0]).toContain('New PC - requires_code');
+    expect(getByTestId('device-device-new').children[0]).toContain(
+      'New PC - requires_code',
+    );
 
     // Update auth status
     await act(async () => {
       fireEvent.press(getByTestId('auth-btn'));
     });
 
-    expect(getByTestId('device-device-new').children[0]).toContain('New PC - authorized');
+    expect(getByTestId('device-device-new').children[0]).toContain(
+      'New PC - authorized',
+    );
 
     // Forget desktop
     await act(async () => {

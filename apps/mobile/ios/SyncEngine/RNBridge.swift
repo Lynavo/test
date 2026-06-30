@@ -95,7 +95,7 @@ private func persistDownloadedURLToLocalStorage(
 ) async throws -> [String: Any] {
     let safeFilename = shareCacheFilename(filename)
     let tempDir = FileManager.default.temporaryDirectory
-        .appendingPathComponent("syncflow_local_downloads", isDirectory: true)
+        .appendingPathComponent("lynavo_drive_local_downloads", isDirectory: true)
     try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
     let tempURL = uniqueShareCacheURL(directory: tempDir, filename: safeFilename)
     try FileManager.default.moveItem(at: downloadedURL, to: tempURL)
@@ -187,7 +187,7 @@ private func performDiagnosticsArchiveUpload(
     note: String,
     headers: [String: String]
 ) async throws -> [String: Any] {
-    let boundary = "syncflow-\(UUID().uuidString)"
+    let boundary = "lynavo-drive-\(UUID().uuidString)"
     var request = URLRequest(url: uploadURL)
     request.httpMethod = "POST"
     for (key, value) in headers {
@@ -634,7 +634,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
         }
     }
 
-    // MARK: - Vivi Drop: Album Browser
+    // MARK: - Lynavo Drive: Album Browser
 
     @objc
     func browseAlbum(_ params: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -681,7 +681,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
         }
     }
 
-    // MARK: - Vivi Drop: Manual Upload
+    // MARK: - Lynavo Drive: Manual Upload
 
     @objc
     func submitManualUpload(_ params: NSDictionary, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -748,7 +748,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
         }
     }
 
-    // MARK: - Vivi Drop: Auto Upload Control
+    // MARK: - Lynavo Drive: Auto Upload Control
 
     // DEPRECATED: RN side uses saveAutoUploadConfig() instead. To be removed next release cycle.
     @objc
@@ -800,7 +800,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
         resolve(nil)
     }
 
-    // MARK: - Vivi Drop: Shared Files
+    // MARK: - Lynavo Drive: Shared Files
 
     @objc
     func browseSharedFiles(_ scope: NSString, path: NSString, accessToken: NSString, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -933,7 +933,7 @@ class NativeSyncEngineModule: RCTEventEmitter {
                     return
                 }
                 let destDir = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("syncflow_shared_downloads", isDirectory: true)
+                    .appendingPathComponent("lynavo_drive_shared_downloads", isDirectory: true)
                 try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
                 let safeFilename = shareCacheFilename(filename as String, fallbackURL: remoteURL)
                 let destURL = uniqueShareCacheURL(directory: destDir, filename: safeFilename)

@@ -5,19 +5,21 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 const workspaceNodeModules = path.resolve(monorepoRoot, 'node_modules');
 const contractsRoot = path.resolve(monorepoRoot, 'packages/contracts');
 
-const pathToRegExp = (value) =>
-  value
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/[/\\]+/g, '[/\\\\]');
+const pathToRegExp = value =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[/\\]+/g, '[/\\\\]');
 
 const mobileRootPattern = pathToRegExp(__dirname);
 const contractsRootPattern = pathToRegExp(contractsRoot);
 const workspaceNodeModulesPattern = pathToRegExp(workspaceNodeModules);
 
 const blockList = [
-  new RegExp(`${mobileRootPattern}[/\\\\]android[/\\\\](?:app[/\\\\])?build(?:[/\\\\]|$)`),
+  new RegExp(
+    `${mobileRootPattern}[/\\\\]android[/\\\\](?:app[/\\\\])?build(?:[/\\\\]|$)`,
+  ),
   new RegExp(`${mobileRootPattern}[/\\\\]android[/\\\\]\\.gradle(?:[/\\\\]|$)`),
-  new RegExp(`${mobileRootPattern}[/\\\\]ios[/\\\\](?:build|Pods)(?:[/\\\\]|$)`),
+  new RegExp(
+    `${mobileRootPattern}[/\\\\]ios[/\\\\](?:build|Pods)(?:[/\\\\]|$)`,
+  ),
   new RegExp(`${contractsRootPattern}[/\\\\]\\.turbo(?:[/\\\\]|$)`),
   new RegExp(`${workspaceNodeModulesPattern}[/\\\\]\\.cache(?:[/\\\\]|$)`),
 ];

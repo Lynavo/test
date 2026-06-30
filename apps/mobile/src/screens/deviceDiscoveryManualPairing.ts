@@ -1,8 +1,15 @@
-import { PROTOCOL_PORT, type DiscoveredDeviceDTO } from '@lynavo-drive/contracts';
+import {
+  PROTOCOL_PORT,
+  type DiscoveredDeviceDTO,
+} from '@lynavo-drive/contracts';
 
-export type ManualPairDevice = Pick<DiscoveredDeviceDTO, 'deviceId' | 'name' | 'ip' | 'type' | 'port'>;
+export type ManualPairDevice = Pick<
+  DiscoveredDeviceDTO,
+  'deviceId' | 'name' | 'ip' | 'type' | 'port'
+>;
 
-const HOSTNAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+const HOSTNAME_PATTERN =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 const IPV4_SEGMENT_PATTERN = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 
 export function normalizeManualPairHost(rawHost: string): string | null {
@@ -15,7 +22,10 @@ export function normalizeManualPairHost(rawHost: string): string | null {
   const isNumericOnly = /^[0-9.]+$/.test(host);
   if (isNumericOnly) {
     const segments = host.split('.');
-    if (segments.length === 4 && segments.every((segment) => IPV4_SEGMENT_PATTERN.test(segment))) {
+    if (
+      segments.length === 4 &&
+      segments.every(segment => IPV4_SEGMENT_PATTERN.test(segment))
+    ) {
       return host;
     }
     return null;
@@ -35,7 +45,9 @@ export function normalizeManualPairHost(rawHost: string): string | null {
   return null;
 }
 
-export function buildManualPairDevice(rawHost: string): ManualPairDevice | null {
+export function buildManualPairDevice(
+  rawHost: string,
+): ManualPairDevice | null {
   const host = normalizeManualPairHost(rawHost);
 
   if (!host) {

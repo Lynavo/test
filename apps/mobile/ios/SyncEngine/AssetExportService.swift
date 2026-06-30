@@ -9,8 +9,8 @@ class AssetExportService {
         onDownloadProgress: ((Double) -> Void)? = nil
     ) async throws -> ExportedFile {
         let perfLoggingEnabled = syncFlowBoolSetting(
-            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
-            userDefaultsKey: "SyncFlowUploadPerfLog"
+            envKey: "LYNAVO_UPLOAD_PERF_LOG",
+            userDefaultsKey: "LynavoDriveUploadPerfLog"
         )
         let exportStart = CFAbsoluteTimeGetCurrent()
         let resources = PHAssetResource.assetResources(for: asset)
@@ -18,7 +18,7 @@ class AssetExportService {
             throw SyncEngineError.permissionError("No resource found for asset")
         }
 
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("syncflow_export")
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("lynavo_drive_export")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
 
         let filename = resource.originalFilename

@@ -15,12 +15,12 @@ function candidatePaths() {
     .map((entry) => entry.trim())
     .filter(Boolean);
 
-  if (process.env.SYNCFLOW_DNSSD_PATH) {
-    candidates.push(process.env.SYNCFLOW_DNSSD_PATH);
+  if (process.env.LYNAVO_DNSSD_PATH) {
+    candidates.push(process.env.LYNAVO_DNSSD_PATH);
   }
 
-  if (process.env.SYNCFLOW_BONJOUR_DIR) {
-    candidates.push(path.join(process.env.SYNCFLOW_BONJOUR_DIR, dnsSDFileName));
+  if (process.env.LYNAVO_BONJOUR_DIR) {
+    candidates.push(path.join(process.env.LYNAVO_BONJOUR_DIR, dnsSDFileName));
   }
 
   // Default vendor directory — works on any host when the binaries are checked in
@@ -56,8 +56,7 @@ function copyIfPresent(sourcePath, destinationPath) {
   if (fs.existsSync(destinationPath)) {
     const destinationStat = fs.statSync(destinationPath);
     const sameFile =
-      destinationStat.size === sourceStat.size &&
-      destinationStat.mtimeMs === sourceStat.mtimeMs;
+      destinationStat.size === sourceStat.size && destinationStat.mtimeMs === sourceStat.mtimeMs;
     if (sameFile) {
       return 'reused';
     }
@@ -84,7 +83,7 @@ const sourcePath = candidatePaths().find((candidate) => fs.existsSync(candidate)
 if (!sourcePath) {
   console.warn(
     '[sync-bonjour-runtime] dns-sd.exe not found; continuing without bundled Bonjour runtime.\n' +
-      '  To bundle Bonjour on a non-Windows host, set SYNCFLOW_BONJOUR_DIR to a directory\n' +
+      '  To bundle Bonjour on a non-Windows host, set LYNAVO_BONJOUR_DIR to a directory\n' +
       '  containing dns-sd.exe + dnssd.dll, or drop them into apps/desktop/resources-vendor/bonjour/.',
   );
   process.exit(0);
@@ -92,7 +91,10 @@ if (!sourcePath) {
 
 const sourceDir = path.dirname(sourcePath);
 const copiedDNS = copyIfPresent(sourcePath, path.join(resourcesDir, dnsSDFileName));
-const copiedDLL = copyIfPresent(path.join(sourceDir, dnsSDDLLName), path.join(resourcesDir, dnsSDDLLName));
+const copiedDLL = copyIfPresent(
+  path.join(sourceDir, dnsSDDLLName),
+  path.join(resourcesDir, dnsSDDLLName),
+);
 
 if (copiedDNS === 'copied') {
   console.log(`[sync-bonjour-runtime] staged ${dnsSDFileName} from ${sourcePath}`);

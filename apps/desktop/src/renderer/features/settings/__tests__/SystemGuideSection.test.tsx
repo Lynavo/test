@@ -28,12 +28,12 @@ describe('SystemGuideSection', () => {
         deviceName: 'Studio PC',
         connectionCode: '',
         rootPath: '',
-        receivePath: '/Users/alice/Vivi Drop/received',
-        personalPath: '/Users/alice/Vivi Drop/personal',
-        sharedPath: '/Users/alice/Vivi Drop/shared',
+        receivePath: '/Users/alice/Lynavo Drive/received',
+        personalPath: '/Users/alice/Lynavo Drive/personal',
+        sharedPath: '/Users/alice/Lynavo Drive/shared',
         shareAddress: '',
         shareStatus: 'unknown',
-        shareName: 'SyncFlow',
+        shareName: 'LynavoDrive',
       },
       validatingShare: false,
       copiedField: null,
@@ -68,7 +68,7 @@ describe('SystemGuideSection', () => {
 
     expect(screen.getByText('Linux 文件共享')).toBeInTheDocument();
     expect(
-      screen.getByText('在系统中手动配置 Samba 或文件共享后，回到 Vivi Drop 重新检测。'),
+      screen.getByText('在系统中手动配置 Samba 或文件共享后，回到 Lynavo Drive 重新检测。'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /打开团队共享目录/ })).toBeInTheDocument();
     expect(screen.queryByText('macOS 文件共享')).not.toBeInTheDocument();
@@ -77,6 +77,6 @@ describe('SystemGuideSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /打开团队共享目录/ }));
 
-    expect(openFolder).toHaveBeenCalledWith('/Users/alice/Vivi Drop/shared');
+    expect(openFolder).toHaveBeenCalledWith('/Users/alice/Lynavo Drive/shared');
   });
 });

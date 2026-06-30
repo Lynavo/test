@@ -17,7 +17,7 @@ const { syncCredentialsToSidecarMock } = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
-    getAppPath: () => '/Volumes/T7/Dev/Web/SyncFlow/apps/desktop',
+    getAppPath: () => '/Volumes/T7/Dev/Web/LynavoDrive/apps/desktop',
     getVersion: () => '0.1.0',
   },
 }));

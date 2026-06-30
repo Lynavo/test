@@ -16,8 +16,8 @@ const transferringDevice: DashboardDeviceDTO = {
   todayFileCount: 1,
   todayBytes: 1024,
   storageLeft: '100 GB',
-  storagePath: '/tmp/SyncFlow',
-  devicePath: '/tmp/SyncFlow/iPhone',
+  storagePath: '/tmp/LynavoDrive',
+  devicePath: '/tmp/LynavoDrive/iPhone',
   currentFile: {
     filename: 'IMG_0001.mov',
     progress: 42,
@@ -38,7 +38,7 @@ function setElectronAPI(overrides?: {
         vi.fn().mockResolvedValue({ refId: 'DIA1234', uploadedAt: '2026-05-08T03:00:00Z' }),
       exportDiagnostics: overrides?.exportDiagnostics ?? vi.fn().mockResolvedValue(null),
       getAppInfo: vi.fn().mockResolvedValue({
-        name: 'Vivi Drop',
+        name: 'Lynavo Drive',
         version: '0.1.0',
         buildNumber: '1',
       }),
@@ -90,7 +90,7 @@ describe('SupportSection', () => {
   it('shows the desktop version with build number', async () => {
     render(<SupportSection />);
 
-    expect(await screen.findByText('Vivi Drop v0.1.0 (1)')).toBeInTheDocument();
+    expect(await screen.findByText('Lynavo Drive v0.1.0 (1)')).toBeInTheDocument();
   });
 
   it('requires a description before uploading diagnostics', async () => {
@@ -173,7 +173,7 @@ describe('SupportSection', () => {
     const checkForUpdates = vi.fn().mockResolvedValue({
       updateAvailable: true,
       latestVersion: '0.2.0',
-      downloadUrl: 'https://www.vividrop.cn/download',
+      downloadUrl: 'https://www.lynavo.com/download',
       checkedAt: '2026-05-08T03:00:00Z',
     });
     const openExternal = vi.fn().mockResolvedValue(undefined);
@@ -184,7 +184,7 @@ describe('SupportSection', () => {
     expect(await screen.findByText('有新版本 v0.2.0 可用')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /打开下载页/ }));
 
-    expect(openExternal).toHaveBeenCalledWith('https://www.vividrop.cn/download');
+    expect(openExternal).toHaveBeenCalledWith('https://www.lynavo.com/download');
   });
 
   it('does not render update content when release notes are blank', async () => {

@@ -1,8 +1,5 @@
 import type { TFunction } from 'i18next';
-import {
-  BONJOUR_INSTALL_ERROR_CODES,
-  type BonjourInstallMessageCode,
-} from '../../shared/bonjour';
+import { BONJOUR_INSTALL_ERROR_CODES, type BonjourInstallMessageCode } from '../../shared/bonjour';
 
 const successKeyByCode: Record<BonjourInstallMessageCode, string> = {
   installed: 'errors.settings.bonjourInstallSuccess',

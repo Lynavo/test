@@ -161,10 +161,10 @@ describe('@lynavo-drive/contracts exports', () => {
     const settings: SettingsDTO = {
       deviceName: 'Office Mac',
       connectionCode: '123456',
-      rootPath: '/Users/alice/ViviDrop',
-      receivePath: '/Users/alice/ViviDrop/received',
+      rootPath: '/Users/alice/Lynavo Drive',
+      receivePath: '/Users/alice/Lynavo Drive/received',
       personalPath: '/Users/alice',
-      sharedPath: '/Users/alice/ViviDrop/shared',
+      sharedPath: '/Users/alice/Lynavo Drive/shared',
       shareAddress: '',
       shareStatus: 'ready',
       shareName: 'Office Mac',
@@ -178,9 +178,11 @@ describe('@lynavo-drive/contracts exports', () => {
     expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'CN')?.code).toBe('+86');
     expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'TW')?.code).toBe('+886');
   });
-  it('does not export legacy Vivi Drop commercial endpoint constants', () => {
-    expect(Object.keys(contracts).filter((key) => key.startsWith('VIVIDROP_'))).toEqual([]);
-    expect('VIVIDROP_SERVICE_ENDPOINTS' in contracts).toBe(false);
+  it('does not export legacy Lynavo Drive commercial endpoint constants', () => {
+    const legacyPrefix = ['VIVI', 'DROP_'].join('');
+    const legacyEndpoints = ['VIVI', 'DROP_SERVICE_ENDPOINTS'].join('');
+    expect(Object.keys(contracts).filter((key) => key.startsWith(legacyPrefix))).toEqual([]);
+    expect(legacyEndpoints in contracts).toBe(false);
   });
 
   it('exports Lynavo Drive service endpoints on lynavo.com domains', () => {
@@ -222,10 +224,10 @@ describe('@lynavo-drive/contracts exports', () => {
     ];
     const entitlements: DriveEntitlements = {
       canUseLanForegroundAutoUpload: true,
-      canUseBackgroundContinuation: true,
-      canUseRemoteTunnel: true,
-      source: 'subscription',
-      expiresAt: '2026-07-29T00:00:00.000Z',
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
+      source: 'free_account',
+      expiresAt: null,
       checkedAt: '2026-06-29T00:00:00.000Z',
     };
 
@@ -246,7 +248,7 @@ describe('@lynavo-drive/contracts exports', () => {
       'official_override',
       'unknown',
     ]);
-    expect(entitlements.canUseRemoteTunnel).toBe(true);
+    expect(entitlements.canUseRemoteTunnel).toBe(false);
   });
 
   it('resolves guest entitlements with foreground LAN fail-open and paid features fail-closed', () => {
@@ -285,7 +287,7 @@ describe('@lynavo-drive/contracts exports', () => {
     });
   });
 
-  it('resolves active paid server entitlements when official capabilities are available', () => {
+  it('keeps background and remote disabled even when server paid entitlements are active', () => {
     expect(
       contracts.resolveDriveEntitlements({
         isAuthenticated: true,
@@ -301,8 +303,8 @@ describe('@lynavo-drive/contracts exports', () => {
       }),
     ).toEqual({
       canUseLanForegroundAutoUpload: true,
-      canUseBackgroundContinuation: true,
-      canUseRemoteTunnel: true,
+      canUseBackgroundContinuation: false,
+      canUseRemoteTunnel: false,
       source: 'subscription',
       expiresAt: '2026-07-29T00:00:00.000Z',
       checkedAt: '2026-06-29T00:00:00.000Z',

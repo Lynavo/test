@@ -18,22 +18,22 @@ type VisualQaRoute = Extract<
   | 'History'
   | 'Settings'
   | 'Help'
-  | 'Subscription'
+  | 'OpenSourceInfo'
   | 'AutoUploadSettings'
 >;
 
 type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __SYNCFLOW_REMOTE_RESOURCES_PREVIEW__?: boolean;
+  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
 };
 
 type VisualQaNativeConstants = {
-  SYNCFLOW_DEV_SKIP_AUTH?: unknown;
-  SYNCFLOW_DEV_SKIP_AUTH_EMAIL?: unknown;
-  SYNCFLOW_VISUAL_QA?: unknown;
-  SYNCFLOW_VISUAL_QA_EMAIL?: unknown;
-  SYNCFLOW_VISUAL_QA_HOME_EMPTY?: unknown;
-  SYNCFLOW_VISUAL_QA_ROUTE?: unknown;
-  SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW?: unknown;
+  LYNAVO_DEV_SKIP_AUTH?: unknown;
+  LYNAVO_DEV_SKIP_AUTH_EMAIL?: unknown;
+  LYNAVO_VISUAL_QA?: unknown;
+  LYNAVO_VISUAL_QA_EMAIL?: unknown;
+  LYNAVO_VISUAL_QA_HOME_EMPTY?: unknown;
+  LYNAVO_VISUAL_QA_ROUTE?: unknown;
+  LYNAVO_VISUAL_QA_REMOTE_PREVIEW?: unknown;
   getConstants?: () => VisualQaNativeConstants;
 };
 
@@ -53,7 +53,7 @@ const VISUAL_QA_ROUTE_WHITELIST: ReadonlySet<string> = new Set<VisualQaRoute>([
   'History',
   'Settings',
   'Help',
-  'Subscription',
+  'OpenSourceInfo',
   'AutoUploadSettings',
 ]);
 
@@ -92,11 +92,11 @@ function isDevRuntime(): boolean {
 }
 
 export function isVisualQaEnabled(): boolean {
-  const nativeValue = readNativeValue('SYNCFLOW_VISUAL_QA');
+  const nativeValue = readNativeValue('LYNAVO_VISUAL_QA');
   if (nativeValue !== undefined) {
     return nativeValue === '1';
   }
-  return isDevRuntime() ? getEnv('SYNCFLOW_VISUAL_QA') === '1' : false;
+  return isDevRuntime() ? getEnv('LYNAVO_VISUAL_QA') === '1' : false;
 }
 
 export function getVisualQaMockTokens(): {
@@ -105,7 +105,7 @@ export function getVisualQaMockTokens(): {
 } | null {
   if (!isVisualQaEnabled()) return null;
   const email =
-    getVisualQaValue('SYNCFLOW_VISUAL_QA_EMAIL') || DEFAULT_VISUAL_QA_EMAIL;
+    getVisualQaValue('LYNAVO_VISUAL_QA_EMAIL') || DEFAULT_VISUAL_QA_EMAIL;
   return {
     accessToken: `mock-sandbox-access-token:${email}`,
     refreshToken: VISUAL_QA_REFRESH_TOKEN,
@@ -114,7 +114,7 @@ export function getVisualQaMockTokens(): {
 
 export function isDevSkipAuthEnabled(): boolean {
   if (!isDevRuntime()) return false;
-  return getVisualQaValue('SYNCFLOW_DEV_SKIP_AUTH') === '1';
+  return getVisualQaValue('LYNAVO_DEV_SKIP_AUTH') === '1';
 }
 
 export function getDevSkipAuthMockTokens(): {
@@ -123,7 +123,7 @@ export function getDevSkipAuthMockTokens(): {
 } | null {
   if (!isDevSkipAuthEnabled()) return null;
   const email =
-    getVisualQaValue('SYNCFLOW_DEV_SKIP_AUTH_EMAIL') ||
+    getVisualQaValue('LYNAVO_DEV_SKIP_AUTH_EMAIL') ||
     DEFAULT_DEV_SKIP_AUTH_EMAIL;
   return {
     accessToken: `mock-sandbox-access-token:${email}`,
@@ -133,7 +133,7 @@ export function getDevSkipAuthMockTokens(): {
 
 export function resolveVisualQaInitialRoute(): VisualQaRoute | null {
   if (!isVisualQaEnabled()) return null;
-  const route = getVisualQaValue('SYNCFLOW_VISUAL_QA_ROUTE');
+  const route = getVisualQaValue('LYNAVO_VISUAL_QA_ROUTE');
   if (!route || !VISUAL_QA_ROUTE_WHITELIST.has(route)) return null;
   return route as VisualQaRoute;
 }
@@ -141,17 +141,17 @@ export function resolveVisualQaInitialRoute(): VisualQaRoute | null {
 export function isVisualQaHomeEmptyStateEnabled(): boolean {
   return (
     isVisualQaEnabled() &&
-    getVisualQaValue('SYNCFLOW_VISUAL_QA_HOME_EMPTY') === '1'
+    getVisualQaValue('LYNAVO_VISUAL_QA_HOME_EMPTY') === '1'
   );
 }
 
 export function applyVisualQaRemotePreviewFlag(): void {
   if (
     isVisualQaEnabled() &&
-    getVisualQaValue('SYNCFLOW_VISUAL_QA_REMOTE_PREVIEW') === '1'
+    getVisualQaValue('LYNAVO_VISUAL_QA_REMOTE_PREVIEW') === '1'
   ) {
     (
       globalThis as RemoteResourcesPreviewGlobal
-    ).__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ = true;
+    ).__LYNAVO_REMOTE_RESOURCES_PREVIEW__ = true;
   }
 }

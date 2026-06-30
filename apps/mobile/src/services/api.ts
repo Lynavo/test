@@ -115,7 +115,7 @@ function normalizeHeaderValue(value: unknown): string | null {
 
 async function resolveClientInfoHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
-    [CLIENT_APP_HEADER]: 'vividrop-mobile',
+    [CLIENT_APP_HEADER]: 'lynavo-drive-mobile',
     [CLIENT_PLATFORM_HEADER]: Platform.OS,
   };
 
@@ -260,9 +260,8 @@ async function request<T>(
 }
 
 async function clearAuthFromModule(transition?: 'session_replaced') {
-  const { _clearAuthFromApi } = require(
-    './auth-service',
-  ) as typeof import('./auth-service');
+  const { _clearAuthFromApi } =
+    require('./auth-service') as typeof import('./auth-service');
   _clearAuthFromApi(transition);
 }
 

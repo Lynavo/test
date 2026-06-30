@@ -13,7 +13,7 @@ func TestEnsureRuntimeDirsRecreatesManagedDirectories(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{
 		DataDir:    filepath.Join(root, "data"),
-		ReceiveDir: filepath.Join(root, "ViviDrop", "received"),
+		ReceiveDir: filepath.Join(root, "Lynavo Drive", "received"),
 	}
 
 	result, err := EnsureRuntimeDirs(cfg)
@@ -64,7 +64,7 @@ func TestEnsureCoreDirsDoesNotCreateMissingStorageRoot(t *testing.T) {
 	missingMount := filepath.Join(root, "MissingExternalDisk")
 	cfg := &config.Config{
 		DataDir:    filepath.Join(root, "data"),
-		ReceiveDir: filepath.Join(missingMount, "ViviDrop", "received"),
+		ReceiveDir: filepath.Join(missingMount, "Lynavo Drive", "received"),
 	}
 
 	result, err := EnsureCoreDirs(cfg)
@@ -94,7 +94,7 @@ func TestEnsureRuntimeDirsDoesNotCreateMissingManagedRootParent(t *testing.T) {
 	missingMount := filepath.Join(root, "MissingExternalDisk")
 	cfg := &config.Config{
 		DataDir:    filepath.Join(root, "data"),
-		ReceiveDir: filepath.Join(missingMount, "ViviDrop", "received"),
+		ReceiveDir: filepath.Join(missingMount, "Lynavo Drive", "received"),
 	}
 
 	if _, err := EnsureRuntimeDirs(cfg); err == nil {
@@ -142,8 +142,8 @@ func TestEnsureStorageDirsRecreatesStorageDirsWhenDataDirIsSeparate(t *testing.T
 func TestEnsureStorageDirsRejectsMissingDataDirRoot(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{
-		DataDir:    filepath.Join(root, "ViviDrop"),
-		ReceiveDir: filepath.Join(root, "ViviDrop", "received"),
+		DataDir:    filepath.Join(root, "Lynavo Drive"),
+		ReceiveDir: filepath.Join(root, "Lynavo Drive", "received"),
 	}
 
 	if _, err := EnsureStorageDirs(cfg); err == nil {
@@ -159,7 +159,7 @@ func TestEnsureStorageDirsRejectsMissingDarwinVolumeRoot(t *testing.T) {
 		t.Skip("macOS /Volumes mount-point guard")
 	}
 
-	volumeRoot := filepath.Join("/Volumes", "SyncFlowMissingVolumeForRuntimeFsTest")
+	volumeRoot := filepath.Join("/Volumes", "LynavoDriveMissingVolumeForRuntimeFsTest")
 	if _, err := os.Stat(volumeRoot); err == nil {
 		t.Skipf("test volume root unexpectedly exists: %s", volumeRoot)
 	} else if !os.IsNotExist(err) {

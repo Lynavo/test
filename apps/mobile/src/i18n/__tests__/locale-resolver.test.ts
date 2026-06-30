@@ -9,7 +9,12 @@ type Locale = {
   isRTL: boolean;
 };
 
-const locale = (tag: string, languageCode: string, countryCode: string, scriptCode?: string): Locale => ({
+const locale = (
+  tag: string,
+  languageCode: string,
+  countryCode: string,
+  scriptCode?: string,
+): Locale => ({
   languageTag: tag,
   languageCode,
   scriptCode,
@@ -19,7 +24,9 @@ const locale = (tag: string, languageCode: string, countryCode: string, scriptCo
 
 describe('resolveLocale', () => {
   it('returns zh-Hans for simplified Chinese with CN region', () => {
-    expect(resolveLocale([locale('zh-Hans-CN', 'zh', 'CN', 'Hans')])).toBe('zh-Hans');
+    expect(resolveLocale([locale('zh-Hans-CN', 'zh', 'CN', 'Hans')])).toBe(
+      'zh-Hans',
+    );
   });
 
   it('returns zh-Hans for bare zh-CN without scriptCode', () => {
@@ -27,11 +34,15 @@ describe('resolveLocale', () => {
   });
 
   it('returns zh-Hant for traditional Chinese (Taiwan)', () => {
-    expect(resolveLocale([locale('zh-Hant-TW', 'zh', 'TW', 'Hant')])).toBe('zh-Hant');
+    expect(resolveLocale([locale('zh-Hant-TW', 'zh', 'TW', 'Hant')])).toBe(
+      'zh-Hant',
+    );
   });
 
   it('returns zh-Hant for traditional Chinese (Hong Kong)', () => {
-    expect(resolveLocale([locale('zh-Hant-HK', 'zh', 'HK', 'Hant')])).toBe('zh-Hant');
+    expect(resolveLocale([locale('zh-Hant-HK', 'zh', 'HK', 'Hant')])).toBe(
+      'zh-Hant',
+    );
   });
 
   it('uses region as a fallback when traditional Chinese has no scriptCode', () => {
@@ -49,24 +60,30 @@ describe('resolveLocale', () => {
   });
 
   it('respects user preference order: picks en when English comes first', () => {
-    expect(resolveLocale([
-      locale('en-US', 'en', 'US'),
-      locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
-    ])).toBe('en');
+    expect(
+      resolveLocale([
+        locale('en-US', 'en', 'US'),
+        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+      ]),
+    ).toBe('en');
   });
 
   it('picks zh-Hans when simplified Chinese comes before English', () => {
-    expect(resolveLocale([
-      locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
-      locale('en-US', 'en', 'US'),
-    ])).toBe('zh-Hans');
+    expect(
+      resolveLocale([
+        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+        locale('en-US', 'en', 'US'),
+      ]),
+    ).toBe('zh-Hans');
   });
 
   it('picks zh-Hant when traditional Chinese is the highest preference', () => {
-    expect(resolveLocale([
-      locale('zh-Hant-TW', 'zh', 'TW', 'Hant'),
-      locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
-    ])).toBe('zh-Hant');
+    expect(
+      resolveLocale([
+        locale('zh-Hant-TW', 'zh', 'TW', 'Hant'),
+        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+      ]),
+    ).toBe('zh-Hant');
   });
 
   it('returns en for empty list', () => {

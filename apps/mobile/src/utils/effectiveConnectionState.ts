@@ -80,10 +80,7 @@ export function getEffectiveConnectionState(
     return 'connected';
   }
 
-  if (
-    connectionState !== 'bound' &&
-    syncActivityImpliesConnected(evidence)
-  ) {
+  if (connectionState !== 'bound' && syncActivityImpliesConnected(evidence)) {
     return 'connected';
   }
 

@@ -36,7 +36,7 @@ describe('HelpDialog', () => {
   it('shows the basic feature introduction by default', () => {
     render(<HelpDialog />);
 
-    expect(screen.getByText('ViviDrop 是什么')).toBeInTheDocument();
+    expect(screen.getByText('Lynavo Drive 是什么')).toBeInTheDocument();
     expect(screen.getByText('如何连接电脑')).toBeInTheDocument();
     expect(screen.getByText('如何上传素材')).toBeInTheDocument();
     expect(screen.getByText('如何访问共享目录')).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe('HelpDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: '联系我们' }));
 
     expect(screen.getByText('客服邮箱')).toBeInTheDocument();
-    expect(screen.getByText(/support@vividrop.cn/)).toBeInTheDocument();
+    expect(screen.getByText(/support@lynavo.com/)).toBeInTheDocument();
     expect(screen.getByText('导出诊断包')).toBeInTheDocument();
     expect(screen.getByText('反馈入口')).toBeInTheDocument();
   });

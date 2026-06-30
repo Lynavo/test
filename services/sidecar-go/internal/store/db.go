@@ -27,7 +27,7 @@ var migration005SQL string
 var migration006SQL string
 
 // Store wraps a SQLite database connection and provides CRUD operations
-// for all SyncFlow sidecar tables.
+// for all Lynavo Drive sidecar tables.
 type Store struct {
 	db *sql.DB
 }

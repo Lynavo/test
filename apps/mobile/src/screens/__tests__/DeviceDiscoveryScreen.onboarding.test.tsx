@@ -48,13 +48,13 @@ jest.mock('react-i18next', () => ({
     t: (key: string) =>
       ({
         'deviceDiscovery.onboarding.unconnected.skip': '跳過',
-        'deviceDiscovery.onboarding.unconnected.title': '開始使用 Vivi Drop',
+        'deviceDiscovery.onboarding.unconnected.title': '開始使用 Lynavo Drive',
         'deviceDiscovery.onboarding.unconnected.subtitle':
           '手機與電腦無線同步素材，三步搞定',
         'deviceDiscovery.onboarding.unconnected.downloadStep.title':
           '下載 PC 端',
         'deviceDiscovery.onboarding.unconnected.downloadStep.body':
-          '在電腦上安裝 Vivi Drop',
+          '在電腦上安裝 Lynavo Drive',
         'deviceDiscovery.onboarding.unconnected.connectStep.title': '手機連接',
         'deviceDiscovery.onboarding.unconnected.connectStep.body':
           '輸入連接碼或掃碼連接',
@@ -135,7 +135,7 @@ describe('DeviceDiscoveryScreen onboarding', () => {
     const screen = render(<DeviceDiscoveryScreen />);
 
     await waitFor(() => {
-      expect(screen.getByText('開始使用 Vivi Drop')).toBeTruthy();
+      expect(screen.getByText('開始使用 Lynavo Drive')).toBeTruthy();
     });
     expect(screen.getByText('首次使用引導 · 可在幫助頁重新查看')).toBeTruthy();
 
@@ -144,7 +144,7 @@ describe('DeviceDiscoveryScreen onboarding', () => {
     await waitFor(
       () => {
         expect(mockMarkUnconnectedGuideSeen).toHaveBeenCalledTimes(1);
-        expect(screen.queryByText('開始使用 Vivi Drop')).toBeNull();
+        expect(screen.queryByText('開始使用 Lynavo Drive')).toBeNull();
       },
       { timeout: 3000 },
     );
@@ -158,6 +158,6 @@ describe('DeviceDiscoveryScreen onboarding', () => {
     await waitFor(() => {
       expect(mockHasSeenUnconnectedGuide).toHaveBeenCalledTimes(1);
     });
-    expect(screen.queryByText('開始使用 Vivi Drop')).toBeNull();
+    expect(screen.queryByText('開始使用 Lynavo Drive')).toBeNull();
   });
 });

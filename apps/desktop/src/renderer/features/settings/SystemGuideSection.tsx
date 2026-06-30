@@ -36,9 +36,7 @@ export function SystemGuideSection() {
             <p className="text-sm font-medium text-foreground">
               {t('settings.systemGuide.macTitle')}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {t('settings.systemGuide.macSubtitle')}
-            </p>
+            <p className="text-xs text-muted-foreground">{t('settings.systemGuide.macSubtitle')}</p>
           </div>
         </button>
       </div>

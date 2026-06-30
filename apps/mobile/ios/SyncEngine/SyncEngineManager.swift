@@ -279,7 +279,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private let watchLoopContinuationLock = NSLock()
     private let incrementalQueueRescanLock = NSLock()
     private let incrementalQueueRescanQueue = DispatchQueue(
-        label: "com.syncflow.incremental-photo-rescan",
+        label: "com.lynavo.drive.incremental-photo-rescan",
         qos: .utility
     )
     private var incrementalQueueRescanWorkItem: DispatchWorkItem?
@@ -288,7 +288,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private let deferredAutoExportRetryAfterSeconds: CFTimeInterval = 60
     private let cloudAssetDetectionLock = NSLock()
     private let cloudAssetDetectionQueue = DispatchQueue(
-        label: "com.syncflow.cloud-asset-detection",
+        label: "com.lynavo.drive.cloud-asset-detection",
         qos: .utility
     )
     private var cloudAssetFlags: [String: Bool] = [:]
@@ -361,7 +361,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var pairingControlDeviceId: String?
     private var pairingControlPairingToken: String?
     private let presenceRecoveryQueue = DispatchQueue(
-        label: "com.syncflow.presence-recovery",
+        label: "com.lynavo.drive.presence-recovery",
         qos: .utility
     )
     private let presenceRecoveryMaxAttempts = 10
@@ -372,7 +372,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var presenceDelayedRecoveryProbeFailures = 0
     private let localTCPProxy = LocalTCPProxy()
     private let p2pTunnelQueue = DispatchQueue(
-        label: "com.syncflow.p2p-tunnel",
+        label: "com.lynavo.drive.p2p-tunnel",
         qos: .utility
     )
     private var p2pTunnelCredentials: P2PTunnelCredentials?
@@ -423,7 +423,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var runtimeIsThermalLimited = false
     private var runtimeThermalReason: ThermalPerformanceReason?
     private let albumBrowserQueue = DispatchQueue(
-        label: "com.syncflow.album-browser",
+        label: "com.lynavo.drive.album-browser",
         qos: .userInitiated
     )
     private let albumBrowserQueueKey = DispatchSpecificKey<Void>()
@@ -1189,7 +1189,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             throw SyncEngineError.permissionError("Document source file not found")
         }
 
-        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("syncflow_export")
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent("lynavo_drive_export")
         try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let filename = asset.originalFilename.isEmpty ? sourceURL.lastPathComponent : asset.originalFilename
         let tempURL = tempDir.appendingPathComponent(UUID().uuidString + "_" + filename)
@@ -1376,7 +1376,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         // removal here would orphan every in-flight background upload and
         // cause a 422 body_size_mismatch chain on relaunch.
         let exportTempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_export", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_export", isDirectory: true)
         let preservePaths: Set<String> = Set(
             (uploadStore?.getItemsWithTempFiles() ?? [])
                 .compactMap { $0.tempFilePath }
@@ -3093,7 +3093,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "clientName": getClientDisplayName(),
             "clientPlatform": "ios",
             "appVersion": currentAppVersionLabel(),
-            "appCompatibilityVersion": syncFlowAppCompatibilityVersion,
+            "appCompatibilityVersion": lynavoAppCompatibilityVersion,
             "appState": await currentAppStateLabel(),
         ]
         if let pairingToken, !pairingToken.isEmpty {
@@ -3186,7 +3186,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             serverCompatibilityVersion = nil
         }
 
-        guard serverCompatibilityVersion == syncFlowAppCompatibilityVersion else {
+        guard serverCompatibilityVersion == lynavoAppCompatibilityVersion else {
             throw structuredPairingError(
                 code: "APP_VERSION_INCOMPATIBLE",
                 rawMessage: "手機與桌面 App 版本不相容，請同時更新兩端後再連線。",
@@ -3430,11 +3430,11 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.setValue(clientId, forHTTPHeaderField: "X-SyncFlow-Client-Id")
-        request.setValue(fileKey, forHTTPHeaderField: "X-SyncFlow-File-Key")
-        request.setValue(timestamp, forHTTPHeaderField: "X-SyncFlow-Auth-Timestamp")
-        request.setValue(nonce, forHTTPHeaderField: "X-SyncFlow-Auth-Nonce")
-        request.setValue(signature, forHTTPHeaderField: "X-SyncFlow-Auth")
+        request.setValue(clientId, forHTTPHeaderField: "X-LynavoDrive-Client-Id")
+        request.setValue(fileKey, forHTTPHeaderField: "X-LynavoDrive-File-Key")
+        request.setValue(timestamp, forHTTPHeaderField: "X-LynavoDrive-Auth-Timestamp")
+        request.setValue(nonce, forHTTPHeaderField: "X-LynavoDrive-Auth-Nonce")
+        request.setValue(signature, forHTTPHeaderField: "X-LynavoDrive-Auth")
 
         do {
             let (data, response) = try await resetUploadSession.data(for: request)
@@ -3679,34 +3679,34 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func resolvedUploadTuning(targetDeviceType targetDeviceTypeOverride: String? = nil) -> UploadTuning {
         let perfLoggingEnabled = syncFlowBoolSetting(
-            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
-            userDefaultsKey: "SyncFlowUploadPerfLog"
+            envKey: "LYNAVO_UPLOAD_PERF_LOG",
+            userDefaultsKey: "LynavoDriveUploadPerfLog"
         )
         let chunkMB = min(
             max(syncFlowIntSetting(
-                envKey: "SYNCFLOW_UPLOAD_CHUNK_MB",
-                userDefaultsKey: "SyncFlowUploadChunkMB"
+                envKey: "LYNAVO_UPLOAD_CHUNK_MB",
+                userDefaultsKey: "LynavoDriveUploadChunkMB"
             ) ?? 8, 1),
             48
         )
         let windowMB = min(
             max(syncFlowIntSetting(
-                envKey: "SYNCFLOW_UPLOAD_WINDOW_MB",
-                userDefaultsKey: "SyncFlowUploadWindowMB"
+                envKey: "LYNAVO_UPLOAD_WINDOW_MB",
+                userDefaultsKey: "LynavoDriveUploadWindowMB"
             ) ?? 32, chunkMB),
             256
         )
         let maxPipelineChunks = min(
             max(syncFlowIntSetting(
-                envKey: "SYNCFLOW_UPLOAD_PIPELINE_CHUNKS",
-                userDefaultsKey: "SyncFlowUploadPipelineChunks"
+                envKey: "LYNAVO_UPLOAD_PIPELINE_CHUNKS",
+                userDefaultsKey: "LynavoDriveUploadPipelineChunks"
             ) ?? 8, 1),
             32
         )
         let ackTimeoutSec = min(
             max(syncFlowIntSetting(
-                envKey: "SYNCFLOW_UPLOAD_ACK_TIMEOUT_SEC",
-                userDefaultsKey: "SyncFlowUploadAckTimeoutSec"
+                envKey: "LYNAVO_UPLOAD_ACK_TIMEOUT_SEC",
+                userDefaultsKey: "LynavoDriveUploadAckTimeoutSec"
             ) ?? 8, 2),
             60
         )
@@ -3822,8 +3822,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func perfLog(_ message: String) {
         guard syncFlowBoolSetting(
-            envKey: "SYNCFLOW_UPLOAD_PERF_LOG",
-            userDefaultsKey: "SyncFlowUploadPerfLog"
+            envKey: "LYNAVO_UPLOAD_PERF_LOG",
+            userDefaultsKey: "LynavoDriveUploadPerfLog"
         ) else {
             return
         }
@@ -3832,15 +3832,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func resolvedForcedSidecarTarget() -> (host: String, port: UInt16)? {
         guard let host = syncFlowStringSetting(
-            envKey: "SYNCFLOW_UPLOAD_FORCE_HOST",
-            userDefaultsKey: "SyncFlowUploadForceHost"
+            envKey: "LYNAVO_UPLOAD_FORCE_HOST",
+            userDefaultsKey: "LynavoDriveUploadForceHost"
         ) else {
             return nil
         }
 
         let portValue = syncFlowIntSetting(
-            envKey: "SYNCFLOW_UPLOAD_FORCE_PORT",
-            userDefaultsKey: "SyncFlowUploadForcePort"
+            envKey: "LYNAVO_UPLOAD_FORCE_PORT",
+            userDefaultsKey: "LynavoDriveUploadForcePort"
         ) ?? 39393
         let clampedPort = min(max(portValue, 1), Int(UInt16.max))
         return (host: host, port: UInt16(clampedPort))
@@ -3926,8 +3926,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         min(
             max(
                 syncFlowIntSetting(
-                    envKey: "SYNCFLOW_UPLOAD_MAX_RECONNECT_ATTEMPTS",
-                    userDefaultsKey: "SyncFlowUploadMaxReconnectAttempts"
+                    envKey: "LYNAVO_UPLOAD_MAX_RECONNECT_ATTEMPTS",
+                    userDefaultsKey: "LynavoDriveUploadMaxReconnectAttempts"
                 ) ?? 3,
                 1
             ),
@@ -4083,7 +4083,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         backgroundService.submitContinuedTask()
 
         Task { [weak self] in
-            await self?.runStartSyncFlow()
+            await self?.runStartLynavoDriveFlow()
         }
     }
 
@@ -4119,7 +4119,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         syncDiagnosticsLog("SyncEngine", "resetAllStatus completed")
     }
 
-    private func runStartSyncFlow() async {
+    private func runStartLynavoDriveFlow() async {
         let shouldBeginBackgroundTransition = await MainActor.run {
             UIApplication.shared.applicationState == .background
         }
@@ -6318,7 +6318,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// should be stored. Using a per-server key prevents pairing with a second
     /// device from overwriting the first device's token.
     private func pairingTokenKeychainKey(for serverId: String) -> String {
-        return "syncflow_pairing_token_\(serverId)"
+        return "lynavo_pairing_token_\(serverId)"
     }
 
     /// Retrieves the pairing token for the given binding, falling back to the
@@ -6810,7 +6810,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let appName =
             (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ??
             (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String) ??
-            "SyncFlow"
+            "Lynavo Drive"
 
         return [
             "appName": appName,
@@ -6827,7 +6827,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         timestampFormatter.dateFormat = "yyyyMMdd-HHmmss"
         let timestamp = timestampFormatter.string(from: Date())
 
-        let bundleName = "SyncFlow-Mobile-Diagnostics-\(timestamp)"
+        let bundleName = "LynavoDrive-Mobile-Diagnostics-\(timestamp)"
         let exportRoot = fileManager.temporaryDirectory.appendingPathComponent(bundleName, isDirectory: true)
         let archiveURL = fileManager.temporaryDirectory.appendingPathComponent("\(bundleName).zip")
 
@@ -6985,7 +6985,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     // MARK: - Client Display Name
 
-    private static let legacyClientNameKey = "syncflow_client_display_name"
+    private static let legacyClientNameKey = "lynavo_client_display_name"
 
     // MARK: - Sidecar Host Resolution
 
@@ -7698,7 +7698,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private lazy var thumbnailCacheDir: URL = {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("syncflow_album_thumbs", isDirectory: true)
+            .appendingPathComponent("lynavo_drive_album_thumbs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -8440,14 +8440,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         syncDiagnosticsLog("SharedFiles", "wake polling exhausted reason=\(reason)")
         let hasMultiDesktopBindingSource = false
-        let hasOnlineViviDropDesktopPeer = false
+        let hasOnlineLynavoDriveDesktopPeer = false
         if !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
             hasMultiDesktopBindingSource: hasMultiDesktopBindingSource,
-            hasOnlineViviDropDesktopPeer: hasOnlineViviDropDesktopPeer
+            hasOnlineLynavoDriveDesktopPeer: hasOnlineLynavoDriveDesktopPeer
         ) {
             for skipReason in SharedFilesRoutePolicy.peerProxySkipReasons(
                 hasMultiDesktopBindingSource: hasMultiDesktopBindingSource,
-                hasOnlineViviDropDesktopPeer: hasOnlineViviDropDesktopPeer,
+                hasOnlineLynavoDriveDesktopPeer: hasOnlineLynavoDriveDesktopPeer,
                 hasThirdPartyHelperConfigured: false
             ) {
                 syncDiagnosticsLog("SharedFiles", "peer proxy skipped reason=\(skipReason)")
@@ -9547,10 +9547,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private static let ownerUserIdKey = "lastSyncOwnerUserId"
 
     /// Prefixes of Keychain accounts that represent per-device pairing tokens.
-    /// The current build writes `syncflow_pairing_token_<serverId>`; historical
+    /// The current build writes `lynavo_pairing_token_<serverId>`; historical
     /// builds used `pairing_token_<serverId>` — we sweep both so an upgraded
     /// user never carries a dangling legacy entry past logout.
-    private static let pairingTokenKeyPrefixes = ["syncflow_pairing_token_", "pairing_token_"]
+    private static let pairingTokenKeyPrefixes = ["lynavo_pairing_token_", "pairing_token_"]
 
     /// Single orchestrator for all sync-identity cleanup. Safe to call multiple
     /// times (idempotent — each step re-checks state). Individual step failures
@@ -9564,7 +9564,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     /// Preserves: clientDisplayName (device preference, not account data)
     /// plus every UserDefaults key not explicitly touched below — including
     /// language/theme/permission state and diagnostic flags outside our
-    /// scope. (Note: the `@vividrop/debug/*` namespace lives in AsyncStorage
+    /// scope. (Note: the `@lynavo-drive/debug/*` namespace lives in AsyncStorage
     /// on the JS side, not UserDefaults; Swift never touches it here, so it
     /// is preserved by virtue of layer separation rather than by any
     /// allowlist on this method.)

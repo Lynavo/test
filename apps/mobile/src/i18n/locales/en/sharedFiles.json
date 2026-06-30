@@ -147,8 +147,8 @@
     "openWithOtherApp": "Open with Another App",
     "cancel": "Cancel",
     "savedLocationPhotos": "Photos",
-    "savedLocationDocuments": "iOS Files App -> Vivi Drop folder",
-    "savedLocationDownloads": "system Downloads -> Vivi Drop folder"
+    "savedLocationDocuments": "iOS Files App -> Lynavo Drive folder",
+    "savedLocationDownloads": "system Downloads -> Lynavo Drive folder"
   },
   "localSaveUnsupported": {
     "title": "Save Not Supported Yet",

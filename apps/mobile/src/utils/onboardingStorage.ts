@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY =
-  '@vividrop/onboarding/unconnected/v1/seen';
+  '@lynavo-drive/onboarding/unconnected/v1/seen';
 export const ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY =
-  '@vividrop/onboarding/sync-activity-tour/v1/seen';
+  '@lynavo-drive/onboarding/sync-activity-tour/v1/seen';
 
 async function hasSeen(key: string): Promise<boolean> {
   try {

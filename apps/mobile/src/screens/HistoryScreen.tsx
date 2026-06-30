@@ -19,7 +19,10 @@ import { formatBytes } from '../utils/format';
 import { Icon } from '../components/Icon';
 import { GradientBackground } from '../components/GradientBackground';
 import { BottomTabBar } from '../components/BottomTabBar';
-import { listHistory, downloadResource } from '../services/desktop-local-service';
+import {
+  listHistory,
+  downloadResource,
+} from '../services/desktop-local-service';
 import type { DesktopSyncRecordDTO } from '@lynavo-drive/contracts';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'History'>;
@@ -49,7 +52,9 @@ export function HistoryScreen() {
       const desktop = { host: binding.host, port: 39394 };
       const result = await listHistory(desktop);
       // Filter out files that were completed successfully
-      const completedFiles = (result || []).filter(item => item.status === 'completed');
+      const completedFiles = (result || []).filter(
+        item => item.status === 'completed',
+      );
       setHistoryItems(completedFiles);
     } catch (e) {
       console.warn('[HistoryScreen] Failed to load history:', e);
@@ -62,7 +67,7 @@ export function HistoryScreen() {
     useCallback(() => {
       setLoading(true);
       loadHistory();
-    }, [loadHistory])
+    }, [loadHistory]),
   );
 
   const handleDownload = useCallback(
@@ -86,38 +91,47 @@ export function HistoryScreen() {
           t('sharedFiles.dialogs.downloadSavedToPhotos', {
             name: filename,
             location: t('sharedFiles.dialogs.savedLocationPhotos') || '相簿',
-          }) ||
-            `${filename} 已儲存至相簿`
+          }) || `${filename} 已儲存至相簿`,
         );
       } catch (err) {
         console.warn('[HistoryScreen] Download failed:', err);
         Alert.alert(
           t('sharedFiles.dialogs.downloadFailed') || '下載失敗',
           t('sharedFiles.dialogs.downloadFailedMessage') ||
-            '無法下載檔案，請稍後重試'
+            '無法下載檔案，請稍後重試',
         );
       } finally {
         setDownloadingId(null);
       }
     },
-    [downloadingId, t]
+    [downloadingId, t],
   );
 
   const getFileIcon = (mediaType: string, filename: string) => {
-    const isVideo = mediaType === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(filename);
-    const isImage = mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
+    const isVideo =
+      mediaType === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(filename);
+    const isImage =
+      mediaType === 'image' ||
+      /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
     if (isVideo) {
       return { name: 'play', color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)' };
     }
     if (isImage) {
       return { name: 'image', color: '#3b82f6', bg: 'rgba(59,130,246,0.08)' };
     }
-    return { name: 'document-text', color: '#10b981', bg: 'rgba(16,185,129,0.08)' };
+    return {
+      name: 'document-text',
+      color: '#10b981',
+      bg: 'rgba(16,185,129,0.08)',
+    };
   };
 
   const getFileTypeText = (mediaType: string, filename: string) => {
-    const isVideo = mediaType === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(filename);
-    const isImage = mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
+    const isVideo =
+      mediaType === 'video' || /\.(mp4|mov|avi|mkv|webm)$/i.test(filename);
+    const isImage =
+      mediaType === 'image' ||
+      /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
     if (isVideo) return '視頻';
     if (isImage) return '照片';
     return '文件';
@@ -132,7 +146,11 @@ export function HistoryScreen() {
     const yesterday = new Date();
     yesterday.setDate(today.getDate() - 1);
 
-    const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const timeString = date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
 
     if (date.toDateString() === today.toDateString()) {
       return `今天 ${timeString}`;
@@ -162,7 +180,9 @@ export function HistoryScreen() {
           <Text style={styles.fileMeta}>
             {`${fileType} · ${formatBytes(item.fileSize)}`}
           </Text>
-          {formattedTime ? <Text style={styles.fileTime}>{formattedTime}</Text> : null}
+          {formattedTime ? (
+            <Text style={styles.fileTime}>{formattedTime}</Text>
+          ) : null}
         </View>
 
         <TouchableOpacity
@@ -195,7 +215,10 @@ export function HistoryScreen() {
                 if (navigation.canGoBack()) {
                   navigation.goBack();
                 } else {
-                  navigation.reset({ index: 0, routes: [{ name: 'SyncActivity' }] });
+                  navigation.reset({
+                    index: 0,
+                    routes: [{ name: 'SyncActivity' }],
+                  });
                 }
               }}
               accessibilityLabel={t('common.back')}
@@ -219,7 +242,11 @@ export function HistoryScreen() {
               showsVerticalScrollIndicator={false}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Icon name="cloud-download-outline" size={48} color="#b0c8da" />
+                  <Icon
+                    name="cloud-download-outline"
+                    size={48}
+                    color="#b0c8da"
+                  />
                   <Text style={styles.emptyText}>暫無下載記錄</Text>
                 </View>
               }

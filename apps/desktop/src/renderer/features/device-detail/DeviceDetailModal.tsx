@@ -50,9 +50,7 @@ export function DeviceDetailModal() {
     if (!isModalOpen || !selectedDevice) return;
 
     const interval = setInterval(() => {
-      useDeviceDetailStore
-        .getState()
-        .fetchDeviceFiles(selectedDevice.deviceId, { silent: true });
+      useDeviceDetailStore.getState().fetchDeviceFiles(selectedDevice.deviceId, { silent: true });
     }, DETAIL_REFRESH_INTERVAL_MS);
 
     return () => clearInterval(interval);
@@ -69,7 +67,12 @@ export function DeviceDetailModal() {
   if (!selectedDevice) return null;
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) closeDeviceDetail(); }}>
+    <Dialog
+      open={isModalOpen}
+      onOpenChange={(open) => {
+        if (!open) closeDeviceDetail();
+      }}
+    >
       <DialogPortal>
         <DialogOverlay
           className="fixed inset-0 z-50"
@@ -86,8 +89,7 @@ export function DeviceDetailModal() {
             backdropFilter: 'blur(24px)',
             border: '1px solid rgba(255,255,255,0.85)',
             borderRadius: 20,
-            boxShadow:
-              '0 24px 80px rgba(80,150,200,0.18), 0 4px 20px rgba(0,0,0,0.06)',
+            boxShadow: '0 24px 80px rgba(80,150,200,0.18), 0 4px 20px rgba(0,0,0,0.06)',
             width: 'min(960px, 92vw)',
             maxWidth: 'min(960px, 92vw)',
             height: 'min(82vh, 760px)',

@@ -18,7 +18,8 @@ async function walk(dir, acc = []) {
       await walk(join(dir, entry.name), acc);
     } else if (entry.isFile()) {
       if (EXCLUDE_FILES.has(entry.name)) continue;
-      if (!EXTENSIONS.has(entry.name.slice(entry.name.lastIndexOf('.')))) continue;
+      if (!EXTENSIONS.has(entry.name.slice(entry.name.lastIndexOf('.'))))
+        continue;
       acc.push(join(dir, entry.name));
     }
   }
@@ -32,14 +33,18 @@ for (const file of files) {
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (HAN.test(lines[i])) {
-      console.log(`${relative(process.cwd(), file)}:${i + 1}:${lines[i].trim()}`);
+      console.log(
+        `${relative(process.cwd(), file)}:${i + 1}:${lines[i].trim()}`,
+      );
       hits++;
     }
   }
 }
 
 if (hits > 0) {
-  console.error(`\nFound ${hits} residual CJK line(s). Migrate them via i18n keys.`);
+  console.error(
+    `\nFound ${hits} residual CJK line(s). Migrate them via i18n keys.`,
+  );
   process.exit(1);
 } else {
   console.log('Clean — no residual CJK outside locale files.');

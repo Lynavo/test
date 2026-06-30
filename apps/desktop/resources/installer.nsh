@@ -1,24 +1,20 @@
 ; =============================================================
-; Vivi Drop - Windows Firewall rules
+; Lynavo Drive - Windows Firewall rules
 ; Injected into the NSIS installer via nsis.include.
 ;
-; Rule setup is idempotent: current Vivi Drop rules and legacy
-; SyncFlow rules are deleted before the current rules are added
-; with the updated $INSTDIR path.
+; Rule setup is idempotent: current Lynavo Drive rules are deleted
+; before the current rules are added with the updated $INSTDIR path.
 ; =============================================================
 
-!define SF_RULE_TCP  "Vivi Drop Sidecar TCP"
-!define SF_RULE_HTTP "Vivi Drop Sidecar HTTP"
-!define SF_RULE_MDNS "Vivi Drop mDNS UDP"
-!define SF_LEGACY_SYNCFLOW_RULE_TCP  "SyncFlow Sidecar TCP"
-!define SF_LEGACY_SYNCFLOW_RULE_HTTP "SyncFlow Sidecar HTTP"
-!define SF_LEGACY_SYNCFLOW_RULE_MDNS "SyncFlow mDNS UDP"
+!define SF_RULE_TCP  "Lynavo Drive Sidecar TCP"
+!define SF_RULE_HTTP "Lynavo Drive Sidecar HTTP"
+!define SF_RULE_MDNS "Lynavo Drive mDNS UDP"
 
 ; -------------------------------------------------------------
 ; Install / Upgrade
 ; -------------------------------------------------------------
 !macro customInstall
-  DetailPrint "Configuring Windows Firewall rules for Vivi Drop..."
+  DetailPrint "Configuring Windows Firewall rules for Lynavo Drive..."
 
   ; Delete stale rules first.  netsh exits non-zero when no matching rule
   ; exists – that is expected on a fresh install, so we ignore the return code.
@@ -31,15 +27,6 @@
   nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_RULE_MDNS}"'
   Pop $R0
   Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_TCP}"'
-  Pop $R0
-  Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_HTTP}"'
-  Pop $R0
-  Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_MDNS}"'
-  Pop $R0
-  Pop $R1
   ; TCP 39393 – mobile → sidecar file-transfer.
   ; remoteip is intentionally unrestricted: in a typical home or office LAN the
   ; port is not exposed to the internet (NAT blocks it), so allowing any local
@@ -47,9 +34,9 @@
   ; transfers (e.g. iPhone on 172.16.22.x connecting to Windows on 172.16.8.x).
   ; Scope to the sidecar executable when present for additional defence-in-depth.
   IfFileExists "$INSTDIR\resources\lynavo-drive-sidecar.exe" 0 +3
-    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\lynavo-drive-sidecar.exe" description="Vivi Drop sidecar file transfer (TCP 39393)"'
+    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 program="$INSTDIR\resources\lynavo-drive-sidecar.exe" description="Lynavo Drive sidecar file transfer (TCP 39393)"'
     Goto tcp_rule_done
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 description="Vivi Drop sidecar file transfer (TCP 39393)"'
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_TCP}" dir=in action=allow protocol=TCP localport=39393 description="Lynavo Drive sidecar file transfer (TCP 39393)"'
   tcp_rule_done:
   Pop $R0
   Pop $R1
@@ -59,9 +46,9 @@
   ; opening the LMUP TCP session, so Windows must allow this inbound port too.
   ; Scope to the sidecar executable when present for additional defence-in-depth.
   IfFileExists "$INSTDIR\resources\lynavo-drive-sidecar.exe" 0 +3
-    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_HTTP}" dir=in action=allow protocol=TCP localport=39394 program="$INSTDIR\resources\lynavo-drive-sidecar.exe" description="Vivi Drop sidecar HTTP health and API (TCP 39394)"'
+    nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_HTTP}" dir=in action=allow protocol=TCP localport=39394 program="$INSTDIR\resources\lynavo-drive-sidecar.exe" description="Lynavo Drive sidecar HTTP health and API (TCP 39394)"'
     Goto http_rule_done
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_HTTP}" dir=in action=allow protocol=TCP localport=39394 description="Vivi Drop sidecar HTTP health and API (TCP 39394)"'
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_HTTP}" dir=in action=allow protocol=TCP localport=39394 description="Lynavo Drive sidecar HTTP health and API (TCP 39394)"'
   http_rule_done:
   Pop $R0
   Pop $R1
@@ -74,7 +61,7 @@
   ;      172.16.8.x).  Limiting to localsubnet would drop those queries and
   ;      prevent cross-segment discovery.
   ;   2. Restricting by localsubnet is safe for TCP but not for mDNS multicast.
-  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_MDNS}" dir=in action=allow protocol=UDP localport=5353 description="Vivi Drop Bonjour/mDNS discovery (UDP 5353)"'
+  nsExec::ExecToStack 'netsh advfirewall firewall add rule name="${SF_RULE_MDNS}" dir=in action=allow protocol=UDP localport=5353 description="Lynavo Drive Bonjour/mDNS discovery (UDP 5353)"'
   Pop $R0
   Pop $R1
 
@@ -85,7 +72,7 @@
 ; Uninstall
 ; -------------------------------------------------------------
 !macro customUnInstall
-  DetailPrint "Removing Vivi Drop Windows Firewall rules..."
+  DetailPrint "Removing Lynavo Drive Windows Firewall rules..."
   nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_RULE_TCP}"'
   Pop $R0
   Pop $R1
@@ -93,15 +80,6 @@
   Pop $R0
   Pop $R1
   nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_RULE_MDNS}"'
-  Pop $R0
-  Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_TCP}"'
-  Pop $R0
-  Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_HTTP}"'
-  Pop $R0
-  Pop $R1
-  nsExec::ExecToStack 'netsh advfirewall firewall delete rule name="${SF_LEGACY_SYNCFLOW_RULE_MDNS}"'
   Pop $R0
   Pop $R1
 !macroend

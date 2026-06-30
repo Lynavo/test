@@ -145,7 +145,7 @@ describe('RecordsPage', () => {
   it('shows the full local path on hover and reveals it from access records', () => {
     const recordWithPath = {
       ...accessRecord1,
-      localPath: '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+      localPath: '/Users/alice/Lynavo Drive/received/Alice iPhone/2026-06-15/clip.mp4',
     } as DesktopAccessRecordDTO;
     useManagementStore.setState({
       accessRecords: [recordWithPath],
@@ -156,13 +156,13 @@ describe('RecordsPage', () => {
     const fileButton = screen.getByRole('button', { name: '在文件夹中显示 clip.mp4' });
     expect(fileButton).toHaveAttribute(
       'title',
-      '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+      '/Users/alice/Lynavo Drive/received/Alice iPhone/2026-06-15/clip.mp4',
     );
 
     fireEvent.click(fileButton);
 
     expect(revealPath).toHaveBeenCalledWith(
-      '/Users/alice/Vivi Drop/received/Alice iPhone/2026-06-15/clip.mp4',
+      '/Users/alice/Lynavo Drive/received/Alice iPhone/2026-06-15/clip.mp4',
     );
   });
 

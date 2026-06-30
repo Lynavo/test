@@ -60,9 +60,10 @@ test('rejects builder config flags and unsupported arches', () => {
     /Linux packaging uses the single electron-builder\.yml config/,
   );
   assert.throws(
-    () => resolvePackageLinuxOptions(['arm64', `--config=${removedBuilderConfigNames[0]}`], {
-      arch: 'x64',
-    }),
+    () =>
+      resolvePackageLinuxOptions(['arm64', `--config=${removedBuilderConfigNames[0]}`], {
+        arch: 'x64',
+      }),
     /Linux packaging uses the single electron-builder\.yml config/,
   );
   assert.throws(
@@ -89,10 +90,7 @@ test('generates workspace, sidecar, and electron-builder commands', () => {
     [
       ['run-workspace-pnpm.cjs', ['build']],
       ['build-sidecar-linux.cjs', ['--arch', 'arm64']],
-      [
-        'run-electron-builder.cjs',
-        ['--linux', 'deb', '--arm64'],
-      ],
+      ['run-electron-builder.cjs', ['--linux', 'deb', '--arm64']],
     ],
   );
 });
@@ -171,14 +169,18 @@ test('desktop packaging keeps a single Lynavo Drive builder config', () => {
   const builderConfig = readFileSync(path.join(desktopRoot, 'electron-builder.yml'), 'utf8');
   assert.match(builderConfig, /^productName: Lynavo Drive$/m);
   assert.match(builderConfig, /^  artifactName: LynavoDrive-\$\{version\}-\$\{arch\}\.\$\{ext\}$/m);
-  assert.match(builderConfig, /^  artifactName: LynavoDrive-\$\{version\}-linux-\$\{arch\}\.\$\{ext\}$/m);
-  assert.match(builderConfig, /^appId: com\.vividrop\.desktop\.china$/m);
-  assert.match(builderConfig, /^  executableName: Vivi Drop$/m);
-  assert.match(builderConfig, /^  executableName: vivi-drop$/m);
+  assert.match(
+    builderConfig,
+    /^  artifactName: LynavoDrive-\$\{version\}-linux-\$\{arch\}\.\$\{ext\}$/m,
+  );
+  assert.match(builderConfig, /^appId: com\.lynavo\.drive\.desktop$/m);
+  assert.match(builderConfig, /^  executableName: Lynavo Drive$/m);
+  assert.match(builderConfig, /^  executableName: lynavo-drive$/m);
   assert.match(builderConfig, /^  shortcutName: Lynavo Drive$/m);
   assert.match(builderConfig, /lynavo-drive-sidecar/);
   assert.doesNotMatch(builderConfig, new RegExp(legacyViviSlug));
   assert.doesNotMatch(builderConfig, new RegExp(`productName: ${legacyViviName}`));
+  assert.doesNotMatch(builderConfig, /^appId: com\.vividrop\.desktop\.china$/m);
 });
 
 test('desktop packaging scripts do not reference removed market builder configs', () => {
@@ -221,21 +223,18 @@ test('macOS packaging scripts use Lynavo global signing defaults without market 
   assert.match(signedScript, /CSC_TEAM_ID:-\$\{DEFAULT_CSC_TEAM_ID\}/);
 });
 
-test('Windows installer keeps existing Vivi Drop firewall rule identities', () => {
+test('Windows installer uses Lynavo Drive firewall rule identities', () => {
   const installer = readFileSync(path.join(desktopRoot, 'resources', 'installer.nsh'), 'utf8');
 
-  assert.match(installer, new RegExp(`!define SF_RULE_TCP\\s+"${legacyViviName} Sidecar TCP"`));
-  assert.match(installer, new RegExp(`!define SF_RULE_HTTP\\s+"${legacyViviName} Sidecar HTTP"`));
-  assert.match(installer, new RegExp(`!define SF_RULE_MDNS\\s+"${legacyViviName} mDNS UDP"`));
+  assert.match(installer, /!define SF_RULE_TCP\s+"Lynavo Drive Sidecar TCP"/);
+  assert.match(installer, /!define SF_RULE_HTTP\s+"Lynavo Drive Sidecar HTTP"/);
+  assert.match(installer, /!define SF_RULE_MDNS\s+"Lynavo Drive mDNS UDP"/);
   assert.doesNotMatch(installer, /SF_LEGACY_VIVI_RULE_/);
-  assert.match(
-    installer,
-    new RegExp(`!define SF_LEGACY_SYNCFLOW_RULE_TCP\\s+"${legacySyncFlowName} Sidecar TCP"`),
-  );
-  assert.doesNotMatch(installer, /delete rule name="\$\{SF_LEGACY_VIVI_RULE_/);
-  assert.match(installer, /delete rule name="\$\{SF_LEGACY_SYNCFLOW_RULE_TCP\}"/);
+  assert.doesNotMatch(installer, /SF_LEGACY_SYNCFLOW_RULE_/);
+  assert.doesNotMatch(installer, /delete rule name="\$\{SF_LEGACY_/);
   assert.doesNotMatch(installer, /add rule name="\$\{SF_LEGACY_/);
-  assert.match(installer, /description="Vivi Drop sidecar file transfer \(TCP 39393\)"/);
+  assert.match(installer, /description="Lynavo Drive sidecar file transfer \(TCP 39393\)"/);
   assert.match(installer, /lynavo-drive-sidecar\.exe/);
-  assert.match(installer, /delete rule name="\$\{SF_LEGACY_SYNCFLOW_RULE_HTTP\}"/);
+  assert.doesNotMatch(installer, new RegExp(`${legacyViviName} Sidecar`));
+  assert.doesNotMatch(installer, new RegExp(`${legacySyncFlowName} Sidecar`));
 });

@@ -14,7 +14,7 @@ describe('PowerSavePreferences', () => {
   });
 
   function createStore() {
-    const dir = mkdtempSync(join(tmpdir(), 'syncflow-power-save-'));
+    const dir = mkdtempSync(join(tmpdir(), 'lynavo-drive-power-save-'));
     dirs.push(dir);
     return new PowerSavePreferences(dir);
   }

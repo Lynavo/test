@@ -351,7 +351,7 @@ func (c *connection) rejectPairingBlocked(meta store.PairingClientMetadata, bloc
 }
 
 func desktopAppVersion() string {
-	if version := strings.TrimSpace(os.Getenv("SYNCFLOW_DESKTOP_APP_VERSION")); version != "" {
+	if version := strings.TrimSpace(os.Getenv("LYNAVO_DESKTOP_APP_VERSION")); version != "" {
 		return version
 	}
 	return "0.1.1"

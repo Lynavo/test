@@ -15,8 +15,7 @@ export function GlassCard({
   className,
   children,
 }: GlassCardProps) {
-  const preset =
-    glass[variant === 'muted' ? 'cardMuted' : variant === 'modal' ? 'modal' : 'card'];
+  const preset = glass[variant === 'muted' ? 'cardMuted' : variant === 'modal' ? 'modal' : 'card'];
 
   return (
     <div

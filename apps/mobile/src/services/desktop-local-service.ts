@@ -836,7 +836,12 @@ async function listReceivedLibraryPageWithScope(
             clientId,
             clientName,
           )
-        : withGlobalReceivedMediaUrls(desktop, page.items, clientId, clientName),
+        : withGlobalReceivedMediaUrls(
+            desktop,
+            page.items,
+            clientId,
+            clientName,
+          ),
   };
 }
 
@@ -895,11 +900,18 @@ export async function listCurrentClientReceivedLibraryPage(
       reason: receivedLibraryErrorMessage(directHttpError),
     });
     try {
-      const page = nativeReceivedLibraryPage(await listReceivedFiles(), options);
-      recordDiagnosticsLog('PhoneSyncSpace', 'native current received success', {
-        itemCount: page.items.length,
-        totalItems: page.totalItems,
-      });
+      const page = nativeReceivedLibraryPage(
+        await listReceivedFiles(),
+        options,
+      );
+      recordDiagnosticsLog(
+        'PhoneSyncSpace',
+        'native current received success',
+        {
+          itemCount: page.items.length,
+          totalItems: page.totalItems,
+        },
+      );
       return page;
     } catch (nativeError) {
       if (isMissingListReceivedFilesBridgeError(nativeError)) {

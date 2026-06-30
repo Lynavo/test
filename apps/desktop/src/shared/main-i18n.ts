@@ -3,10 +3,10 @@ import { isSupportedLocale, type SupportedLocale } from './locale';
 const MAIN_STRINGS = {
   en: {
     diagnostics: {
-      filenamePrefix: 'Vivi Drop-diagnostics',
+      filenamePrefix: 'Lynavo Drive-diagnostics',
       title: 'Export diagnostics bundle',
       readme: [
-        'Vivi Drop diagnostics bundle',
+        'Lynavo Drive diagnostics bundle',
         '',
         'Contents:',
         '- diagnostics.json: issue description, version, runtime state, dashboard, settings, sharing status, API endpoints, paths, and network environment (Wi-Fi SSID, network interfaces)',
@@ -25,7 +25,7 @@ const MAIN_STRINGS = {
       ],
     },
     updates: {
-      title: 'Vivi Drop update available',
+      title: 'Lynavo Drive update available',
       message: 'Version v{{version}} is available',
       minimumRequired: 'This version must be updated before continuing.',
       releaseNotes: 'Update content',
@@ -36,10 +36,10 @@ const MAIN_STRINGS = {
   },
   'zh-Hans': {
     diagnostics: {
-      filenamePrefix: 'Vivi Drop-诊断包',
+      filenamePrefix: 'Lynavo Drive-诊断包',
       title: '导出诊断包',
       readme: [
-        'Vivi Drop 诊断包',
+        'Lynavo Drive 诊断包',
         '',
         '包含内容：',
         '- diagnostics.json：问题描述、版本、运行时状态、dashboard、设置、共享状态、API 端点、路径与网络环境（WiFi SSID、网卡列表）',
@@ -58,7 +58,7 @@ const MAIN_STRINGS = {
       ],
     },
     updates: {
-      title: 'Vivi Drop 有可用更新',
+      title: 'Lynavo Drive 有可用更新',
       message: '有新版本 v{{version}} 可用',
       minimumRequired: '此版本需要更新后继续使用。',
       releaseNotes: '更新内容',
@@ -69,10 +69,10 @@ const MAIN_STRINGS = {
   },
   'zh-Hant': {
     diagnostics: {
-      filenamePrefix: 'Vivi Drop-診斷包',
+      filenamePrefix: 'Lynavo Drive-診斷包',
       title: '匯出診斷包',
       readme: [
-        'Vivi Drop 診斷包',
+        'Lynavo Drive 診斷包',
         '',
         '包含內容：',
         '- diagnostics.json：問題描述、版本、執行狀態、dashboard、設定、共享狀態、API 端點、路徑與網路環境（Wi-Fi SSID、網路介面列表）',
@@ -91,7 +91,7 @@ const MAIN_STRINGS = {
       ],
     },
     updates: {
-      title: 'Vivi Drop 有可用更新',
+      title: 'Lynavo Drive 有可用更新',
       message: '有新版本 v{{version}} 可用',
       minimumRequired: '此版本需要更新後繼續使用。',
       releaseNotes: '更新內容',

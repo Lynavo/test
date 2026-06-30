@@ -8,8 +8,7 @@ const colors = {
 
 export function DiskWarningBanner() {
   const { t } = useTranslation();
-  const { summary, diskWarningDismissed, dismissDiskWarning } =
-    useDashboardStore();
+  const { summary, diskWarningDismissed, dismissDiskWarning } = useDashboardStore();
 
   if (!summary.isDiskLow || diskWarningDismissed) return null;
 
@@ -24,9 +23,7 @@ export function DiskWarningBanner() {
       role="alert"
     >
       <AlertTriangle className="h-4 w-4 shrink-0" />
-      <span className="flex-1 text-sm font-medium">
-        {t('dashboard.diskWarning')}
-      </span>
+      <span className="flex-1 text-sm font-medium">{t('dashboard.diskWarning')}</span>
       <button
         onClick={dismissDiskWarning}
         className="ml-auto flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-[background-color,transform] duration-150 ease-out hover:bg-red-100 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"

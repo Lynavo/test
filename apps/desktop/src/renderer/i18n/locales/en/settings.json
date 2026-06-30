@@ -60,7 +60,7 @@
   },
   "powerSave": {
     "preventSleepTitle": "Prevent computer sleep",
-    "preventSleepDescription": "Keep computer awake while SyncFlow is running (screen is allowed to turn off) so mobile can sync at any time. This does not enable Wake-on-LAN, which must be configured separately in macOS or Windows.",
+    "preventSleepDescription": "Keep computer awake while Lynavo Drive is running (screen is allowed to turn off) so mobile can sync at any time. This does not enable Wake-on-LAN, which must be configured separately in macOS or Windows.",
     "blockingSleep": "Keeping awake",
     "idle": "Disabled"
   },
@@ -86,7 +86,7 @@
     "ready": "Sharing is ready",
     "readyDetail": "{{shareName}} is accessible to devices on the same LAN.",
     "needsManualEnable": "Manual sharing setup required",
-    "needsManualEnableDetailMac": "Enable File Sharing in System Settings and allow Vivi Drop to access the team shared folder.",
+    "needsManualEnableDetailMac": "Enable File Sharing in System Settings and allow Lynavo Drive to access the team shared folder.",
     "needsManualEnableDetailWindows": "Enable Windows advanced sharing and confirm network discovery is available.",
     "needsManualEnableDetailLinux": "Configure file sharing in Linux system settings, then check again.",
     "shareRegistered": "Team shared folder registered",
@@ -126,7 +126,7 @@
     "windowsTitle": "Windows File Sharing",
     "windowsDescription": "Enable network discovery, file and printer sharing, and sharing for the team shared folder.",
     "linuxTitle": "Linux File Sharing",
-    "linuxDescription": "Configure Samba or file sharing in the system, then return to Vivi Drop and check again.",
+    "linuxDescription": "Configure Samba or file sharing in the system, then return to Lynavo Drive and check again.",
     "steps": [
       "Open advanced sharing settings",
       "Enable network discovery",
@@ -170,7 +170,7 @@
       "placeholder": "Describe the issue, steps, or improvements you want",
       "contactPlaceholder": "Contact email or phone",
       "contactEmpty": "No contact provided",
-      "mailSubject": "ViviDrop Desktop feedback v{{version}}",
+      "mailSubject": "Lynavo Drive Desktop feedback v{{version}}",
       "mailBody": "Issue description:\n{{description}}\n\nContact:\n{{contact}}\n\nCurrent version: v{{version}}"
     },
     "diagnostics": {

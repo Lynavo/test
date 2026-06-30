@@ -3,7 +3,7 @@
   "productName": "Lynavo Drive",
   "description": "Lynavo Drive desktop app for local mobile media sync.",
   "version": "1.0.1",
-  "syncflowBuildNumber": "62",
+  "lynavoDriveBuildNumber": "62",
   "homepage": "https://www.lynavo.com",
   "author": {
     "name": "Lynavo",

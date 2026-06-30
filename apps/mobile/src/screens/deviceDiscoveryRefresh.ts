@@ -10,8 +10,6 @@ export function shouldKeepCachedDevicesVisible({
   preserveCachedDevices,
 }: DeviceDiscoveryRefreshDecision): boolean {
   return (
-    preserveCachedDevices &&
-    currentDeviceCount > 0 &&
-    nextDeviceCount === 0
+    preserveCachedDevices && currentDeviceCount > 0 && nextDeviceCount === 0
   );
 }

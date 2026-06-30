@@ -128,7 +128,9 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
 
       // Build fingerprint from fileKeys to detect actual changes
       const newFingerprint = allFiles.map((f) => f.fileKey).join('\n');
-      const oldFingerprint = get().receivedFiles.map((f) => f.fileKey).join('\n');
+      const oldFingerprint = get()
+        .receivedFiles.map((f) => f.fileKey)
+        .join('\n');
 
       if (newFingerprint !== oldFingerprint || totalBytes !== get().receivedTotalBytes) {
         set({
@@ -169,7 +171,9 @@ export const useDirectoryStore = create<DirectoryState>((set, get) => ({
 
       // Only update state if the file list actually changed
       const newFingerprint = entries.map((f) => f.path).join('\n');
-      const oldFingerprint = get().sharedFiles.map((f) => f.path).join('\n');
+      const oldFingerprint = get()
+        .sharedFiles.map((f) => f.path)
+        .join('\n');
 
       if (newFingerprint !== oldFingerprint) {
         set({ sharedFiles: entries, sharedError: null });

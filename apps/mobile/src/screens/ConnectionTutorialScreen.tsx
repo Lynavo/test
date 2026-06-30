@@ -161,7 +161,7 @@ export function ConnectionTutorialScreen() {
           t('connectionTutorial.cards.lan.steps.2'),
         ],
         warning: t('connectionTutorial.cards.lan.warning').replace(
-          'www.vividrop.cn',
+          'www.lynavo.com',
           desktopDownloadHost,
         ),
       },

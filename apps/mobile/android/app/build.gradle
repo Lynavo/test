@@ -145,9 +145,9 @@ android {
                 keyPassword MYAPP_RELEASE_KEY_PASSWORD
             } else {
                 storeFile file('release.keystore')
-                storePassword 'vividrop_release_2026'
-                keyAlias 'vividrop-release'
-                keyPassword 'vividrop_release_2026'
+                storePassword 'lynavo_release_2026'
+                keyAlias 'lynavo-release'
+                keyPassword 'lynavo_release_2026'
             }
         }
     }

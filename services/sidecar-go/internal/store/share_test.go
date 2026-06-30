@@ -34,7 +34,7 @@ func TestUpdateGetShareConfig_Roundtrip(t *testing.T) {
 
 	validated := "2026-03-21T12:00:00Z"
 	updated := ShareConfig{
-		ReceiveRoot:     "/Users/test/SyncFlow",
+		ReceiveRoot:     "/Users/test/LynavoDrive",
 		ShareName:       "MyShare",
 		ShareURL:        "smb://mac/MyShare",
 		ShareStatus:     "valid",
@@ -50,8 +50,8 @@ func TestUpdateGetShareConfig_Roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShareConfig: %v", err)
 	}
-	if got.ReceiveRoot != "/Users/test/SyncFlow" {
-		t.Errorf("expected receive_root '/Users/test/SyncFlow', got %q", got.ReceiveRoot)
+	if got.ReceiveRoot != "/Users/test/LynavoDrive" {
+		t.Errorf("expected receive_root '/Users/test/LynavoDrive', got %q", got.ReceiveRoot)
 	}
 	if got.ShareName != "MyShare" {
 		t.Errorf("expected share_name 'MyShare', got %q", got.ShareName)

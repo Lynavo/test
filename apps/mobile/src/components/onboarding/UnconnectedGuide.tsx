@@ -13,7 +13,6 @@ import { appConfig } from '../../config/app-config';
 
 const DOWNLOAD_URL = appConfig.endpoints.webBaseUrl;
 
-
 interface UnconnectedGuideProps {
   onSkip: () => void;
   onStart: () => void;

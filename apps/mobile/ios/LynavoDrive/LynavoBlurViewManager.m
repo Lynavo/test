@@ -1,13 +1,13 @@
 #import <React/RCTViewManager.h>
 #import <UIKit/UIKit.h>
 
-@interface VividropBlurView : UIVisualEffectView
+@interface LynavoBlurView : UIVisualEffectView
 @property (nonatomic, copy) NSString *blurStyle;
 @property (nonatomic, strong) NSNumber *intensity;
 @property (nonatomic, strong) UIViewPropertyAnimator *blurAnimator;
 @end
 
-@implementation VividropBlurView
+@implementation LynavoBlurView
 
 - (instancetype)init
 {
@@ -125,16 +125,16 @@
 
 @end
 
-@interface VividropBlurViewManager : RCTViewManager
+@interface LynavoBlurViewManager : RCTViewManager
 @end
 
-@implementation VividropBlurViewManager
+@implementation LynavoBlurViewManager
 
-RCT_EXPORT_MODULE(VividropBlurView)
+RCT_EXPORT_MODULE(LynavoBlurView)
 
 - (UIView *)view
 {
-  return [VividropBlurView new];
+  return [LynavoBlurView new];
 }
 
 RCT_EXPORT_VIEW_PROPERTY(blurStyle, NSString)

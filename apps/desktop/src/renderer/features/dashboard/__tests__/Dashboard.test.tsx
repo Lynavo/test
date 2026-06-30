@@ -14,13 +14,7 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('qrcode.react', () => ({
-  QRCodeSVG: ({
-    value,
-    title,
-  }: {
-    value: string;
-    title?: string;
-  }) => (
+  QRCodeSVG: ({ value, title }: { value: string; title?: string }) => (
     <svg data-testid="connection-qr-code" data-value={value}>
       {title ? <title>{title}</title> : null}
     </svg>
@@ -89,7 +83,6 @@ describe('Dashboard', () => {
         getLocalIPs: vi.fn().mockReturnValue(['192.168.31.8']),
       },
     };
-
   });
 
   it('renders the local LAN cards without a remote access toggle', () => {
@@ -123,7 +116,7 @@ describe('Dashboard', () => {
     fireEvent.click(screen.getByRole('button', { name: '显示连接二维码' }));
 
     expect(screen.getByText('手机扫码配对该电脑')).toBeInTheDocument();
-    expect(screen.getByTitle('ViviDrop 连接二维码')).toBeInTheDocument();
+    expect(screen.getByTitle('Lynavo Drive 连接二维码')).toBeInTheDocument();
   });
 
   it('includes the desktop LAN IP in the connection QR code payload', () => {
@@ -131,13 +124,9 @@ describe('Dashboard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '显示连接二维码' }));
 
-    const qrValue = screen
-      .getByTestId('connection-qr-code')
-      .getAttribute('data-value');
+    const qrValue = screen.getByTestId('connection-qr-code').getAttribute('data-value');
 
-    expect(qrValue).toBe(
-      'vividrop://connect?ip=192.168.31.8&device=Test%20PC&code=998877',
-    );
+    expect(qrValue).toBe('lynavodrive://connect?ip=192.168.31.8&device=Test%20PC&code=998877');
   });
 
   it('triggers copy connection code', async () => {

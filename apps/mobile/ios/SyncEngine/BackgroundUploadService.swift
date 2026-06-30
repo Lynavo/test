@@ -40,7 +40,7 @@ final class BackgroundUploadService: NSObject {
     // MARK: - Constants
 
     static let shared = BackgroundUploadService()
-    static let sessionIdentifier = "com.syncflow.background-upload"
+    static let sessionIdentifier = "com.lynavo.drive.background-upload"
 
     /// Hard upper bound on response body size accumulated by the delegate.
     /// Sidecar responses are small JSON bodies; anything past this is abuse

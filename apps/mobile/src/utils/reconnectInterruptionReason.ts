@@ -8,10 +8,7 @@ interface ReconnectInterruptionReasonEvidence {
 
 export function getReconnectInterruptionReason(
   evidence: ReconnectInterruptionReasonEvidence,
-):
-  | 'transient_reconnect'
-  | 'network_recovery'
-  | 'windows_host_interrupted' {
+): 'transient_reconnect' | 'network_recovery' | 'windows_host_interrupted' {
   if (
     evidence.deviceType === 'win' &&
     evidence.lastErrorCode === 'WINDOWS_HOST_ABORTED_CONNECTION'

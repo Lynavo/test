@@ -53,7 +53,7 @@ describe('OSS API config', () => {
     expect(config.getDebugBaseUrlOverride()).toBe('http://192.168.1.42:8080');
     expect(config.getBaseUrl()).toBe('http://192.168.1.42:8080');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      '@vividrop/debug/api_base_url',
+      '@lynavo-drive/debug/api_base_url',
       'http://192.168.1.42:8080',
     );
   });
@@ -80,8 +80,6 @@ describe('OSS API config', () => {
   test('rejects invalid debug base URL overrides', async () => {
     await expect(
       config.setDebugBaseUrlOverride('192.168.1.42:8080'),
-    ).rejects.toThrow(
-      'debug base URL must start with http:// or https://',
-    );
+    ).rejects.toThrow('debug base URL must start with http:// or https://');
   });
 });

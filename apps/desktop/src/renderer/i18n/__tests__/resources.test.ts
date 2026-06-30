@@ -47,9 +47,9 @@ const allowedHardcodedChinesePatterns = [
   /const localeLabels:/,
   /'zh-Hans':/,
   /'zh-Hant':/,
-  /title="ViviDrop/,
-  /ViviDrop/,
-  /Vivi Drop/,
+  /title="LynavoDrive/,
+  /LynavoDrive/,
+  /Lynavo Drive/,
 ];
 
 function collectLeafPaths(value: unknown, prefix = ''): string[] {
@@ -58,9 +58,7 @@ function collectLeafPaths(value: unknown, prefix = ''): string[] {
   }
 
   return Object.entries(value as Record<string, unknown>)
-    .flatMap(([key, child]) =>
-      collectLeafPaths(child, prefix ? `${prefix}.${key}` : key),
-    )
+    .flatMap(([key, child]) => collectLeafPaths(child, prefix ? `${prefix}.${key}` : key))
     .sort();
 }
 
@@ -107,15 +105,13 @@ function collectHardcodedChineseCopy(): string[] {
     const path = join(sourceRoot, file);
     const source = readFileSync(path, 'utf8');
 
-    return source
-      .split('\n')
-      .flatMap((line, index) => {
-        if (!chineseTextPattern.test(line)) return [];
-        if (translatedFallbackPattern.test(line)) return [];
-        if (allowedHardcodedChinesePatterns.some((pattern) => pattern.test(line))) return [];
+    return source.split('\n').flatMap((line, index) => {
+      if (!chineseTextPattern.test(line)) return [];
+      if (translatedFallbackPattern.test(line)) return [];
+      if (allowedHardcodedChinesePatterns.some((pattern) => pattern.test(line))) return [];
 
-        return [`${file}:${index + 1}: ${line.trim()}`];
-      });
+      return [`${file}:${index + 1}: ${line.trim()}`];
+    });
   });
 }
 

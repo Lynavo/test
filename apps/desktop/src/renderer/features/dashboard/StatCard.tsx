@@ -23,7 +23,8 @@ export function StatCard({
   const toneClasses = tone
     ? {
         blue: 'bg-[#f0f8ff]/72 text-[#2788dc] shadow-[0_14px_36px_rgba(75,158,226,0.11)] border-blue-100/30',
-        green: 'bg-[#f1fbf3]/76 text-[#2c9c5a] shadow-[0_14px_36px_rgba(64,176,101,0.11)] border-emerald-100/30',
+        green:
+          'bg-[#f1fbf3]/76 text-[#2c9c5a] shadow-[0_14px_36px_rgba(64,176,101,0.11)] border-emerald-100/30',
         cyan: 'bg-[#eefbff]/74 text-[#14a4d8] shadow-[0_14px_36px_rgba(49,176,215,0.11)] border-cyan-100/30',
       }[tone]
     : '';
@@ -61,11 +62,7 @@ export function StatCard({
           }`}
         >
           {value}
-          {unit && (
-            <span className="ml-1 text-base font-normal text-muted-foreground">
-              {unit}
-            </span>
-          )}
+          {unit && <span className="ml-1 text-base font-normal text-muted-foreground">{unit}</span>}
         </p>
       </div>
     </GlassCard>

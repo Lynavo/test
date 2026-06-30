@@ -17,7 +17,7 @@ APPLE_API_KEY_ID="${APPLE_API_KEY_ID:-AMY9XVV3LD}"
 APPLE_API_ISSUER="${APPLE_API_ISSUER:-8de17ec0-4bff-4ab2-8c01-ace1f9307147}"
 EXPORT_OPTIONS="${EXPORT_OPTIONS:-${IOS_DIR}/ExportOptions-TestFlight.plist}"
 ARCHIVES_DIR="${IOS_DIR}/build/archives"
-EXPORT_DIR="/tmp/syncflow-export"
+EXPORT_DIR="/tmp/lynavo-drive-export"
 IOS_EXPORT_SIGNING_CERTIFICATE="${IOS_EXPORT_SIGNING_CERTIFICATE:-Apple Distribution}"
 
 # Resolve App Store Connect API Key path
@@ -33,7 +33,7 @@ BUILD_NUMBER="$(sed -n 's/.*CURRENT_PROJECT_VERSION = \([^;]*\);/\1/p' "${PROJEC
 
 ORIGINAL_BUILD_NUMBER="${BUILD_NUMBER}"
 NEED_ROLLBACK=false
-ARCHIVE_PATH="${ARCHIVES_DIR}/SyncFlow-${MARKETING_VERSION}-b${BUILD_NUMBER}.xcarchive"
+ARCHIVE_PATH="${ARCHIVES_DIR}/LynavoDrive-${MARKETING_VERSION}-b${BUILD_NUMBER}.xcarchive"
 
 usage() {
   cat <<EOF
@@ -248,7 +248,7 @@ increment_build_number() {
   
   BUILD_NUMBER="${NEW_BUILD_NUMBER}"
   # Update archive path to use the new build number
-  ARCHIVE_PATH="${ARCHIVES_DIR}/SyncFlow-${MARKETING_VERSION}-b${BUILD_NUMBER}.xcarchive"
+  ARCHIVE_PATH="${ARCHIVES_DIR}/LynavoDrive-${MARKETING_VERSION}-b${BUILD_NUMBER}.xcarchive"
   NEED_ROLLBACK=true
 }
 

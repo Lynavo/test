@@ -18,7 +18,9 @@ jest.mock('react-native-vision-camera', () => {
   const React = require('react');
   const { View } = require('react-native');
   const Camera = (props: Record<string, unknown>) => <View {...props} />;
-  Camera.getCameraPermissionStatus = jest.fn().mockReturnValue('not-determined');
+  Camera.getCameraPermissionStatus = jest
+    .fn()
+    .mockReturnValue('not-determined');
   Camera.requestCameraPermission = jest.fn().mockResolvedValue('granted');
 
   return {
@@ -68,7 +70,9 @@ describe('QRScannerScreen', () => {
       configurable: true,
       value: 'ios',
     });
-    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('not-determined');
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue(
+      'not-determined',
+    );
     (Camera.requestCameraPermission as jest.Mock).mockResolvedValue('granted');
   });
 
@@ -91,7 +95,9 @@ describe('QRScannerScreen', () => {
     await waitFor(() => {
       expect(getByText('如何取得二維碼？')).toBeTruthy();
       expect(
-        getByText('打開電腦端 Vivi Drop，在「全域設定」中找到連接碼，用攝像頭對準二維碼即可自動連接。'),
+        getByText(
+          '打開電腦端 Lynavo Drive，在「全域設定」中找到連接碼，用攝像頭對準二維碼即可自動連接。',
+        ),
       ).toBeTruthy();
     });
   });
@@ -121,7 +127,9 @@ describe('QRScannerScreen', () => {
 
   it('does not show the denied permission copy while the permission request is pending', async () => {
     let resolvePermission: (status: string) => void = () => {};
-    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue('not-determined');
+    (Camera.getCameraPermissionStatus as jest.Mock).mockReturnValue(
+      'not-determined',
+    );
     (Camera.requestCameraPermission as jest.Mock).mockImplementation(
       () =>
         new Promise(resolve => {
@@ -170,10 +178,12 @@ describe('QRScannerScreen', () => {
 
   it('refreshes camera permission after returning from system settings', async () => {
     let appStateHandler: ((state: string) => void) | null = null;
-    jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, handler) => {
-      appStateHandler = handler as (state: string) => void;
-      return { remove: jest.fn() };
-    });
+    jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_event, handler) => {
+        appStateHandler = handler as (state: string) => void;
+        return { remove: jest.fn() };
+      });
     (Camera.getCameraPermissionStatus as jest.Mock)
       .mockReturnValueOnce('denied')
       .mockReturnValueOnce('granted');
@@ -211,7 +221,7 @@ describe('QRScannerScreen', () => {
     scannerConfig.onCodeScanned([
       {
         value:
-          'vividrop://connect?ip=192.168.31.8&device=Studio%20Mac&code=A8X2K9',
+          'lynavodrive://connect?ip=192.168.31.8&device=Studio%20Mac&code=A8X2K9',
       },
     ]);
 

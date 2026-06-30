@@ -38,11 +38,9 @@ describe('sortAlbumAssetsForDisplay', () => {
       }),
     ];
 
-    expect(sortAlbumAssetsForDisplay(assets).map(asset => asset.assetLocalId)).toEqual([
-      'selectable',
-      'queued',
-      'transferred',
-    ]);
+    expect(
+      sortAlbumAssetsForDisplay(assets).map(asset => asset.assetLocalId),
+    ).toEqual(['selectable', 'queued', 'transferred']);
   });
 
   it('keeps newer assets first inside the same rank', () => {
@@ -67,7 +65,9 @@ describe('sortAlbumAssetsForDisplay', () => {
       }),
     ];
 
-    expect(sortAlbumAssetsForDisplay(assets).map(asset => asset.assetLocalId)).toEqual([
+    expect(
+      sortAlbumAssetsForDisplay(assets).map(asset => asset.assetLocalId),
+    ).toEqual([
       'newer-selectable',
       'older-selectable',
       'newer-queued',

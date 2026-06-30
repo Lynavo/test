@@ -10,7 +10,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-class VividropBlurView(
+class LynavoBlurView(
   private val reactContext: ReactApplicationContext,
 ) : View(reactContext) {
   // Tuned for short-lived modal backdrops; avoid broad reuse on scrolling or persistent surfaces.

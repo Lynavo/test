@@ -1,10 +1,5 @@
 import { useEffect } from 'react';
-import {
-  AppState,
-  StatusBar,
-  StyleSheet,
-  useColorScheme,
-} from 'react-native';
+import { AppState, StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -37,7 +32,10 @@ export function App() {
         try {
           await refreshNativeAppFeatureSettings();
         } catch (error) {
-          console.warn('[App] failed to refresh native feature settings:', error);
+          console.warn(
+            '[App] failed to refresh native feature settings:',
+            error,
+          );
         }
       } finally {
         refreshInFlight = false;

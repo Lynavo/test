@@ -615,7 +615,7 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
     expect(mockNavigate).not.toHaveBeenCalledWith('Login');
-    expect(mockNavigate).not.toHaveBeenCalledWith('Subscription', undefined);
+    expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo', undefined);
   });
 });
 
@@ -661,7 +661,7 @@ describe('SharedFilesGlobalScreen', () => {
     fireEvent.press(getByText('遠端訪問電腦'));
 
     expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
-    expect(mockNavigate).not.toHaveBeenCalledWith('Subscription');
+    expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo');
     expect(queryByText('网络断开')).toBeNull();
   });
 
@@ -680,7 +680,7 @@ describe('SharedFilesGlobalScreen', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
     expect(mockNavigate).not.toHaveBeenCalledWith('Login');
-    expect(mockNavigate).not.toHaveBeenCalledWith('Subscription');
+    expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo');
   });
 });
 
@@ -690,13 +690,13 @@ describe('RemoteAccessGlobalScreen', () => {
     Record<string, (payload: unknown) => void>
   > = {};
   const testGlobal = globalThis as typeof globalThis & {
-    __SYNCFLOW_REMOTE_RESOURCES_PREVIEW__?: boolean;
+    __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockVisualQaEnabled = false;
-    delete testGlobal.__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: mockBindingState,
       addListener: jest.fn(),
@@ -1668,7 +1668,7 @@ describe('RemoteAccessGlobalScreen', () => {
   });
 
   it('keeps the demo desktop subtitle behind the explicit remote resources preview gate', async () => {
-    testGlobal.__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__ = true;
+    testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__ = true;
     mockBindingState.mockResolvedValueOnce(null);
 
     const { getByText } = render(
@@ -2065,13 +2065,13 @@ describe('RemoteAccessGlobalScreen', () => {
 describe('PhoneSyncSpaceGlobalScreen', () => {
   const mockBindingState = jest.fn();
   const testGlobal = globalThis as typeof globalThis & {
-    __SYNCFLOW_REMOTE_RESOURCES_PREVIEW__?: boolean;
+    __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockVisualQaEnabled = false;
-    delete testGlobal.__SYNCFLOW_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: mockBindingState,
       addListener: jest.fn(),
@@ -2981,7 +2981,7 @@ describe('RemoteAccessScreen', () => {
       );
       expect(getByText('real-contract.pdf')).toBeTruthy();
     });
-    expect(queryByText('vividrop-presentation.pdf')).toBeNull();
+    expect(queryByText('lynavo-drive-presentation.pdf')).toBeNull();
   });
 
   it('triggers download when download button is pressed', async () => {

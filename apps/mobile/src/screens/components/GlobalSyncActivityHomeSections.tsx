@@ -18,7 +18,6 @@ import { formatBytes } from '../../utils/format';
 import { getGlobalRemoteAccessThumbnailUrl } from '../../services/desktop-local-service';
 import { isPersonalDirRecord } from '../../services/download-records-service';
 
-
 const BLUE = colors.accent;
 const DARK = colors.primary;
 const SOFT_TEXT = colors.secondaryForeground;
@@ -177,11 +176,12 @@ export function RecentDownloadsSection({
         })
       : placeholders.slice(0, 4).map(item => ({
           key: item.key,
-          label: item.key === 'photo'
-            ? t('syncActivity.home.recentDownloadPhoto') || item.label
-            : item.key === 'video'
-            ? t('syncActivity.home.recentDownloadVideo') || item.label
-            : t('syncActivity.home.recentDownloadFile') || item.label,
+          label:
+            item.key === 'photo'
+              ? t('syncActivity.home.recentDownloadPhoto') || item.label
+              : item.key === 'video'
+                ? t('syncActivity.home.recentDownloadVideo') || item.label
+                : t('syncActivity.home.recentDownloadFile') || item.label,
           meta: '',
           iconName: item.iconName,
           iconColor: item.iconColor,
@@ -343,18 +343,12 @@ function RecentDownloadPreview({
       hasLiveUri: Boolean(liveUri),
       activeUri: activeUri ?? null,
       renderer: thumbnailSource?.renderer ?? (liveUri ? 'image' : null),
-      renderingImage: Boolean(
-        activeUri &&
-        !thumbnailFailed,
-      ),
+      renderingImage: Boolean(activeUri && !thumbnailFailed),
       thumbnailFailed,
     });
   }, [label, thumbnailFailed, thumbnailSource, liveUri, activeUri, type]);
 
-  if (
-    activeUri &&
-    !thumbnailFailed
-  ) {
+  if (activeUri && !thumbnailFailed) {
     return (
       <Image
         testID="recent-download-thumbnail-image"
@@ -500,7 +494,9 @@ export function GlobalSyncRecordTimelineSection({
             {t('syncActivity.syncRecords.title')}
           </Text>
           <Text style={styles.globalSyncRecordTotal}>
-            {t('syncActivity.syncRecords.totalSynced', { size: totalSyncedSize })}
+            {t('syncActivity.syncRecords.totalSynced', {
+              size: totalSyncedSize,
+            })}
           </Text>
         </View>
       </View>
@@ -519,7 +515,10 @@ export function GlobalSyncRecordTimelineSection({
               <View style={styles.globalSyncRecordDayRow}>
                 <Text style={styles.globalSyncRecordDay}>{day.label}</Text>
                 <Text style={styles.globalSyncRecordDayStats}>
-                  {t('syncActivity.syncRecords.dayStats', { count: day.totalFiles, size: day.totalSize })}
+                  {t('syncActivity.syncRecords.dayStats', {
+                    count: day.totalFiles,
+                    size: day.totalSize,
+                  })}
                 </Text>
               </View>
               <View style={styles.globalSyncTimelineRecordList}>
@@ -555,7 +554,9 @@ export function GlobalSyncRecordTimelineSection({
                                 : styles.globalSyncRecordStatusTextSyncing,
                             ]}
                           >
-                            {isCompleted ? t('syncActivity.syncRecords.statusCompleted') : t('syncActivity.syncRecords.statusSyncing')}
+                            {isCompleted
+                              ? t('syncActivity.syncRecords.statusCompleted')
+                              : t('syncActivity.syncRecords.statusSyncing')}
                           </Text>
                         </View>
                       </View>
@@ -566,7 +567,9 @@ export function GlobalSyncRecordTimelineSection({
                             {t('syncActivity.syncRecords.uploadFiles')}
                           </Text>
                           <Text style={styles.globalSyncRecordStatValue}>
-                            {t('syncActivity.syncRecords.fileCount', { count: record.fileCount })}
+                            {t('syncActivity.syncRecords.fileCount', {
+                              count: record.fileCount,
+                            })}
                           </Text>
                         </View>
                         <View style={styles.globalSyncRecordStat}>
@@ -862,8 +865,7 @@ function getRecentDownloadThumbnailSource(
 
   // 3. 对于图片类型，如果在本地没有文件，可以使用远端的 previewUrl 或 streamUrl
   const mediaUri =
-    readNonEmptyUri(record.previewUrl) ??
-    readNonEmptyUri(record.streamUrl);
+    readNonEmptyUri(record.previewUrl) ?? readNonEmptyUri(record.streamUrl);
   if (!mediaUri) {
     return undefined;
   }

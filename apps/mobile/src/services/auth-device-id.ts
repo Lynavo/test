@@ -52,7 +52,7 @@ export async function getOrCreateAuthDeviceId(): Promise<string> {
 }
 
 async function loadOrCreateAuthDeviceId(): Promise<string> {
-  const service = 'cn.vividrop.auth-device-id';
+  const service = 'com.lynavo.drive.auth-device-id';
   const account = 'auth-device-id';
 
   try {

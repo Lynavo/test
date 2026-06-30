@@ -40,9 +40,9 @@
   --success-foreground: oklch(0.99 0 0);
   --warning: oklch(0.75 0.15 65);
   --warning-foreground: oklch(0.3 0.05 65);
-  --vividrop-scrollbar-thumb: transparent;
-  --vividrop-scrollbar-thumb-active: rgba(79, 91, 104, 0.36);
-  --vividrop-scrollbar-thumb-active-hover: rgba(79, 91, 104, 0.5);
+  --lynavo-scrollbar-thumb: transparent;
+  --lynavo-scrollbar-thumb-active: rgba(79, 91, 104, 0.36);
+  --lynavo-scrollbar-thumb-active-hover: rgba(79, 91, 104, 0.5);
 }
 
 @theme inline {
@@ -94,7 +94,7 @@
   * {
     @apply border-border outline-ring/50;
     scrollbar-width: thin;
-    scrollbar-color: var(--vividrop-scrollbar-thumb) transparent;
+    scrollbar-color: var(--lynavo-scrollbar-thumb) transparent;
   }
   body {
     @apply bg-background text-foreground;
@@ -108,7 +108,7 @@
   pre,
   kbd,
   samp,
-  .vividrop-selectable-text {
+  .lynavo-selectable-text {
     -webkit-user-select: text;
     user-select: text;
   }
@@ -124,20 +124,20 @@
     border: 3px solid transparent;
     border-radius: 999px;
     background-clip: content-box;
-    background-color: var(--vividrop-scrollbar-thumb);
+    background-color: var(--lynavo-scrollbar-thumb);
     transition: background-color 160ms ease;
   }
   *::-webkit-scrollbar-corner {
     background: transparent;
   }
-  .vividrop-scrollbar-active {
-    scrollbar-color: var(--vividrop-scrollbar-thumb-active) transparent;
+  .lynavo-scrollbar-active {
+    scrollbar-color: var(--lynavo-scrollbar-thumb-active) transparent;
   }
-  .vividrop-scrollbar-active::-webkit-scrollbar-thumb {
-    background-color: var(--vividrop-scrollbar-thumb-active);
+  .lynavo-scrollbar-active::-webkit-scrollbar-thumb {
+    background-color: var(--lynavo-scrollbar-thumb-active);
   }
-  .vividrop-scrollbar-active::-webkit-scrollbar-thumb:hover {
-    background-color: var(--vividrop-scrollbar-thumb-active-hover);
+  .lynavo-scrollbar-active::-webkit-scrollbar-thumb:hover {
+    background-color: var(--lynavo-scrollbar-thumb-active-hover);
   }
 }
 
@@ -175,10 +175,10 @@
   animation: slide-up 0.3s ease-out;
 }
 
-.vividrop-window-drag-region {
+.lynavo-window-drag-region {
   -webkit-app-region: drag;
 }
 
-.vividrop-window-no-drag-region {
+.lynavo-window-no-drag-region {
   -webkit-app-region: no-drag;
 }

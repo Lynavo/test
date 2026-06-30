@@ -28,8 +28,7 @@ jest.mock('react-native', () => ({
       GRANTED: 'granted',
     },
     check: (...args: unknown[]) => mockNotificationPermissionCheck(...args),
-    request: (...args: unknown[]) =>
-      mockNotificationPermissionRequest(...args),
+    request: (...args: unknown[]) => mockNotificationPermissionRequest(...args),
   },
   NativeModules: {
     NativeSyncEngine: {
