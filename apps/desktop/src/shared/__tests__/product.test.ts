@@ -21,9 +21,9 @@ describe('desktop product helper', () => {
     expect(getProductName()).toBe('Lynavo Drive');
   });
 
-  it('preserves the existing Electron storage identity for this commercial removal task', () => {
-    expect(APP_STORAGE_IDENTITY_NAME).toBe('Vivi Drop');
-    expect(APP_STORAGE_IDENTITY_NAME).not.toBe(getProductName());
+  it('uses Lynavo Drive as the Electron storage identity', () => {
+    expect(APP_STORAGE_IDENTITY_NAME).toBe('Lynavo Drive');
+    expect(APP_STORAGE_IDENTITY_NAME).toBe(getProductName());
   });
 
   it('does not let the legacy market env affect product identity', () => {

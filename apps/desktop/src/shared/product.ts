@@ -2,7 +2,7 @@ import { LYNAVO_API_BASE_URL } from '@lynavo-drive/contracts';
 import type { Distribution, ReleaseChannel } from '@lynavo-drive/contracts';
 
 export const PRODUCT_NAME = 'Lynavo Drive';
-export const APP_STORAGE_IDENTITY_NAME = 'Vivi Drop';
+export const APP_STORAGE_IDENTITY_NAME = 'Lynavo Drive';
 export const PRODUCT_DISTRIBUTION: Distribution = 'community';
 
 type Env = NodeJS.ProcessEnv;
@@ -42,10 +42,7 @@ export function getProductReleaseChannel(env: Env = process.env): ReleaseChannel
 }
 
 export function resolveLynavoApiBaseUrl(env: Env = process.env): string {
-  return firstNonEmpty(
-    env.LYNAVO_API_BASE_URL,
-    LYNAVO_API_BASE_URL,
-  );
+  return firstNonEmpty(env.LYNAVO_API_BASE_URL, LYNAVO_API_BASE_URL);
 }
 
 export function shouldUseLynavoReviewTarget(env: Env = process.env): boolean {

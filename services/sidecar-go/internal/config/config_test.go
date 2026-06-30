@@ -219,9 +219,13 @@ func TestSetDefaultsFillsDataDirReceiveDirDeviceName(t *testing.T) {
 }
 
 func TestSelectDataDirPrefersCurrentBrandDir(t *testing.T) {
+	if currentDataDirName != "Lynavo Drive" {
+		t.Fatalf("currentDataDirName = %q, want Lynavo Drive", currentDataDirName)
+	}
+
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	if err := os.MkdirAll(preferredPath, 0o755); err != nil {
 		t.Fatalf("MkdirAll(preferredPath): %v", err)
@@ -238,10 +242,19 @@ func TestSelectDataDirPrefersCurrentBrandDir(t *testing.T) {
 func TestSelectDataDirFallsBackToLegacyDir(t *testing.T) {
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	if err := os.MkdirAll(legacyPath, 0o755); err != nil {
 		t.Fatalf("MkdirAll(legacyPath): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "sidecar.db-wal"), []byte("wal"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy wal: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(legacyPath, "logs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll legacy logs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "logs", "sidecar.log"), []byte("log"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy log: %v", err)
 	}
 
 	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
@@ -250,15 +263,128 @@ func TestSelectDataDirFallsBackToLegacyDir(t *testing.T) {
 	if !isDir(preferredPath) {
 		t.Fatalf("expected preferred path to exist after migration")
 	}
-	if isDir(legacyPath) {
-		t.Fatalf("expected legacy path to be moved to preferred path")
+	if !isDir(legacyPath) {
+		t.Fatalf("expected legacy path to remain after migration")
+	}
+	if _, err := os.Stat(filepath.Join(preferredPath, "sidecar.db-wal")); err != nil {
+		t.Fatalf("expected WAL file copied to preferred path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(preferredPath, "logs", "sidecar.log")); err != nil {
+		t.Fatalf("expected representative nested file copied to preferred path: %v", err)
+	}
+}
+
+func TestSelectDataDirCopiesOlderLegacyDirWithoutDeletingSource(t *testing.T) {
+	dir := t.TempDir()
+	preferredPath := filepath.Join(dir, currentDataDirName)
+	viviLegacyPath := filepath.Join(dir, "Vivi Drop")
+	olderLegacyPath := filepath.Join(dir, legacyDataDirName)
+
+	writeSQLiteState(t, olderLegacyPath, sqliteState{
+		sessions:      1,
+		uploads:       1,
+		pairedDevices: 1,
+		shareStatus:   "share_registered",
+	})
+	if err := os.WriteFile(filepath.Join(olderLegacyPath, "sidecar.db-shm"), []byte("shm"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy shm: %v", err)
+	}
+
+	if got := selectDataDir(preferredPath, viviLegacyPath, olderLegacyPath); got != preferredPath {
+		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
+	}
+	if !isDir(olderLegacyPath) {
+		t.Fatalf("expected older legacy path to remain after migration")
+	}
+	if _, err := os.Stat(filepath.Join(preferredPath, "sidecar.db")); err != nil {
+		t.Fatalf("expected DB copied to preferred path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(preferredPath, "sidecar.db-shm")); err != nil {
+		t.Fatalf("expected SHM copied to preferred path: %v", err)
+	}
+}
+
+func TestSelectDataDirReturnsPreferredWhenLegacyCopyFails(t *testing.T) {
+	dir := t.TempDir()
+	blockingParent := filepath.Join(dir, "blocked-parent")
+	preferredPath := filepath.Join(blockingParent, currentDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
+
+	if err := os.WriteFile(blockingParent, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("WriteFile(blockingParent): %v", err)
+	}
+	if err := os.MkdirAll(legacyPath, 0o755); err != nil {
+		t.Fatalf("MkdirAll(legacyPath): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "sidecar.db"), []byte("legacy"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy DB: %v", err)
+	}
+
+	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
+		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
+	}
+	if _, err := os.Stat(filepath.Join(legacyPath, "sidecar.db")); err != nil {
+		t.Fatalf("expected legacy DB to remain after failed copy: %v", err)
+	}
+	if _, err := os.Stat(preferredPath); err == nil {
+		t.Fatalf("expected failed copy not to create preferred path")
+	}
+}
+
+func TestSelectDataDirDoesNotLeavePartialPreferredDirWhenLegacyCopyFails(t *testing.T) {
+	dir := t.TempDir()
+	preferredPath := filepath.Join(dir, currentDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
+
+	if err := os.MkdirAll(filepath.Join(legacyPath, "a-logs"), 0o755); err != nil {
+		t.Fatalf("MkdirAll legacy logs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "a-logs", "sidecar.log"), []byte("log"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy log: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyPath, "sidecar.db"), []byte("legacy"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy DB: %v", err)
+	}
+	deniedFile := filepath.Join(legacyPath, "z-denied.bin")
+	if err := os.WriteFile(deniedFile, []byte("denied"), 0o644); err != nil {
+		t.Fatalf("WriteFile denied file: %v", err)
+	}
+	if err := os.Chmod(deniedFile, 0); err != nil {
+		t.Fatalf("Chmod denied file: %v", err)
+	}
+	defer func() {
+		_ = os.Chmod(deniedFile, 0o644)
+	}()
+
+	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
+		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
+	}
+	if _, err := os.Stat(preferredPath); err == nil {
+		t.Fatalf("expected failed copy not to leave partial preferred path")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("expected preferred path to be absent after failed copy, got err=%v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir(temp root): %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), currentDataDirName+".copy-") {
+			t.Fatalf("expected failed copy to remove temp dir, found %q", entry.Name())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(legacyPath, "a-logs", "sidecar.log")); err != nil {
+		t.Fatalf("expected legacy log to remain after failed copy: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyPath, "sidecar.db")); err != nil {
+		t.Fatalf("expected legacy DB to remain after failed copy: %v", err)
 	}
 }
 
 func TestSelectDataDirPrefersLegacyWhenPreferredHasFreshDB(t *testing.T) {
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	if err := os.MkdirAll(preferredPath, 0o755); err != nil {
 		t.Fatalf("MkdirAll(preferredPath): %v", err)
@@ -276,18 +402,18 @@ func TestSelectDataDirPrefersLegacyWhenPreferredHasFreshDB(t *testing.T) {
 	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
 		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
 	}
-	if !isDir(preferredPath + ".pre-legacy-migration") {
+	if !isDir(preferredPath + ".pre-legacy-copy") {
 		t.Fatalf("expected fresh preferred dir to be backed up before migration")
 	}
-	if isDir(legacyPath) {
-		t.Fatalf("expected legacy path to be moved to preferred path")
+	if !isDir(legacyPath) {
+		t.Fatalf("expected legacy path to remain after migration")
 	}
 }
 
 func TestSelectDataDirPrefersLegacyWhenLegacyHasMeaningfulState(t *testing.T) {
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	writeSQLiteState(t, preferredPath, sqliteState{
 		sessions:      0,
@@ -305,18 +431,21 @@ func TestSelectDataDirPrefersLegacyWhenLegacyHasMeaningfulState(t *testing.T) {
 	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
 		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
 	}
-	if !isDir(preferredPath + ".pre-legacy-migration") {
+	if !isDir(preferredPath + ".pre-legacy-copy") {
 		t.Fatalf("expected placeholder preferred dir to be backed up before migration")
 	}
-	if isDir(legacyPath) {
-		t.Fatalf("expected legacy path to be moved to preferred path")
+	if !isDir(legacyPath) {
+		t.Fatalf("expected legacy path to remain after migration")
+	}
+	if inspectDataDirState(preferredPath).sessions != 2 {
+		t.Fatalf("expected preferred path to use copied legacy state")
 	}
 }
 
 func TestSelectDataDirKeepsPreferredWhenPreferredHasEstablishedDB(t *testing.T) {
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	if err := os.MkdirAll(preferredPath, 0o755); err != nil {
 		t.Fatalf("MkdirAll(preferredPath): %v", err)
@@ -334,12 +463,15 @@ func TestSelectDataDirKeepsPreferredWhenPreferredHasEstablishedDB(t *testing.T) 
 	if got := selectDataDir(preferredPath, legacyPath); got != preferredPath {
 		t.Errorf("selectDataDir() = %q, want %q", got, preferredPath)
 	}
+	if _, err := os.Stat(filepath.Join(legacyPath, "sidecar.db")); err != nil {
+		t.Fatalf("expected legacy DB to remain untouched: %v", err)
+	}
 }
 
 func TestSelectDataDirKeepsPreferredWhenPreferredHasMeaningfulState(t *testing.T) {
 	dir := t.TempDir()
 	preferredPath := filepath.Join(dir, currentDataDirName)
-	legacyPath := filepath.Join(dir, legacyDataDirName)
+	legacyPath := filepath.Join(dir, "Vivi Drop")
 
 	writeSQLiteState(t, preferredPath, sqliteState{
 		sessions:      4,

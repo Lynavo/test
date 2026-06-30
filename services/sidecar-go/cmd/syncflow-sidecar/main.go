@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
@@ -459,28 +461,26 @@ func cleanupLegacyStagingDir(cfg *config.Config) error {
 
 func receiveRootRewriteTarget(cfg *config.Config, currentReceiveRoot string) (string, bool) {
 	currentReceiveRoot = filepath.Clean(currentReceiveRoot)
-	if isObsoletePersonalReceiveRoot(currentReceiveRoot) {
-		target := filepath.Join(filepath.Dir(filepath.Dir(currentReceiveRoot)), "received")
-		return target, filepath.Clean(target) != currentReceiveRoot
+	currentDataDir := filepath.Clean(cfg.DataDir)
+	targetReceiveDir := filepath.Clean(cfg.ReceiveDir)
+
+	managedDataDirs := []string{currentDataDir}
+	for _, legacyDataDirName := range []string{"Vivi Drop", "小豹闪传"} {
+		managedDataDirs = append(managedDataDirs, filepath.Join(filepath.Dir(currentDataDir), legacyDataDirName))
 	}
 
-	if filepath.Base(cfg.DataDir) != "Vivi Drop" {
-		return "", false
-	}
-
-	legacyBrandReceiveRoot := filepath.Join(filepath.Dir(cfg.DataDir), "小豹闪传", "received")
-	currentBrandLegacyReceiveRoot := filepath.Join(cfg.DataDir, "received")
-	if currentReceiveRoot == filepath.Clean(legacyBrandReceiveRoot) ||
-		currentReceiveRoot == filepath.Clean(currentBrandLegacyReceiveRoot) {
-		return cfg.ReceiveDir, filepath.Clean(cfg.ReceiveDir) != currentReceiveRoot
+	for _, managedDataDir := range managedDataDirs {
+		for _, legacyReceiveRoot := range []string{
+			filepath.Join(managedDataDir, "received"),
+			filepath.Join(managedDataDir, "personal", "received"),
+		} {
+			if currentReceiveRoot == filepath.Clean(legacyReceiveRoot) {
+				return targetReceiveDir, targetReceiveDir != currentReceiveRoot
+			}
+		}
 	}
 
 	return "", false
-}
-
-func isObsoletePersonalReceiveRoot(receiveRoot string) bool {
-	return filepath.Base(receiveRoot) == "received" &&
-		filepath.Base(filepath.Dir(receiveRoot)) == "personal"
 }
 
 func migrateReceiveRootIfSafe(from string, to string) error {
@@ -496,40 +496,79 @@ func migrateReceiveRootIfSafe(from string, to string) error {
 		return fmt.Errorf("stat legacy receive root: %w", err)
 	}
 
-	if _, err := os.Stat(to); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
-			return fmt.Errorf("create receive parent: %w", err)
-		}
-		if err := os.Rename(from, to); err != nil {
-			return fmt.Errorf("move legacy receive root: %w", err)
-		}
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("stat personal receive root: %w", err)
-	}
-
-	entries, err := os.ReadDir(from)
-	if err != nil {
-		return fmt.Errorf("read legacy receive root: %w", err)
-	}
 	if err := os.MkdirAll(to, 0o755); err != nil {
 		return fmt.Errorf("create receive root: %w", err)
 	}
-	for _, entry := range entries {
-		target := filepath.Join(to, entry.Name())
-		if _, err := os.Stat(target); err == nil {
-			return fmt.Errorf("target already exists: %s", target)
+	return copyMissingReceiveEntries(from, to)
+}
+
+func copyMissingReceiveEntries(from string, to string) error {
+	return filepath.WalkDir(from, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == from {
+			return nil
+		}
+		rel, err := filepath.Rel(from, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(to, rel)
+		if targetInfo, err := os.Stat(target); err == nil {
+			if entry.IsDir() {
+				if !targetInfo.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			return nil
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("stat target: %w", err)
 		}
-	}
-	for _, entry := range entries {
-		if err := os.Rename(filepath.Join(from, entry.Name()), filepath.Join(to, entry.Name())); err != nil {
-			return fmt.Errorf("move legacy entry %q: %w", entry.Name(), err)
+
+		info, err := entry.Info()
+		if err != nil {
+			return err
 		}
+		if entry.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(linkTarget, target)
+		}
+		if !entry.Type().IsRegular() {
+			return nil
+		}
+		return copyReceiveFile(path, target, info.Mode().Perm())
+	})
+}
+
+func copyReceiveFile(from string, to string, perm fs.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+		return err
 	}
-	if err := os.Remove(from); err != nil {
-		return fmt.Errorf("remove empty legacy receive root: %w", err)
+	source, err := os.Open(from)
+	if err != nil {
+		return err
 	}
-	return nil
+	defer source.Close()
+
+	target, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if os.IsExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer target.Close()
+
+	if _, err := io.Copy(target, source); err != nil {
+		return err
+	}
+	return target.Chmod(perm)
 }

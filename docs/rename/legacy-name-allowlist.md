@@ -50,6 +50,8 @@ It scans hidden files and directories, while explicitly skipping generated build
 | `apps/mobile/src/utils/clearUserScopedStorage.ts`                | Shared-preference and storage migration strings preserve existing installs.                                                   |
 | `apps/mobile/src/utils/__tests__/clearUserScopedStorage.test.ts` | Shared-preference migration test coverage.                                                                                    |
 | `apps/mobile/src/screens/*GlobalScreen.tsx`                      | Temporary post-market-removal filenames retained to avoid broad mobile UI import churn; follow-up rename can drop the suffix. |
+| `apps/desktop/src/main/storage-identity.ts`                      | Electron userData copy migration reads legacy `Vivi Drop` storage without deleting it.                                        |
+| `apps/desktop/src/main/__tests__/storage-identity.test.ts`       | Electron userData copy migration test coverage.                                                                               |
 | `services/sidecar-go/internal/config/config.go`                  | Old data-dir migration paths preserve existing desktop installs.                                                              |
 | `services/sidecar-go/internal/config/config_test.go`             | Old data-dir migration test coverage.                                                                                         |
 | `services/sidecar-go/cmd/syncflow-sidecar/main.go`               | Go cmd path and old data-dir migration compatibility.                                                                         |

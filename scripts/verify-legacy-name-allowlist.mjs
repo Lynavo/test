@@ -211,6 +211,16 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny('Shared-preference migration test coverage.'),
   ],
   [
+    'apps/desktop/src/main/storage-identity.ts',
+    allowAny(
+      'Electron userData copy migration reads legacy Vivi Drop storage without deleting it.',
+    ),
+  ],
+  [
+    'apps/desktop/src/main/__tests__/storage-identity.test.ts',
+    allowAny('Electron userData copy migration test coverage.'),
+  ],
+  [
     'services/sidecar-go/internal/config/config.go',
     allowAny('Old data-dir migration paths preserve existing desktop installs.'),
   ],

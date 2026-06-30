@@ -11,11 +11,18 @@ import (
 
 func TestBootstrapReconciliationUpdatesLegacyDefaultReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Vivi Drop")
+	dataDir := filepath.Join(dir, "Lynavo Drive")
 	dbPath := filepath.Join(dataDir, "sidecar.db")
+	legacyReceiveRoot := filepath.Join(dir, "小豹闪传", "received")
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(dataDir): %v", err)
+	}
+	if err := os.MkdirAll(legacyReceiveRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(legacyReceiveRoot): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyReceiveRoot, "old.txt"), []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy receive file: %v", err)
 	}
 
 	st, err := store.New(dbPath)
@@ -28,7 +35,7 @@ func TestBootstrapReconciliationUpdatesLegacyDefaultReceiveRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetShareConfig: %v", err)
 	}
-	cfg.ReceiveRoot = filepath.Join(dir, "小豹闪传", "received")
+	cfg.ReceiveRoot = legacyReceiveRoot
 	if err := st.UpdateShareConfig(*cfg); err != nil {
 		t.Fatalf("UpdateShareConfig: %v", err)
 	}
@@ -51,11 +58,71 @@ func TestBootstrapReconciliationUpdatesLegacyDefaultReceiveRoot(t *testing.T) {
 	if runtimeConfig.ReceiveDir != filepath.Join(dataDir, "received") {
 		t.Fatalf("runtime ReceiveDir = %q, want %q", runtimeConfig.ReceiveDir, filepath.Join(dataDir, "received"))
 	}
+	if _, err := os.Stat(filepath.Join(dataDir, "received", "old.txt")); err != nil {
+		t.Fatalf("expected legacy receive file copied into new receive root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyReceiveRoot, "old.txt")); err != nil {
+		t.Fatalf("expected legacy receive file to remain in old receive root: %v", err)
+	}
+}
+
+func TestBootstrapReconciliationUpdatesViviDropDefaultReceiveRoot(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "Lynavo Drive")
+	dbPath := filepath.Join(dataDir, "sidecar.db")
+	legacyReceiveRoot := filepath.Join(dir, "Vivi Drop", "received")
+
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(dataDir): %v", err)
+	}
+	if err := os.MkdirAll(legacyReceiveRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(legacyReceiveRoot): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyReceiveRoot, "old.txt"), []byte("old"), 0o644); err != nil {
+		t.Fatalf("WriteFile legacy receive file: %v", err)
+	}
+
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer st.Close()
+
+	cfg, err := st.GetShareConfig()
+	if err != nil {
+		t.Fatalf("GetShareConfig: %v", err)
+	}
+	cfg.ReceiveRoot = legacyReceiveRoot
+	if err := st.UpdateShareConfig(*cfg); err != nil {
+		t.Fatalf("UpdateShareConfig: %v", err)
+	}
+
+	runtimeConfig := &config.Config{
+		DataDir:    dataDir,
+		ReceiveDir: filepath.Join(dataDir, "received"),
+		DeviceName: "test-device",
+	}
+
+	bootstrapReconciliation(st, runtimeConfig)
+
+	updated, err := st.GetShareConfig()
+	if err != nil {
+		t.Fatalf("GetShareConfig(updated): %v", err)
+	}
+	if updated.ReceiveRoot != filepath.Join(dataDir, "received") {
+		t.Fatalf("ReceiveRoot = %q, want %q", updated.ReceiveRoot, filepath.Join(dataDir, "received"))
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "received", "old.txt")); err != nil {
+		t.Fatalf("expected legacy receive file copied into new receive root: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacyReceiveRoot, "old.txt")); err != nil {
+		t.Fatalf("expected legacy receive file to remain in old receive root: %v", err)
+	}
 }
 
 func TestBootstrapReconciliationKeepsCurrentBrandDefaultReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Vivi Drop")
+	dataDir := filepath.Join(dir, "Lynavo Drive")
 	dbPath := filepath.Join(dataDir, "sidecar.db")
 	currentReceiveRoot := filepath.Join(dataDir, "received")
 
@@ -106,7 +173,7 @@ func TestBootstrapReconciliationKeepsCurrentBrandDefaultReceiveRoot(t *testing.T
 
 func TestBootstrapReconciliationMovesObsoletePersonalReceiveRoot(t *testing.T) {
 	dir := t.TempDir()
-	dataDir := filepath.Join(dir, "Vivi Drop")
+	dataDir := filepath.Join(dir, "Lynavo Drive")
 	dbPath := filepath.Join(dataDir, "sidecar.db")
 	obsoleteReceiveRoot := filepath.Join(dataDir, "personal", "received")
 	currentReceiveRoot := filepath.Join(dataDir, "received")
@@ -152,10 +219,10 @@ func TestBootstrapReconciliationMovesObsoletePersonalReceiveRoot(t *testing.T) {
 		t.Fatalf("runtime ReceiveDir = %q, want %q", runtimeConfig.ReceiveDir, currentReceiveRoot)
 	}
 	if _, err := os.Stat(filepath.Join(currentReceiveRoot, "old.txt")); err != nil {
-		t.Fatalf("expected receive file to move into current receive root: %v", err)
+		t.Fatalf("expected receive file copied into current receive root: %v", err)
 	}
-	if _, err := os.Stat(obsoleteReceiveRoot); !os.IsNotExist(err) {
-		t.Fatalf("expected obsolete receive root to be removed, err=%v", err)
+	if _, err := os.Stat(filepath.Join(obsoleteReceiveRoot, "old.txt")); err != nil {
+		t.Fatalf("expected obsolete receive root file to remain after copy: %v", err)
 	}
 }
 
@@ -203,11 +270,85 @@ func TestBootstrapReconciliationKeepsCustomReceiveRoot(t *testing.T) {
 	}
 }
 
+func TestBootstrapReconciliationKeepsExternalPersonalReceivedCustomRoot(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "Lynavo Drive")
+	dbPath := filepath.Join(dataDir, "sidecar.db")
+	customReceiveRoot := filepath.Join(dir, "ExternalMedia", "personal", "received")
+
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(dataDir): %v", err)
+	}
+	if err := os.MkdirAll(customReceiveRoot, 0o755); err != nil {
+		t.Fatalf("MkdirAll(customReceiveRoot): %v", err)
+	}
+
+	st, err := store.New(dbPath)
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	defer st.Close()
+
+	cfg, err := st.GetShareConfig()
+	if err != nil {
+		t.Fatalf("GetShareConfig: %v", err)
+	}
+	cfg.ReceiveRoot = customReceiveRoot
+	if err := st.UpdateShareConfig(*cfg); err != nil {
+		t.Fatalf("UpdateShareConfig: %v", err)
+	}
+
+	runtimeConfig := &config.Config{
+		DataDir:    dataDir,
+		ReceiveDir: filepath.Join(dataDir, "received"),
+		DeviceName: "test-device",
+	}
+
+	bootstrapReconciliation(st, runtimeConfig)
+
+	updated, err := st.GetShareConfig()
+	if err != nil {
+		t.Fatalf("GetShareConfig(updated): %v", err)
+	}
+	if updated.ReceiveRoot != customReceiveRoot {
+		t.Fatalf("ReceiveRoot = %q, want custom %q", updated.ReceiveRoot, customReceiveRoot)
+	}
+	if runtimeConfig.ReceiveDir != customReceiveRoot {
+		t.Fatalf("runtime ReceiveDir = %q, want custom %q", runtimeConfig.ReceiveDir, customReceiveRoot)
+	}
+}
+
+func TestCopyMissingReceiveEntriesSkipsSourceSubtreeWhenTargetPathIsFile(t *testing.T) {
+	dir := t.TempDir()
+	from := filepath.Join(dir, "from")
+	to := filepath.Join(dir, "to")
+
+	if err := os.MkdirAll(filepath.Join(from, "album"), 0o755); err != nil {
+		t.Fatalf("MkdirAll source album: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(from, "album", "photo.jpg"), []byte("source"), 0o644); err != nil {
+		t.Fatalf("WriteFile source photo: %v", err)
+	}
+	if err := os.MkdirAll(to, 0o755); err != nil {
+		t.Fatalf("MkdirAll target: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(to, "album"), []byte("target file"), 0o644); err != nil {
+		t.Fatalf("WriteFile target album file: %v", err)
+	}
+
+	if err := copyMissingReceiveEntries(from, to); err != nil {
+		t.Fatalf("copyMissingReceiveEntries: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(to, "album")); err != nil || string(got) != "target file" {
+		t.Fatalf("target file was changed, got=%q err=%v", string(got), err)
+	}
+}
+
 func TestEnsureRuntimeDirsCreatesSharedDirAtStartup(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &config.Config{
-		DataDir:    filepath.Join(dir, "Vivi Drop"),
-		ReceiveDir: filepath.Join(dir, "Vivi Drop", "received"),
+		DataDir:    filepath.Join(dir, "Lynavo Drive"),
+		ReceiveDir: filepath.Join(dir, "Lynavo Drive", "received"),
 		DeviceName: "test-device",
 	}
 
