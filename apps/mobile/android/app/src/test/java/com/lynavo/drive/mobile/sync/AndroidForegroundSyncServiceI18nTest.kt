@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
@@ -36,7 +36,7 @@ class AndroidForegroundSyncServiceI18nTest {
   @Test
   fun foregroundSyncServiceDoesNotHardcodeNotificationCopy() {
     val source = androidAppDir()
-      .resolve("src/main/java/com/vividrop/mobile/china/sync/AndroidForegroundSyncService.kt")
+      .resolve("src/main/java/com/lynavo/drive/mobile/sync/AndroidForegroundSyncService.kt")
       .readText()
 
     val blockedCopy = listOf(

@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china
+package com.lynavo.drive.mobile
 
 import android.app.Application
 import android.content.Context
@@ -9,9 +9,9 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.mrousavy.camera.react.CameraPackage
-import com.vividrop.mobile.china.sync.NativeSyncEngineModule
-import com.vividrop.mobile.china.sync.NativeSyncEnginePackage
-import com.vividrop.mobile.china.ui.VividropUiPackage
+import com.lynavo.drive.mobile.sync.NativeSyncEngineModule
+import com.lynavo.drive.mobile.sync.NativeSyncEnginePackage
+import com.lynavo.drive.mobile.ui.VividropUiPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -39,7 +39,7 @@ class MainApplication : Application(), ReactApplication {
     // lets us purge any surviving identity before React starts.
     //
     // Also handles the 2-phase self-heal: if a prior wipe was killed after
-    // setting `vivi_wipe_in_progress` but before clearing it, retry now.
+    // setting `lynavo_wipe_in_progress` but before clearing it, retry now.
     runInstallSentinel(this)
 
     loadReactNative(this)

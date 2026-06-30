@@ -38,12 +38,12 @@
       android:supportsRtl="true">
       <provider
         android:name="androidx.core.content.FileProvider"
-        android:authorities="${applicationId}.syncflow.fileprovider"
+        android:authorities="${applicationId}.fileprovider"
         android:exported="false"
         android:grantUriPermissions="true">
         <meta-data
           android:name="android.support.FILE_PROVIDER_PATHS"
-          android:resource="@xml/syncflow_file_paths" />
+          android:resource="@xml/lynavo_file_paths" />
       </provider>
       <service
         android:name=".sync.AndroidForegroundSyncService"
@@ -65,8 +65,6 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.DEFAULT" />
             <category android:name="android.intent.category.BROWSABLE" />
-            <!-- OAuth redirect migration is not complete in Task 9; keep the
-                 legacy scheme so existing login redirects do not break. -->
             <data android:scheme="vividrop" android:host="auth" />
         </intent-filter>
       </activity>

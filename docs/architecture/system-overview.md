@@ -88,7 +88,7 @@ Vivi Drop 目前的目標非常聚焦：
 關鍵目錄：
 
 - `apps/mobile/ios/SyncEngine`
-- `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync`
+- `apps/mobile/android/app/src/main/java/com/lynavo/drive/mobile/sync`
 
 ## 3. 關鍵資料流
 

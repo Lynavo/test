@@ -49,8 +49,8 @@ function renderOutputs(manifest) {
       content: `${generatedHeader('//')}let syncFlowAppCompatibilityVersion = ${appCompatibilityVersion}\n`,
     },
     {
-      path: 'apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/SyncFlowVersion.kt',
-      content: `package com.vividrop.mobile.china.sync\n\n${generatedHeader('//')}internal const val APP_COMPATIBILITY_VERSION = ${appCompatibilityVersion}\n`,
+      path: 'apps/mobile/android/app/src/main/java/com/lynavo/drive/mobile/sync/SyncFlowVersion.kt',
+      content: `package com.lynavo.drive.mobile.sync\n\n${generatedHeader('//')}internal const val APP_COMPATIBILITY_VERSION = ${appCompatibilityVersion}\n`,
     },
   ];
 }

@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,8 +11,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import com.vividrop.mobile.china.MainActivity
-import com.vividrop.mobile.china.R
+import com.lynavo.drive.mobile.MainActivity
+import com.lynavo.drive.mobile.R
 
 class AndroidForegroundSyncService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
@@ -112,10 +112,10 @@ class AndroidForegroundSyncService : Service() {
     }
 
   companion object {
-    private const val CHANNEL_ID = "vividrop_background_sync"
+    private const val CHANNEL_ID = "lynavo_drive_background_sync"
     private const val NOTIFICATION_ID = 39_393
-    private const val ACTION_START = "com.vividrop.mobile.sync.START_BACKGROUND_SYNC"
-    private const val ACTION_STOP = "com.vividrop.mobile.sync.STOP_BACKGROUND_SYNC"
+    private const val ACTION_START = "com.lynavo.drive.mobile.sync.START_BACKGROUND_SYNC"
+    private const val ACTION_STOP = "com.lynavo.drive.mobile.sync.STOP_BACKGROUND_SYNC"
     private const val EXTRA_REASON = "reason"
 
     fun start(context: Context, reason: String) {

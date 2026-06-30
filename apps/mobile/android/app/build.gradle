@@ -120,12 +120,11 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.vividrop.mobile.china"
+    namespace "com.lynavo.drive.mobile"
     defaultConfig {
-        // Task 9 removes Android market flavors, but Task 15 owns package/app-id
-        // migration. Keep the legacy applicationId until store/signing migration
-        // is explicitly accepted.
-        applicationId "com.vividrop.mobile.china"
+        // Keep namespace and applicationId aligned so manifest placeholders,
+        // launcher helpers, and native bridge tests resolve one Android identity.
+        applicationId "com.lynavo.drive.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode resolveIosBuildNumber().toInteger()

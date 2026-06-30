@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china
+package com.lynavo.drive.mobile
 
 import android.content.Intent
 import android.os.Bundle

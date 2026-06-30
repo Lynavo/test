@@ -138,7 +138,7 @@ test('removes externally exported legacy release env from child process env', ()
       LYNAVO_CLIENT_CONFIG_BASE_URL: 'https://external-config.example',
       LYNAVO_GIFTCARD_REDEEM_BASE_URL: 'https://external-gift.example',
       SYNCFLOW_AUTH_BASE_URL: 'https://old-auth.example',
-      SYNCFLOW_ANDROID_APP_ID: 'com.vividrop.mobile.china.cn',
+      SYNCFLOW_ANDROID_APP_ID: 'com.legacy.mobile.cn',
       SYNCFLOW_ANDROID_INSTALL_TASK: ':app:installCnDebug',
       SYNCFLOW_GOOGLE_CLIENT_CONFIG_FILE: '/secure/google-client.json',
       GOOGLE_CLIENT_ID: 'google-client-id',

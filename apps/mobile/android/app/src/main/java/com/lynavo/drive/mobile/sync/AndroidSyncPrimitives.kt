@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import java.io.BufferedOutputStream
 import java.io.File

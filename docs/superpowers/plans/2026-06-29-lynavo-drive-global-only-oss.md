@@ -307,18 +307,18 @@ pnpm --filter @lynavo-drive/desktop typecheck
 
 - Modify: `apps/mobile/android/app/build.gradle`
 - Modify: `apps/mobile/android/app/src/main/AndroidManifest.xml`
-- Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/MainApplication.kt`
+- Modify: Android `MainApplication.kt` under the package path active at the time of the task
 - Delete: `apps/mobile/android/app/src/cn/**`
 - Delete: `apps/mobile/android/app/src/global/**`
 - Delete or modify: `apps/mobile/android/app/src/testCn/**`
-- Delete: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/market/**`
+- Delete: Android native market module package
 - Modify Android tests that reference flavors/tasks
 
 - [x] Write/update Gradle or script tests so `assembleCn*` and `assembleGlobal*` are no longer expected.
 - [x] Remove `flavorDimensions`, `productFlavors`, `cnImplementation`, Alipay, WeChat, `NativeMarketConfigPackage`, and `NativeMarketConfigModule`.
-- [x] Keep Java/Kotlin package path `com.vividrop.mobile.china` until Task 17 to reduce churn.
+- [x] Keep the pre-Lynavo Java/Kotlin package path until Task 17 to reduce churn.
 - [x] Set one `applicationId`. Use `com.lynavo.drive.mobile` only if signing/store migration has been accepted for this branch; otherwise document why it remains legacy.
-- [x] Remove WeChat manifest query/activity and `vividrop://auth` only when OAuth redirect strategy is updated in the same task.
+- [x] Remove WeChat manifest query/activity and the legacy auth URL scheme only when OAuth redirect strategy is updated in the same task.
 - [x] Do not change foreground/background sync behavior except what is required to compile without market modules.
 
 **Verification:**
@@ -552,7 +552,7 @@ pnpm test
 - Modify: `apps/desktop/resources/**`
 - Modify: `packages/contracts/src/protocol.ts`
 
-- [ ] Rename Android package/namespace and FileProvider authority only with migration notes for keychain/shared prefs.
+- [x] Rename Android package/namespace and FileProvider authority. No legacy keychain/shared prefs compatibility is required for the OSS baseline.
 - [ ] Rename iOS target/project directories only if Xcode scheme/build commands are updated and verified.
 - [x] Rename sidecar binary to `lynavo-drive-sidecar`.
 - [x] Drop legacy data-dir compatibility; fresh OSS state uses `Lynavo Drive` only.

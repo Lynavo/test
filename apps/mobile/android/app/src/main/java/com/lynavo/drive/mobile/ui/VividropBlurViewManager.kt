@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.ui
+package com.lynavo.drive.mobile.ui
 
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.SimpleViewManager

@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import android.content.Context
 import android.content.SharedPreferences

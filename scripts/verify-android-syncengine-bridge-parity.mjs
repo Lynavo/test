@@ -6,7 +6,7 @@ const root = resolve(import.meta.dirname, '..');
 const androidModule = readFileSync(
   resolve(
     root,
-    'apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt',
+    'apps/mobile/android/app/src/main/java/com/lynavo/drive/mobile/sync/NativeSyncEngineModule.kt',
   ),
   'utf8',
 );

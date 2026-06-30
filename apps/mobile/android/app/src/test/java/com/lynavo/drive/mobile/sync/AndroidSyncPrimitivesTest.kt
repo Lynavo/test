@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import java.util.zip.ZipFile
 import org.junit.Assert.assertEquals

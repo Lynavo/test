@@ -1,15 +1,15 @@
-package com.vividrop.mobile.china.ui
+package com.lynavo.drive.mobile.sync
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
-class VividropUiPackage : ReactPackage {
+class NativeSyncEnginePackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-    emptyList()
+    listOf(NativeSyncEngineModule(reactContext))
 
   override fun createViewManagers(
     reactContext: ReactApplicationContext,
-  ): List<ViewManager<*, *>> = listOf(VividropBlurViewManager(reactContext))
+  ): List<ViewManager<*, *>> = emptyList()
 }

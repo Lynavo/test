@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.sync
+package com.lynavo.drive.mobile.sync
 
 import android.Manifest
 import android.app.Activity
@@ -1758,7 +1758,7 @@ class NativeSyncEngineModule(
         if (statusCode !in 200..299) {
           throw IllegalStateException("Download failed with HTTP $statusCode")
         }
-        val destDir = File(reactApplicationContext.cacheDir, "syncflow_shared_downloads")
+        val destDir = File(reactApplicationContext.cacheDir, "lynavo_shared_downloads")
         if (!destDir.exists()) {
           destDir.mkdirs()
         }
@@ -1977,7 +1977,7 @@ class NativeSyncEngineModule(
   private fun fileProviderUri(file: File): Uri =
     FileProvider.getUriForFile(
       reactApplicationContext,
-      "${reactApplicationContext.packageName}.syncflow.fileprovider",
+      "${reactApplicationContext.packageName}.fileprovider",
       file,
     )
 
@@ -7447,7 +7447,7 @@ class NativeSyncEngineModule(
     private const val ANDROID_14_API = 34
     private const val PERMISSION_READ_MEDIA_VISUAL_USER_SELECTED =
       "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
-    const val PREFS_NAME = "syncflow.android.native_sync_engine"
+    const val PREFS_NAME = "lynavo.android.native_sync_engine"
     private const val PREF_BINDING = "binding"
     private const val PREF_BINDING_INVALIDATION_REASON = "binding_invalidation_reason"
     private const val PREF_CLIENT_ID = "client_id"
@@ -7464,10 +7464,10 @@ class NativeSyncEngineModule(
     /** UserDefaults/SharedPrefs key — seeded on first launch, survives only as
      *  long as the app install does, so a missing marker uniquely identifies
      *  a fresh / reinstalled app. */
-    const val PREF_INSTALL_MARKER = "vivi_install_marker"
+    const val PREF_INSTALL_MARKER = "lynavo_install_marker"
     /** 2-phase wipe flag. Set before clearing, removed after. If present on
      *  cold start the wipe was killed mid-way and the sentinel retries. */
-    const val PREF_WIPE_IN_PROGRESS = "vivi_wipe_in_progress"
+    const val PREF_WIPE_IN_PROGRESS = "lynavo_wipe_in_progress"
     /** Numeric auth user id last bound to this sync identity. Absent means
      *  "no owner recorded" (fresh install / post-wipe). */
     const val PREF_OWNER_USER_ID = "lastSyncOwnerUserId"
@@ -7545,9 +7545,9 @@ class NativeSyncEngineModule(
      *
      * Preserved:
      *  - `client_display_name` — device label (not account data)
-     *  - `vivi_install_marker` — reinstall sentinel (stays set for the
+     *  - `lynavo_install_marker` — reinstall sentinel (stays set for the
      *    lifetime of the install; cleared only by app deletion)
-     *  - `vivi_wipe_in_progress` — 2-phase self-heal flag; managed by
+     *  - `lynavo_wipe_in_progress` — 2-phase self-heal flag; managed by
      *    wipe itself (set at top, cleared at bottom)
      */
     private val SYNC_IDENTITY_PRESERVED_KEYS: Set<String> = setOf(

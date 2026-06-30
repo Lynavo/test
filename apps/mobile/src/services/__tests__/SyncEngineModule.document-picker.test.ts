@@ -170,7 +170,7 @@ describe('SyncEngineModule document picker bridge', () => {
       'ios/SyncEngine/RNBridge.swift',
     );
     const androidBridge = readNativeBridgeSource(
-      'android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt',
+      'android/app/src/main/java/com/lynavo/drive/mobile/sync/NativeSyncEngineModule.kt',
     );
 
     expect(iosExternBridge).not.toContain('pickDocumentUploads');

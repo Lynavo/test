@@ -83,10 +83,26 @@ if [[ "$actual_gradle_args" != "$expected_gradle_args" ]]; then
 fi
 
 actual_adb_log="$(cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG")"
-expected_launch="15977ea9 shell am start -n com.vividrop.mobile.china/com.vividrop.mobile.china.MainActivity"
+expected_launch="15977ea9 shell am start -n com.lynavo.drive.mobile/com.lynavo.drive.mobile.MainActivity"
 
 if ! grep -Fq "$expected_launch" <<<"$actual_adb_log"; then
   echo "Expected adb launch: $expected_launch" >&2
+  echo "Actual adb log:" >&2
+  cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG" >&2
+  exit 1
+fi
+
+: >"$SYNCFLOW_ANDROID_TEST_ADB_LOG"
+: >"$SYNCFLOW_ANDROID_TEST_GRADLE_LOG"
+SYNCFLOW_ANDROID_APP_ID="com.example.override" \
+  SYNCFLOW_ANDROID_MAIN_ACTIVITY=".MainActivity" \
+  bash "$tmp_dir/repo/scripts/dev/run-mobile-android-device.sh" >/dev/null
+
+actual_adb_log="$(cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG")"
+expected_override_launch="15977ea9 shell am start -n com.example.override/com.example.override.MainActivity"
+
+if ! grep -Fq "$expected_override_launch" <<<"$actual_adb_log"; then
+  echo "Expected override adb launch: $expected_override_launch" >&2
   echo "Actual adb log:" >&2
   cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG" >&2
   exit 1

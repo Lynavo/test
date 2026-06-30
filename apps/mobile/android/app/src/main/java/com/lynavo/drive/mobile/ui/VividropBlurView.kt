@@ -1,4 +1,4 @@
-package com.vividrop.mobile.china.ui
+package com.lynavo.drive.mobile.ui
 
 import android.graphics.Bitmap
 import android.graphics.Canvas

@@ -5,12 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ANDROID_DIR="$ROOT_DIR/apps/mobile/android"
 METRO_PORT="${METRO_PORT:-${RCT_METRO_PORT:-8081}}"
 METRO_READY_TIMEOUT_SECONDS="${SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS:-20}"
-APP_ID="${SYNCFLOW_ANDROID_APP_ID:-com.vividrop.mobile.china}"
+APP_ID="${SYNCFLOW_ANDROID_APP_ID:-com.lynavo.drive.mobile}"
 MAIN_ACTIVITY="${SYNCFLOW_ANDROID_MAIN_ACTIVITY:-.MainActivity}"
 if [[ "$MAIN_ACTIVITY" == .* ]]; then
-  # The Android namespace stays under com.vividrop.mobile.china until Task 15
-  # performs the package path migration.
-  MAIN_ACTIVITY="com.vividrop.mobile.china$MAIN_ACTIVITY"
+  # Resolve relative activity names against the app id being launched.
+  MAIN_ACTIVITY="$APP_ID$MAIN_ACTIVITY"
 fi
 INSTALL_TASK="${SYNCFLOW_ANDROID_INSTALL_TASK:-:app:installDebug}"
 
