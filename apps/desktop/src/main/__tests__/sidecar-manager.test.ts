@@ -53,7 +53,7 @@ vi.mock('../sidecar-client', async () => {
 
 function compatibleHealth(
   capabilities?: { connectionDeviceManagement?: boolean },
-  service = 'syncflow-sidecar',
+  service = 'lynavo-drive-sidecar',
 ) {
   return {
     ok: true,
@@ -211,7 +211,7 @@ describe('SidecarManager', () => {
     vi.mocked(sidecarClient.getHealth)
       .mockResolvedValueOnce({
         ok: true,
-        service: 'syncflow-sidecar',
+        service: 'lynavo-drive-sidecar',
       })
       .mockResolvedValue({
         ...compatibleHealth({ connectionDeviceManagement: true }),
@@ -225,7 +225,7 @@ describe('SidecarManager', () => {
     expect(manager.getState().status).toBe('healthy');
   });
 
-  it('accepts renamed sidecar health service identity', async () => {
+  it('accepts Lynavo sidecar health service identity', async () => {
     vi.mocked(sidecarClient.getHealth).mockResolvedValue(
       compatibleHealth({ connectionDeviceManagement: true }, 'lynavo-drive-sidecar'),
     );
@@ -246,5 +246,28 @@ describe('SidecarManager', () => {
 
     expect(spawnMock).not.toHaveBeenCalled();
     expect(manager.getState().status).toBe('healthy');
+  });
+
+  it('rejects legacy sidecar health service identity', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(
+      compatibleHealth({ connectionDeviceManagement: true }, 'legacy-sidecar'),
+    );
+
+    const manager = new SidecarManager();
+
+    await expect(manager.healthCheck()).resolves.toBe(false);
+  });
+
+  it('treats any healthy sidecar response as reachable while waiting for port shutdown', async () => {
+    vi.mocked(sidecarClient.getHealth).mockResolvedValue(
+      compatibleHealth({ connectionDeviceManagement: true }, 'legacy-sidecar'),
+    );
+
+    const manager = new SidecarManager();
+    const reachableManager = manager as unknown as {
+      isSidecarReachable: () => Promise<boolean>;
+    };
+
+    await expect(reachableManager.isSidecarReachable()).resolves.toBe(true);
   });
 });

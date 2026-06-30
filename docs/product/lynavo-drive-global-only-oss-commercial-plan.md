@@ -645,9 +645,9 @@ cd apps/mobile/android && ./gradlew assembleRelease bundleRelease
 - 权限说明改成 Lynavo Drive。
 - `ExportOptions-TestFlightGlobal.plist` 合并成单一 `ExportOptions-TestFlight.plist`。
 - 如果改项目名成本可控，目录 / target 从 `SyncFlowMobile` 改成 `LynavoDrive`；若短期不改，必须进入 legacy allowlist。
-- 对 `NSBonjourServices` 的 `_syncflow._tcp` 做决策：
-  - 若不考虑旧客户端兼容，改成 `_lynavodrive._tcp`，并同步 sidecar。
-  - 若需要迁移窗口，mobile 同时发现 `_lynavodrive._tcp` 和 `_syncflow._tcp`，sidecar 同时广播两者；迁移期后删除旧服务名。
+- 对 `NSBonjourServices` / sidecar mDNS 做 no-compat 切换：
+  - Lynavo Drive 使用 `_lynavodrive._tcp`。
+  - 不保留 `_syncflow._tcp` 双广播 / 双发现迁移窗口。
 
 验收：
 
@@ -1148,7 +1148,7 @@ commercial-overlays/official-release/
   - remote entitlement guard。
   - local LAN API 不受 remote entitlement 影响。
 - mDNS service：
-  - 决策是否从 `_syncflow._tcp` 迁移到 `_lynavodrive._tcp`。
+  - 已决策直接从 `_syncflow._tcp` 迁移到 `_lynavodrive._tcp`，不保留旧客户端发现兼容。
 
 ### 7.8 docs / tests
 
@@ -1354,7 +1354,7 @@ pnpm release --profile prod --targets ios,android,mac,win --dry-run
 
 ### 13.2 mDNS / 协议名是否改
 
-`_syncflow._tcp` 改成 `_lynavodrive._tcp` 会影响旧客户端发现。建议做 1 个版本的双广播 / 双发现迁移期，或者明确 Lynavo Drive 与 Vivi Drop 不兼容。
+已决策直接改成 `_lynavodrive._tcp`。Lynavo Drive OSS 版本不兼容旧 `_syncflow._tcp` 客户端发现；后续任务不再保留双广播 / 双发现迁移窗口。
 
 ### 13.3 后台继续是否全开源
 

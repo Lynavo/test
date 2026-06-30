@@ -99,14 +99,14 @@ class DiscoveryService {
         devices.removeAll()
         reachableDevices.removeAll()
 
-        let descriptor = NWBrowser.Descriptor.bonjourWithTXTRecord(type: "_syncflow._tcp", domain: nil)
+        let descriptor = NWBrowser.Descriptor.bonjourWithTXTRecord(type: "_lynavodrive._tcp", domain: nil)
         let params = NWParameters()
         // Prefer infrastructure Wi-Fi / USB network paths for discovery so the
         // surfaced address matches the path used for actual transfer.
         params.includePeerToPeer = false
         syncDiagnosticsLog(
             "DiscoveryService",
-            "starting browser type=_syncflow._tcp domain=default includePeerToPeer=\(params.includePeerToPeer)"
+            "starting browser type=_lynavodrive._tcp domain=default includePeerToPeer=\(params.includePeerToPeer)"
         )
         browser = NWBrowser(for: descriptor, using: params)
 

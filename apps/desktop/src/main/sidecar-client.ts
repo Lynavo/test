@@ -19,7 +19,7 @@ import type {
 import { desktopClientHeaders } from './app-info';
 
 const BASE = `http://127.0.0.1:${SIDECAR_HTTP_PORT}`;
-export const SIDECAR_HEALTH_SERVICE_NAMES = ['syncflow-sidecar', 'lynavo-drive-sidecar'] as const;
+export const SIDECAR_HEALTH_SERVICE_NAMES = ['lynavo-drive-sidecar'] as const;
 
 export function isCompatibleSidecarService(service: string | null | undefined): boolean {
   return SIDECAR_HEALTH_SERVICE_NAMES.some((candidate) => candidate === service);

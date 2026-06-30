@@ -94,9 +94,9 @@ Vivi Drop 目前的目標非常聚焦：
 
 ## 3.1 發現
 
-1. sidecar 透過 Bonjour 廣播 `_syncflow._tcp`
+1. sidecar 透過 Bonjour 廣播 `_lynavodrive._tcp`
 2. macOS / Windows 優先使用原生 `dns-sd` 廣播；Windows 缺失 Bonjour 時會回退到 zeroconf 相容廣播
-3. iOS 使用 `Network.framework` 瀏覽區域網服務；Android 使用 `NsdManager` 瀏覽 `_syncflow._tcp`，並在未發現設備時回退到手動輸入 IP
+3. iOS 使用 `Network.framework` 瀏覽區域網服務；Android 使用 `NsdManager` 瀏覽 `_lynavodrive._tcp`，並在未發現設備時回退到手動輸入 IP
 4. 目前實作優先使用 sidecar 廣播的 IPv4 資訊，避免 `fe80::` 連結本地 IPv6 誤判
 5. 發現列表展示的是「可探活、可連接」的設備，而不是單純有廣播的設備
 

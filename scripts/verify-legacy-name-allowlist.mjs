@@ -172,29 +172,6 @@ const ALLOWED_EXACT_PATHS = new Map([
     ),
   ],
   [
-    'packages/contracts/src/protocol.ts',
-    allowTerms(['syncflow'], 'Protocol service type remains _syncflow._tcp for LAN compatibility.'),
-  ],
-  [
-    'services/sidecar-go/internal/mdns/broadcast.go',
-    allowTerms(['syncflow'], 'Protocol service type remains _syncflow._tcp for LAN compatibility.'),
-  ],
-  [
-    'services/sidecar-go/internal/mdns/broadcast_test.go',
-    allowTerms(['syncflow'], 'Protocol service type compatibility test coverage.'),
-  ],
-  [
-    'services/sidecar-go/internal/api/handlers_health.go',
-    allowTerms(
-      ['syncflow'],
-      'Sidecar health service name remains syncflow-sidecar for compatibility.',
-    ),
-  ],
-  [
-    'services/sidecar-go/internal/api/router_test.go',
-    allowTerms(['syncflow'], 'Sidecar health service compatibility test coverage.'),
-  ],
-  [
     'services/sidecar-go/internal/config/config.go',
     allowTerms(['SYNCFLOW'], 'Device IP override env name remains before env rename.'),
   ],

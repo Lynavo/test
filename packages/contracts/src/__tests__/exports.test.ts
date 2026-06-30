@@ -89,6 +89,9 @@ describe('@lynavo-drive/contracts exports', () => {
   it('exports SIDECAR_HTTP_PORT', () => {
     expect(contracts.SIDECAR_HTTP_PORT).toBe(39394);
   });
+  it('exports BONJOUR_SERVICE_TYPE', () => {
+    expect(contracts.BONJOUR_SERVICE_TYPE).toBe('_lynavodrive._tcp');
+  });
   it('exports all MessageType values', () => {
     expect(contracts.MessageType.HELLO_REQ).toBe(0x0001);
     expect(contracts.MessageType.ERROR).toBe(0x0011);

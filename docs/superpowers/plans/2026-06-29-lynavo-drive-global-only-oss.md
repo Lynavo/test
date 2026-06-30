@@ -25,7 +25,7 @@
 
 - Release profiles become `review` and `prod`; `cn-prod`, `global-prod`, `cn-review`, and `global-review` are removed.
 - Public OSS app IDs target `com.lynavo.drive.mobile` and `com.lynavo.drive.desktop`, but store migration implications must remain documented until a release owner confirms App Store / Play continuity.
-- mDNS service `_syncflow._tcp`, sidecar health service `syncflow-sidecar`, and Go module path are legacy compatibility items until their own migration tasks land. The workspace package scope is migrated in Task 16.
+- mDNS service and sidecar health service have migrated to Lynavo identities without old-client compatibility. The Go module / cmd path remains a legacy item until its own rename task lands. The workspace package scope is migrated in Task 16.
 - Official commercial native modules are not added to the public repo in this plan. OSS implements entitlement contracts and fail-closed stubs/guards only.
 - Android/iOS package and target renames are split from flavor/scheme removal to keep builds debuggable.
 - Product direction confirmed after the code review fix pass: continue toward a thorough open-source edition. Do not preserve subscription/IAP/gift-card/TURN/official remote access as a public Pro overlay unless a later product decision reverses this.
@@ -347,7 +347,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 - [x] Remove `DebugGlobal` / `ReleaseGlobal` and `SYNCFLOW_MARKET`.
 - [x] Remove `SyncFlowMarket` from `Info.plist` and `AppleAuthModule` constants.
 - [x] Preserve Apple Sign-In entitlement in the surviving entitlement file.
-- [x] Keep `_syncflow._tcp` until mDNS migration task.
+- [x] Keep old mDNS identity only until the mDNS migration task; Task 17C switches to `_lynavodrive._tcp` without dual discovery.
 - [x] Do not remove background modes until paid background entitlement gates are implemented and verified.
 
 **Verification:**
@@ -554,10 +554,10 @@ pnpm test
 
 - [ ] Rename Android package/namespace and FileProvider authority only with migration notes for keychain/shared prefs.
 - [ ] Rename iOS target/project directories only if Xcode scheme/build commands are updated and verified.
-- [ ] Rename sidecar binary to `lynavo-drive-sidecar`.
-- [ ] Add safe data-dir migration: read old `Vivi Drop`, write new `Lynavo Drive`, do not delete old data automatically.
-- [ ] Decide mDNS compatibility: either dual advertise/discover `_syncflow._tcp` and `_lynavodrive._tcp` for one migration window, or document Lynavo Drive as incompatible with old clients.
-- [ ] Update health service compatibility only after desktop supports both service identities.
+- [x] Rename sidecar binary to `lynavo-drive-sidecar`.
+- [x] Drop legacy data-dir compatibility; fresh OSS state uses `Lynavo Drive` only.
+- [x] Decide mDNS compatibility: Lynavo Drive is incompatible with old `_syncflow._tcp` clients and uses `_lynavodrive._tcp` only.
+- [x] Update health service identity to `lynavo-drive-sidecar` only.
 
 **Verification:**
 

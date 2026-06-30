@@ -40,11 +40,6 @@ It scans hidden files and directories, while explicitly skipping generated build
 | `services/sidecar-go/go.mod`                                     | Go module path before sidecar module rename.                                                                                  |
 | `services/sidecar-go/go.sum`                                     | Go module path checksums before sidecar module rename.                                                                        |
 | `services/sidecar-go/Makefile`                                   | Go command path and local legacy dev database cleanup remain before cmd/data-dir rename.                                      |
-| `packages/contracts/src/protocol.ts`                             | Protocol service type remains `_syncflow._tcp` for LAN compatibility.                                                         |
-| `services/sidecar-go/internal/mdns/broadcast.go`                 | Protocol service type remains `_syncflow._tcp` for LAN compatibility.                                                         |
-| `services/sidecar-go/internal/mdns/broadcast_test.go`            | Protocol service type compatibility test coverage.                                                                            |
-| `services/sidecar-go/internal/api/handlers_health.go`            | Sidecar health service name remains `syncflow-sidecar` for compatibility.                                                     |
-| `services/sidecar-go/internal/api/router_test.go`                | Sidecar health service compatibility test coverage.                                                                           |
 | `services/sidecar-go/internal/config/config.go`                  | Device IP override env name remains before env rename.                                                                        |
 | `services/sidecar-go/cmd/syncflow-sidecar/main.go`               | Go module path and sidecar config entrypoint names remain before cmd/module rename.                                           |
 | `services/sidecar-go/cmd/syncflow-sidecar/main_test.go`          | Go module import path remains before module rename.                                                                           |

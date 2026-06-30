@@ -5,7 +5,11 @@ import { delimiter, join } from 'node:path';
 import { promisify } from 'node:util';
 import { app } from 'electron';
 import log from 'electron-log';
-import { APP_COMPATIBILITY_VERSION, SIDECAR_HTTP_PORT } from '@lynavo-drive/contracts';
+import {
+  APP_COMPATIBILITY_VERSION,
+  BONJOUR_SERVICE_TYPE,
+  SIDECAR_HTTP_PORT,
+} from '@lynavo-drive/contracts';
 import {
   isCompatibleSidecarService,
   sidecarClient,
@@ -182,7 +186,7 @@ export class SidecarManager extends EventEmitter {
       if (isDev) {
         const killedResidualProcesses = await this.forceShutdownResidualSidecars();
         shouldWaitForSidecarStop = shouldWaitForSidecarStop || killedResidualProcesses;
-        await this.forceShutdownSyncFlowBonjourBroadcasts();
+        await this.forceShutdownLynavoBonjourBroadcasts();
       }
 
       if (shouldWaitForSidecarStop) {
@@ -337,7 +341,7 @@ export class SidecarManager extends EventEmitter {
       shouldWaitForSidecarStop = shouldWaitForSidecarStop || killedResidualProcesses;
     }
     if (options.killBonjourBroadcasts) {
-      await this.forceShutdownSyncFlowBonjourBroadcasts();
+      await this.forceShutdownLynavoBonjourBroadcasts();
     }
     if (shouldWaitForSidecarStop) {
       await this.waitForSidecarToStop(SIDECAR_STOP_TIMEOUT_MS);
@@ -374,7 +378,7 @@ export class SidecarManager extends EventEmitter {
 
   private async isSidecarReachable(): Promise<boolean> {
     const res = await this.getHealthSnapshot();
-    return res?.ok === true && isCompatibleSidecarService(res.service);
+    return res?.ok === true;
   }
 
   private async waitForHealth(retries: number, intervalMs: number): Promise<void> {
@@ -434,14 +438,14 @@ export class SidecarManager extends EventEmitter {
     return true;
   }
 
-  private async forceShutdownSyncFlowBonjourBroadcasts(): Promise<void> {
-    const pids = await findSyncFlowBonjourBroadcastPIDs();
+  private async forceShutdownLynavoBonjourBroadcasts(): Promise<void> {
+    const pids = await findLynavoBonjourBroadcastPIDs();
     if (pids.length === 0) {
       return;
     }
 
     log.info(
-      `[SidecarManager] force stopping SyncFlow Bonjour broadcast PID(s): ${pids.join(', ')}`,
+      `[SidecarManager] force stopping Lynavo Drive Bonjour broadcast PID(s): ${pids.join(', ')}`,
     );
     for (const pid of pids) {
       await killProcessByPID(pid);
@@ -596,13 +600,14 @@ async function findProcessPIDsByName(processName: string): Promise<number[]> {
   }
 }
 
-async function findSyncFlowBonjourBroadcastPIDs(): Promise<number[]> {
+async function findLynavoBonjourBroadcastPIDs(): Promise<number[]> {
+  const bonjourServiceTypePattern = BONJOUR_SERVICE_TYPE.replace(/\./g, '\\.');
   try {
     if (process.platform === 'win32') {
       const script = [
         `$processes = Get-CimInstance Win32_Process -Filter "Name='${bonjourBinaryName}'" -ErrorAction SilentlyContinue | Where-Object {`,
         "  $_.CommandLine -match 'dns-sd(\\\\.exe)?\\s+-R' -and",
-        "  $_.CommandLine -match '_syncflow\\._tcp' -and",
+        `  $_.CommandLine -match '${bonjourServiceTypePattern}' -and`,
         "  $_.CommandLine -match 'local\\.'",
         '} | Select-Object -ExpandProperty ProcessId',
         'if ($processes) { $processes | Sort-Object -Unique }',
@@ -611,8 +616,7 @@ async function findSyncFlowBonjourBroadcastPIDs(): Promise<number[]> {
       return parsePIDList(stdout);
     }
 
-    // macOS / Linux: use pgrep to find dns-sd processes advertising _syncflow._tcp
-    const { stdout } = await execFileAsync('pgrep', ['-f', 'dns-sd.*_syncflow._tcp']);
+    const { stdout } = await execFileAsync('pgrep', ['-f', `dns-sd.*${bonjourServiceTypePattern}`]);
     return parsePIDList(stdout);
   } catch {
     return [];

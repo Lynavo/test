@@ -97,16 +97,16 @@ Get-CimInstance Win32_Process |
 macOS：
 
 ```bash
-dns-sd -B _syncflow._tcp local.
+dns-sd -B _lynavodrive._tcp local.
 ```
 
-应能看到 `_syncflow._tcp` 广播。
+应能看到 `_lynavodrive._tcp` 广播。
 
 Windows（PowerShell）：
 
 ```powershell
 Get-Service -Name "Bonjour Service"
-dns-sd.exe -B _syncflow._tcp local.
+dns-sd.exe -B _lynavodrive._tcp local.
 ```
 
 如果 `dns-sd.exe` 不在 `PATH`，改用 Bonjour 安装目录或桌面端 `resources` 目录里的实际路径。
@@ -155,14 +155,14 @@ Get-Process lynavo-drive-sidecar,syncflow-sidecar -ErrorAction SilentlyContinue 
 macOS：
 
 ```bash
-pgrep -af 'dns-sd.*_syncflow._tcp'
+pgrep -af 'dns-sd.*_lynavodrive._tcp'
 ```
 
 Windows（PowerShell）：
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
-  Where-Object { $_.CommandLine -like '*_syncflow._tcp*' } |
+  Where-Object { $_.CommandLine -like '*_lynavodrive._tcp*' } |
   Select-Object ProcessId,ExecutablePath,CommandLine
 ```
 
@@ -171,14 +171,14 @@ Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
 macOS：
 
 ```bash
-pkill -f 'dns-sd.*_syncflow._tcp'
+pkill -f 'dns-sd.*_lynavodrive._tcp'
 ```
 
 Windows（PowerShell）：
 
 ```powershell
 Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
-  Where-Object { $_.CommandLine -like '*_syncflow._tcp*' } |
+  Where-Object { $_.CommandLine -like '*_lynavodrive._tcp*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 ```
 
@@ -225,7 +225,7 @@ macOS：
 
 ```bash
 pkill -f 'lynavo-drive-sidecar|syncflow-sidecar' || true
-pkill -f 'dns-sd.*_syncflow._tcp' || true
+pkill -f 'dns-sd.*_lynavodrive._tcp' || true
 ```
 
 然后再确认：
@@ -242,7 +242,7 @@ Windows（PowerShell）：
 ```powershell
 Get-Process lynavo-drive-sidecar,syncflow-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
-  Where-Object { $_.CommandLine -like '*_syncflow._tcp*' } |
+  Where-Object { $_.CommandLine -like '*_lynavodrive._tcp*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Get-NetTCPConnection -State Listen -LocalPort 39393,39394
 ```

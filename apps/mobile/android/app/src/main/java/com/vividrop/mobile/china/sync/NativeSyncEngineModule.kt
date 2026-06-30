@@ -4596,7 +4596,7 @@ class NativeSyncEngineModule(
         return false
       }
       val json = JSONObject(readResponseBody(connection, status))
-      json.optBoolean("ok", false) && json.optString("service") == "syncflow-sidecar"
+      json.optBoolean("ok", false) && json.optString("service") == SIDECAR_HEALTH_SERVICE
     } catch (_: Throwable) {
       false
     } finally {
@@ -6858,7 +6858,7 @@ class NativeSyncEngineModule(
       }
       val body = readResponseBody(connection, status)
       val json = JSONObject(body)
-      if (!json.optBoolean("ok", false) || json.optString("service") != "syncflow-sidecar") {
+      if (!json.optBoolean("ok", false) || json.optString("service") != SIDECAR_HEALTH_SERVICE) {
         return null
       }
       val helloResponse = readFallbackHello(host)
@@ -7483,7 +7483,8 @@ class NativeSyncEngineModule(
     private const val MAX_BODY_LENGTH = 64 * 1024 * 1024
     private const val DEFAULT_PROTOCOL_PORT = 39_393
     private const val DEFAULT_SIDECAR_HTTP_PORT = 39_394
-    private const val BONJOUR_SERVICE_TYPE = "_syncflow._tcp"
+    private const val BONJOUR_SERVICE_TYPE = "_lynavodrive._tcp"
+    private const val SIDECAR_HEALTH_SERVICE = "lynavo-drive-sidecar"
     private const val DISCOVERY_PROBE_TIMEOUT_MS = 2_000
     private const val DISCOVERY_FALLBACK_DELAY_MS = 2_500L
     private const val DISCOVERY_FALLBACK_HTTP_TIMEOUT_MS = 350

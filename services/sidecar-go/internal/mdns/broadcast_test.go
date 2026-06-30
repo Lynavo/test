@@ -22,7 +22,7 @@ func testConfig() BroadcastConfig {
 		TCPPort:      39393,
 		Proto:        2,
 		ShareEnabled: true,
-		ShareName:    "SyncFlow",
+		ShareName:    "Lynavo Drive",
 	}
 }
 
@@ -46,7 +46,7 @@ func TestBuildTXTRecords(t *testing.T) {
 		"proto=2",
 		"auth=code",
 		"share=1",
-		"shareName=SyncFlow",
+		"shareName=Lynavo Drive",
 		"ip=192.168.1.10",
 	}
 
@@ -225,7 +225,7 @@ func TestResolveDNSSDPathUsesAdjacentExecutable(t *testing.T) {
 		return "", os.ErrNotExist
 	}
 	executablePath = func() (string, error) {
-		return filepath.Join(tempDir, "syncflow-sidecar.exe"), nil
+		return filepath.Join(tempDir, "lynavo-drive-sidecar.exe"), nil
 	}
 	if err := os.Unsetenv(dnsSDPathEnv); err != nil {
 		t.Fatalf("Unsetenv() failed: %v", err)
@@ -289,7 +289,7 @@ func sanitizeHostName(base string) string {
 
 	host := strings.Trim(builder.String(), "-")
 	if host == "" {
-		host = "syncflow-sidecar"
+		host = "lynavo-drive-sidecar"
 	}
 	return host
 }
@@ -305,21 +305,21 @@ func TestServiceIPs(t *testing.T) {
 	}
 }
 
-func TestParseSyncFlowBroadcastPID(t *testing.T) {
-	pid, ok := parseSyncFlowBroadcastPID("29320 dns-sd -R bloomingdeMacBook-Pro-Online _syncflow._tcp local. 39393 id=abc")
+func TestParseLynavoBroadcastPID(t *testing.T) {
+	pid, ok := parseLynavoBroadcastPID("29320 dns-sd -R bloomingdeMacBook-Pro-Online _lynavodrive._tcp local. 39393 id=abc")
 	if !ok {
-		t.Fatal("expected syncflow dns-sd process to match")
+		t.Fatal("expected Lynavo Drive dns-sd process to match")
 	}
 	if pid != 29320 {
 		t.Fatalf("pid = %d, want 29320", pid)
 	}
 }
 
-func TestParseSyncFlowBroadcastPID_WindowsCommandLine(t *testing.T) {
-	line := `6576 C:\dev\SyncFlow\apps\desktop\resources\dns-sd.exe -R PS2021DFYQCEAF _syncflow._tcp local. 39393 id=c16752f3-c01d name=PS2021DFYQCEAF type=win proto=2 auth=code share=0 shareName=SyncFlow ip=192.168.0.1`
-	pid, ok := parseSyncFlowBroadcastPID(line)
+func TestParseLynavoBroadcastPID_WindowsCommandLine(t *testing.T) {
+	line := `6576 C:\dev\LynavoDrive\apps\desktop\resources\dns-sd.exe -R PS2021DFYQCEAF _lynavodrive._tcp local. 39393 id=c16752f3-c01d name=PS2021DFYQCEAF type=win proto=2 auth=code share=0 shareName=Lynavo%20Drive ip=192.168.0.1`
+	pid, ok := parseLynavoBroadcastPID(line)
 	if !ok {
-		t.Fatal("expected Windows syncflow dns-sd process to match")
+		t.Fatal("expected Windows Lynavo Drive dns-sd process to match")
 	}
 	if pid != 6576 {
 		t.Fatalf("pid = %d, want 6576", pid)
@@ -497,16 +497,17 @@ func TestRoutedLocalIPv4(t *testing.T) {
 	}
 }
 
-func TestParseSyncFlowBroadcastPID_IgnoresOtherProcesses(t *testing.T) {
+func TestParseLynavoBroadcastPID_IgnoresOtherProcesses(t *testing.T) {
 	cases := []string{
 		"",
 		"29320 /Applications/Other.app/Contents/MacOS/Other",
 		"29320 dns-sd -R some-service _other._tcp local. 12345",
-		"not-a-pid dns-sd -R bloom _syncflow._tcp local. 39393",
+		"29320 dns-sd -R bloom _legacy._tcp local. 39393",
+		"not-a-pid dns-sd -R bloom _lynavodrive._tcp local. 39393",
 	}
 
 	for _, input := range cases {
-		if _, ok := parseSyncFlowBroadcastPID(input); ok {
+		if _, ok := parseLynavoBroadcastPID(input); ok {
 			t.Fatalf("expected %q to be ignored", input)
 		}
 	}

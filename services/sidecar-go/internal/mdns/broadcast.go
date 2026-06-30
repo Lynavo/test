@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	serviceType     = "_syncflow._tcp"
+	serviceType     = "_lynavodrive._tcp"
 	serviceDomain   = "local."
 	backendDNSSD    = "dns-sd"
 	backendZeroconf = "zeroconf"
@@ -85,7 +85,7 @@ func DeviceTypeForGOOS(goos string) string {
 	return "mac"
 }
 
-// NewBroadcaster registers a _syncflow._tcp Bonjour service.
+// NewBroadcaster registers a Lynavo Drive Bonjour service.
 // macOS and Windows prefer dns-sd when available for parity with the Apple
 // Bonjour stack used by iOS. Platforms without dns-sd fall back to zeroconf.
 func NewBroadcaster(cfg BroadcastConfig) (*Broadcaster, error) {
@@ -706,7 +706,7 @@ func serviceHostName(cfg BroadcastConfig) string {
 		base = cfg.DeviceName
 	}
 	if strings.TrimSpace(base) == "" {
-		base = "syncflow-sidecar"
+		base = "lynavo-drive-sidecar"
 	}
 
 	var builder strings.Builder
@@ -726,7 +726,7 @@ func serviceHostName(cfg BroadcastConfig) string {
 
 	host := strings.Trim(builder.String(), "-")
 	if host == "" {
-		host = "syncflow-sidecar"
+		host = "lynavo-drive-sidecar"
 	}
 	return host
 }
@@ -786,7 +786,7 @@ func cleanupStaleBroadcastProcesses() error {
 	}
 
 	for _, line := range strings.Split(string(out), "\n") {
-		pid, ok := parseSyncFlowBroadcastPID(line)
+		pid, ok := parseLynavoBroadcastPID(line)
 		if !ok {
 			continue
 		}
@@ -800,7 +800,7 @@ func cleanupStaleBroadcastProcesses() error {
 	return nil
 }
 
-func parseSyncFlowBroadcastPID(line string) (int, bool) {
+func parseLynavoBroadcastPID(line string) (int, bool) {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return 0, false
@@ -813,7 +813,7 @@ func parseSyncFlowBroadcastPID(line string) (int, bool) {
 
 	command := strings.Join(fields[1:], " ")
 	if !(strings.Contains(command, "dns-sd -R") || strings.Contains(command, "dns-sd.exe -R")) ||
-		!strings.Contains(command, "_syncflow._tcp") ||
+		!strings.Contains(command, serviceType) ||
 		!strings.Contains(command, "local.") {
 		return 0, false
 	}

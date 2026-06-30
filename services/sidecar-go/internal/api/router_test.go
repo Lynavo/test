@@ -542,8 +542,8 @@ func TestHealthEndpoint(t *testing.T) {
 	if body["ok"] != true {
 		t.Errorf("expected ok=true, got %v", body["ok"])
 	}
-	if body["service"] != "syncflow-sidecar" {
-		t.Errorf("expected service=syncflow-sidecar, got %v", body["service"])
+	if body["service"] != "lynavo-drive-sidecar" {
+		t.Errorf("expected service=lynavo-drive-sidecar, got %v", body["service"])
 	}
 	if body["version"] != "0.1.0" {
 		t.Errorf("expected version=0.1.0, got %v", body["version"])

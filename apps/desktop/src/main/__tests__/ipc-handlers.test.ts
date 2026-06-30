@@ -177,7 +177,7 @@ vi.mock('../sidecar-client', async () => {
 function compatibleHealth(capabilities?: { connectionDeviceManagement?: boolean }) {
   return {
     ok: true,
-    service: 'syncflow-sidecar',
+    service: 'lynavo-drive-sidecar',
     appCompatibilityVersion: APP_COMPATIBILITY_VERSION,
     ...(capabilities ? { capabilities } : {}),
   };

@@ -58,7 +58,7 @@
 	</dict>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_syncflow._tcp</string>
+		<string>_lynavodrive._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Vivi Drop 需要相机权限来扫描桌面端的二维码连接码</string>
