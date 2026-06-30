@@ -1,13 +1,14 @@
-# Vivi Drop
+# Lynavo Drive
 
-移动端（iOS / Android）→ Desktop（macOS / Windows）局域网素材无感增量同步工具，面向短视频团队。
+移动端（iOS / Android）→ Desktop（macOS / Windows / Linux）局域网素材无感增量同步工具，面向全球用户和短视频团队。当前开源基线是 Lynavo Drive global-only，不再维护 CN / Global 双市场发行路径。
 
 ## 当前状态
 
 - 桌面端、Go sidecar、移动端和 iOS / Android 原生同步能力都已落地
 - iOS 与 Android 移动端都属于当前支持范围
-- 当前工作重点是 beta 收口、异常恢复、后台上传和发布验证
+- 当前工作重点是 beta 收口、异常恢复、后台上传、远程能力边界和发布验证
 - 仓库中目前没有单独维护的产品 spec 文件；开发基线以当前代码、`@syncflow/contracts` 和测试矩阵为准
+- guest/local 用户可使用前景 LAN 自动同步；后台持续和远程访问属于官方商业能力，缺少有效 entitlement 时必须 fail closed
 
 ## 前置依赖
 
@@ -64,39 +65,38 @@ pnpm check
 
 ## 發佈與 Review 打包
 
-正式發佈、Review 包、TestFlight 上傳、Android APK/AAB、Desktop DMG / EXE 都應先選 release profile，避免手動拼接 market 或 API base URL：
+正式發佈、Review 包、TestFlight 上傳、Android APK/AAB、Desktop DMG / EXE / DEB 都應先選 release profile，避免手動拼接 API base URL：
 
 ```bash
-# 檢查實際 market、Review 狀態、base URL 與會執行的命令
-pnpm release --profile global-review --targets win --dry-run
+# 檢查 review 後端、base URL 與會執行的命令
+pnpm release --profile review --targets win --dry-run
 
-# 打 global-review Windows EXE / zip
-pnpm release --profile global-review --targets win
+# 打 review Windows EXE / zip
+pnpm release --profile review --targets win
 
-# 打 cn-review Windows EXE / zip
-pnpm release --profile cn-review --targets win
+# 打 prod Windows EXE / zip
+pnpm release --profile prod --targets win
 
-# 打 global-prod Windows EXE / zip
-pnpm release --profile global-prod --targets win
-
-# 打 cn-prod Windows EXE / zip
-pnpm release --profile cn-prod --targets win
-
-# 打完整 Review 版本（iOS TestFlight + macOS DMG + Windows EXE / zip）
-pnpm release --profile global-review --targets ios,mac,win
-pnpm release --profile cn-review --targets ios,mac,win
-
-# 打完整 global-prod / cn-prod 版本
-pnpm release --profile global-prod --targets ios,mac,win
-pnpm release --profile cn-prod --targets ios,mac,win
+# 打完整 Review / Prod 版本（iOS TestFlight + Android + Desktop）
+pnpm release --profile review --targets ios,android,mac,win,linux
+pnpm release --profile prod --targets ios,android,mac,win,linux
 ```
 
-`package:desktop:win` / `@syncflow/desktop package:win:global` 只負責 Windows 封裝與 market 設定；`*-review` / `*-prod` 都應走 `release` 指令，讓 profile 統一注入正確的 `SYNCFLOW_RELEASE_PROFILE`、market 與 API base URL。`global-review` / `cn-review` 指向 `https://review-api.vividrop.cn`，`global-prod` 指向 `https://global-api.vividrop.cn`，`cn-prod` 指向 `https://api.vividrop.cn`。
+`package:desktop:*` 類腳本只做本地封裝或單平台驗證；正式 / Review 發佈都應走 `release` 指令，讓 profile 統一注入 `LYNAVO_RELEASE_CHANNEL` 與 Lynavo API base URL。`review` 必須指向 review API，`prod` 不得使用 review API。
+
+## Open Source / Commercial Boundary
+
+- Community/OSS build 是 global-only：不提供 CN 市場分支、CN 專屬支付、CN 專屬 release profile 或雙市場回歸矩陣。
+- guest local LAN mode 必須可用：未登入或無訂閱時，使用者仍可在前景發現 desktop、配對、掃描 pending queue 並自動 LAN 上傳。
+- 不提供手動選檔替代路徑：佇列仍由 mobile 本地掃描和 pending queue 驅動，UI 不允許手動勾選檔案來繞過自動增量同步。
+- foreground LAN fail-open：只要本地權限、配對和 LAN 可達，前景同步不因登入、訂閱或官方商業模組缺失而被阻斷。
+- remote/background fail-closed：遠端訪問、tunnel credentials、背景靜默續傳等能力必須同時具備官方 capability 和有效 entitlement；缺失、過期或無法確認時保持關閉。
+- package scope、mDNS service、舊 data-dir、native package/bundle rename 是後續遷移邊界，本輪文檔不要求執行 rename 或資料遷移。
 
 ## 專案結構
 
 ```text
-vivi-drop/
+lynavo-drive/
 ├── apps/
 │   ├── desktop/              # Electron 桌面應用
 │   │   └── src/
@@ -116,6 +116,8 @@ vivi-drop/
 ├── docs/
 │   ├── architecture/         # 架構、狀態機、數據模型
 │   ├── operations/           # 排障、診斷、環境、sidecar 運行手冊
+│   ├── open-source/          # Community/OSS build 規則
+│   ├── commercial/           # 官方商業能力邊界
 │   ├── product/              # 產品約束與非目標
 │   ├── release/              # TestFlight / 簽名 / 發版手冊
 │   └── testing/              # 測試矩陣和 beta 驗證說明
@@ -163,6 +165,7 @@ Desktop (Electron + Go sidecar, macOS / Windows)
 - 佇列保持唯讀，不允許在 UI 裡刪除、重排或跳過
 - 同一台手機同一時間只允許序列上傳一個檔案
 - `tmp/ui-demo/` 只做視覺參考，不作為實作來源
+- guest/local 前景 LAN 同步 fail-open；遠端訪問和背景續傳 fail-closed
 
 ## 檔案
 
@@ -177,6 +180,8 @@ Desktop (Electron + Go sidecar, macOS / Windows)
 - 產品約束與非目標：[`docs/product/constraints.md`](./docs/product/constraints.md)
 - Beta 發佈手冊：[`docs/release/release-playbook.md`](./docs/release/release-playbook.md)
 - beta 測試矩陣：[`docs/testing/beta-test-matrix.md`](./docs/testing/beta-test-matrix.md)
+- Community build：[`docs/open-source/community-build.md`](./docs/open-source/community-build.md)
+- Commercial feature boundary：[`docs/commercial/feature-boundary.md`](./docs/commercial/feature-boundary.md)
 
 ## License
 
