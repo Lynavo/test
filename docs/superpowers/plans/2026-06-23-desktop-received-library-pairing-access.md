@@ -60,6 +60,7 @@
 ### Task 1: Add Contracts Setting Shape
 
 **Files:**
+
 - Modify: `packages/contracts/src/types.ts`
 - Modify: `packages/contracts/src/__tests__/exports.test.ts`
 
@@ -162,6 +163,7 @@ git commit -m "feat: add received access setting contract"
 ### Task 2: Add Sidecar Settings API Support
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/handlers_settings.go`
 - Modify: `services/sidecar-go/internal/api/router_test.go`
 
@@ -380,6 +382,7 @@ git commit -m "feat: persist cross-device received access setting"
 ### Task 3: Correct Stable Device Receive Folder Allocation
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/server/device_dir.go`
 - Modify: `services/sidecar-go/internal/server/device_dir_test.go`
 
@@ -548,6 +551,7 @@ git commit -m "fix: reuse receive folders by stable device"
 ### Task 4: Add Stable-Device Received Library Store Scope
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/store/received_library.go`
 - Modify: `services/sidecar-go/internal/store/received_library_test.go`
 
@@ -823,6 +827,7 @@ git commit -m "feat: scope received library by stable device"
 ### Task 5: Apply Mobile Received Access Policy
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/handlers_resources.go`
 - Modify: `services/sidecar-go/internal/api/resources_handlers_test.go`
 
@@ -1198,6 +1203,7 @@ git commit -m "feat: authorize mobile received library access"
 ### Task 6: Add Desktop Settings Switch
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/stores/settings-store.ts`
 - Modify: `apps/desktop/src/renderer/mocks/settings.ts`
 - Modify: `apps/desktop/src/renderer/features/settings/SettingsPage.tsx`
@@ -1343,6 +1349,7 @@ git commit -m "feat: add received library access setting"
 ### Task 7: Keep Mobile Received Library Requests Server-Scoped
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/__tests__/desktop-local-service.test.ts`
 - Read-only: `apps/mobile/src/services/desktop-local-service.ts`
 
@@ -1403,6 +1410,7 @@ git commit -m "test: keep mobile received library server scoped"
 ### Task 8: Run Integrated Verification
 
 **Files:**
+
 - Verify only unless tests expose a regression.
 
 - [ ] **Step 1: Run contracts verification**

@@ -87,7 +87,7 @@ config 內的 `APP_REVIEW_PHONE`。不一致會直接失敗，避免 App Review 
 
 產物位置：
 
-- `apps/mobile/ios/build/archives/SyncFlow-<version>-b<build>.xcarchive`
+- `apps/mobile/ios/build/archives/LynavoDrive-<version>-b<build>.xcarchive`
 
 上傳成功後：
 
@@ -160,7 +160,7 @@ pnpm release --profile prod --targets win
 
 1. fresh install 後 app 能正常啟動
 2. `resources\lynavo-drive-sidecar.exe` 已隨包落地並能被 desktop 拉起
-3. 安裝器已寫入相容既有安裝的 `Vivi Drop Sidecar TCP`、`Vivi Drop Sidecar HTTP` 和 `Vivi Drop mDNS UDP` 防火牆規則，分別放行 `39393/TCP`、`39394/TCP` 和 `5353/UDP`；規則命名改為 Lynavo Drive 留到後續 native/binary/mDNS migration 任務
+3. 安裝器已寫入 `Lynavo Drive Sidecar TCP`、`Lynavo Drive Sidecar HTTP` 和 `Lynavo Drive mDNS UDP` 防火牆規則，分別放行 `39393/TCP`、`39394/TCP` 和 `5353/UDP`
 4. 設定頁能看到 Bonjour 執行時資訊，缺少 Bonjour 時 fallback 狀態可解釋
 
 ### 5.3 Linux `.deb`
@@ -204,12 +204,12 @@ pnpm package:linux -- --arch arm64
 
 TestFlight 打包上傳觸發 beta tag 時，必須讓兩個倉庫都有同一個測試 tag：
 
-1. `/Volumes/T7/Dev/Web/SyncFlow`
+1. `/Volumes/T7/Dev/Web/LynavoDrive`
 2. `/Volumes/T7/Dev/Web/vivi-drop-server`
 
-tag 名稱沿用本文件的 `beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`，例如 `beta/v1.0.0-b37`。不要只在 SyncFlow 單邊打 tag；若要推送遠端 tag，也必須兩邊都推送。
+tag 名稱沿用本文件的 `beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>`，例如 `beta/v1.0.0-b37`。不要只在 LynavoDrive 單邊打 tag；若要推送遠端 tag，也必須兩邊都推送。
 
-先在 SyncFlow 執行：
+先在 LynavoDrive 執行：
 
 ```bash
 pnpm tag:beta
@@ -222,7 +222,7 @@ cd /Volumes/T7/Dev/Web/vivi-drop-server
 git tag -a beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION> -m "Lynavo Drive beta <MARKETING_VERSION> (<CURRENT_PROJECT_VERSION>)"
 ```
 
-如果要推遠端 tag，SyncFlow 可直接執行：
+如果要推遠端 tag，LynavoDrive 可直接執行：
 
 ```bash
 pnpm tag:beta:push
@@ -246,7 +246,7 @@ git push origin beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>
 5. 出 macOS signed DMG
 6. 如本輪包含 Windows，出 Windows NSIS / ZIP
 7. 如本輪包含 Linux，出 Ubuntu 22.04+ `.deb`
-8. 給 SyncFlow 和 vivi-drop-server 打同一個 Lynavo Drive beta tag
+8. 給 LynavoDrive 和 vivi-drop-server 打同一個 Lynavo Drive beta tag
 9. 確認工作區乾淨
 10. 推程式碼和 tag
 11. 等 TestFlight processing 完成後再擴大測試範圍
@@ -289,7 +289,7 @@ git push origin beta/v<MARKETING_VERSION>-b<CURRENT_PROJECT_VERSION>
 1. 從 `LynavoDrive-*-x64.exe` fresh install
 2. app 正常啟動
 3. sidecar 正常監聽和廣播
-4. `Vivi Drop Sidecar TCP / Vivi Drop Sidecar HTTP / Vivi Drop mDNS UDP` 防火牆規則已寫入；Task 15 保留既有 firewall/mDNS identity，命名遷移留到後續 native/binary/mDNS migration 任務
+4. `Lynavo Drive Sidecar TCP / Lynavo Drive Sidecar HTTP / Lynavo Drive mDNS UDP` 防火牆規則已寫入
 5. 設定頁 Bonjour 執行時 / fallback 文案正常
 6. 診斷包匯出正常
 

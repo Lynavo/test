@@ -13,6 +13,7 @@
 ### Task 1: Encode The Approved Guide Behavior In Tests
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/__tests__/DeviceDiscoveryGlobalScreen.onboarding.test.tsx`
 
 - [x] **Step 1: Write the failing tests**
@@ -32,6 +33,7 @@ Expected: fail because the current implementation still renders `1/8` and only o
 ### Task 2: Implement The Six-Step Global Feature Guide
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/DeviceDiscoveryGlobalScreen.tsx`
 
 - [x] **Step 1: Add guide state and config**
@@ -70,6 +72,7 @@ Expected: pass.
 ### Task 3: Verify Integration
 
 **Files:**
+
 - Modify as needed only if tests reveal type or interaction issues.
 
 - [x] **Step 1: Run typecheck**

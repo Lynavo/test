@@ -155,7 +155,7 @@ test('does not broadly allow all docs/superpowers paths', () => {
     const planDir = join(fixtureRoot, 'docs', 'superpowers', 'plans');
     mkdirSync(planDir, { recursive: true });
     writeFileSync(
-      join(planDir, '2026-06-29-lynavo-drive-global-only-oss.md'),
+      join(planDir, '2026-06-30-unlisted-rename-plan.md'),
       'Task plan mentions SyncFlow.\n',
     );
 
@@ -165,7 +165,7 @@ test('does not broadly allow all docs/superpowers paths', () => {
     assert.match(result.stdout, /Unallowlisted legacy name hits: 1/);
     assert.match(
       result.stdout,
-      /docs\/superpowers\/plans\/2026-06-29-lynavo-drive-global-only-oss\.md:1 SyncFlow/,
+      /docs\/superpowers\/plans\/2026-06-30-unlisted-rename-plan\.md:1 SyncFlow/,
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

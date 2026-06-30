@@ -13,6 +13,7 @@
 ### Task 1: Sidecar File Status
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/store/models.go`
 - Modify: `services/sidecar-go/internal/store/received_library.go`
 - Test: `services/sidecar-go/internal/store/received_library_test.go`
@@ -25,6 +26,7 @@
 ### Task 2: Mobile Received URLs
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/handlers_resources.go`
 - Test: `services/sidecar-go/internal/api/resources_handlers_test.go`
 
@@ -36,6 +38,7 @@
 ### Task 3: Mobile UI Guards
 
 **Files:**
+
 - Modify: `packages/contracts/src/types.ts`
 - Modify: `apps/mobile/src/screens/PhoneSyncSpaceScreen.tsx`
 - Modify: `apps/mobile/src/screens/PhoneSyncSpaceGlobalScreen.tsx`
@@ -53,6 +56,7 @@
 ### Task 4: Verification
 
 **Files:**
+
 - All files touched above.
 
 - [x] Run `go test ./internal/store ./internal/api` from `services/sidecar-go`.

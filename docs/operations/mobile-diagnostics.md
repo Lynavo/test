@@ -6,7 +6,7 @@
 
 mobile 端诊断包导出为一个 zip 文件，命名类似：
 
-- `Vivi Drop-Mobile-Diagnostics-20260325-214928.zip`
+- `Lynavo Drive-Mobile-Diagnostics-20260325-214928.zip`
 
 导出入口：
 
@@ -90,14 +90,14 @@ mobile 端诊断包导出为一个 zip 文件，命名类似：
 - `SyncUpload`
 - `Diagnostics`
 
-### 2.5 `syncflow.db`
+### 2.5 `lynavo-drive.db`
 
 mobile 本地 SQLite 快照。
 
 如存在，也会同时带上：
 
-- `syncflow.db-wal`
-- `syncflow.db-shm`
+- `lynavo-drive.db-wal`
+- `lynavo-drive.db-shm`
 
 这是最有价值的排障材料之一，不建议为控体积过早删掉。
 
@@ -200,8 +200,8 @@ Wake-on-LAN 判讀口徑：
 
 - `wake skipped reason=<reason> metadata_missing_or_unusable`：使用者打開 `我的電腦` 或按 `重新連接`，但 bound desktop 沒有已快取的 wake targets，或 targets 被判定不可用
 - `wake packets sent packets=<n>`：mobile 已對 directed / limited broadcast 目的地送出 `<n>` 個 magic packets
-- `wake packets sent via peer proxy to host=<peer>`：peer proxy follow-up 實作完成後，mobile 已請另一台 authenticated、awake、同 LAN/VPN 的 Vivi Drop Desktop 代送 magic packet；目前若沒有 multi-desktop peer source，應只看到 skipped reason
-- `peer proxy skipped reason=<reason>`：沒有合格的 authenticated awake Vivi Drop Desktop peer、目前 build 沒有 multi-desktop binding 來源，或使用者未明確設定 third-party helper / webhook / router API
+- `wake packets sent via peer proxy to host=<peer>`：peer proxy follow-up 實作完成後，mobile 已請另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop 代送 magic packet；目前若沒有 multi-desktop peer source，應只看到 skipped reason
+- `peer proxy skipped reason=<reason>`：沒有合格的 authenticated awake Lynavo Drive Desktop peer、目前 build 沒有 multi-desktop binding 來源，或使用者未明確設定 third-party helper / webhook / router API
 - `wake packets sent`：舊版或摘要型日誌，代表 mobile 已送出 magic packet
 - `wake LAN reachable host=<ip>` / `wake recovered LAN host`：wake polling 期間，`/health` 已從該 LAN host 恢復可達
 - `wake polling exhausted` / `wake probe timed out`：送出 wake packet 後，限定 polling 時間內仍未觀察到 sidecar 恢復
@@ -214,8 +214,8 @@ Wake-on-LAN 判讀口徑：
 
 1. app 啟動、回前景、單純顯示離線，不應出現 `wake packets sent`
 2. `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN，也不會自動嘗試 router public wake
-3. peer proxy 僅限另一台 authenticated、awake、同 LAN/VPN 的 Vivi Drop Desktop；未安裝 Vivi Drop Desktop 的 router-connected device 不可自動當 peer proxy
-4. NAS、OpenWrt、Home Assistant、router 或其他常在線設備若未安裝 Vivi Drop Desktop，只能透過使用者明確設定並完成驗證的 third-party helper / webhook / router API 參與喚醒
+3. peer proxy 僅限另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop；未安裝 Lynavo Drive Desktop 的 router-connected device 不可自動當 peer proxy
+4. NAS、OpenWrt、Home Assistant、router 或其他常在線設備若未安裝 Lynavo Drive Desktop，只能透過使用者明確設定並完成驗證的 third-party helper / webhook / router API 參與喚醒
 5. 手機在外部網路且沒有 router wake/helper、configured public wake target、eligible peer proxy、explicit helper 或 VPN fallback 時，喚醒失敗屬於能力邊界，不應視為 upload queue 或 sync state machine 錯誤
 
 ## 4. 当前大小控制
@@ -225,12 +225,12 @@ Wake-on-LAN 判讀口徑：
 1. `engine.log` 是 ring buffer
 2. `diagnostics.json / history.json` 是快照
 3. `queue.json` 当前是整份 pending 队列
-4. `syncflow.db` 是整库副本
+4. `lynavo-drive.db` 是整库副本
 
 所以体积最不可控的通常是：
 
 1. `queue.json`
-2. `syncflow.db`
+2. `lynavo-drive.db`
 
 目前策略是优先保留数据库完整性，方便排障。
 
@@ -269,4 +269,4 @@ Wake-on-LAN 判讀口徑：
 1. `diagnostics.json`
 2. `queue.json`
 3. `engine.log`
-4. `syncflow.db`
+4. `lynavo-drive.db`

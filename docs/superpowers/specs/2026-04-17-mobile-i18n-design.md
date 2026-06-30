@@ -32,14 +32,14 @@ SyncFlow Mobile 目前所有 UI 文字硬編碼為簡體中文，面向大陸市
 
 ## 3. 核心決策
 
-| 決策 | 選擇 | 理由 |
-|---|---|---|
-| 切換入口 | 只跟隨系統 locale | 簡化架構，免 UI 改動與持久化 |
-| 中文變體 | 單一 `zh`（簡體） | 主市場為大陸，維護一套即可 |
-| Fallback | 非 zh/en 系統 fallback `en` | 英文為國際通用語言 |
-| 範圍 | JS 側 UI + JS 側錯誤訊息 | native 層字串可走 bridge error code 轉譯 |
-| 套件 | `react-i18next` + `react-native-localize` | TS 型別推導、生態最成熟 |
-| Key 組織 | 單一 JSON + namespace 巢狀 | 500 條字串規模下讀寫比最佳 |
+| 決策     | 選擇                                      | 理由                                     |
+| -------- | ----------------------------------------- | ---------------------------------------- |
+| 切換入口 | 只跟隨系統 locale                         | 簡化架構，免 UI 改動與持久化             |
+| 中文變體 | 單一 `zh`（簡體）                         | 主市場為大陸，維護一套即可               |
+| Fallback | 非 zh/en 系統 fallback `en`               | 英文為國際通用語言                       |
+| 範圍     | JS 側 UI + JS 側錯誤訊息                  | native 層字串可走 bridge error code 轉譯 |
+| 套件     | `react-i18next` + `react-native-localize` | TS 型別推導、生態最成熟                  |
+| Key 組織 | 單一 JSON + namespace 巢狀                | 500 條字串規模下讀寫比最佳               |
 
 ## 4. 架構設計
 
@@ -93,9 +93,11 @@ i18next.use(initReactI18next).init({
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnNull: false,
-  missingInterpolationHandler: __DEV__ ? (text, value) => {
-    console.warn('[i18n] missing interpolation', { text, value });
-  } : undefined,
+  missingInterpolationHandler: __DEV__
+    ? (text, value) => {
+        console.warn('[i18n] missing interpolation', { text, value });
+      }
+    : undefined,
 });
 
 export default i18next;
@@ -158,7 +160,7 @@ export function SettingsScreen() {
 ```ts
 export class AppError extends Error {
   constructor(
-    public readonly code: string,           // 對應 i18n key，例如 'errors.authInvalidPhone'
+    public readonly code: string, // 對應 i18n key，例如 'errors.authInvalidPhone'
     public readonly params?: Record<string, unknown>,
   ) {
     super(code);
@@ -179,9 +181,7 @@ if (!isValidPhone(phone)) {
 try {
   await loginService.requestCode(phone);
 } catch (e) {
-  const msg = e instanceof AppError
-    ? t(e.code, e.params)
-    : t('errors.unknown');
+  const msg = e instanceof AppError ? t(e.code, e.params) : t('errors.unknown');
   Alert.alert(t('errors.title'), msg);
 }
 ```
@@ -218,12 +218,12 @@ translation（i18next 預設 namespace，僅此一個）
 
 ### 5.2 命名規則
 
-| 層級 | 規則 | 範例 |
-|---|---|---|
-| 頂層分組 | 對應 screens 目錄名 camelCase | `syncActivity`、`albumWorkbench` |
-| leaf key | 動詞/名詞 camelCase；動態值 `{{param}}` | `uploadingFile`、`resendIn` |
-| plural | i18next 後綴 `_one` / `_other` | `selectedCount_one` / `selectedCount_other` |
-| error | `errors.*`，`AppError.code` 與 key 同名 | `errors.authInvalidPhone` |
+| 層級     | 規則                                    | 範例                                        |
+| -------- | --------------------------------------- | ------------------------------------------- |
+| 頂層分組 | 對應 screens 目錄名 camelCase           | `syncActivity`、`albumWorkbench`            |
+| leaf key | 動詞/名詞 camelCase；動態值 `{{param}}` | `uploadingFile`、`resendIn`                 |
+| plural   | i18next 後綴 `_one` / `_other`          | `selectedCount_one` / `selectedCount_other` |
+| error    | `errors.*`，`AppError.code` 與 key 同名 | `errors.authInvalidPhone`                   |
 
 ### 5.3 插值規則
 
@@ -275,15 +275,15 @@ translation（i18next 預設 namespace，僅此一個）
 
 ### 6.1 階段劃分
 
-| 階段 | 範圍 | 備註 |
-|---|---|---|
-| P0 基礎建設 | 安裝套件、建立 `src/i18n/*`、`AppError`、型別注入、`App.tsx` 掛載 | 不動業務程式碼 |
-| P1 共用層 | `common.*`、`errors.*`、`Icon` 等共用 component | 共用優先，後續 screens 直接引用 |
-| P2 入口流程 | `LoginScreen`、`SmsVerifyScreen`、`AuthScreenShell` | 英文使用者首次可見區 |
-| P3 主要 Tab Screens | `SyncActivityScreen`、`SettingsScreen`、`AlbumWorkbenchScreen` | 使用頻率最高 |
-| P4 次要 Screens | `DeviceDiscoveryScreen`、`QRScannerScreen`、`CodeVerifyScreen`、`HistoryScreen`、`SharedFilesScreen`、`HelpScreen`、`SubscriptionScreen`、`SyncStatusScreen` | 批量處理 |
-| P5 錯誤訊息回收 | `services/auth-service.ts`、`services/api.ts`、`services/subscription-service.ts`、`utils/phone-validation.ts` 的 `throw new Error(...)` | 改用 `AppError(code)` |
-| P6 英文譯文補齊 | `en.json` 全量翻譯 | 可邊做邊翻，也可最後集中翻 |
+| 階段                | 範圍                                                                                                                                                         | 備註                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| P0 基礎建設         | 安裝套件、建立 `src/i18n/*`、`AppError`、型別注入、`App.tsx` 掛載                                                                                            | 不動業務程式碼                  |
+| P1 共用層           | `common.*`、`errors.*`、`Icon` 等共用 component                                                                                                              | 共用優先，後續 screens 直接引用 |
+| P2 入口流程         | `LoginScreen`、`SmsVerifyScreen`、`AuthScreenShell`                                                                                                          | 英文使用者首次可見區            |
+| P3 主要 Tab Screens | `SyncActivityScreen`、`SettingsScreen`、`AlbumWorkbenchScreen`                                                                                               | 使用頻率最高                    |
+| P4 次要 Screens     | `DeviceDiscoveryScreen`、`QRScannerScreen`、`CodeVerifyScreen`、`HistoryScreen`、`SharedFilesScreen`、`HelpScreen`、`SubscriptionScreen`、`SyncStatusScreen` | 批量處理                        |
+| P5 錯誤訊息回收     | `services/auth-service.ts`、`services/api.ts`、`services/subscription-service.ts`、`utils/phone-validation.ts` 的 `throw new Error(...)`                     | 改用 `AppError(code)`           |
+| P6 英文譯文補齊     | `en.json` 全量翻譯                                                                                                                                           | 可邊做邊翻，也可最後集中翻      |
 
 可視工作節奏開一個大 PR 或拆 6 個 sub-PR；下游 writing-plans 階段決定。
 
@@ -300,11 +300,11 @@ translation（i18next 預設 namespace，僅此一個）
 
 ## 7. 測試策略
 
-| 測試 | 對象 | 重點 |
-|---|---|---|
-| Unit | `src/i18n/__tests__/locale-resolver.test.ts` | `zh-Hans-CN` → `zh`；`en-US` → `en`；`ja-JP` → `en`；`zh-Hant-TW` → `en` |
-| Unit | `src/utils/__tests__/app-error.test.ts` | code / params 正確；`instanceof AppError` 成立 |
-| Component | 2-3 個 screen（`LoginScreen`、`SettingsScreen`）用 `@testing-library/react-native` 渲染，切換 `i18next.changeLanguage()` 驗證關鍵文字 | 確保 `useTranslation` 在 re-render 時正常綁定 |
+| 測試      | 對象                                                                                                                                  | 重點                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Unit      | `src/i18n/__tests__/locale-resolver.test.ts`                                                                                          | `zh-Hans-CN` → `zh`；`en-US` → `en`；`ja-JP` → `en`；`zh-Hant-TW` → `en` |
+| Unit      | `src/utils/__tests__/app-error.test.ts`                                                                                               | code / params 正確；`instanceof AppError` 成立                           |
+| Component | 2-3 個 screen（`LoginScreen`、`SettingsScreen`）用 `@testing-library/react-native` 渲染，切換 `i18next.changeLanguage()` 驗證關鍵文字 | 確保 `useTranslation` 在 re-render 時正常綁定                            |
 
 **不做**：
 
@@ -313,16 +313,16 @@ translation（i18next 預設 namespace，僅此一個）
 
 ## 8. 邊界情況
 
-| 情況 | 處理 |
-|---|---|
-| 系統 locale 在 app 開啟中被切換 | 不處理；下次冷啟動生效 |
-| 翻譯 key 缺失 | `fallbackLng: 'en'`；英文也缺則顯示 key 本身（便於發現漏譯） |
-| 插值 param 缺失 | dev mode 透過 `missingInterpolationHandler` 印 warning；prod 保留 `{{param}}` 字面 |
-| 原生層拋的中文訊息（bridge 回 JS） | 原樣顯示——不在本次範圍 |
-| 繁體中文系統 | fallback 至英文（預期行為） |
-| 日期/數字格式 | 使用 Hermes 內建 `Intl.DateTimeFormat` / `Intl.NumberFormat`，語言傳 `i18next.language`——不走 i18next 翻譯系統 |
-| Alert.alert 的 title 空字串 | 沿用現況，不強制 |
-| 後端 API 中文錯誤訊息 | UI 以 HTTP status / error code 映射到 `errors.*`；不直接顯示原始字串 |
+| 情況                               | 處理                                                                                                           |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 系統 locale 在 app 開啟中被切換    | 不處理；下次冷啟動生效                                                                                         |
+| 翻譯 key 缺失                      | `fallbackLng: 'en'`；英文也缺則顯示 key 本身（便於發現漏譯）                                                   |
+| 插值 param 缺失                    | dev mode 透過 `missingInterpolationHandler` 印 warning；prod 保留 `{{param}}` 字面                             |
+| 原生層拋的中文訊息（bridge 回 JS） | 原樣顯示——不在本次範圍                                                                                         |
+| 繁體中文系統                       | fallback 至英文（預期行為）                                                                                    |
+| 日期/數字格式                      | 使用 Hermes 內建 `Intl.DateTimeFormat` / `Intl.NumberFormat`，語言傳 `i18next.language`——不走 i18next 翻譯系統 |
+| Alert.alert 的 title 空字串        | 沿用現況，不強制                                                                                               |
+| 後端 API 中文錯誤訊息              | UI 以 HTTP status / error code 映射到 `errors.*`；不直接顯示原始字串                                           |
 
 ## 9. 回歸驗證
 
@@ -345,10 +345,10 @@ translation（i18next 預設 namespace，僅此一個）
 
 ## 11. 風險
 
-| 風險 | 機率 | 影響 | 緩解 |
-|---|---|---|---|
-| 硬編碼字串日後回歸 | 中 | 中 | 階段尾用 `extract-cjk.mjs` 掃；未來可考慮啟用 ESLint 規則 |
-| `AppError` 改造漏掉 service 層某條 `throw` | 中 | 低 | CSV 報告覆蓋 services/ 目錄；Code review 時逐條比對 |
-| i18next 型別注入配置失敗（`t()` 補全失效） | 低 | 中 | P0 階段驗收時手動測試自動補全 |
-| 英文翻譯品質不一致（語氣、大小寫、標點） | 中 | 低 | P6 集中翻譯時建立 style guide（句末標點、title case 等） |
-| Hermes `Intl` API 在某些舊 RN 版本有 bug | 低 | 低 | RN 0.84 已預設啟用 Hermes Intl；若出包時發現問題再 polyfill |
+| 風險                                       | 機率 | 影響 | 緩解                                                        |
+| ------------------------------------------ | ---- | ---- | ----------------------------------------------------------- |
+| 硬編碼字串日後回歸                         | 中   | 中   | 階段尾用 `extract-cjk.mjs` 掃；未來可考慮啟用 ESLint 規則   |
+| `AppError` 改造漏掉 service 層某條 `throw` | 中   | 低   | CSV 報告覆蓋 services/ 目錄；Code review 時逐條比對         |
+| i18next 型別注入配置失敗（`t()` 補全失效） | 低   | 中   | P0 階段驗收時手動測試自動補全                               |
+| 英文翻譯品質不一致（語氣、大小寫、標點）   | 中   | 低   | P6 集中翻譯時建立 style guide（句末標點、title case 等）    |
+| Hermes `Intl` API 在某些舊 RN 版本有 bug   | 低   | 低   | RN 0.84 已預設啟用 Hermes Intl；若出包時發現問題再 polyfill |

@@ -42,6 +42,7 @@
 ## Task 1: P0 Desktop Strong Power Save Blocker
 
 **Files:**
+
 - Modify: `apps/desktop/src/main/power-save-manager.ts`
 - Modify: `apps/desktop/src/main/__tests__/power-save-manager.test.ts`
 - Modify: `apps/desktop/src/renderer/i18n/locales/en/settings.json`
@@ -100,6 +101,7 @@ Expected: PASS.
 ## Task 2: P1 Sleep Resume Messaging
 
 **Files:**
+
 - Modify: `apps/mobile/src/i18n/locales/en/syncStatus.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/syncStatus.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/syncStatus.json`

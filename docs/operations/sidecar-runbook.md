@@ -47,11 +47,11 @@ desktop main 负责 sidecar 生命周期管理。
 
 如果这两个端口没有监听，绝大多数同步问题都没有必要继续往上看。
 
-Windows 安装包当前应写入以下入站防火墙规则，并在升级时清理旧 `SyncFlow ...` 规则：
+Windows 安装包当前应写入以下入站防火墙规则：
 
-- `Vivi Drop Sidecar TCP`：`39393/TCP`，LMUP 文件传输与 `HELLO`
-- `Vivi Drop Sidecar HTTP`：`39394/TCP`，sidecar HTTP API、`/health`、mobile discovery fallback
-- `Vivi Drop mDNS UDP`：`5353/UDP`，Bonjour/mDNS 发现
+- `Lynavo Drive Sidecar TCP`：`39393/TCP`，LMUP 文件传输与 `HELLO`
+- `Lynavo Drive Sidecar HTTP`：`39394/TCP`，sidecar HTTP API、`/health`、mobile discovery fallback
+- `Lynavo Drive mDNS UDP`：`5353/UDP`，Bonjour/mDNS 发现
 
 ## 3. 最小健康检查
 
@@ -76,14 +76,14 @@ Get-NetTCPConnection -State Listen -LocalPort 39393,39394 |
 macOS：
 
 ```bash
-pgrep -af 'lynavo-drive-sidecar|syncflow-sidecar'
+pgrep -af 'lynavo-drive-sidecar|lynavo-drive-sidecar'
 ```
 
 Windows（PowerShell）：
 
 ```powershell
 Get-CimInstance Win32_Process |
-  Where-Object { $_.Name -in @("lynavo-drive-sidecar.exe", "syncflow-sidecar.exe") } |
+  Where-Object { $_.Name -in @("lynavo-drive-sidecar.exe", "lynavo-drive-sidecar.exe") } |
   Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine
 ```
 
@@ -130,13 +130,13 @@ dns-sd.exe -B _lynavodrive._tcp local.
 macOS：
 
 ```bash
-pkill -f 'lynavo-drive-sidecar|syncflow-sidecar'
+pkill -f 'lynavo-drive-sidecar|lynavo-drive-sidecar'
 ```
 
 Windows（PowerShell）：
 
 ```powershell
-Get-Process lynavo-drive-sidecar,syncflow-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process lynavo-drive-sidecar,lynavo-drive-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
 ```
 
 ## 4.2 假在线 Bonjour 广播
@@ -193,9 +193,9 @@ Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
 
 ```powershell
 Get-Service -Name "Bonjour Service"
-netsh advfirewall firewall show rule name="Vivi Drop Sidecar TCP"
-netsh advfirewall firewall show rule name="Vivi Drop Sidecar HTTP"
-netsh advfirewall firewall show rule name="Vivi Drop mDNS UDP"
+netsh advfirewall firewall show rule name="Lynavo Drive Sidecar TCP"
+netsh advfirewall firewall show rule name="Lynavo Drive Sidecar HTTP"
+netsh advfirewall firewall show rule name="Lynavo Drive mDNS UDP"
 ```
 
 处理原则：
@@ -224,7 +224,7 @@ netsh advfirewall firewall show rule name="Vivi Drop mDNS UDP"
 macOS：
 
 ```bash
-pkill -f 'lynavo-drive-sidecar|syncflow-sidecar' || true
+pkill -f 'lynavo-drive-sidecar|lynavo-drive-sidecar' || true
 pkill -f 'dns-sd.*_lynavodrive._tcp' || true
 ```
 
@@ -240,7 +240,7 @@ lsof -nP -iTCP:39394 -sTCP:LISTEN
 Windows（PowerShell）：
 
 ```powershell
-Get-Process lynavo-drive-sidecar,syncflow-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process lynavo-drive-sidecar,lynavo-drive-sidecar -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-CimInstance Win32_Process -Filter "Name='dns-sd.exe'" |
   Where-Object { $_.CommandLine -like '*_lynavodrive._tcp*' } |
   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }

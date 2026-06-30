@@ -13,6 +13,7 @@
 ### Task 1: Add localization keys in translation files
 
 **Files:**
+
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/errors.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/errors.json`
 - Modify: `apps/mobile/src/i18n/locales/en/errors.json`
@@ -20,6 +21,7 @@
 - [ ] **Step 1: Add localization keys to `zh-Hant/errors.json`**
 
 Edit `apps/mobile/src/i18n/locales/zh-Hant/errors.json` to append the version mismatch keys:
+
 ```json
   "pairingVersionMismatchTitle": "版本不相容",
   "pairingVersionMismatchMessage": "手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。"
@@ -28,6 +30,7 @@ Edit `apps/mobile/src/i18n/locales/zh-Hant/errors.json` to append the version mi
 - [ ] **Step 2: Add localization keys to `zh-Hans/errors.json`**
 
 Edit `apps/mobile/src/i18n/locales/zh-Hans/errors.json` to append the version mismatch keys:
+
 ```json
   "pairingVersionMismatchTitle": "版本不兼容",
   "pairingVersionMismatchMessage": "手机与电脑端的版本不兼容，请将电脑端（桌面端）App 更新至最新版本后再试。"
@@ -36,6 +39,7 @@ Edit `apps/mobile/src/i18n/locales/zh-Hans/errors.json` to append the version mi
 - [ ] **Step 3: Add localization keys to `en/errors.json`**
 
 Edit `apps/mobile/src/i18n/locales/en/errors.json` to append the version mismatch keys:
+
 ```json
   "pairingVersionMismatchTitle": "Version Incompatible",
   "pairingVersionMismatchMessage": "The app versions on your mobile device and computer are incompatible. Please update the desktop app to the latest version and try again."
@@ -53,6 +57,7 @@ git commit -m "feat: add version compatibility localization strings for errors"
 ### Task 2: Implement version incompatibility interception and alert popup in CodeVerifyScreen
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/CodeVerifyScreen.tsx:83-118`
 
 - [ ] **Step 1: Import Alert from react-native**
@@ -60,6 +65,7 @@ git commit -m "feat: add version compatibility localization strings for errors"
 Verify that `Alert` is already imported from `react-native` in `CodeVerifyScreen.tsx`. (Yes, `Alert` is not currently in the import block of `CodeVerifyScreen.tsx`, so we must add it).
 
 Add `Alert` to imports:
+
 ```typescript
 import {
   View,
@@ -125,6 +131,7 @@ git commit -m "feat: intercept compatibility version mismatch and show Alert dia
 ### Task 3: Write unit tests to verify the version mismatch alert popup
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/__tests__/CodeVerifyScreen.test.tsx`
 
 - [ ] **Step 1: Add a unit test to verify version mismatch Alert.alert triggering**
@@ -134,12 +141,13 @@ Append a new test to the `CodeVerifyScreen` describe block inside `apps/mobile/s
 Before writing the test, make sure `Alert` is mocked or spied. We can spy on `Alert.alert` using `jest.spyOn(Alert, 'alert')`.
 
 Add the test content:
+
 ```typescript
   it('triggers Alert.alert and displays upgrade message when pairing fails due to version compatibility mismatch', async () => {
     const { Alert, NativeModules, Vibration } = require('react-native');
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const vibrateSpy = jest.spyOn(Vibration, 'vibrate').mockImplementation(() => {});
-    
+
     const mockPairDevice = jest.fn().mockRejectedValueOnce(
       new Error('手機與桌面 App 版本不相容，請同時更新兩端後再連線。')
     );
@@ -162,6 +170,7 @@ Add the test content:
 Wait, since it's simpler to test `prefilledCode` prop logic in navigation params, we can mock `useRoute` to return `prefilledCode: '123456'`.
 Let's create a separate describe block or test case that overrides `useRoute` params, or we can just mock `NativeSyncEngine.pairDevice` and render `CodeVerifyScreen` with a `prefilledCode` parameter in navigation params.
 Let's see how `useRoute` is mocked:
+
 ```typescript
 jest.mock('@react-navigation/native', () => ({
 ...
@@ -175,8 +184,10 @@ jest.mock('@react-navigation/native', () => ({
   }),
 }));
 ```
+
 We can mock it dynamically or spy on `useRoute` using `jest.spyOn(require('@react-navigation/native'), 'useRoute')`.
 Wait, let's write an elegant, functional unit test.
+
 ```typescript
   it('triggers Alert.alert when pairDevice throws APP_VERSION_INCOMPATIBLE', async () => {
     const { Alert, NativeModules } = require('react-native');
@@ -216,10 +227,11 @@ Wait, let's write an elegant, functional unit test.
       '手機與電腦端的版本不相容，請將電腦端（桌面端）App 更新至最新版本後再試。',
       [{ text: '好' }]
     );
-    
+
     alertSpy.mockRestore();
   });
 ```
+
 This is incredibly elegant, uses `prefilledCode` parameter, wait for 600ms, and asserts that `pairDevice` is called and `Alert.alert` is triggered with the correct localized title, message, and button text!
 
 - [ ] **Step 2: Run test to verify it passes**

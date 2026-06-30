@@ -6,15 +6,14 @@
 
 - Marketing Version：`0.1.0`
 - Build Number：`CURRENT_PROJECT_VERSION`
-- Bundle ID：沿用当前工程已发布的 native bundle id。Task 15 不执行 native identity / bundle id migration；该迁移延后到后续 native migration 任务处理。
-
-Native identity / bundle id migration is deferred to the later native migration task.
+- Bundle ID：`com.lynavo.drive.mobile`
 
 说明：
 
 1. `0.1.0` 是对外展示版本
 2. 每次重新上传 TestFlight，必须递增 `CURRENT_PROJECT_VERSION`
 3. 同一个 `0.1.0` 可以对应多个 build，例如 `0.1.0 (1)`、`0.1.0 (2)`
+4. App Store Connect 必须使用 Lynavo Drive 当前 bundle id 对应的 app 记录；不再沿用历史产品 identity。
 
 ## 2. 发布前门槛
 
@@ -107,7 +106,7 @@ SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflig
 
 1. 命令成功退出
 2. 产物存在：
-   - `/Volumes/workspace/work/sync-flow/apps/mobile/ios/build/archives/SyncFlow-<version>-b<build>.xcarchive`
+   - `/Volumes/workspace/work/sync-flow/apps/mobile/ios/build/archives/LynavoDrive-<version>-b<build>.xcarchive`
 
 ## 6. 上传 TestFlight
 
@@ -137,7 +136,7 @@ SERVER_ENV_FILE=/path/to/vivi-drop-server/.env.prod pnpm package:mobile:testflig
 
 1. 当前 Mac 的 Xcode 账号已登录
 2. 对应团队在本机可用
-3. App Store Connect 中已有当前 native bundle id 对应的 app 记录；不要在 Task 15 发布路径中改 bundle id 或创建新的 bundle id 迁移路径
+3. App Store Connect 中已有 `com.lynavo.drive.mobile` 对应的 app 记录
 
 ## 7. App Store Connect 操作
 

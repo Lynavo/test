@@ -96,6 +96,7 @@
 ### Task 1: Contracts for Management DTOs and Pairing Errors
 
 **Files:**
+
 - Modify: `packages/contracts/src/errors.ts`
 - Modify: `packages/contracts/src/types.ts`
 - Modify: `packages/contracts/src/__tests__/exports.test.ts`
@@ -295,6 +296,7 @@ git commit -m "feat: add connection device management contracts"
 ### Task 2: Sidecar Migration and Store Models
 
 **Files:**
+
 - Create: `services/sidecar-go/internal/store/migrations/005_pairing_device_management.sql`
 - Modify: `services/sidecar-go/internal/store/db.go`
 - Modify: `services/sidecar-go/internal/store/models.go`
@@ -528,6 +530,7 @@ git commit -m "feat: add pairing security database schema"
 ### Task 3: Store Methods for Attempts, Rate Limits, Blocks, and Management Lists
 
 **Files:**
+
 - Create: `services/sidecar-go/internal/store/pairing_security.go`
 - Modify: `services/sidecar-go/internal/store/pairing_security_test.go`
 
@@ -1096,6 +1099,7 @@ git commit -m "feat: add pairing security store operations"
 ### Task 4: Sidecar Pairing Flow Enforcement
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/protocol/messages.go`
 - Modify: `services/sidecar-go/internal/server/handler_hello.go`
 - Modify: `services/sidecar-go/internal/server/connection_test.go`
@@ -1563,6 +1567,7 @@ git commit -m "feat: enforce local pairing block rules"
 ### Task 5: Sidecar HTTP Management API and Code Regeneration Semantics
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/router.go`
 - Create: `services/sidecar-go/internal/api/handlers_connection_devices.go`
 - Modify: `services/sidecar-go/internal/api/handlers_code.go`
@@ -1976,6 +1981,7 @@ git commit -m "feat: expose connection device management api"
 ### Task 6: Desktop Main IPC and Preload Bridge
 
 **Files:**
+
 - Modify: `apps/desktop/src/main/sidecar-client.ts`
 - Modify: `apps/desktop/src/main/ipc-handlers.ts`
 - Modify: `apps/desktop/src/main/__tests__/sidecar-client.test.ts`
@@ -2105,13 +2111,13 @@ In both `apps/desktop/src/main/ipc-handlers.ts` and `apps/desktop/src/preload/in
 In `registerIpcHandlers`, add:
 
 ```typescript
-  ipcMain.handle(IPC.SIDECAR_CONNECTION_DEVICES, () => sidecarClient.getConnectionDevices());
-  ipcMain.handle(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE, (_e, clientId: string) =>
-    sidecarClient.revokeConnectionDevice(clientId),
-  );
-  ipcMain.handle(IPC.SIDECAR_CLEAR_BLOCKED_CLIENT, (_e, clientId: string) =>
-    sidecarClient.clearBlockedClient(clientId),
-  );
+ipcMain.handle(IPC.SIDECAR_CONNECTION_DEVICES, () => sidecarClient.getConnectionDevices());
+ipcMain.handle(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE, (_e, clientId: string) =>
+  sidecarClient.revokeConnectionDevice(clientId),
+);
+ipcMain.handle(IPC.SIDECAR_CLEAR_BLOCKED_CLIENT, (_e, clientId: string) =>
+  sidecarClient.clearBlockedClient(clientId),
+);
 ```
 
 - [ ] **Step 5: Expose preload methods and types**
@@ -2156,6 +2162,7 @@ git commit -m "feat: bridge connection device management to renderer"
 ### Task 7: Desktop Renderer Store
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/stores/connection-devices-store.ts`
 - Create: `apps/desktop/src/renderer/stores/__tests__/connection-devices-store.test.ts`
 
@@ -2349,6 +2356,7 @@ git commit -m "feat: add connection devices renderer store"
 ### Task 8: Desktop Settings UI and I18n
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/features/settings/ConnectionDevicesSection.tsx`
 - Create: `apps/desktop/src/renderer/features/settings/__tests__/ConnectionDevicesSection.test.tsx`
 - Modify: `apps/desktop/src/renderer/features/settings/SettingsPage.tsx`
@@ -2685,12 +2693,12 @@ import { ConnectionDevicesSection } from './ConnectionDevicesSection';
 Insert after the connection-code section:
 
 ```tsx
-        <section className="mb-8">
-          <h2 className="mb-1 text-sm font-semibold text-foreground">
-            {t('settings.connectionDevices.title')}
-          </h2>
-          <ConnectionDevicesSection />
-        </section>
+<section className="mb-8">
+  <h2 className="mb-1 text-sm font-semibold text-foreground">
+    {t('settings.connectionDevices.title')}
+  </h2>
+  <ConnectionDevicesSection />
+</section>
 ```
 
 - [ ] **Step 6: Run UI tests**
@@ -2715,6 +2723,7 @@ git commit -m "feat: add connection devices settings ui"
 ### Task 9: Mobile Pairing Error Mapping
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 - Modify: `apps/mobile/ios/SyncEngine/RNBridge.swift`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
@@ -2832,36 +2841,34 @@ function getRemainingAttempts(error: PairingNativeError): number | undefined {
 Replace the catch block message selection with:
 
 ```typescript
-        const nativeError = e as PairingNativeError;
-        const code = getNativeErrorCode(nativeError);
-        const msg = nativeError.message || '';
-        if (code === 'PAIRING_CODE_INVALID') {
-          setErrorMsg(
-            t('errors.pairingWrongCodeWithRemaining', {
-              remaining: getRemainingAttempts(nativeError) ?? 0,
-            }),
-          );
-        } else if (code === 'PAIRING_CLIENT_BLOCKED') {
-          setErrorMsg(t('errors.pairingClientBlocked'));
-        } else if (code === 'PAIR_TOKEN_INVALID') {
-          setErrorMsg(t('errors.pairingTokenInvalid'));
-        } else if (
-          code === 'APP_VERSION_INCOMPATIBLE' ||
-          msg.includes('版本不相容') ||
-          msg.includes('APP_VERSION_INCOMPATIBLE') ||
-          msg.includes('版本不兼容')
-        ) {
-          Alert.alert(
-            t('errors.pairingVersionMismatchTitle'),
-            t('errors.pairingVersionMismatchMessage'),
-            [{ text: t('common.ok') }],
-          );
-          setErrorMsg(t('errors.pairingVersionMismatchMessage'));
-        } else if (msg.includes('Pairing rejected')) {
-          setErrorMsg(t('errors.pairingWrongCode'));
-        } else {
-          setErrorMsg(t('errors.pairingConnectFailed', { msg }));
-        }
+const nativeError = e as PairingNativeError;
+const code = getNativeErrorCode(nativeError);
+const msg = nativeError.message || '';
+if (code === 'PAIRING_CODE_INVALID') {
+  setErrorMsg(
+    t('errors.pairingWrongCodeWithRemaining', {
+      remaining: getRemainingAttempts(nativeError) ?? 0,
+    }),
+  );
+} else if (code === 'PAIRING_CLIENT_BLOCKED') {
+  setErrorMsg(t('errors.pairingClientBlocked'));
+} else if (code === 'PAIR_TOKEN_INVALID') {
+  setErrorMsg(t('errors.pairingTokenInvalid'));
+} else if (
+  code === 'APP_VERSION_INCOMPATIBLE' ||
+  msg.includes('版本不相容') ||
+  msg.includes('APP_VERSION_INCOMPATIBLE') ||
+  msg.includes('版本不兼容')
+) {
+  Alert.alert(t('errors.pairingVersionMismatchTitle'), t('errors.pairingVersionMismatchMessage'), [
+    { text: t('common.ok') },
+  ]);
+  setErrorMsg(t('errors.pairingVersionMismatchMessage'));
+} else if (msg.includes('Pairing rejected')) {
+  setErrorMsg(t('errors.pairingWrongCode'));
+} else {
+  setErrorMsg(t('errors.pairingConnectFailed', { msg }));
+}
 ```
 
 - [ ] **Step 5: Update Android native pairing error propagation**
@@ -2965,6 +2972,7 @@ git commit -m "feat: show structured mobile pairing errors"
 ### Task 10: Remove Old Code-Rotation Revocation Recovery Path
 
 **Files:**
+
 - Modify: `apps/desktop/src/main/sidecar-client.ts`
 - Modify: `apps/desktop/src/main/ipc-handlers.ts`
 - Modify: `apps/desktop/src/main/__tests__/ipc-handlers.test.ts`
@@ -3024,7 +3032,7 @@ async function regenerateConnectionCodeSafely(): Promise<{ code: string }> {
 Update the handler registration:
 
 ```typescript
-  ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely());
+ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely());
 ```
 
 Remove unused `supportsPairingRevocationOnCodeRotation` imports and tests.
@@ -3064,6 +3072,7 @@ git commit -m "fix: stop treating code rotation as device revocation"
 ### Task 11: Cross-Module Verification
 
 **Files:**
+
 - No source edits unless a verification failure points to a defect in the preceding tasks.
 
 - [ ] **Step 1: Run sidecar focused tests**

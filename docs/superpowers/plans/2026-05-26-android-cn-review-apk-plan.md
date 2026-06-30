@@ -11,11 +11,13 @@
 ---
 
 ### Task 1: 暫時更換 API Base URL
+
 **Files:**
+
 - Modify: `apps/mobile/src/markets/cn/config.ts:7`
 
 - [ ] **Step 1: 修改 apiBaseUrl 變量**
-  將 `apiBaseUrl` 改為 `https://review-api.vividrop.cn`。
+      將 `apiBaseUrl` 改為 `https://review-api.vividrop.cn`。
 
   ```typescript
   // apps/mobile/src/markets/cn/config.ts:7
@@ -23,39 +25,43 @@
   ```
 
 - [ ] **Step 2: 驗證修改**
-  執行 git diff 以確認僅修改了 `apiBaseUrl`。
-  Run: `git diff apps/mobile/src/markets/cn/config.ts`
-  Expected: 僅有一行 `apiBaseUrl` 被改為 `https://review-api.vividrop.cn`。
+      執行 git diff 以確認僅修改了 `apiBaseUrl`。
+      Run: `git diff apps/mobile/src/markets/cn/config.ts`
+      Expected: 僅有一行 `apiBaseUrl` 被改為 `https://review-api.vividrop.cn`。
 
 ---
 
 ### Task 2: 執行 Android 封裝編譯
+
 **Files:**
+
 - Modify: None (Compile task)
 
 - [ ] **Step 1: 清理先前快取與安裝依賴**
-  在 `apps/mobile` 目錄執行 pnpm install。
-  Run: `pnpm install`
-  Expected: 依賴成功更新。
+      在 `apps/mobile` 目錄執行 pnpm install。
+      Run: `pnpm install`
+      Expected: 依賴成功更新。
 
 - [ ] **Step 2: 執行 Gradle assembleCnRelease**
-  進入 `apps/mobile/android` 目錄，執行清理與編譯打包命令。
-  Run: `./gradlew clean assembleCnRelease` (在 `apps/mobile/android` 中)
-  Expected: 終端輸出 `BUILD SUCCESSFUL`。
+      進入 `apps/mobile/android` 目錄，執行清理與編譯打包命令。
+      Run: `./gradlew clean assembleCnRelease` (在 `apps/mobile/android` 中)
+      Expected: 終端輸出 `BUILD SUCCESSFUL`。
 
 - [ ] **Step 3: 確認產出的 APK 檔案路徑與存在**
-  確認生成的 APK 檔案是否存在。
-  Run: `ls -la apps/mobile/android/app/build/outputs/apk/cn/release/app-cn-release.apk`
-  Expected: 能找到對應的 APK 檔案，且檔案大小大於 0。
+      確認生成的 APK 檔案是否存在。
+      Run: `ls -la apps/mobile/android/app/build/outputs/apk/cn/release/app-cn-release.apk`
+      Expected: 能找到對應的 APK 檔案，且檔案大小大於 0。
 
 ---
 
 ### Task 3: 還原 API 設定與整理
+
 **Files:**
+
 - Modify: `apps/mobile/src/markets/cn/config.ts:7`
 
 - [ ] **Step 1: 還原 apiBaseUrl 修改**
-  將 `apiBaseUrl` 還原回原本的 `https://api.vividrop.cn`。
+      將 `apiBaseUrl` 還原回原本的 `https://api.vividrop.cn`。
 
   ```typescript
   // apps/mobile/src/markets/cn/config.ts:7
@@ -63,5 +69,5 @@
   ```
 
 - [ ] **Step 2: 檢查 git status**
-  Run: `git status`
-  Expected: 顯示 `nothing to commit, working tree clean`。
+      Run: `git status`
+      Expected: 顯示 `nothing to commit, working tree clean`。

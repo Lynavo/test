@@ -137,6 +137,7 @@
 ## Task 1: Contracts For Desktop-Local Product Surface
 
 **Files:**
+
 - Modify: `packages/contracts/src/types.ts`
 - Modify: `packages/contracts/src/events.ts`
 - Modify: `packages/contracts/src/index.ts`
@@ -355,6 +356,7 @@ git commit -m "feat(contracts): add desktop-local management DTOs"
 ## Task 2: Sidecar Persistence For Devices, Blocks, Records, And Resources
 
 **Files:**
+
 - Create: `services/sidecar-go/internal/store/migrations/005_desktop_local_management.sql`
 - Modify: `services/sidecar-go/internal/store/models.go`
 - Create: `services/sidecar-go/internal/store/device_management.go`
@@ -658,6 +660,7 @@ git commit -m "feat(sidecar): persist desktop-local management state"
 ## Task 3: Sidecar Pairing Enforcement And Management APIs
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/server/handler_hello.go`
 - Modify: `services/sidecar-go/internal/protocol/messages.go`
 - Create: `services/sidecar-go/internal/api/handlers_management.go`
@@ -808,6 +811,7 @@ git commit -m "feat(sidecar): enforce pairing blocks and expose management APIs"
 ## Task 4: Desktop Main/Preload Bridge For Management APIs
 
 **Files:**
+
 - Modify: `apps/desktop/src/main/sidecar-client.ts`
 - Modify: `apps/desktop/src/main/ipc-handlers.ts`
 - Modify: `apps/desktop/src/preload/index.ts`
@@ -884,6 +888,7 @@ git commit -m "feat(desktop): bridge desktop-local management APIs"
 ## Task 5: Desktop New IA Shell And Legacy Entry Hiding
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/stores/app-store.ts`
 - Modify: `apps/desktop/src/renderer/features/layout/Sidebar.tsx`
 - Modify: `apps/desktop/src/renderer/features/layout/AppShell.tsx`
@@ -950,6 +955,7 @@ git commit -m "feat(desktop): introduce desktop-local navigation shell"
 ## Task 6: Desktop Devices And Records Pages
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/stores/management-store.ts`
 - Create: `apps/desktop/src/renderer/stores/__tests__/management-store.test.ts`
 - Create: `apps/desktop/src/renderer/features/devices/DevicesPage.tsx`
@@ -1034,6 +1040,7 @@ git commit -m "feat(desktop): add device management and records pages"
 ## Task 7: Desktop Shared Resources And Received Library Pages
 
 **Files:**
+
 - Create: `apps/desktop/src/renderer/stores/resources-store.ts`
 - Create: `apps/desktop/src/renderer/stores/__tests__/resources-store.test.ts`
 - Create: `apps/desktop/src/renderer/features/shared/SharedResourcesPage.tsx`
@@ -1058,11 +1065,11 @@ Assert:
 Methods:
 
 ```ts
-loadSharedResources()
-addSharedResource(input)
-removeSharedResource(resourceId)
-loadReceivedLibrary()
-shareReceivedItem(fileKey)
+loadSharedResources();
+addSharedResource(input);
+removeSharedResource(resourceId);
+loadReceivedLibrary();
+shareReceivedItem(fileKey);
 ```
 
 `shareReceivedItem(fileKey)` must call a real sidecar API that creates a shared resource from an existing received upload. If Task 3 did not add that endpoint, extend Task 3 with `POST /resources/shared/from-received` and extend Task 4 with the matching preload bridge before implementing this store method.
@@ -1125,6 +1132,7 @@ git commit -m "feat(desktop): add shared resources and received library"
 ## Task 8: Desktop Dashboard, Settings, And Help Visual Completion
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/features/dashboard/Dashboard.tsx`
 - Modify: `apps/desktop/src/renderer/features/dashboard/DeviceCard.tsx`
 - Modify: `apps/desktop/src/renderer/features/dashboard/StatCard.tsx`
@@ -1190,6 +1198,7 @@ git commit -m "feat(desktop): complete new management console UI"
 ## Task 9: Mobile Recent Desktops And Code Verification
 
 **Files:**
+
 - Create: `apps/mobile/src/stores/recent-desktops-store.ts`
 - Create: `apps/mobile/src/stores/__tests__/recent-desktops-store.test.ts`
 - Modify: `apps/mobile/src/services/SyncEngineModule.ts`
@@ -1217,12 +1226,12 @@ Assert:
 Use the app's existing storage pattern. Store only:
 
 ```ts
-desktopDeviceId
-desktopName
-host
-port
-lastConnectedAt
-authorizationStatus
+desktopDeviceId;
+desktopName;
+host;
+port;
+lastConnectedAt;
+authorizationStatus;
 ```
 
 Do not store management records or shared resource lists.
@@ -1301,6 +1310,7 @@ git commit -m "feat(mobile): add recent desktops and pairing block states"
 ## Task 10: Mobile Shared Files, History, Sync Activity, Settings, And Album Repositioning
 
 **Files:**
+
 - Create: `apps/mobile/src/services/desktop-local-service.ts`
 - Create: `apps/mobile/src/services/__tests__/desktop-local-service.test.ts`
 - Modify: `apps/mobile/src/screens/SyncActivityScreen.tsx`
@@ -1327,10 +1337,10 @@ Mock fetch or existing LAN request helper and assert:
 Use current desktop host/port from binding/session state. API functions:
 
 ```ts
-listSharedResources(currentDesktop)
-listReceivedLibrary(currentDesktop)
-downloadResource(currentDesktop, resourceId)
-listHistory(currentDesktop)
+listSharedResources(currentDesktop);
+listReceivedLibrary(currentDesktop);
+downloadResource(currentDesktop, resourceId);
+listHistory(currentDesktop);
 ```
 
 - [ ] **Step 3: Update SharedFilesScreen tests**
@@ -1420,6 +1430,7 @@ git commit -m "feat(mobile): add desktop-local shared files and history UI"
 ## Task 11: Cross-Surface Legacy Entry Audit
 
 **Files:**
+
 - Modify tests as needed across desktop/mobile
 - Modify only UI entry files needed to hide old routes/actions
 - Create: `docs/testing/desktop-local-product-expansion-regression.md`
@@ -1492,6 +1503,7 @@ git commit -m "test: audit desktop-local product entry points"
 ## Task 12: Final Integration Verification And Self-Review
 
 **Files:**
+
 - No planned source changes unless verification exposes defects.
 
 - [ ] **Step 1: Check worktree cleanliness and untracked references**

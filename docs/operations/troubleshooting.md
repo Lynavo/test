@@ -1,4 +1,4 @@
-# Vivi Drop 排障手冊
+# Lynavo Drive 排障手冊
 
 本文件給接手同事一個統一的排障入口。優先用「分層定位」而不是盲猜。
 
@@ -109,8 +109,8 @@ LAN Wake-on-LAN 檢查：
 - app 啟動、回到前景、或只是顯示離線狀態，不應觸發喚醒
 - `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN 按鈕；不會嘗試 router public wake
 - 手機和電腦不在同一個 LAN 時，除非 VPN 讓手機等同進入該 LAN 且 wake 封包可送達，否則同 LAN WoL 不保證有效
-- peer proxy / WOL Relay 僅限另一台 authenticated、awake、同 LAN/VPN 的 Vivi Drop Desktop；它必須能在 target desktop 所在 LAN/VPN 內代送 magic packet
-- 未安裝 Vivi Drop Desktop 的 router-connected device 不可自動當 peer proxy；NAS、OpenWrt、Home Assistant、router 或其他常在線設備只能透過使用者明確設定的 authenticated third-party helper / webhook / router API 參與
+- peer proxy / WOL Relay 僅限另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop；它必須能在 target desktop 所在 LAN/VPN 內代送 magic packet
+- 未安裝 Lynavo Drive Desktop 的 router-connected device 不可自動當 peer proxy；NAS、OpenWrt、Home Assistant、router 或其他常在線設備只能透過使用者明確設定的 authenticated third-party helper / webhook / router API 參與
 - 只有一台睡眠中的電腦、且沒有 router Wake-on-WAN / router helper / configured public wake target / eligible peer proxy / explicit helper / VPN fallback 時，cloud 不能憑空喚醒 NAT 後面的電腦
 - macOS 需確認系統設定中的 `Wake for network access`；Ethernet 通常比睡眠 Wi-Fi 穩定
 - Windows 需確認 BIOS/UEFI WoL、網卡 `Allow this device to wake the computer`、`Only allow a magic packet to wake the computer`；Modern Standby、休眠、關機狀態會依機型不同
@@ -136,7 +136,7 @@ LAN Wake-on-LAN 檢查：
 2. 確認手機和 desktop 位於同一 LAN；若是 VPN，必須等同 VPN-LAN 且允許 wake packet 進入 target LAN
 3. macOS 先確認 `Wake for network access`，Windows 先確認 BIOS/UEFI 與 NIC magic packet wake
 4. 確認 mobile diagnostics 出現 `wake packets sent packets=<n>`；peer proxy follow-up 實作完成後，才應期待 `wake packets sent via peer proxy to host=<peer>`
-5. 若出現 `peer proxy skipped reason=<reason>`，依 reason 檢查是否沒有 authenticated awake Vivi Drop Desktop peer、沒有 multi-desktop binding source，或 third-party helper 尚未明確設定
+5. 若出現 `peer proxy skipped reason=<reason>`，依 reason 檢查是否沒有 authenticated awake Lynavo Drive Desktop peer、沒有 multi-desktop binding source，或 third-party helper 尚未明確設定
 6. 若出現 `wake polling exhausted` / `wake probe timed out`，代表封包送出後 `/health` 未在限定時間內恢復，應檢查平台 WoL 設定、路由器 broadcast 行為、睡眠模式與 `http://<desktop-lan-ip>:39394/health`
 
 ## 3.5 「發現頁能掃到設備，但實際連不上」
@@ -146,7 +146,7 @@ LAN Wake-on-LAN 檢查：
 1. sidecar 是否真的監聽 `39393 / 39394`
 2. 本機是否有殘留的 `dns-sd` Bonjour 廣播孤兒行程
 3. mobile 實際選到的是 IPv4 還是 `fe80::` IPv6
-4. Windows 下 `SyncFlow Sidecar TCP / SyncFlow Sidecar HTTP / SyncFlow mDNS UDP` 防火牆規則是否生效，`Bonjour Service` 是否正在執行
+4. Windows 下 `Lynavo Drive Sidecar TCP / Lynavo Drive Sidecar HTTP / Lynavo Drive mDNS UDP` 防火牆規則是否生效，`Bonjour Service` 是否正在執行
 
 歷史上常見根因：
 

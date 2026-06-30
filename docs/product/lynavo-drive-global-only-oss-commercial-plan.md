@@ -24,11 +24,11 @@
 
 命名范围分三层处理：
 
-| 层级 | 目标 | 是否必须在第一阶段完成 |
-| --- | --- | --- |
-| 用户可见品牌 | App 名称、Desktop 名称、安装包名、窗口 title、权限说明、通知文案、下载页、README | 必须 |
-| 构建 / 发布身份 | bundle id、application id、appId、URL scheme、IAP product id、artifact name、installer shortcut、firewall rule | 必须，但 bundle id/IAP 需确认商店迁移策略 |
-| 内部命名空间 | `@syncflow/*`、`SyncFlowMobile`、`syncflow-sidecar`、Go module、mDNS service type、数据库文件名、日志 tag | 建议分阶段；若重命名成本过高，可先建立 legacy allowlist |
+| 层级            | 目标                                                                                                           | 是否必须在第一阶段完成                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 用户可见品牌    | App 名称、Desktop 名称、安装包名、窗口 title、权限说明、通知文案、下载页、README                               | 必须                                                    |
+| 构建 / 发布身份 | bundle id、application id、appId、URL scheme、IAP product id、artifact name、installer shortcut、firewall rule | 必须，但 bundle id/IAP 需确认商店迁移策略               |
+| 内部命名空间    | `@syncflow/*`、`SyncFlowMobile`、`syncflow-sidecar`、Go module、mDNS service type、数据库文件名、日志 tag      | 建议分阶段；若重命名成本过高，可先建立 legacy allowlist |
 
 建议第一阶段至少做到：用户看到的所有 **Vivi Drop** 都变成 **Lynavo Drive**；开源仓库名、README、package metadata、安装包名、App display name、desktop productName 全部改名。内部 `SyncFlow` 命名如果无法一次性全部改完，需要建立 `docs/rename/legacy-name-allowlist.md`，明确哪些是短期协议 / 存量兼容名称，不能无限期散落。
 
@@ -144,12 +144,12 @@ export type Distribution = 'community' | 'official';
 
 含义区分：
 
-| 概念 | 是否允许 | 用途 |
-| --- | --- | --- |
-| `market = cn/global` | 不允许 | 已废弃，不应进入开源主干 |
-| `releaseChannel = dev/review/prod` | 允许 | 控制 API base、签名、商店发布目标 |
+| 概念                                | 是否允许 | 用途                                                                  |
+| ----------------------------------- | -------- | --------------------------------------------------------------------- |
+| `market = cn/global`                | 不允许   | 已废弃，不应进入开源主干                                              |
+| `releaseChannel = dev/review/prod`  | 允许     | 控制 API base、签名、商店发布目标                                     |
 | `distribution = community/official` | 谨慎允许 | 控制是否打入官方商业模块、IAP、远程服务；不能变成另一个 market switch |
-| runtime entitlement | 必须 | 控制后台继续、远程穿透等商业能力 |
+| runtime entitlement                 | 必须     | 控制后台继续、远程穿透等商业能力                                      |
 
 ### 3.2 单一 App config
 
@@ -214,13 +214,13 @@ export interface DriveEntitlements {
 
 默认策略：
 
-| 用户 / 构建状态 | 局域网前台自动上传 | 后台 / 锁屏继续 | 远程穿透 |
-| --- | --- | --- | --- |
-| OSS guest | 允许 | 不允许 | 不允许 |
-| Official guest | 允许 | 不允许 | 不允许 |
-| Official logged-in free | 允许 | 不允许 | 不允许 |
-| Official paid / valid entitlement | 允许 | 按后端 entitlement | 按后端 entitlement |
-| entitlement unknown / expired | 允许 | 不允许 | 不允许 |
+| 用户 / 构建状态                   | 局域网前台自动上传 | 后台 / 锁屏继续    | 远程穿透           |
+| --------------------------------- | ------------------ | ------------------ | ------------------ |
+| OSS guest                         | 允许               | 不允许             | 不允许             |
+| Official guest                    | 允许               | 不允许             | 不允许             |
+| Official logged-in free           | 允许               | 不允许             | 不允许             |
+| Official paid / valid entitlement | 允许               | 按后端 entitlement | 按后端 entitlement |
+| entitlement unknown / expired     | 允许               | 不允许             | 不允许             |
 
 Fail-open / fail-closed：
 
@@ -236,10 +236,10 @@ Fail-open / fail-closed：
 
 后台 / 锁屏继续上传不同：它主要是本地 native 能力。如果完整后台实现全部开源，用户理论上可以自编译绕过 JS entitlement。因此有两种路线：
 
-| 路线 | 做法 | 优点 | 风险 |
-| --- | --- | --- | --- |
+| 路线             | 做法                                                                                                                                                                    | 优点                                         | 风险                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------- |
 | 强商业隔离，推荐 | OSS 只保留前台 LAN 同步；paid background 的 native continuation、silent audio、background URLSession chain、Android FGS continuation 放入官方私有模块或 private overlay | 商业边界清晰，自编译不能轻易解锁付费本地能力 | 工程上需要维护 official overlay / private package |
-| 全开源弱约束 | OSS 包含完整后台代码，但 entitlement 默认 false；官方 build 通过订阅打开 | 社区透明，工程简单 | 用户可 fork 解锁后台，本地付费点弱化 |
+| 全开源弱约束     | OSS 包含完整后台代码，但 entitlement 默认 false；官方 build 通过订阅打开                                                                                                | 社区透明，工程简单                           | 用户可 fork 解锁后台，本地付费点弱化              |
 
 建议采用强商业隔离：
 
@@ -380,14 +380,14 @@ binary: lynavo-drive-sidecar
 
 建议新安装包身份：
 
-| 平台 | 当前 | 建议目标 |
-| --- | --- | --- |
-| iOS bundle id | `com.vividrop.mobile.global` | `com.lynavo.drive.mobile` |
-| Android applicationId | `com.vividrop.mobile.global` | `com.lynavo.drive.mobile` |
-| Desktop appId | `com.vividrop.desktop.global` | `com.lynavo.drive.desktop` |
-| Apple Sign-in service id | `com.vividrop.global.signin` | `com.lynavo.drive.signin` |
-| URL scheme | `vividrop` | `lynavodrive` |
-| FileProvider authority | `${applicationId}.syncflow.fileprovider` | `${applicationId}.drive.fileprovider` 或 `${applicationId}.fileprovider` |
+| 平台                     | 当前                                     | 建议目标                                                                 |
+| ------------------------ | ---------------------------------------- | ------------------------------------------------------------------------ |
+| iOS bundle id            | `com.vividrop.mobile.global`             | `com.lynavo.drive.mobile`                                                |
+| Android applicationId    | `com.vividrop.mobile.global`             | `com.lynavo.drive.mobile`                                                |
+| Desktop appId            | `com.vividrop.desktop.global`            | `com.lynavo.drive.desktop`                                               |
+| Apple Sign-in service id | `com.vividrop.global.signin`             | `com.lynavo.drive.signin`                                                |
+| URL scheme               | `vividrop`                               | `lynavodrive`                                                            |
+| FileProvider authority   | `${applicationId}.syncflow.fileprovider` | `${applicationId}.drive.fileprovider` 或 `${applicationId}.fileprovider` |
 
 注意：如果要保留现有 App Store / Google Play 上架记录，bundle id / applicationId 不能随意改；这需要单独确认商店迁移策略。若 Lynavo Drive 是新品牌新 app，则建议直接启用新 id。
 
@@ -909,7 +909,7 @@ struct DriveEntitlementSnapshot {
 - `remoteAccessEnabled` 是用户隐私设置，不是付费状态；最终条件为：
 
 ```ts
-remoteAccessEnabled && entitlements.canUseRemoteTunnel
+remoteAccessEnabled && entitlements.canUseRemoteTunnel;
 ```
 
 - Sidecar 做最后防线：
@@ -1172,58 +1172,58 @@ commercial-overlays/official-release/
 
 ### 8.1 Global-only / market removal
 
-| 场景 | 预期 |
-| --- | --- |
-| 全仓搜索 `SYNCFLOW_MARKET` | 无结果或仅 legacy allowlist |
-| 全仓搜索 `isChinaMarket` / `activeMarket` | 无结果 |
-| release dry-run | 不显示 Market，只显示 Release Channel |
-| Android Gradle tasks | 无 `assembleCn*` / `assembleGlobal*` |
-| iOS schemes | 只有 Lynavo Drive 单一路径 |
-| Desktop builder configs | 只有单一 `electron-builder.yml` |
+| 场景                                      | 预期                                  |
+| ----------------------------------------- | ------------------------------------- |
+| 全仓搜索 `SYNCFLOW_MARKET`                | 无结果或仅 legacy allowlist           |
+| 全仓搜索 `isChinaMarket` / `activeMarket` | 无结果                                |
+| release dry-run                           | 不显示 Market，只显示 Release Channel |
+| Android Gradle tasks                      | 无 `assembleCn*` / `assembleGlobal*`  |
+| iOS schemes                               | 只有 Lynavo Drive 单一路径            |
+| Desktop builder configs                   | 只有单一 `electron-builder.yml`       |
 
 ### 8.2 Branding / rename
 
-| 场景 | 预期 |
-| --- | --- |
-| App display name | Lynavo Drive |
-| Desktop window title | Lynavo Drive |
-| Installer artifact | `LynavoDrive-...` |
-| Windows shortcut | Lynavo Drive |
-| Notifications | Lynavo Drive |
-| Permission strings | Lynavo Drive |
-| README / docs 首页 | Lynavo Drive |
-| Legacy string scan | `Vivi Drop` / `vividrop` 只存在于 migration allowlist |
+| 场景                 | 预期                                                  |
+| -------------------- | ----------------------------------------------------- |
+| App display name     | Lynavo Drive                                          |
+| Desktop window title | Lynavo Drive                                          |
+| Installer artifact   | `LynavoDrive-...`                                     |
+| Windows shortcut     | Lynavo Drive                                          |
+| Notifications        | Lynavo Drive                                          |
+| Permission strings   | Lynavo Drive                                          |
+| README / docs 首页   | Lynavo Drive                                          |
+| Legacy string scan   | `Vivi Drop` / `vividrop` 只存在于 migration allowlist |
 
 ### 8.3 Community / OSS local mode
 
-| 场景 | Mobile | Desktop | 预期 |
-| --- | --- | --- | --- |
-| Fresh community build | 未登录 | 未登录 | 可发现、配对、前台 LAN 自动上传 |
-| Guest background | 未登录 | 未登录 | 切后台 / 锁屏后停止推进，pending queue 保留 |
-| Offline local | 无网络 | 同 LAN | 不访问官方 API，前台 LAN 可用 |
-| Notification denied Android | 未登录 | 任意 | 前台 LAN 同步不中止 |
-| No official module | OSS build | OSS build | background / remote 不可开启 |
+| 场景                        | Mobile    | Desktop   | 预期                                        |
+| --------------------------- | --------- | --------- | ------------------------------------------- |
+| Fresh community build       | 未登录    | 未登录    | 可发现、配对、前台 LAN 自动上传             |
+| Guest background            | 未登录    | 未登录    | 切后台 / 锁屏后停止推进，pending queue 保留 |
+| Offline local               | 无网络    | 同 LAN    | 不访问官方 API，前台 LAN 可用               |
+| Notification denied Android | 未登录    | 任意      | 前台 LAN 同步不中止                         |
+| No official module          | OSS build | OSS build | background / remote 不可开启                |
 
 ### 8.4 Official commercial
 
-| 场景 | 预期 |
-| --- | --- |
-| Official guest | 前台 LAN 可用；后台 / 远程提示登录/订阅 |
-| Logged-in free | 前台 LAN 可用；不请求 TURN；后台开关不可用 |
-| Paid background | iOS / Android 在平台限制内继续后台上传 |
-| Paid remote enabled | 获取 TURN，sidecar tunnel 可用 |
-| Paid remote disabled by setting | 不启动 tunnel，local LAN 不受影响 |
-| Entitlement expired | 前台 LAN 可用；后台和远程停用并清除 credentials |
-| Server 401/403 | 不误报网络故障，展示登录/订阅状态 |
+| 场景                            | 预期                                            |
+| ------------------------------- | ----------------------------------------------- |
+| Official guest                  | 前台 LAN 可用；后台 / 远程提示登录/订阅         |
+| Logged-in free                  | 前台 LAN 可用；不请求 TURN；后台开关不可用      |
+| Paid background                 | iOS / Android 在平台限制内继续后台上传          |
+| Paid remote enabled             | 获取 TURN，sidecar tunnel 可用                  |
+| Paid remote disabled by setting | 不启动 tunnel，local LAN 不受影响               |
+| Entitlement expired             | 前台 LAN 可用；后台和远程停用并清除 credentials |
+| Server 401/403                  | 不误报网络故障，展示登录/订阅状态               |
 
 ### 8.5 兼容 / 迁移
 
-| 场景 | 预期 |
-| --- | --- |
-| 旧 Vivi Drop data dir 存在 | Lynavo Drive 首次启动迁移或读取旧数据，日志说明 |
-| 旧 Windows firewall rules 存在 | 新 installer 添加 Lynavo Drive rules，并清理旧规则 |
-| 旧 mDNS service name | 若启用迁移期，mobile 可发现旧 sidecar；否则文档明确不兼容 |
-| 旧 OAuth callback | 新 scheme 生效；旧 scheme 按商店/后端策略决定是否保留迁移窗口 |
+| 场景                           | 预期                                                          |
+| ------------------------------ | ------------------------------------------------------------- |
+| 旧 Vivi Drop data dir 存在     | Lynavo Drive 首次启动迁移或读取旧数据，日志说明               |
+| 旧 Windows firewall rules 存在 | 新 installer 添加 Lynavo Drive rules，并清理旧规则            |
+| 旧 mDNS service name           | 若启用迁移期，mobile 可发现旧 sidecar；否则文档明确不兼容     |
+| 旧 OAuth callback              | 新 scheme 生效；旧 scheme 按商店/后端策略决定是否保留迁移窗口 |
 
 ---
 
@@ -1292,17 +1292,17 @@ pnpm release --profile prod --targets ios,android,mac,win --dry-run
 
 原计划中的这些结论需要改写：
 
-| 原计划写法 | 新版写法 |
-| --- | --- |
-| 本计划只针对 global，cn 保持现状 | Lynavo Drive OSS 只保留 global 语义；cn 从开源仓库移除 |
-| cn fallback / cn regression | 删除 OSS 中的 cn fallback；cn regression 只属于私有旧产品 |
-| `CommercialEntitlements.market` | 删除 market 字段，改为 global-only `DriveEntitlements` |
-| release profile 使用 `global-review/global-prod` | release channel 使用 `review/prod`，不再带 global |
-| desktop `isGlobalMarket()` | 删除 market helper，产品默认 Lynavo Drive |
-| mobile `activeMarket` | 删除 market resolver，使用单一 app config |
-| Android `assembleGlobalRelease` | 改为无 flavor 的 `assembleRelease` |
-| iOS `SyncFlowMobileGlobal` scheme | 改为单一 `LynavoDrive` scheme |
-| “开源 build 默认值应可用 local LAN” | 进一步明确：OSS build 就是 local-first global-only，不是 market profile |
+| 原计划写法                                       | 新版写法                                                                |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| 本计划只针对 global，cn 保持现状                 | Lynavo Drive OSS 只保留 global 语义；cn 从开源仓库移除                  |
+| cn fallback / cn regression                      | 删除 OSS 中的 cn fallback；cn regression 只属于私有旧产品               |
+| `CommercialEntitlements.market`                  | 删除 market 字段，改为 global-only `DriveEntitlements`                  |
+| release profile 使用 `global-review/global-prod` | release channel 使用 `review/prod`，不再带 global                       |
+| desktop `isGlobalMarket()`                       | 删除 market helper，产品默认 Lynavo Drive                               |
+| mobile `activeMarket`                            | 删除 market resolver，使用单一 app config                               |
+| Android `assembleGlobalRelease`                  | 改为无 flavor 的 `assembleRelease`                                      |
+| iOS `SyncFlowMobileGlobal` scheme                | 改为单一 `LynavoDrive` scheme                                           |
+| “开源 build 默认值应可用 local LAN”              | 进一步明确：OSS build 就是 local-first global-only，不是 market profile |
 
 ---
 

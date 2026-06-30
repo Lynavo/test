@@ -1,10 +1,10 @@
-# Vivi Drop 系统概覽
+# Lynavo Drive 系统概覽
 
 本文件用於幫助新同事快速理解目前系統邊界、職責分工和主鏈路。不作為產品規格文件；行為以目前程式碼和 `@lynavo-drive/contracts` 為準。
 
 ## 1. 目標
 
-Vivi Drop 目前的目標非常聚焦：
+Lynavo Drive 目前的目標非常聚焦：
 
 1. mobile 端自動或半自動綁定一台 desktop
 2. 在區域網內把相簿素材無感增量同步到 desktop

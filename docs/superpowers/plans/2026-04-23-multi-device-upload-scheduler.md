@@ -55,20 +55,21 @@
 
 ## File Map
 
-| File | Change |
-|---|---|
-| `services/sidecar-go/internal/store/uploads.go` | Reorder `GetDashboardDevices()` SQL for deterministic multi-device ordering |
-| `services/sidecar-go/internal/store/uploads_test.go` | Add store tests for concurrent-transfer ordering and fallbacks |
-| `services/sidecar-go/internal/api/router_test.go` | Add HTTP regression test that `/dashboard/devices` preserves the intended order |
-| `apps/desktop/src/renderer/stores/dashboard-store.ts` | Make same-status ordering explicit and preserve incoming order |
-| `apps/desktop/src/renderer/stores/__tests__/dashboard-store.test.ts` | Add renderer tests for same-status stability and concurrent transfer promotion |
-| `docs/testing/beta-test-matrix.md` | Add multi-device concurrent-upload smoke coverage |
+| File                                                                 | Change                                                                          |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `services/sidecar-go/internal/store/uploads.go`                      | Reorder `GetDashboardDevices()` SQL for deterministic multi-device ordering     |
+| `services/sidecar-go/internal/store/uploads_test.go`                 | Add store tests for concurrent-transfer ordering and fallbacks                  |
+| `services/sidecar-go/internal/api/router_test.go`                    | Add HTTP regression test that `/dashboard/devices` preserves the intended order |
+| `apps/desktop/src/renderer/stores/dashboard-store.ts`                | Make same-status ordering explicit and preserve incoming order                  |
+| `apps/desktop/src/renderer/stores/__tests__/dashboard-store.test.ts` | Add renderer tests for same-status stability and concurrent transfer promotion  |
+| `docs/testing/beta-test-matrix.md`                                   | Add multi-device concurrent-upload smoke coverage                               |
 
 ---
 
 ## Task 1: Sidecar store — make dashboard ordering deterministic
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/store/uploads.go`
 - Modify: `services/sidecar-go/internal/store/uploads_test.go`
 
@@ -154,6 +155,7 @@ git commit -m "feat(sidecar): order dashboard devices for concurrent transfers"
 ## Task 2: Sidecar HTTP API — lock the order at the `/dashboard/devices` boundary
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/router_test.go`
 
 - [ ] **Step 1: Add failing HTTP regression test**
@@ -194,6 +196,7 @@ git commit -m "test(sidecar): cover concurrent dashboard device ordering"
 ## Task 3: Desktop store — preserve same-status input order explicitly
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/stores/dashboard-store.ts`
 - Modify: `apps/desktop/src/renderer/stores/__tests__/dashboard-store.test.ts`
 
@@ -252,6 +255,7 @@ git commit -m "feat(desktop): preserve concurrent device order in dashboard"
 ## Task 4: Beta matrix — add concurrent multi-device smoke coverage
 
 **Files:**
+
 - Modify: `docs/testing/beta-test-matrix.md`
 
 - [ ] **Step 1: Add a dedicated manual smoke scenario**

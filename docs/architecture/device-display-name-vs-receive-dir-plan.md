@@ -361,9 +361,7 @@ func (fw *FileWriter) Finalize(receivePath, deviceAlias, date, filename, fileKey
 目前 `DeviceHeader.tsx` 和 `DeviceDetailPage.tsx` 用 regex 比對 `clientName` 判斷設備類型：
 
 ```tsx
-const isPhone = /iphone|ipad|galaxy|pixel|android|mobile/i.test(
-  device.clientName,
-);
+const isPhone = /iphone|ipad|galaxy|pixel|android|mobile/i.test(device.clientName);
 ```
 
 如果前端改讀 `displayName`，使用者設了像「我的手機」這種 alias，regex 會失敗。改用 `platform` 欄位可徹底解決。sidecar 目前會從 `HELLO_REQ.clientPlatform` 暫存到 connection state，並在配對與 returning-device metadata refresh 時寫回 `paired_devices.platform`；對尚未送出 `clientPlatform` 的舊 client，sidecar 仍保留 `"ios"` fallback。

@@ -13,11 +13,13 @@
 ### Task 1: [contracts] Define TURN and Signaling DTOs
 
 **Files:**
+
 - Modify: `packages/contracts/src/types.ts`
 - Modify: `packages/contracts/src/index.ts`
 
 - [ ] **Step 1: Write DTO interfaces in types.ts**
-  Add the following interfaces to the end of `packages/contracts/src/types.ts`:
+      Add the following interfaces to the end of `packages/contracts/src/types.ts`:
+
   ```typescript
   export interface TurnCredentialsDTO {
     username: string;
@@ -45,14 +47,15 @@
   ```
 
 - [ ] **Step 2: Export new types in index.ts**
-  Ensure the new types are exported in `packages/contracts/src/index.ts` if not exported automatically.
+      Ensure the new types are exported in `packages/contracts/src/index.ts` if not exported automatically.
+
   ```typescript
   export * from './types';
   ```
 
 - [ ] **Step 3: Run build to update contract bundle**
-  Run: `pnpm --filter @lynavo-drive/contracts build`
-  Expected: Command succeeds, generating updated build outputs under `packages/contracts/dist`.
+      Run: `pnpm --filter @lynavo-drive/contracts build`
+      Expected: Command succeeds, generating updated build outputs under `packages/contracts/dist`.
 
 - [ ] **Step 4: Commit contracts changes**
   ```bash
@@ -65,12 +68,14 @@
 ### Task 2: [server] Implement Dynamic TURN Credentials Service
 
 **Files:**
+
 - Create: `internal/service/turn_service.go` (in `vivi-drop-server` workspace)
 - Modify: `internal/handler/router.go`
 - Modify: `internal/handler/auth.go`
 
 - [ ] **Step 1: Write TURN credentials generator service**
-  Create `internal/service/turn_service.go`:
+      Create `internal/service/turn_service.go`:
+
   ```go
   package service
 
@@ -114,7 +119,8 @@
   ```
 
 - [ ] **Step 2: Add Turn Credentials Handler in auth.go**
-  Add the following method to `internal/handler/auth.go`:
+      Add the following method to `internal/handler/auth.go`:
+
   ```go
   func (h *AuthHandler) GetTurnCredentials(c *gin.Context) {
   	claims, exists := c.Get("claims") // Retrieve authenticated user claims from AuthMiddleware
@@ -129,14 +135,15 @@
   ```
 
 - [ ] **Step 3: Register route in router.go**
-  Modify `internal/handler/router.go` to include the route:
+      Modify `internal/handler/router.go` to include the route:
+
   ```go
   v1.GET("/tunnel/turn-credentials", AuthMiddleware(cfg.JWT), auth.GetTurnCredentials)
   ```
 
 - [ ] **Step 4: Verify Compilation**
-  Run: `make build` inside `vivi-drop-server`
-  Expected: Build succeeds without compiler errors.
+      Run: `make build` inside `vivi-drop-server`
+      Expected: Build succeeds without compiler errors.
 
 - [ ] **Step 5: Commit server TURN service changes**
   ```bash
@@ -149,11 +156,13 @@
 ### Task 3: [server] Implement WebSocket Signaling Hub
 
 **Files:**
+
 - Create: `internal/handler/signaling.go` (in `vivi-drop-server` workspace)
 - Modify: `internal/handler/router.go`
 
 - [ ] **Step 1: Write WebSocket signaling and pairing validator handler**
-  Create `internal/handler/signaling.go`:
+      Create `internal/handler/signaling.go`:
+
   ```go
   package handler
 
@@ -294,14 +303,15 @@
   ```
 
 - [ ] **Step 2: Register websocket endpoint in router.go**
-  Add the route mapping in `internal/handler/router.go`:
+      Add the route mapping in `internal/handler/router.go`:
+
   ```go
   v1.GET("/tunnel/signaling", HandleSignaling)
   ```
 
 - [ ] **Step 3: Verify server compilation**
-  Run: `make build` inside `vivi-drop-server`
-  Expected: Build succeeds.
+      Run: `make build` inside `vivi-drop-server`
+      Expected: Build succeeds.
 
 - [ ] **Step 4: Commit server signaling hub changes**
   ```bash
@@ -314,21 +324,25 @@
 ### Task 4: [sidecar-go] Integrate Pion WebRTC and Yamux Multiplexer
 
 **Files:**
+
 - Modify: `services/sidecar-go/go.mod`
 - Create: `services/sidecar-go/internal/protocol/p2p_listener.go`
 
 - [ ] **Step 1: Update dependencies in go.mod**
-  Add WebRTC and Yamux dependencies:
+      Add WebRTC and Yamux dependencies:
+
   ```go
   require (
   	github.com/pion/webrtc/v4 v4.0.0
   	github.com/hashicorp/yamux v0.1.1
   )
   ```
+
   Run: `go mod tidy` in `services/sidecar-go/`
 
 - [ ] **Step 2: Implement WebRTC connection and TCP loopback forwarder**
-  Create `services/sidecar-go/internal/protocol/p2p_listener.go`:
+      Create `services/sidecar-go/internal/protocol/p2p_listener.go`:
+
   ```go
   package protocol
 
@@ -571,8 +585,8 @@
   ```
 
 - [ ] **Step 3: Verify Sidecar Go Compilation**
-  Run: `go build -o test_bin ./cmd/...` in `services/sidecar-go`
-  Expected: Compiles clean.
+      Run: `go build -o test_bin ./cmd/...` in `services/sidecar-go`
+      Expected: Compiles clean.
 
 - [ ] **Step 4: Commit sidecar-go traversal changes**
   ```bash
@@ -585,11 +599,13 @@
 ### Task 5: [mobile-ios] Implement Swift Native Loopback TCP Proxy
 
 **Files:**
+
 - Create: `apps/mobile/ios/SyncEngine/LocalTCPProxy.swift`
 - Modify: `apps/mobile/ios/SyncEngine/SharedFilesService.swift`
 
 - [ ] **Step 1: Write native local TCP loopback server using Network.framework**
-  Create `apps/mobile/ios/SyncEngine/LocalTCPProxy.swift`:
+      Create `apps/mobile/ios/SyncEngine/LocalTCPProxy.swift`:
+
   ```swift
   import Foundation
   import Network
@@ -610,7 +626,7 @@
           let parameters = NWParameters.tcp
           let loopback = try! IPv4Address("127.0.0.1")
           parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(loopback), port: NWEndpoint.Port(integerLiteral: port))
-          
+
           listener = try NWListener(using: parameters)
           listener?.stateUpdateHandler = { state in
               if case .failed(let error) = state {
@@ -649,8 +665,9 @@
   ```
 
 - [ ] **Step 2: Adapt SharedFilesService to check tunnel status**
-  Modify `SharedFilesService.swift`:
-  Add Dynamic Port routing check to `buildURL` function.
+      Modify `SharedFilesService.swift`:
+      Add Dynamic Port routing check to `buildURL` function.
+
   ```swift
   // In apps/mobile/ios/SyncEngine/SharedFilesService.swift
   var tunnelPort: UInt16?
@@ -659,7 +676,7 @@
   private func buildURL(path: String) throws -> URL {
       var components = URLComponents()
       components.scheme = "http"
-      
+
       if isTunnelActive, let port = tunnelPort {
           components.host = "127.0.0.1"
           components.port = Int(port)
@@ -671,7 +688,7 @@
           components.port = Self.sidecarHttpPort
       }
       components.path = path
-      
+
       guard let url = components.url else {
           throw SyncEngineError.networkError("Invalid URL")
       }

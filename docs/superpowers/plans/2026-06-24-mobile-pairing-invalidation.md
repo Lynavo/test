@@ -68,6 +68,7 @@ This increment extends the already-planned mobile pairing invalidation flow so d
 ### Task A: Sidecar Active Invalidation Frame
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/protocol/frame.go`
 - Modify: `services/sidecar-go/internal/server/listener.go`
 - Modify: `services/sidecar-go/internal/server/connection.go`
@@ -103,6 +104,7 @@ cd services/sidecar-go && go test ./internal/protocol ./internal/server ./intern
 ### Task B: Android Active Invalidation Frame
 
 **Files:**
+
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 - Test: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
@@ -118,6 +120,7 @@ Add `TYPE_PAIRING_INVALIDATED = 0x0014`. When an authenticated sync read receive
 ### Task C: iOS Active Invalidation Frame
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift`
 - Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
 - Modify: `apps/mobile/ios/SyncEngine/TcpTransport.swift`
@@ -135,6 +138,7 @@ Add `.pairingInvalidated = 0x0014`, convert that frame into a typed `PairingInva
 ### Task D: Idle Mobile Control Session
 
 **Files:**
+
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 - Test: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
@@ -161,6 +165,7 @@ Run focused Android/iOS/sidecar tests, then compile Android global debug and Swi
 ## Task 1: JS Contract And Central Navigation Watcher
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/SyncEngineModule.ts`
 - Modify: `apps/mobile/src/navigation/RootNavigator.tsx`
 - Test: `apps/mobile/src/navigation/__tests__/RootNavigator.pairingInvalidation.test.tsx`
@@ -200,11 +205,7 @@ jest.mock('../../screens/DeviceDiscoveryGlobalScreen', () => ({
   DeviceDiscoveryGlobalScreen: ({ route }: { route?: { params?: Record<string, unknown> } }) => {
     const React = require('react');
     const { Text } = require('react-native');
-    return (
-      <Text>
-        DeviceDiscoveryGlobal:{String(route?.params?.reason ?? 'none')}
-      </Text>
-    );
+    return <Text>DeviceDiscoveryGlobal:{String(route?.params?.reason ?? 'none')}</Text>;
   },
 }));
 
@@ -234,9 +235,13 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('@react-navigation/stack', () => ({
   createStackNavigator: () => ({
     Navigator: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    Screen: ({ component: Component, initialParams }: { component: React.ComponentType<any>; initialParams?: Record<string, unknown> }) => (
-      <Component route={{ params: initialParams }} />
-    ),
+    Screen: ({
+      component: Component,
+      initialParams,
+    }: {
+      component: React.ComponentType<any>;
+      initialParams?: Record<string, unknown>;
+    }) => <Component route={{ params: initialParams }} />,
   }),
 }));
 
@@ -250,7 +255,7 @@ jest.mock('@react-navigation/bottom-tabs', () => ({
 describe('RootNavigator pairing invalidation routing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    Object.keys(nativeEventHandlers).forEach(key => delete nativeEventHandlers[key]);
+    Object.keys(nativeEventHandlers).forEach((key) => delete nativeEventHandlers[key]);
     (isGlobalMarket as jest.Mock).mockReturnValue(true);
     (useAuth as jest.Mock).mockReturnValue({
       isLoading: false,
@@ -352,16 +357,13 @@ export const PAIRING_INVALIDATED_EVENT = 'onPairingInvalidated';
 
 export const PAIRING_INVALIDATED_ROUTE_REASON = 'pairing_invalidated' as const;
 
-export type PairingInvalidatedRouteReason =
-  typeof PAIRING_INVALIDATED_ROUTE_REASON;
+export type PairingInvalidatedRouteReason = typeof PAIRING_INVALIDATED_ROUTE_REASON;
 
 export type PairingInvalidatedEvent = {
   reason?: string;
 };
 
-export function isPairingInvalidatedEvent(
-  payload: unknown,
-): payload is PairingInvalidatedEvent {
+export function isPairingInvalidatedEvent(payload: unknown): payload is PairingInvalidatedEvent {
   return (
     payload === null ||
     payload === undefined ||
@@ -406,26 +408,23 @@ function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
     if (!nativeModule) return;
 
     const emitter = new NativeEventEmitter(nativeModule);
-    const subscription = emitter.addListener(
-      PAIRING_INVALIDATED_EVENT,
-      payload => {
-        if (!isPairingInvalidatedEvent(payload) || resetInFlightRef.current) {
-          return;
-        }
-        resetInFlightRef.current = true;
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [
-              {
-                name: 'DeviceDiscovery',
-                params: { reason: PAIRING_INVALIDATED_ROUTE_REASON },
-              },
-            ],
-          }),
-        );
-      },
-    );
+    const subscription = emitter.addListener(PAIRING_INVALIDATED_EVENT, (payload) => {
+      if (!isPairingInvalidatedEvent(payload) || resetInFlightRef.current) {
+        return;
+      }
+      resetInFlightRef.current = true;
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [
+            {
+              name: 'DeviceDiscovery',
+              params: { reason: PAIRING_INVALIDATED_ROUTE_REASON },
+            },
+          ],
+        }),
+      );
+    });
 
     return () => subscription.remove();
   }, [enabled, navigation]);
@@ -438,9 +437,9 @@ In `AuthedStack.decide`, before `resolveDefaultAuthedRoute()`:
 
 ```ts
 if (globalMarket) {
-  const invalidation = await NativeModules.NativeSyncEngine
-    ?.getBindingInvalidationState?.()
-    .catch(() => null);
+  const invalidation = await NativeModules.NativeSyncEngine?.getBindingInvalidationState?.().catch(
+    () => null,
+  );
   if (invalidation) {
     if (!cancelled) {
       setInitialDeviceDiscoveryReason(PAIRING_INVALIDATED_ROUTE_REASON);
@@ -454,8 +453,9 @@ if (globalMarket) {
 Add this state beside `initialRoute`:
 
 ```ts
-const [initialDeviceDiscoveryReason, setInitialDeviceDiscoveryReason] =
-  useState<PairingInvalidatedRouteReason | undefined>(undefined);
+const [initialDeviceDiscoveryReason, setInitialDeviceDiscoveryReason] = useState<
+  PairingInvalidatedRouteReason | undefined
+>(undefined);
 ```
 
 When setting `Subscription`, a visual QA route, or the route returned by `resolveDefaultAuthedRoute()`, also call:
@@ -504,6 +504,7 @@ git commit -m "feat(mobile): route pairing invalidation globally"
 ## Task 2: Device Discovery Invalidation Message
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/DeviceDiscoveryGlobalScreen.tsx`
 - Modify: `apps/mobile/src/i18n/locales/en/deviceDiscovery.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json`
@@ -518,18 +519,14 @@ it('shows a pairing invalidated message while keeping pairing choices available'
   mockHasSeenUnconnectedGuide.mockResolvedValue(true);
 
   const screen = render(
-    <DeviceDiscoveryGlobalScreen
-      route={{ params: { reason: 'pairing_invalidated' } } as never}
-    />,
+    <DeviceDiscoveryGlobalScreen route={{ params: { reason: 'pairing_invalidated' } } as never} />,
   );
 
   await waitFor(() => {
     expect(screen.getByText('需要重新配对这台电脑')).toBeTruthy();
   });
 
-  expect(
-    screen.getByText('这台电脑已更新连接码。请重新配对后继续同步。'),
-  ).toBeTruthy();
+  expect(screen.getByText('这台电脑已更新连接码。请重新配对后继续同步。')).toBeTruthy();
   expect(screen.getByText('手动配对')).toBeTruthy();
   expect(screen.getByText('Studio Mac')).toBeTruthy();
 });
@@ -579,23 +576,24 @@ type DeviceDiscoveryGlobalScreenProps = {
 Derive the flag:
 
 ```ts
-const showPairingInvalidatedNotice =
-  route?.params?.reason === 'pairing_invalidated';
+const showPairingInvalidatedNotice = route?.params?.reason === 'pairing_invalidated';
 ```
 
 Render this before the devices card:
 
 ```tsx
-{showPairingInvalidatedNotice ? (
-  <FlowStateCard
-    state={{
-      title: t('deviceDiscovery.global.pairingInvalidatedTitle'),
-      description: t('deviceDiscovery.global.pairingInvalidatedDesc'),
-      icon: 'key-outline',
-      tone: 'warning',
-    }}
-  />
-) : null}
+{
+  showPairingInvalidatedNotice ? (
+    <FlowStateCard
+      state={{
+        title: t('deviceDiscovery.global.pairingInvalidatedTitle'),
+        description: t('deviceDiscovery.global.pairingInvalidatedDesc'),
+        icon: 'key-outline',
+        tone: 'warning',
+      }}
+    />
+  ) : null;
+}
 ```
 
 Do not fold this into `connectionStateContent`; that object hides device rows and recent desktops when present.
@@ -620,6 +618,7 @@ git commit -m "feat(mobile): explain invalidated pairing in discovery"
 ## Task 3: iOS Native Pairing Invalidation
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicy.swift`
 - Modify: `apps/mobile/ios/SyncEngine/PresenceReconnectPolicyTests/main.swift`
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
@@ -779,6 +778,7 @@ git commit -m "feat(ios): emit pairing invalidation on token rejection"
 ## Task 4: Android Native Pairing Invalidation
 
 **Files:**
+
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 - Modify: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
@@ -926,6 +926,7 @@ git commit -m "feat(android): emit pairing invalidation on token rejection"
 ## Task 5: End-To-End Verification And Cleanup
 
 **Files:**
+
 - Verify all files touched in Tasks 1-4.
 - Update docs only if implementation discovers behavior that differs from `docs/superpowers/specs/2026-06-24-mobile-pairing-invalidation-design.md`.
 

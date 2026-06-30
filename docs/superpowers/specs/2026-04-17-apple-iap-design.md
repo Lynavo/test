@@ -38,20 +38,20 @@
 
 ### 2.2 明確不做（非目標）
 
-| 項目 | 理由 |
-|---|---|
-| Family Sharing（家庭共享訂閱） | 產品決策不開啟，App Store Connect 該選項保持關閉 |
-| Yearly 試用 | 只有 monthly 配 7 天免費試用；yearly 首購即扣款 |
-| Promotional offers / 優惠碼 / 首購折扣 | 需 JWT 簽章與後端整合，本期不做 |
-| 除 monthly 7 天免費試用外的 introductory pricing（折扣價、pay-as-you-go） | 本期不做 |
-| 升降級按比例退款 UI | Apple 自動處理，前端僅透過 `loadSubscription` 呈現結果 |
-| 自建訂閱管理介面（取消 / 改方案） | 導引至 iOS 系統設定 `https://apps.apple.com/account/subscriptions` |
-| Android / Google Play Billing | 本期僅 iOS |
-| 多幣別 / 非中國區訂閱 | 產品目前只上 App Store China |
-| 沙盒帳號自動化 E2E | Apple 沙盒帳號無法自動化，只做 unit test + 手動測試矩陣 |
-| 訂閱到期前 push 提醒 | 後端 notification 服務另行規劃 |
-| 收據簽章本地驗證 | Mobile 端不自行驗證 receipt，完全信任後端 `/verify` |
-| 用 `getSubscriptions().localizedPrice` 取代硬編碼價格 | 列為後續迭代 |
+| 項目                                                                      | 理由                                                               |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Family Sharing（家庭共享訂閱）                                            | 產品決策不開啟，App Store Connect 該選項保持關閉                   |
+| Yearly 試用                                                               | 只有 monthly 配 7 天免費試用；yearly 首購即扣款                    |
+| Promotional offers / 優惠碼 / 首購折扣                                    | 需 JWT 簽章與後端整合，本期不做                                    |
+| 除 monthly 7 天免費試用外的 introductory pricing（折扣價、pay-as-you-go） | 本期不做                                                           |
+| 升降級按比例退款 UI                                                       | Apple 自動處理，前端僅透過 `loadSubscription` 呈現結果             |
+| 自建訂閱管理介面（取消 / 改方案）                                         | 導引至 iOS 系統設定 `https://apps.apple.com/account/subscriptions` |
+| Android / Google Play Billing                                             | 本期僅 iOS                                                         |
+| 多幣別 / 非中國區訂閱                                                     | 產品目前只上 App Store China                                       |
+| 沙盒帳號自動化 E2E                                                        | Apple 沙盒帳號無法自動化，只做 unit test + 手動測試矩陣            |
+| 訂閱到期前 push 提醒                                                      | 後端 notification 服務另行規劃                                     |
+| 收據簽章本地驗證                                                          | Mobile 端不自行驗證 receipt，完全信任後端 `/verify`                |
+| 用 `getSubscriptions().localizedPrice` 取代硬編碼價格                     | 列為後續迭代                                                       |
 
 ### 2.3 Trial 策略（後端 trial 與 Apple trial 並存）
 
@@ -66,32 +66,32 @@
 
 ### 3.1 後端契約
 
-| 端點 | 方法 | Request | Response |
-|---|---|---|---|
-| `/api/v1/subscription/status` | GET | `Authorization: Bearer <token>` | `{ status, plan, expire_at, trial_end }` |
-| `/api/v1/subscription/verify` | POST | `{ receipt_data, plan }` | `{}`（成功）/ 錯誤碼 |
+| 端點                          | 方法 | Request                         | Response                                 |
+| ----------------------------- | ---- | ------------------------------- | ---------------------------------------- |
+| `/api/v1/subscription/status` | GET  | `Authorization: Bearer <token>` | `{ status, plan, expire_at, trial_end }` |
+| `/api/v1/subscription/verify` | POST | `{ receipt_data, plan }`        | `{}`（成功）/ 錯誤碼                     |
 
 **錯誤碼**（`services/api.ts` 已定義）
 
-| Code | 名稱 | 意義 |
-|---|---|---|
-| 2001 | `IAP_VERIFY_FAILED` | Apple 回 status != 0，receipt 無效 |
-| 2002 | `RECEIPT_ALREADY_USED` | 同 receipt 已驗證過，**當成功處理** |
-| 2003 | `PRODUCT_ID_MISMATCH` | Receipt 的 product ID 不在 `validProducts` |
+| Code | 名稱                   | 意義                                       |
+| ---- | ---------------------- | ------------------------------------------ |
+| 2001 | `IAP_VERIFY_FAILED`    | Apple 回 status != 0，receipt 無效         |
+| 2002 | `RECEIPT_ALREADY_USED` | 同 receipt 已驗證過，**當成功處理**        |
+| 2003 | `PRODUCT_ID_MISMATCH`  | Receipt 的 product ID 不在 `validProducts` |
 
 ### 3.2 App Store Connect 設定
 
-| 項目 | 值 |
-|---|---|
-| Bundle ID | `com.vividrop.mobile.china` |
-| Monthly Product ID | `com.vividrop.mobile.china.monthly.999` |
-| Monthly 價格 | ¥9.9 / 月（auto-renewable） |
-| Monthly Introductory Offer | **7 天免費試用**（free trial） |
-| Yearly Product ID | `com.vividrop.mobile.china.yearly.10400` |
-| Yearly 價格 | ¥104 / 年（auto-renewable，無 trial） |
-| Subscription Group | 同一組（允許月 ↔ 年升降級） |
-| Family Sharing | **關閉** |
-| Webhook URL | 後端已設 V2 endpoint、Apple Root CA 鏈驗證 |
+| 項目                       | 值                                         |
+| -------------------------- | ------------------------------------------ |
+| Bundle ID                  | `com.vividrop.mobile.china`                |
+| Monthly Product ID         | `com.vividrop.mobile.china.monthly.999`    |
+| Monthly 價格               | ¥9.9 / 月（auto-renewable）                |
+| Monthly Introductory Offer | **7 天免費試用**（free trial）             |
+| Yearly Product ID          | `com.vividrop.mobile.china.yearly.10400`   |
+| Yearly 價格                | ¥104 / 年（auto-renewable，無 trial）      |
+| Subscription Group         | 同一組（允許月 ↔ 年升降級）                |
+| Family Sharing             | **關閉**                                   |
+| Webhook URL                | 後端已設 V2 endpoint、Apple Root CA 鏈驗證 |
 
 ### 3.3 Receipt 格式
 
@@ -109,39 +109,39 @@
 apps/mobile/
   package.json                     + react-native-iap ^12.16.x
   ios/Podfile.lock                 + (pod install 自動產生)
-  
+
   src/
     constants/
       iap.ts                       NEW  — IAP_PRODUCTS、PLAN_TO_PRODUCT、PRODUCT_TO_PLAN
       features.ts                  MOD  — 新增 IAP_ENABLED、IAP_RESTORE_ENABLED
-    
+
     services/
       iap-service.ts               NEW  — react-native-iap 封裝（initialize/purchase/restore/teardown/checkEligibility）
       iap-errors.ts                NEW  — Apple error code + backend 錯誤碼 → i18n key mapping
       subscription-service.ts      —    已存在，不動
-    
+
     hooks/
       useIapLifecycle.ts           NEW  — 綁 initialize/teardown 到 auth 狀態
-    
+
     screens/
       SubscriptionScreen.tsx       MOD  — 接真實 IAP、加 Restore 按鈕、加錯誤態、加 trial eligibility
-    
+
     stores/
       auth-store.tsx               MOD  — AuthProvider 掛 useIapLifecycle
-    
+
     i18n/locales/{en,zh-Hans,zh-Hant}/subscription.json
                                    MOD  — 新增 restore.*、errors.*、plans.monthly.trialOffer
 ```
 
 ### 4.2 模組責任
 
-| 模組 | 負責 | 不負責 |
-|---|---|---|
-| `constants/iap.ts` | Product ID 常數與 plan ↔ productId 雙向 map | |
-| `services/iap-service.ts` | `react-native-iap` 生命週期、purchase / restore Promise 包裝、孤兒交易偵測與 finish、trial eligibility 查詢 | 後端驗證、auth-store 更新、UI 狀態 |
-| `services/iap-errors.ts` | Apple error code（`E_USER_CANCELLED` 等）與 backend 錯誤碼（2001/2002/2003）的分類與 i18n key mapping | |
-| `hooks/useIapLifecycle.ts` | `isLoggedIn` 變 true 時 `initialize()`、訂閱 `onOrphanPurchaseVerified` 呼叫 `loadSubscription()`；`isLoggedIn` 變 false 時 unsubscribe + `teardown()` | 購買邏輯 |
-| `SubscriptionScreen.tsx` | UI 狀態（idle / loading / error / success / restoring / trial-copy-variant）、orchestrate `iapService.purchase` → `verifyIapReceipt` → `loadSubscription` | native 細節、lifecycle |
+| 模組                       | 負責                                                                                                                                                      | 不負責                             |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `constants/iap.ts`         | Product ID 常數與 plan ↔ productId 雙向 map                                                                                                               |                                    |
+| `services/iap-service.ts`  | `react-native-iap` 生命週期、purchase / restore Promise 包裝、孤兒交易偵測與 finish、trial eligibility 查詢                                               | 後端驗證、auth-store 更新、UI 狀態 |
+| `services/iap-errors.ts`   | Apple error code（`E_USER_CANCELLED` 等）與 backend 錯誤碼（2001/2002/2003）的分類與 i18n key mapping                                                     |                                    |
+| `hooks/useIapLifecycle.ts` | `isLoggedIn` 變 true 時 `initialize()`、訂閱 `onOrphanPurchaseVerified` 呼叫 `loadSubscription()`；`isLoggedIn` 變 false 時 unsubscribe + `teardown()`    | 購買邏輯                           |
+| `SubscriptionScreen.tsx`   | UI 狀態（idle / loading / error / success / restoring / trial-copy-variant）、orchestrate `iapService.purchase` → `verifyIapReceipt` → `loadSubscription` | native 細節、lifecycle             |
 
 ### 4.3 `constants/iap.ts` 完整內容
 
@@ -150,7 +150,7 @@ import type { SubscriptionPlan } from '../stores/auth-store';
 
 export const IAP_PRODUCTS = {
   monthly: 'com.vividrop.mobile.china.monthly.999',
-  yearly:  'com.vividrop.mobile.china.yearly.10400',
+  yearly: 'com.vividrop.mobile.china.yearly.10400',
 } as const;
 
 export type IapProductId = (typeof IAP_PRODUCTS)[keyof typeof IAP_PRODUCTS];
@@ -175,7 +175,7 @@ export const TRIAL_ELIGIBLE_PRODUCTS: readonly IapProductId[] = [IAP_PRODUCTS.mo
 
 ```ts
 export interface PurchaseReceipt {
-  transactionReceipt: string;   // base64 — 送給 /verify 的 receipt_data
+  transactionReceipt: string; // base64 — 送給 /verify 的 receipt_data
   productId: IapProductId;
   transactionId: string;
 }
@@ -186,23 +186,23 @@ export interface EligibilityResult {
 }
 
 export interface IapService {
-  initialize(): Promise<void>;        // 在 login 後呼叫，多次呼叫 idempotent
-  teardown(): Promise<void>;          // 在 logout 時呼叫
-  
-  getProducts(): Promise<Product[]>;  // 拉 App Store 產品資訊（localizedPrice、title 等）
-  checkEligibility(): Promise<EligibilityResult[]>;  // 查 intro offer 合規
-  
+  initialize(): Promise<void>; // 在 login 後呼叫，多次呼叫 idempotent
+  teardown(): Promise<void>; // 在 logout 時呼叫
+
+  getProducts(): Promise<Product[]>; // 拉 App Store 產品資訊（localizedPrice、title 等）
+  checkEligibility(): Promise<EligibilityResult[]>; // 查 intro offer 合規
+
   purchase(productId: IapProductId): Promise<PurchaseReceipt>;
   restore(): Promise<PurchaseReceipt[]>;
-  
+
   // 只在 /verify 成功後或 PRODUCT_ID_MISMATCH 時呼叫
   finishTransaction(transactionId: string): Promise<void>;
-  
+
   // 供 auth-store / hooks 訂閱「孤兒交易已驗證成功」事件
-  onOrphanPurchaseVerified(cb: () => void): () => void;  // 回傳 unsubscribe
+  onOrphanPurchaseVerified(cb: () => void): () => void; // 回傳 unsubscribe
 }
 
-export const iapService: IapService;  // singleton
+export const iapService: IapService; // singleton
 ```
 
 ---
@@ -258,31 +258,37 @@ export const iapService: IapService;  // singleton
 ### 5.3 關鍵失敗路徑
 
 **A. 使用者取消**
+
 - `react-native-iap` 拋 `E_USER_CANCELLED`
 - `iap-errors.ts` 分類 → `cancelled`
 - UI **靜默回 idle**，不彈 alert、不當錯誤 log
 
 **B. Deferred（Screen Time 家長控管 / 企業 MDM）**
+
 - 拋 `E_DEFERRED_PAYMENT`
 - UI 彈 `errors.deferred` 訊息 + 回 idle
 - Transaction 保留，核准後 listener 會收到
 
 **C. Apple UI 失敗 / 網路錯誤（`E_NETWORK_ERROR`, `E_UNKNOWN`）**
+
 - UI 進 `error` 狀態 + 「重試」按鈕
 - 無 transaction 需處理
 
 **D. 驗證階段網路失敗（最危險 — Apple 已扣款但 `/verify` 沒到）**
+
 - **不 finish transaction**，Apple 會在下次啟動透過 listener 重送
 - Service 呼叫方立即做 2 次重試（exponential backoff 1s → 4s，合計約 5s）
 - 仍失敗 → UI 顯示 `errors.verifyRetrying` + 提供 Restore 按鈕當手動救援
 - 下次 app 啟動 `initialize()` 掛 listener 時自動補打 `/verify`（孤兒路徑）
 
 **E. Backend 2002 `RECEIPT_ALREADY_USED`**
+
 - **當成功處理**：`finishTransaction` + `loadSubscription`
 - `iap-errors.ts` 把 2002 標記為 `SILENT_SUCCESS`
 - 這是最重要的一條 — 防止「付款後 crash」變成「永遠訂閱不了」
 
 **F. Backend 2003 `PRODUCT_ID_MISMATCH`**
+
 - **必須 finish transaction**（否則 listener 無限迴圈）
 - UI 顯示 `errors.productMismatch`（「產品設定有誤，請聯絡客服」）
 - 不自動重試
@@ -308,7 +314,7 @@ handleOrphanPurchase(purchase) {
     log.warn('orphan receipt with unknown productId', purchase.productId);
     return;
   }
-  
+
   try {
     await verifyIapReceipt(purchase.transactionReceipt, plan);
     // 200 OK 或 2002 都來到這裡
@@ -340,11 +346,11 @@ handleOrphanPurchase(purchase) {
 
 月卡：
 
-| Eligibility | UI 顯示 |
-|---|---|
-| `eligibleForIntroOffer = true` | `subscription.plans.monthly.trialOffer`（例：「7 天免費試用，之後 ¥9.9/月」） |
-| `eligibleForIntroOffer = false` | `subscription.plans.monthly.subtitle`（例：「¥9.9/月」） |
-| 查詢失敗 / 尚未完成 | fallback 到非 trial 文案（不誤導使用者） |
+| Eligibility                     | UI 顯示                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `eligibleForIntroOffer = true`  | `subscription.plans.monthly.trialOffer`（例：「7 天免費試用，之後 ¥9.9/月」） |
+| `eligibleForIntroOffer = false` | `subscription.plans.monthly.subtitle`（例：「¥9.9/月」）                      |
+| 查詢失敗 / 尚未完成             | fallback 到非 trial 文案（不誤導使用者）                                      |
 
 年卡：永遠顯示 `subscription.plans.yearly.*`，與 eligibility 無關。
 
@@ -392,9 +398,9 @@ tap「恢復購買」
   → iapService.restore()
     → getAvailablePurchases()  // StoreKit 2 回所有 active subscription
     → receipts: Purchase[]
-  
+
   if receipts.length === 0 → 顯示 "empty"
-  
+
   foreach receipt in receipts.slice(0, MAX_RESTORE_RECEIPTS=10):
     plan = productIdToPlan(receipt.productId)
     if !plan: skip
@@ -409,7 +415,7 @@ tap「恢復購買」
       skip (不同 bundle 殘留)
     catch 其他:
       failCount++ (不 finish)
-  
+
   if successCount > 0 → loadSubscription() + 顯示 "success"
   else → 顯示 "failed"
 ```
@@ -425,18 +431,18 @@ tap「恢復購買」
 
 ## 8. 錯誤矩陣
 
-| 來源 | 錯誤碼 / 事件 | 分類 | UI 行為 | Transaction 處理 |
-|---|---|---|---|---|
-| RN-IAP | `E_USER_CANCELLED` | `cancelled` | 靜默回 idle，不 alert | 無 |
-| RN-IAP | `E_DEFERRED_PAYMENT` | `deferred` | alert `errors.deferred` + 回 idle | 保留（待核准） |
-| RN-IAP | `E_NETWORK_ERROR` | `retryable` | `error` 狀態 + 重試按鈕 | 無 |
-| RN-IAP | `E_ALREADY_OWNED` | `auto_restore` | 自動觸發 restore 流程 | restore 處理 |
-| RN-IAP | `E_ITEM_UNAVAILABLE` | `fatal_config` | `errors.productUnavailable` | 無 |
-| RN-IAP | `E_UNKNOWN` | `retryable` | `errors.iapFailed` + 重試 | 有 receipt 走孤兒 |
-| Backend | 2001 `IAP_VERIFY_FAILED` | `retryable` | `errors.verifyFailed` + 重試 | 保留（listener 重送） |
-| Backend | 2002 `RECEIPT_ALREADY_USED` | `silent_success` | success flow | finish |
-| Backend | 2003 `PRODUCT_ID_MISMATCH` | `fatal_mismatch` | `errors.productMismatch` | **finish**（避免卡 queue） |
-| Backend | 9004 `NETWORK_ERROR` / 5xx | `retryable` | `error+已付款未驗證` + 自動 retry 2 次 + Restore 按鈕 | 保留 |
+| 來源    | 錯誤碼 / 事件               | 分類             | UI 行為                                               | Transaction 處理           |
+| ------- | --------------------------- | ---------------- | ----------------------------------------------------- | -------------------------- |
+| RN-IAP  | `E_USER_CANCELLED`          | `cancelled`      | 靜默回 idle，不 alert                                 | 無                         |
+| RN-IAP  | `E_DEFERRED_PAYMENT`        | `deferred`       | alert `errors.deferred` + 回 idle                     | 保留（待核准）             |
+| RN-IAP  | `E_NETWORK_ERROR`           | `retryable`      | `error` 狀態 + 重試按鈕                               | 無                         |
+| RN-IAP  | `E_ALREADY_OWNED`           | `auto_restore`   | 自動觸發 restore 流程                                 | restore 處理               |
+| RN-IAP  | `E_ITEM_UNAVAILABLE`        | `fatal_config`   | `errors.productUnavailable`                           | 無                         |
+| RN-IAP  | `E_UNKNOWN`                 | `retryable`      | `errors.iapFailed` + 重試                             | 有 receipt 走孤兒          |
+| Backend | 2001 `IAP_VERIFY_FAILED`    | `retryable`      | `errors.verifyFailed` + 重試                          | 保留（listener 重送）      |
+| Backend | 2002 `RECEIPT_ALREADY_USED` | `silent_success` | success flow                                          | finish                     |
+| Backend | 2003 `PRODUCT_ID_MISMATCH`  | `fatal_mismatch` | `errors.productMismatch`                              | **finish**（避免卡 queue） |
+| Backend | 9004 `NETWORK_ERROR` / 5xx  | `retryable`      | `error+已付款未驗證` + 自動 retry 2 次 + Restore 按鈕 | 保留                       |
 
 **設計原則**
 
@@ -451,13 +457,13 @@ tap「恢復購買」
 
 ### 9.1 單元 / 元件測試（vitest）
 
-| 測試檔 | 驗證項 |
-|---|---|
-| `services/__tests__/iap-service.test.ts` | `initialize()` idempotent、purchase Deferred 三路徑（resolve/reject/timeout）、孤兒交易 handler（2002 當成功、2003 強制 finish）、restore 三路徑（空/部分/全失敗）、`teardown()` 正確 unsubscribe、`checkEligibility` 對 monthly / yearly 回傳正確 |
-| `services/__tests__/iap-errors.test.ts` | 每個 error code 有對應 i18n key、cancel 不當錯誤、2002 標記 SILENT_SUCCESS |
-| `constants/__tests__/iap.test.ts` | `productIdToPlan` / `planToProductId` 雙向正確、未知 productId 回 null |
-| `hooks/__tests__/useIapLifecycle.test.ts` | login → initialize、logout → teardown、re-login 不 leak listener |
-| `screens/__tests__/SubscriptionScreen.test.tsx` | idle/loading/error/success/restoring 五態 UI 正確、Restore 按鈕觸發 restore、2002 當成功觸發 PaymentSuccessModal、eligibility 切換月卡文案 |
+| 測試檔                                          | 驗證項                                                                                                                                                                                                                                             |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/__tests__/iap-service.test.ts`        | `initialize()` idempotent、purchase Deferred 三路徑（resolve/reject/timeout）、孤兒交易 handler（2002 當成功、2003 強制 finish）、restore 三路徑（空/部分/全失敗）、`teardown()` 正確 unsubscribe、`checkEligibility` 對 monthly / yearly 回傳正確 |
+| `services/__tests__/iap-errors.test.ts`         | 每個 error code 有對應 i18n key、cancel 不當錯誤、2002 標記 SILENT_SUCCESS                                                                                                                                                                         |
+| `constants/__tests__/iap.test.ts`               | `productIdToPlan` / `planToProductId` 雙向正確、未知 productId 回 null                                                                                                                                                                             |
+| `hooks/__tests__/useIapLifecycle.test.ts`       | login → initialize、logout → teardown、re-login 不 leak listener                                                                                                                                                                                   |
+| `screens/__tests__/SubscriptionScreen.test.tsx` | idle/loading/error/success/restoring 五態 UI 正確、Restore 按鈕觸發 restore、2002 當成功觸發 PaymentSuccessModal、eligibility 切換月卡文案                                                                                                         |
 
 Mock 策略：`services/iap-service.ts` 在 screen test 完全 mock；`iap-service.test.ts` 自己 mock `react-native-iap` 模組。
 
@@ -465,20 +471,20 @@ Mock 策略：`services/iap-service.ts` 在 screen test 完全 mock；`iap-servi
 
 新增到 `docs/testing/beta-test-matrix.md`：
 
-| 場景 | 前置條件 | 驗證點 |
-|---|---|---|
-| 首次訂閱 monthly（享 trial） | 全新沙盒帳號 | UI 顯示「7 天免費試用」、扣款 0 元、receipt `is_trial_period: true`、第 7 天自動轉付費 |
-| 已用過 trial 訂閱 monthly | 沙盒帳號先用過 trial | UI 顯示「¥9.9/月」無 trial 文案、立即扣款 |
-| Trial 期間取消自動續訂 | Monthly trial active | 第 7 天到期變 `sub_expired`、不扣款 |
-| 首次訂閱 yearly | 全新沙盒帳號 | 扣款 ¥104、訂閱期限 1 年、無 trial |
-| 訂閱後殺 app 重啟 | Monthly active | 狀態仍 subscribed、無重複扣款 |
-| 付款後 `/verify` 前斷網 | Sandbox + 飛航模式 | 恢復網路後下次啟動自動補驗證 |
-| 使用者取消購買 UI | Sandbox | 無 alert、無錯誤 log、UI 回 idle |
-| Deferred（Screen Time） | 啟用 Screen Time 付款限制 | 顯示 deferred alert |
-| 跨裝置 Restore | 裝置 A 訂閱、裝置 B 登同帳號 | 裝置 B Restore → 狀態 subscribed |
-| 月訂升級為年訂 | Monthly active | Apple 按比例處理、webhook V2 同步、UI 更新為 yearly |
-| 取消自動續訂 | 已訂閱 | 到期前顯示「已取消」、到期變 sub_expired |
-| 退款（sandbox CONSUMPTION_REQUEST） | 訂閱後觸發退款 | Webhook V2 同步、狀態變 sub_expired |
+| 場景                                | 前置條件                     | 驗證點                                                                                 |
+| ----------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| 首次訂閱 monthly（享 trial）        | 全新沙盒帳號                 | UI 顯示「7 天免費試用」、扣款 0 元、receipt `is_trial_period: true`、第 7 天自動轉付費 |
+| 已用過 trial 訂閱 monthly           | 沙盒帳號先用過 trial         | UI 顯示「¥9.9/月」無 trial 文案、立即扣款                                              |
+| Trial 期間取消自動續訂              | Monthly trial active         | 第 7 天到期變 `sub_expired`、不扣款                                                    |
+| 首次訂閱 yearly                     | 全新沙盒帳號                 | 扣款 ¥104、訂閱期限 1 年、無 trial                                                     |
+| 訂閱後殺 app 重啟                   | Monthly active               | 狀態仍 subscribed、無重複扣款                                                          |
+| 付款後 `/verify` 前斷網             | Sandbox + 飛航模式           | 恢復網路後下次啟動自動補驗證                                                           |
+| 使用者取消購買 UI                   | Sandbox                      | 無 alert、無錯誤 log、UI 回 idle                                                       |
+| Deferred（Screen Time）             | 啟用 Screen Time 付款限制    | 顯示 deferred alert                                                                    |
+| 跨裝置 Restore                      | 裝置 A 訂閱、裝置 B 登同帳號 | 裝置 B Restore → 狀態 subscribed                                                       |
+| 月訂升級為年訂                      | Monthly active               | Apple 按比例處理、webhook V2 同步、UI 更新為 yearly                                    |
+| 取消自動續訂                        | 已訂閱                       | 到期前顯示「已取消」、到期變 sub_expired                                               |
+| 退款（sandbox CONSUMPTION_REQUEST） | 訂閱後觸發退款               | Webhook V2 同步、狀態變 sub_expired                                                    |
 
 ### 9.3 沙盒帳號需求
 
@@ -496,20 +502,22 @@ Mock 策略：`services/iap-service.ts` 在 screen test 完全 mock；`iap-servi
 
 ```ts
 export const FEATURES = {
-  SUBSCRIPTION_ENFORCEMENT: false,  // 既有：paywall 強制
-  IAP_ENABLED: false,               // 新：實際 IAP 流程
-  IAP_RESTORE_ENABLED: false,       // 新：Restore 按鈕曝光
-} as const
+  SUBSCRIPTION_ENFORCEMENT: false, // 既有：paywall 強制
+  IAP_ENABLED: false, // 新：實際 IAP 流程
+  IAP_RESTORE_ENABLED: false, // 新：Restore 按鈕曝光
+} as const;
 ```
 
 ### 10.2 階段
 
 **階段 1 — Dev build 內部驗證（週 1）**
+
 - `IAP_ENABLED = true`（`__DEV__` only）
 - `SUBSCRIPTION_ENFORCEMENT = false`
 - 開發團隊用沙盒帳號跑完測試矩陣 12 條
 
 **階段 2 — TestFlight Beta（週 2）**
+
 - 所有 flag true
 - 發 TestFlight 給 20 名內測
 - 監控後端：2001/2002/2003 比例、`/verify` p95 latency、`RECEIPT_ALREADY_USED` 比例（> 5% 暗示前端 finish bug）
@@ -529,27 +537,27 @@ export const FEATURES = {
 
 上架後所有 flag true，監控：
 
-| 指標 | 健康值 | 異常代表 |
-|---|---|---|
-| `/verify` 成功率 | > 98% | 前端 bug |
-| 2002 比例 | < 3% | finish 邏輯問題 |
-| 2003 比例 | = 0 | Product ID 不同步 |
-| Restore 成功率 | > 80% | 帳號切換或驗證問題 |
+| 指標                                              | 健康值            | 異常代表            |
+| ------------------------------------------------- | ----------------- | ------------------- |
+| `/verify` 成功率                                  | > 98%             | 前端 bug            |
+| 2002 比例                                         | < 3%              | finish 邏輯問題     |
+| 2003 比例                                         | = 0               | Product ID 不同步   |
+| Restore 成功率                                    | > 80%             | 帳號切換或驗證問題  |
 | Trial → 付費轉換率（`DID_RENEW` / `INITIAL_BUY`） | > 30%（行業基準） | 產品定價 / 文案問題 |
 
 ---
 
 ## 11. 風險與應對
 
-| 風險 | 影響 | 應對 |
-|---|---|---|
-| `react-native-iap` 大版本 breaking | service 層要重寫 | Pin `^12.16.x`；升版前跑完測試矩陣 |
-| Sandbox 週期加速誤判 | 看起來正常的續訂在 prod 失敗 | TestFlight 用真實帳號持續驗證 |
-| Apple Review 退件（訂閱條款不夠明確） | 上架延遲 1 週 | Paywall 文案提審前由產品 / 法務 review |
-| `/verify` 後端掛 | 使用者付款後看不到訂閱 | 孤兒交易自動恢復 + Restore + webhook V2 second source of truth |
-| 中國區沙盒帳號審核與區域不符 | 開發自測卡關 | 沙盒帳號 region 選中國、裝置語言區域切中國 |
-| Product ID 命名價格調整後不換 | UI 與扣款不符 | Spec 註記產品 ID 尾綴僅是命名慣例；後續迭代用 `localizedPrice` |
-| Trial eligibility 查詢失敗 | 月卡文案預設到非 trial 版本 | Fallback 到非 trial 文案（不誤導），不阻塞 UI |
+| 風險                                  | 影響                         | 應對                                                           |
+| ------------------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| `react-native-iap` 大版本 breaking    | service 層要重寫             | Pin `^12.16.x`；升版前跑完測試矩陣                             |
+| Sandbox 週期加速誤判                  | 看起來正常的續訂在 prod 失敗 | TestFlight 用真實帳號持續驗證                                  |
+| Apple Review 退件（訂閱條款不夠明確） | 上架延遲 1 週                | Paywall 文案提審前由產品 / 法務 review                         |
+| `/verify` 後端掛                      | 使用者付款後看不到訂閱       | 孤兒交易自動恢復 + Restore + webhook V2 second source of truth |
+| 中國區沙盒帳號審核與區域不符          | 開發自測卡關                 | 沙盒帳號 region 選中國、裝置語言區域切中國                     |
+| Product ID 命名價格調整後不換         | UI 與扣款不符                | Spec 註記產品 ID 尾綴僅是命名慣例；後續迭代用 `localizedPrice` |
+| Trial eligibility 查詢失敗            | 月卡文案預設到非 trial 版本  | Fallback 到非 trial 文案（不誤導），不阻塞 UI                  |
 
 ---
 

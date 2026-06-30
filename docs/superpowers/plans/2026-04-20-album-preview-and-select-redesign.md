@@ -15,10 +15,12 @@
 ## File Map
 
 **Create:**
+
 - `apps/mobile/src/components/AssetPreviewModal.tsx` — modal + pager
 - `apps/mobile/src/components/__tests__/AssetPreviewModal.test.tsx` — unit tests
 
 **Modify:**
+
 - `packages/contracts/src/types.ts` — add `AssetPreviewSourceDTO`
 - `apps/mobile/ios/SyncEngine/AlbumBrowserService.swift` — add `getPreviewSource`
 - `apps/mobile/ios/SyncEngine/SyncEngineManager.swift` — expose `getAssetPreviewSource`, add cache cleanup
@@ -37,6 +39,7 @@
 ## Task 1: Add `AssetPreviewSourceDTO` to contracts
 
 **Files:**
+
 - Modify: `packages/contracts/src/types.ts` (after `AlbumAssetDTO` around line 206)
 
 - [ ] **Step 1: Add the DTO**
@@ -73,6 +76,7 @@ git commit -m "feat(contracts): Add AssetPreviewSourceDTO for album preview"
 ## Task 2: iOS native — image branch of `getPreviewSource`
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/AlbumBrowserService.swift`
 
 - [ ] **Step 1: Add cache dir and image method**
@@ -171,6 +175,7 @@ git commit -m "feat(ios): Add image branch of getPreviewSource with tmp cache"
 ## Task 3: iOS native — video branch of `getPreviewSource`
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/AlbumBrowserService.swift`
 
 - [ ] **Step 1: Implement `fetchVideoPreview`**
@@ -231,6 +236,7 @@ git commit -m "feat(ios): Add video branch of getPreviewSource with iCloud timeo
 ## Task 4: iOS native — preview cache cleanup
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 
 - [ ] **Step 1: Add cleanup method**
@@ -306,6 +312,7 @@ git commit -m "feat(ios): Add preview cache cleanup (24h TTL, 500MB cap)"
 ## Task 5: iOS Bridge — expose `getAssetPreviewSource`
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift` (add wrapper)
 - Modify: `apps/mobile/ios/SyncEngine/RNBridge.swift`
 - Modify: `apps/mobile/ios/SyncEngine/RNBridge.m`
@@ -364,6 +371,7 @@ git commit -m "feat(ios): Expose getAssetPreviewSource to RN bridge"
 ## Task 6: JS wrapper for `getAssetPreviewSource`
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/SyncEngineModule.ts`
 
 - [ ] **Step 1: Add import**
@@ -385,9 +393,7 @@ import type {
 Edit `SyncEngineModule.ts`, add after `getAlbumCollections` (around line 72):
 
 ```typescript
-export async function getAssetPreviewSource(
-  assetLocalId: string,
-): Promise<AssetPreviewSourceDTO> {
+export async function getAssetPreviewSource(assetLocalId: string): Promise<AssetPreviewSourceDTO> {
   const result = await NativeSyncEngine.getAssetPreviewSource(assetLocalId);
   return result as AssetPreviewSourceDTO;
 }
@@ -410,6 +416,7 @@ git commit -m "feat(mobile): Add getAssetPreviewSource JS wrapper"
 ## Task 7: Install `react-native-video`
 
 **Files:**
+
 - Modify: `apps/mobile/package.json`
 - Modify: `apps/mobile/ios/Podfile.lock` (auto-generated)
 
@@ -449,6 +456,7 @@ git commit -m "chore(mobile): Add react-native-video@^6 dependency"
 ## Task 8: `AssetPreviewModal` — skeleton + test
 
 **Files:**
+
 - Create: `apps/mobile/src/components/AssetPreviewModal.tsx`
 - Create: `apps/mobile/src/components/__tests__/AssetPreviewModal.test.tsx`
 
@@ -612,16 +620,14 @@ export const AssetPreviewModal: React.FC<AssetPreviewModalProps> = ({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={initialIndex}
-          keyExtractor={item => item.assetLocalId}
+          keyExtractor={(item) => item.assetLocalId}
           getItemLayout={(_, index) => ({
             length: SCREEN_WIDTH,
             offset: SCREEN_WIDTH * index,
             index,
           })}
-          onMomentumScrollEnd={event => {
-            const newIndex = Math.round(
-              event.nativeEvent.contentOffset.x / SCREEN_WIDTH,
-            );
+          onMomentumScrollEnd={(event) => {
+            const newIndex = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
             setActiveIndex(newIndex);
           }}
           renderItem={() => <View style={{ width: SCREEN_WIDTH }} />}
@@ -664,6 +670,7 @@ git commit -m "feat(mobile): Add AssetPreviewModal skeleton with pager header"
 ## Task 9: `AssetPreviewModal` — image rendering + loading/error
 
 **Files:**
+
 - Modify: `apps/mobile/src/components/AssetPreviewModal.tsx`
 - Modify: `apps/mobile/src/components/__tests__/AssetPreviewModal.test.tsx`
 
@@ -757,7 +764,7 @@ const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive }) => {
     let cancelled = false;
     setLoading(true);
     getAssetPreviewSource(asset.assetLocalId)
-      .then(result => {
+      .then((result) => {
         if (!cancelled) {
           setSource(result);
           setLoading(false);
@@ -797,11 +804,7 @@ const PreviewPage: React.FC<PreviewPageProps> = ({ asset, isActive }) => {
   if (source?.mediaType === 'image') {
     return (
       <View style={pageStyles.page}>
-        <Image
-          source={{ uri: source.uri }}
-          style={pageStyles.media}
-          resizeMode="contain"
-        />
+        <Image source={{ uri: source.uri }} style={pageStyles.media} resizeMode="contain" />
       </View>
     );
   }
@@ -837,8 +840,7 @@ The test file needs `react-i18next` mock. Add at top of test file (below existin
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => {
-      if (key === 'albumWorkbench.preview.cloudUnavailable')
-        return 'iCloud 影片未下載，無法預覽';
+      if (key === 'albumWorkbench.preview.cloudUnavailable') return 'iCloud 影片未下載，無法預覽';
       if (key === 'albumWorkbench.preview.notFound') return '素材找不到';
       return key;
     },
@@ -863,6 +865,7 @@ git commit -m "feat(mobile): Render image previews with loading/error states"
 ## Task 10: `AssetPreviewModal` — video rendering
 
 **Files:**
+
 - Modify: `apps/mobile/src/components/AssetPreviewModal.tsx`
 - Modify: `apps/mobile/src/components/__tests__/AssetPreviewModal.test.tsx`
 
@@ -954,6 +957,7 @@ git commit -m "feat(mobile): Render video previews with pause-when-not-active"
 ## Task 11: `AlbumWorkbenchScreen` — split item touch zones (grid + list)
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AlbumWorkbenchScreen.tsx`
 
 - [ ] **Step 1: Add state for preview**
@@ -970,14 +974,15 @@ const [previewIndex, setPreviewIndex] = useState(0);
 Add near `handleToggleSelect` (~line 435):
 
 ```typescript
-const handleOpenPreview = useCallback((assetLocalId: string) => {
-  const idx = filteredSortedAssets.findIndex(
-    a => a.assetLocalId === assetLocalId,
-  );
-  if (idx < 0) return;
-  setPreviewIndex(idx);
-  setPreviewVisible(true);
-}, [filteredSortedAssets]);
+const handleOpenPreview = useCallback(
+  (assetLocalId: string) => {
+    const idx = filteredSortedAssets.findIndex((a) => a.assetLocalId === assetLocalId);
+    if (idx < 0) return;
+    setPreviewIndex(idx);
+    setPreviewVisible(true);
+  },
+  [filteredSortedAssets],
+);
 ```
 
 Note: `filteredSortedAssets` is the array currently fed to the FlatList. Grep for the actual variable name in the file (line ~1361 `data={...}`) and use that exact name.
@@ -1008,9 +1013,7 @@ const renderGridItem = useCallback(
         )}
         {item.isQueued && !item.isTransferred && (
           <View style={styles.queuedBadge}>
-            <Text style={styles.queuedBadgeText}>
-              {t('albumWorkbench.badges.queued')}
-            </Text>
+            <Text style={styles.queuedBadgeText}>{t('albumWorkbench.badges.queued')}</Text>
           </View>
         )}
         {item.mediaType === 'video' && (
@@ -1021,10 +1024,7 @@ const renderGridItem = useCallback(
         {/* Selection circle — always visible for non-transferred items */}
         {!item.isTransferred && (
           <TouchableOpacity
-            style={[
-              styles.selectionCircle,
-              isSelected && styles.selectionCircleActive,
-            ]}
+            style={[styles.selectionCircle, isSelected && styles.selectionCircleActive]}
             hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
             onPress={() => handleToggleSelect(item.assetLocalId)}
           >
@@ -1062,9 +1062,7 @@ const renderListItem = useCallback(
             {item.filename}
           </Text>
           <View style={styles.listMeta}>
-            <Text style={styles.listFileSize}>
-              {formatBytes(item.fileSize)}
-            </Text>
+            <Text style={styles.listFileSize}>{formatBytes(item.fileSize)}</Text>
             <Text style={styles.listFileType}>
               {item.mediaType === 'video'
                 ? t('albumWorkbench.mediaTypes.video')
@@ -1079,18 +1077,13 @@ const renderListItem = useCallback(
               </View>
             )}
             {item.isQueued && !item.isTransferred && (
-              <Text style={styles.listQueuedText}>
-                {t('albumWorkbench.badges.queued')}
-              </Text>
+              <Text style={styles.listQueuedText}>{t('albumWorkbench.badges.queued')}</Text>
             )}
           </View>
         </View>
         {!item.isTransferred && (
           <TouchableOpacity
-            style={[
-              styles.listCheckbox,
-              isSelected && styles.listCheckboxActive,
-            ]}
+            style={[styles.listCheckbox, isSelected && styles.listCheckboxActive]}
             hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
             onPress={() => handleToggleSelect(item.assetLocalId)}
           >
@@ -1121,11 +1114,13 @@ git commit -m "refactor(mobile): Split album item touch zones — body=preview, 
 ## Task 12: `AlbumWorkbenchScreen` — remove `multiSelectMode`
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AlbumWorkbenchScreen.tsx`
 
 - [ ] **Step 1: Delete state**
 
 Grep for `multiSelectMode` in the file and remove all occurrences:
+
 - `useState` declaration
 - `setMultiSelectMode(...)` calls (inside `handleToggleSelect`, `handleUnifiedFilterPress`, etc.)
 
@@ -1139,7 +1134,7 @@ Replace with:
 
 ```typescript
 const handleToggleSelect = useCallback((assetLocalId: string) => {
-  setSelectedIds(prev => {
+  setSelectedIds((prev) => {
     const next = new Set(prev);
     if (next.has(assetLocalId)) {
       next.delete(assetLocalId);
@@ -1168,6 +1163,7 @@ git commit -m "refactor(mobile): Remove multiSelectMode state (circle is now alw
 ## Task 13: `AlbumWorkbenchScreen` — select-all / deselect-all button
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AlbumWorkbenchScreen.tsx`
 
 - [ ] **Step 1: Compute selectable set**
@@ -1176,14 +1172,11 @@ Near the stats card render logic (search for `stats?.totalCount` ~line 781 / `st
 
 ```typescript
 const selectableIds = useMemo(
-  () => filteredSortedAssets
-    .filter(a => !a.isTransferred)
-    .map(a => a.assetLocalId),
+  () => filteredSortedAssets.filter((a) => !a.isTransferred).map((a) => a.assetLocalId),
   [filteredSortedAssets],
 );
 const allSelectableSelected =
-  selectableIds.length > 0 &&
-  selectableIds.every(id => selectedIds.has(id));
+  selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
 ```
 
 (Use the actual variable name for the filtered+sorted list; see Task 11 Step 2 note.)
@@ -1207,18 +1200,15 @@ const handleToggleSelectAll = useCallback(() => {
 Locate the stats card JSX (~line 1196 where `selectedIds.size` is rendered). Add a `TouchableOpacity` next to the selected count display:
 
 ```tsx
-{selectableIds.length > 0 && (
-  <TouchableOpacity
-    onPress={handleToggleSelectAll}
-    style={styles.selectAllBtn}
-  >
-    <Text style={styles.selectAllBtnText}>
-      {allSelectableSelected
-        ? t('albumWorkbench.deselectAll')
-        : t('albumWorkbench.selectAll')}
-    </Text>
-  </TouchableOpacity>
-)}
+{
+  selectableIds.length > 0 && (
+    <TouchableOpacity onPress={handleToggleSelectAll} style={styles.selectAllBtn}>
+      <Text style={styles.selectAllBtnText}>
+        {allSelectableSelected ? t('albumWorkbench.deselectAll') : t('albumWorkbench.selectAll')}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 ```
 
 Add styles (append to the `StyleSheet.create` block):
@@ -1254,6 +1244,7 @@ git commit -m "feat(mobile): Add select-all / deselect-all button for filtered r
 ## Task 14: `AlbumWorkbenchScreen` — mount `AssetPreviewModal`
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AlbumWorkbenchScreen.tsx`
 
 - [ ] **Step 1: Import modal**
@@ -1294,6 +1285,7 @@ git commit -m "feat(mobile): Mount AssetPreviewModal in AlbumWorkbenchScreen"
 ## Task 15: Update `AlbumWorkbenchScreen.test.tsx`
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/__tests__/AlbumWorkbenchScreen.test.tsx`
 
 - [ ] **Step 1: Mock new dependencies**
@@ -1382,6 +1374,7 @@ git commit -m "test(mobile): Update album workbench tests for preview + circle-s
 ## Task 16: i18n keys in 3 locales
 
 **Files:**
+
 - Modify: `apps/mobile/src/i18n/locales/en/albumWorkbench.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/albumWorkbench.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/albumWorkbench.json`
@@ -1453,6 +1446,7 @@ git commit -m "i18n(mobile): Add preview + select-all strings in en / zh-Hans / 
 ```bash
 pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 ```
+
 Expected: No errors.
 
 - [ ] **Step 2: Full test run**
@@ -1460,6 +1454,7 @@ Expected: No errors.
 ```bash
 pnpm --filter @lynavo-drive/mobile test
 ```
+
 Expected: All passing.
 
 - [ ] **Step 3: Build contracts**
@@ -1467,6 +1462,7 @@ Expected: All passing.
 ```bash
 pnpm build
 ```
+
 Expected: All workspace builds green.
 
 - [ ] **Step 4: iOS smoke build**
@@ -1474,11 +1470,13 @@ Expected: All workspace builds green.
 ```bash
 cd apps/mobile/ios && xcodebuild -workspace SyncFlowMobile.xcworkspace -scheme SyncFlowMobile -destination 'generic/platform=iOS' -configuration Debug build -quiet 2>&1 | tail -20
 ```
+
 Expected: Build Succeeded.
 
 - [ ] **Step 5: Manual smoke checklist (operator)**
 
 Document in the final commit message. Device checks:
+
 - Open album workbench → grid and list both show top-right empty circle on non-transferred items
 - Transferred items show green check overlay, no circle
 - Tap item body → fullscreen preview opens, shows correct index/total and filename

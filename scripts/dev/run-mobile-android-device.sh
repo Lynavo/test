@@ -4,14 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ANDROID_DIR="$ROOT_DIR/apps/mobile/android"
 METRO_PORT="${METRO_PORT:-${RCT_METRO_PORT:-8081}}"
-METRO_READY_TIMEOUT_SECONDS="${SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS:-20}"
-APP_ID="${SYNCFLOW_ANDROID_APP_ID:-com.lynavo.drive.mobile}"
-MAIN_ACTIVITY="${SYNCFLOW_ANDROID_MAIN_ACTIVITY:-.MainActivity}"
+METRO_READY_TIMEOUT_SECONDS="${LYNAVO_ANDROID_METRO_READY_TIMEOUT_SECONDS:-20}"
+APP_ID="${LYNAVO_ANDROID_APP_ID:-com.lynavo.drive.mobile}"
+MAIN_ACTIVITY="${LYNAVO_ANDROID_MAIN_ACTIVITY:-.MainActivity}"
 if [[ "$MAIN_ACTIVITY" == .* ]]; then
   # Resolve relative activity names against the app id being launched.
   MAIN_ACTIVITY="$APP_ID$MAIN_ACTIVITY"
 fi
-INSTALL_TASK="${SYNCFLOW_ANDROID_INSTALL_TASK:-:app:installDebug}"
+INSTALL_TASK="${LYNAVO_ANDROID_INSTALL_TASK:-:app:installDebug}"
 
 unset NODE_OPTIONS
 unset VSCODE_INSPECTOR_OPTIONS
@@ -38,7 +38,7 @@ metro_ready() {
 require_command adb
 require_command curl
 
-selected_device="${SYNCFLOW_ANDROID_DEVICE:-${ANDROID_SERIAL:-}}"
+selected_device="${LYNAVO_ANDROID_DEVICE:-${ANDROID_SERIAL:-}}"
 if [[ -n "$selected_device" ]]; then
   if [[ "$(adb -s "$selected_device" get-state 2>/dev/null || true)" != "device" ]]; then
     echo "Android device is not available: $selected_device" >&2
@@ -62,7 +62,7 @@ else
   selected_device="${devices[0]}"
   if [[ "${#devices[@]}" -gt 1 ]]; then
     echo "Multiple Android devices are connected; using $selected_device."
-    echo "Set SYNCFLOW_ANDROID_DEVICE to choose a different device."
+    echo "Set LYNAVO_ANDROID_DEVICE to choose a different device."
   fi
 fi
 
@@ -71,7 +71,7 @@ if [[ -z "$device_model" ]]; then
   device_model="$selected_device"
 fi
 
-if [[ "${SYNCFLOW_ANDROID_PRINT_DEVICE_ONLY:-}" == "1" ]]; then
+if [[ "${LYNAVO_ANDROID_PRINT_DEVICE_ONLY:-}" == "1" ]]; then
   echo "$selected_device"
   exit 0
 fi

@@ -26,15 +26,15 @@ Opening the mobile app, returning to foreground, or rendering an offline state i
 
 The product behavior should be evaluated using this matrix:
 
-| Scenario | Expected behavior | Supported by this plan |
-| --- | --- | --- |
-| Mobile and desktop are on the same LAN | Send Wake-on-LAN packets to cached LAN broadcast targets, then poll sidecar `/health`. | Yes |
-| Mobile is outside and router Wake-on-WAN is manually configured | Future public wake target sends packet to configured public host/port. | No, follow-up primary public path |
-| Mobile is outside and a router/NAS helper can send WoL | Future authenticated helper integration can request wake. | No, follow-up |
-| Mobile is outside and another Vivi Drop desktop is already awake on the target LAN/VPN | Future peer proxy can ask the awake desktop to send the target's WoL packet locally after strict account and paired-client verification. | Optional follow-up only |
-| Mobile is outside and another router-connected device is awake but does not run Vivi Drop Desktop | Do not auto-use it as a relay. It must expose an explicitly configured, authenticated helper/webhook/router API before Vivi Drop can call it. | Future third-party helper only |
-| Mobile is outside but connected to a VPN that places it inside the LAN | Treat as same-LAN if LAN health and wake traffic work. VPN is fallback only, not the main public wake setup. | Fallback only, partially through same-LAN logic |
-| Mobile is outside, only one sleeping computer exists, and there is no router wake/helper, configured public wake target, authenticated awake peer, explicitly configured third-party helper, VPN fallback, or relay support | Show setup-required or unavailable; do not attempt fake cloud wake. | No explicit state in this plan; follow-up required |
+| Scenario                                                                                                                                                                                                                    | Expected behavior                                                                                                                             | Supported by this plan                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Mobile and desktop are on the same LAN                                                                                                                                                                                      | Send Wake-on-LAN packets to cached LAN broadcast targets, then poll sidecar `/health`.                                                        | Yes                                                |
+| Mobile is outside and router Wake-on-WAN is manually configured                                                                                                                                                             | Future public wake target sends packet to configured public host/port.                                                                        | No, follow-up primary public path                  |
+| Mobile is outside and a router/NAS helper can send WoL                                                                                                                                                                      | Future authenticated helper integration can request wake.                                                                                     | No, follow-up                                      |
+| Mobile is outside and another Vivi Drop desktop is already awake on the target LAN/VPN                                                                                                                                      | Future peer proxy can ask the awake desktop to send the target's WoL packet locally after strict account and paired-client verification.      | Optional follow-up only                            |
+| Mobile is outside and another router-connected device is awake but does not run Vivi Drop Desktop                                                                                                                           | Do not auto-use it as a relay. It must expose an explicitly configured, authenticated helper/webhook/router API before Vivi Drop can call it. | Future third-party helper only                     |
+| Mobile is outside but connected to a VPN that places it inside the LAN                                                                                                                                                      | Treat as same-LAN if LAN health and wake traffic work. VPN is fallback only, not the main public wake setup.                                  | Fallback only, partially through same-LAN logic    |
+| Mobile is outside, only one sleeping computer exists, and there is no router wake/helper, configured public wake target, authenticated awake peer, explicitly configured third-party helper, VPN fallback, or relay support | Show setup-required or unavailable; do not attempt fake cloud wake.                                                                           | No explicit state in this plan; follow-up required |
 
 ## Wake Path Priority
 
@@ -160,6 +160,7 @@ The manual reconnect button in `apps/mobile/src/screens/SyncActivityScreen.tsx` 
 ## Task 1: Contracts Wake DTOs
 
 **Files:**
+
 - Modify: `packages/contracts/src/enums.ts`
 - Modify: `packages/contracts/src/types.ts`
 - Test: `packages/contracts/src/__tests__/exports.test.ts`
@@ -237,8 +238,7 @@ Expected: TypeScript reports that `WakeCapabilityDTO`, `WakeTargetDTO`, `Binding
 Change `packages/contracts/src/enums.ts`:
 
 ```ts
-export type SharedFilesReachabilityState =
-  | 'unknown' | 'available' | 'unavailable' | 'waking';
+export type SharedFilesReachabilityState = 'unknown' | 'available' | 'unavailable' | 'waking';
 ```
 
 Add these interfaces before `BindingStateDTO` in `packages/contracts/src/types.ts`:
@@ -301,6 +301,7 @@ git commit -m "feat: add wake metadata contracts"
 ## Task 2: Sidecar Wake Metadata Provider
 
 **Files:**
+
 - Create: `services/sidecar-go/internal/wake/metadata.go`
 - Test: `services/sidecar-go/internal/wake/metadata_test.go`
 - Modify: `services/sidecar-go/internal/protocol/messages.go`
@@ -534,6 +535,7 @@ git commit -m "feat: collect sidecar wake metadata"
 ## Task 3: Publish Wake Metadata From Sidecar
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/server/handler_hello.go`
 - Modify: `services/sidecar-go/internal/api/handlers_health.go`
 - Modify: `services/sidecar-go/internal/api/presence.go`
@@ -674,6 +676,7 @@ git commit -m "feat: publish wake metadata to paired mobile clients"
 ## Task 4: Persist Wake Metadata On iOS
 
 **Files:**
+
 - Create: `apps/mobile/ios/SyncEngine/WakeMetadata.swift`
 - Modify: `apps/mobile/ios/SyncEngine/UploadStore.swift`
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
@@ -842,6 +845,7 @@ git commit -m "feat: persist iOS wake metadata"
 ## Task 5: Implement iOS Wake-on-LAN Sender
 
 **Files:**
+
 - Create: `apps/mobile/ios/SyncEngine/WakeOnLanService.swift`
 - Test: `apps/mobile/ios/SyncEngine/WakeOnLanServiceTests/main.swift`
 - Modify: iOS project file if needed so `WakeMetadata.swift` and `WakeOnLanService.swift` are included in the app target.
@@ -1030,6 +1034,7 @@ git commit -m "feat: add iOS wake-on-lan sender"
 ## Task 6: Integrate Wake Attempts Into iOS Shared Files Route
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 
 - [ ] **Step 1: Add wake attempt helper**
@@ -1150,6 +1155,7 @@ git commit -m "feat: wake desktop before iOS shared files fallback"
 ## Task 7: Persist And Send Wake On Android
 
 **Files:**
+
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitives.kt`
 - Modify: `apps/mobile/android/app/src/test/java/com/vividrop/mobile/china/sync/AndroidSyncPrimitivesTest.kt`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
@@ -1384,6 +1390,7 @@ git commit -m "feat: wake desktop before Android shared files fallback"
 ## Task 8: Shared Files UI Wake Status
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/SharedFilesScreen.tsx`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/sharedFiles.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/sharedFiles.json`
@@ -1427,13 +1434,7 @@ Expected: FAIL because `waking` is not mapped.
 In `SharedFilesScreen.tsx`, extend:
 
 ```ts
-type SharedFilesConnectionStatus =
-  | 'lan'
-  | 'p2p'
-  | 'relay'
-  | 'waking'
-  | 'unavailable'
-  | 'offline';
+type SharedFilesConnectionStatus = 'lan' | 'p2p' | 'relay' | 'waking' | 'unavailable' | 'offline';
 ```
 
 In the helper that maps `SharedFilesReachabilityDTO` to UI status, add:
@@ -1445,7 +1446,7 @@ if (state.state === 'waking') return 'waking';
 In the connection status label lookup, use:
 
 ```ts
-t(`sharedFiles.connectionStatus.${sharedFilesConnectionStatus}`)
+t(`sharedFiles.connectionStatus.${sharedFilesConnectionStatus}`);
 ```
 
 so the new key is picked up with the existing status view.
@@ -1498,6 +1499,7 @@ git commit -m "feat: show shared files wake status"
 ## Task 9: Sync Status LAN Retry Wake Trigger
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 - Modify: `apps/mobile/src/screens/SyncActivityScreen.tsx`
@@ -1697,6 +1699,7 @@ git commit -m "feat: retry LAN wake from sync status reconnect"
 ## Task 10: Platform Wake Setup Guidance
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/i18n/locales/zh-Hant/help.json`
 - Modify: `apps/desktop/src/renderer/i18n/locales/zh-Hans/help.json`
 - Modify: `apps/desktop/src/renderer/i18n/locales/en/help.json`
@@ -1799,6 +1802,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 ## Task 11: Go Sidecar Peer Proxy Wake Endpoint
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/router.go`
 - Create: `services/sidecar-go/internal/api/handlers_wake.go`
 - Test: `services/sidecar-go/internal/api/router_test.go`
@@ -1902,10 +1906,12 @@ func TestProxyWakeRejectsUnsafeTarget(t *testing.T) {
 If `SetDesktopAuthContextForTest` does not exist yet, add a tiny test-only helper in the same package as existing account-context tests, or reuse the existing `/account/context` setup path. Do not weaken production authorization for the test.
 
 - [ ] **Step 3: Run tests and verify they fail**
-  Run:
+      Run:
+
   ```bash
   cd services/sidecar-go && go test ./internal/api
   ```
+
   Expected: FAIL because `/wake/proxy`, request validation, paired-client verification, or the injected sender does not exist.
 
 - [ ] **Step 4: Implement bounded proxy wake handler**
@@ -1923,16 +1929,19 @@ Create `services/sidecar-go/internal/api/handlers_wake.go`. The implementation m
 Use `strconv.Itoa(port)` when building UDP host/port strings. Do not use `string(port)`.
 
 - [ ] **Step 5: Register route in router.go**
-  In `services/sidecar-go/internal/api/router.go`, register:
+      In `services/sidecar-go/internal/api/router.go`, register:
+
   ```go
   mux.HandleFunc("POST /wake/proxy", withJSON(srv.handleProxyWake))
   ```
 
 - [ ] **Step 6: Run sidecar API tests**
-  Run:
+      Run:
+
   ```bash
   cd services/sidecar-go && go test ./internal/api
   ```
+
   Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -1944,6 +1953,7 @@ Use `strconv.Itoa(port)` when building UDP host/port strings. Do not use `string
 ## Task 12: Mobile Client Peer Proxy Orchestration
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`
 - Modify: `apps/mobile/android/app/src/main/java/com/vividrop/mobile/china/sync/NativeSyncEngineModule.kt`
 
@@ -2007,12 +2017,14 @@ Mobile logs must distinguish:
 ## Task 13: Diagnostics, Docs, And Beta Matrix
 
 **Files:**
+
 - Modify: `docs/operations/troubleshooting.md`
 - Modify: `docs/operations/mobile-diagnostics.md`
 - Modify: `docs/testing/beta-test-matrix.md`
 
 - [ ] **Step 1: Add diagnostic log expectations**
-  In `docs/operations/mobile-diagnostics.md`, add a "Wake-on-LAN explicit recovery" section:
+      In `docs/operations/mobile-diagnostics.md`, add a "Wake-on-LAN explicit recovery" section:
+
   ```md
   ### Wake-on-LAN explicit recovery
 
@@ -2030,7 +2042,8 @@ Mobile logs must distinguish:
   ```
 
 - [ ] **Step 2: Add troubleshooting guidance**
-  In `docs/operations/troubleshooting.md`, add:
+      In `docs/operations/troubleshooting.md`, add:
+
   ```md
   ### My Computer or LAN reconnect does not wake after desktop sleep
 
@@ -2046,7 +2059,8 @@ Mobile logs must distinguish:
   ```
 
 - [ ] **Step 3: Add beta test scenarios**
-  In `docs/testing/beta-test-matrix.md`, add rows:
+      In `docs/testing/beta-test-matrix.md`, add rows:
+
   ```md
   | Shared files wake | macOS sleep -> mobile opens My Computer | Enable Wake for network access, bind mobile, let Mac sleep, open My Computer | Mac wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
   | Shared files wake | Windows sleep -> mobile opens My Computer | Enable BIOS/NIC WoL, bind mobile, let PC sleep, open My Computer | PC wakes or mobile shows unavailable after bounded wake attempt; diagnostics show packets sent and probe result |
@@ -2067,46 +2081,57 @@ Mobile logs must distinguish:
 ## Task 14: End-To-End Verification
 
 **Files:**
+
 - No new files.
 
 - [ ] **Step 1: Run full sidecar tests**
-  Run:
+      Run:
+
   ```bash
   cd services/sidecar-go
   go test ./...
   ```
+
   Expected: PASS.
 
 - [ ] **Step 2: Build shared packages**
-  Run:
+      Run:
+
   ```bash
   pnpm build
   ```
+
   Expected: contracts and design tokens build successfully.
 
 - [ ] **Step 3: Run mobile TypeScript verification**
-  Run:
+      Run:
+
   ```bash
   pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
   ```
+
   Expected: PASS.
 
 - [ ] **Step 4: Run Android verification**
-  Run:
+      Run:
+
   ```bash
   cd apps/mobile/android
   ./gradlew testDebugUnitTest --tests com.vividrop.mobile.china.sync.AndroidSyncPrimitivesTest
   ./gradlew assembleDebug
   ```
+
   Expected: PASS.
 
 - [ ] **Step 5: Run iOS focused verification**
-  Run:
+      Run:
+
   ```bash
   cd apps/mobile/ios/SyncEngine
   swiftc WakeMetadata.swift SyncEngineError.swift WakeOnLanService.swift WakeOnLanServiceTests/main.swift -o /tmp/WakeOnLanServiceTests && /tmp/WakeOnLanServiceTests
   swiftc SharedFilesRoutePolicy.swift SharedFilesRoutePolicyTests/main.swift -o /tmp/SharedFilesRoutePolicyTests && /tmp/SharedFilesRoutePolicyTests
   ```
+
   Expected: both standalone tests pass. Then run the normal local iOS simulator or archive build used for the target release profile.
 
 - [ ] **Step 6: Manual macOS wake test**

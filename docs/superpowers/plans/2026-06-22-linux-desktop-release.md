@@ -40,6 +40,7 @@
 ## Task 1: Linux Platform Capability Bridge
 
 **Files:**
+
 - Modify: `apps/desktop/src/shared/platform-capabilities.ts`
 - Modify: `apps/desktop/src/shared/__tests__/platform-capabilities.test.ts`
 - Modify: `apps/desktop/src/preload/api.d.ts`
@@ -147,11 +148,11 @@ Extend the hoisted API type in `apps/desktop/src/preload/__tests__/index.test.ts
 Add a test:
 
 ```ts
-  it('exposes Linux platform capability', async () => {
-    await import('../index');
+it('exposes Linux platform capability', async () => {
+  await import('../index');
 
-    expect(exposed.api?.platform.isLinux()).toBe(process.platform === 'linux');
-  });
+  expect(exposed.api?.platform.isLinux()).toBe(process.platform === 'linux');
+});
 ```
 
 Update `apps/desktop/src/renderer/hooks/use-electron-api.ts` mock platform:
@@ -192,6 +193,7 @@ git commit -m "feat(desktop): expose linux platform capability"
 ## Task 2: Linux-Neutral Sharing UI
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/features/settings/ShareAddressSection.tsx`
 - Modify: `apps/desktop/src/renderer/features/settings/SystemGuideSection.tsx`
 - Modify: `apps/desktop/src/renderer/features/settings/__tests__/ShareAddressSection.test.tsx`
@@ -275,24 +277,20 @@ Add English:
 Update `ShareAddressSection.tsx` platform reads:
 
 ```ts
-  const isMac = window.electronAPI?.platform.isMac() ?? true;
-  const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
-  const isLinux = window.electronAPI?.platform.isLinux?.() ?? false;
+const isMac = window.electronAPI?.platform.isMac() ?? true;
+const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
+const isLinux = window.electronAPI?.platform.isLinux?.() ?? false;
 ```
 
 Add helper inside the component before `statusMeta`:
 
 ```ts
-  const platformShareDetail = (
-    macKey: string,
-    windowsKey: string,
-    linuxKey: string,
-  ): string => {
-    if (isMac) return t(macKey);
-    if (isWindows) return t(windowsKey);
-    if (isLinux) return t(linuxKey);
-    return t(linuxKey);
-  };
+const platformShareDetail = (macKey: string, windowsKey: string, linuxKey: string): string => {
+  if (isMac) return t(macKey);
+  if (isWindows) return t(windowsKey);
+  if (isLinux) return t(linuxKey);
+  return t(linuxKey);
+};
 ```
 
 Use it for `needs_manual_enable` and `share_registered`:
@@ -410,36 +408,38 @@ English:
 Update `SystemGuideSection.tsx`:
 
 ```ts
-  const isMac = window.electronAPI?.platform.isMac?.() ?? true;
-  const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
-  const isLinux = window.electronAPI?.platform.isLinux?.() ?? false;
+const isMac = window.electronAPI?.platform.isMac?.() ?? true;
+const isWindows = window.electronAPI?.platform.isWindows?.() ?? false;
+const isLinux = window.electronAPI?.platform.isLinux?.() ?? false;
 ```
 
 Render the Mac card only when `isMac`, the Windows card only when `isWindows`, and add the Linux card:
 
 ```tsx
-      {isLinux ? (
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <div className="mb-3">
-            <p className="text-sm font-medium text-foreground">
-              {t('settings.systemGuide.linuxTitle')}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t('settings.systemGuide.linuxDescription')}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void window.electronAPI?.files.openFolder(sharedPath)}
-            disabled={!sharedPath}
-          >
-            <FolderOpen className="h-4 w-4" />
-            {t('settings.filePath.openShared')}
-          </Button>
-        </div>
-      ) : null}
+{
+  isLinux ? (
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="mb-3">
+        <p className="text-sm font-medium text-foreground">
+          {t('settings.systemGuide.linuxTitle')}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t('settings.systemGuide.linuxDescription')}
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => void window.electronAPI?.files.openFolder(sharedPath)}
+        disabled={!sharedPath}
+      >
+        <FolderOpen className="h-4 w-4" />
+        {t('settings.filePath.openShared')}
+      </Button>
+    </div>
+  ) : null;
+}
 ```
 
 - [ ] **Step 9: Run focused UI tests**
@@ -471,6 +471,7 @@ git commit -m "fix(desktop): show linux sharing guidance"
 ## Task 3: Linux Sidecar Build Script
 
 **Files:**
+
 - Create: `apps/desktop/scripts/build-sidecar-linux.cjs`
 - Create: `apps/desktop/scripts/__tests__/build-sidecar-linux.test.mjs`
 
@@ -588,15 +589,11 @@ function run() {
     process.exit(1);
   }
 
-  const child = spawn(
-    'go',
-    ['build', '-o', outputPath, './cmd/syncflow-sidecar/'],
-    {
-      cwd: sidecarRoot,
-      env: buildLinuxSidecarEnv(arch),
-      stdio: 'inherit',
-    },
-  );
+  const child = spawn('go', ['build', '-o', outputPath, './cmd/syncflow-sidecar/'], {
+    cwd: sidecarRoot,
+    env: buildLinuxSidecarEnv(arch),
+    stdio: 'inherit',
+  });
 
   child.on('exit', (code, signal) => {
     if (signal) {
@@ -649,6 +646,7 @@ git commit -m "feat(desktop): add linux sidecar build script"
 ## Task 4: Linux Package Wrapper and Scripts
 
 **Files:**
+
 - Create: `apps/desktop/scripts/package-linux.cjs`
 - Create: `apps/desktop/scripts/__tests__/package-linux.test.mjs`
 - Modify: `apps/desktop/package.json`
@@ -696,7 +694,10 @@ test('generates workspace, sidecar, and electron-builder commands', () => {
     [
       ['run-workspace-pnpm.cjs', ['build']],
       ['build-sidecar-linux.cjs', ['--arch', 'arm64']],
-      ['run-electron-builder.cjs', ['--config', 'electron-builder.cn.yml', '--linux', 'deb', '--arm64']],
+      [
+        'run-electron-builder.cjs',
+        ['--config', 'electron-builder.cn.yml', '--linux', 'deb', '--arm64'],
+      ],
     ],
   );
 });
@@ -860,6 +861,7 @@ git commit -m "feat(desktop): add linux package scripts"
 ## Task 5: Electron Builder Linux Debian Configuration
 
 **Files:**
+
 - Modify: `apps/desktop/electron-builder.yml`
 - Modify: `apps/desktop/electron-builder.cn.yml`
 - Modify: `apps/desktop/electron-builder.global.yml`
@@ -944,6 +946,7 @@ git commit -m "feat(desktop): configure linux deb packaging"
 ## Task 6: Release Profile Linux Target
 
 **Files:**
+
 - Modify: `scripts/release/release-profiles.mjs`
 - Modify: `scripts/release/__tests__/release-profiles.test.mjs`
 - Modify: `scripts/release/__tests__/release-cli.test.mjs`
@@ -969,10 +972,10 @@ test('parses targets predictably', () => {
 Update `builds commands and env from the selected profile` target list to include Linux:
 
 ```js
-  const plan = buildReleasePlan({
-    profileName: 'global-review',
-    targets: ['ios', 'android', 'mac', 'win', 'linux'],
-  });
+const plan = buildReleasePlan({
+  profileName: 'global-review',
+  targets: ['ios', 'android', 'mac', 'win', 'linux'],
+});
 ```
 
 Add the expected Linux step:
@@ -986,13 +989,13 @@ Add the expected Linux step:
 In `release-cli.test.mjs`, add to both review plan tests:
 
 ```js
-  assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:linux:cn/);
+assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:linux:cn/);
 ```
 
 and:
 
 ```js
-  assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:linux:global/);
+assert.match(result.stdout, /pnpm --filter @syncflow\/desktop package:linux:global/);
 ```
 
 Update the default helper target list:
@@ -1034,19 +1037,19 @@ desktopLinuxScript: 'package:linux:global',
 Update the unsupported target error string:
 
 ```js
-`Unsupported release target "${target}". Supported targets: ios, android, mac, win, linux`
+`Unsupported release target "${target}". Supported targets: ios, android, mac, win, linux`;
 ```
 
 Add Linux step before the Windows fallback return:
 
 ```js
-  if (target === 'linux') {
-    return {
-      target,
-      command: 'pnpm',
-      args: ['--filter', '@lynavo-drive/desktop', profile.desktopLinuxScript],
-    };
-  }
+if (target === 'linux') {
+  return {
+    target,
+    command: 'pnpm',
+    args: ['--filter', '@lynavo-drive/desktop', profile.desktopLinuxScript],
+  };
+}
 ```
 
 - [ ] **Step 5: Run release tests**
@@ -1073,6 +1076,7 @@ git commit -m "feat(release): add linux desktop target"
 ## Task 7: Release Documentation and Test Matrix
 
 **Files:**
+
 - Modify: `docs/release/release-playbook.md`
 - Modify: `docs/testing/beta-test-matrix.md`
 
@@ -1155,6 +1159,7 @@ git commit -m "docs: add linux desktop release checks"
 ## Task 8: Full Automated Verification
 
 **Files:**
+
 - No code changes.
 
 - [ ] **Step 1: Run desktop tests and typecheck**
@@ -1213,6 +1218,7 @@ Expected: no output.
 ## Task 9: Linux VM Build and Install Smoke
 
 **Files:**
+
 - No repo code changes.
 
 - [ ] **Step 1: Build arm64 deb on Ubuntu 22.04 arm64**

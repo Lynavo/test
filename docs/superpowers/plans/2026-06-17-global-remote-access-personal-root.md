@@ -13,6 +13,7 @@
 ### Task 1: Add Failing Service Tests
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/__tests__/desktop-local-service.test.ts`
 
 - [ ] **Step 1: Import the new global personal helpers after they are defined**
@@ -46,15 +47,36 @@ it('lists global remote access from the desktop personal directory root', async 
     scope: 'personal',
     path: '',
     files: [
-      { name: 'Desktop', path: 'Desktop', type: 'other', size: 96, modifiedAt: '2026-06-17T08:00:00.000Z', isDirectory: true },
-      { name: 'notes.txt', path: 'notes.txt', type: 'document', size: 12, modifiedAt: '2026-06-17T08:01:00.000Z' },
+      {
+        name: 'Desktop',
+        path: 'Desktop',
+        type: 'other',
+        size: 96,
+        modifiedAt: '2026-06-17T08:00:00.000Z',
+        isDirectory: true,
+      },
+      {
+        name: 'notes.txt',
+        path: 'notes.txt',
+        type: 'document',
+        size: 12,
+        modifiedAt: '2026-06-17T08:01:00.000Z',
+      },
     ],
     totalCount: 2,
   });
 
   await expect(listGlobalRemoteAccessResources()).resolves.toEqual([
-    expect.objectContaining({ resourceId: 'personal-dir:Desktop', kind: 'shared_folder', displayName: 'Desktop' }),
-    expect.objectContaining({ resourceId: 'personal-dir:notes.txt', kind: 'shared_file', displayName: 'notes.txt' }),
+    expect.objectContaining({
+      resourceId: 'personal-dir:Desktop',
+      kind: 'shared_folder',
+      displayName: 'Desktop',
+    }),
+    expect.objectContaining({
+      resourceId: 'personal-dir:notes.txt',
+      kind: 'shared_file',
+      displayName: 'notes.txt',
+    }),
   ]);
   expect(mockedBrowseDirectory).toHaveBeenCalledWith('personal');
 });
@@ -73,6 +95,7 @@ Expected: FAIL because the new helper exports do not exist.
 ### Task 2: Implement Personal Directory Adapter
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/desktop-local-service.ts`
 - Modify: `apps/mobile/src/screens/RemoteAccessGlobalScreen.tsx`
 
@@ -95,7 +118,9 @@ export async function listGlobalRemoteAccessResources(): Promise<DesktopSharedRe
 - [ ] **Step 3: Route personal download, preview, and share operations through native bridge**
 
 ```ts
-export async function downloadGlobalRemoteAccessResource(resourceId: string): Promise<ResourceDownloadResult> {
+export async function downloadGlobalRemoteAccessResource(
+  resourceId: string,
+): Promise<ResourceDownloadResult> {
   return downloadDirectoryFile('personal', getPersonalDirectoryPathFromResourceId(resourceId));
 }
 ```
@@ -117,6 +142,7 @@ Expected: PASS.
 ### Task 3: Verification And Review
 
 **Files:**
+
 - Review: `apps/mobile/src/services/desktop-local-service.ts`
 - Review: `apps/mobile/src/screens/RemoteAccessGlobalScreen.tsx`
 - Review: `apps/mobile/src/services/__tests__/desktop-local-service.test.ts`

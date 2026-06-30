@@ -9,7 +9,7 @@ import json
 import os
 import sys
 
-requested = os.environ.get("SYNCFLOW_IOS_DEVICE", "").strip()
+requested = os.environ.get("LYNAVO_IOS_DEVICE", "").strip()
 
 try:
     devices = json.load(sys.stdin)
@@ -58,7 +58,7 @@ if len(phones) > 1 and not requested:
         ),
         file=sys.stderr,
     )
-    print("Set SYNCFLOW_IOS_DEVICE to a device name or UDID to choose another one.", file=sys.stderr)
+    print("Set LYNAVO_IOS_DEVICE to a device name or UDID to choose another one.", file=sys.stderr)
 
 print("{}\t{}".format(selected.get("identifier"), selected.get("name")))
 '
@@ -69,7 +69,7 @@ device_name="${selection#*	}"
 
 echo "Launching LynavoDrive on ${device_name} (${device_id})..."
 
-if [[ "${SYNCFLOW_IOS_PRINT_DEVICE_ONLY:-}" == "1" ]]; then
+if [[ "${LYNAVO_IOS_PRINT_DEVICE_ONLY:-}" == "1" ]]; then
   exit 0
 fi
 

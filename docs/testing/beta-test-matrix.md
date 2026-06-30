@@ -66,15 +66,15 @@ cd /Volumes/workspace/work/sync-flow/apps/mobile/android
 
 脚本：
 
-- [syncflow_upload_eval.sh](/Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh)
+- [lynavo_upload_eval.sh](/Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh)
 
 基础调用：
 
 ```bash
-bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
+bash /Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh \
   --mode <MODE> \
   --device <DEVICE_UDID> \
-  --app com.vividrop.mobile.china \
+  --app com.lynavo.drive.mobile \
   --file-key <FILE_KEY>
 ```
 
@@ -92,8 +92,8 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 
 对应入口：
 
-- [syncflow_upload_eval.sh#L31](/Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh#L31)
-- [syncflow_upload_eval.sh#L820](/Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh#L820)
+- [lynavo_upload_eval.sh#L31](/Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh#L31)
+- [lynavo_upload_eval.sh#L820](/Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh#L820)
 
 ### 3.2 建议最小回归集
 
@@ -165,7 +165,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 ### 4.5 Windows desktop 冒烟
 
 1. 从 `LynavoDrive-*-x64.exe` fresh install
-2. 安装后确认 `Vivi Drop Sidecar TCP / Vivi Drop Sidecar HTTP / Vivi Drop mDNS UDP` 防火墙规则存在，覆盖 `39393/TCP`、`39394/TCP` 和 `5353/UDP`；Task 15 保留既有 firewall/mDNS identity，规则命名迁移延后到 native/binary/mDNS migration 任务
+2. 安装后确认 `Lynavo Drive Sidecar TCP / Lynavo Drive Sidecar HTTP / Lynavo Drive mDNS UDP` 防火墙规则存在，覆盖 `39393/TCP`、`39394/TCP` 和 `5353/UDP`
 3. 设置页能看到 Bonjour 运行时或 fallback 状态
 4. mobile 能发现并配对
 5. 触发一轮真实素材同步
@@ -287,7 +287,7 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/syncflow_upload_eval.sh \
 
 真机脚本默认输出：
 
-1. 结果 CSV：`/tmp/syncflow-upload-eval`
-2. App / sidecar 日志：`/tmp/syncflow-upload-eval-logs`
+1. 结果 CSV：`/tmp/lynavo-drive-upload-eval`
+2. App / sidecar 日志：`/tmp/lynavo-drive-upload-eval-logs`
 
 这些目录是临时产物，不应该作为版本化测试记录保存。

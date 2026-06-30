@@ -259,7 +259,7 @@ wsBridge = new WsBridge(
 Electron must not blindly trust `cachePath`. The best implementation is to derive or configure the allowed cache root from the same desktop/sidecar runtime data used to launch sidecar, then require:
 
 ```ts
-path.resolve(cachePath).startsWith(path.resolve(cacheRoot) + path.sep)
+path.resolve(cachePath).startsWith(path.resolve(cacheRoot) + path.sep);
 ```
 
 If that cache root is not currently available in desktop main, add the smallest explicit helper to expose it from existing sidecar runtime/config code. Do not allow arbitrary event payloads to write outside sidecar's thumbnail cache directory.

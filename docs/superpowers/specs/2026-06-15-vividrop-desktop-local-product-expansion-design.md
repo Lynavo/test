@@ -501,4 +501,3 @@ Use an isolated worktree for implementation. Subagents may be used after the imp
 - The reference projects include UI concepts with cloud wording. Product copy must be rewritten for desktop-local LAN semantics.
 - This update touches contracts, sidecar, desktop, and mobile. The implementation plan must split work into verifiable tasks and avoid a single large unreviewable change.
 - Existing sidecar ledger schemas may already contain part of received-library data. The implementation should inspect current schema before creating redundant tables.
-

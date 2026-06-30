@@ -20,7 +20,7 @@ if (!existsSync(artifactPath)) {
 }
 
 const readobj = findReadobj();
-const workDir = mkdtempSync(join(tmpdir(), 'vividrop-native-page-size-'));
+const workDir = mkdtempSync(join(tmpdir(), 'lynavo-drive-native-page-size-'));
 
 try {
   const unzip = spawnSync('unzip', ['-o', '-q', artifactPath, '-d', workDir], {
@@ -94,7 +94,9 @@ function listFiles(dir) {
 
 function findReadobj() {
   const sdkRoot =
-    process.env.ANDROID_SDK_ROOT || process.env.ANDROID_HOME || join(process.env.HOME, 'Library/Android/sdk');
+    process.env.ANDROID_SDK_ROOT ||
+    process.env.ANDROID_HOME ||
+    join(process.env.HOME, 'Library/Android/sdk');
   const ndkRoot = join(sdkRoot, 'ndk');
 
   if (!existsSync(ndkRoot)) {
@@ -104,7 +106,9 @@ function findReadobj() {
   const candidates = readdirSync(ndkRoot)
     .sort(compareVersions)
     .reverse()
-    .map((version) => join(ndkRoot, version, 'toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readobj'));
+    .map((version) =>
+      join(ndkRoot, version, 'toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-readobj'),
+    );
 
   const found = candidates.find((candidate) => existsSync(candidate));
   if (!found) {

@@ -2,7 +2,7 @@
 
 This file tracks temporary compatibility uses of legacy product names during the Lynavo Drive rename.
 
-The scanner is advisory in Task 0. Later rename tasks should remove broad hits and make the check CI-blocking.
+The strict scanner is now intended to be CI-blocking: every remaining legacy hit must either be removed or match a narrow compatibility rationale in `scripts/verify-legacy-name-allowlist.mjs`.
 
 ## Scanner
 
@@ -26,34 +26,41 @@ It scans hidden files and directories, while explicitly skipping generated build
 
 ## Allowed Compatibility Paths
 
-| Path                                                             | Rationale                                                                                                                     |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `docs/product/lynavo-drive-global-only-oss-commercial-plan.md`   | Product rename source plan; legacy names are quoted for migration scope.                                                      |
-| `docs/rename/legacy-name-allowlist.md`                           | This allowlist document necessarily names legacy forms.                                                                       |
-| `scripts/verify-legacy-name-allowlist.mjs`                       | The verifier owns the legacy-name pattern and compatibility allowlist.                                                        |
-| `scripts/release/__tests__/legacy-name-allowlist.test.mjs`       | Regression test fixture for unallowlisted legacy-name detection.                                                              |
-| `apps/desktop/package.json`                                      | Desktop build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                                  |
-| `apps/desktop/scripts/build-sidecar-linux.cjs`                   | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                                  |
-| `apps/desktop/scripts/build-sidecar-mac.cjs`                     | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                                  |
-| `apps/desktop/scripts/build-sidecar-win.cjs`                     | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                                  |
-| `scripts/release/__tests__/desktop-branding.test.mjs`            | Regression tests assert old packaged sidecar exe paths do not return.                                                         |
-| `services/sidecar-go/go.mod`                                     | Go module path before sidecar module rename.                                                                                  |
-| `services/sidecar-go/go.sum`                                     | Go module path checksums before sidecar module rename.                                                                        |
-| `services/sidecar-go/Makefile`                                   | Go command path and local legacy dev database cleanup remain before cmd/data-dir rename.                                      |
-| `services/sidecar-go/internal/config/config.go`                  | Device IP override env name remains before env rename.                                                                        |
-| `services/sidecar-go/cmd/syncflow-sidecar/main.go`               | Go module path and sidecar config entrypoint names remain before cmd/module rename.                                           |
-| `services/sidecar-go/cmd/syncflow-sidecar/main_test.go`          | Go module import path remains before module rename.                                                                           |
-| `apps/mobile/ios/LynavoDrive/AuthKeychainCleaner.swift`          | Keychain migration strings preserve access to existing credentials.                                                           |
-| `apps/mobile/ios/LynavoDrive/AppleAuthModule.swift`              | Keychain migration strings and build settings preserve existing installs.                                                     |
-| `apps/mobile/src/utils/clearUserScopedStorage.ts`                | Shared-preference and storage migration strings preserve existing installs.                                                   |
-| `apps/mobile/src/utils/__tests__/clearUserScopedStorage.test.ts` | Shared-preference migration test coverage.                                                                                    |
-| `apps/mobile/src/screens/*GlobalScreen.tsx`                      | Temporary post-market-removal filenames retained to avoid broad mobile UI import churn; follow-up rename can drop the suffix. |
+| Path                                                              | Rationale                                                                                                              |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `docs/product/lynavo-drive-global-only-oss-commercial-plan.md`    | Product rename source plan; legacy names are quoted for migration scope.                                               |
+| `docs/rename/legacy-name-allowlist.md`                            | This allowlist document necessarily names legacy forms.                                                                |
+| `scripts/verify-legacy-name-allowlist.mjs`                        | The verifier owns the legacy-name pattern and compatibility allowlist.                                                 |
+| `scripts/release/__tests__/legacy-name-allowlist.test.mjs`        | Regression test fixture for unallowlisted legacy-name detection.                                                       |
+| `.gitignore`                                                      | Local generated sidecar artifacts may still use the current Go cmd/db names until the sidecar cmd/module rename lands. |
+| `apps/desktop/package.json`                                       | Desktop build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                           |
+| `apps/desktop/src/main/sidecar-manager.ts`                        | Desktop dev mode keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                               |
+| `apps/desktop/scripts/build-sidecar-linux.cjs`                    | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                           |
+| `apps/desktop/scripts/build-sidecar-mac.cjs`                      | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                           |
+| `apps/desktop/scripts/build-sidecar-win.cjs`                      | Sidecar build script keeps Go cmd path `./cmd/syncflow-sidecar/` until cmd directory rename.                           |
+| `scripts/release/__tests__/desktop-branding.test.mjs`             | Regression tests assert old packaged sidecar exe paths do not return.                                                  |
+| `AGENTS.md`                                                       | Repository handoff instructions quote external historical repo paths.                                                  |
+| `scripts/dev/oss-env-scrubber.cjs`                                | OSS env scrubber must name legacy commercial env vars to remove them.                                                  |
+| `scripts/dev/__tests__/release-profile-dev.test.mjs`              | Regression test fixture asserts legacy release/profile envs stay scrubbed.                                             |
+| `scripts/release/__tests__/release-cli.test.mjs`                  | Regression test fixture asserts release CLI ignores legacy envs.                                                       |
+| `apps/desktop/scripts/__tests__/*.mjs`                            | Regression fixtures assert legacy package/env names do not return.                                                     |
+| `scripts/ios/build-mobile-tunnel.sh`                              | Tunnel build script still references current prebuilt tunnel framework names before tunnel binary rename.              |
+| `scripts/ios/lynavo_upload_eval.sh`                               | iOS upload evaluation script controls the current sidecar cmd/binary before cmd rename.                                |
+| `apps/mobile/android/app/build.gradle`                            | Android still links the current prebuilt tunnel AAR before tunnel binary rename.                                       |
+| `apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj`           | iOS still links the current prebuilt tunnel xcframework before tunnel binary rename.                                   |
+| `apps/mobile/ios/SyncEngine/LocalTCPProxy.swift`                  | LocalTCPProxy imports the current prebuilt tunnel framework before tunnel binary rename.                               |
+| `apps/mobile/**` / `services/sidecar-go/**` protocol header files | LAN signed-request compatibility still uses `X-SyncFlow-*` headers until protocol rename.                              |
+| `services/sidecar-go/go.mod`                                      | Go module path before sidecar module rename.                                                                           |
+| `services/sidecar-go/go.sum`                                      | Go module path checksums before sidecar module rename.                                                                 |
+| `services/sidecar-go/Makefile`                                    | Go command path and local legacy dev database cleanup remain before cmd/data-dir rename.                               |
+| `services/sidecar-go/cmd/syncflow-sidecar/main.go`                | Go module path and sidecar config entrypoint names remain before cmd/module rename.                                    |
+| `services/sidecar-go/cmd/syncflow-sidecar/main_test.go`           | Go module import path remains before module rename.                                                                    |
 
 ## Temporary Historical-Doc Exceptions
 
 The following exact `docs/superpowers` paths are temporarily allowlisted because they are historical implementation plans and specs written before the rename. The exception is intentionally exact rather than directory-wide so new rename work remains visible to the advisory scanner.
 
-`docs/superpowers/plans/2026-06-29-lynavo-drive-global-only-oss.md` is not allowlisted by this historical-doc exception.
+`docs/superpowers/plans/2026-06-29-lynavo-drive-global-only-oss.md` is allowlisted as the current rename source plan and remains exact-path scoped.
 
 - `docs/superpowers/plans/2026-04-17-apple-iap.md`
 - `docs/superpowers/plans/2026-04-17-mobile-i18n.md`

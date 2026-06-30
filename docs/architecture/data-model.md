@@ -1,4 +1,4 @@
-# Vivi Drop 資料模型與統計口徑
+# Lynavo Drive 資料模型與統計口徑
 
 本文件記錄 mobile / sidecar 兩端的核心持久化結構、身份語意和統計口徑。
 
@@ -199,10 +199,10 @@ desktop detail 的完成時間來自：
 
 默認接收根目錄：
 
-- macOS：`~/Library/Application Support/Vivi Drop/received`
-- Windows：`%AppData%\\Vivi Drop\\received`
+- macOS：`~/Library/Application Support/Lynavo Drive/received`
+- Windows：`%AppData%\\Lynavo Drive\\received`
 
-以上默認值來自 sidecar 的 `os.UserConfigDir()/Vivi Drop/received`。
+以上默認值來自 sidecar 的 `os.UserConfigDir()/Lynavo Drive/received`。
 
 實際佈局：
 

@@ -136,7 +136,7 @@ lynavo-drive/
 | iOS Native     | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
 | Android Native | Kotlin bridge + NativeSyncEngine / MediaStore / NsdManager |
 | Sidecar        | Go 1.25.6 + SQLite + WebSocket                             |
-| Shared         | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`          |
+| Shared         | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
 | Test           | vitest 4.1 + jest + `go test`                              |
 
 ## 架構概覽

@@ -38,6 +38,7 @@
 ## Task 1: Onboarding Storage
 
 **Files:**
+
 - Create: `apps/mobile/src/utils/onboardingStorage.ts`
 - Create: `apps/mobile/src/utils/__tests__/onboardingStorage.test.ts`
 
@@ -65,21 +66,13 @@ describe('onboardingStorage', () => {
   });
 
   it('reads both device-scoped onboarding flags', async () => {
-    (AsyncStorage.getItem as jest.Mock)
-      .mockResolvedValueOnce('1')
-      .mockResolvedValueOnce(null);
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValueOnce('1').mockResolvedValueOnce(null);
 
     await expect(hasSeenUnconnectedGuide()).resolves.toBe(true);
     await expect(hasSeenSyncActivityTour()).resolves.toBe(false);
 
-    expect(AsyncStorage.getItem).toHaveBeenNthCalledWith(
-      1,
-      ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY,
-    );
-    expect(AsyncStorage.getItem).toHaveBeenNthCalledWith(
-      2,
-      ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY,
-    );
+    expect(AsyncStorage.getItem).toHaveBeenNthCalledWith(1, ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY);
+    expect(AsyncStorage.getItem).toHaveBeenNthCalledWith(2, ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY);
   });
 
   it('marks both onboarding guides as seen', async () => {
@@ -120,8 +113,7 @@ Expected: fail because `../onboardingStorage` does not exist.
 ```ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY =
-  '@vividrop/onboarding/unconnected/v1/seen';
+export const ONBOARDING_UNCONNECTED_GUIDE_SEEN_KEY = '@vividrop/onboarding/unconnected/v1/seen';
 export const ONBOARDING_SYNC_ACTIVITY_TOUR_SEEN_KEY =
   '@vividrop/onboarding/sync-activity-tour/v1/seen';
 
@@ -168,6 +160,7 @@ Expected: pass.
 ## Task 2: Preserve Onboarding During User-Scoped Cleanup
 
 **Files:**
+
 - Modify: `apps/mobile/src/utils/__tests__/clearUserScopedStorage.test.ts`
 
 - [ ] **Step 1: Add failing preservation test**
@@ -183,6 +176,7 @@ Expected: pass if cleanup already preserves unknown app-level keys; fail only if
 ## Task 3: Unconnected Guide Component and Mount
 
 **Files:**
+
 - Create: `apps/mobile/src/components/onboarding/UnconnectedGuide.tsx`
 - Modify: `apps/mobile/src/screens/DeviceDiscoveryScreen.tsx`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/deviceDiscovery.json`
@@ -216,6 +210,7 @@ Expected: pass.
 ## Task 4: Sync Activity Tour Component and Mount
 
 **Files:**
+
 - Create: `apps/mobile/src/components/onboarding/SyncActivityTour.tsx`
 - Modify: `apps/mobile/src/screens/SyncActivityScreen.tsx`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/syncActivity.json`
@@ -249,6 +244,7 @@ Expected: pass.
 ## Task 5: Verification
 
 **Files:**
+
 - All files above.
 
 - [ ] **Step 1: Run focused tests**

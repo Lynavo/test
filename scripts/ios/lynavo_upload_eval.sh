@@ -13,11 +13,11 @@ UPLOAD_ACK_TIMEOUT_SEC=""
 UPLOAD_PERF_LOG=""
 UPLOAD_FORCE_HOST=""
 UPLOAD_FORCE_PORT=""
-SIDE_DB="$HOME/Library/Application Support/SyncFlow/sidecar.db"
-RECV_DIR="$HOME/Library/Application Support/SyncFlow/received"
-STAGING_DIR="$HOME/Library/Application Support/SyncFlow/staging"
-TMP_ROOT="/tmp/syncflow-upload-eval"
-LOG_ROOT="/tmp/syncflow-upload-eval-logs"
+SIDE_DB="$HOME/Library/Application Support/Lynavo Drive/sidecar.db"
+RECV_DIR="$HOME/Library/Application Support/Lynavo Drive/received"
+STAGING_DIR="$HOME/Library/Application Support/Lynavo Drive/staging"
+TMP_ROOT="/tmp/lynavo-drive-upload-eval"
+LOG_ROOT="/tmp/lynavo-drive-upload-eval-logs"
 RESULTS=""
 THRESHOLD_BYTES=$((512 * 1024 * 1024))
 ROUND_TIMEOUT_SEC=600
@@ -28,7 +28,7 @@ PAUSE_SEC=15
 usage() {
   cat <<'EOF'
 Usage:
-  syncflow_upload_eval.sh --mode <batch|recovery-app|recovery-sidecar|recovery-late-sidecar|recovery-sidecar-pause|recovery-app-suspend|all> \
+  lynavo_upload_eval.sh --mode <batch|recovery-app|recovery-sidecar|recovery-late-sidecar|recovery-sidecar-pause|recovery-app-suspend|all> \
     --device <DEVICE_UDID> \
     --app <BUNDLE_ID> \
     --file-key <FILE_KEY> \
@@ -53,10 +53,10 @@ Usage:
     [--sidecar-dir <PATH>]
 
 Examples:
-  bash scripts/ios/syncflow_upload_eval.sh \
+  bash scripts/ios/lynavo_upload_eval.sh \
     --mode batch \
     --device 88D18636-8E5D-5111-80CF-8A540F81DA1D \
-    --app com.vividrop.mobile.china \
+    --app com.lynavo.drive.mobile \
     --file-key c42c4420... \
     --chunk-mb 16 \
     --window-mb 256 \
@@ -64,10 +64,10 @@ Examples:
     --force-host 192.168.1.197 \
     --perf-log 1
 
-  bash scripts/ios/syncflow_upload_eval.sh \
+  bash scripts/ios/lynavo_upload_eval.sh \
     --mode recovery-app \
     --device 88D18636-8E5D-5111-80CF-8A540F81DA1D \
-    --app com.vividrop.mobile.china \
+    --app com.lynavo.drive.mobile \
     --file-key c42c4420...
 EOF
 }
@@ -101,8 +101,8 @@ pull_device_db() {
   mkdir -p "$out_dir"
   xcrun devicectl device copy from \
     --device "$DEVICE" \
-    --source Documents/syncflow.db \
-    --destination "$out_dir/syncflow.db" \
+    --source Documents/lynavo-drive.db \
+    --destination "$out_dir/lynavo-drive.db" \
     --domain-type appDataContainer \
     --domain-identifier "$APP" \
     >"$out_dir/pull.log" 2>&1
@@ -111,21 +111,21 @@ pull_device_db() {
 seed_device_db_from_local_snapshot() {
   local out_dir=$1
   local seed_db
-  seed_db=$(ls -t "$TMP_ROOT"/state-*/syncflow.db 2>/dev/null | head -n 1 || true)
+  seed_db=$(ls -t "$TMP_ROOT"/state-*/lynavo-drive.db 2>/dev/null | head -n 1 || true)
   if [ -z "$seed_db" ] || [ ! -f "$seed_db" ]; then
     return 1
   fi
 
-  cp "$seed_db" "$out_dir/syncflow.db"
+  cp "$seed_db" "$out_dir/lynavo-drive.db"
   if [ -f "${seed_db}-wal" ]; then
-    cp "${seed_db}-wal" "$out_dir/syncflow.db-wal"
+    cp "${seed_db}-wal" "$out_dir/lynavo-drive.db-wal"
   else
-    : >"$out_dir/syncflow.db-wal"
+    : >"$out_dir/lynavo-drive.db-wal"
   fi
   if [ -f "${seed_db}-shm" ]; then
-    cp "${seed_db}-shm" "$out_dir/syncflow.db-shm"
+    cp "${seed_db}-shm" "$out_dir/lynavo-drive.db-shm"
   else
-    : >"$out_dir/syncflow.db-shm"
+    : >"$out_dir/lynavo-drive.db-shm"
   fi
   log "DEVICE_DB_SEEDED from=$seed_db"
 }
@@ -134,24 +134,24 @@ push_device_db() {
   local out_dir=$1
   xcrun devicectl device copy to \
     --device "$DEVICE" \
-    --source "$out_dir/syncflow.db" \
-    --destination Documents/syncflow.db \
+    --source "$out_dir/lynavo-drive.db" \
+    --destination Documents/lynavo-drive.db \
     --domain-type appDataContainer \
     --domain-identifier "$APP" \
     >"$out_dir/push-db.log" 2>&1
 
   xcrun devicectl device copy to \
     --device "$DEVICE" \
-    --source "$out_dir/syncflow.db-wal" \
-    --destination Documents/syncflow.db-wal \
+    --source "$out_dir/lynavo-drive.db-wal" \
+    --destination Documents/lynavo-drive.db-wal \
     --domain-type appDataContainer \
     --domain-identifier "$APP" \
     >"$out_dir/push-wal.log" 2>&1
 
   xcrun devicectl device copy to \
     --device "$DEVICE" \
-    --source "$out_dir/syncflow.db-shm" \
-    --destination Documents/syncflow.db-shm \
+    --source "$out_dir/lynavo-drive.db-shm" \
+    --destination Documents/lynavo-drive.db-shm \
     --domain-type appDataContainer \
     --domain-identifier "$APP" \
     >"$out_dir/push-shm.log" 2>&1
@@ -224,14 +224,14 @@ def apply_int(raw: str, key: str) -> None:
     else:
         data.pop(key, None)
 
-apply_int(chunk_mb, "SyncFlowUploadChunkMB")
-apply_int(window_mb, "SyncFlowUploadWindowMB")
-apply_int(pipeline_chunks, "SyncFlowUploadPipelineChunks")
-apply_int(ack_timeout_sec, "SyncFlowUploadAckTimeoutSec")
+apply_int(chunk_mb, "LynavoDriveUploadChunkMB")
+apply_int(window_mb, "LynavoDriveUploadWindowMB")
+apply_int(pipeline_chunks, "LynavoDriveUploadPipelineChunks")
+apply_int(ack_timeout_sec, "LynavoDriveUploadAckTimeoutSec")
 if perf_log:
-    data["SyncFlowUploadPerfLog"] = perf_log.lower() in {"1", "true", "yes", "on"}
+    data["LynavoDriveUploadPerfLog"] = perf_log.lower() in {"1", "true", "yes", "on"}
 else:
-    data.pop("SyncFlowUploadPerfLog", None)
+    data.pop("LynavoDriveUploadPerfLog", None)
 
 plist_path.parent.mkdir(parents=True, exist_ok=True)
 with plist_path.open("wb") as fh:
@@ -266,11 +266,11 @@ reset_device_queue_state() {
     fi
   fi
 
-  sqlite3 "$out_dir/syncflow.db" "UPDATE upload_items SET status='completed', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE file_key<>'$FILE_KEY' AND status<>'completed';"
-  sqlite3 "$out_dir/syncflow.db" "UPDATE upload_items SET status='queued', acked_offset=0, last_error_code=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE file_key='$FILE_KEY';"
-  sqlite3 "$out_dir/syncflow.db" "PRAGMA wal_checkpoint(TRUNCATE);"
-  : >"$out_dir/syncflow.db-wal"
-  : >"$out_dir/syncflow.db-shm"
+  sqlite3 "$out_dir/lynavo-drive.db" "UPDATE upload_items SET status='completed', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE file_key<>'$FILE_KEY' AND status<>'completed';"
+  sqlite3 "$out_dir/lynavo-drive.db" "UPDATE upload_items SET status='queued', acked_offset=0, last_error_code=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE file_key='$FILE_KEY';"
+  sqlite3 "$out_dir/lynavo-drive.db" "PRAGMA wal_checkpoint(TRUNCATE);"
+  : >"$out_dir/lynavo-drive.db-wal"
+  : >"$out_dir/lynavo-drive.db-shm"
 
   push_device_db "$out_dir"
 }
@@ -300,19 +300,19 @@ force_port = sys.argv[7]
 
 env = {}
 if chunk_mb:
-    env["SYNCFLOW_UPLOAD_CHUNK_MB"] = chunk_mb
+    env["LYNAVO_UPLOAD_CHUNK_MB"] = chunk_mb
 if window_mb:
-    env["SYNCFLOW_UPLOAD_WINDOW_MB"] = window_mb
+    env["LYNAVO_UPLOAD_WINDOW_MB"] = window_mb
 if pipeline_chunks:
-    env["SYNCFLOW_UPLOAD_PIPELINE_CHUNKS"] = pipeline_chunks
+    env["LYNAVO_UPLOAD_PIPELINE_CHUNKS"] = pipeline_chunks
 if ack_timeout_sec:
-    env["SYNCFLOW_UPLOAD_ACK_TIMEOUT_SEC"] = ack_timeout_sec
+    env["LYNAVO_UPLOAD_ACK_TIMEOUT_SEC"] = ack_timeout_sec
 if perf_log:
-    env["SYNCFLOW_UPLOAD_PERF_LOG"] = perf_log
+    env["LYNAVO_UPLOAD_PERF_LOG"] = perf_log
 if force_host:
-    env["SYNCFLOW_UPLOAD_FORCE_HOST"] = force_host
+    env["LYNAVO_UPLOAD_FORCE_HOST"] = force_host
 if force_port:
-    env["SYNCFLOW_UPLOAD_FORCE_PORT"] = force_port
+    env["LYNAVO_UPLOAD_FORCE_PORT"] = force_port
 
 print(json.dumps(env, separators=(",", ":")))
 PY
@@ -500,7 +500,7 @@ ensure_sidecar_running() {
     return 0
   fi
   if [ -n "$UPLOAD_PERF_LOG" ] && [ "$UPLOAD_PERF_LOG" != "0" ]; then
-    (cd "$SIDECAR_DIR" && nohup env SYNCFLOW_UPLOAD_PERF_LOG=1 go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
+    (cd "$SIDECAR_DIR" && nohup env LYNAVO_UPLOAD_PERF_LOG=1 go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
   else
     (cd "$SIDECAR_DIR" && nohup go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
   fi
@@ -528,7 +528,7 @@ resume_sidecar() {
 restart_sidecar() {
   stop_sidecar
   if [ -n "$UPLOAD_PERF_LOG" ] && [ "$UPLOAD_PERF_LOG" != "0" ]; then
-    (cd "$SIDECAR_DIR" && nohup env SYNCFLOW_UPLOAD_PERF_LOG=1 go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
+    (cd "$SIDECAR_DIR" && nohup env LYNAVO_UPLOAD_PERF_LOG=1 go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
   else
     (cd "$SIDECAR_DIR" && nohup go run ./cmd/syncflow-sidecar/ >"$LOG_ROOT/sidecar-restart.log" 2>&1 &)
   fi

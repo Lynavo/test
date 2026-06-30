@@ -18,30 +18,31 @@
 
 ## File Map
 
-| File | Change |
-|---|---|
-| `apps/mobile/ios/SyncEngine/SyncEngineManager.swift` | Add `getKnownDeviceIds() -> [String]` (line 5444, before closing `}`) |
-| `apps/mobile/ios/SyncEngine/RNBridge.swift` | Add `@objc func getKnownDeviceIds(...)` (after `setOwnerUserId` at line 474) |
-| `apps/mobile/ios/SyncEngine/RNBridge.m` | Add `RCT_EXTERN_METHOD(getKnownDeviceIds:...)` |
-| `apps/mobile/src/services/SyncEngineModule.ts` | Export `getKnownDeviceIds(): Promise<string[]>` |
-| `apps/mobile/src/services/__tests__/SyncEngineModule.getKnownDeviceIds.test.ts` | New test file |
-| `apps/mobile/src/navigation/RootNavigator.tsx` | `DeviceDiscovery: { mode?: 'switch' } \| undefined` |
-| `apps/mobile/src/i18n/locales/zh-Hans/settings.json` | Add `switchDeviceWhileUploading` keys |
-| `apps/mobile/src/i18n/locales/zh-Hant/settings.json` | Add `switchDeviceWhileUploading` keys |
-| `apps/mobile/src/i18n/locales/en/settings.json` | Add `switchDeviceWhileUploading` keys |
-| `apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json` | Add `switch` keys |
-| `apps/mobile/src/i18n/locales/zh-Hant/deviceDiscovery.json` | Add `switch` keys |
-| `apps/mobile/src/i18n/locales/en/deviceDiscovery.json` | Add `switch` keys |
-| `apps/mobile/src/screens/SettingsScreen.tsx` | Update `handleSwitchDevice` |
-| `apps/mobile/src/screens/__tests__/SettingsScreen.test.tsx` | Add switch device tests |
-| `apps/mobile/src/screens/DeviceDiscoveryScreen.tsx` | Add switch mode |
-| `apps/mobile/src/screens/__tests__/DeviceDiscoveryScreen.switchMode.test.tsx` | New test file |
+| File                                                                            | Change                                                                       |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apps/mobile/ios/SyncEngine/SyncEngineManager.swift`                            | Add `getKnownDeviceIds() -> [String]` (line 5444, before closing `}`)        |
+| `apps/mobile/ios/SyncEngine/RNBridge.swift`                                     | Add `@objc func getKnownDeviceIds(...)` (after `setOwnerUserId` at line 474) |
+| `apps/mobile/ios/SyncEngine/RNBridge.m`                                         | Add `RCT_EXTERN_METHOD(getKnownDeviceIds:...)`                               |
+| `apps/mobile/src/services/SyncEngineModule.ts`                                  | Export `getKnownDeviceIds(): Promise<string[]>`                              |
+| `apps/mobile/src/services/__tests__/SyncEngineModule.getKnownDeviceIds.test.ts` | New test file                                                                |
+| `apps/mobile/src/navigation/RootNavigator.tsx`                                  | `DeviceDiscovery: { mode?: 'switch' } \| undefined`                          |
+| `apps/mobile/src/i18n/locales/zh-Hans/settings.json`                            | Add `switchDeviceWhileUploading` keys                                        |
+| `apps/mobile/src/i18n/locales/zh-Hant/settings.json`                            | Add `switchDeviceWhileUploading` keys                                        |
+| `apps/mobile/src/i18n/locales/en/settings.json`                                 | Add `switchDeviceWhileUploading` keys                                        |
+| `apps/mobile/src/i18n/locales/zh-Hans/deviceDiscovery.json`                     | Add `switch` keys                                                            |
+| `apps/mobile/src/i18n/locales/zh-Hant/deviceDiscovery.json`                     | Add `switch` keys                                                            |
+| `apps/mobile/src/i18n/locales/en/deviceDiscovery.json`                          | Add `switch` keys                                                            |
+| `apps/mobile/src/screens/SettingsScreen.tsx`                                    | Update `handleSwitchDevice`                                                  |
+| `apps/mobile/src/screens/__tests__/SettingsScreen.test.tsx`                     | Add switch device tests                                                      |
+| `apps/mobile/src/screens/DeviceDiscoveryScreen.tsx`                             | Add switch mode                                                              |
+| `apps/mobile/src/screens/__tests__/DeviceDiscoveryScreen.switchMode.test.tsx`   | New test file                                                                |
 
 ---
 
 ## Task 1: Native — add `getKnownDeviceIds` to SyncEngineManager + RNBridge
 
 **Files:**
+
 - Modify: `apps/mobile/ios/SyncEngine/SyncEngineManager.swift` (line 5444)
 - Modify: `apps/mobile/ios/SyncEngine/RNBridge.swift` (after line 474)
 - Modify: `apps/mobile/ios/SyncEngine/RNBridge.m` (after line 52)
@@ -97,6 +98,7 @@ git commit -m "feat(mobile/native): add getKnownDeviceIds to RNBridge"
 ## Task 2: JS — expose `getKnownDeviceIds` in SyncEngineModule + tests
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/SyncEngineModule.ts`
 - Create: `apps/mobile/src/services/__tests__/SyncEngineModule.getKnownDeviceIds.test.ts`
 
@@ -177,6 +179,7 @@ git commit -m "feat(mobile): expose getKnownDeviceIds in SyncEngineModule"
 ## Task 3: Navigation type + i18n strings
 
 **Files:**
+
 - Modify: `apps/mobile/src/navigation/RootNavigator.tsx`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hans/settings.json`
 - Modify: `apps/mobile/src/i18n/locales/zh-Hant/settings.json`
@@ -289,6 +292,7 @@ In `apps/mobile/src/i18n/locales/en/deviceDiscovery.json`, add a comma after `"d
 The previous flow used `settings.dialogs.switchDevice.{title,body,confirm}` to confirm "disconnect and switch". The new flow no longer shows this dialog (the confirm step now lives only when an upload is active, which uses the new `switchDeviceWhileUploading` keys). The old keys become dead code.
 
 Delete the entire `"switchDevice"` block from inside `"dialogs"` in:
+
 - `apps/mobile/src/i18n/locales/zh-Hans/settings.json`
 - `apps/mobile/src/i18n/locales/zh-Hant/settings.json`
 - `apps/mobile/src/i18n/locales/en/settings.json`
@@ -329,6 +333,7 @@ git commit -m "feat(mobile): add switch-device i18n keys and DeviceDiscovery rou
 ## Task 4: SettingsScreen — upload guard + navigate to switch mode
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/SettingsScreen.tsx`
 - Modify: `apps/mobile/src/screens/__tests__/SettingsScreen.test.tsx`
 
@@ -448,6 +453,7 @@ git commit -m "feat(mobile): guard switch-device with upload check, navigate to 
 ## Task 5: DeviceDiscoveryScreen — switch mode
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/DeviceDiscoveryScreen.tsx`
 - Create: `apps/mobile/src/screens/__tests__/DeviceDiscoveryScreen.switchMode.test.tsx`
 
@@ -492,7 +498,7 @@ jest.mock('@react-navigation/native', () => ({
     params: { mode: 'switch' },
   }),
   CommonActions: {
-    reset: jest.fn(payload => ({ type: 'RESET', payload })),
+    reset: jest.fn((payload) => ({ type: 'RESET', payload })),
   },
 }));
 
@@ -673,9 +679,12 @@ describe('DeviceDiscoveryScreen — switch mode', () => {
     fireEvent.press(getByText('New PC'));
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('CodeVerify', expect.objectContaining({
-        deviceId: 'server-new',
-      }));
+      expect(mockNavigate).toHaveBeenCalledWith(
+        'CodeVerify',
+        expect.objectContaining({
+          deviceId: 'server-new',
+        }),
+      );
     });
     expect(mockNativeSyncEngine.pairDevice).not.toHaveBeenCalled();
   });
@@ -768,7 +777,9 @@ useEffect(() => {
     setKnownDeviceIds(new Set(ids as string[]));
     setCurrentDeviceId((binding as any)?.deviceId ?? null);
   });
-  return () => { cancelled = true; };
+  return () => {
+    cancelled = true;
+  };
 }, [mode]);
 ```
 
@@ -867,16 +878,12 @@ const renderDevice = useCallback(
         </View>
         {isCurrentDevice && (
           <View style={styles.badgeCurrent}>
-            <Text style={styles.badgeCurrentText}>
-              {t('deviceDiscovery.switch.badge.current')}
-            </Text>
+            <Text style={styles.badgeCurrentText}>{t('deviceDiscovery.switch.badge.current')}</Text>
           </View>
         )}
         {isKnownDevice && (
           <View style={styles.badgeKnown}>
-            <Text style={styles.badgeKnownText}>
-              {t('deviceDiscovery.switch.badge.known')}
-            </Text>
+            <Text style={styles.badgeKnownText}>{t('deviceDiscovery.switch.badge.known')}</Text>
           </View>
         )}
         {!isCurrentDevice && !isKnownDevice && (

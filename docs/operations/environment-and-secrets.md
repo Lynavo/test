@@ -1,6 +1,6 @@
 # 环境与密钥说明
 
-本文件记录 Vivi Drop 当前本地开发、签名和发布所需的环境、证书、脚本输入和调试开关。
+本文件记录 Lynavo Drive 当前本地开发、签名和发布所需的环境、证书、脚本输入和调试开关。
 
 ## 1. 本地开发前置依赖
 
@@ -28,8 +28,8 @@ pnpm build
 需要：
 
 1. 本机 Xcode 已登录有效 Apple 账号
-2. App Store Connect 已存在 `com.vividrop.mobile.china`
-3. `Vivi DropMobile.xcworkspace` 能正常 archive 和 export
+2. App Store Connect 已存在 `com.lynavo.drive.mobile`
+3. `LynavoDrive.xcworkspace` 能正常 archive 和 export
 
 ### 2.2 macOS 签名与公证
 
@@ -59,12 +59,11 @@ pnpm package:desktop:win
 
 ## 3. 本地密钥放置
 
-当前 macOS signed desktop 打包脚本会根据 release profile market 从仓库根目录读取：
+当前 macOS signed desktop 打包脚本会根据 release profile 从仓库根目录读取：
 
-| Market | App Store Connect key | Required Developer ID Team ID |
-| --- | --- | --- |
-| `cn` | `AuthKey_HY8CAHGPW9.p8` | `GKN7JQNCMC` |
-| `global` | `AuthKey_Global_AMY9XVV3LD.p8` | `S44ANBLMF9` |
+| Profile           | App Store Connect key          | Required Developer ID Team ID |
+| ----------------- | ------------------------------ | ----------------------------- |
+| `review` / `prod` | `AuthKey_Global_AMY9XVV3LD.p8` | `S44ANBLMF9`                  |
 
 注意：
 
@@ -81,15 +80,13 @@ pnpm package:desktop:win
 - `APPLE_API_KEY`
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
-- `SYNCFLOW_BUILD_NUMBER`
-- `SYNCFLOW_MARKET`
+- `LYNAVO_BUILD_NUMBER`
 
 说明：
 
 1. `CSC_NAME` 不要带 `Developer ID Application:` 前缀
-2. `SYNCFLOW_BUILD_NUMBER` 默认从 iOS `CURRENT_PROJECT_VERSION` 推导
-3. `SYNCFLOW_MARKET=global` 时，`CSC_NAME` 必须匹配 Team ID `S44ANBLMF9`
-4. `SYNCFLOW_MARKET=cn` 时，`CSC_NAME` 必须匹配 Team ID `GKN7JQNCMC`
+2. `LYNAVO_BUILD_NUMBER` 默认从 iOS `CURRENT_PROJECT_VERSION` 推导
+3. `CSC_NAME` 必须匹配 Team ID `S44ANBLMF9`
 
 ## 4.2 Windows Desktop 打包
 
@@ -97,8 +94,8 @@ pnpm package:desktop:win
 
 需要额外关注的不是密钥，而是：
 
-1. Windows 机器能正常编译 `syncflow-sidecar.exe`
-2. 安装包内包含 `syncflow-sidecar.exe / dns-sd.exe / dnssd.dll`
+1. Windows 机器能正常编译 `lynavo-drive-sidecar.exe`
+2. 安装包内包含 `lynavo-drive-sidecar.exe / dns-sd.exe / dnssd.dll`
 3. 安装后防火墙规则能落地
 
 ## 4.2 iOS TestFlight 脚本
@@ -115,7 +112,7 @@ pnpm package:desktop:win
 
 ### sidecar
 
-- `SYNCFLOW_UPLOAD_PERF_LOG=1`
+- `LYNAVO_UPLOAD_PERF_LOG=1`
 
 ### mobile
 

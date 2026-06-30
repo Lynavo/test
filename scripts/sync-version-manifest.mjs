@@ -45,11 +45,11 @@ function renderOutputs(manifest) {
       content: `package protocol\n\n${generatedHeader('//')}const AppCompatibilityVersion = ${appCompatibilityVersion}\n`,
     },
     {
-      path: 'apps/mobile/ios/SyncEngine/SyncFlowVersion.generated.swift',
-      content: `${generatedHeader('//')}let syncFlowAppCompatibilityVersion = ${appCompatibilityVersion}\n`,
+      path: 'apps/mobile/ios/SyncEngine/LynavoVersion.generated.swift',
+      content: `${generatedHeader('//')}let lynavoAppCompatibilityVersion = ${appCompatibilityVersion}\n`,
     },
     {
-      path: 'apps/mobile/android/app/src/main/java/com/lynavo/drive/mobile/sync/SyncFlowVersion.kt',
+      path: 'apps/mobile/android/app/src/main/java/com/lynavo/drive/mobile/sync/LynavoVersion.kt',
       content: `package com.lynavo.drive.mobile.sync\n\n${generatedHeader('//')}internal const val APP_COMPATIBILITY_VERSION = ${appCompatibilityVersion}\n`,
     },
   ];

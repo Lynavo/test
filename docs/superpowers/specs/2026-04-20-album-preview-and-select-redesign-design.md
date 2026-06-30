@@ -12,9 +12,9 @@
 
 每個相冊 item 拆為兩個獨立熱區：
 
-| 熱區 | 行為 | 已上傳項（`isTransferred`） |
-|------|------|-----------------------------|
-| Item 本體 | `onPress` → 打開預覽 Modal | 同樣可預覽 |
+| 熱區           | 行為                           | 已上傳項（`isTransferred`）    |
+| -------------- | ------------------------------ | ------------------------------ |
+| Item 本體      | `onPress` → 打開預覽 Modal     | 同樣可預覽                     |
 | 右上角選擇圓圈 | `onPress` → 切換 `selectedIds` | 不渲染圓圈（保留現有綠勾遮罩） |
 
 實作：選擇圓圈用獨立 `TouchableOpacity` 包住；`hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}` 擴大觸控範圍；無需手動 `stopPropagation`（React Native 的 Touchable 不會冒泡到父 Touchable，但仍將圓圈置於絕對定位以避免視覺與觸控重疊）。
@@ -98,12 +98,14 @@ func getPreviewSource(assetLocalId: String) -> [String: Any]
 ```
 
 **圖片分支**：
+
 - `PHImageRequestOptions`：`deliveryMode = .highQualityFormat`、`isNetworkAccessAllowed = true`、`isSynchronous = false`（但在 bridge 層包成 Promise 式同步等待）
 - `PHImageManager.default().requestImageDataAndOrientation` 取原始 JPEG data
 - 寫入 `tmp/syncflow_album_previews/<safeId>.jpg`
 - 已存在則直接回傳（快取）
 
 **影片分支**：
+
 - `PHVideoRequestOptions`：`isNetworkAccessAllowed = true`、`deliveryMode = .automatic`
 - `PHImageManager.default().requestAVAsset(forVideo:options:)` → `AVURLAsset.url`
 - **不導出** —— 直接回傳原生 URL 字串（iOS 內部 sandbox 已為 `<Video>` 授權）
@@ -122,6 +124,7 @@ func getAssetPreviewSource(assetLocalId: String) -> [String: Any]
 ### 3.3 Tmp 清理
 
 新增 `SyncEngineManager.cleanupPreviewCacheIfNeeded()`：
+
 - App 啟動時（`init` 尾端或既有 startup hook）呼叫
 - 掃 `tmp/syncflow_album_previews/` 所有檔案
 - 規則：刪除最後修改超過 **24 小時** 或目錄總大小超過 **500 MB**（後者先刪最舊的直到達標）
@@ -187,12 +190,12 @@ export interface AssetPreviewSourceDTO {
 
 ## 7. 測試策略
 
-| 層 | 測試重點 | 工具 |
-|----|---------|------|
-| `AlbumWorkbenchScreen.test.tsx` | 圓圈點擊切換選中、item 本體點擊打開 Modal、全選/取消全選、上傳按鈕聯動；**刪除**長按多選相關 case | `@testing-library/react-native` |
+| 層                                   | 測試重點                                                                                               | 工具                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `AlbumWorkbenchScreen.test.tsx`      | 圓圈點擊切換選中、item 本體點擊打開 Modal、全選/取消全選、上傳按鈕聯動；**刪除**長按多選相關 case      | `@testing-library/react-native`                            |
 | `AssetPreviewModal.test.tsx`（新增） | 初始 index 正確、左右滑 `activeIndex` 更新、只有當前頁影片播放、loading / error 狀態渲染、關閉回呼觸發 | `@testing-library/react-native`；`react-native-video` mock |
-| `AlbumBrowserService` XCTest | `getPreviewSource` 圖片快取命中、cloud_unavailable 回傳、路徑 sanitize | Swift `XCTest` |
-| Tmp 清理 | 24h 逾期刪除、500 MB 上限 LRU 削減 | Swift `XCTest` |
+| `AlbumBrowserService` XCTest         | `getPreviewSource` 圖片快取命中、cloud_unavailable 回傳、路徑 sanitize                                 | Swift `XCTest`                                             |
+| Tmp 清理                             | 24h 逾期刪除、500 MB 上限 LRU 削減                                                                     | Swift `XCTest`                                             |
 
 **既有測試回歸**：`AlbumWorkbenchScreen.test.tsx` 目前 long-press 相關 case 需刪除/改寫。
 
@@ -222,10 +225,10 @@ export interface AssetPreviewSourceDTO {
 
 ## 10. 風險與緩解
 
-| 風險 | 緩解 |
-|------|------|
-| iCloud 影片請求失敗或超時卡住 UI | `getPreviewSource` 設 15 秒超時；前端 loading 超過 15s 顯示錯誤 |
-| 預覽快取撐爆儲存 | §3.3 的 24h/500MB 清理策略 |
-| `react-native-video` 與 RN 0.84 的兼容性 | 選用明確支援 RN 0.84 的版本；`pod install` 後手動冒煙驗證 |
+| 風險                                                         | 緩解                                                                              |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| iCloud 影片請求失敗或超時卡住 UI                             | `getPreviewSource` 設 15 秒超時；前端 loading 超過 15s 顯示錯誤                   |
+| 預覽快取撐爆儲存                                             | §3.3 的 24h/500MB 清理策略                                                        |
+| `react-native-video` 與 RN 0.84 的兼容性                     | 選用明確支援 RN 0.84 的版本；`pod install` 後手動冒煙驗證                         |
 | 橫向 `FlatList` 在 iOS 上 `getItemLayout` 未設好導致跳頁閃爍 | 明確設 `getItemLayout={(_, i) => ({ length: width, offset: width*i, index: i })}` |
-| 原生端同步 I/O 阻塞 JS 線程 | bridge 方法用 Promise 返回，原生端 `DispatchQueue.global` 執行 |
+| 原生端同步 I/O 阻塞 JS 線程                                  | bridge 方法用 Promise 返回，原生端 `DispatchQueue.global` 執行                    |

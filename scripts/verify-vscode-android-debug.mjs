@@ -23,14 +23,8 @@ assert.equal(defaultConfig?.name, 'Mobile: Android Debug (F5)');
 assert.equal(defaultConfig.type, 'node-terminal');
 assert.equal(defaultConfig.request, 'launch');
 assert.equal(defaultConfig.preLaunchTask, 'mobile: start metro');
-assert.match(
-  defaultConfig.command,
-  /SYNCFLOW_ANDROID_METRO_READY_TIMEOUT_SECONDS=180/,
-);
-assert.match(
-  defaultConfig.command,
-  /bash scripts\/dev\/run-mobile-android-device\.sh/,
-);
+assert.match(defaultConfig.command, /LYNAVO_ANDROID_METRO_READY_TIMEOUT_SECONDS=180/);
+assert.match(defaultConfig.command, /bash scripts\/dev\/run-mobile-android-device\.sh/);
 assert.equal(defaultConfig.platform, undefined);
 assert.equal(defaultConfig.target, undefined);
 assert.equal(defaultConfig.cwd, undefined);
@@ -50,7 +44,7 @@ assert.match(
 );
 assert.doesNotMatch(
   iosNoMetroConfig.command,
-  /SyncFlowMobileGlobal|LynavoDriveGlobal|DebugGlobal|SYNCFLOW_MARKET/,
+  /SyncFlowMobileGlobal|LynavoDriveGlobal|DebugGlobal|LYNAVO_MARKET/,
 );
 
 const iosDeviceConfig = launch.configurations.find(
@@ -60,10 +54,7 @@ assert.ok(iosDeviceConfig, 'Mobile: iOS (macOS) should exist');
 assert.equal(iosDeviceConfig.type, 'node-terminal');
 assert.equal(iosDeviceConfig.request, 'launch');
 assert.equal(iosDeviceConfig.preLaunchTask, 'mobile: start metro');
-assert.match(
-  iosDeviceConfig.command,
-  /bash scripts\/dev\/run-mobile-ios-device\.sh/,
-);
+assert.match(iosDeviceConfig.command, /bash scripts\/dev\/run-mobile-ios-device\.sh/);
 
 const androidIosCompound = launch.compounds?.find(
   (compound) => compound.name === 'Mobile: Android + iOS',
@@ -88,18 +79,10 @@ const metroTask = tasks.tasks.find((task) => task.label === 'mobile: start metro
 assert.ok(metroTask, 'mobile: start metro task should exist');
 assert.equal(metroTask.type, 'shell');
 assert.equal(metroTask.command, 'bash');
-assert.deepEqual(metroTask.args, [
-  '${workspaceFolder}/scripts/dev/ensure-mobile-metro.sh',
-]);
+assert.deepEqual(metroTask.args, ['${workspaceFolder}/scripts/dev/ensure-mobile-metro.sh']);
 assert.equal(metroTask.isBackground, true);
-assert.match(
-  metroTask.problemMatcher.background.beginsPattern,
-  /Metro already running/,
-);
-assert.equal(
-  metroTask.problemMatcher.background.endsPattern,
-  '.*Metro launch requested.*',
-);
+assert.match(metroTask.problemMatcher.background.beginsPattern, /Metro already running/);
+assert.equal(metroTask.problemMatcher.background.endsPattern, '.*Metro launch requested.*');
 assert.equal(mobilePackage.scripts?.start, 'react-native start');
 
 assert.equal(

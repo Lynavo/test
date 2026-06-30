@@ -1,10 +1,10 @@
-# Vivi Drop 产品约束与非目标
+# Lynavo Drive 产品约束与非目标
 
 本文件把当前项目的核心产品约束从工程语言翻译成产品语言，方便交接时统一判断边界。
 
 ## 1. 当前产品边界
 
-Vivi Drop V2 当前做两件事：
+Lynavo Drive V2 当前做两件事：
 
 - `Mobile（iOS / Android） -> Desktop（macOS / Windows）` 的局域网增量同步（自动 + 手动上传共存）
 - 桌面端共享文件供移动端浏览和下载

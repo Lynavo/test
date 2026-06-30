@@ -28,11 +28,11 @@ if [[ "$1" == "-s" ]]; then
       if [[ "$2" == "getprop" ]]; then
         echo "PEGM10"
       else
-        echo "$device $*" >>"$SYNCFLOW_ANDROID_TEST_ADB_LOG"
+        echo "$device $*" >>"$LYNAVO_ANDROID_TEST_ADB_LOG"
       fi
       ;;
     reverse)
-      echo "$device reverse $2 $3" >>"$SYNCFLOW_ANDROID_TEST_ADB_LOG"
+      echo "$device reverse $2 $3" >>"$LYNAVO_ANDROID_TEST_ADB_LOG"
       ;;
     *)
       echo "unexpected adb command: $*" >&2
@@ -61,19 +61,19 @@ STUB
 cat >"$tmp_dir/repo/apps/mobile/android/gradlew" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$*" >"$SYNCFLOW_ANDROID_TEST_GRADLE_LOG"
+printf '%s\n' "$*" >"$LYNAVO_ANDROID_TEST_GRADLE_LOG"
 STUB
 
 chmod +x "$tmp_dir/bin/adb" "$tmp_dir/bin/curl" "$tmp_dir/repo/apps/mobile/android/gradlew"
 
 export PATH="$tmp_dir/bin:$PATH"
-export SYNCFLOW_ANDROID_DEVICE="15977ea9"
-export SYNCFLOW_ANDROID_TEST_ADB_LOG="$tmp_dir/adb.log"
-export SYNCFLOW_ANDROID_TEST_GRADLE_LOG="$tmp_dir/gradle.log"
+export LYNAVO_ANDROID_DEVICE="15977ea9"
+export LYNAVO_ANDROID_TEST_ADB_LOG="$tmp_dir/adb.log"
+export LYNAVO_ANDROID_TEST_GRADLE_LOG="$tmp_dir/gradle.log"
 
 bash "$tmp_dir/repo/scripts/dev/run-mobile-android-device.sh" >/dev/null
 
-actual_gradle_args="$(cat "$SYNCFLOW_ANDROID_TEST_GRADLE_LOG")"
+actual_gradle_args="$(cat "$LYNAVO_ANDROID_TEST_GRADLE_LOG")"
 expected_gradle_args=":app:installDebug"
 
 if [[ "$actual_gradle_args" != "$expected_gradle_args" ]]; then
@@ -82,28 +82,28 @@ if [[ "$actual_gradle_args" != "$expected_gradle_args" ]]; then
   exit 1
 fi
 
-actual_adb_log="$(cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG")"
+actual_adb_log="$(cat "$LYNAVO_ANDROID_TEST_ADB_LOG")"
 expected_launch="15977ea9 shell am start -n com.lynavo.drive.mobile/com.lynavo.drive.mobile.MainActivity"
 
 if ! grep -Fq "$expected_launch" <<<"$actual_adb_log"; then
   echo "Expected adb launch: $expected_launch" >&2
   echo "Actual adb log:" >&2
-  cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG" >&2
+  cat "$LYNAVO_ANDROID_TEST_ADB_LOG" >&2
   exit 1
 fi
 
-: >"$SYNCFLOW_ANDROID_TEST_ADB_LOG"
-: >"$SYNCFLOW_ANDROID_TEST_GRADLE_LOG"
-SYNCFLOW_ANDROID_APP_ID="com.example.override" \
-  SYNCFLOW_ANDROID_MAIN_ACTIVITY=".MainActivity" \
+: >"$LYNAVO_ANDROID_TEST_ADB_LOG"
+: >"$LYNAVO_ANDROID_TEST_GRADLE_LOG"
+LYNAVO_ANDROID_APP_ID="com.example.override" \
+  LYNAVO_ANDROID_MAIN_ACTIVITY=".MainActivity" \
   bash "$tmp_dir/repo/scripts/dev/run-mobile-android-device.sh" >/dev/null
 
-actual_adb_log="$(cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG")"
+actual_adb_log="$(cat "$LYNAVO_ANDROID_TEST_ADB_LOG")"
 expected_override_launch="15977ea9 shell am start -n com.example.override/com.example.override.MainActivity"
 
 if ! grep -Fq "$expected_override_launch" <<<"$actual_adb_log"; then
   echo "Expected override adb launch: $expected_override_launch" >&2
   echo "Actual adb log:" >&2
-  cat "$SYNCFLOW_ANDROID_TEST_ADB_LOG" >&2
+  cat "$LYNAVO_ANDROID_TEST_ADB_LOG" >&2
   exit 1
 fi

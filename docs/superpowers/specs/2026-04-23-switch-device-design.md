@@ -55,8 +55,8 @@ New export:
 
 ```ts
 export async function getKnownDeviceIds(): Promise<string[]> {
-    const result = await NativeSyncEngine.getKnownDeviceIds();
-    return result as string[];
+  const result = await NativeSyncEngine.getKnownDeviceIds();
+  return result as string[];
 }
 ```
 
@@ -74,40 +74,44 @@ DeviceDiscovery: { mode?: 'switch' } | undefined;
 
 ```ts
 const handleSwitchDevice = useCallback(() => {
-    if (isSyncActivityActivelyTransferring(syncOverviewState)) {
-        Alert.alert(
-            t('settings.dialogs.switchDeviceWhileUploading.title'),
-            t('settings.dialogs.switchDeviceWhileUploading.body'),
-            [
-                { text: t('common.cancel'), style: 'cancel' },
-                {
-                    text: t('settings.dialogs.switchDeviceWhileUploading.confirm'),
-                    style: 'destructive',
-                    onPress: () => navigation.navigate('DeviceDiscovery', { mode: 'switch' }),
-                },
-            ],
-        );
-    } else {
-        navigation.navigate('DeviceDiscovery', { mode: 'switch' });
-    }
+  if (isSyncActivityActivelyTransferring(syncOverviewState)) {
+    Alert.alert(
+      t('settings.dialogs.switchDeviceWhileUploading.title'),
+      t('settings.dialogs.switchDeviceWhileUploading.body'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.dialogs.switchDeviceWhileUploading.confirm'),
+          style: 'destructive',
+          onPress: () => navigation.navigate('DeviceDiscovery', { mode: 'switch' }),
+        },
+      ],
+    );
+  } else {
+    navigation.navigate('DeviceDiscovery', { mode: 'switch' });
+  }
 }, [navigation, syncOverviewState, t]);
 ```
 
 ### 5. `DeviceDiscoveryScreen.tsx`
 
 **Props / route params:**
+
 - Read `mode` from route params (`route.params?.mode ?? 'initial'`).
 - On mount (switch mode only): call `getKnownDeviceIds()` and store result as `Set<string>`.
 
 **Header (switch mode):**
+
 - Replace wifi icon + manual-pair button row with a back button (`←`) + title "切換設備".
 - Back button calls `navigation.goBack()`.
 
 **Device card (switch mode):**
+
 - `deviceId in knownIds` → show blue "當前" badge (current device) or green "直接切換" badge (other known devices), no badge change for unknown devices.
 - Current device determined by comparing `deviceId` against `bindingState.deviceId`.
 
 Visual spec (Option A — badge on right):
+
 ```
 [ 🖥  Brett 的 MacBook Pro    macOS · 192.168.1.5   [當前]  ]
 [ 🖥  Studio iMac             macOS · 192.168.1.8   [直接切換] ]
@@ -154,12 +158,12 @@ DeviceDiscoveryScreen (mode='switch')
 
 ## Error Handling
 
-| Scenario | Handling |
-|---|---|
+| Scenario                             | Handling                                                 |
+| ------------------------------------ | -------------------------------------------------------- |
 | Token revoked (desktop changed code) | pairDevice throws pairing error → fallback to CodeVerify |
-| Network timeout / device unreachable | Alert: "無法連接，請確認設備已開啟" |
-| `getKnownDeviceIds()` fails | Treat all devices as unknown (graceful degradation) |
-| Upload in progress during switch | Alert confirmation before navigating |
+| Network timeout / device unreachable | Alert: "無法連接，請確認設備已開啟"                      |
+| `getKnownDeviceIds()` fails          | Treat all devices as unknown (graceful degradation)      |
+| Upload in progress during switch     | Alert confirmation before navigating                     |
 
 ---
 

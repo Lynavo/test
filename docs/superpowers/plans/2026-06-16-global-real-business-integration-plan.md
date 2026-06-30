@@ -45,6 +45,7 @@
 **Owner:** Worker, isolated.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/DeviceDiscoveryGlobalScreen.tsx`
 - Modify/Test: `apps/mobile/src/screens/__tests__/DeviceDiscoveryGlobalScreen.onboarding.test.tsx`
 
@@ -67,6 +68,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, isolated after Task 7 wrapper decision if wrappers are needed.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/SettingsGlobalScreen.tsx`
 - Modify/Test: `apps/mobile/src/screens/__tests__/SettingsGlobalScreen.test.tsx`
 - Optional helper: `apps/mobile/src/screens/settings-global/*`
@@ -93,6 +95,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, isolated.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AutoUploadSettingsGlobalScreen.tsx`
 - Modify/Test: `apps/mobile/src/screens/__tests__/AutoUploadSettingsGlobalScreen.test.tsx`
 
@@ -115,6 +118,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, isolated after Task 7 if typed wrappers are needed.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/SyncActivityGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/components/GlobalSyncActivityHomeSections.tsx` only if section props need real-state shape changes
 - Modify/Test: `apps/mobile/src/screens/__tests__/SyncActivityGlobalScreen.test.tsx`
@@ -139,6 +143,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, isolated.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/HistoryGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/DownloadRecordsGlobalScreen.tsx`
 - Modify/Test: `apps/mobile/src/screens/__tests__/HistoryGlobalScreen.test.tsx`
@@ -163,6 +168,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, isolated from Task 5, but may need shared service review.
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/RemoteAccessGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/PhoneSyncSpaceGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/SharedFilesGlobalScreen.tsx`
@@ -186,6 +192,7 @@ pnpm --filter @lynavo-drive/mobile test -- SharedFilesDownloadGate
 **Owner:** Worker, isolated. Run before Tasks 2 and 4 only if those tasks need wrappers beyond existing exports.
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/SyncEngineModule.ts`
 - Modify/Test: `apps/mobile/src/services/__tests__/SyncEngineModule.*.test.ts`
 
@@ -206,6 +213,7 @@ pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 **Owner:** Worker, shared service task. Do after remote resource UI scope is clear.
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/desktop-local-service.ts`
 - Modify/Test: `apps/mobile/src/services/__tests__/download-records-service.test.ts`
 - Optional: global remote/download tests

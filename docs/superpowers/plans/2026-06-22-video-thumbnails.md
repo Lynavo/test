@@ -56,6 +56,7 @@
 ## Task 1: Contracts Event
 
 **Files:**
+
 - Modify: `packages/contracts/src/events.ts`
 - Modify: `packages/contracts/src/__tests__/exports.test.ts`
 
@@ -73,25 +74,23 @@ Add `type SidecarEvent` to the existing import from `../index`:
 Add this test inside the existing `describe('desktop-local product exports', ...)` block:
 
 ```ts
-  it('exports the video thumbnail request event type', () => {
-    expect(SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST).toBe(
-      'video.thumbnail.request',
-    );
+it('exports the video thumbnail request event type', () => {
+  expect(SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST).toBe('video.thumbnail.request');
 
-    const event: SidecarEvent = {
-      type: SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST,
-      payload: {
-        requestId: 'req-1',
-        sourcePath: '/tmp/source.mov',
-        cachePath: '/tmp/thumbnail-cache/aa/cache.jpg',
-        sourceVersion: '1024-123-v1',
-        maxEdge: 256,
-        quality: 80,
-      },
-    };
+  const event: SidecarEvent = {
+    type: SIDECAR_EVENT_TYPES.VIDEO_THUMBNAIL_REQUEST,
+    payload: {
+      requestId: 'req-1',
+      sourcePath: '/tmp/source.mov',
+      cachePath: '/tmp/thumbnail-cache/aa/cache.jpg',
+      sourceVersion: '1024-123-v1',
+      maxEdge: 256,
+      quality: 80,
+    },
+  };
 
-    expect(event.payload.maxEdge).toBe(256);
-  });
+  expect(event.payload.maxEdge).toBe(256);
+});
 ```
 
 - [ ] **Step 2: Run the contracts test to verify it fails**
@@ -168,6 +167,7 @@ git commit -m "feat: add video thumbnail sidecar event"
 ## Task 2: Sidecar Directory Listing Metadata
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/handlers_shared.go`
 - Modify: `services/sidecar-go/internal/api/router_test.go`
 
@@ -445,6 +445,7 @@ git commit -m "feat: expose video thumbnail metadata from sidecar lists"
 ## Task 3: Sidecar Video Thumbnail Cache Miss Flow
 
 **Files:**
+
 - Modify: `services/sidecar-go/internal/api/router.go`
 - Modify: `services/sidecar-go/internal/api/handlers_shared.go`
 - Modify: `services/sidecar-go/internal/api/router_test.go`
@@ -752,6 +753,7 @@ git commit -m "feat: request desktop-generated video thumbnails from sidecar"
 ## Task 4: Electron Video Thumbnail Generator
 
 **Files:**
+
 - Create: `apps/desktop/src/main/video-thumbnail-generator.ts`
 - Create: `apps/desktop/src/main/__tests__/video-thumbnail-generator.test.ts`
 - Modify: `apps/desktop/src/main/index.ts`
@@ -1032,19 +1034,19 @@ import { createVideoThumbnailEventHandler } from './video-thumbnail-generator';
 Create the handler before `wsBridge = new WsBridge(...)`:
 
 ```ts
-  const handleVideoThumbnailEvent = createVideoThumbnailEventHandler();
+const handleVideoThumbnailEvent = createVideoThumbnailEventHandler();
 ```
 
 Replace the current callback:
 
 ```ts
-  wsBridge = new WsBridge(
-    () => mainWindow,
-    (event) => {
-      powerSaveCoordinator?.handleSidecarEvent(event);
-      void handleVideoThumbnailEvent(event);
-    },
-  );
+wsBridge = new WsBridge(
+  () => mainWindow,
+  (event) => {
+    powerSaveCoordinator?.handleSidecarEvent(event);
+    void handleVideoThumbnailEvent(event);
+  },
+);
 ```
 
 - [ ] **Step 5: Run desktop tests**
@@ -1068,6 +1070,7 @@ git commit -m "feat: generate video thumbnails in desktop main"
 ## Task 5: Mobile Resource URL Mapping
 
 **Files:**
+
 - Modify: `apps/mobile/src/services/desktop-local-service.ts`
 - Modify: `apps/mobile/src/services/__tests__/desktop-local-service.test.ts`
 
@@ -1117,9 +1120,7 @@ Edit `apps/mobile/src/services/desktop-local-service.ts`.
 Replace `personalDirectoryFileToSharedResource` with:
 
 ```ts
-function personalDirectoryFileToSharedResource(
-  file: DirectoryFileDTO,
-): GlobalRemoteAccessResource {
+function personalDirectoryFileToSharedResource(file: DirectoryFileDTO): GlobalRemoteAccessResource {
   return {
     resourceId: personalDirectoryResourceId(file.path),
     desktopDeviceId: PERSONAL_DIRECTORY_DESKTOP_ID,
@@ -1155,6 +1156,7 @@ git commit -m "feat: preserve video preview urls from desktop directories"
 ## Task 6: Mobile Remote Resource Thumbnails
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/RemoteAccessGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/__tests__/SharedFilesDownloadGate.test.tsx`
 
@@ -1237,9 +1239,8 @@ Edit `apps/mobile/src/screens/RemoteAccessGlobalScreen.tsx`.
 Change `RemoteResourceVisual` thumbnail selection:
 
 ```tsx
-  const supportsThumbnail = isImage(item) || isVideoFile(item.mediaType, item.displayName);
-  const thumbnailUrl =
-    supportsThumbnail && !thumbnailFailed ? item.thumbnailUrl?.trim() : undefined;
+const supportsThumbnail = isImage(item) || isVideoFile(item.mediaType, item.displayName);
+const thumbnailUrl = supportsThumbnail && !thumbnailFailed ? item.thumbnailUrl?.trim() : undefined;
 ```
 
 Keep the existing `<Image testID="remote-resource-thumbnail-image" ... />` block and fallback icon unchanged.
@@ -1264,6 +1265,7 @@ git commit -m "feat: show video thumbnails in remote resources"
 ## Task 7: Mobile Recent Download Thumbnails
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/DownloadRecordsGlobalScreen.tsx`
 - Modify: `apps/mobile/src/screens/__tests__/DownloadRecordsGlobalScreen.test.tsx`
 - Modify: `apps/mobile/src/screens/components/GlobalSyncActivityHomeSections.tsx`
@@ -1282,8 +1284,7 @@ it('renders video record thumbnails as images and falls back to icon without thu
       mediaType: 'video',
       size: 2048,
       completedAt: '2026-06-17T08:00:00.000Z',
-      thumbnailUrl:
-        'http://192.168.1.100:39394/personal/thumbnail/clip.mov?v=2048-1780000',
+      thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/clip.mov?v=2048-1780000',
       streamUrl: 'http://192.168.1.100:39394/personal/stream/clip.mov',
       source: 'global_remote',
       sourceResourceId: 'personal-dir:clip.mov',
@@ -1300,9 +1301,7 @@ it('renders video record thumbnails as images and falls back to icon without thu
     },
   ]);
 
-  const { getByTestId, getByText, queryByTestId } = render(
-    <DownloadRecordsGlobalScreen />,
-  );
+  const { getByTestId, getByText, queryByTestId } = render(<DownloadRecordsGlobalScreen />);
 
   await waitFor(() => {
     expect(getByText('clip.mov')).toBeTruthy();
@@ -1337,9 +1336,7 @@ Replace the video record in `renders recent image and video thumbnails from avai
 Change expectations:
 
 ```ts
-const imageSources = tree!.root
-  .findAllByType(Image)
-  .map(node => node.props.source);
+const imageSources = tree!.root.findAllByType(Image).map((node) => node.props.source);
 const videoNodes = tree!.root.findAllByProps({
   testID: 'recent-download-thumbnail-video',
 });
@@ -1377,9 +1374,7 @@ it('does not render local video paths as recent download thumbnails', () => {
     );
   });
 
-  expect(
-    tree!.root.findAllByProps({ testID: 'recent-download-thumbnail-video' }),
-  ).toHaveLength(0);
+  expect(tree!.root.findAllByProps({ testID: 'recent-download-thumbnail-video' })).toHaveLength(0);
   expect(tree!.root.findAllByType(Image)).toHaveLength(0);
 });
 ```
@@ -1401,40 +1396,40 @@ Edit `apps/mobile/src/screens/DownloadRecordsGlobalScreen.tsx`.
 Replace the thumbnail URI logic in `DownloadRecordPreviewThumbnail` with separate thumbnail-only handling:
 
 ```tsx
-  const thumbnailUri = readNonEmptyUri(record.thumbnailUrl);
+const thumbnailUri = readNonEmptyUri(record.thumbnailUrl);
 
-  if (thumbnailUri && !thumbnailFailed && (kind === 'photo' || kind === 'video')) {
+if (thumbnailUri && !thumbnailFailed && (kind === 'photo' || kind === 'video')) {
+  return (
+    <Image
+      testID={`download-record-thumbnail-${record.id}`}
+      source={{ uri: thumbnailUri }}
+      style={styles.previewMedia}
+      resizeMode="cover"
+      onError={() => setThumbnailFailed(true)}
+    />
+  );
+}
+
+if (!thumbnailUri && kind === 'photo') {
+  const photoUri = getDownloadRecordThumbnailUri(record);
+  if (photoUri && !thumbnailFailed) {
     return (
       <Image
         testID={`download-record-thumbnail-${record.id}`}
-        source={{ uri: thumbnailUri }}
+        source={{ uri: photoUri }}
         style={styles.previewMedia}
         resizeMode="cover"
         onError={() => setThumbnailFailed(true)}
       />
     );
   }
-
-  if (!thumbnailUri && kind === 'photo') {
-    const photoUri = getDownloadRecordThumbnailUri(record);
-    if (photoUri && !thumbnailFailed) {
-      return (
-        <Image
-          testID={`download-record-thumbnail-${record.id}`}
-          source={{ uri: photoUri }}
-          style={styles.previewMedia}
-          resizeMode="cover"
-          onError={() => setThumbnailFailed(true)}
-        />
-      );
-    }
-  }
+}
 ```
 
 Remove the `<Video testID={`download-record-thumbnail-${record.id}`} ... />` branch entirely. Leave the final fallback:
 
 ```tsx
-  return <GlobalMediaPreviewIcon type={kind} />;
+return <GlobalMediaPreviewIcon type={kind} />;
 ```
 
 - [ ] **Step 5: Update home recent download thumbnail source logic**
@@ -1444,27 +1439,27 @@ Edit `apps/mobile/src/screens/components/GlobalSyncActivityHomeSections.tsx`.
 Change `getRecentDownloadThumbnailSource` so video items only return image thumbnails when `thumbnailUrl` exists:
 
 ```ts
-  const thumbnailUrl = readNonEmptyUri(record.thumbnailUrl);
-  if (thumbnailUrl) {
-    return { uri: thumbnailUrl, renderer: 'image' };
-  }
+const thumbnailUrl = readNonEmptyUri(record.thumbnailUrl);
+if (thumbnailUrl) {
+  return { uri: thumbnailUrl, renderer: 'image' };
+}
 
-  if (previewType === 'video') {
-    return undefined;
-  }
+if (previewType === 'video') {
+  return undefined;
+}
 
-  const mediaUri =
-    readNonEmptyUri(record.previewUrl) ??
-    readNonEmptyUri(record.streamUrl) ??
-    readLocalPathUri(record.localPath);
-  if (!mediaUri) {
-    return undefined;
-  }
+const mediaUri =
+  readNonEmptyUri(record.previewUrl) ??
+  readNonEmptyUri(record.streamUrl) ??
+  readLocalPathUri(record.localPath);
+if (!mediaUri) {
+  return undefined;
+}
 
-  return {
-    uri: mediaUri,
-    renderer: 'image',
-  };
+return {
+  uri: mediaUri,
+  renderer: 'image',
+};
 ```
 
 Remove the `<Video testID="recent-download-thumbnail-video" ... />` rendering branch from `RecentDownloadThumbnail`. Keep the `<Image testID="recent-download-thumbnail-image" ... />` branch and icon fallback.
@@ -1489,6 +1484,7 @@ git commit -m "feat: render recent video thumbnails as images"
 ## Task 8: Cross-Package Verification
 
 **Files:**
+
 - No source edits expected unless a verification failure identifies a targeted issue.
 
 - [ ] **Step 1: Run targeted sidecar tests**
