@@ -61,7 +61,7 @@ type ReceivedLibraryPageOptions = {
   pageSize?: number;
 };
 
-export type GlobalRemoteAccessResource = DesktopSharedResourceDTO & {
+export type GlobalLocalComputerResource = DesktopSharedResourceDTO & {
   previewUrl?: string;
   thumbnailUrl?: string;
   streamUrl?: string;
@@ -292,7 +292,7 @@ function directoryFileToSharedResource(
 
 function personalDirectoryFileToSharedResource(
   file: DirectoryFileDTO,
-): GlobalRemoteAccessResource {
+): GlobalLocalComputerResource {
   return {
     resourceId: personalDirectoryResourceId(file.path),
     desktopDeviceId: PERSONAL_DIRECTORY_DESKTOP_ID,
@@ -353,7 +353,7 @@ async function withPersonalDirectoryImageStreamUrl(
     return trimmed.length > 0 ? { ...file, streamUrl: trimmed } : file;
   } catch (error) {
     recordDiagnosticsLog(
-      'RemoteAccess',
+      'LocalComputer',
       'personal image stream url unavailable',
       {
         name: file.name,
@@ -686,8 +686,8 @@ export async function listSharedResources(
   return sharedDirectory.files.map(directoryFileToSharedResource);
 }
 
-export async function listGlobalRemoteAccessResources(): Promise<
-  GlobalRemoteAccessResource[]
+export async function listGlobalLocalComputerResources(): Promise<
+  GlobalLocalComputerResource[]
 > {
   const listing = await browseDirectory('personal');
   const files = await withPersonalDirectoryImageStreamUrls(listing.files);
@@ -723,7 +723,7 @@ export async function listSharedFolderContents(
   return (await res.json()) as SharedDirectoryDTO;
 }
 
-export async function listGlobalRemoteAccessFolderContents(
+export async function listGlobalLocalComputerFolderContents(
   resourceId: string,
   path?: string,
 ): Promise<DirectoryListingDTO> {
@@ -1109,7 +1109,7 @@ export async function prepareReceivedLibraryPreview(
   return localPath;
 }
 
-export async function downloadGlobalRemoteAccessResource(
+export async function downloadGlobalLocalComputerResource(
   resourceId: string,
 ): Promise<ResourceDownloadResult> {
   const result = await downloadDirectoryFile(
@@ -1119,7 +1119,7 @@ export async function downloadGlobalRemoteAccessResource(
   return normalizeLocalDownloadResult(result);
 }
 
-export async function getGlobalRemoteAccessPreviewUrl(
+export async function getGlobalLocalComputerPreviewUrl(
   resourceId: string,
 ): Promise<string> {
   return getDirectoryFileStreamUrl(
@@ -1128,7 +1128,7 @@ export async function getGlobalRemoteAccessPreviewUrl(
   );
 }
 
-export async function getGlobalRemoteAccessThumbnailUrl(
+export async function getGlobalLocalComputerThumbnailUrl(
   resourceId: string,
 ): Promise<string> {
   return getPersonalFileThumbnailUrl(
@@ -1136,7 +1136,7 @@ export async function getGlobalRemoteAccessThumbnailUrl(
   );
 }
 
-export async function prepareGlobalRemoteAccessPreview(
+export async function prepareGlobalLocalComputerPreview(
   resourceId: string,
   filename?: string,
 ): Promise<string> {
@@ -1151,7 +1151,7 @@ export async function prepareGlobalRemoteAccessPreview(
   return localPath;
 }
 
-export async function prepareGlobalRemoteAccessShareFile(
+export async function prepareGlobalLocalComputerShareFile(
   resourceId: string,
   filename?: string,
 ): Promise<string> {
@@ -1177,7 +1177,7 @@ export async function prepareGlobalRemoteAccessShareFile(
   return localPath;
 }
 
-export async function shareGlobalRemoteAccessResources(
+export async function shareGlobalLocalComputerResources(
   resources: ResourceShareItem[],
 ): Promise<void> {
   if (resources.length === 0) {
@@ -1189,7 +1189,7 @@ export async function shareGlobalRemoteAccessResources(
 
   const localPaths: string[] = [];
   for (const resource of resources) {
-    const localPath = await prepareGlobalRemoteAccessShareFile(
+    const localPath = await prepareGlobalLocalComputerShareFile(
       resource.resourceId,
       resource.displayName,
     );

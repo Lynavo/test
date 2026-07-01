@@ -483,7 +483,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     expect(screen.queryByTestId('device-discovery-screen')).toBeNull();
   });
 
-  test('global connected session renders home, remote resources, and settings inside the main tab shell', async () => {
+  test('global connected session renders home, local computer files, and settings inside the main tab shell', async () => {
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: jest.fn().mockResolvedValue({ deviceId: 'desktop-1' }),
       addListener: jest.fn(),

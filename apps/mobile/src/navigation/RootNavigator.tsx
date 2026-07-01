@@ -23,7 +23,7 @@ import { SyncActivityGlobalScreen } from '../screens/SyncActivityGlobalScreen';
 import { AlbumWorkbenchScreen } from '../screens/AlbumWorkbenchScreen';
 import { SharedFilesGlobalScreen } from '../screens/SharedFilesGlobalScreen';
 import { PhoneSyncSpaceGlobalScreen } from '../screens/PhoneSyncSpaceGlobalScreen';
-import { RemoteAccessGlobalScreen } from '../screens/RemoteAccessGlobalScreen';
+import { LocalComputerGlobalScreen } from '../screens/LocalComputerGlobalScreen';
 import { DownloadRecordsGlobalScreen } from '../screens/DownloadRecordsGlobalScreen';
 import { HistoryGlobalScreen } from '../screens/HistoryGlobalScreen';
 import { SettingsGlobalScreen } from '../screens/SettingsGlobalScreen';
@@ -71,7 +71,7 @@ export type RootStackParamList = {
   AlbumWorkbench: undefined;
   SharedFiles: undefined;
   PhoneSyncSpace: undefined;
-  RemoteAccess: { path?: string } | undefined;
+  LocalComputer: { path?: string } | undefined;
   DownloadRecords: undefined;
   History: undefined;
   Settings: undefined;
@@ -268,8 +268,8 @@ function LanSyncStack() {
           component={PhoneSyncSpaceGlobalScreen}
         />
         <Stack.Screen
-          name="RemoteAccess"
-          component={RemoteAccessGlobalScreen}
+          name="LocalComputer"
+          component={LocalComputerGlobalScreen}
         />
         <Stack.Screen
           name="DownloadRecords"

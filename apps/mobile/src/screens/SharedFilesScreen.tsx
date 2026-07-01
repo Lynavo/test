@@ -23,11 +23,11 @@ export function SharedFilesScreen() {
     navigation.navigate('PhoneSyncSpace');
   };
 
-  const openRemoteAccess = () => {
-    recordDiagnosticsLog('RemoteAccess', 'local LAN entry pressed', {
+  const openLocalComputer = () => {
+    recordDiagnosticsLog('LocalComputer', 'local LAN entry pressed', {
       screen: 'SharedFilesScreen',
     });
-    navigation.navigate('RemoteAccess');
+    navigation.navigate('LocalComputer');
   };
 
   return (
@@ -35,7 +35,7 @@ export function SharedFilesScreen() {
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            {t('sharedFiles.title') || '遠端資源'}
+            {t('sharedFiles.title') || '文件'}
           </Text>
         </View>
 
@@ -68,7 +68,7 @@ export function SharedFilesScreen() {
           <TouchableOpacity
             style={styles.card}
             activeOpacity={0.8}
-            onPress={openRemoteAccess}
+            onPress={openLocalComputer}
           >
             <View
               style={[
@@ -80,10 +80,10 @@ export function SharedFilesScreen() {
             </View>
             <View style={styles.cardInfo}>
               <Text style={styles.cardTitle}>
-                {t('sharedFiles.remoteAccess.title') || '遠端訪問電腦'}
+                {t('sharedFiles.localComputer.title') || '電腦檔案'}
               </Text>
               <Text style={styles.cardDescription}>
-                {t('sharedFiles.remoteAccess.desc') ||
+                {t('sharedFiles.localComputer.desc') ||
                   '流覽電腦端共享的目錄結構並下載文件'}
               </Text>
             </View>

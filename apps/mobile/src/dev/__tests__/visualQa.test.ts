@@ -1,6 +1,6 @@
 import { NativeModules } from 'react-native';
 import {
-  applyVisualQaRemotePreviewFlag,
+  applyVisualQaSharedFilesPreviewFlag,
   getDevSkipAuthMockTokens,
   getVisualQaMockTokens,
   isVisualQaHomeEmptyStateEnabled,
@@ -11,7 +11,7 @@ declare const process: { env: Record<string, string | undefined> };
 
 type TestGlobal = typeof globalThis & {
   __DEV__?: boolean;
-  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+  __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
 };
 
 const testGlobal = globalThis as TestGlobal;
@@ -24,12 +24,12 @@ describe('visual QA dev bootstrap', () => {
     testGlobal.__DEV__ = true;
     delete NativeModules.NativeMarketConfig;
     delete NativeModules.AppleAuthModule;
-    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__;
     process.env = { ...originalEnv };
     delete process.env.LYNAVO_VISUAL_QA;
     delete process.env.LYNAVO_VISUAL_QA_EMAIL;
     delete process.env.LYNAVO_VISUAL_QA_ROUTE;
-    delete process.env.LYNAVO_VISUAL_QA_REMOTE_PREVIEW;
+    delete process.env.LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW;
     delete process.env.LYNAVO_VISUAL_QA_HOME_EMPTY;
     delete process.env.LYNAVO_DEV_SKIP_AUTH;
     delete process.env.LYNAVO_DEV_SKIP_AUTH_EMAIL;
@@ -38,7 +38,7 @@ describe('visual QA dev bootstrap', () => {
   afterAll(() => {
     testGlobal.__DEV__ = originalDev;
     process.env = originalEnv;
-    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__;
   });
 
   test('stays disabled outside dev even when env is present', () => {
@@ -46,12 +46,12 @@ describe('visual QA dev bootstrap', () => {
     process.env.LYNAVO_VISUAL_QA = '1';
     process.env.LYNAVO_VISUAL_QA_EMAIL = 'person@example.com';
     process.env.LYNAVO_VISUAL_QA_ROUTE = 'History';
-    process.env.LYNAVO_VISUAL_QA_REMOTE_PREVIEW = '1';
+    process.env.LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW = '1';
 
     expect(getVisualQaMockTokens()).toBeNull();
     expect(resolveVisualQaInitialRoute()).toBeNull();
-    applyVisualQaRemotePreviewFlag();
-    expect(testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__).toBeUndefined();
+    applyVisualQaSharedFilesPreviewFlag();
+    expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBeUndefined();
   });
 
   test('allows native visual QA constants outside dev runtime', () => {
@@ -59,7 +59,7 @@ describe('visual QA dev bootstrap', () => {
     NativeModules.AppleAuthModule = {
       LYNAVO_VISUAL_QA: '1',
       LYNAVO_VISUAL_QA_ROUTE: 'History',
-      LYNAVO_VISUAL_QA_REMOTE_PREVIEW: '1',
+      LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW: '1',
     };
 
     expect(getVisualQaMockTokens()).toEqual({
@@ -67,8 +67,8 @@ describe('visual QA dev bootstrap', () => {
       refreshToken: 'mock-sandbox-refresh-token',
     });
     expect(resolveVisualQaInitialRoute()).toBe('History');
-    applyVisualQaRemotePreviewFlag();
-    expect(testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__).toBe(true);
+    applyVisualQaSharedFilesPreviewFlag();
+    expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBe(true);
   });
 
   test('stays disabled in dev when enable env is missing', () => {
@@ -90,7 +90,7 @@ describe('visual QA dev bootstrap', () => {
       LYNAVO_VISUAL_QA: '1',
       LYNAVO_VISUAL_QA_EMAIL: 'native@example.com',
       LYNAVO_VISUAL_QA_ROUTE: 'History',
-      LYNAVO_VISUAL_QA_REMOTE_PREVIEW: '1',
+      LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW: '1',
     };
     process.env.LYNAVO_VISUAL_QA = '0';
     process.env.LYNAVO_VISUAL_QA_EMAIL = 'process@example.com';
@@ -101,8 +101,8 @@ describe('visual QA dev bootstrap', () => {
       refreshToken: 'mock-sandbox-refresh-token',
     });
     expect(resolveVisualQaInitialRoute()).toBe('History');
-    applyVisualQaRemotePreviewFlag();
-    expect(testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__).toBe(true);
+    applyVisualQaSharedFilesPreviewFlag();
+    expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBe(true);
   });
 
   test('falls back to AppleAuthModule visual QA constants when market config is absent', () => {
@@ -174,14 +174,14 @@ describe('visual QA dev bootstrap', () => {
     expect(resolveVisualQaInitialRoute()).toBeNull();
   });
 
-  test('sets remote preview flag only when explicitly enabled', () => {
+  test('sets shared files preview flag only when explicitly enabled', () => {
     process.env.LYNAVO_VISUAL_QA = '1';
-    applyVisualQaRemotePreviewFlag();
-    expect(testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__).toBeUndefined();
+    applyVisualQaSharedFilesPreviewFlag();
+    expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBeUndefined();
 
-    process.env.LYNAVO_VISUAL_QA_REMOTE_PREVIEW = '1';
-    applyVisualQaRemotePreviewFlag();
-    expect(testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__).toBe(true);
+    process.env.LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW = '1';
+    applyVisualQaSharedFilesPreviewFlag();
+    expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBe(true);
   });
 
   test('enables home empty-state visual QA only when explicitly requested', () => {

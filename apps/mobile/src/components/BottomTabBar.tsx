@@ -72,7 +72,7 @@ export function BottomTabBar({ activeTab }: BottomTabBarProps) {
             activeTab === 'files' && styles.activeTabLabel,
           ]}
         >
-          {t('common.tabs.files') || '遠端資源'}
+          {t('common.tabs.files') || '電腦檔案'}
         </Text>
       </TouchableOpacity>
 

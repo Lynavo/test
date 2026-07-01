@@ -1,28 +1,28 @@
 import { NativeModules, Platform } from 'react-native';
 
 import {
-  downloadGlobalRemoteAccessResource,
+  downloadGlobalLocalComputerResource,
   downloadReceivedLibraryItem,
   downloadResource,
   downloadResourceForGlobal,
-  getGlobalRemoteAccessPreviewUrl,
-  getGlobalRemoteAccessThumbnailUrl,
+  getGlobalLocalComputerPreviewUrl,
+  getGlobalLocalComputerThumbnailUrl,
   getReceivedLibraryPreviewUrl,
   getResourcePreviewUrl,
   listGlobalReceivedLibraryPage,
   isDownloadSavedLocally,
   listCurrentClientReceivedLibraryPage,
-  listGlobalRemoteAccessFolderContents,
-  listGlobalRemoteAccessResources,
+  listGlobalLocalComputerFolderContents,
+  listGlobalLocalComputerResources,
   listCurrentClientReceivedLibrary,
   listReceivedLibrary,
   listSharedResources,
   listSharedFolderContents,
-  prepareGlobalRemoteAccessShareFile,
-  prepareGlobalRemoteAccessPreview,
+  prepareGlobalLocalComputerShareFile,
+  prepareGlobalLocalComputerPreview,
   prepareReceivedLibraryPreview,
   prepareResourcePreview,
-  shareGlobalRemoteAccessResources,
+  shareGlobalLocalComputerResources,
   shareResources,
 } from '../desktop-local-service';
 import {
@@ -159,7 +159,7 @@ describe('desktop-local-service', () => {
     );
   });
 
-  it('downloads a global remote resource through native local persistence', async () => {
+  it('downloads a global shared resource through native local persistence', async () => {
     mockDownloadUrlToLocal.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/downloads/report.pdf',
@@ -1030,7 +1030,7 @@ describe('desktop-local-service', () => {
     expect(mockedListReceivedFiles).toHaveBeenCalledTimes(1);
   });
 
-  it('downloads selected remote resources to share cache and opens the system share sheet once', async () => {
+  it('downloads selected shared files to share cache and opens the system share sheet once', async () => {
     mockDownloadUrlToShareCache
       .mockResolvedValueOnce('/cache/photo.jpg')
       .mockResolvedValueOnce('/cache/spec.pdf');
@@ -1063,7 +1063,7 @@ describe('desktop-local-service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('prepares a normal remote resource for system preview through the share cache', async () => {
+  it('prepares a normal shared resource for system preview through the share cache', async () => {
     mockDownloadUrlToShareCache.mockResolvedValueOnce('/cache/report.pdf');
 
     await expect(
@@ -1161,7 +1161,7 @@ describe('desktop-local-service', () => {
     );
   });
 
-  it('lists global remote access from the desktop personal directory root', async () => {
+  it('lists global local computer from the desktop personal directory root', async () => {
     mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
       'http://127.0.0.1:39394/personal/stream/cover.jpg',
     );
@@ -1209,7 +1209,7 @@ describe('desktop-local-service', () => {
       totalCount: 4,
     });
 
-    await expect(listGlobalRemoteAccessResources()).resolves.toEqual([
+    await expect(listGlobalLocalComputerResources()).resolves.toEqual([
       {
         resourceId: 'personal-dir:Desktop',
         desktopDeviceId: 'personal-dir',
@@ -1274,7 +1274,7 @@ describe('desktop-local-service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('lists global remote access folders through the desktop personal directory bridge', async () => {
+  it('lists global local computer folders through the desktop personal directory bridge', async () => {
     mockedBrowseDirectory.mockResolvedValueOnce({
       scope: 'personal',
       path: 'Desktop/Projects',
@@ -1291,7 +1291,7 @@ describe('desktop-local-service', () => {
     });
 
     await expect(
-      listGlobalRemoteAccessFolderContents('personal-dir:Desktop', 'Projects'),
+      listGlobalLocalComputerFolderContents('personal-dir:Desktop', 'Projects'),
     ).resolves.toEqual({
       scope: 'personal',
       path: 'Desktop/Projects',
@@ -1313,7 +1313,7 @@ describe('desktop-local-service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('adds stream preview urls to global remote access folder images that only have thumbnails', async () => {
+  it('adds stream preview urls to global local computer folder images that only have thumbnails', async () => {
     mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
       'http://127.0.0.1:39394/personal/stream/Desktop/photo.jpg',
     );
@@ -1335,7 +1335,7 @@ describe('desktop-local-service', () => {
     });
 
     await expect(
-      listGlobalRemoteAccessFolderContents('personal-dir:Desktop'),
+      listGlobalLocalComputerFolderContents('personal-dir:Desktop'),
     ).resolves.toEqual({
       scope: 'personal',
       path: 'Desktop',
@@ -1360,7 +1360,7 @@ describe('desktop-local-service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('downloads and previews global remote access files through the personal directory bridge', async () => {
+  it('downloads and previews global local computer files through the personal directory bridge', async () => {
     mockedDownloadDirectoryFile.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/downloads/notes.txt',
@@ -1375,22 +1375,22 @@ describe('desktop-local-service', () => {
     mockedPrepareDirectoryFilePreview.mockResolvedValueOnce('/cache/notes.txt');
 
     await expect(
-      downloadGlobalRemoteAccessResource('personal-dir:Desktop/notes.txt'),
+      downloadGlobalLocalComputerResource('personal-dir:Desktop/notes.txt'),
     ).resolves.toEqual({
       savedToPhotos: false,
       localPath: '/downloads/notes.txt',
       savedLocation: '/downloads/notes.txt',
     });
     await expect(
-      getGlobalRemoteAccessPreviewUrl('personal-dir:Desktop/notes.txt'),
+      getGlobalLocalComputerPreviewUrl('personal-dir:Desktop/notes.txt'),
     ).resolves.toBe('http://127.0.0.1:39394/personal/stream/Desktop/notes.txt');
     await expect(
-      getGlobalRemoteAccessThumbnailUrl('personal-dir:Desktop/notes.txt'),
+      getGlobalLocalComputerThumbnailUrl('personal-dir:Desktop/notes.txt'),
     ).resolves.toBe(
       'http://127.0.0.1:39394/personal/thumbnail/Desktop/notes.txt',
     );
     await expect(
-      prepareGlobalRemoteAccessPreview(
+      prepareGlobalLocalComputerPreview(
         'personal-dir:Desktop/notes.txt',
         'notes.txt',
       ),
@@ -1415,7 +1415,7 @@ describe('desktop-local-service', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('normalizes global remote access media-store downloads as saved to photos', async () => {
+  it('normalizes global local computer media-store downloads as saved to photos', async () => {
     mockedDownloadDirectoryFile.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: null,
@@ -1423,7 +1423,7 @@ describe('desktop-local-service', () => {
     });
 
     await expect(
-      downloadGlobalRemoteAccessResource('personal-dir:Projects/video.mov'),
+      downloadGlobalLocalComputerResource('personal-dir:Projects/video.mov'),
     ).resolves.toEqual({
       savedToPhotos: true,
       localPath: null,
@@ -1431,7 +1431,7 @@ describe('desktop-local-service', () => {
     });
   });
 
-  it('prepares global remote access share files through the native share cache', async () => {
+  it('prepares global local computer share files through the native share cache', async () => {
     mockedGetDirectoryFileStreamUrl.mockResolvedValueOnce(
       'http://127.0.0.1:39394/personal/stream/protoc-gen-go',
     );
@@ -1440,7 +1440,7 @@ describe('desktop-local-service', () => {
     );
 
     await expect(
-      prepareGlobalRemoteAccessShareFile(
+      prepareGlobalLocalComputerShareFile(
         'personal-dir:protoc-gen-go',
         'protoc-gen-go',
       ),
@@ -1458,7 +1458,7 @@ describe('desktop-local-service', () => {
     expect(mockedPrepareDirectoryFilePreview).not.toHaveBeenCalled();
   });
 
-  it('shares global remote access files through the native share cache', async () => {
+  it('shares global local computer files through the native share cache', async () => {
     mockedGetDirectoryFileStreamUrl
       .mockResolvedValueOnce(
         'http://127.0.0.1:39394/personal/stream/Pictures/photo.jpg',
@@ -1472,7 +1472,7 @@ describe('desktop-local-service', () => {
     mockShareFiles.mockResolvedValueOnce(true);
 
     await expect(
-      shareGlobalRemoteAccessResources([
+      shareGlobalLocalComputerResources([
         {
           resourceId: 'personal-dir:Pictures/photo.jpg',
           displayName: 'photo.jpg',

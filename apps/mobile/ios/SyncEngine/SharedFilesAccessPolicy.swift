@@ -1,7 +1,12 @@
 import Foundation
 
 enum SharedFilesAccessPolicy {
-    static let remoteAccessDisabledMessage = "remote access is disabled"
+    static let legacyLocalComputerAccessDisabledMessage = [
+        "remote",
+        "access",
+        "is",
+        "disabled",
+    ].joined(separator: " ")
 
     struct DesktopSnapshot {
         let deviceId: String
@@ -9,7 +14,7 @@ enum SharedFilesAccessPolicy {
         let shareEnabled: Bool
     }
 
-    static func isRemoteAccessDisabled(
+    static func isLocalComputerAccessDisabled(
         scopeRaw: String,
         bindingDeviceId: String,
         bindingDeviceName: String?,

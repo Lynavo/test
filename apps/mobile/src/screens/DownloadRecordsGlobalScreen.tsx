@@ -27,11 +27,11 @@ import { isVisualQaEnabled } from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import {
-  downloadGlobalRemoteAccessResource,
+  downloadGlobalLocalComputerResource,
   downloadReceivedLibraryItem,
   downloadResourceForGlobal,
-  getGlobalRemoteAccessPreviewUrl,
-  getGlobalRemoteAccessThumbnailUrl,
+  getGlobalLocalComputerPreviewUrl,
+  getGlobalLocalComputerThumbnailUrl,
   isDownloadSavedLocally,
   isDownloadSavedToPhotos,
   type DesktopInfo,
@@ -111,7 +111,9 @@ export function DownloadRecordsGlobalScreen() {
       // personal-dir: records no longer cache signed URLs; fetch a fresh one.
       if (!previewUrl && isPersonalDirRecord(record.resourceId)) {
         try {
-          previewUrl = await getGlobalRemoteAccessPreviewUrl(record.resourceId);
+          previewUrl = await getGlobalLocalComputerPreviewUrl(
+            record.resourceId,
+          );
         } catch (err) {
           console.warn(
             '[DownloadRecordsGlobalScreen] Failed to fetch personal-dir preview URL',
@@ -161,7 +163,7 @@ export function DownloadRecordsGlobalScreen() {
       if (!isDownloadSavedLocally(result)) {
         Alert.alert(
           '無法重新下載',
-          '這筆紀錄沒有可用的本機檔案，也沒有足夠的遠端路由資訊可重新下載。',
+          '這筆紀錄沒有可用的本機檔案，也沒有足夠的電腦端下載資訊可重新下載。',
         );
         return;
       }
@@ -335,7 +337,7 @@ async function redownloadRecord(
   }
 
   if (record.resourceId.startsWith('personal-dir:')) {
-    return downloadGlobalRemoteAccessResource(record.resourceId);
+    return downloadGlobalLocalComputerResource(record.resourceId);
   }
 
   return downloadResourceForGlobal(
@@ -428,7 +430,7 @@ function DownloadRecordPreviewThumbnail({
     setThumbnailFailed(false);
     setLiveUri(null);
     let cancelled = false;
-    getGlobalRemoteAccessThumbnailUrl(record.resourceId)
+    getGlobalLocalComputerThumbnailUrl(record.resourceId)
       .then(url => {
         if (!cancelled) setLiveUri(url);
       })

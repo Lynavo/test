@@ -151,8 +151,8 @@ jest.mock('../../screens/SharedFilesGlobalScreen', () => ({
 jest.mock('../../screens/PhoneSyncSpaceGlobalScreen', () => ({
   PhoneSyncSpaceGlobalScreen: () => null,
 }));
-jest.mock('../../screens/RemoteAccessGlobalScreen', () => ({
-  RemoteAccessGlobalScreen: () => null,
+jest.mock('../../screens/LocalComputerGlobalScreen', () => ({
+  LocalComputerGlobalScreen: () => null,
 }));
 jest.mock('../../screens/DownloadRecordsGlobalScreen', () => ({
   DownloadRecordsGlobalScreen: () => null,
@@ -197,8 +197,8 @@ jest.mock('../../screens/SharedFilesScreen', () => ({
 jest.mock('../../screens/PhoneSyncSpaceScreen', () => ({
   PhoneSyncSpaceScreen: () => null,
 }));
-jest.mock('../../screens/RemoteAccessScreen', () => ({
-  RemoteAccessScreen: () => null,
+jest.mock('../../screens/LocalComputerScreen', () => ({
+  LocalComputerScreen: () => null,
 }));
 jest.mock('../../screens/HistoryScreen', () => ({ HistoryScreen: () => null }));
 jest.mock('../../screens/SettingsScreen', () => ({

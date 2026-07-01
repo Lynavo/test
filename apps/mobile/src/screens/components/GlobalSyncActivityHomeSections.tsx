@@ -15,7 +15,7 @@ import { colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
 import { androidBoxShadow } from '../../utils/androidShadow';
 import { formatBytes } from '../../utils/format';
-import { getGlobalRemoteAccessThumbnailUrl } from '../../services/desktop-local-service';
+import { getGlobalLocalComputerThumbnailUrl } from '../../services/desktop-local-service';
 import { isPersonalDirRecord } from '../../services/download-records-service';
 
 const BLUE = colors.accent;
@@ -312,7 +312,7 @@ function RecentDownloadPreview({
     }
 
     let cancelled = false;
-    getGlobalRemoteAccessThumbnailUrl(recordId)
+    getGlobalLocalComputerThumbnailUrl(recordId)
       .then(url => {
         if (!cancelled && url) {
           setLiveUri(url);
@@ -853,7 +853,7 @@ function getRecentDownloadThumbnailSource(
     }
   }
 
-  // 2. 其次使用远端缩略图，视频和图片皆是如此
+  // 2. 其次使用电脑端缩略图，视频和图片皆是如此
   const thumbnailUrl = readNonEmptyUri(record.thumbnailUrl);
   if (thumbnailUrl) {
     return { uri: thumbnailUrl, renderer: 'image' };

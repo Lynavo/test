@@ -129,7 +129,7 @@
       "step5Title": "Recent Records",
       "step5Desc": "Files downloaded from computer and sync history are shown here.",
       "step5Action": "Next",
-      "step6Title": "Remote Access",
+      "step6Title": "Local Computer",
       "step6Desc": "Browse computer files and sync space, retrieve files quickly.",
       "step6Action": "Done"
     },
@@ -223,10 +223,10 @@
       "syncSpaceDesc": "View files synced to computer and upload sources",
       "syncSpaceBadge1": "Today 5 files",
       "syncSpaceBadge2": "Keep source",
-      "remoteAccessTitle": "Remote Access PC",
-      "remoteAccessDesc": "Browse computer shared folders and download files",
-      "remoteAccessBadge1": "Desktop folder",
-      "remoteAccessBadge2": "List/Grid"
+      "localComputerTitle": "Local Computer",
+      "localComputerDesc": "Browse computer shared folders and download files",
+      "localComputerBadge1": "Desktop folder",
+      "localComputerBadge2": "List/Grid"
     }
   }
 }

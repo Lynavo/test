@@ -25,7 +25,7 @@ let disabledBoundCandidate = makeDevice(
 )
 
 expect(
-    SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "personal",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",
@@ -37,7 +37,7 @@ expect(
 )
 
 expect(
-    !SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    !SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "team",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",
@@ -45,11 +45,11 @@ expect(
         discoveredDevice: nil,
         candidateDevices: [disabledBoundCandidate]
     ),
-    "team shared files must not be blocked by the personal remote-access gate"
+    "team shared files must not be blocked by the personal local-computer gate"
 )
 
 expect(
-    !SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    !SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "personal",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",
@@ -63,7 +63,7 @@ expect(
 )
 
 expect(
-    SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "personal",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",
@@ -73,11 +73,11 @@ expect(
             makeDevice(deviceId: "bonjour-service-name", name: "Studio Mac", shareEnabled: false)
         ]
     ),
-    "personal shared files may use the existing unique Bonjour name fallback to detect disabled remote access"
+    "personal shared files may use the existing unique Bonjour name fallback to detect disabled local computer access"
 )
 
 expect(
-    SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "personal",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",
@@ -89,7 +89,7 @@ expect(
 )
 
 expect(
-    !SharedFilesAccessPolicy.isRemoteAccessDisabled(
+    !SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
         scopeRaw: "personal",
         bindingDeviceId: "desktop-1",
         bindingDeviceName: "Studio Mac",

@@ -61,7 +61,7 @@ jest.mock('react-i18next', () => {
               '此檔案類型目前無法預覽，請先下載後再用其他 App 開啟',
             'sharedFiles.dialogs.openWithOtherApp': '用其他 App 開啟',
             'sharedFiles.dialogs.cancel': '取消',
-            'sharedFiles.title': '遠端資源',
+            'sharedFiles.title': '文件',
             'sharedFiles.phoneSyncSpace.title': '手機同步空間',
             'sharedFiles.phoneSyncSpace.desc':
               '檢視已同步至电脑的檔案與上传来源',
@@ -90,45 +90,45 @@ jest.mock('react-i18next', () => {
             'sharedFiles.phoneSyncSpace.previewFailedTitle': '无法加载预览',
             'sharedFiles.phoneSyncSpace.previewFailedSubtitle':
               '请确认电脑在线且文件仍存在。',
-            'sharedFiles.remoteAccess.title': '遠端訪問電腦',
-            'sharedFiles.remoteAccess.desc':
+            'sharedFiles.localComputer.title': '電腦檔案',
+            'sharedFiles.localComputer.desc':
               '流覽電腦端共享的目錄結構並下載文件',
-            'sharedFiles.remoteAccess.ossDesc':
+            'sharedFiles.localComputer.ossDesc':
               '通过同一局域网访问已配对电脑文件，不需要订阅。',
-            'sharedFiles.remoteAccess.badgeDesktop': '电脑',
-            'sharedFiles.remoteAccess.badgeView': '浏览',
-            'sharedFiles.remoteAccess.ossBadge': '局域网',
-            'sharedFiles.remoteAccess.empty': '此資料夾為空',
-            'sharedFiles.remoteAccess.rootDirectoryLabel': '用户目录',
-            'sharedFiles.remoteAccess.fallbackDesktopLabel': '当前电脑',
-            'sharedFiles.remoteAccess.unboundRemoteSubtitle': '尚未连接电脑',
-            'sharedFiles.remoteAccess.noFilesTitle': '暂无文件',
-            'sharedFiles.remoteAccess.noFilesSubtitle':
+            'sharedFiles.localComputer.badgeDesktop': '电脑',
+            'sharedFiles.localComputer.badgeView': '浏览',
+            'sharedFiles.localComputer.ossBadge': '局域网',
+            'sharedFiles.localComputer.empty': '此資料夾為空',
+            'sharedFiles.localComputer.rootDirectoryLabel': '用户目录',
+            'sharedFiles.localComputer.fallbackDesktopLabel': '当前电脑',
+            'sharedFiles.localComputer.unboundLocalComputerSubtitle':
+              '尚未连接电脑',
+            'sharedFiles.localComputer.noFilesTitle': '暂无文件',
+            'sharedFiles.localComputer.noFilesSubtitle':
               '电脑端共享的文件会显示在这里。',
-            'sharedFiles.remoteAccess.remoteAccessDisabledTitle':
-              '尚未開啟遠端存取',
-            'sharedFiles.remoteAccess.remoteAccessDisabledSubtitle':
-              '請到電腦端開啟「遠端存取」後，再回到手機端重新整理。',
-            'sharedFiles.remoteAccess.recheckPermission': '重新檢查',
-            'sharedFiles.remoteAccess.loadingTitle': '远程资源加载中',
-            'sharedFiles.remoteAccess.loadingSubtitle':
+            'sharedFiles.localComputer.localComputerDisabledTitle':
+              '尚未開啟本地共享',
+            'sharedFiles.localComputer.localComputerDisabledSubtitle':
+              '請到電腦端開啟本地共享後，再回到手機端重新整理。',
+            'sharedFiles.localComputer.recheckPermission': '重新檢查',
+            'sharedFiles.localComputer.loadingTitle': '电脑文件加载中',
+            'sharedFiles.localComputer.loadingSubtitle':
               '正在读取电脑端共享目录。',
-            'sharedFiles.remoteAccess.networkDisconnectedTitle': '网络断开',
-            'sharedFiles.remoteAccess.networkDisconnectedSubtitle':
+            'sharedFiles.localComputer.networkDisconnectedTitle': '网络断开',
+            'sharedFiles.localComputer.networkDisconnectedSubtitle':
               '当前路径会保留，恢复网络或电脑端在线后可以继续访问。',
-            'sharedFiles.remoteAccess.retryConnection': '重试连接',
-            'sharedFiles.remoteAccess.listView': '列表视图',
-            'sharedFiles.remoteAccess.gridView': '网格视图',
-            'sharedFiles.remoteAccess.searchFilesPlaceholder': '搜索电脑文件',
-            'sharedFiles.remoteAccess.searchFolderPlaceholder':
+            'sharedFiles.localComputer.retryConnection': '重试连接',
+            'sharedFiles.localComputer.listView': '列表视图',
+            'sharedFiles.localComputer.gridView': '网格视图',
+            'sharedFiles.localComputer.searchFilesPlaceholder': '搜索电脑文件',
+            'sharedFiles.localComputer.searchFolderPlaceholder':
               '搜索当前文件夹',
-            'sharedFiles.remoteAccess.connectionStatePrefix':
-              '远端访问连接方式：',
-            'sharedFiles.remoteAccess.sortTitle': '排序方式',
-            'sharedFiles.remoteAccess.select': '選擇',
-            'sharedFiles.remoteAccess.done': '完成',
-            'sharedFiles.remoteAccess.download': '下載',
-            'sharedFiles.remoteAccess.share': '分享',
+            'sharedFiles.localComputer.connectionStatePrefix': '电脑连接方式：',
+            'sharedFiles.localComputer.sortTitle': '排序方式',
+            'sharedFiles.localComputer.select': '選擇',
+            'sharedFiles.localComputer.done': '完成',
+            'sharedFiles.localComputer.download': '下載',
+            'sharedFiles.localComputer.share': '分享',
             'sharedFiles.connectionStatus.lan': '局域网',
             'sharedFiles.connectionStatus.unavailable': '不可达',
             'sharedFiles.sortBy.name': '名称',
@@ -137,7 +137,7 @@ jest.mock('react-i18next', () => {
             'common.back': '返回',
             'common.today': '今天',
             'common.yesterday': '昨天',
-            'sharedFiles.remoteAccess.selectedCount': `已選擇 ${
+            'sharedFiles.localComputer.selectedCount': `已選擇 ${
               options?.count ?? 0
             } 個`,
           };
@@ -320,8 +320,8 @@ jest.mock('../../dev/visualQa', () => ({
 jest.mock('../../services/desktop-local-service', () => ({
   listSharedResources: jest.fn(),
   listSharedFolderContents: jest.fn(),
-  listGlobalRemoteAccessResources: jest.fn(),
-  listGlobalRemoteAccessFolderContents: jest.fn(),
+  listGlobalLocalComputerResources: jest.fn(),
+  listGlobalLocalComputerFolderContents: jest.fn(),
   listReceivedLibrary: jest.fn(),
   listCurrentClientReceivedLibrary: jest.fn(),
   listCurrentClientReceivedLibraryPage: jest.fn(),
@@ -329,16 +329,16 @@ jest.mock('../../services/desktop-local-service', () => ({
   downloadResource: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
   downloadReceivedLibraryItem: jest.fn(),
-  downloadGlobalRemoteAccessResource: jest.fn(),
+  downloadGlobalLocalComputerResource: jest.fn(),
   getResourcePreviewUrl: jest.fn(),
   getReceivedLibraryPreviewUrl: jest.fn(),
-  getGlobalRemoteAccessPreviewUrl: jest.fn(),
+  getGlobalLocalComputerPreviewUrl: jest.fn(),
   prepareResourcePreview: jest.fn(),
   prepareReceivedLibraryPreview: jest.fn(),
-  prepareGlobalRemoteAccessPreview: jest.fn(),
-  prepareGlobalRemoteAccessShareFile: jest.fn(),
+  prepareGlobalLocalComputerPreview: jest.fn(),
+  prepareGlobalLocalComputerShareFile: jest.fn(),
   shareResources: jest.fn(),
-  shareGlobalRemoteAccessResources: jest.fn(),
+  shareGlobalLocalComputerResources: jest.fn(),
   isDownloadSavedLocally: jest.fn(
     (result: {
       savedToPhotos?: boolean;
@@ -380,43 +380,43 @@ import {
   normalizeDirectoryPath,
   parentDirectoryPath,
 } from '../SharedFilesScreen';
-import { RemoteAccessScreen } from '../RemoteAccessScreen';
+import { LocalComputerScreen } from '../LocalComputerScreen';
 import {
   listSharedResources,
   listSharedFolderContents,
-  listGlobalRemoteAccessResources,
-  listGlobalRemoteAccessFolderContents,
+  listGlobalLocalComputerResources,
+  listGlobalLocalComputerFolderContents,
   listReceivedLibrary,
   listCurrentClientReceivedLibrary,
   listGlobalReceivedLibraryPage,
   downloadResource,
   downloadResourceForGlobal,
   downloadReceivedLibraryItem,
-  downloadGlobalRemoteAccessResource,
+  downloadGlobalLocalComputerResource,
   getResourcePreviewUrl,
   getReceivedLibraryPreviewUrl,
-  getGlobalRemoteAccessPreviewUrl,
+  getGlobalLocalComputerPreviewUrl,
   prepareResourcePreview,
   prepareReceivedLibraryPreview,
-  prepareGlobalRemoteAccessPreview,
-  prepareGlobalRemoteAccessShareFile,
+  prepareGlobalLocalComputerPreview,
+  prepareGlobalLocalComputerShareFile,
   shareResources,
-  shareGlobalRemoteAccessResources,
+  shareGlobalLocalComputerResources,
 } from '../../services/desktop-local-service';
 import { recordDownloadedFile } from '../../services/download-records-service';
 import { recordDiagnosticsLog } from '../../services/diagnostics-log-service';
 import { viewDocument } from '@react-native-documents/viewer';
 import { SharedFilesGlobalScreen } from '../SharedFilesGlobalScreen';
-import { RemoteAccessGlobalScreen } from '../RemoteAccessGlobalScreen';
+import { LocalComputerGlobalScreen } from '../LocalComputerGlobalScreen';
 import { PhoneSyncSpaceGlobalScreen } from '../PhoneSyncSpaceGlobalScreen';
 import { PhoneSyncSpaceScreen } from '../PhoneSyncSpaceScreen';
 
 const mockListSharedResources = listSharedResources as jest.Mock;
 const mockListSharedFolderContents = listSharedFolderContents as jest.Mock;
-const mockListGlobalRemoteAccessResources =
-  listGlobalRemoteAccessResources as jest.Mock;
-const mockListGlobalRemoteAccessFolderContents =
-  listGlobalRemoteAccessFolderContents as jest.Mock;
+const mockListGlobalLocalComputerResources =
+  listGlobalLocalComputerResources as jest.Mock;
+const mockListGlobalLocalComputerFolderContents =
+  listGlobalLocalComputerFolderContents as jest.Mock;
 const mockListReceivedLibrary = listReceivedLibrary as jest.Mock;
 const mockListCurrentClientReceivedLibrary =
   listCurrentClientReceivedLibrary as jest.Mock;
@@ -426,23 +426,23 @@ const mockDownloadResource = downloadResource as jest.Mock;
 const mockDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
 const mockDownloadReceivedLibraryItem =
   downloadReceivedLibraryItem as jest.Mock;
-const mockDownloadGlobalRemoteAccessResource =
-  downloadGlobalRemoteAccessResource as jest.Mock;
+const mockDownloadGlobalLocalComputerResource =
+  downloadGlobalLocalComputerResource as jest.Mock;
 const mockGetResourcePreviewUrl = getResourcePreviewUrl as jest.Mock;
 const mockGetReceivedLibraryPreviewUrl =
   getReceivedLibraryPreviewUrl as jest.Mock;
-const mockGetGlobalRemoteAccessPreviewUrl =
-  getGlobalRemoteAccessPreviewUrl as jest.Mock;
+const mockGetGlobalLocalComputerPreviewUrl =
+  getGlobalLocalComputerPreviewUrl as jest.Mock;
 const mockPrepareResourcePreview = prepareResourcePreview as jest.Mock;
 const mockPrepareReceivedLibraryPreview =
   prepareReceivedLibraryPreview as jest.Mock;
-const mockPrepareGlobalRemoteAccessPreview =
-  prepareGlobalRemoteAccessPreview as jest.Mock;
-const mockPrepareGlobalRemoteAccessShareFile =
-  prepareGlobalRemoteAccessShareFile as jest.Mock;
+const mockPrepareGlobalLocalComputerPreview =
+  prepareGlobalLocalComputerPreview as jest.Mock;
+const mockPrepareGlobalLocalComputerShareFile =
+  prepareGlobalLocalComputerShareFile as jest.Mock;
 const mockShareResources = shareResources as jest.Mock;
-const mockShareGlobalRemoteAccessResources =
-  shareGlobalRemoteAccessResources as jest.Mock;
+const mockShareGlobalLocalComputerResources =
+  shareGlobalLocalComputerResources as jest.Mock;
 const mockRecordDownloadedFile = recordDownloadedFile as jest.Mock;
 const mockRecordDiagnosticsLog = recordDiagnosticsLog as jest.Mock;
 const mockViewDocument = viewDocument as jest.Mock;
@@ -451,24 +451,24 @@ beforeEach(() => {
   [
     mockListSharedResources,
     mockListSharedFolderContents,
-    mockListGlobalRemoteAccessResources,
-    mockListGlobalRemoteAccessFolderContents,
+    mockListGlobalLocalComputerResources,
+    mockListGlobalLocalComputerFolderContents,
     mockListReceivedLibrary,
     mockListCurrentClientReceivedLibrary,
     mockListGlobalReceivedLibraryPage,
     mockDownloadResource,
     mockDownloadResourceForGlobal,
     mockDownloadReceivedLibraryItem,
-    mockDownloadGlobalRemoteAccessResource,
+    mockDownloadGlobalLocalComputerResource,
     mockGetResourcePreviewUrl,
     mockGetReceivedLibraryPreviewUrl,
-    mockGetGlobalRemoteAccessPreviewUrl,
+    mockGetGlobalLocalComputerPreviewUrl,
     mockPrepareResourcePreview,
     mockPrepareReceivedLibraryPreview,
-    mockPrepareGlobalRemoteAccessPreview,
-    mockPrepareGlobalRemoteAccessShareFile,
+    mockPrepareGlobalLocalComputerPreview,
+    mockPrepareGlobalLocalComputerShareFile,
     mockShareResources,
-    mockShareGlobalRemoteAccessResources,
+    mockShareGlobalLocalComputerResources,
     mockRecordDownloadedFile,
     mockRecordDiagnosticsLog,
     mockViewDocument,
@@ -568,7 +568,7 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
     );
 
     expect(getByText('手機同步空間')).toBeTruthy();
-    expect(getByText('遠端訪問電腦')).toBeTruthy();
+    expect(getByText('電腦檔案')).toBeTruthy();
   });
 
   it('navigates to PhoneSyncSpace on card press', () => {
@@ -587,18 +587,18 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
     );
   });
 
-  it('navigates to RemoteAccess on card press', () => {
+  it('navigates to LocalComputer on card press', () => {
     const { getByText } = render(
       <TestErrorBoundary>
         <SharedFilesScreen />
       </TestErrorBoundary>,
     );
 
-    fireEvent.press(getByText('遠端訪問電腦'));
-    expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
+    fireEvent.press(getByText('電腦檔案'));
+    expect(mockNavigate).toHaveBeenCalledWith('LocalComputer');
   });
 
-  it('keeps guest users on local-LAN remote access instead of login or purchase flow', () => {
+  it('keeps guest users on local-LAN local computer access instead of login or purchase flow', () => {
     mockAuthState = {
       isLoggedIn: false,
       user: null,
@@ -611,9 +611,9 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
       </TestErrorBoundary>,
     );
 
-    fireEvent.press(getByText('遠端訪問電腦'));
+    fireEvent.press(getByText('電腦檔案'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
+    expect(mockNavigate).toHaveBeenCalledWith('LocalComputer');
     expect(mockNavigate).not.toHaveBeenCalledWith('Login');
     expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo', undefined);
   });
@@ -649,7 +649,7 @@ describe('SharedFilesGlobalScreen', () => {
     );
   });
 
-  it('keeps global remote access local-LAN without a paid entitlement gate', () => {
+  it('keeps global local computer local-LAN without a paid entitlement gate', () => {
     const { getByText, queryByText } = render(
       <SharedFilesGlobalScreen showBottomTabBar={false} />,
     );
@@ -658,14 +658,14 @@ describe('SharedFilesGlobalScreen', () => {
     expect(
       getByText('通过同一局域网访问已配对电脑文件，不需要订阅。'),
     ).toBeTruthy();
-    fireEvent.press(getByText('遠端訪問電腦'));
+    fireEvent.press(getByText('電腦檔案'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
+    expect(mockNavigate).toHaveBeenCalledWith('LocalComputer');
     expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo');
     expect(queryByText('网络断开')).toBeNull();
   });
 
-  it('keeps guest users on local-LAN remote access instead of login or purchase flow', () => {
+  it('keeps guest users on local-LAN local computer access instead of login or purchase flow', () => {
     mockAuthState = {
       isLoggedIn: false,
       user: null,
@@ -676,27 +676,27 @@ describe('SharedFilesGlobalScreen', () => {
       <SharedFilesGlobalScreen showBottomTabBar={false} />,
     );
 
-    fireEvent.press(getByText('遠端訪問電腦'));
+    fireEvent.press(getByText('電腦檔案'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('RemoteAccess');
+    expect(mockNavigate).toHaveBeenCalledWith('LocalComputer');
     expect(mockNavigate).not.toHaveBeenCalledWith('Login');
     expect(mockNavigate).not.toHaveBeenCalledWith('OpenSourceInfo');
   });
 });
 
-describe('RemoteAccessGlobalScreen', () => {
+describe('LocalComputerGlobalScreen', () => {
   const mockBindingState = jest.fn();
   const nativeEventHandlers: Partial<
     Record<string, (payload: unknown) => void>
   > = {};
   const testGlobal = globalThis as typeof globalThis & {
-    __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+    __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockVisualQaEnabled = false;
-    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__;
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: mockBindingState,
       addListener: jest.fn(),
@@ -726,35 +726,35 @@ describe('RemoteAccessGlobalScreen', () => {
   });
 
   it('does not crash when share target translations are unavailable on initial render', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     expect(() => {
-      render(<RemoteAccessGlobalScreen />);
+      render(<LocalComputerGlobalScreen />);
     }).not.toThrow();
 
     await waitFor(() => {
-      expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
+      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
     });
   });
 
-  it('lists remote resources without a paid tunnel entitlement gate', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+  it('lists shared files without a paid tunnel entitlement gate', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
+      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
     });
-    expect(queryByText('需要订阅才能远程访问')).toBeNull();
+    expect(queryByText('需要订阅才能访问电脑文件')).toBeNull();
     expect(queryByText('网络断开')).toBeNull();
   });
 
-  it('renders remote access list items without calling hooks from renderItem helpers', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('renders local computer access list items without calling hooks from renderItem helpers', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -766,31 +766,31 @@ describe('RemoteAccessGlobalScreen', () => {
       },
     ]);
 
-    const { getByText } = render(<RemoteAccessGlobalScreen />);
+    const { getByText } = render(<LocalComputerGlobalScreen />);
 
     await waitFor(() => {
       expect(getByText('Project Files')).toBeTruthy();
     });
   });
 
-  it('keeps an empty real response empty unless the remote preview gate is explicit', async () => {
+  it('keeps an empty real response empty unless the shared files preview gate is explicit', async () => {
     mockVisualQaEnabled = true;
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByTestId, getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
+      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
     });
 
     await waitFor(() => {
       expect(getByText('暂无文件')).toBeTruthy();
     });
-    expect(getByTestId('remote-access-empty-icon-remote')).toBeTruthy();
+    expect(getByTestId('local-computer-empty-icon-computer')).toBeTruthy();
     expect(queryByText('Mac 客户端安装手册-2506.docx')).toBeNull();
     expect(queryByText('document-outline')).toBeNull();
   });
@@ -803,11 +803,11 @@ describe('RemoteAccessGlobalScreen', () => {
       host: '192.168.1.100',
       connectionState: 'connected',
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -831,11 +831,11 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -858,11 +858,11 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -900,11 +900,11 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -915,16 +915,16 @@ describe('RemoteAccessGlobalScreen', () => {
   });
 
   it('ignores relay reachability events in the OSS local-LAN runtime', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
+      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
       expect(getByText('局域网')).toBeTruthy();
     });
 
@@ -958,7 +958,7 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -972,7 +972,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1009,7 +1009,7 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -1023,7 +1023,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1061,13 +1061,13 @@ describe('RemoteAccessGlobalScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalRemoteAccessResources.mockImplementationOnce(
+    mockListGlobalLocalComputerResources.mockImplementationOnce(
       () => new Promise(() => {}),
     );
 
     const { getByText, queryByText, unmount } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1075,8 +1075,8 @@ describe('RemoteAccessGlobalScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
-    expect(getByText('远程资源加载中')).toBeTruthy();
+    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+    expect(getByText('电脑文件加载中')).toBeTruthy();
     expect(queryByText('中继服务器连接中')).toBeNull();
     expect(queryByText('唤醒中')).toBeNull();
 
@@ -1084,16 +1084,16 @@ describe('RemoteAccessGlobalScreen', () => {
     jest.clearAllTimers();
   });
 
-  it('falls back to the disconnected state when global remote loading times out', async () => {
+  it('falls back to the disconnected state when local computer loading times out', async () => {
     jest.useFakeTimers();
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockImplementationOnce(
+    mockListGlobalLocalComputerResources.mockImplementationOnce(
       () => new Promise(() => {}),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1101,8 +1101,8 @@ describe('RemoteAccessGlobalScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledWith();
-    expect(getByText('远程资源加载中')).toBeTruthy();
+    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+    expect(getByText('电脑文件加载中')).toBeTruthy();
 
     await act(async () => {
       jest.advanceTimersByTime(35_000);
@@ -1114,9 +1114,9 @@ describe('RemoteAccessGlobalScreen', () => {
       await Promise.resolve();
     });
     expect(getByText('网络断开')).toBeTruthy();
-    expect(queryByText('远程资源加载中')).toBeNull();
+    expect(queryByText('电脑文件加载中')).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(
-      '[RemoteAccessScreen] Failed to load data:',
+      '[LocalComputerScreen] Failed to load data:',
       expect.any(Error),
     );
 
@@ -1125,41 +1125,41 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('shows desktop remote-access disabled instead of network disconnected when the desktop rejects browsing', async () => {
+  it('shows desktop local-computer disabled instead of network disconnected when the desktop rejects browsing', async () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
-      new Error('remote access is disabled'),
+    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+      new Error('local computer access is disabled'),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
+      expect(getByText('尚未開啟本地共享')).toBeTruthy();
     });
     expect(
-      getByText('請到電腦端開啟「遠端存取」後，再回到手機端重新整理。'),
+      getByText('請到電腦端開啟本地共享後，再回到手機端重新整理。'),
     ).toBeTruthy();
     expect(getByText('重新檢查')).toBeTruthy();
     expect(queryByText('网络断开')).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(
-      '[RemoteAccessScreen] Failed to load data:',
+      '[LocalComputerScreen] Failed to load data:',
       expect.any(Error),
     );
   });
 
   it('shows generic LAN unavailable guidance when the desktop account identity is unavailable', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error('desktop account identity is unavailable'),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1170,20 +1170,20 @@ describe('RemoteAccessGlobalScreen', () => {
     expect(queryByText('電腦端未登入')).toBeNull();
     expect(queryByText('帳號不一致')).toBeNull();
     expect(
-      queryByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
+      queryByText('sharedFiles.localComputer.networkDisconnectedTitle'),
     ).toBeNull();
-    expect(queryByText('尚未開啟遠端存取')).toBeNull();
+    expect(queryByText('尚未開啟本地共享')).toBeNull();
   });
 
   it('shows generic LAN unavailable guidance when mobile and desktop account identities differ', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error('account mismatch'),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1194,52 +1194,52 @@ describe('RemoteAccessGlobalScreen', () => {
     expect(queryByText('電腦端未登入')).toBeNull();
     expect(queryByText('帳號不一致')).toBeNull();
     expect(
-      queryByText('sharedFiles.remoteAccess.networkDisconnectedTitle'),
+      queryByText('sharedFiles.localComputer.networkDisconnectedTitle'),
     ).toBeNull();
-    expect(queryByText('尚未開啟遠端存取')).toBeNull();
+    expect(queryByText('尚未開啟本地共享')).toBeNull();
   });
 
-  it('shows desktop remote-access disabled for generic personal directory HTTP 403', async () => {
+  it('shows desktop local-computer disabled for generic personal directory HTTP 403', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error('Sidecar returned HTTP 403 for /personal/list'),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
+      expect(getByText('尚未開啟本地共享')).toBeTruthy();
     });
     expect(queryByText('网络断开')).toBeNull();
   });
 
-  it('shows desktop remote-access disabled when sidecar returns personal directory HTTP 403 with body', async () => {
+  it('shows desktop local-computer disabled when sidecar returns personal directory HTTP 403 with body', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockRejectedValueOnce(
+    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error(
-        'Sidecar returned HTTP 403 for /personal/list: remote access is disabled',
+        'Sidecar returned HTTP 403 for /personal/list: local computer access is disabled',
       ),
     );
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(getByText('尚未開啟遠端存取')).toBeTruthy();
+      expect(getByText('尚未開啟本地共享')).toBeTruthy();
     });
     expect(queryByText('网络断开')).toBeNull();
   });
 
-  it('silently retries the first global remote list while the shared-files route is becoming ready', async () => {
+  it('silently retries the first local computer list while the shared-files route is becoming ready', async () => {
     jest.useFakeTimers();
-    mockListGlobalRemoteAccessResources
+    mockListGlobalLocalComputerResources
       .mockRejectedValueOnce(new Error('No shared files route available'))
       .mockResolvedValueOnce([
         {
@@ -1255,7 +1255,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1263,7 +1263,7 @@ describe('RemoteAccessGlobalScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledTimes(1);
+    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledTimes(1);
     expect(queryByText('网络断开')).toBeNull();
 
     await act(async () => {
@@ -1275,12 +1275,12 @@ describe('RemoteAccessGlobalScreen', () => {
     await waitFor(() => {
       expect(getByText('Project Files')).toBeTruthy();
     });
-    expect(mockListGlobalRemoteAccessResources).toHaveBeenCalledTimes(2);
+    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledTimes(2);
     expect(queryByText('网络断开')).toBeNull();
   });
 
   it('loads real shared folder contents when a production folder is opened', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -1291,7 +1291,7 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockListGlobalRemoteAccessFolderContents.mockResolvedValueOnce({
+    mockListGlobalLocalComputerFolderContents.mockResolvedValueOnce({
       path: '',
       files: [
         {
@@ -1331,7 +1331,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1344,7 +1344,7 @@ describe('RemoteAccessGlobalScreen', () => {
     });
 
     await waitFor(() => {
-      expect(mockListGlobalRemoteAccessFolderContents).toHaveBeenCalledWith(
+      expect(mockListGlobalLocalComputerFolderContents).toHaveBeenCalledWith(
         'personal-dir:Project%20Files',
         '',
       );
@@ -1353,12 +1353,12 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(getByText('cover.jpg')).toBeTruthy();
       expect(getByText('walkthrough.mov')).toBeTruthy();
     });
-    expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
-    expect(queryByTestId('remote-resource-icon-video')).toBeNull();
+    expect(getByTestId('local-computer-resource-thumbnail-image')).toBeTruthy();
+    expect(queryByTestId('local-computer-resource-icon-video')).toBeNull();
   });
 
-  it('keeps sparse global remote grid items constrained to a single column', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('keeps sparse local computer grid items constrained to a single column', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:command-line-tools',
         desktopDeviceId: 'desktop-device-id',
@@ -1372,7 +1372,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByText, queryAllByTestId, queryAllByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1380,7 +1380,8 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(getByText('command-line-tools')).toBeTruthy();
     });
 
-    let gridToggle = queryAllByTestId('remote-toolbar-grid-icon')[0].parent;
+    let gridToggle = queryAllByTestId('local-computer-toolbar-grid-icon')[0]
+      .parent;
     while (gridToggle && typeof gridToggle.props.onPress !== 'function') {
       gridToggle = gridToggle.parent;
     }
@@ -1415,8 +1416,8 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('renders the reference-style media type icons in the global remote access list', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('renders the reference-style media type icons in the global local computer list', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'res-folder',
         desktopDeviceId: 'desktop-device-id',
@@ -1463,20 +1464,20 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByTestId } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
-      expect(getByTestId('remote-resource-icon-folder')).toBeTruthy();
-      expect(getByTestId('remote-resource-icon-photo')).toBeTruthy();
-      expect(getByTestId('remote-resource-icon-video')).toBeTruthy();
-      expect(getByTestId('remote-resource-icon-file')).toBeTruthy();
+      expect(getByTestId('local-computer-resource-icon-folder')).toBeTruthy();
+      expect(getByTestId('local-computer-resource-icon-photo')).toBeTruthy();
+      expect(getByTestId('local-computer-resource-icon-video')).toBeTruthy();
+      expect(getByTestId('local-computer-resource-icon-file')).toBeTruthy();
     });
   });
 
-  it('renders global remote image and video thumbnails from thumbnail urls', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('renders local computer image and video thumbnails from thumbnail urls', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1508,7 +1509,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getAllByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1517,14 +1518,16 @@ describe('RemoteAccessGlobalScreen', () => {
       expect(getByText('beta.mov')).toBeTruthy();
     });
 
-    const thumbnails = getAllByTestId('remote-resource-thumbnail-image');
+    const thumbnails = getAllByTestId(
+      'local-computer-resource-thumbnail-image',
+    );
     expect(thumbnails).toHaveLength(2);
-    expect(queryByTestId('remote-resource-icon-photo')).toBeNull();
-    expect(queryByTestId('remote-resource-icon-video')).toBeNull();
+    expect(queryByTestId('local-computer-resource-icon-photo')).toBeNull();
+    expect(queryByTestId('local-computer-resource-icon-video')).toBeNull();
   });
 
-  it('falls back to the image file type icon when a global remote thumbnail fails', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('falls back to the image file type icon when a local computer thumbnail fails', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:broken.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1542,25 +1545,29 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
       expect(getByText('broken.jpg')).toBeTruthy();
-      expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
+      expect(
+        getByTestId('local-computer-resource-thumbnail-image'),
+      ).toBeTruthy();
     });
 
-    fireEvent(getByTestId('remote-resource-thumbnail-image'), 'error');
+    fireEvent(getByTestId('local-computer-resource-thumbnail-image'), 'error');
 
     await waitFor(() => {
-      expect(queryByTestId('remote-resource-thumbnail-image')).toBeNull();
-      expect(getByTestId('remote-resource-icon-photo')).toBeTruthy();
+      expect(
+        queryByTestId('local-computer-resource-thumbnail-image'),
+      ).toBeNull();
+      expect(getByTestId('local-computer-resource-icon-photo')).toBeTruthy();
     });
   });
 
-  it('falls back to the video file type icon when a global remote video thumbnail fails', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('falls back to the video file type icon when a local computer video thumbnail fails', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:broken.mov',
         desktopDeviceId: 'desktop-device-id',
@@ -1579,25 +1586,29 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByTestId, getByText, queryByTestId } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
       expect(getByText('broken.mov')).toBeTruthy();
-      expect(getByTestId('remote-resource-thumbnail-image')).toBeTruthy();
+      expect(
+        getByTestId('local-computer-resource-thumbnail-image'),
+      ).toBeTruthy();
     });
 
-    fireEvent(getByTestId('remote-resource-thumbnail-image'), 'error');
+    fireEvent(getByTestId('local-computer-resource-thumbnail-image'), 'error');
 
     await waitFor(() => {
-      expect(queryByTestId('remote-resource-thumbnail-image')).toBeNull();
-      expect(getByTestId('remote-resource-icon-video')).toBeTruthy();
+      expect(
+        queryByTestId('local-computer-resource-thumbnail-image'),
+      ).toBeNull();
+      expect(getByTestId('local-computer-resource-icon-video')).toBeTruthy();
     });
   });
 
-  it('limits the global remote FlatList render batch to ten rows', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce(
+  it('limits the local computer FlatList render batch to ten rows', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce(
       Array.from({ length: 12 }, (_, index) => ({
         resourceId: `personal-dir:photo-${index}.jpg`,
         desktopDeviceId: 'desktop-device-id',
@@ -1614,7 +1625,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { UNSAFE_getByProps, getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1629,23 +1640,23 @@ describe('RemoteAccessGlobalScreen', () => {
   });
 
   it('uses reference lucide toolbar icons instead of Ionicons glyph mappings', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([]);
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
 
     const { queryAllByTestId, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
     await waitFor(() => {
       expect(
-        queryAllByTestId('remote-toolbar-sort-icon').length,
+        queryAllByTestId('local-computer-toolbar-sort-icon').length,
       ).toBeGreaterThan(0);
       expect(
-        queryAllByTestId('remote-toolbar-list-icon').length,
+        queryAllByTestId('local-computer-toolbar-list-icon').length,
       ).toBeGreaterThan(0);
       expect(
-        queryAllByTestId('remote-toolbar-grid-icon').length,
+        queryAllByTestId('local-computer-toolbar-grid-icon').length,
       ).toBeGreaterThan(0);
     });
     expect(queryByText('list-outline')).toBeNull();
@@ -1657,7 +1668,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1667,13 +1678,13 @@ describe('RemoteAccessGlobalScreen', () => {
     expect(queryByText('MacBook Pro / 用户目录')).toBeNull();
   });
 
-  it('keeps the demo desktop subtitle behind the explicit remote resources preview gate', async () => {
-    testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__ = true;
+  it('keeps the demo desktop subtitle behind the explicit shared files preview gate', async () => {
+    testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__ = true;
     mockBindingState.mockResolvedValueOnce(null);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1682,9 +1693,9 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('records a saved global remote download after native persistence succeeds', async () => {
+  it('records a saved local computer download after native persistence succeeds', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1700,14 +1711,14 @@ describe('RemoteAccessGlobalScreen', () => {
         streamUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
       },
     ]);
-    mockDownloadGlobalRemoteAccessResource.mockResolvedValueOnce({
+    mockDownloadGlobalLocalComputerResource.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/local/alpha.jpg',
     });
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1718,7 +1729,7 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('download-outline'));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenCalledWith(
+      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledWith(
         'personal-dir:alpha.jpg',
       );
     });
@@ -1740,7 +1751,7 @@ describe('RemoteAccessGlobalScreen', () => {
 
   it('records folder image downloads with stream urls for recent download previews', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Album',
         desktopDeviceId: 'desktop-device-id',
@@ -1751,7 +1762,7 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockListGlobalRemoteAccessFolderContents.mockResolvedValueOnce({
+    mockListGlobalLocalComputerFolderContents.mockResolvedValueOnce({
       path: 'Album',
       files: [
         {
@@ -1769,14 +1780,14 @@ describe('RemoteAccessGlobalScreen', () => {
       ],
       totalCount: 1,
     });
-    mockDownloadGlobalRemoteAccessResource.mockResolvedValueOnce({
+    mockDownloadGlobalLocalComputerResource.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/local/photo.jpg',
     });
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1795,7 +1806,7 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('download-outline'));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenCalledWith(
+      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledWith(
         'personal-dir:Album/photo.jpg',
       );
     });
@@ -1812,7 +1823,7 @@ describe('RemoteAccessGlobalScreen', () => {
       savedToPhotos: false,
     });
     expect(mockRecordDiagnosticsLog).toHaveBeenCalledWith(
-      'RemoteAccess',
+      'LocalComputer',
       'record download source',
       expect.objectContaining({
         resourceId: 'personal-dir:Album/photo.jpg',
@@ -1829,7 +1840,7 @@ describe('RemoteAccessGlobalScreen', () => {
   });
 
   it('runs the global download gate for every selected file instead of only the first selection', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1853,14 +1864,14 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockDownloadGlobalRemoteAccessResource.mockResolvedValue({
+    mockDownloadGlobalLocalComputerResource.mockResolvedValue({
       savedToPhotos: false,
       localPath: null,
     });
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1875,20 +1886,20 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText(/^(下载|下載)$/));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenCalledTimes(2);
+      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledTimes(2);
     });
-    expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenNthCalledWith(
+    expect(mockDownloadGlobalLocalComputerResource).toHaveBeenNthCalledWith(
       1,
       'personal-dir:alpha.jpg',
     );
-    expect(mockDownloadGlobalRemoteAccessResource).toHaveBeenNthCalledWith(
+    expect(mockDownloadGlobalLocalComputerResource).toHaveBeenNthCalledWith(
       2,
       'personal-dir:beta.mov',
     );
   });
 
-  it('opens the system share flow for selected global remote files', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('opens the system share flow for selected local computer files', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1902,11 +1913,11 @@ describe('RemoteAccessGlobalScreen', () => {
         thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
       },
     ]);
-    mockShareGlobalRemoteAccessResources.mockResolvedValueOnce(undefined);
+    mockShareGlobalLocalComputerResources.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1919,14 +1930,14 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('分享'));
 
     await waitFor(() => {
-      expect(mockShareGlobalRemoteAccessResources).toHaveBeenCalledWith([
+      expect(mockShareGlobalLocalComputerResources).toHaveBeenCalledWith([
         { resourceId: 'personal-dir:alpha.jpg', displayName: 'alpha.jpg' },
       ]);
     });
   });
 
-  it('opens a global remote document with the system preview viewer', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('opens a local computer document with the system preview viewer', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:manual.pdf',
         desktopDeviceId: 'desktop-device-id',
@@ -1939,14 +1950,14 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockPrepareGlobalRemoteAccessPreview.mockResolvedValueOnce(
+    mockPrepareGlobalLocalComputerPreview.mockResolvedValueOnce(
       '/cache/manual.pdf',
     );
     mockViewDocument.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -1957,7 +1968,7 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('manual.pdf'));
 
     await waitFor(() => {
-      expect(mockPrepareGlobalRemoteAccessPreview).toHaveBeenCalledWith(
+      expect(mockPrepareGlobalLocalComputerPreview).toHaveBeenCalledWith(
         'personal-dir:manual.pdf',
         'manual.pdf',
       );
@@ -1969,9 +1980,9 @@ describe('RemoteAccessGlobalScreen', () => {
     });
   });
 
-  it('opens unsupported extensionless global remote documents through the system app chooser', async () => {
+  it('opens unsupported extensionless local computer documents through the system app chooser', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:protoc-gen-go',
         desktopDeviceId: 'desktop-device-id',
@@ -1984,14 +1995,14 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockPrepareGlobalRemoteAccessShareFile.mockResolvedValueOnce(
+    mockPrepareGlobalLocalComputerShareFile.mockResolvedValueOnce(
       '/downloads/protoc-gen-go',
     );
     mockShareOpen.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -2002,7 +2013,7 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('protoc-gen-go'));
 
     await waitFor(() => {
-      expect(mockPrepareGlobalRemoteAccessShareFile).toHaveBeenCalledWith(
+      expect(mockPrepareGlobalLocalComputerShareFile).toHaveBeenCalledWith(
         'personal-dir:protoc-gen-go',
         'protoc-gen-go',
       );
@@ -2017,12 +2028,12 @@ describe('RemoteAccessGlobalScreen', () => {
       failOnCancel: false,
       showAppsToView: true,
     });
-    expect(mockPrepareGlobalRemoteAccessPreview).not.toHaveBeenCalled();
+    expect(mockPrepareGlobalLocalComputerPreview).not.toHaveBeenCalled();
     expect(mockViewDocument).not.toHaveBeenCalled();
   });
 
-  it('opens a global remote image inside the app preview instead of the system viewer', async () => {
-    mockListGlobalRemoteAccessResources.mockResolvedValueOnce([
+  it('opens a local computer image inside the app preview instead of the system viewer', async () => {
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:cover.png',
         desktopDeviceId: 'desktop-device-id',
@@ -2035,13 +2046,13 @@ describe('RemoteAccessGlobalScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockGetGlobalRemoteAccessPreviewUrl.mockResolvedValueOnce(
+    mockGetGlobalLocalComputerPreviewUrl.mockResolvedValueOnce(
       'http://192.168.1.100:39394/personal/stream/cover.png',
     );
 
     const { getByTestId, getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessGlobalScreen />
+        <LocalComputerGlobalScreen />
       </TestErrorBoundary>,
     );
 
@@ -2052,12 +2063,12 @@ describe('RemoteAccessGlobalScreen', () => {
     fireEvent.press(getByText('cover.png'));
 
     await waitFor(() => {
-      expect(mockGetGlobalRemoteAccessPreviewUrl).toHaveBeenCalledWith(
+      expect(mockGetGlobalLocalComputerPreviewUrl).toHaveBeenCalledWith(
         'personal-dir:cover.png',
       );
-      expect(getByTestId('remote-resource-preview-image')).toBeTruthy();
+      expect(getByTestId('local-computer-resource-preview-image')).toBeTruthy();
     });
-    expect(mockPrepareGlobalRemoteAccessPreview).not.toHaveBeenCalled();
+    expect(mockPrepareGlobalLocalComputerPreview).not.toHaveBeenCalled();
     expect(mockViewDocument).not.toHaveBeenCalled();
   });
 });
@@ -2065,13 +2076,13 @@ describe('RemoteAccessGlobalScreen', () => {
 describe('PhoneSyncSpaceGlobalScreen', () => {
   const mockBindingState = jest.fn();
   const testGlobal = globalThis as typeof globalThis & {
-    __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+    __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockVisualQaEnabled = false;
-    delete testGlobal.__LYNAVO_REMOTE_RESOURCES_PREVIEW__;
+    delete testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__;
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: mockBindingState,
       addListener: jest.fn(),
@@ -2085,7 +2096,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
     mockCurrentClientReceivedLibraryPageFromLegacyList();
   });
 
-  it('keeps an empty real received library empty unless the remote preview gate is explicit', async () => {
+  it('keeps an empty real received library empty unless the shared files preview gate is explicit', async () => {
     mockVisualQaEnabled = true;
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([]);
 
@@ -2835,7 +2846,7 @@ describe('PhoneSyncSpaceGlobalScreen', () => {
   });
 });
 
-describe('RemoteAccessScreen', () => {
+describe('LocalComputerScreen', () => {
   const mockBindingState = jest.fn();
 
   beforeAll(() => {
@@ -2859,7 +2870,7 @@ describe('RemoteAccessScreen', () => {
     mockBindingState.mockResolvedValueOnce(null);
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
     await waitFor(() => {
@@ -2885,7 +2896,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -2895,7 +2906,7 @@ describe('RemoteAccessScreen', () => {
     });
   });
 
-  it('renders remote image and video thumbnails when preview urls are available', async () => {
+  it('renders local computer image and video thumbnails when preview urls are available', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-image',
@@ -2923,7 +2934,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByTestId, getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -2932,8 +2943,8 @@ describe('RemoteAccessScreen', () => {
       expect(getByText('clip.mov')).toBeTruthy();
     });
 
-    expect(getByTestId('remote-access-thumbnail-image')).toBeTruthy();
-    expect(getByTestId('remote-access-thumbnail-video')).toBeTruthy();
+    expect(getByTestId('local-computer-thumbnail-image')).toBeTruthy();
+    expect(getByTestId('local-computer-thumbnail-video')).toBeTruthy();
   });
 
   it('loads real folder contents when a folder is opened', async () => {
@@ -2961,7 +2972,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3004,7 +3015,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3075,7 +3086,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3114,7 +3125,7 @@ describe('RemoteAccessScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('keeps download available for selected remote files', async () => {
+  it('keeps download available for selected local computer files', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-1',
@@ -3136,7 +3147,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3165,7 +3176,7 @@ describe('RemoteAccessScreen', () => {
     );
   });
 
-  it('opens the system share flow for selected remote files', async () => {
+  it('opens the system share flow for selected local computer files', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-2',
@@ -3178,7 +3189,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3198,7 +3209,7 @@ describe('RemoteAccessScreen', () => {
     });
   });
 
-  it('opens a remote document with the system preview viewer', async () => {
+  it('opens a local computer document with the system preview viewer', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-doc',
@@ -3213,7 +3224,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3237,7 +3248,7 @@ describe('RemoteAccessScreen', () => {
     });
   });
 
-  it('keeps selection-mode row presses from opening remote previews', async () => {
+  it('keeps selection-mode row presses from opening local computer previews', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-doc',
@@ -3250,7 +3261,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3266,7 +3277,7 @@ describe('RemoteAccessScreen', () => {
     expect(getByText('已選擇 1 個')).toBeTruthy();
   });
 
-  it('opens a remote image inside the app preview', async () => {
+  it('opens a local computer image inside the app preview', async () => {
     mockListSharedResources.mockResolvedValueOnce([
       {
         resourceId: 'res-image',
@@ -3282,7 +3293,7 @@ describe('RemoteAccessScreen', () => {
 
     const { getByTestId, getByText } = render(
       <TestErrorBoundary>
-        <RemoteAccessScreen />
+        <LocalComputerScreen />
       </TestErrorBoundary>,
     );
 
@@ -3297,7 +3308,7 @@ describe('RemoteAccessScreen', () => {
         { host: '192.168.1.100', port: 39394 },
         'res-image',
       );
-      expect(getByTestId('remote-access-preview-image')).toBeTruthy();
+      expect(getByTestId('local-computer-preview-image')).toBeTruthy();
     });
   });
 });

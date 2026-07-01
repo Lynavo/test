@@ -32,20 +32,20 @@ export function SharedFilesGlobalScreen({
     navigation.navigate('PhoneSyncSpace');
   };
 
-  const openRemoteAccess = () => {
-    recordDiagnosticsLog('RemoteAccess', 'local LAN entry pressed', {
+  const openLocalComputer = () => {
+    recordDiagnosticsLog('LocalComputer', 'local LAN entry pressed', {
       screen: 'SharedFilesGlobalScreen',
     });
-    navigation.navigate('RemoteAccess');
+    navigation.navigate('LocalComputer');
   };
-  const remoteAccessDescription = translateOrFallback(
+  const localComputerDescription = translateOrFallback(
     translate,
-    'sharedFiles.remoteAccess.ossDesc',
+    'sharedFiles.localComputer.ossDesc',
     'Access paired computer files on the same local network.',
   );
-  const remoteAccessBadge = translateOrFallback(
+  const localComputerBadge = translateOrFallback(
     translate,
-    'sharedFiles.remoteAccess.ossBadge',
+    'sharedFiles.localComputer.ossBadge',
     'LAN',
   );
 
@@ -54,7 +54,7 @@ export function SharedFilesGlobalScreen({
       <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>
-            {t('sharedFiles.title') || '遠端資源'}
+            {t('sharedFiles.title') || '文件'}
           </Text>
           <Text style={styles.headerSubtitle}>
             {t('sharedFiles.headerSubtitle')}
@@ -102,7 +102,7 @@ export function SharedFilesGlobalScreen({
           <TouchableOpacity
             style={styles.card}
             activeOpacity={0.8}
-            onPress={openRemoteAccess}
+            onPress={openLocalComputer}
           >
             <View
               style={[
@@ -114,19 +114,19 @@ export function SharedFilesGlobalScreen({
             </View>
             <View style={styles.cardInfo}>
               <Text style={styles.cardTitle}>
-                {t('sharedFiles.remoteAccess.title') || '遠端訪問電腦'}
+                {t('sharedFiles.localComputer.title') || '電腦檔案'}
               </Text>
               <Text style={styles.cardDescription}>
-                {remoteAccessDescription}
+                {localComputerDescription}
               </Text>
               <View style={styles.badgeRow}>
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
-                    {t('sharedFiles.remoteAccess.badgeDesktop')}
+                    {t('sharedFiles.localComputer.badgeDesktop')}
                   </Text>
                 </View>
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{remoteAccessBadge}</Text>
+                  <Text style={styles.badgeText}>{localComputerBadge}</Text>
                 </View>
               </View>
             </View>

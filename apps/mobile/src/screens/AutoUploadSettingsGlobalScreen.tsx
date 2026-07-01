@@ -584,7 +584,7 @@ export function AutoUploadSettingsGlobalScreen() {
       ? activeRangeLabel
       : t('common.notApplicable') || '不适用';
   const infoText = renderInfoText();
-  const confirmLabel = t('sharedFiles.remoteAccess.done') || '完成';
+  const confirmLabel = t('sharedFiles.localComputer.done') || '完成';
 
   return (
     <GlobalGradientBackground>

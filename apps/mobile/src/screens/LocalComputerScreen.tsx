@@ -45,9 +45,9 @@ import {
   openFileWithOtherApp,
 } from '../utils/file-preview';
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'LocalComputer'>;
 
-interface RemoteAccessItem {
+interface LocalComputerItem {
   resourceId: string;
   displayName: string;
   kind: 'shared_file' | 'shared_folder';
@@ -57,31 +57,31 @@ interface RemoteAccessItem {
   previewUrl?: string;
   streamUrl?: string;
   rootResourceId?: string;
-  remotePath?: string;
+  resourcePath?: string;
 }
 
-type RemoteAccessIconConfig = {
+type LocalComputerIconConfig = {
   name: string;
   color: string;
   bg: string;
 };
 
-type RemoteAccessResourceDTO = DesktopSharedResourceDTO & {
+type LocalComputerResourceDTO = DesktopSharedResourceDTO & {
   thumbnailUrl?: string;
   previewUrl?: string;
   streamUrl?: string;
 };
 
-interface RemotePreviewState {
-  item: RemoteAccessItem;
+interface LocalComputerPreviewState {
+  item: LocalComputerItem;
   url: string;
 }
 
 const SHARED_DIRECTORY_RESOURCE_PREFIX = 'shared-dir:';
 
-function sharedResourceToRemoteItem(
-  resource: RemoteAccessResourceDTO,
-): RemoteAccessItem | null {
+function sharedResourceToLocalComputerItem(
+  resource: LocalComputerResourceDTO,
+): LocalComputerItem | null {
   if (resource.kind !== 'shared_file' && resource.kind !== 'shared_folder') {
     return null;
   }
@@ -98,7 +98,7 @@ function sharedResourceToRemoteItem(
   };
 }
 
-function encodeRemotePath(path: string): string {
+function encodeResourcePath(path: string): string {
   return path
     .trim()
     .replace(/^\/+|\/+$/g, '')
@@ -108,16 +108,16 @@ function encodeRemotePath(path: string): string {
     .join('/');
 }
 
-function directoryFileToRemoteItem(
+function directoryFileToLocalComputerItem(
   file: DirectoryFileDTO,
-  folder: RemoteAccessItem,
-): RemoteAccessItem {
+  folder: LocalComputerItem,
+): LocalComputerItem {
   const isSharedDirectory = folder.resourceId.startsWith(
     SHARED_DIRECTORY_RESOURCE_PREFIX,
   );
   const rootResourceId = folder.rootResourceId ?? folder.resourceId;
   const resourceId = isSharedDirectory
-    ? `${SHARED_DIRECTORY_RESOURCE_PREFIX}${encodeRemotePath(file.path)}`
+    ? `${SHARED_DIRECTORY_RESOURCE_PREFIX}${encodeResourcePath(file.path)}`
     : `shared-folder-entry:${rootResourceId}:${file.path}`;
   return {
     resourceId,
@@ -129,26 +129,28 @@ function directoryFileToRemoteItem(
     previewUrl: file.isDirectory ? undefined : file.streamUrl,
     streamUrl: file.isDirectory ? undefined : file.streamUrl,
     rootResourceId: isSharedDirectory ? resourceId : rootResourceId,
-    remotePath: isSharedDirectory ? '' : file.path,
+    resourcePath: isSharedDirectory ? '' : file.path,
   };
 }
 
-export function RemoteAccessScreen() {
+export function LocalComputerScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [rootItems, setRootItems] = useState<RemoteAccessItem[]>([]);
-  const [folderItems, setFolderItems] = useState<RemoteAccessItem[]>([]);
-  const [currentFolder, setCurrentFolder] = useState<RemoteAccessItem | null>(
+  const [rootItems, setRootItems] = useState<LocalComputerItem[]>([]);
+  const [folderItems, setFolderItems] = useState<LocalComputerItem[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<LocalComputerItem | null>(
     null,
   );
-  const [folderHistory, setFolderHistory] = useState<RemoteAccessItem[]>([]);
+  const [folderHistory, setFolderHistory] = useState<LocalComputerItem[]>([]);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [sharing, setSharing] = useState(false);
   const [sortDesc, setSortDesc] = useState(true);
-  const [preview, setPreview] = useState<RemotePreviewState | null>(null);
+  const [preview, setPreview] = useState<LocalComputerPreviewState | null>(
+    null,
+  );
 
   const getBoundDesktop = useCallback(async () => {
     const { NativeSyncEngine } = NativeModules;
@@ -175,7 +177,7 @@ export function RemoteAccessScreen() {
       const result = await listSharedResources(desktop);
       setRootItems(
         (result || []).flatMap(resource => {
-          const item = sharedResourceToRemoteItem(resource);
+          const item = sharedResourceToLocalComputerItem(resource);
           return item ? [item] : [];
         }),
       );
@@ -185,7 +187,7 @@ export function RemoteAccessScreen() {
       setSelectionMode(false);
       setSelectedIds(new Set());
     } catch (e) {
-      console.warn('[RemoteAccessScreen] Failed to load data:', e);
+      console.warn('[LocalComputerScreen] Failed to load data:', e);
     } finally {
       setLoading(false);
     }
@@ -201,7 +203,7 @@ export function RemoteAccessScreen() {
   const currentItems = currentFolder ? folderItems : rootItems;
 
   const handleDownload = useCallback(
-    async (item: RemoteAccessItem) => {
+    async (item: LocalComputerItem) => {
       const { resourceId, displayName: filename } = item;
       if (downloadingId) return;
       setDownloadingId(resourceId);
@@ -217,7 +219,7 @@ export function RemoteAccessScreen() {
         const desktop = { host: binding.host, port: 39394 };
         await downloadResource(desktop, resourceId);
 
-        // Keep 「最近下載」 in sync with remote-access downloads.
+        // Keep 「最近下載」 in sync with local-computer downloads.
         await recordDownloadedFile({
           resourceId,
           filename,
@@ -247,7 +249,7 @@ export function RemoteAccessScreen() {
               }) || `${filename} 已保存到文件`,
         );
       } catch (err) {
-        console.warn('[RemoteAccessScreen] Download failed:', err);
+        console.warn('[LocalComputerScreen] Download failed:', err);
         Alert.alert(
           t('sharedFiles.dialogs.downloadFailed') || '下載失敗',
           t('sharedFiles.dialogs.downloadFailedMessage') ||
@@ -299,8 +301,8 @@ export function RemoteAccessScreen() {
     );
     if (selectedFiles.length === 0) {
       Alert.alert(
-        t('sharedFiles.remoteAccess.shareNoSelectionTitle') || '尚未選擇檔案',
-        t('sharedFiles.remoteAccess.shareNoSelectionMessage') ||
+        t('sharedFiles.localComputer.shareNoSelectionTitle') || '尚未選擇檔案',
+        t('sharedFiles.localComputer.shareNoSelectionMessage') ||
           '請先選擇要分享的檔案',
       );
       return;
@@ -323,10 +325,10 @@ export function RemoteAccessScreen() {
       setSelectionMode(false);
       setSelectedIds(new Set());
     } catch (err) {
-      console.warn('[RemoteAccessScreen] Share failed:', err);
+      console.warn('[LocalComputerScreen] Share failed:', err);
       Alert.alert(
-        t('sharedFiles.remoteAccess.shareFailedTitle') || '分享失敗',
-        t('sharedFiles.remoteAccess.shareFailedMessage') ||
+        t('sharedFiles.localComputer.shareFailedTitle') || '分享失敗',
+        t('sharedFiles.localComputer.shareFailedMessage') ||
           '無法開啟系統分享，請稍後重試',
       );
     } finally {
@@ -335,7 +337,7 @@ export function RemoteAccessScreen() {
   }, [currentItems, getBoundDesktop, selectedIds, sharing, t]);
 
   const handleOpenFile = useCallback(
-    async (item: RemoteAccessItem) => {
+    async (item: LocalComputerItem) => {
       if (item.kind !== 'shared_file') return;
 
       try {
@@ -364,7 +366,7 @@ export function RemoteAccessScreen() {
             await openFileWithOtherApp(localPath, item.displayName);
           } catch (err) {
             console.warn(
-              '[RemoteAccessScreen] Open with other app failed:',
+              '[LocalComputerScreen] Open with other app failed:',
               err,
             );
             Alert.alert(
@@ -387,7 +389,7 @@ export function RemoteAccessScreen() {
           mimeType: documentMimeType(item.displayName),
         });
       } catch (err) {
-        console.warn('[RemoteAccessScreen] Preview failed:', err);
+        console.warn('[LocalComputerScreen] Preview failed:', err);
         Alert.alert(
           t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
           t('sharedFiles.dialogs.previewFailedMessage') || '無法取得檔案預覽',
@@ -398,7 +400,7 @@ export function RemoteAccessScreen() {
   );
 
   const navigateIntoFolder = useCallback(
-    async (folder: RemoteAccessItem) => {
+    async (folder: LocalComputerItem) => {
       const desktop = await getBoundDesktop();
       if (!desktop) {
         setFolderItems([]);
@@ -411,10 +413,12 @@ export function RemoteAccessScreen() {
         const listing = await listSharedFolderContents(
           desktop,
           rootResourceId,
-          folder.remotePath ?? '',
+          folder.resourcePath ?? '',
         );
         setFolderItems(
-          listing.files.map(file => directoryFileToRemoteItem(file, folder)),
+          listing.files.map(file =>
+            directoryFileToLocalComputerItem(file, folder),
+          ),
         );
         setSelectedIds(new Set());
         if (currentFolder) {
@@ -422,7 +426,10 @@ export function RemoteAccessScreen() {
         }
         setCurrentFolder(folder);
       } catch (e) {
-        console.warn('[RemoteAccessScreen] Failed to load folder contents:', e);
+        console.warn(
+          '[LocalComputerScreen] Failed to load folder contents:',
+          e,
+        );
         setFolderItems([]);
       } finally {
         setLoading(false);
@@ -432,7 +439,7 @@ export function RemoteAccessScreen() {
   );
 
   const reloadFolder = useCallback(
-    async (folder: RemoteAccessItem) => {
+    async (folder: LocalComputerItem) => {
       const desktop = await getBoundDesktop();
       if (!desktop) {
         setFolderItems([]);
@@ -443,15 +450,17 @@ export function RemoteAccessScreen() {
         const listing = await listSharedFolderContents(
           desktop,
           folder.rootResourceId ?? folder.resourceId,
-          folder.remotePath ?? '',
+          folder.resourcePath ?? '',
         );
         setFolderItems(
-          listing.files.map(file => directoryFileToRemoteItem(file, folder)),
+          listing.files.map(file =>
+            directoryFileToLocalComputerItem(file, folder),
+          ),
         );
         setSelectedIds(new Set());
       } catch (e) {
         console.warn(
-          '[RemoteAccessScreen] Failed to reload folder contents:',
+          '[LocalComputerScreen] Failed to reload folder contents:',
           e,
         );
         setFolderItems([]);
@@ -508,7 +517,7 @@ export function RemoteAccessScreen() {
     return sortDesc ? nameB.localeCompare(nameA) : nameA.localeCompare(nameB);
   });
 
-  const renderItem = ({ item }: { item: RemoteAccessItem }) => {
+  const renderItem = ({ item }: { item: LocalComputerItem }) => {
     const iconConfig = getFileIcon(item.kind, item.mediaType, item.displayName);
     const isFolder = item.kind === 'shared_folder';
     const isDownloading = downloadingId === item.resourceId;
@@ -530,7 +539,7 @@ export function RemoteAccessScreen() {
           void handleOpenFile(item);
         }}
       >
-        <RemoteAccessThumbnail item={item} iconConfig={iconConfig} />
+        <LocalComputerThumbnail item={item} iconConfig={iconConfig} />
         <View style={styles.infoWrapper}>
           <Text style={styles.filename} numberOfLines={1}>
             {item.displayName}
@@ -597,7 +606,7 @@ export function RemoteAccessScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>
             {currentFolder
               ? `${currentFolder.displayName}`
-              : t('sharedFiles.remoteAccess.title') || '遠端訪問電腦'}
+              : t('sharedFiles.localComputer.title') || '電腦檔案'}
           </Text>
           <TouchableOpacity
             style={styles.selectButton}
@@ -606,8 +615,8 @@ export function RemoteAccessScreen() {
           >
             <Text style={styles.selectButtonText}>
               {selectionMode
-                ? t('sharedFiles.remoteAccess.done') || '完成'
-                : t('sharedFiles.remoteAccess.select') || '選擇'}
+                ? t('sharedFiles.localComputer.done') || '完成'
+                : t('sharedFiles.localComputer.select') || '選擇'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -648,7 +657,7 @@ export function RemoteAccessScreen() {
           <View style={styles.centered}>
             <Icon name="folder-open-outline" size={48} color="#94a3b8" />
             <Text style={styles.emptyText}>
-              {t('sharedFiles.remoteAccess.empty') || '此資料夾為空'}
+              {t('sharedFiles.localComputer.empty') || '此資料夾為空'}
             </Text>
           </View>
         ) : (
@@ -666,7 +675,7 @@ export function RemoteAccessScreen() {
         {selectionMode && (
           <View style={styles.selectionBar}>
             <Text style={styles.selectionCount}>
-              {t('sharedFiles.remoteAccess.selectedCount', {
+              {t('sharedFiles.localComputer.selectedCount', {
                 count: selectedIds.size,
               }) || `已選擇 ${selectedIds.size} 個`}
             </Text>
@@ -687,7 +696,7 @@ export function RemoteAccessScreen() {
                   <>
                     <Icon name="download-outline" size={17} color="#2563eb" />
                     <Text style={styles.selectionDownloadButtonText}>
-                      {t('sharedFiles.remoteAccess.download') || '下載'}
+                      {t('sharedFiles.localComputer.download') || '下載'}
                     </Text>
                   </>
                 )}
@@ -708,7 +717,7 @@ export function RemoteAccessScreen() {
                   <>
                     <Icon name="share-outline" size={17} color="#ffffff" />
                     <Text style={styles.shareButtonText}>
-                      {t('sharedFiles.remoteAccess.share') || '分享'}
+                      {t('sharedFiles.localComputer.share') || '分享'}
                     </Text>
                   </>
                 )}
@@ -717,7 +726,7 @@ export function RemoteAccessScreen() {
           </View>
         )}
       </SafeAreaView>
-      <RemoteAccessPreviewModal
+      <LocalComputerPreviewModal
         preview={preview}
         onClose={() => setPreview(null)}
       />
@@ -726,12 +735,12 @@ export function RemoteAccessScreen() {
   );
 }
 
-function RemoteAccessThumbnail({
+function LocalComputerThumbnail({
   item,
   iconConfig,
 }: {
-  item: RemoteAccessItem;
-  iconConfig: RemoteAccessIconConfig;
+  item: LocalComputerItem;
+  iconConfig: LocalComputerIconConfig;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -749,7 +758,7 @@ function RemoteAccessThumbnail({
     return (
       <View style={[styles.iconWrapper, styles.thumbnailWrapper]}>
         <Image
-          testID="remote-access-thumbnail-image"
+          testID="local-computer-thumbnail-image"
           source={{ uri: imagePreviewUrl }}
           style={styles.thumbnailMedia}
           resizeMode="cover"
@@ -769,7 +778,7 @@ function RemoteAccessThumbnail({
     return (
       <View style={[styles.iconWrapper, styles.thumbnailWrapper]}>
         <Video
-          testID="remote-access-thumbnail-video"
+          testID="local-computer-thumbnail-video"
           source={{ uri: videoPreviewUrl }}
           style={styles.thumbnailMedia}
           resizeMode="cover"
@@ -792,11 +801,11 @@ function RemoteAccessThumbnail({
   );
 }
 
-function RemoteAccessPreviewModal({
+function LocalComputerPreviewModal({
   preview,
   onClose,
 }: {
-  preview: RemotePreviewState | null;
+  preview: LocalComputerPreviewState | null;
   onClose: () => void;
 }) {
   if (!preview) return null;
@@ -819,7 +828,7 @@ function RemoteAccessPreviewModal({
           <TouchableOpacity
             style={styles.previewCloseButton}
             accessibilityRole="button"
-            accessibilityLabel={t('sharedFiles.remoteAccess.closePreview')}
+            accessibilityLabel={t('sharedFiles.localComputer.closePreview')}
             activeOpacity={0.7}
             onPress={onClose}
           >
@@ -829,7 +838,7 @@ function RemoteAccessPreviewModal({
         <View style={styles.previewBody}>
           {video ? (
             <Video
-              testID="remote-access-preview-video"
+              testID="local-computer-preview-video"
               source={{ uri: preview.url }}
               style={styles.previewMedia}
               resizeMode="contain"
@@ -839,7 +848,7 @@ function RemoteAccessPreviewModal({
             />
           ) : (
             <Image
-              testID="remote-access-preview-image"
+              testID="local-computer-preview-image"
               source={{ uri: preview.url }}
               style={styles.previewMedia}
               resizeMode="contain"

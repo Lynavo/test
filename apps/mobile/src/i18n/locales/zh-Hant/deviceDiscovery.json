@@ -129,7 +129,7 @@
       "step5Title": "檢視最近記錄",
       "step5Desc": "從電腦端下載的素材或同步歷史記錄會顯示在這裡。",
       "step5Action": "下一步",
-      "step6Title": "遠端存取檔案",
+      "step6Title": "電腦檔案",
       "step6Desc": "透過手機瀏覽電腦端的共享資料夾，並快速下載需要的檔案。",
       "step6Action": "完成"
     },
@@ -223,10 +223,10 @@
       "syncSpaceDesc": "查看已同步至電腦的檔案與上傳來源",
       "syncSpaceBadge1": "今日 5 個",
       "syncSpaceBadge2": "保留來源",
-      "remoteAccessTitle": "遠端訪問電腦",
-      "remoteAccessDesc": "瀏覽電腦端共享目錄並下載檔案",
-      "remoteAccessBadge1": "桌面目錄",
-      "remoteAccessBadge2": "列表/網格"
+      "localComputerTitle": "電腦檔案",
+      "localComputerDesc": "瀏覽電腦端共享目錄並下載檔案",
+      "localComputerBadge1": "桌面目錄",
+      "localComputerBadge2": "列表/網格"
     }
   }
 }

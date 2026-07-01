@@ -7536,7 +7536,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 shareEnabled: $0.shareEnabled
             )
         }
-        guard SharedFilesAccessPolicy.isRemoteAccessDisabled(
+        guard SharedFilesAccessPolicy.isLocalComputerAccessDisabled(
             scopeRaw: scope.rawValue,
             bindingDeviceId: binding.deviceId,
             bindingDeviceName: binding.deviceName,
@@ -7548,9 +7548,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         syncDiagnosticsLog(
             "SharedFiles",
-            "personal remote access disabled by Bonjour share state device=\(binding.deviceId) candidates=\(candidateSnapshots.count)"
+            "personal local computer access disabled by Bonjour share state device=\(binding.deviceId) candidates=\(candidateSnapshots.count)"
         )
-        throw SyncEngineError.networkError(SharedFilesAccessPolicy.remoteAccessDisabledMessage)
+        throw SyncEngineError.networkError(SharedFilesAccessPolicy.legacyLocalComputerAccessDisabledMessage)
     }
 
     func browseSharedFiles(scope scopeRaw: String, path: String, accessToken: String) async throws -> [String: Any] {

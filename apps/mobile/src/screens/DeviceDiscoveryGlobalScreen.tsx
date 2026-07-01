@@ -118,7 +118,7 @@ type ConnectionGuidePreviewKind =
   | 'uploadScope'
   | 'syncProgress'
   | 'records'
-  | 'remoteResources';
+  | 'sharedFilesHub';
 type ConnectionGuideStep = {
   title: string;
   description: string;
@@ -453,7 +453,7 @@ export function DeviceDiscoveryGlobalScreen() {
         title: t('deviceDiscovery.global.onboarding.step6Title'),
         description: t('deviceDiscovery.global.onboarding.step6Desc'),
         actionLabel: t('deviceDiscovery.global.onboarding.step6Action'),
-        previewKind: 'remoteResources',
+        previewKind: 'sharedFilesHub',
       },
     ],
     [t],
@@ -1867,7 +1867,7 @@ function GlobalConnectionFeaturePreviewCard({
     );
   }
 
-  if (kind === 'remoteResources') {
+  if (kind === 'sharedFilesHub') {
     return (
       <GuidePreviewShell>
         <GuidePreviewResourceEntry
@@ -1886,12 +1886,12 @@ function GlobalConnectionFeaturePreviewCard({
           icon={Monitor}
           iconStyle={styles.guidePreviewIconPurple}
           iconColor="#8B5CF6"
-          testID="guide-preview-remote-access-icon"
-          title={t('deviceDiscovery.global.preview.remoteAccessTitle')}
-          description={t('deviceDiscovery.global.preview.remoteAccessDesc')}
+          testID="guide-preview-local-computer-icon"
+          title={t('deviceDiscovery.global.preview.localComputerTitle')}
+          description={t('deviceDiscovery.global.preview.localComputerDesc')}
           badges={[
-            t('deviceDiscovery.global.preview.remoteAccessBadge1'),
-            t('deviceDiscovery.global.preview.remoteAccessBadge2'),
+            t('deviceDiscovery.global.preview.localComputerBadge1'),
+            t('deviceDiscovery.global.preview.localComputerBadge2'),
           ]}
         />
       </GuidePreviewShell>

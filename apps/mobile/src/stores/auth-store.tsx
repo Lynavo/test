@@ -8,12 +8,12 @@ import React, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Keychain from 'react-native-keychain';
 import {
-  applyVisualQaRemotePreviewFlag,
+  applyVisualQaSharedFilesPreviewFlag,
   getDevSkipAuthMockTokens,
   getVisualQaMockTokens,
 } from '../dev/visualQa';
 
-applyVisualQaRemotePreviewFlag();
+applyVisualQaSharedFilesPreviewFlag();
 
 // ---------------------------------------------------------------------------
 // Types

@@ -50,13 +50,13 @@ jest.mock('../../services/download-records-service', () => ({
 }));
 
 jest.mock('../../services/desktop-local-service', () => ({
-  downloadGlobalRemoteAccessResource: jest.fn(),
+  downloadGlobalLocalComputerResource: jest.fn(),
   downloadReceivedLibraryItem: jest.fn(),
   downloadResourceForGlobal: jest.fn(),
-  getGlobalRemoteAccessPreviewUrl: jest
+  getGlobalLocalComputerPreviewUrl: jest
     .fn()
     .mockResolvedValue('http://192.168.1.100:39394/personal/stream/live'),
-  getGlobalRemoteAccessThumbnailUrl: jest
+  getGlobalLocalComputerThumbnailUrl: jest
     .fn()
     .mockResolvedValue('http://192.168.1.100:39394/personal/thumbnail/live'),
   isDownloadSavedLocally: jest.fn(
@@ -341,7 +341,7 @@ describe('DownloadRecordsGlobalScreen', () => {
     });
   });
 
-  it('download button shares a local file or re-downloads a remote record', async () => {
+  it('download button shares a local file or re-downloads from a computer record', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockedListDownloadRecords.mockResolvedValueOnce([
       {

@@ -242,19 +242,19 @@ const MOCK_RECEIVED_ITEMS: ReceivedLibraryMediaItem[] = [
   },
 ];
 
-type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+type SharedFilesPreviewGlobal = typeof globalThis & {
+  __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
 };
 
-function isRemoteResourcesPreviewMode() {
+function isSharedFilesPreviewMode() {
   return (
-    (globalThis as RemoteResourcesPreviewGlobal)
-      .__LYNAVO_REMOTE_RESOURCES_PREVIEW__ === true
+    (globalThis as SharedFilesPreviewGlobal).__LYNAVO_SHARED_FILES_PREVIEW__ ===
+    true
   );
 }
 
 function getPreviewReceivedItems() {
-  return isRemoteResourcesPreviewMode() ? MOCK_RECEIVED_ITEMS : [];
+  return isSharedFilesPreviewMode() ? MOCK_RECEIVED_ITEMS : [];
 }
 
 function getSectionTitle(isoString: string, t: any) {
@@ -1135,7 +1135,7 @@ function SortSheet({
       </Pressable>
       <View style={styles.sheetCard}>
         <Text style={styles.sheetTitle}>
-          {t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}
+          {t('sharedFiles.localComputer.sortTitle') || '排序方式'}
         </Text>
         {options.map(option => {
           const active = option.id === value;
@@ -1213,7 +1213,7 @@ function ReceivedMediaPreviewModal({
             style={styles.mediaPreviewCloseButton}
             accessibilityRole="button"
             accessibilityLabel={
-              t('sharedFiles.remoteAccess.closePreview') || '关闭预览'
+              t('sharedFiles.localComputer.closePreview') || '关闭预览'
             }
             activeOpacity={0.7}
             onPress={onClose}

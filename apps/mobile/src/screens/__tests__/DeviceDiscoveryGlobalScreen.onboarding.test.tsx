@@ -433,13 +433,13 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryAllByText('arrow-down-circle-outline')).toHaveLength(0);
 
     fireEvent.press(screen.getByText('下一步'));
-    expect(screen.getByText('远程访问文件')).toBeTruthy();
+    expect(screen.getByText('电脑文件')).toBeTruthy();
     expect(screen.getByText('6/6')).toBeTruthy();
     expect(screen.getByText('完成')).toBeTruthy();
     expectPreviewText(screen, '手机同步空间');
-    expectPreviewText(screen, '远程访问电脑');
+    expectPreviewText(screen, '电脑文件');
     expectPreviewTestId(screen, 'guide-preview-phone-sync-icon');
-    expectPreviewTestId(screen, 'guide-preview-remote-access-icon');
+    expectPreviewTestId(screen, 'guide-preview-local-computer-icon');
 
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(mockDispatch).not.toHaveBeenCalled();

@@ -105,20 +105,23 @@ describe('OSS commercial-removal locale guards', () => {
     }
   });
 
-  it('keeps shared-files remote access copy local-LAN only', () => {
+  it('keeps shared-files local-computer copy local-LAN only', () => {
     for (const localeName of supportedLocales) {
       const sharedFiles = resources[localeName].translation
         .sharedFiles as Record<string, unknown>;
-      const remoteAccess = sharedFiles.remoteAccess as Record<string, unknown>;
+      const localComputer = sharedFiles.localComputer as Record<
+        string,
+        unknown
+      >;
       const connectionStatus = sharedFiles.connectionStatus as Record<
         string,
         unknown
       >;
 
-      expect(remoteAccess).not.toHaveProperty('desktopLoggedOutTitle');
-      expect(remoteAccess).not.toHaveProperty('desktopLoggedOutSubtitle');
-      expect(remoteAccess).not.toHaveProperty('accountMismatchTitle');
-      expect(remoteAccess).not.toHaveProperty('accountMismatchSubtitle');
+      expect(localComputer).not.toHaveProperty('desktopLoggedOutTitle');
+      expect(localComputer).not.toHaveProperty('desktopLoggedOutSubtitle');
+      expect(localComputer).not.toHaveProperty('accountMismatchTitle');
+      expect(localComputer).not.toHaveProperty('accountMismatchSubtitle');
       expect(connectionStatus).not.toHaveProperty('p2p');
       expect(connectionStatus).not.toHaveProperty('relay');
       expect(connectionStatus).not.toHaveProperty('waking');

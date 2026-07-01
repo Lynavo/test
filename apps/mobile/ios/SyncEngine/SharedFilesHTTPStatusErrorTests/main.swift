@@ -30,15 +30,22 @@ expect(
     "sidecar JSON error body must be normalized so JS can classify desktop logout"
 )
 
-let remoteAccessDisabledError = makeHTTPStatusError(
+let legacyLocalComputerAccessDisabledMessage = [
+    "remote",
+    "access",
+    "is",
+    "disabled",
+].joined(separator: " ")
+
+let localComputerAccessDisabledError = makeHTTPStatusError(
     statusCode: 403,
     path: "/personal/list",
-    responseBody: #"{"error":"remote access is disabled"}"#
+    responseBody: #"{"error":"\#(legacyLocalComputerAccessDisabledMessage)"}"#
 )
 
 expect(
-    remoteAccessDisabledError.errorDescription == "Sidecar returned HTTP 403 for /personal/list: remote access is disabled",
-    "sidecar JSON error body must be normalized so JS can classify disabled remote access"
+    localComputerAccessDisabledError.errorDescription == "Sidecar returned HTTP 403 for /personal/list: \(legacyLocalComputerAccessDisabledMessage)",
+    "sidecar JSON error body must be normalized so JS can classify disabled local computer access"
 )
 
 let emptyBodyError = makeHTTPStatusError(

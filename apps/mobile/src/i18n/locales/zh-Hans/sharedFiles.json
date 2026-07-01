@@ -1,5 +1,5 @@
 {
-  "title": "远端资源",
+  "title": "文件",
   "headerSubtitle": "从手机回看同步素材，也可以进入电脑目录取文件。",
   "phoneSyncSpace": {
     "title": "手机同步空间",
@@ -30,8 +30,8 @@
     "previewFailedTitle": "无法加载预览",
     "previewFailedSubtitle": "请确认电脑在线且文件仍存在。"
   },
-  "remoteAccess": {
-    "title": "远端访问电脑",
+  "localComputer": {
+    "title": "电脑文件",
     "desc": "浏览电脑端共享的目录结构并下载文件",
     "ossDesc": "通过本地局域网浏览已配对电脑的文件，无需订阅或远程隧道。",
     "ossBadge": "局域网",
@@ -50,19 +50,19 @@
     "empty": "目前没有共享资源",
     "rootDirectoryLabel": "用户目录",
     "fallbackDesktopLabel": "当前电脑",
-    "unboundRemoteSubtitle": "尚未连接电脑",
+    "unboundLocalComputerSubtitle": "尚未连接电脑",
     "searchFolderPlaceholder": "搜索当前文件夹",
     "searchFilesPlaceholder": "搜索电脑文件",
-    "loadingTitle": "远端资源加载中",
+    "loadingTitle": "文件加载中",
     "loadingSubtitle": "正在读取电脑端共享目录。",
     "folderLoadingTitle": "文件夹加载中",
     "folderLoadingSubtitle": "正在读取电脑端目录内容。",
-    "connectionStatePrefix": "远端访问连接方式：",
+    "connectionStatePrefix": "电脑连接方式：",
     "networkDisconnectedTitle": "网络断开",
     "networkDisconnectedSubtitle": "当前路径会保留，恢复网络或电脑端在线后可以继续访问。",
     "retryConnection": "重试连接",
-    "remoteAccessDisabledTitle": "局域网共享不可用",
-    "remoteAccessDisabledSubtitle": "请确认已配对电脑在线，并已在本地共享文件夹后重新检查。",
+    "localComputerDisabledTitle": "局域网共享不可用",
+    "localComputerDisabledSubtitle": "请确认已配对电脑在线，并已在本地共享文件夹后重新检查。",
     "recheckPermission": "重新检查",
     "folderLoadErrorTitle": "目录加载失败",
     "folderLoadErrorSubtitle": "无法读取这个共享文件夹，请确认电脑端文件仍然存在。",

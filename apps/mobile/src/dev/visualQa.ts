@@ -13,7 +13,7 @@ type VisualQaRoute = Extract<
   | 'AlbumWorkbench'
   | 'SharedFiles'
   | 'PhoneSyncSpace'
-  | 'RemoteAccess'
+  | 'LocalComputer'
   | 'DownloadRecords'
   | 'History'
   | 'Settings'
@@ -22,8 +22,8 @@ type VisualQaRoute = Extract<
   | 'AutoUploadSettings'
 >;
 
-type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+type SharedFilesPreviewGlobal = typeof globalThis & {
+  __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
 };
 
 type VisualQaNativeConstants = {
@@ -33,7 +33,7 @@ type VisualQaNativeConstants = {
   LYNAVO_VISUAL_QA_EMAIL?: unknown;
   LYNAVO_VISUAL_QA_HOME_EMPTY?: unknown;
   LYNAVO_VISUAL_QA_ROUTE?: unknown;
-  LYNAVO_VISUAL_QA_REMOTE_PREVIEW?: unknown;
+  LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW?: unknown;
   getConstants?: () => VisualQaNativeConstants;
 };
 
@@ -48,7 +48,7 @@ const VISUAL_QA_ROUTE_WHITELIST: ReadonlySet<string> = new Set<VisualQaRoute>([
   'AlbumWorkbench',
   'SharedFiles',
   'PhoneSyncSpace',
-  'RemoteAccess',
+  'LocalComputer',
   'DownloadRecords',
   'History',
   'Settings',
@@ -145,13 +145,12 @@ export function isVisualQaHomeEmptyStateEnabled(): boolean {
   );
 }
 
-export function applyVisualQaRemotePreviewFlag(): void {
+export function applyVisualQaSharedFilesPreviewFlag(): void {
   if (
     isVisualQaEnabled() &&
-    getVisualQaValue('LYNAVO_VISUAL_QA_REMOTE_PREVIEW') === '1'
+    getVisualQaValue('LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW') === '1'
   ) {
-    (
-      globalThis as RemoteResourcesPreviewGlobal
-    ).__LYNAVO_REMOTE_RESOURCES_PREVIEW__ = true;
+    (globalThis as SharedFilesPreviewGlobal).__LYNAVO_SHARED_FILES_PREVIEW__ =
+      true;
   }
 }

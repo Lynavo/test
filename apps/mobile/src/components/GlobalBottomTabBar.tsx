@@ -98,7 +98,7 @@ export function GlobalBottomTabBar({
               activeTab === 'files' && styles.activeTabLabel,
             ]}
           >
-            {t('common.tabs.files') || '远程资源'}
+            {t('common.tabs.files') || '电脑文件'}
           </Text>
         </TouchableOpacity>
 

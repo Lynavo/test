@@ -129,7 +129,7 @@
       "step5Title": "查看最近记录",
       "step5Desc": "从电脑端下载的素材或同步的历史记录会显示在这里。",
       "step5Action": "下一步",
-      "step6Title": "远程访问文件",
+      "step6Title": "电脑文件",
       "step6Desc": "通过手机浏览电脑端的共享文件夹，并快速下载需要的文件。",
       "step6Action": "完成"
     },
@@ -223,10 +223,10 @@
       "syncSpaceDesc": "查看已同步至电脑的文件与上传来源",
       "syncSpaceBadge1": "今日 5 个",
       "syncSpaceBadge2": "保留来源",
-      "remoteAccessTitle": "远程访问电脑",
-      "remoteAccessDesc": "浏览电脑端共享目录并下载文件",
-      "remoteAccessBadge1": "桌面目录",
-      "remoteAccessBadge2": "列表/网格"
+      "localComputerTitle": "电脑文件",
+      "localComputerDesc": "浏览电脑端共享目录并下载文件",
+      "localComputerBadge1": "桌面目录",
+      "localComputerBadge2": "列表/网格"
     }
   }
 }

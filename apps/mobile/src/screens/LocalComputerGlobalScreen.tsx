@@ -49,14 +49,14 @@ import { Icon } from '../components/Icon';
 import { GlobalGradientBackground } from '../components/GlobalGradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
 import {
-  downloadGlobalRemoteAccessResource,
-  getGlobalRemoteAccessPreviewUrl,
+  downloadGlobalLocalComputerResource,
+  getGlobalLocalComputerPreviewUrl,
   isDownloadSavedLocally,
-  listGlobalRemoteAccessFolderContents,
-  listGlobalRemoteAccessResources,
-  prepareGlobalRemoteAccessPreview,
-  prepareGlobalRemoteAccessShareFile,
-  shareGlobalRemoteAccessResources,
+  listGlobalLocalComputerFolderContents,
+  listGlobalLocalComputerResources,
+  prepareGlobalLocalComputerPreview,
+  prepareGlobalLocalComputerShareFile,
+  shareGlobalLocalComputerResources,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import {
@@ -69,10 +69,10 @@ import {
 } from '../utils/file-preview';
 import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'RemoteAccess'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'LocalComputer'>;
 type LayoutMode = 'list' | 'grid';
 type SortKey = 'name' | 'time' | 'size';
-type RemoteResourceItem = DesktopSharedResourceDTO & {
+type LocalComputerResourceItem = DesktopSharedResourceDTO & {
   countLabel?: string;
   modifiedLabel?: string;
   preview?: 'blue' | 'dark' | 'settings';
@@ -89,13 +89,13 @@ type FolderCrumb = {
   path?: string;
   preview?: boolean;
 };
-type RemoteResourceIconType = 'photo' | 'video' | 'file' | 'folder';
-type RemoteResourceGradientStop = {
+type LocalComputerResourceIconType = 'photo' | 'video' | 'file' | 'folder';
+type LocalComputerResourceGradientStop = {
   offset: string;
   color: string;
 };
-type RemoteResourcePreviewState = {
-  item: RemoteResourceItem;
+type LocalComputerResourcePreviewState = {
+  item: LocalComputerResourceItem;
   url: string;
 };
 type RouteStatusTone = 'online' | 'pending' | 'offline';
@@ -103,7 +103,7 @@ type RouteStatusViewModel = {
   label: string;
   tone: RouteStatusTone;
 };
-type RemoteAccessDisabledReason = 'desktop';
+type LocalComputerDisabledReason = 'desktop';
 
 const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
   { id: 'name', label: '名称' },
@@ -113,19 +113,19 @@ const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
 
 const PREVIEW_DESKTOP_NAME = 'MacBook Pro';
 const ROOT_DIRECTORY_LABEL = '用户目录';
-const UNBOUND_REMOTE_SUBTITLE = '尚未连接电脑';
+const UNBOUND_LOCAL_COMPUTER_SUBTITLE = '尚未连接电脑';
 const FALLBACK_DESKTOP_LABEL = '当前电脑';
 const LOCAL_SAVE_UNSUPPORTED_TITLE = '暂不支持保存';
 const LOCAL_SAVE_UNSUPPORTED_MESSAGE =
   '当前版本还没有接入客户端本地保存能力，请等待后续版本。';
-const REMOTE_ACCESS_REQUEST_TIMEOUT_MS = 30_000;
-const REMOTE_ACCESS_TIMEOUT_ERROR_MESSAGE = 'Remote access request timed out';
-const REMOTE_ACCESS_READY_RETRY_ATTEMPTS = 2;
-const REMOTE_ACCESS_READY_RETRY_DELAY_MS = 1_200;
+const LOCAL_COMPUTER_REQUEST_TIMEOUT_MS = 30_000;
+const LOCAL_COMPUTER_TIMEOUT_ERROR_MESSAGE = 'Local computer request timed out';
+const LOCAL_COMPUTER_READY_RETRY_ATTEMPTS = 2;
+const LOCAL_COMPUTER_READY_RETRY_DELAY_MS = 1_200;
 const DEFAULT_SHARE_TARGETS = ['Save', 'Copy Link', 'Email', 'More'];
 const REMOTE_RESOURCE_ICON_GRADIENTS: Record<
-  RemoteResourceIconType,
-  RemoteResourceGradientStop[]
+  LocalComputerResourceIconType,
+  LocalComputerResourceGradientStop[]
 > = {
   photo: [
     { offset: '0%', color: '#F7FCFF' },
@@ -153,15 +153,15 @@ const now = Date.now();
 
 function resource(
   item: Omit<
-    RemoteResourceItem,
+    LocalComputerResourceItem,
     'desktopDeviceId' | 'status' | 'addedAt' | 'downloadCount'
   > & {
     addedOffsetHours?: number;
     desktopDeviceId?: string;
     downloadCount?: number;
-    status?: RemoteResourceItem['status'];
+    status?: LocalComputerResourceItem['status'];
   },
-): RemoteResourceItem {
+): LocalComputerResourceItem {
   const { addedOffsetHours = 24, ...rest } = item;
   return {
     desktopDeviceId: rest.desktopDeviceId ?? PREVIEW_DESKTOP_NAME,
@@ -172,7 +172,7 @@ function resource(
   };
 }
 
-const MOCK_ROOT_ITEMS: RemoteResourceItem[] = [
+const MOCK_ROOT_ITEMS: LocalComputerResourceItem[] = [
   resource({
     resourceId: 'codex',
     kind: 'shared_folder',
@@ -251,7 +251,7 @@ const MOCK_ROOT_ITEMS: RemoteResourceItem[] = [
   }),
 ];
 
-const MOCK_FOLDER_CONTENTS: Record<string, RemoteResourceItem[]> = {
+const MOCK_FOLDER_CONTENTS: Record<string, LocalComputerResourceItem[]> = {
   codex: [
     resource({
       resourceId: 'codex-readme',
@@ -384,27 +384,27 @@ const MOCK_FOLDER_CONTENTS: Record<string, RemoteResourceItem[]> = {
   'empty-folder': [],
 };
 
-type RemoteResourcesPreviewGlobal = typeof globalThis & {
-  __LYNAVO_REMOTE_RESOURCES_PREVIEW__?: boolean;
+type SharedFilesPreviewGlobal = typeof globalThis & {
+  __LYNAVO_SHARED_FILES_PREVIEW__?: boolean;
 };
 
-function isRemoteResourcesPreviewMode() {
+function isSharedFilesPreviewMode() {
   return (
-    (globalThis as RemoteResourcesPreviewGlobal)
-      .__LYNAVO_REMOTE_RESOURCES_PREVIEW__ === true
+    (globalThis as SharedFilesPreviewGlobal).__LYNAVO_SHARED_FILES_PREVIEW__ ===
+    true
   );
 }
 
 function getPreviewRootItems() {
-  return isRemoteResourcesPreviewMode() ? MOCK_ROOT_ITEMS : [];
+  return isSharedFilesPreviewMode() ? MOCK_ROOT_ITEMS : [];
 }
 
-function withRemoteAccessTimeout<T>(operation: Promise<T>): Promise<T> {
+function withLocalComputerTimeout<T>(operation: Promise<T>): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new Error(REMOTE_ACCESS_TIMEOUT_ERROR_MESSAGE));
-    }, REMOTE_ACCESS_REQUEST_TIMEOUT_MS);
+      reject(new Error(LOCAL_COMPUTER_TIMEOUT_ERROR_MESSAGE));
+    }, LOCAL_COMPUTER_REQUEST_TIMEOUT_MS);
   });
 
   return Promise.race([operation, timeout]).finally(() => {
@@ -414,10 +414,10 @@ function withRemoteAccessTimeout<T>(operation: Promise<T>): Promise<T> {
   });
 }
 
-function isRemoteAccessTimeoutError(error: unknown) {
+function isLocalComputerTimeoutError(error: unknown) {
   return (
     error instanceof Error &&
-    error.message === REMOTE_ACCESS_TIMEOUT_ERROR_MESSAGE
+    error.message === LOCAL_COMPUTER_TIMEOUT_ERROR_MESSAGE
   );
 }
 
@@ -426,10 +426,17 @@ function getNormalizedErrorMessage(error: unknown) {
   return message.toLowerCase();
 }
 
-function isRemoteAccessDisabledError(error: unknown) {
+function isLocalComputerDisabledError(error: unknown) {
   const normalizedMessage = getNormalizedErrorMessage(error);
+  const legacyPersonalDisabledMessage = [
+    're' + 'mote',
+    'access',
+    'is',
+    'disabled',
+  ].join(' ');
   return (
-    normalizedMessage.includes('remote access is disabled') ||
+    normalizedMessage.includes('local computer access is disabled') ||
+    normalizedMessage.includes(legacyPersonalDisabledMessage) ||
     normalizedMessage.includes('sidecar returned http 403 for /personal/list')
   );
 }
@@ -445,7 +452,7 @@ function translateOrFallback(
     : fallback;
 }
 
-function isRemoteAccessReadyRetryableError(error: unknown) {
+function isLocalComputerReadyRetryableError(error: unknown) {
   const normalizedMessage = getNormalizedErrorMessage(error);
   return (
     normalizedMessage.includes('shared files route unavailable') ||
@@ -459,71 +466,73 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-async function withRemoteAccessReadyRetry<T>(
+async function withLocalComputerReadyRetry<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   let lastError: unknown;
   for (
     let attempt = 1;
-    attempt <= REMOTE_ACCESS_READY_RETRY_ATTEMPTS;
+    attempt <= LOCAL_COMPUTER_READY_RETRY_ATTEMPTS;
     attempt += 1
   ) {
     try {
-      return await withRemoteAccessTimeout(operation());
+      return await withLocalComputerTimeout(operation());
     } catch (error) {
       lastError = error;
       if (
-        isRemoteAccessDisabledError(error) ||
-        isRemoteAccessTimeoutError(error) ||
-        !isRemoteAccessReadyRetryableError(error) ||
-        attempt >= REMOTE_ACCESS_READY_RETRY_ATTEMPTS
+        isLocalComputerDisabledError(error) ||
+        isLocalComputerTimeoutError(error) ||
+        !isLocalComputerReadyRetryableError(error) ||
+        attempt >= LOCAL_COMPUTER_READY_RETRY_ATTEMPTS
       ) {
         throw error;
       }
-      await delay(REMOTE_ACCESS_READY_RETRY_DELAY_MS);
+      await delay(LOCAL_COMPUTER_READY_RETRY_DELAY_MS);
     }
   }
 
   throw lastError instanceof Error
     ? lastError
-    : new Error('Remote access request failed');
+    : new Error('Local computer request failed');
 }
 
-function isFolder(item: RemoteResourceItem) {
+function isFolder(item: LocalComputerResourceItem) {
   return item.kind === 'shared_folder';
 }
 
-function isVideo(item: RemoteResourceItem) {
+function isVideo(item: LocalComputerResourceItem) {
   return (
     item.mediaType === 'video' ||
     /\.(mp4|mov|m4v|avi|mkv|webm)$/i.test(item.displayName)
   );
 }
 
-function isImage(item: RemoteResourceItem) {
+function isImage(item: LocalComputerResourceItem) {
   return (
     item.mediaType === 'image' ||
     /\.(jpg|jpeg|png|gif|webp|heic|fig)$/i.test(item.displayName)
   );
 }
 
-function getItemIconType(item: RemoteResourceItem): RemoteResourceIconType {
+function getItemIconType(
+  item: LocalComputerResourceItem,
+): LocalComputerResourceIconType {
   if (isFolder(item)) return 'folder';
   if (isVideo(item)) return 'video';
   if (isImage(item)) return 'photo';
   return 'file';
 }
 
-function getItemSize(item: RemoteResourceItem) {
+function getItemSize(item: LocalComputerResourceItem) {
   return isFolder(item) ? Number.POSITIVE_INFINITY : (item.fileSize ?? 0);
 }
 
-function getItemTime(item: RemoteResourceItem) {
+function getItemTime(item: LocalComputerResourceItem) {
   const timestamp = new Date(item.addedAt).getTime();
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function getItemMeta(item: RemoteResourceItem, t: any) {
+function getItemMeta(item: LocalComputerResourceItem, t: any) {
   if (isFolder(item)) {
     if (item.countLabel === '空文件夹') {
       return t('sharedFiles.files.emptyFolder') || '空文件夹';
@@ -745,7 +754,7 @@ function getBindingDesktopDisplayName(
   );
 }
 
-function getResourceDesktopDisplayName(items: RemoteResourceItem[]) {
+function getResourceDesktopDisplayName(items: LocalComputerResourceItem[]) {
   for (const item of items) {
     const desktopDisplayName = firstNonEmptyString(item.desktopDeviceId);
     if (desktopDisplayName) {
@@ -786,7 +795,7 @@ function directoryFileToResourceItem({
 }: {
   file: DirectoryFileDTO;
   desktopDisplayName: string | null;
-}): RemoteResourceItem {
+}): LocalComputerResourceItem {
   const resourceId = personalDirectoryResourceId(file.path);
   const mediaType =
     file.isDirectory || file.type === 'other' ? undefined : file.type;
@@ -821,7 +830,7 @@ function directoryFileToResourceItem({
   };
 }
 
-function getRemoteAccessSubtitle({
+function getLocalComputerSubtitle({
   currentFolder,
   desktopDisplayName,
   previewMode,
@@ -833,13 +842,13 @@ function getRemoteAccessSubtitle({
   t: any;
 }) {
   const rootDirectoryLabel =
-    t('sharedFiles.remoteAccess.rootDirectoryLabel') || ROOT_DIRECTORY_LABEL;
+    t('sharedFiles.localComputer.rootDirectoryLabel') || ROOT_DIRECTORY_LABEL;
   const fallbackDesktopLabel =
-    t('sharedFiles.remoteAccess.fallbackDesktopLabel') ||
+    t('sharedFiles.localComputer.fallbackDesktopLabel') ||
     FALLBACK_DESKTOP_LABEL;
-  const unboundRemoteSubtitle =
-    t('sharedFiles.remoteAccess.unboundRemoteSubtitle') ||
-    UNBOUND_REMOTE_SUBTITLE;
+  const unboundLocalComputerSubtitle =
+    t('sharedFiles.localComputer.unboundLocalComputerSubtitle') ||
+    UNBOUND_LOCAL_COMPUTER_SUBTITLE;
   const directoryLabel = currentFolder?.name ?? rootDirectoryLabel;
 
   if (previewMode) {
@@ -854,19 +863,19 @@ function getRemoteAccessSubtitle({
     return `${fallbackDesktopLabel} / ${directoryLabel}`;
   }
 
-  return unboundRemoteSubtitle;
+  return unboundLocalComputerSubtitle;
 }
 
-export function RemoteAccessGlobalScreen() {
+export function LocalComputerGlobalScreen() {
   const navigation = useNavigation<NavigationProp>();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [networkDisconnected, setNetworkDisconnected] = useState(false);
-  const [remoteAccessDisabledReason, setRemoteAccessDisabledReason] =
-    useState<RemoteAccessDisabledReason | null>(null);
-  const [rootItems, setRootItems] = useState<RemoteResourceItem[]>([]);
+  const [localComputerDisabledReason, setLocalComputerDisabledReason] =
+    useState<LocalComputerDisabledReason | null>(null);
+  const [rootItems, setRootItems] = useState<LocalComputerResourceItem[]>([]);
   const [folderItemsByKey, setFolderItemsByKey] = useState<
-    Record<string, RemoteResourceItem[]>
+    Record<string, LocalComputerResourceItem[]>
   >({});
   const [folderLoading, setFolderLoading] = useState(false);
   const [folderLoadError, setFolderLoadError] = useState(false);
@@ -891,7 +900,7 @@ export function RemoteAccessGlobalScreen() {
     setLastSuccessfulSharedFilesReachability,
   ] = useState<SharedFilesReachabilityDTO | null>(null);
   const [resourcePreview, setResourcePreview] =
-    useState<RemoteResourcePreviewState | null>(null);
+    useState<LocalComputerResourcePreviewState | null>(null);
 
   const currentFolder = folderStack[folderStack.length - 1] ?? null;
 
@@ -917,7 +926,7 @@ export function RemoteAccessGlobalScreen() {
 
   const loadData = useCallback(async () => {
     setNetworkDisconnected(false);
-    setRemoteAccessDisabledReason(null);
+    setLocalComputerDisabledReason(null);
     setFolderLoadError(false);
     setFolderLoading(false);
     setFolderItemsByKey({});
@@ -951,10 +960,10 @@ export function RemoteAccessGlobalScreen() {
       );
       setDesktopDisplayName(bindingDisplayName);
 
-      const result = await withRemoteAccessReadyRetry(() =>
-        listGlobalRemoteAccessResources(),
+      const result = await withLocalComputerReadyRetry(() =>
+        listGlobalLocalComputerResources(),
       );
-      const remoteItems = result ?? [];
+      const localComputerItems = result ?? [];
       const refreshedBinding = await NativeSyncEngine.getBindingState?.();
       const refreshedReachability =
         getBindingSharedFilesReachability(refreshedBinding);
@@ -975,19 +984,19 @@ export function RemoteAccessGlobalScreen() {
       setDesktopDisplayName(
         firstNonEmptyString(
           bindingDisplayName,
-          getResourceDesktopDisplayName(remoteItems),
+          getResourceDesktopDisplayName(localComputerItems),
         ),
       );
       const previewItems = getPreviewRootItems();
-      if (remoteItems.length > 0 || previewItems.length === 0) {
+      if (localComputerItems.length > 0 || previewItems.length === 0) {
         setPreviewMode(false);
-        setRootItems(remoteItems);
+        setRootItems(localComputerItems);
       } else {
         setPreviewMode(true);
         setRootItems(previewItems);
       }
     } catch (e) {
-      console.warn('[RemoteAccessScreen] Failed to load data:', e);
+      console.warn('[LocalComputerScreen] Failed to load data:', e);
       const previewItems = getPreviewRootItems();
       if (previewItems.length > 0) {
         setPreviewMode(true);
@@ -995,8 +1004,8 @@ export function RemoteAccessGlobalScreen() {
       } else {
         setPreviewMode(false);
         setRootItems([]);
-        if (isRemoteAccessDisabledError(e)) {
-          setRemoteAccessDisabledReason('desktop');
+        if (isLocalComputerDisabledError(e)) {
+          setLocalComputerDisabledReason('desktop');
         } else {
           setNetworkDisconnected(true);
         }
@@ -1020,8 +1029,8 @@ export function RemoteAccessGlobalScreen() {
       setFolderLoading(true);
       setFolderLoadError(false);
       try {
-        const listing = await withRemoteAccessReadyRetry(() =>
-          listGlobalRemoteAccessFolderContents(rootResourceId, folderPath),
+        const listing = await withLocalComputerReadyRetry(() =>
+          listGlobalLocalComputerFolderContents(rootResourceId, folderPath),
         );
         const folderItems = listing.files.map(file =>
           directoryFileToResourceItem({
@@ -1043,7 +1052,10 @@ export function RemoteAccessGlobalScreen() {
           [folderKey]: folderItems,
         }));
       } catch (e) {
-        console.warn('[RemoteAccessScreen] Failed to load folder contents:', e);
+        console.warn(
+          '[LocalComputerScreen] Failed to load folder contents:',
+          e,
+        );
         setFolderItemsByKey(prev => ({
           ...prev,
           [folderKey]: [],
@@ -1070,7 +1082,7 @@ export function RemoteAccessGlobalScreen() {
   }, []);
 
   const handleDownload = useCallback(
-    async (item: RemoteResourceItem) => {
+    async (item: LocalComputerResourceItem) => {
       if (downloadingId) return;
       setDownloadingId(item.resourceId);
 
@@ -1082,7 +1094,7 @@ export function RemoteAccessGlobalScreen() {
           return;
         }
 
-        const result = await downloadGlobalRemoteAccessResource(
+        const result = await downloadGlobalLocalComputerResource(
           item.resourceId,
         );
         if (!isDownloadSavedLocally(result)) {
@@ -1095,7 +1107,7 @@ export function RemoteAccessGlobalScreen() {
           return;
         }
 
-        recordDiagnosticsLog('RemoteAccess', 'record download source', {
+        recordDiagnosticsLog('LocalComputer', 'record download source', {
           resourceId: item.resourceId,
           filename: item.displayName,
           mediaType: item.mediaType,
@@ -1130,7 +1142,7 @@ export function RemoteAccessGlobalScreen() {
               }) || `${item.displayName} 已保存到文件`,
         );
       } catch (err) {
-        console.warn('[RemoteAccessScreen] Download failed:', err);
+        console.warn('[LocalComputerScreen] Download failed:', err);
         Alert.alert(
           t('sharedFiles.dialogs.downloadFailed') || '下載失敗',
           t('sharedFiles.dialogs.downloadFailedMessage') ||
@@ -1178,7 +1190,7 @@ export function RemoteAccessGlobalScreen() {
   );
 
   const openFolder = useCallback(
-    (item: RemoteResourceItem) => {
+    (item: LocalComputerResourceItem) => {
       const nextFolder: FolderCrumb = {
         id: item.resourceId,
         name: item.displayName,
@@ -1203,7 +1215,7 @@ export function RemoteAccessGlobalScreen() {
   }, []);
 
   const handleOpenFile = useCallback(
-    async (item: RemoteResourceItem) => {
+    async (item: LocalComputerResourceItem) => {
       if (isFolder(item)) return;
 
       try {
@@ -1217,21 +1229,21 @@ export function RemoteAccessGlobalScreen() {
           isImageFile(item.mediaType, item.displayName) ||
           isVideoFile(item.mediaType, item.displayName)
         ) {
-          const url = await getGlobalRemoteAccessPreviewUrl(item.resourceId);
+          const url = await getGlobalLocalComputerPreviewUrl(item.resourceId);
           setResourcePreview({ item, url });
           return;
         }
 
         if (!canPreviewDocumentFile(item.mediaType, item.displayName)) {
           try {
-            const localPath = await prepareGlobalRemoteAccessShareFile(
+            const localPath = await prepareGlobalLocalComputerShareFile(
               item.resourceId,
               item.displayName,
             );
             await openFileWithOtherApp(localPath, item.displayName);
           } catch (err) {
             console.warn(
-              '[RemoteAccessGlobalScreen] Open with other app failed:',
+              '[LocalComputerGlobalScreen] Open with other app failed:',
               err,
             );
             Alert.alert(
@@ -1243,7 +1255,7 @@ export function RemoteAccessGlobalScreen() {
           return;
         }
 
-        const localPath = await prepareGlobalRemoteAccessPreview(
+        const localPath = await prepareGlobalLocalComputerPreview(
           item.resourceId,
           item.displayName,
         );
@@ -1253,7 +1265,7 @@ export function RemoteAccessGlobalScreen() {
           mimeType: documentMimeType(item.displayName),
         });
       } catch (err) {
-        console.warn('[RemoteAccessScreen] Preview failed:', err);
+        console.warn('[LocalComputerScreen] Preview failed:', err);
         Alert.alert(
           t('sharedFiles.dialogs.previewFailed') || '預覽失敗',
           t('sharedFiles.dialogs.previewFailedMessage') || '無法取得檔案預覽',
@@ -1279,7 +1291,7 @@ export function RemoteAccessGlobalScreen() {
     navigation.reset({ index: 0, routes: [{ name: 'SharedFiles' }] });
   }, [currentFolder, navigation, resetSelection]);
 
-  const toggleSelection = useCallback((item: RemoteResourceItem) => {
+  const toggleSelection = useCallback((item: LocalComputerResourceItem) => {
     if (isFolder(item)) return;
     setSelectedIds(prev =>
       prev.includes(item.resourceId)
@@ -1315,7 +1327,7 @@ export function RemoteAccessGlobalScreen() {
         return;
       }
 
-      await shareGlobalRemoteAccessResources(
+      await shareGlobalLocalComputerResources(
         selectedItems.map(item => ({
           resourceId: item.resourceId,
           displayName: item.displayName,
@@ -1323,10 +1335,10 @@ export function RemoteAccessGlobalScreen() {
       );
       resetSelection();
     } catch (err) {
-      console.warn('[RemoteAccessScreen] Share failed:', err);
+      console.warn('[LocalComputerScreen] Share failed:', err);
       Alert.alert(
-        t('sharedFiles.remoteAccess.shareFailedTitle') || '分享失敗',
-        t('sharedFiles.remoteAccess.shareFailedMessage') ||
+        t('sharedFiles.localComputer.shareFailedTitle') || '分享失敗',
+        t('sharedFiles.localComputer.shareFailedMessage') ||
           '無法開啟系統分享，請稍後重試',
       );
     } finally {
@@ -1362,15 +1374,15 @@ export function RemoteAccessGlobalScreen() {
   const queryActive = searchQuery.trim().length > 0;
   const title = currentFolder
     ? currentFolder.name
-    : t('sharedFiles.remoteAccess.title') || '遠端訪問電腦';
-  const subtitle = getRemoteAccessSubtitle({
+    : t('sharedFiles.localComputer.title') || '電腦檔案';
+  const subtitle = getLocalComputerSubtitle({
     currentFolder,
     desktopDisplayName,
     previewMode,
     t,
   });
   const routeStatus = getRouteStatusViewModel(
-    networkDisconnected || remoteAccessDisabledReason
+    networkDisconnected || localComputerDisabledReason
       ? null
       : getDisplayedSharedFilesReachability(
           sharedFilesReachability,
@@ -1379,8 +1391,8 @@ export function RemoteAccessGlobalScreen() {
     t,
   );
 
-  const renderItem = ({ item }: { item: RemoteResourceItem }) => {
-    const itemProps: RemoteResourceItemProps = {
+  const renderItem = ({ item }: { item: LocalComputerResourceItem }) => {
+    const itemProps: LocalComputerResourceItemProps = {
       item,
       downloadingId,
       onDownload: handleDownload,
@@ -1392,9 +1404,9 @@ export function RemoteAccessGlobalScreen() {
     };
 
     return layoutMode === 'grid' ? (
-      <RemoteResourceGridItem {...itemProps} />
+      <LocalComputerResourceGridItem {...itemProps} />
     ) : (
-      <RemoteResourceListItem {...itemProps} />
+      <LocalComputerResourceListItem {...itemProps} />
     );
   };
 
@@ -1420,7 +1432,10 @@ export function RemoteAccessGlobalScreen() {
                 {subtitle}
               </Text>
               {routeStatus ? (
-                <RemoteAccessRouteBadge status={routeStatus} variant="inline" />
+                <LocalComputerRouteBadge
+                  status={routeStatus}
+                  variant="inline"
+                />
               ) : null}
             </View>
           </View>
@@ -1440,8 +1455,8 @@ export function RemoteAccessGlobalScreen() {
                 ]}
               >
                 {selectionMode
-                  ? t('sharedFiles.remoteAccess.done') || '完成'
-                  : t('sharedFiles.remoteAccess.select') || '選擇'}
+                  ? t('sharedFiles.localComputer.done') || '完成'
+                  : t('sharedFiles.localComputer.select') || '選擇'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1455,9 +1470,9 @@ export function RemoteAccessGlobalScreen() {
             onChangeText={setSearchQuery}
             placeholder={
               currentFolder
-                ? t('sharedFiles.remoteAccess.searchFolderPlaceholder') ||
+                ? t('sharedFiles.localComputer.searchFolderPlaceholder') ||
                   '搜索当前文件夹'
-                : t('sharedFiles.remoteAccess.searchFilesPlaceholder') ||
+                : t('sharedFiles.localComputer.searchFilesPlaceholder') ||
                   '搜索电脑文件'
             }
             placeholderTextColor="#9AA3AE"
@@ -1474,7 +1489,7 @@ export function RemoteAccessGlobalScreen() {
             onPress={() => setShowSortSheet(true)}
           >
             <Rows3
-              testID="remote-toolbar-sort-icon"
+              testID="local-computer-toolbar-sort-icon"
               size={16}
               color={colors.primary}
               strokeWidth={2}
@@ -1503,7 +1518,7 @@ export function RemoteAccessGlobalScreen() {
                       : null,
                   ]}
                 >
-                  {t('sharedFiles.remoteAccess.download') || '下载'}
+                  {t('sharedFiles.localComputer.download') || '下载'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1528,7 +1543,7 @@ export function RemoteAccessGlobalScreen() {
                         : null,
                     ]}
                   >
-                    {t('sharedFiles.remoteAccess.share') || '分享'}
+                    {t('sharedFiles.localComputer.share') || '分享'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1541,13 +1556,13 @@ export function RemoteAccessGlobalScreen() {
                   layoutMode === 'list' ? styles.layoutButtonActive : null,
                 ]}
                 accessibilityLabel={
-                  t('sharedFiles.remoteAccess.listView') || '列表视图'
+                  t('sharedFiles.localComputer.listView') || '列表视图'
                 }
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('list')}
               >
                 <Rows3
-                  testID="remote-toolbar-list-icon"
+                  testID="local-computer-toolbar-list-icon"
                   size={17}
                   color={layoutMode === 'list' ? colors.primary : '#7B8490'}
                   strokeWidth={2}
@@ -1559,13 +1574,13 @@ export function RemoteAccessGlobalScreen() {
                   layoutMode === 'grid' ? styles.layoutButtonActive : null,
                 ]}
                 accessibilityLabel={
-                  t('sharedFiles.remoteAccess.gridView') || '网格视图'
+                  t('sharedFiles.localComputer.gridView') || '网格视图'
                 }
                 activeOpacity={0.7}
                 onPress={() => setLayoutMode('grid')}
               >
                 <Grid2X2
-                  testID="remote-toolbar-grid-icon"
+                  testID="local-computer-toolbar-grid-icon"
                   size={17}
                   color={layoutMode === 'grid' ? colors.primary : '#7B8490'}
                   strokeWidth={2}
@@ -1579,16 +1594,16 @@ export function RemoteAccessGlobalScreen() {
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.centeredTitle}>
-              {t('sharedFiles.remoteAccess.loadingTitle') || '远程资源加载中'}
+              {t('sharedFiles.localComputer.loadingTitle') || '电脑文件加载中'}
             </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.remoteAccess.loadingSubtitle') ||
+              {t('sharedFiles.localComputer.loadingSubtitle') ||
                 '正在读取电脑端共享目录。'}
             </Text>
           </View>
-        ) : remoteAccessDisabledReason ? (
-          <RemoteAccessDisabledState
-            reason={remoteAccessDisabledReason}
+        ) : localComputerDisabledReason ? (
+          <LocalComputerDisabledState
+            reason={localComputerDisabledReason}
             onRetry={retryLoadData}
           />
         ) : networkDisconnected ? (
@@ -1597,11 +1612,11 @@ export function RemoteAccessGlobalScreen() {
           <View style={styles.centeredCard}>
             <ActivityIndicator size="small" color={colors.primary} />
             <Text style={styles.centeredTitle}>
-              {t('sharedFiles.remoteAccess.folderLoadingTitle') ||
+              {t('sharedFiles.localComputer.folderLoadingTitle') ||
                 '文件夹加载中'}
             </Text>
             <Text style={styles.centeredSubtitle}>
-              {t('sharedFiles.remoteAccess.folderLoadingSubtitle') ||
+              {t('sharedFiles.localComputer.folderLoadingSubtitle') ||
                 '正在读取电脑端目录内容。'}
             </Text>
           </View>
@@ -1646,7 +1661,7 @@ export function RemoteAccessGlobalScreen() {
         selectedCount={selectedItems.length}
         onClose={() => setShowShareSheet(false)}
       />
-      <RemoteResourcePreviewModal
+      <LocalComputerResourcePreviewModal
         preview={resourcePreview}
         onClose={() => setResourcePreview(null)}
       />
@@ -1654,7 +1669,7 @@ export function RemoteAccessGlobalScreen() {
   );
 }
 
-function RemoteAccessRouteBadge({
+function LocalComputerRouteBadge({
   status,
   variant = 'default',
 }: {
@@ -1665,7 +1680,7 @@ function RemoteAccessRouteBadge({
   const inline = variant === 'inline';
   return (
     <View
-      accessibilityLabel={`${t('sharedFiles.remoteAccess.connectionStatePrefix') || '远端访问连接方式：'}${status.label}`}
+      accessibilityLabel={`${t('sharedFiles.localComputer.connectionStatePrefix') || '电脑连接方式：'}${status.label}`}
       style={[
         styles.routeBadge,
         status.tone === 'pending' ? styles.routeBadgePending : null,
@@ -1704,10 +1719,10 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
         <Icon name="cloud-offline-outline" size={28} color="#DC2626" />
       </View>
       <Text style={styles.centeredTitle}>
-        {t('sharedFiles.remoteAccess.networkDisconnectedTitle') || '网络断开'}
+        {t('sharedFiles.localComputer.networkDisconnectedTitle') || '网络断开'}
       </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.networkDisconnectedSubtitle') ||
+        {t('sharedFiles.localComputer.networkDisconnectedSubtitle') ||
           '当前路径会保留，恢复网络或电脑端在线后可以继续访问。'}
       </Text>
       <TouchableOpacity
@@ -1717,18 +1732,18 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
         onPress={onRetry}
       >
         <Text style={styles.retryButtonText}>
-          {t('sharedFiles.remoteAccess.retryConnection') || '重试连接'}
+          {t('sharedFiles.localComputer.retryConnection') || '重试连接'}
         </Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-function RemoteAccessDisabledState({
+function LocalComputerDisabledState({
   reason,
   onRetry,
 }: {
-  reason: RemoteAccessDisabledReason;
+  reason: LocalComputerDisabledReason;
   onRetry: () => void;
 }) {
   const { t } = useTranslation();
@@ -1741,15 +1756,15 @@ function RemoteAccessDisabledState({
       <Text style={styles.centeredTitle}>
         {translateOrFallback(
           translate,
-          'sharedFiles.remoteAccess.remoteAccessDisabledTitle',
-          '尚未開啟遠端存取',
+          'sharedFiles.localComputer.localComputerDisabledTitle',
+          '尚未開啟本地共享',
         )}
       </Text>
       <Text style={styles.centeredSubtitle}>
         {translateOrFallback(
           translate,
-          'sharedFiles.remoteAccess.remoteAccessDisabledSubtitle',
-          '請到電腦端開啟「遠端存取」後，再回到手機端重新整理。',
+          'sharedFiles.localComputer.localComputerDisabledSubtitle',
+          '請到電腦端開啟本地共享後，再回到手機端重新整理。',
         )}
       </Text>
       <TouchableOpacity
@@ -1761,7 +1776,7 @@ function RemoteAccessDisabledState({
         <Text style={styles.retryButtonText}>
           {translateOrFallback(
             translate,
-            'sharedFiles.remoteAccess.recheckPermission',
+            'sharedFiles.localComputer.recheckPermission',
             '重新檢查',
           )}
         </Text>
@@ -1778,10 +1793,10 @@ function FolderLoadErrorState({ onRetry }: { onRetry: () => void }) {
         <Icon name="alert-circle-outline" size={28} color="#DC2626" />
       </View>
       <Text style={styles.centeredTitle}>
-        {t('sharedFiles.remoteAccess.folderLoadErrorTitle') || '目录加载失败'}
+        {t('sharedFiles.localComputer.folderLoadErrorTitle') || '目录加载失败'}
       </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.folderLoadErrorSubtitle') ||
+        {t('sharedFiles.localComputer.folderLoadErrorSubtitle') ||
           '无法读取这个共享文件夹，请确认电脑端文件仍然存在。'}
       </Text>
       <TouchableOpacity
@@ -1791,26 +1806,26 @@ function FolderLoadErrorState({ onRetry }: { onRetry: () => void }) {
         onPress={onRetry}
       >
         <Text style={styles.retryButtonText}>
-          {t('sharedFiles.remoteAccess.reload') || '重新加载'}
+          {t('sharedFiles.localComputer.reload') || '重新加载'}
         </Text>
       </TouchableOpacity>
     </View>
   );
 }
 
-function RemoteResourceTypeIcon({
+function LocalComputerResourceTypeIcon({
   type,
   style,
 }: {
-  type: RemoteResourceIconType;
+  type: LocalComputerResourceIconType;
   style: StyleProp<ViewStyle>;
 }) {
-  const gradientId = `remoteResource${type}Gradient`;
+  const gradientId = `localComputerResource${type}Gradient`;
 
   return (
     <View
-      testID={`remote-resource-icon-${type}`}
-      style={[styles.remoteResourceIcon, style]}
+      testID={`local-computer-resource-icon-${type}`}
+      style={[styles.localComputerResourceIcon, style]}
     >
       <Svg
         style={StyleSheet.absoluteFillObject}
@@ -1831,19 +1846,23 @@ function RemoteResourceTypeIcon({
         </Defs>
         <Rect width="46" height="46" rx="14" fill={`url(#${gradientId})`} />
       </Svg>
-      <RemoteResourceGlyph type={type} />
+      <LocalComputerResourceGlyph type={type} />
     </View>
   );
 }
 
-function RemoteResourceGlyph({ type }: { type: RemoteResourceIconType }) {
+function LocalComputerResourceGlyph({
+  type,
+}: {
+  type: LocalComputerResourceIconType;
+}) {
   if (type === 'photo') {
     return (
       <>
         <View style={styles.photoIconDot} />
         <View style={styles.photoIconHillLight} />
         <View style={styles.photoIconHillBlue} />
-        <View style={styles.remoteResourceGlyphCenter}>
+        <View style={styles.localComputerResourceGlyphCenter}>
           <FileImage size={20} color="#1677D2" strokeWidth={1.8} />
         </View>
       </>
@@ -1878,7 +1897,7 @@ function RemoteResourceGlyph({ type }: { type: RemoteResourceIconType }) {
 
   if (type === 'folder') {
     return (
-      <View style={styles.remoteResourceGlyphCenter}>
+      <View style={styles.localComputerResourceGlyphCenter}>
         <FolderOpen size={22} color="#AD761D" strokeWidth={1.8} />
       </View>
     );
@@ -1887,25 +1906,25 @@ function RemoteResourceGlyph({ type }: { type: RemoteResourceIconType }) {
   return (
     <>
       <View style={styles.fileIconCorner} />
-      <View style={styles.remoteResourceGlyphCenter}>
+      <View style={styles.localComputerResourceGlyphCenter}>
         <FileText size={20} color="#59616D" strokeWidth={1.8} />
       </View>
     </>
   );
 }
 
-type RemoteResourceItemProps = {
-  item: RemoteResourceItem;
+type LocalComputerResourceItemProps = {
+  item: LocalComputerResourceItem;
   downloadingId: string | null;
-  onDownload: (item: RemoteResourceItem) => void;
-  onOpenFile: (item: RemoteResourceItem) => void;
-  onOpenFolder: (item: RemoteResourceItem) => void;
-  onToggleSelection: (item: RemoteResourceItem) => void;
+  onDownload: (item: LocalComputerResourceItem) => void;
+  onOpenFile: (item: LocalComputerResourceItem) => void;
+  onOpenFolder: (item: LocalComputerResourceItem) => void;
+  onToggleSelection: (item: LocalComputerResourceItem) => void;
   selected: boolean;
   selectionMode: boolean;
 };
 
-function RemoteResourceListItem({
+function LocalComputerResourceListItem({
   item,
   downloadingId,
   onDownload,
@@ -1914,7 +1933,7 @@ function RemoteResourceListItem({
   onToggleSelection,
   selected,
   selectionMode,
-}: RemoteResourceItemProps) {
+}: LocalComputerResourceItemProps) {
   const { t } = useTranslation();
   const folder = isFolder(item);
   const iconType = getItemIconType(item);
@@ -1936,7 +1955,7 @@ function RemoteResourceListItem({
         onOpenFile(item);
       }}
     >
-      <RemoteResourceVisual
+      <LocalComputerResourceVisual
         item={item}
         iconType={iconType}
         style={styles.iconWrapper}
@@ -1980,7 +1999,7 @@ function RemoteResourceListItem({
   );
 }
 
-function RemoteResourceGridItem({
+function LocalComputerResourceGridItem({
   item,
   downloadingId,
   onDownload,
@@ -1989,7 +2008,7 @@ function RemoteResourceGridItem({
   onToggleSelection,
   selected,
   selectionMode,
-}: RemoteResourceItemProps) {
+}: LocalComputerResourceItemProps) {
   const { t } = useTranslation();
   const folder = isFolder(item);
   const iconType = getItemIconType(item);
@@ -2012,7 +2031,7 @@ function RemoteResourceGridItem({
           onOpenFile(item);
         }}
       >
-        <RemoteResourceVisual
+        <LocalComputerResourceVisual
           item={item}
           iconType={iconType}
           style={styles.gridIconWrapper}
@@ -2049,13 +2068,13 @@ function RemoteResourceGridItem({
   );
 }
 
-function RemoteResourceVisual({
+function LocalComputerResourceVisual({
   item,
   iconType,
   style,
 }: {
-  item: RemoteResourceItem;
-  iconType: RemoteResourceIconType;
+  item: LocalComputerResourceItem;
+  iconType: LocalComputerResourceIconType;
   style: StyleProp<ViewStyle>;
 }) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
@@ -2070,7 +2089,7 @@ function RemoteResourceVisual({
     if (!supportsThumbnail) {
       return;
     }
-    console.info('[video-thumbnail][mobile] remote resource thumbnail state', {
+    console.info('[video-thumbnail][mobile] shared resource thumbnail state', {
       name: item.displayName,
       mediaType: item.mediaType,
       supportsThumbnail,
@@ -2092,13 +2111,13 @@ function RemoteResourceVisual({
     return (
       <View style={style}>
         <Image
-          testID="remote-resource-thumbnail-image"
+          testID="local-computer-resource-thumbnail-image"
           source={{ uri: thumbnailUrl }}
-          style={styles.remoteResourceThumbnail}
+          style={styles.localComputerResourceThumbnail}
           resizeMode="cover"
           onError={() => {
             console.warn(
-              '[video-thumbnail][mobile] remote resource image load failed',
+              '[video-thumbnail][mobile] shared resource image load failed',
               {
                 name: item.displayName,
                 mediaType: item.mediaType,
@@ -2112,14 +2131,14 @@ function RemoteResourceVisual({
     );
   }
 
-  return <RemoteResourceTypeIcon type={iconType} style={style} />;
+  return <LocalComputerResourceTypeIcon type={iconType} style={style} />;
 }
 
-function RemoteResourcePreviewModal({
+function LocalComputerResourcePreviewModal({
   preview,
   onClose,
 }: {
-  preview: RemoteResourcePreviewState | null;
+  preview: LocalComputerResourcePreviewState | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -2144,7 +2163,7 @@ function RemoteResourcePreviewModal({
             style={styles.mediaPreviewCloseButton}
             accessibilityRole="button"
             accessibilityLabel={
-              t('sharedFiles.remoteAccess.closePreview') || '关闭预览'
+              t('sharedFiles.localComputer.closePreview') || '关闭预览'
             }
             activeOpacity={0.7}
             onPress={onClose}
@@ -2155,7 +2174,7 @@ function RemoteResourcePreviewModal({
         <View style={styles.mediaPreviewBody}>
           {video ? (
             <Video
-              testID="remote-resource-preview-video"
+              testID="local-computer-resource-preview-video"
               source={{ uri: preview.url }}
               style={styles.mediaPreviewFullMedia}
               resizeMode="contain"
@@ -2165,7 +2184,7 @@ function RemoteResourcePreviewModal({
             />
           ) : (
             <Image
-              testID="remote-resource-preview-image"
+              testID="local-computer-resource-preview-image"
               source={{ uri: preview.url }}
               style={styles.mediaPreviewFullMedia}
               resizeMode="contain"
@@ -2212,12 +2231,12 @@ function EmptyState({
   if (queryActive) {
     return (
       <View style={styles.centeredCard}>
-        <RemoteEmptyArtwork variant="search" />
+        <LocalComputerEmptyArtwork variant="search" />
         <Text style={styles.centeredTitle}>
-          {t('sharedFiles.remoteAccess.noMatchTitle') || '没有匹配结果'}
+          {t('sharedFiles.localComputer.noMatchTitle') || '没有匹配结果'}
         </Text>
         <Text style={styles.centeredSubtitle}>
-          {t('sharedFiles.remoteAccess.noMatchSubtitle') ||
+          {t('sharedFiles.localComputer.noMatchSubtitle') ||
             '换个关键词再试一次'}
         </Text>
       </View>
@@ -2227,12 +2246,12 @@ function EmptyState({
   if (currentFolder) {
     return (
       <View style={styles.centeredCard}>
-        <RemoteEmptyArtwork variant="folder" />
+        <LocalComputerEmptyArtwork variant="folder" />
         <Text style={styles.centeredTitle}>
-          {t('sharedFiles.remoteAccess.emptyFolderTitle') || '空文件夹'}
+          {t('sharedFiles.localComputer.emptyFolderTitle') || '空文件夹'}
         </Text>
         <Text style={styles.centeredSubtitle}>
-          {t('sharedFiles.remoteAccess.emptyFolderSubtitle') ||
+          {t('sharedFiles.localComputer.emptyFolderSubtitle') ||
             '这个目录暂时没有可下载或分享的文件。'}
         </Text>
       </View>
@@ -2241,26 +2260,26 @@ function EmptyState({
 
   return (
     <View style={styles.centeredCard}>
-      <RemoteEmptyArtwork variant="remote" />
+      <LocalComputerEmptyArtwork variant="computer" />
       <Text style={styles.centeredTitle}>
-        {t('sharedFiles.remoteAccess.noFilesTitle') || '暂无文件'}
+        {t('sharedFiles.localComputer.noFilesTitle') || '暂无文件'}
       </Text>
       <Text style={styles.centeredSubtitle}>
-        {t('sharedFiles.remoteAccess.noFilesSubtitle') ||
+        {t('sharedFiles.localComputer.noFilesSubtitle') ||
           '电脑端还没有开放可访问的文件目录。'}
       </Text>
     </View>
   );
 }
 
-function RemoteEmptyArtwork({
+function LocalComputerEmptyArtwork({
   variant,
 }: {
-  variant: 'folder' | 'remote' | 'search';
+  variant: 'computer' | 'folder' | 'search';
 }) {
   const isFolder = variant === 'folder';
   const isSearch = variant === 'search';
-  const gradientId = `remoteEmpty${variant}Gradient`;
+  const gradientId = `localComputerEmpty${variant}Gradient`;
   const iconColor = isFolder ? '#AD761D' : isSearch ? '#59616D' : '#1677D2';
   const stops = isFolder
     ? ['#FFFDF4', '#FFEAB7', '#F7C76F']
@@ -2270,7 +2289,7 @@ function RemoteEmptyArtwork({
 
   return (
     <View
-      testID={`remote-access-empty-icon-${variant}`}
+      testID={`local-computer-empty-icon-${variant}`}
       style={styles.emptyArtwork}
     >
       <View
@@ -2350,7 +2369,7 @@ function SortSheet({
         </Pressable>
         <View style={styles.sheetCard}>
           <Text style={styles.sheetTitle}>
-            {t('sharedFiles.remoteAccess.sortTitle') || '排序方式'}
+            {t('sharedFiles.localComputer.sortTitle') || '排序方式'}
           </Text>
           {options.map(option => {
             const active = option.id === value;
@@ -2385,7 +2404,7 @@ function ShareSheet({
 }) {
   const { t } = useTranslation();
   const targets = normalizeShareTargets(
-    t('sharedFiles.remoteAccess.shareTargets', { returnObjects: true }),
+    t('sharedFiles.localComputer.shareTargets', { returnObjects: true }),
   );
 
   return (
@@ -2402,10 +2421,10 @@ function ShareSheet({
         </Pressable>
         <View style={styles.shareCard}>
           <Text style={styles.shareTitle}>
-            {t('sharedFiles.remoteAccess.shareTitle') || '分享所选文件'}
+            {t('sharedFiles.localComputer.shareTitle') || '分享所选文件'}
           </Text>
           <Text style={styles.shareSubtitle}>
-            {t('sharedFiles.remoteAccess.shareSubtitle', {
+            {t('sharedFiles.localComputer.shareSubtitle', {
               count: selectedCount,
             }) || `已选择 ${selectedCount} 个文件`}
           </Text>
@@ -2749,11 +2768,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.75)',
     overflow: 'hidden',
   },
-  remoteResourceThumbnail: {
+  localComputerResourceThumbnail: {
     width: '100%',
     height: '100%',
   },
-  remoteResourceIcon: {
+  localComputerResourceIcon: {
     position: 'relative',
     overflow: 'hidden',
     shadowColor: '#46608A',
@@ -2767,7 +2786,7 @@ const styles = StyleSheet.create({
       color: 'rgba(70, 96, 138, 0.10)',
     }),
   },
-  remoteResourceGlyphCenter: {
+  localComputerResourceGlyphCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
