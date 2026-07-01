@@ -141,80 +141,110 @@ func NewServer(s *store.Store, cfg *config.Config, hub *events.Hub, csp ClientSt
 	mux := http.NewServeMux()
 
 	// Presence (mobile heartbeat)
-	mux.HandleFunc("POST /presence/{clientId}", withJSON(srv.handlePresence))
+	mux.HandleFunc("POST /presence/{clientId}", withJSON(requireLocalNetworkRequest(srv.handlePresence)))
 	mux.HandleFunc("POST /power/state", withJSON(srv.handlePowerState))
 	// Health
-	mux.HandleFunc("GET /health", withJSON(srv.handleHealth))
+	mux.HandleFunc("GET /health", withJSON(requireLocalNetworkRequest(srv.handleHealth)))
 	// Dashboard
-	mux.HandleFunc("GET /dashboard/summary", withJSON(srv.handleDashboardSummary))
-	mux.HandleFunc("GET /dashboard/devices", withJSON(srv.handleDashboardDevices))
+	mux.HandleFunc("GET /dashboard/summary", withJSON(requireLocalRequest(srv.handleDashboardSummary)))
+	mux.HandleFunc("GET /dashboard/devices", withJSON(requireLocalRequest(srv.handleDashboardDevices)))
 	// Local management
-	mux.HandleFunc("GET /management/devices", withJSON(srv.handleManagementDevices))
-	mux.HandleFunc("POST /management/devices/{clientId}/unblock", withJSON(srv.handleManagementUnblockDevice))
-	mux.HandleFunc("POST /management/devices/{clientId}/block", withJSON(srv.handleManagementBlockDevice))
-	mux.HandleFunc("GET /management/records/sync", withJSON(srv.handleManagementSyncRecords))
-	mux.HandleFunc("GET /management/records/access", withJSON(srv.handleManagementAccessRecords))
+	mux.HandleFunc("GET /management/devices", withJSON(requireLocalRequest(srv.handleManagementDevices)))
+	mux.HandleFunc("POST /management/devices/{clientId}/unblock", withJSON(requireLocalRequest(srv.handleManagementUnblockDevice)))
+	mux.HandleFunc("POST /management/devices/{clientId}/block", withJSON(requireLocalRequest(srv.handleManagementBlockDevice)))
+	mux.HandleFunc("GET /management/records/sync", withJSON(requireLocalNetworkRequest(srv.handleManagementSyncRecords)))
+	mux.HandleFunc("GET /management/records/access", withJSON(requireLocalRequest(srv.handleManagementAccessRecords)))
 	// Shared resource management
-	mux.HandleFunc("GET /resources/shared", withJSON(srv.handleResourcesShared))
-	mux.HandleFunc("POST /resources/shared", withJSON(srv.handleResourcesAddShared))
-	mux.HandleFunc("DELETE /resources/shared/{resourceId}", withJSON(srv.handleResourcesRemoveShared))
-	mux.HandleFunc("GET /resources/received", withJSON(srv.handleResourcesReceived))
-	mux.HandleFunc("GET /resources/received/thumbnail", srv.handleResourcesReceivedThumbnail)
-	mux.HandleFunc("GET /resources/mobile/shared", withJSON(srv.handleMobileSharedResources))
-	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list", withJSON(srv.handleMobileSharedResourceFolderList))
-	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list/{path...}", withJSON(srv.handleMobileSharedResourceFolderListPath))
-	mux.HandleFunc("GET /resources/mobile/received", withJSON(srv.handleMobileReceivedResources))
-	mux.HandleFunc("GET /resources/mobile/received/download", srv.handleMobileReceivedFileDownload)
-	mux.HandleFunc("GET /resources/mobile/received/thumbnail", srv.handleMobileReceivedFileThumbnail)
-	mux.HandleFunc("GET /resources/mobile/received/preview", srv.handleMobileReceivedFilePreview)
-	mux.HandleFunc("GET /resources/mobile/received/stream", srv.handleMobileReceivedFileStream)
-	mux.HandleFunc("POST /resources/mobile/view/{resourceId}", withJSON(srv.handleMobileResourceView))
-	mux.HandleFunc("GET /resources/mobile/download/{resourceId}", srv.handleMobileResourceDownload)
+	mux.HandleFunc("GET /resources/shared", withJSON(requireLocalRequest(srv.handleResourcesShared)))
+	mux.HandleFunc("POST /resources/shared", withJSON(requireLocalRequest(srv.handleResourcesAddShared)))
+	mux.HandleFunc("DELETE /resources/shared/{resourceId}", withJSON(requireLocalRequest(srv.handleResourcesRemoveShared)))
+	mux.HandleFunc("GET /resources/received", withJSON(requireLocalRequest(srv.handleResourcesReceived)))
+	mux.HandleFunc("GET /resources/received/thumbnail", requireLocalRequest(srv.handleResourcesReceivedThumbnail))
+	mux.HandleFunc("GET /resources/mobile/shared", withJSON(requireLocalNetworkRequest(srv.handleMobileSharedResources)))
+	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list", withJSON(requireLocalNetworkRequest(srv.handleMobileSharedResourceFolderList)))
+	mux.HandleFunc("GET /resources/mobile/shared/{resourceId}/list/{path...}", withJSON(requireLocalNetworkRequest(srv.handleMobileSharedResourceFolderListPath)))
+	mux.HandleFunc("GET /resources/mobile/received", withJSON(requireLocalNetworkRequest(srv.handleMobileReceivedResources)))
+	mux.HandleFunc("GET /resources/mobile/received/download", requireLocalNetworkRequest(srv.handleMobileReceivedFileDownload))
+	mux.HandleFunc("GET /resources/mobile/received/thumbnail", requireLocalNetworkRequest(srv.handleMobileReceivedFileThumbnail))
+	mux.HandleFunc("GET /resources/mobile/received/preview", requireLocalNetworkRequest(srv.handleMobileReceivedFilePreview))
+	mux.HandleFunc("GET /resources/mobile/received/stream", requireLocalNetworkRequest(srv.handleMobileReceivedFileStream))
+	mux.HandleFunc("POST /resources/mobile/view/{resourceId}", withJSON(requireLocalNetworkRequest(srv.handleMobileResourceView)))
+	mux.HandleFunc("GET /resources/mobile/download/{resourceId}", requireLocalNetworkRequest(srv.handleMobileResourceDownload))
 	// Devices
-	mux.HandleFunc("GET /devices/{deviceId}", withJSON(srv.handleDeviceDetail))
-	mux.HandleFunc("GET /devices/{deviceId}/files", withJSON(srv.handleDeviceFiles))
-	mux.HandleFunc("GET /devices/{deviceId}/dates", withJSON(srv.handleDeviceDates))
-	mux.HandleFunc("GET /devices/{deviceId}/existing-file-keys", withJSON(srv.handleDeviceExistingFileKeys))
+	mux.HandleFunc("GET /devices/{deviceId}", withJSON(requireLocalRequest(srv.handleDeviceDetail)))
+	mux.HandleFunc("GET /devices/{deviceId}/files", withJSON(requireLocalRequest(srv.handleDeviceFiles)))
+	mux.HandleFunc("GET /devices/{deviceId}/dates", withJSON(requireLocalRequest(srv.handleDeviceDates)))
+	mux.HandleFunc("GET /devices/{deviceId}/existing-file-keys", withJSON(requireLocalNetworkRequest(srv.handleDeviceExistingFileKeys)))
 	// Settings
-	mux.HandleFunc("GET /settings", withJSON(srv.handleGetSettings))
-	mux.HandleFunc("PUT /settings", withJSON(srv.handleUpdateSettings))
-	mux.HandleFunc("POST /settings/reset-state", withJSON(srv.handleResetState))
-	mux.HandleFunc("GET /settings/connection-devices", withJSON(srv.handleGetConnectionDevices))
-	mux.HandleFunc("POST /settings/connection-devices/{clientId}/revoke", withJSON(srv.handleRevokeConnectionDevice))
-	mux.HandleFunc("POST /settings/blocked-clients/{clientId}/clear", withJSON(srv.handleClearBlockedClient))
+	mux.HandleFunc("GET /settings", withJSON(requireLocalRequest(srv.handleGetSettings)))
+	mux.HandleFunc("PUT /settings", withJSON(requireLocalRequest(srv.handleUpdateSettings)))
+	mux.HandleFunc("POST /settings/reset-state", withJSON(requireLocalRequest(srv.handleResetState)))
+	mux.HandleFunc("GET /settings/connection-devices", withJSON(requireLocalRequest(srv.handleGetConnectionDevices)))
+	mux.HandleFunc("POST /settings/connection-devices/{clientId}/revoke", withJSON(requireLocalRequest(srv.handleRevokeConnectionDevice)))
+	mux.HandleFunc("POST /settings/blocked-clients/{clientId}/clear", withJSON(requireLocalRequest(srv.handleClearBlockedClient)))
 	// Connection code
-	mux.HandleFunc("POST /connection-code", withJSON(srv.handleSetConnectionCode))
-	mux.HandleFunc("POST /connection-code/regenerate", withJSON(srv.handleRegenerateCode))
+	mux.HandleFunc("POST /connection-code", withJSON(requireLocalRequest(srv.handleSetConnectionCode)))
+	mux.HandleFunc("POST /connection-code/regenerate", withJSON(requireLocalRequest(srv.handleRegenerateCode)))
 	// Share
-	mux.HandleFunc("GET /share/status", withJSON(srv.handleShareStatus))
-	mux.HandleFunc("POST /share/validate", withJSON(srv.handleShareValidate))
+	mux.HandleFunc("GET /share/status", withJSON(requireLocalRequest(srv.handleShareStatus)))
+	mux.HandleFunc("POST /share/validate", withJSON(requireLocalRequest(srv.handleShareValidate)))
 	// Shared files (binary responses — no withJSON wrapper)
-	mux.HandleFunc("GET /shared/list", withJSON(srv.handleSharedList))
-	mux.HandleFunc("GET /shared/list/{path...}", withJSON(srv.handleSharedListPath))
-	mux.HandleFunc("GET /shared/thumbnail/{path...}", srv.handleSharedThumbnail)
-	mux.HandleFunc("GET /shared/download/{path...}", srv.handleSharedDownload)
-	mux.HandleFunc("GET /shared/stream/{path...}", srv.handleSharedStream)
+	mux.HandleFunc("GET /shared/list", withJSON(requireLocalNetworkRequest(srv.handleSharedList)))
+	mux.HandleFunc("GET /shared/list/{path...}", withJSON(requireLocalNetworkRequest(srv.handleSharedListPath)))
+	mux.HandleFunc("GET /shared/thumbnail/{path...}", requireLocalNetworkRequest(srv.handleSharedThumbnail))
+	mux.HandleFunc("GET /shared/download/{path...}", requireLocalNetworkRequest(srv.handleSharedDownload))
+	mux.HandleFunc("GET /shared/stream/{path...}", requireLocalNetworkRequest(srv.handleSharedStream))
 	// Personal files use paired-device HMAC access in the OSS runtime.
-	mux.HandleFunc("GET /personal/list", withJSON(srv.handlePersonalList))
-	mux.HandleFunc("GET /personal/list/{path...}", withJSON(srv.handlePersonalListPath))
-	mux.HandleFunc("GET /personal/thumbnail/{path...}", srv.handlePersonalThumbnail)
-	mux.HandleFunc("GET /personal/download/{path...}", srv.handlePersonalDownload)
-	mux.HandleFunc("GET /personal/stream/{path...}", srv.handlePersonalStream)
+	mux.HandleFunc("GET /personal/list", withJSON(requireLocalNetworkRequest(srv.handlePersonalList)))
+	mux.HandleFunc("GET /personal/list/{path...}", withJSON(requireLocalNetworkRequest(srv.handlePersonalListPath)))
+	mux.HandleFunc("GET /personal/thumbnail/{path...}", requireLocalNetworkRequest(srv.handlePersonalThumbnail))
+	mux.HandleFunc("GET /personal/download/{path...}", requireLocalNetworkRequest(srv.handlePersonalDownload))
+	mux.HandleFunc("GET /personal/stream/{path...}", requireLocalNetworkRequest(srv.handlePersonalStream))
 	// Transfer state
-	mux.HandleFunc("GET /transfer/active", withJSON(srv.handleTransferActive))
+	mux.HandleFunc("GET /transfer/active", withJSON(requireLocalRequest(srv.handleTransferActive)))
 	// WebSocket
-	mux.HandleFunc("GET /events/stream", srv.handleEventStream)
+	mux.HandleFunc("GET /events/stream", requireLocalRequest(srv.handleEventStream))
 
 	return srv, withLogging(mux)
 }
 
 func isLocalRequest(r *http.Request) bool {
+	ip := remoteIP(r)
+	return ip != nil && ip.IsLoopback()
+}
+
+func isLocalNetworkRequest(r *http.Request) bool {
+	ip := remoteIP(r)
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast())
+}
+
+func remoteIP(r *http.Request) net.IP {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	host = strings.Trim(host, "[]")
+	return net.ParseIP(host)
+}
+
+func requireLocalRequest(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isLocalRequest(r) {
+			writeError(w, http.StatusForbidden, "local access required")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func requireLocalNetworkRequest(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isLocalNetworkRequest(r) {
+			writeError(w, http.StatusForbidden, "local network access required")
+			return
+		}
+		next(w, r)
+	}
 }
 
 // handleEventStream upgrades the connection to a WebSocket for real-time events.

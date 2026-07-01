@@ -828,6 +828,7 @@ func TestMobileReceivedResourcesAllowsAllPairedClientsWhenCrossDeviceAccessEnabl
 	insertCompletedReceivedUploadForResources(t, srv, "file-b", "client-b", "b.jpg", "Bob iPhone/b.jpg")
 
 	req := httptest.NewRequest(http.MethodGet, "/resources/mobile/received?clientId=client-a&clientName=Alice%20iPhone&page=1&pageSize=20", nil)
+	markRequestFromLocalNetwork(req)
 	rec := httptest.NewRecorder()
 	srv.router().ServeHTTP(rec, req)
 
@@ -863,6 +864,7 @@ func TestMobileReceivedResourcesRestrictsToStableDeviceWhenCrossDeviceAccessDisa
 	insertCompletedReceivedUploadForResources(t, srv, "file-c", "client-c", "c.jpg", "Bob iPhone/c.jpg")
 
 	req := httptest.NewRequest(http.MethodGet, "/resources/mobile/received?clientId=client-a&clientName=Alice%20Personal&page=1&pageSize=20", nil)
+	markRequestFromLocalNetwork(req)
 	rec := httptest.NewRecorder()
 	srv.router().ServeHTTP(rec, req)
 
@@ -890,6 +892,7 @@ func TestMobileReceivedDownloadRejectsDifferentStableDeviceWhenCrossDeviceAccess
 	insertCompletedReceivedUploadForResources(t, srv, "file-c", "client-c", "c.jpg", "Bob iPhone/c.jpg")
 
 	req := httptest.NewRequest(http.MethodGet, "/resources/mobile/received/download?clientId=client-a&clientName=Alice%20iPhone&fileKey=file-c", nil)
+	markRequestFromLocalNetwork(req)
 	rec := httptest.NewRecorder()
 	srv.router().ServeHTTP(rec, req)
 

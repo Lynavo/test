@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,9 +39,9 @@ func (p *PresenceTracker) IsAlive(clientID string, window time.Duration) bool {
 }
 
 func (s *Server) handlePresence(w http.ResponseWriter, r *http.Request) {
-	clientID := r.PathValue("clientId")
-	if clientID == "" {
-		writeError(w, http.StatusBadRequest, "missing clientId")
+	clientID := strings.TrimSpace(r.PathValue("clientId"))
+	if !isValidAPIID(clientID) {
+		writeError(w, http.StatusBadRequest, "invalid clientId")
 		return
 	}
 

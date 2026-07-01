@@ -36,6 +36,8 @@ const (
 	testPersonalClientID          = "test-client"
 	testPersonalClientName        = "Test Phone"
 	testPersonalPairingToken      = "test-pairing-token"
+	testLANRemoteAddr             = "192.168.1.20:61234"
+	testPublicRemoteAddr          = "203.0.113.20:61234"
 )
 
 type videoThumbnailRequestEvent struct {
@@ -213,6 +215,14 @@ func testEnv(t *testing.T) (*store.Store, *config.Config, *events.Hub) {
 
 	hub := events.NewHub()
 	return st, cfg, hub
+}
+
+func markRequestFromLocalNetwork(req *http.Request) {
+	req.RemoteAddr = testLANRemoteAddr
+}
+
+func markRequestFromPublicNetwork(req *http.Request) {
+	req.RemoteAddr = testPublicRemoteAddr
 }
 
 func insertPairedDeviceWithStableID(
@@ -796,6 +806,118 @@ func TestPowerStateUpdateIsLocalOnly(t *testing.T) {
 
 	if remoteResp.Code != http.StatusForbidden {
 		t.Fatalf("remote power update status = %d, want %d", remoteResp.Code, http.StatusForbidden)
+	}
+}
+
+func TestSidecarHTTPRejectsPublicRemoteAccess(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", time.Now().UTC().Format(time.RFC3339Nano))
+	_, handler := api.NewServer(st, cfg, hub, nil)
+
+	tests := []struct {
+		name      string
+		method    string
+		path      string
+		body      string
+		wantError string
+	}{
+		{name: "health", method: http.MethodGet, path: "/health", wantError: "local network access required"},
+		{name: "presence", method: http.MethodPost, path: "/presence/client-1", wantError: "local network access required"},
+		{name: "mobile resources", method: http.MethodGet, path: "/resources/mobile/shared?clientId=client-1&clientName=Nick%20iPhone", wantError: "local network access required"},
+		{name: "legacy shared files", method: http.MethodGet, path: "/shared/list", wantError: "local network access required"},
+		{name: "mobile sync records", method: http.MethodGet, path: "/management/records/sync?clientId=client-1", wantError: "local network access required"},
+		{name: "mobile existing keys", method: http.MethodGet, path: "/devices/client-1/existing-file-keys", wantError: "local network access required"},
+		{name: "personal files", method: http.MethodGet, path: "/personal/list?clientId=client-1", wantError: "local network access required"},
+		{name: "desktop dashboard", method: http.MethodGet, path: "/dashboard/summary", wantError: "local access required"},
+		{name: "desktop settings", method: http.MethodGet, path: "/settings", wantError: "local access required"},
+		{name: "desktop shared resource management", method: http.MethodGet, path: "/resources/shared", wantError: "local access required"},
+		{name: "desktop events", method: http.MethodGet, path: "/events/stream", wantError: "local access required"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body io.Reader
+			if tt.body != "" {
+				body = strings.NewReader(tt.body)
+			}
+			req := httptest.NewRequest(tt.method, tt.path, body)
+			markRequestFromPublicNetwork(req)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s %s status = %d, want %d body=%s", tt.method, tt.path, rec.Code, http.StatusForbidden, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), tt.wantError) {
+				t.Fatalf("%s %s error body = %s, want to contain %q", tt.method, tt.path, rec.Body.String(), tt.wantError)
+			}
+		})
+	}
+}
+
+func TestSidecarLocalNetworkMobileRoutesRemainReachable(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", time.Now().UTC().Format(time.RFC3339Nano))
+	_, handler := api.NewServer(st, cfg, hub, nil)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "health", method: http.MethodGet, path: "/health"},
+		{name: "presence", method: http.MethodPost, path: "/presence/client-1"},
+		{name: "mobile resources", method: http.MethodGet, path: "/resources/mobile/shared?clientId=client-1&clientName=Nick%20iPhone"},
+		{name: "legacy shared files", method: http.MethodGet, path: "/shared/list"},
+		{name: "mobile sync records", method: http.MethodGet, path: "/management/records/sync?clientId=client-1"},
+		{name: "mobile existing keys", method: http.MethodGet, path: "/devices/client-1/existing-file-keys"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			markRequestFromLocalNetwork(req)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s %s status = %d, want %d body=%s", tt.method, tt.path, rec.Code, http.StatusOK, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestSidecarDesktopOnlyRoutesRejectLANAccess(t *testing.T) {
+	st, cfg, hub := testEnv(t)
+	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", time.Now().UTC().Format(time.RFC3339Nano))
+	_, handler := api.NewServer(st, cfg, hub, nil)
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "dashboard", method: http.MethodGet, path: "/dashboard/summary"},
+		{name: "settings", method: http.MethodGet, path: "/settings"},
+		{name: "device detail", method: http.MethodGet, path: "/devices/client-1"},
+		{name: "resource management", method: http.MethodGet, path: "/resources/shared"},
+		{name: "event stream", method: http.MethodGet, path: "/events/stream"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			markRequestFromLocalNetwork(req)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("%s %s status = %d, want %d body=%s", tt.method, tt.path, rec.Code, http.StatusForbidden, rec.Body.String())
+			}
+		})
 	}
 }
 

@@ -1026,6 +1026,10 @@ func isValidAccessResult(result string) bool {
 
 // verifyMobileClientPaired validates the client exists in paired_devices, is not revoked, and is not blocked.
 func (s *Server) verifyMobileClientPaired(w http.ResponseWriter, r *http.Request) (mobileAccessClient, bool) {
+	if !isLocalNetworkRequest(r) {
+		writeError(w, http.StatusForbidden, "local network access required")
+		return mobileAccessClient{}, false
+	}
 	client, ok := mobileAccessClientFromQuery(w, r)
 	if !ok {
 		return client, false
