@@ -386,22 +386,14 @@ class AndroidSyncPrimitivesTest {
     requireNotNull(capability)
     assertTrue(capability.supported)
     assertTrue(capability.hasUsableTargets)
-    assertNull(capability.publicTarget)
+    assertEquals("192.168.1.255", capability.targets.single().broadcastAddress)
   }
 
   @Test
-  fun mergeWakeCapabilityClearsPublicTarget() {
-    val existingPT = AndroidPublicWakeTarget(
-      kind = "router_wan_udp",
-      host = "my-wan.net",
-      port = 9,
-      enabled = true,
-      updatedAt = "2026-06-11T00:00:00Z"
-    )
+  fun mergeWakeCapabilityKeepsLanWakeTargetsOnly() {
     val existing = AndroidWakeCapability(
       supported = true,
       targets = emptyList(),
-      publicTarget = existingPT,
       updatedAt = "2026-06-11T00:00:00Z"
     )
     val serverNew = AndroidWakeCapability(
@@ -409,14 +401,13 @@ class AndroidSyncPrimitivesTest {
       targets = listOf(
         AndroidWakeTarget("eth0", "00:11:22:33:44:55", "192.168.1.10", "192.168.1.255", listOf(9))
       ),
-      publicTarget = null,
       updatedAt = "2026-06-11T01:00:00Z"
     )
     val merged = AndroidSyncPrimitives.mergeWakeCapability(serverNew, existing)
     requireNotNull(merged)
     assertEquals("2026-06-11T01:00:00Z", merged.updatedAt)
     assertEquals(1, merged.targets.size)
-    assertNull(merged.publicTarget)
+    assertEquals("192.168.1.255", merged.targets.single().broadcastAddress)
   }
 
   @Test
@@ -512,34 +503,6 @@ class AndroidSyncPrimitivesTest {
         scope = "personal",
         path = "Photos/image.jpg",
         operation = "preview",
-      ),
-    )
-  }
-
-  @Test
-  fun publicWakeIsDisabledForOssSharedFilesRoutes() {
-    assertFalse(
-      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
-        scope = "personal",
-        path = "",
-        operation = "list",
-        trigger = "shared_files_root_browse",
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
-        scope = "personal",
-        path = "",
-        operation = "list",
-        trigger = "manual_lan_reconnect",
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAllowSharedFilesPublicWake(
-        scope = "personal",
-        path = "Documents",
-        operation = "list",
-        trigger = "shared_files_root_browse",
       ),
     )
   }

@@ -145,11 +145,7 @@ do {
     expect(false, "unexpected error type")
 }
 
-// Assert legacy public targets are ignored on decode, serialization, and merge.
-let existingPT = PublicWakeTarget(kind: "router_wan_udp", host: "my-wan.net", port: 9, enabled: true, updatedAt: "2026-06-11T00:00:00Z")
-let existingWake = WakeCapability(supported: true, targets: [], publicTarget: existingPT, updatedAt: "2026-06-11T00:00:00Z")
-let payloadWithPublicTarget = existingWake.toPayload()
-expect(payloadWithPublicTarget["publicTarget"] is NSNull, "wake payload serialization must clear public target")
+// Assert legacy public targets are ignored on decode and not serialized back out.
 let decodedWake = WakeCapability.fromJSONValue([
     "supported": true,
     "updatedAt": "2026-06-11T00:00:00Z",
@@ -170,10 +166,11 @@ let decodedWake = WakeCapability.fromJSONValue([
         "updatedAt": "2026-06-11T00:00:00Z",
     ],
 ])
-expect(decodedWake?.publicTarget == nil, "wake metadata decode must ignore legacy public target")
-let newWake = WakeCapability(supported: true, targets: [targets[0]], publicTarget: nil, updatedAt: "2026-06-11T01:00:00Z")
+expect(decodedWake?.targets.count == 1, "wake metadata decode must ignore legacy public target and keep LAN targets")
+expect(decodedWake?.toPayload()["publicTarget"] == nil, "wake payload serialization must not expose public target")
+let existingWake = WakeCapability(supported: true, targets: [], updatedAt: "2026-06-11T00:00:00Z")
+let newWake = WakeCapability(supported: true, targets: [targets[0]], updatedAt: "2026-06-11T01:00:00Z")
 let mergedWake = WakeCapability.merge(newWake: newWake, existingWake: existingWake)
 expect(mergedWake != nil, "merged capability must not be nil")
 expect(mergedWake?.updatedAt == "2026-06-11T01:00:00Z", "merged capability must update timestamp")
 expect(mergedWake?.targets.count == 1, "merged capability must update targets")
-expect(mergedWake?.publicTarget == nil, "merged capability must clear existing public target")

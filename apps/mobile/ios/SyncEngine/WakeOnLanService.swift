@@ -63,7 +63,7 @@ struct WakeOnLanService {
         }
     }
 
-    static func destinations(for target: WakeTarget, publicTarget: PublicWakeTarget? = nil) -> [WakePacketDestination] {
+    static func destinations(for target: WakeTarget) -> [WakePacketDestination] {
         let hosts = [
             target.broadcastAddress,
             "255.255.255.255",
@@ -80,33 +80,21 @@ struct WakeOnLanService {
             .filter { (1...65_535).contains($0) }
             .filter { seenPorts.insert($0).inserted }
 
-        var result = uniqueHosts.flatMap { host in
+        return uniqueHosts.flatMap { host in
             ports.map { port in
                 WakePacketDestination(host: host, port: port)
             }
         }
-
-        if let pub = publicTarget, pub.enabled,
-           !pub.host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           (1...65_535).contains(pub.port) {
-            let pubHost = pub.host.trimmingCharacters(in: .whitespacesAndNewlines)
-            let pubDest = WakePacketDestination(host: pubHost, port: pub.port)
-            if !result.contains(pubDest) {
-                result.append(pubDest)
-            }
-        }
-
-        return result
     }
 
-    func sendWakePackets(targets: [WakeTarget], publicTarget: PublicWakeTarget? = nil) throws -> WakeOnLanSendResult {
+    func sendWakePackets(targets: [WakeTarget]) throws -> WakeOnLanSendResult {
         var sentPackets = 0
         var destinations: [WakePacketDestination] = []
         var failures: [WakePacketSendFailure] = []
         var seenFailures = Set<String>()
         for target in targets {
             let packet = try Self.magicPacket(macAddress: target.macAddress)
-            let targetDestinations = Self.destinations(for: target, publicTarget: publicTarget)
+            let targetDestinations = Self.destinations(for: target)
             destinations.append(contentsOf: targetDestinations)
             for round in 0..<repeatCount {
                 for destination in targetDestinations {

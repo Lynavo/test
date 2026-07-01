@@ -1,17 +1,8 @@
 import Foundation
 
-struct PublicWakeTarget: Codable, Equatable {
-    let kind: String
-    let host: String
-    let port: Int
-    let enabled: Bool
-    let updatedAt: String
-}
-
 struct WakeCapability: Codable, Equatable {
     let supported: Bool
     let targets: [WakeTarget]
-    let publicTarget: PublicWakeTarget?
     let updatedAt: String
 
     var hasUsableTargets: Bool {
@@ -19,7 +10,7 @@ struct WakeCapability: Codable, Equatable {
     }
 
     func toPayload() -> [String: Any] {
-        var payload: [String: Any] = [
+        [
             "supported": supported,
             "targets": targets.map { target in
                 [
@@ -32,8 +23,6 @@ struct WakeCapability: Codable, Equatable {
             },
             "updatedAt": updatedAt,
         ]
-        payload["publicTarget"] = NSNull()
-        return payload
     }
 
     static func fromJSONValue(_ value: Any?) -> WakeCapability? {
@@ -65,7 +54,6 @@ struct WakeCapability: Codable, Equatable {
         return WakeCapability(
             supported: supported,
             targets: targets,
-            publicTarget: nil,
             updatedAt: updatedAt?.isEmpty == false ? updatedAt! : ISO8601DateFormatter().string(from: Date())
         )
     }
@@ -98,14 +86,12 @@ struct WakeCapability: Codable, Equatable {
             return WakeCapability(
                 supported: existingWake.supported,
                 targets: existingWake.targets,
-                publicTarget: nil,
                 updatedAt: existingWake.updatedAt
             )
         }
         return WakeCapability(
             supported: newWake.supported,
             targets: newWake.targets,
-            publicTarget: nil,
             updatedAt: newWake.updatedAt
         )
     }

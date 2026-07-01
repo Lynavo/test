@@ -26,22 +26,18 @@ It scans hidden files and directories, while explicitly skipping generated build
 
 ## Allowed Compatibility Paths
 
-| Path                                                           | Rationale                                                                                                 |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `docs/product/lynavo-drive-global-only-oss-commercial-plan.md` | Product rename source plan; legacy names are quoted for migration scope.                                  |
-| `docs/rename/legacy-name-allowlist.md`                         | This allowlist document necessarily names legacy forms.                                                   |
-| `scripts/verify-legacy-name-allowlist.mjs`                     | The verifier owns the legacy-name pattern and compatibility allowlist.                                    |
-| `scripts/release/__tests__/legacy-name-allowlist.test.mjs`     | Regression test fixture for unallowlisted legacy-name detection.                                          |
-| `scripts/release/__tests__/desktop-branding.test.mjs`          | Regression tests assert old packaged sidecar exe paths do not return.                                     |
-| `AGENTS.md`                                                    | Repository handoff instructions quote external historical repo paths.                                     |
-| `scripts/dev/oss-env-scrubber.cjs`                             | OSS env scrubber must name legacy commercial env vars to remove them.                                     |
-| `scripts/dev/__tests__/release-profile-dev.test.mjs`           | Regression test fixture asserts legacy release/profile envs stay scrubbed.                                |
-| `scripts/release/__tests__/release-cli.test.mjs`               | Regression test fixture asserts release CLI ignores legacy envs.                                          |
-| `apps/desktop/scripts/__tests__/*.mjs`                         | Regression fixtures assert legacy package/env names do not return.                                        |
-| `scripts/ios/build-mobile-tunnel.sh`                           | Tunnel build script still references current prebuilt tunnel framework names before tunnel binary rename. |
-| `apps/mobile/android/app/build.gradle`                         | Android still links the current prebuilt tunnel AAR before tunnel binary rename.                          |
-| `apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj`        | iOS still links the current prebuilt tunnel xcframework before tunnel binary rename.                      |
-| `apps/mobile/ios/SyncEngine/LocalTCPProxy.swift`               | LocalTCPProxy imports the current prebuilt tunnel framework before tunnel binary rename.                  |
+| Path                                                           | Rationale                                                                  |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `docs/product/lynavo-drive-global-only-oss-commercial-plan.md` | Product rename source plan; legacy names are quoted for migration scope.   |
+| `docs/rename/legacy-name-allowlist.md`                         | This allowlist document necessarily names legacy forms.                    |
+| `scripts/verify-legacy-name-allowlist.mjs`                     | The verifier owns the legacy-name pattern and compatibility allowlist.     |
+| `scripts/release/__tests__/legacy-name-allowlist.test.mjs`     | Regression test fixture for unallowlisted legacy-name detection.           |
+| `scripts/release/__tests__/desktop-branding.test.mjs`          | Regression tests assert old packaged sidecar exe paths do not return.      |
+| `AGENTS.md`                                                    | Repository handoff instructions quote external historical repo paths.      |
+| `scripts/dev/oss-env-scrubber.cjs`                             | OSS env scrubber must name legacy commercial env vars to remove them.      |
+| `scripts/dev/__tests__/release-profile-dev.test.mjs`           | Regression test fixture asserts legacy release/profile envs stay scrubbed. |
+| `scripts/release/__tests__/release-cli.test.mjs`               | Regression test fixture asserts release CLI ignores legacy envs.           |
+| `apps/desktop/scripts/__tests__/*.mjs`                         | Regression fixtures assert legacy package/env names do not return.         |
 
 ## Temporary Historical-Doc Exceptions
 

@@ -158,48 +158,10 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny('Regression test fixture asserts release CLI ignores legacy envs.'),
   ],
   [
-    'scripts/ios/build-mobile-tunnel.sh',
-    allowMatches(
-      [
-        {
-          terms: ['SyncFlow'],
-          linePattern: /SyncFlowMobileTunnel\.(?:xcframework|aar)/,
-        },
-      ],
-      'Tunnel build script outputs the current prebuilt binary/framework names before tunnel rename.',
-    ),
-  ],
-  [
     'scripts/verify-vscode-android-debug.mjs',
     allowMatches(
       [{ terms: ['SyncFlow'], linePattern: /SyncFlowMobileGlobal/ }],
       'VS Code verifier asserts old iOS scheme names do not return.',
-    ),
-  ],
-  [
-    'apps/mobile/android/app/build.gradle',
-    allowMatches(
-      [{ terms: ['SyncFlow'], linePattern: /SyncFlowMobileTunnel\.aar/ }],
-      'Android still links the current prebuilt tunnel AAR before tunnel binary rename.',
-    ),
-  ],
-  [
-    'apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj',
-    allowMatches(
-      [{ terms: ['SyncFlow'], linePattern: /SyncFlowMobileTunnel\.xcframework/ }],
-      'iOS still links the current prebuilt tunnel xcframework before tunnel binary rename.',
-    ),
-  ],
-  [
-    'apps/mobile/ios/SyncEngine/LocalTCPProxy.swift',
-    allowMatches(
-      [
-        {
-          terms: ['SyncFlow'],
-          linePattern: /SyncFlowMobileTunnel/,
-        },
-      ],
-      'LocalTCPProxy imports the current prebuilt tunnel framework before tunnel binary rename.',
     ),
   ],
   [
@@ -232,12 +194,7 @@ for (const path of HISTORICAL_DOC_PATHS) {
   );
 }
 
-const ALLOWED_PATH_PREFIXES = [
-  [
-    'apps/mobile/ios/Frameworks/SyncFlowMobileTunnel.xcframework/',
-    allowAny('Prebuilt tunnel xcframework retains its current binary/module name.'),
-  ],
-];
+const ALLOWED_PATH_PREFIXES = [];
 
 function usage() {
   return [

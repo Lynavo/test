@@ -452,26 +452,6 @@ expect(
 )
 
 expect(
-    !SharedFilesRoutePolicy.shouldAllowPublicWake(
-        scope: "personal",
-        path: "",
-        operation: "list",
-        trigger: "shared_files_root_browse"
-    ),
-    "OSS personal root browse must remain LAN-only and must not use configured Wake-on-WAN"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAllowPublicWake(
-        scope: "personal",
-        path: "",
-        operation: "list",
-        trigger: "manual_lan_reconnect"
-    ),
-    "manual reconnect must remain LAN-only and must not use configured Wake-on-WAN"
-)
-
-expect(
     !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "Documents/report.pdf", operation: "preview"),
     "personal previews must not trigger bound desktop wake"
 )

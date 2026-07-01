@@ -144,18 +144,9 @@ data class AndroidWakePacketDestination(
   val port: Int,
 )
 
-data class AndroidPublicWakeTarget(
-  val kind: String, // "router_wan_udp"
-  val host: String,
-  val port: Int,
-  val enabled: Boolean,
-  val updatedAt: String,
-)
-
 data class AndroidWakeCapability(
   val supported: Boolean,
   val targets: List<AndroidWakeTarget>,
-  val publicTarget: AndroidPublicWakeTarget?,
   val updatedAt: String,
 ) {
   val hasUsableTargets: Boolean
@@ -179,7 +170,6 @@ data class AndroidWakeCapability(
           },
         ),
       )
-      put("publicTarget", JSONObject.NULL)
     }
 }
 
@@ -195,8 +185,6 @@ data class AndroidForegroundLanRuntimeDecision(
 )
 
 object AndroidSyncPrimitives {
-  private const val OSS_PUBLIC_WAKE_ENABLED = false
-
   fun peerProxySkipReasons(
     hasMultiDesktopBindingSource: Boolean,
     hasOnlineLynavoDriveDesktopPeer: Boolean,
@@ -225,8 +213,7 @@ object AndroidSyncPrimitives {
     newWake: AndroidWakeCapability?,
     existingWake: AndroidWakeCapability?,
   ): AndroidWakeCapability? {
-    if (newWake == null) return existingWake?.copy(publicTarget = null)
-    return newWake.copy(publicTarget = null)
+    return newWake ?: existingWake
   }
 
   fun decideSharedFilesRoute(
@@ -313,7 +300,6 @@ object AndroidSyncPrimitives {
     return AndroidWakeCapability(
       supported = raw.optBoolean("supported", false),
       targets = targets,
-      publicTarget = null,
       updatedAt = raw.optString("updatedAt").takeIf { it.isNotBlank() }.orEmpty(),
     )
   }
@@ -343,7 +329,6 @@ object AndroidSyncPrimitives {
     return AndroidWakeCapability(
       supported = raw["supported"] as? Boolean ?: false,
       targets = targets,
-      publicTarget = null,
       updatedAt = raw["updatedAt"] as? String ?: "",
     )
   }
@@ -363,16 +348,6 @@ object AndroidSyncPrimitives {
       normalizedPath.isEmpty() &&
       !hasTraversalSegment
   }
-
-  fun shouldAllowSharedFilesPublicWake(
-    scope: String,
-    path: String,
-    operation: String,
-    trigger: String,
-  ): Boolean =
-    shouldAttemptSharedFilesWake(scope, path, operation) &&
-      trigger == "shared_files_root_browse" &&
-      OSS_PUBLIC_WAKE_ENABLED
 
   fun sharedFilesRouteMetadata(
     decision: AndroidSharedFilesRouteDecision,

@@ -912,7 +912,7 @@ class NativeSyncEngineModule(
       return "wake=nil"
     }
     val usableTargets = AndroidSyncPrimitives.validWakeTargets(wake.targets).size
-    return "wakeSupported=${wake.supported} wakeTargets=${wake.targets.size} wakeUsableTargets=$usableTargets remoteWakeEnabled=false"
+    return "wakeSupported=${wake.supported} wakeTargets=${wake.targets.size} wakeUsableTargets=$usableTargets"
   }
 
   @ReactMethod
@@ -7064,7 +7064,6 @@ class NativeSyncEngineModule(
             }
           },
         )
-        putNull("publicTarget")
       }
     }
 
