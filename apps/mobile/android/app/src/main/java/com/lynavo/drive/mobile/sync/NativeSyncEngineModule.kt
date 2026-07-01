@@ -2314,16 +2314,13 @@ class NativeSyncEngineModule(
         return
       }
 
-      if (!startForegroundSyncService(notificationReason)) {
-        recordDiagnosticsLog("BackgroundSync", "round aborted reason=$reason foregroundServiceAvailable=false")
-        emitError(
-          code = "ANDROID_BACKGROUND_SYNC_SERVICE_UNAVAILABLE",
-          message = "無法啟動 Android 背景同步服務，已保留佇列。",
+      foregroundServiceStarted = startForegroundSyncService(notificationReason)
+      if (!foregroundServiceStarted) {
+        recordDiagnosticsLog(
+          "BackgroundSync",
+          "foreground service unavailable; continuing foreground LAN round reason=$reason",
         )
-        emitIdleSyncState(binding)
-        return
       }
-      foregroundServiceStarted = true
 
       emitSyncState(binding, "scanning")
       val clientId = getOrCreateClientId()

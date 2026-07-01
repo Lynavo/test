@@ -1,4 +1,4 @@
-import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import type { DocumentPickerResponse } from '@react-native-documents/picker';
 import {
   ErrorCode,
@@ -314,9 +314,6 @@ export async function getAssetPreviewSource(
 export async function submitManualUpload(
   assetLocalIds: string[],
 ): Promise<ManualUploadResult> {
-  if (assetLocalIds.length > 0) {
-    await requestAndroidBackgroundSyncNotificationPermission();
-  }
   const result = await NativeSyncEngine.submitManualUpload({ assetLocalIds });
   return result as ManualUploadResult;
 }
@@ -353,9 +350,6 @@ export async function pickDocumentUploads(): Promise<DocumentUploadResult> {
 export async function submitDocumentUploads(
   files: DocumentUploadFile[],
 ): Promise<DocumentUploadResult> {
-  if (files.length > 0) {
-    await requestAndroidBackgroundSyncNotificationPermission();
-  }
   const result = await NativeSyncEngine.submitDocumentUploads({ files });
   return result as DocumentUploadResult;
 }
@@ -399,7 +393,6 @@ export async function prepareAutoUploadEnable(): Promise<void> {
   if (status !== 'authorized' && status !== 'limited') {
     throw new Error('Android photo library access is required for auto upload');
   }
-  await requestAndroidBackgroundSyncNotificationPermission();
 }
 
 /** Re-enable auto upload from interrupted/disabled state, persists 'active' state. */
@@ -589,36 +582,6 @@ export async function stopBackgroundSyncService(): Promise<void> {
     return;
   }
   await NativeSyncEngine.stopBackgroundSyncService();
-}
-
-async function requestAndroidBackgroundSyncNotificationPermission(): Promise<void> {
-  if (Platform.OS !== 'android') {
-    return;
-  }
-
-  const version =
-    typeof Platform.Version === 'number'
-      ? Platform.Version
-      : Number.parseInt(String(Platform.Version), 10);
-  if (!Number.isFinite(version) || version < 33) {
-    return;
-  }
-
-  const permission = PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS;
-  if (!permission) {
-    return;
-  }
-
-  if (await PermissionsAndroid.check(permission)) {
-    return;
-  }
-
-  const result = await PermissionsAndroid.request(permission);
-  if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-    throw new Error(
-      'Android notification permission is required for background sync',
-    );
-  }
 }
 
 export async function setBackgroundSilentAudioEnabled(
