@@ -81,7 +81,7 @@ func EnsureStorageDirs(cfg *config.Config) (EnsureResult, error) {
 	})
 }
 
-// EnsurePersonalDir recreates only the account-scoped personal shared
+// EnsurePersonalDir recreates only the local personal shared
 // directory. It is deliberately separate from EnsureStorageDirs because an
 // unavailable personal disk should not block LAN receive/team shared flows.
 func EnsurePersonalDir(cfg *config.Config) (EnsureResult, error) {

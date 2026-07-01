@@ -17,7 +17,7 @@ type Config struct {
 	TCPPort    int    `yaml:"tcp_port"`
 	DataDir    string `yaml:"data_dir"`
 	ReceiveDir string `yaml:"receive_dir"`
-	// PersonalShareDir is the account-scoped directory exposed through /personal/*.
+	// PersonalShareDir is the local personal directory exposed through /personal/*.
 	// It is independent from RootDir/ReceiveDir so users can share a whole disk.
 	PersonalShareDir string `yaml:"personal_share_dir"`
 	LogLevel         string `yaml:"log_level"`

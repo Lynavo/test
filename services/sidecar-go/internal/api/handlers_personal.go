@@ -17,34 +17,34 @@ import (
 const personalAccessSignatureMaxSkew = 5 * time.Minute
 
 const (
-	personalGuardReasonOSSAccountDisabled = "oss_account_disabled"
-	personalGuardReasonInvalidDeviceAuth  = "invalid_device_authorization"
+	personalGuardReasonCredentialsRequired = "paired_device_credentials_required"
+	personalGuardReasonInvalidDeviceAuth   = "invalid_device_authorization"
 )
 
-const ossAccountPersonalAccessDisabledMessage = "account-backed personal shared files access is disabled in the open-source build"
+const personalAccessCredentialsRequiredMessage = "paired device credentials are required for personal shared files access"
 
 func (s *Server) authorizePersonalRequest(w http.ResponseWriter, r *http.Request) bool {
-	_, ok := s.authorizePersonalRequestAccountID(w, r)
+	_, ok := s.authorizePersonalPairedDeviceRequest(w, r)
 	return ok
 }
 
-func (s *Server) authorizePersonalRequestAccountID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if pairedAccountID, pairedOK, pairedAttempted, pairedStatus, pairedMessage, pairedReason := s.authorizePersonalPairedDeviceRequest(r); pairedOK {
-		return pairedAccountID, true
+func (s *Server) authorizePersonalPairedDeviceRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if pairedDeviceID, pairedOK, pairedAttempted, pairedStatus, pairedMessage, pairedReason := s.verifyPersonalPairedDeviceRequest(r); pairedOK {
+		return pairedDeviceID, true
 	} else if pairedAttempted {
 		s.writePersonalAccessGuardError(w, r, pairedStatus, pairedMessage, pairedReason, "operation", "personal.paired_device")
 		return "", false
 	}
 
-	s.writeOSSCommercialDisabled(w, r, "personal.account")
+	s.writePersonalAccessCredentialsRequired(w, r, "personal.paired_device")
 	return "", false
 }
 
-func (s *Server) authorizePersonalPairedDeviceRequest(r *http.Request) (string, bool, bool, int, string, string) {
+func (s *Server) verifyPersonalPairedDeviceRequest(r *http.Request) (string, bool, bool, int, string, string) {
 	escapedPath := r.URL.EscapedPath()
 	signature, timestamp, nonce, attempted, credentialsAllowed := personalAccessAuthValues(r, isPersonalQueryAuthAllowedPath(escapedPath))
 	if !attempted {
-		return "", false, false, http.StatusForbidden, ossAccountPersonalAccessDisabledMessage, personalGuardReasonOSSAccountDisabled
+		return "", false, false, http.StatusForbidden, personalAccessCredentialsRequiredMessage, personalGuardReasonCredentialsRequired
 	}
 	if !credentialsAllowed {
 		return "", false, true, http.StatusUnauthorized, "paired device query credentials are not allowed for this endpoint", personalGuardReasonInvalidDeviceAuth
@@ -103,13 +103,13 @@ func (s *Server) authorizePersonalPairedDeviceRequest(r *http.Request) (string, 
 	return "paired:" + clientID, true, true, http.StatusOK, "", ""
 }
 
-func (s *Server) writeOSSCommercialDisabled(w http.ResponseWriter, r *http.Request, operation string) {
+func (s *Server) writePersonalAccessCredentialsRequired(w http.ResponseWriter, r *http.Request, operation string) {
 	s.writePersonalAccessGuardError(
 		w,
 		r,
 		http.StatusForbidden,
-		ossAccountPersonalAccessDisabledMessage,
-		personalGuardReasonOSSAccountDisabled,
+		personalAccessCredentialsRequiredMessage,
+		personalGuardReasonCredentialsRequired,
 		"operation",
 		operation,
 	)
@@ -117,7 +117,7 @@ func (s *Server) writeOSSCommercialDisabled(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) writePersonalAccessGuardError(w http.ResponseWriter, r *http.Request, status int, message string, reason string, attrs ...any) {
 	if reason == "" {
-		reason = personalGuardReasonOSSAccountDisabled
+		reason = personalGuardReasonCredentialsRequired
 	}
 	logAttrs := []any{
 		"reason", reason,

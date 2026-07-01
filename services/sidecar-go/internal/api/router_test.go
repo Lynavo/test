@@ -3,7 +3,6 @@ package api_test
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"image"
@@ -455,15 +454,6 @@ func testWakeCapability() *protocol.WakeCapability {
 	}
 }
 
-func fakeAccountJWT(t *testing.T, accountID string) string {
-	t.Helper()
-
-	encode := base64.RawURLEncoding.EncodeToString
-	header := encode([]byte(`{"alg":"none","typ":"JWT"}`))
-	payload := encode([]byte(`{"user_id":"` + accountID + `"}`))
-	return header + "." + payload + ".signature"
-}
-
 func writeTestJSON(t *testing.T, w http.ResponseWriter, payload any) {
 	t.Helper()
 
@@ -507,7 +497,7 @@ func assertRecorderErrorReason(t *testing.T, resp *httptest.ResponseRecorder, wa
 	}
 }
 
-const ossAccountDisabledReason = "oss_account_disabled"
+const pairedDeviceCredentialsRequiredReason = "paired_device_credentials_required"
 
 func TestHealthEndpoint(t *testing.T) {
 	st, cfg, hub := testEnv(t)
@@ -921,7 +911,7 @@ func TestSidecarDesktopOnlyRoutesRejectLANAccess(t *testing.T) {
 	}
 }
 
-func TestOSSSettingsDoNotExposeAccountBackedPersonalAccess(t *testing.T) {
+func TestOSSSettingsDoNotExposeLegacyCommercialToggle(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 
 	_, handler := api.NewServer(st, cfg, hub, nil)
@@ -940,9 +930,9 @@ func TestOSSSettingsDoNotExposeAccountBackedPersonalAccess(t *testing.T) {
 	if err := json.NewDecoder(settingsResp.Body).Decode(&settings); err != nil {
 		t.Fatalf("decode settings: %v", err)
 	}
-	legacyPersonalAccessKey := "remote" + "AccessEnabled"
-	if _, ok := settings[legacyPersonalAccessKey]; ok {
-		t.Fatal("settings must not expose legacy account-backed personal access toggles in OSS runtime")
+	legacyCommercialKey := "remote" + "AccessEnabled"
+	if _, ok := settings[legacyCommercialKey]; ok {
+		t.Fatal("settings must not expose legacy commercial toggles in OSS runtime")
 	}
 
 	presenceResp, err := http.Post(srv.URL+"/presence/phone-local", "application/json", strings.NewReader("{}"))
@@ -2576,7 +2566,7 @@ func TestPersonalAccessDeniesWhenDeviceStatusChecksFail(t *testing.T) {
 	}
 }
 
-func TestPersonalPairedDeviceAccessDoesNotRequireAccountContext(t *testing.T) {
+func TestPersonalPairedDeviceAccessUsesLocalHMACCredentials(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
 		t.Fatalf("mkdir personal dir: %v", err)
@@ -2603,7 +2593,7 @@ func TestPersonalPairedDeviceAccessDoesNotRequireAccountContext(t *testing.T) {
 	}
 }
 
-func TestPersonalPairedDeviceHMACBypassesAccountBearerDisabled(t *testing.T) {
+func TestPersonalAccessRejectsBearerTokenWithoutPairedDeviceCredentials(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
 		t.Fatalf("mkdir personal dir: %v", err)
@@ -2633,15 +2623,15 @@ func TestPersonalPairedDeviceHMACBypassesAccountBearerDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+fakeAccountJWT(t, "account-1"))
+	req.Header.Set("Authorization", "Bearer legacy-token-is-not-personal-access")
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("GET account personal list: %v", err)
+		t.Fatalf("GET bearer personal list: %v", err)
 	}
-	assertErrorReason(t, resp, http.StatusForbidden, ossAccountDisabledReason)
+	assertErrorReason(t, resp, http.StatusForbidden, pairedDeviceCredentialsRequiredReason)
 }
 
-func TestPersonalAccessAcceptsPairedDeviceHMACWithoutAccountBearer(t *testing.T) {
+func TestPersonalAccessAcceptsPairedDeviceHMACCredentials(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	if err := os.MkdirAll(cfg.PersonalDir(), 0o755); err != nil {
 		t.Fatalf("mkdir personal dir: %v", err)
@@ -2775,7 +2765,7 @@ func TestPersonalAccessRejectsBlockedPairedDeviceHMAC(t *testing.T) {
 	}
 }
 
-func TestPersonalListReturnsSameAccountPersonalDirectory(t *testing.T) {
+func TestPersonalListReturnsConfiguredLocalPersonalDirectory(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	cfg.ReceiveDir = filepath.Join(t.TempDir(), "received")
 	cfg.PersonalShareDir = filepath.Join(t.TempDir(), "Personal Share")
