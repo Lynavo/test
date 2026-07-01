@@ -169,10 +169,6 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny('Keychain migration strings preserve access to existing credentials.'),
   ],
   [
-    'apps/mobile/ios/LynavoDrive/AppleAuthModule.swift',
-    allowAny('Keychain migration strings and build settings preserve existing installs.'),
-  ],
-  [
     'apps/mobile/src/utils/clearUserScopedStorage.ts',
     allowAny('Shared-preference and storage migration strings preserve existing installs.'),
   ],

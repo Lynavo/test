@@ -65,19 +65,12 @@ function getEnv(name: string): string | undefined {
 function readNativeValue(
   name: keyof VisualQaNativeConstants,
 ): string | undefined {
-  const nativeMarketConfig = NativeModules.NativeMarketConfig as
+  const nativeAppRuntimeConfig = NativeModules.NativeAppRuntimeConfig as
     | VisualQaNativeConstants
     | undefined;
-  const appleAuthModule = NativeModules.AppleAuthModule as
-    | VisualQaNativeConstants
-    | undefined;
-  const nativeMarketConstants = nativeMarketConfig?.getConstants?.();
-  const appleAuthConstants = appleAuthModule?.getConstants?.();
+  const nativeAppRuntimeConstants = nativeAppRuntimeConfig?.getConstants?.();
   const value =
-    nativeMarketConfig?.[name] ??
-    nativeMarketConstants?.[name] ??
-    appleAuthModule?.[name] ??
-    appleAuthConstants?.[name];
+    nativeAppRuntimeConfig?.[name] ?? nativeAppRuntimeConstants?.[name];
   return typeof value === 'string' ? value : undefined;
 }
 

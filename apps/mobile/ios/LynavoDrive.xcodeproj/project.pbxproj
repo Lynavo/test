@@ -28,7 +28,6 @@
 		D4E1CA212FA1000100000001 /* ClientDisplayNameResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1CA202FA1000100000001 /* ClientDisplayNameResolver.swift */; };
 		D4E1CA312FA2000100000001 /* SharedFilesAccessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E1CA302FA2000100000001 /* SharedFilesAccessPolicy.swift */; };
 		DB862C6CA16A33F1996C19AF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		F099B4D807822DF27768C5E5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7906572870B674B3935AF6FD /* GoogleService-Info.plist */; };
 		FC3ECC2E2F6F05B5000460F8 /* RNBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC252F6F05B5000460F8 /* RNBridge.m */; };
 		FC3ECC302F6F05B5000460F8 /* RNBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC262F6F05B5000460F8 /* RNBridge.swift */; };
 		FC3ECC312F6F05B5000460F8 /* BindingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC212F6F05B5000460F8 /* BindingService.swift */; };
@@ -47,8 +46,8 @@
 		FC3ECC712F6F0C00000460F8 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC702F6F0C00000460F8 /* Log.swift */; };
 		FC3ECCA02F7A0001000460F8 /* HMACAuthHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECCA12F7A0001000460F8 /* HMACAuthHelper.swift */; };
 		FC3ECCC02F8A0002000460F8 /* BackgroundTransitionRefCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECCC12F8A0002000460F8 /* BackgroundTransitionRefCount.swift */; };
-		FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000001 /* AppleAuthModule.swift */; };
-		FFFF00000000000000000004 /* AppleAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000003 /* AppleAuthModuleBridge.m */; };
+		FFFF00000000000000000002 /* NativeAppRuntimeConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000001 /* NativeAppRuntimeConfig.swift */; };
+		FFFF00000000000000000004 /* NativeAppRuntimeConfigBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000003 /* NativeAppRuntimeConfigBridge.m */; };
 		VD0000000000000000000002 /* LynavoBlurViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = VD0000000000000000000001 /* LynavoBlurViewManager.m */; };
 /* End PBXBuildFile section */
 
@@ -65,7 +64,6 @@
 		5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AuthKeychainCleaner.swift; path = LynavoDrive/AuthKeychainCleaner.swift; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-LynavoDrive.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-LynavoDrive.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = LynavoDrive/AppDelegate.swift; sourceTree = "<group>"; };
-		7906572870B674B3935AF6FD /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = text.plist; name = "GoogleService-Info.plist"; path = "LynavoDrive/GoogleService-Info.plist"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = LynavoDrive/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BF03A37DF229F642E8356F03 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		D2C0A4C610F1EE6DEAF9DAB0 /* SharedFilesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedFilesService.swift; sourceTree = "<group>"; };
@@ -99,8 +97,8 @@
 		FC3ECC702F6F0C00000460F8 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		FC3ECCA12F7A0001000460F8 /* HMACAuthHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACAuthHelper.swift; sourceTree = "<group>"; };
 		FC3ECCC12F8A0002000460F8 /* BackgroundTransitionRefCount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionRefCount.swift; sourceTree = "<group>"; };
-		FFFF00000000000000000001 /* AppleAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleAuthModule.swift; path = LynavoDrive/AppleAuthModule.swift; sourceTree = "<group>"; };
-		FFFF00000000000000000003 /* AppleAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = AppleAuthModuleBridge.m; path = LynavoDrive/AppleAuthModuleBridge.m; sourceTree = "<group>"; };
+		FFFF00000000000000000001 /* NativeAppRuntimeConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NativeAppRuntimeConfig.swift; path = LynavoDrive/NativeAppRuntimeConfig.swift; sourceTree = "<group>"; };
+		FFFF00000000000000000003 /* NativeAppRuntimeConfigBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = NativeAppRuntimeConfigBridge.m; path = LynavoDrive/NativeAppRuntimeConfigBridge.m; sourceTree = "<group>"; };
 		VD0000000000000000000001 /* LynavoBlurViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LynavoBlurViewManager.m; path = LynavoDrive/LynavoBlurViewManager.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -122,8 +120,8 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				761780EC2CA45674006654EE /* AppDelegate.swift */,
 				5A2D2F6A3480DB6500C3A12F /* AuthKeychainCleaner.swift */,
-				FFFF00000000000000000001 /* AppleAuthModule.swift */,
-				FFFF00000000000000000003 /* AppleAuthModuleBridge.m */,
+				FFFF00000000000000000001 /* NativeAppRuntimeConfig.swift */,
+				FFFF00000000000000000003 /* NativeAppRuntimeConfigBridge.m */,
 				VD0000000000000000000001 /* LynavoBlurViewManager.m */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */,
@@ -157,7 +155,6 @@
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				BBD78D7AC51CEA395F1C20DB /* Pods */,
-				7906572870B674B3935AF6FD /* GoogleService-Info.plist */,
 				2A006A30AF22FE10FF0A2871 /* InfoPlist.strings */,
 			);
 			indentWidth = 2;
@@ -285,7 +282,6 @@
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				DB862C6CA16A33F1996C19AF /* PrivacyInfo.xcprivacy in Resources */,
-				F099B4D807822DF27768C5E5 /* GoogleService-Info.plist in Resources */,
 				79925496FECC53ED57FB261F /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -374,8 +370,8 @@
 			files = (
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				5A2D2F6B3480DB6500C3A12F /* AuthKeychainCleaner.swift in Sources */,
-				FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */,
-				FFFF00000000000000000004 /* AppleAuthModuleBridge.m in Sources */,
+				FFFF00000000000000000002 /* NativeAppRuntimeConfig.swift in Sources */,
+				FFFF00000000000000000004 /* NativeAppRuntimeConfigBridge.m in Sources */,
 				VD0000000000000000000002 /* LynavoBlurViewManager.m in Sources */,
 				FC3ECC2E2F6F05B5000460F8 /* RNBridge.m in Sources */,
 				FC3ECC302F6F05B5000460F8 /* RNBridge.swift in Sources */,

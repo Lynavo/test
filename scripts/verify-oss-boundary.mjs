@@ -33,6 +33,7 @@ const OSS_BOUNDARY_TERMS = [
   'GoogleSignin',
   '@react-native-google-signin',
   'GoogleService-Info.plist',
+  'googleusercontent',
   'AppleAuth',
   'AppleAuthModule',
   'supportsAppleAuth',
@@ -166,12 +167,6 @@ const ALLOWED_EXACT_PATHS = new Map([
   ['apps/mobile/src/config/__tests__/app-config.test.ts', allowAny(NEGATIVE_ASSERTION_REASON)],
   ['packages/contracts/src/types.ts', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
   ['packages/contracts/src/__tests__/exports.test.ts', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
-  [
-    'packages/contracts/src/service-endpoints.ts',
-    allowAny(
-      'Current contracts package still exposes legacy auth endpoint constants; tracked for later deletion.',
-    ),
-  ],
   ['apps/mobile/src/stores/auth-store.tsx', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
   [
     'apps/mobile/src/stores/__tests__/auth-store-local-mode.test.tsx',
@@ -181,12 +176,6 @@ const ALLOWED_EXACT_PATHS = new Map([
   [
     'apps/mobile/src/services/__tests__/api-dev-sandbox.test.ts',
     allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
-  ],
-  [
-    'apps/mobile/package.json',
-    allowAny(
-      'Current mobile dependency manifest still records third-party auth dependency; tracked for later deletion.',
-    ),
   ],
   [
     'apps/mobile/src/navigation/__tests__/RootNavigator.local-mode.test.tsx',
@@ -225,42 +214,8 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
   ],
   [
-    'apps/mobile/jest-setup.js',
-    allowAny('Existing native module shim kept until AppleAuthModule is renamed or removed.'),
-  ],
-  [
-    'apps/mobile/src/dev/visualQa.ts',
-    allowAny('Visual QA bridge still reads the existing AppleAuthModule constants surface.'),
-  ],
-  [
-    'apps/mobile/src/dev/__tests__/visualQa.test.ts',
-    allowAny('Visual QA bridge tests still mock the existing AppleAuthModule constants surface.'),
-  ],
-  [
-    'apps/mobile/ios/LynavoDrive/AppleAuthModule.swift',
-    allowAny('Existing native bridge name retained until account/native constants cleanup.'),
-  ],
-  [
-    'apps/mobile/ios/LynavoDrive/AppleAuthModuleBridge.m',
-    allowAny('Existing native bridge name retained until account/native constants cleanup.'),
-  ],
-  [
     'apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj',
-    allowAny(
-      'Xcode project still references current native bridge and Apple signing entitlements.',
-    ),
-  ],
-  [
-    'apps/mobile/ios/Podfile.lock',
-    allowAny(
-      'Current dependency lock still records third-party auth dependency; tracked for later deletion.',
-    ),
-  ],
-  [
-    'apps/mobile/ios/LynavoDrive/GoogleService-Info.plist',
-    allowAny(
-      'Current iOS bundle still contains third-party auth configuration; tracked for later deletion.',
-    ),
+    allowAny(APPLE_SIGNING_ENTITLEMENTS_REASON),
   ],
   [
     'apps/mobile/ios/SyncEngine/SyncEngineManager.swift',

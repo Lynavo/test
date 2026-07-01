@@ -1,13 +1,13 @@
 import Foundation
 import React
 
-@objc(AppleAuthModule)
-class AppleAuthModule: NSObject {
+@objc(NativeAppRuntimeConfig)
+class NativeAppRuntimeConfig: NSObject {
   @objc
   static func requiresMainQueueSetup() -> Bool {
     return true
   }
-  
+
   private func exportedConstants() -> [AnyHashable: Any] {
     var constants: [AnyHashable: Any] = [:]
     let environment = ProcessInfo.processInfo.environment
@@ -28,21 +28,12 @@ class AppleAuthModule: NSObject {
   }
 
   @objc
-  func constantsToExport() -> [AnyHashable : Any]! {
+  func constantsToExport() -> [AnyHashable: Any]! {
     return exportedConstants()
   }
 
   @objc
-  func getConstants() -> [AnyHashable : Any]! {
+  func getConstants() -> [AnyHashable: Any]! {
     return exportedConstants()
-  }
-  
-  @objc
-  func login(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    reject(
-      "ERR_OFFICIAL_AUTH_UNSUPPORTED",
-      "Sign in with Apple is unavailable in the OSS runtime.",
-      nil
-    )
   }
 }

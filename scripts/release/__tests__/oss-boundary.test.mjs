@@ -25,6 +25,7 @@ test('blocks unallowlisted commercial and remote-access boundary terms by defaul
         'const oldScreen = "RemoteAccess";',
         'const tunnel = "remote tunnel";',
         'const gate = "paywall";',
+        'const urlScheme = "com.googleusercontent.apps.example";',
       ].join('\n'),
     );
     writeFileSync(join(sourceDir, 'RemoteAccessScreen.tsx'), 'export const ok = true;\n');
@@ -32,11 +33,12 @@ test('blocks unallowlisted commercial and remote-access boundary terms by defaul
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 4/);
+    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 5/);
     assert.match(result.stdout, /apps\/mobile\/src\/RemoteAccessScreen\.tsx:0 RemoteAccess/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:1 RemoteAccess/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:2 remote tunnel/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:3 paywall/);
+    assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:4 googleusercontent/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -9,6 +9,7 @@ import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.mrousavy.camera.react.CameraPackage
+import com.lynavo.drive.mobile.runtime.NativeAppRuntimeConfigPackage
 import com.lynavo.drive.mobile.sync.NativeSyncEngineModule
 import com.lynavo.drive.mobile.sync.NativeSyncEnginePackage
 import com.lynavo.drive.mobile.ui.LynavoUiPackage
@@ -21,6 +22,7 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
           add(CameraPackage())
+          add(NativeAppRuntimeConfigPackage())
           add(NativeSyncEnginePackage())
           add(LynavoUiPackage())
         },

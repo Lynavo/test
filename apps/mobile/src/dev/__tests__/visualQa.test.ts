@@ -22,8 +22,7 @@ describe('visual QA dev bootstrap', () => {
 
   beforeEach(() => {
     testGlobal.__DEV__ = true;
-    delete NativeModules.NativeMarketConfig;
-    delete NativeModules.AppleAuthModule;
+    delete NativeModules.NativeAppRuntimeConfig;
     delete testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__;
     process.env = { ...originalEnv };
     delete process.env.LYNAVO_VISUAL_QA;
@@ -56,7 +55,7 @@ describe('visual QA dev bootstrap', () => {
 
   test('allows native visual QA constants outside dev runtime', () => {
     testGlobal.__DEV__ = false;
-    NativeModules.AppleAuthModule = {
+    NativeModules.NativeAppRuntimeConfig = {
       LYNAVO_VISUAL_QA: '1',
       LYNAVO_VISUAL_QA_ROUTE: 'History',
       LYNAVO_VISUAL_QA_SHARED_FILES_PREVIEW: '1',
@@ -85,8 +84,8 @@ describe('visual QA dev bootstrap', () => {
     });
   });
 
-  test('prefers native visual QA constants over process env fallback', () => {
-    NativeModules.NativeMarketConfig = {
+  test('prefers native runtime visual QA constants over process env fallback', () => {
+    NativeModules.NativeAppRuntimeConfig = {
       LYNAVO_VISUAL_QA: '1',
       LYNAVO_VISUAL_QA_EMAIL: 'native@example.com',
       LYNAVO_VISUAL_QA_ROUTE: 'History',
@@ -105,21 +104,8 @@ describe('visual QA dev bootstrap', () => {
     expect(testGlobal.__LYNAVO_SHARED_FILES_PREVIEW__).toBe(true);
   });
 
-  test('falls back to AppleAuthModule visual QA constants when market config is absent', () => {
-    NativeModules.AppleAuthModule = {
-      LYNAVO_VISUAL_QA: '1',
-      LYNAVO_VISUAL_QA_ROUTE: 'Settings',
-    };
-
-    expect(getVisualQaMockTokens()).toEqual({
-      accessToken: 'mock-sandbox-access-token:qa@example.com',
-      refreshToken: 'mock-sandbox-refresh-token',
-    });
-    expect(resolveVisualQaInitialRoute()).toBe('Settings');
-  });
-
-  test('reads AppleAuthModule getConstants visual QA constants', () => {
-    NativeModules.AppleAuthModule = {
+  test('reads native runtime getConstants visual QA constants', () => {
+    NativeModules.NativeAppRuntimeConfig = {
       getConstants: () => ({
         LYNAVO_VISUAL_QA: '1',
         LYNAVO_VISUAL_QA_ROUTE: 'History',
@@ -134,7 +120,7 @@ describe('visual QA dev bootstrap', () => {
   });
 
   test('reads native dev skip-auth constants without enabling visual QA mocks', () => {
-    NativeModules.AppleAuthModule = {
+    NativeModules.NativeAppRuntimeConfig = {
       LYNAVO_DEV_SKIP_AUTH: '1',
       LYNAVO_DEV_SKIP_AUTH_EMAIL: 'functional@example.com',
       LYNAVO_VISUAL_QA: '0',

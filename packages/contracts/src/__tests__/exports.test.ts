@@ -191,7 +191,7 @@ describe('@lynavo-drive/contracts exports', () => {
     expect(contracts.LYNAVO_REVIEW_API_BASE_URL).toBe('https://review-api.lynavo.com');
     expect(contracts.LYNAVO_SUPPORT_EMAIL).toBe('support@lynavo.com');
     expect(contracts.LYNAVO_REVIEW_EMAIL).toBe('review@lynavo.com');
-    expect(contracts.LYNAVO_APPLE_REDIRECT_URI).toBe('https://api.lynavo.com/auth/apple/callback');
+    expect('LYNAVO_APPLE_REDIRECT_URI' in contracts).toBe(false);
     expect('LYNAVO_TURN_URL' in contracts).toBe(false);
     expect(contracts.LYNAVO_SERVICE_ENDPOINTS).toEqual({
       webBaseUrl: 'https://www.lynavo.com',
@@ -199,7 +199,6 @@ describe('@lynavo-drive/contracts exports', () => {
       reviewApiBaseUrl: 'https://review-api.lynavo.com',
       supportEmail: 'support@lynavo.com',
       reviewEmail: 'review@lynavo.com',
-      appleRedirectUri: 'https://api.lynavo.com/auth/apple/callback',
     });
   });
 
