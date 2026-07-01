@@ -313,6 +313,33 @@ object AndroidSyncPrimitives {
     return AndroidBackgroundContinuationDecision(canContinue = true, reason = null)
   }
 
+  fun shouldAcceptRemoteTunnelCredentials(
+    entitlement: AndroidDriveEntitlementSnapshot,
+    now: String,
+  ): Boolean =
+    hasActiveDriveEntitlement(
+      enabled = entitlement.canUseRemoteTunnel,
+      checkedAt = entitlement.checkedAt,
+      expiresAt = entitlement.expiresAt,
+      now = now,
+    )
+
+  fun shouldClearRemoteTunnelOnEntitlementUpdate(
+    entitlement: AndroidDriveEntitlementSnapshot,
+    now: String,
+  ): Boolean = !shouldAcceptRemoteTunnelCredentials(entitlement, now)
+
+  fun remoteTunnelExpiryDelayMillis(
+    entitlement: AndroidDriveEntitlementSnapshot,
+    now: String,
+  ): Long? =
+    driveEntitlementExpiryDelayMillis(
+      enabled = entitlement.canUseRemoteTunnel,
+      checkedAt = entitlement.checkedAt,
+      expiresAt = entitlement.expiresAt,
+      now = now,
+    )
+
   fun buildWakeOnLanMagicPacket(macAddress: String): ByteArray {
     val mac = parseMacAddress(macAddress)
     return ByteArray(WAKE_MAGIC_PACKET_SIZE) { index ->
@@ -1231,13 +1258,26 @@ object AndroidSyncPrimitives {
   private fun hasActiveBackgroundContinuationEntitlement(
     entitlement: AndroidDriveEntitlementSnapshot,
     now: String,
+  ): Boolean =
+    hasActiveDriveEntitlement(
+      enabled = entitlement.canUseBackgroundContinuation,
+      checkedAt = entitlement.checkedAt,
+      expiresAt = entitlement.expiresAt,
+      now = now,
+    )
+
+  private fun hasActiveDriveEntitlement(
+    enabled: Boolean,
+    checkedAt: String?,
+    expiresAt: String?,
+    now: String,
   ): Boolean {
-    if (!entitlement.canUseBackgroundContinuation) {
+    if (!enabled) {
       return false
     }
     val nowMs = parseIsoInstantMillis(now) ?: return false
-    val checkedAtMs = entitlement.checkedAt?.let { parseIsoInstantMillis(it) } ?: return false
-    val expiresAtMs = entitlement.expiresAt?.let { parseIsoInstantMillis(it) } ?: return false
+    val checkedAtMs = checkedAt?.let { parseIsoInstantMillis(it) } ?: return false
+    val expiresAtMs = expiresAt?.let { parseIsoInstantMillis(it) } ?: return false
     if (checkedAtMs > nowMs) {
       return false
     }
@@ -1245,6 +1285,30 @@ object AndroidSyncPrimitives {
       return false
     }
     return expiresAtMs > nowMs
+  }
+
+  private fun driveEntitlementExpiryDelayMillis(
+    enabled: Boolean,
+    checkedAt: String?,
+    expiresAt: String?,
+    now: String,
+  ): Long? {
+    if (!enabled) {
+      return null
+    }
+    val nowMs = parseIsoInstantMillis(now) ?: return null
+    val checkedAtMs = checkedAt?.let { parseIsoInstantMillis(it) } ?: return null
+    val expiresAtMs = expiresAt?.let { parseIsoInstantMillis(it) } ?: return null
+    if (checkedAtMs > nowMs) {
+      return null
+    }
+    if (nowMs - checkedAtMs > DRIVE_ENTITLEMENT_MAX_AGE_MS) {
+      return null
+    }
+    if (expiresAtMs <= nowMs) {
+      return null
+    }
+    return (minOf(expiresAtMs, checkedAtMs + DRIVE_ENTITLEMENT_MAX_AGE_MS) - nowMs).coerceAtLeast(0)
   }
 
   private fun ipv4ToLong(ip: String): Long? {

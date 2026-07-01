@@ -2016,6 +2016,122 @@ class AndroidSyncPrimitivesTest {
     assertEquals("background_entitlement_missing", futureCheckedAt.reason)
   }
 
+  @Test
+  fun remoteTunnelAcceptsCredentialsOnlyWithFreshEntitlement() {
+    val active = AndroidDriveEntitlementSnapshot(
+      canUseBackgroundContinuation = false,
+      canUseRemoteTunnel = true,
+      checkedAt = "2026-07-01T00:00:00Z",
+      expiresAt = "2026-07-02T00:00:00Z",
+    )
+    val disabled = active.copy(canUseRemoteTunnel = false)
+    val missingExpiry = active.copy(expiresAt = null)
+    val expired = active.copy(expiresAt = "2026-07-01T00:00:00Z")
+    val staleCheckedAt = active.copy(checkedAt = "2026-06-29T23:59:59Z")
+
+    assertTrue(
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = active,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = disabled,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = missingExpiry,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = expired,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = staleCheckedAt,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+  }
+
+  @Test
+  fun remoteTunnelClearsWhenEntitlementIsMissingOrExpired() {
+    val active = AndroidDriveEntitlementSnapshot(
+      canUseBackgroundContinuation = false,
+      canUseRemoteTunnel = true,
+      checkedAt = "2026-07-01T00:00:00Z",
+      expiresAt = "2026-07-02T00:00:00Z",
+    )
+
+    assertFalse(
+      AndroidSyncPrimitives.shouldClearRemoteTunnelOnEntitlementUpdate(
+        entitlement = active,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldClearRemoteTunnelOnEntitlementUpdate(
+        entitlement = active.copy(canUseRemoteTunnel = false),
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldClearRemoteTunnelOnEntitlementUpdate(
+        entitlement = active.copy(expiresAt = "2026-07-01T00:00:00Z"),
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+  }
+
+  @Test
+  fun remoteTunnelExpiryDelayUsesEarliestEntitlementDeadline() {
+    val active = AndroidDriveEntitlementSnapshot(
+      canUseBackgroundContinuation = false,
+      canUseRemoteTunnel = true,
+      checkedAt = "2026-07-01T00:00:00Z",
+      expiresAt = "2026-07-02T00:00:00Z",
+    )
+    val expiresAtLimited = active.copy(expiresAt = "2026-07-01T00:10:00Z")
+    val maxAgeLimited = active.copy(
+      checkedAt = "2026-06-30T23:59:00Z",
+      expiresAt = "2026-07-02T00:30:00Z",
+    )
+
+    assertEquals(
+      9 * 60 * 1000L,
+      AndroidSyncPrimitives.remoteTunnelExpiryDelayMillis(
+        entitlement = expiresAtLimited,
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertEquals(
+      23 * 60 * 1000L,
+      AndroidSyncPrimitives.remoteTunnelExpiryDelayMillis(
+        entitlement = maxAgeLimited,
+        now = "2026-07-01T23:36:00Z",
+      ),
+    )
+    assertNull(
+      AndroidSyncPrimitives.remoteTunnelExpiryDelayMillis(
+        entitlement = active.copy(canUseRemoteTunnel = false),
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+    assertNull(
+      AndroidSyncPrimitives.remoteTunnelExpiryDelayMillis(
+        entitlement = active.copy(expiresAt = "2026-07-01T00:00:00Z"),
+        now = "2026-07-01T00:01:00Z",
+      ),
+    )
+  }
+
   private fun testUploadItem(
     fileKey: String,
     source: String,

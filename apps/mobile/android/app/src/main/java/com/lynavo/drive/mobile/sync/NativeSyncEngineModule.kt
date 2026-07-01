@@ -152,6 +152,10 @@ class NativeSyncEngineModule(
   private var signalingUrl: String? = null
   private var accessToken: String? = null
   private var tunnelIceServersJSON: String = ""
+  private val remoteTunnelEntitlementLock = Any()
+  private var remoteTunnelEntitlementGeneration = 0L
+  private var remoteTunnelEntitlementExecutor: ScheduledExecutorService? = null
+  private var remoteTunnelEntitlementFuture: ScheduledFuture<*>? = null
   @Volatile private var sharedFilesReachability: SharedFilesReachability? = null
   private val bindingMutationLock = Any()
   init {
@@ -176,6 +180,7 @@ class NativeSyncEngineModule(
     cancelPresenceRecoveryProbe(reason = "module_invalidated")
     stopPresenceHeartbeatTimer()
     stopPairingControlSession(reason = "module_invalidated")
+    cancelRemoteTunnelEntitlementExpiry(reason = "module_invalidated")
     stopP2PTunnel()
     unregisterNetworkAvailabilityMonitor()
     reactApplicationContext.removeLifecycleEventListener(this)
@@ -215,13 +220,18 @@ class NativeSyncEngineModule(
     promise: Promise,
   ) {
     if (signalingUrl.isBlank() || accessToken.isBlank()) {
-      synchronized(p2pTunnelLock) {
-        this.signalingUrl = null
-        this.accessToken = null
-        this.tunnelIceServersJSON = ""
-      }
-      stopP2PTunnel()
-      recordNativeLog("SyncEngine", "tunnel credentials cleared")
+      clearP2PTunnelCredentials("credentials_cleared")
+      promise.resolve(null)
+      return
+    }
+    if (
+      !AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = driveEntitlementSnapshot,
+        now = isoNow(),
+      )
+    ) {
+      clearP2PTunnelCredentialsIfRemoteEntitlementDenied("remote_entitlement_denied")
+      recordNativeLog("SyncEngine", "tunnel credentials rejected: remote entitlement denied")
       promise.resolve(null)
       return
     }
@@ -241,6 +251,7 @@ class NativeSyncEngineModule(
 
     Log.d("NativeSyncEngine", "setTunnelCredentials received signalingUrl=$signalingUrl")
     recordNativeLog("SyncEngine", "setTunnelCredentials received signalingUrl=$signalingUrl")
+    rescheduleRemoteTunnelEntitlementExpiry(reason = "credentials_received")
     val currentBinding = loadBinding()
     if (currentBinding != null && isBindingConnected(currentBinding)) {
       startP2PTunnelIfNeeded(currentBinding)
@@ -1077,12 +1088,20 @@ class NativeSyncEngineModule(
 
   @ReactMethod
   fun setDriveEntitlements(params: ReadableMap, promise: Promise) {
-    driveEntitlementSnapshot = AndroidDriveEntitlementSnapshot(
+    val snapshot = AndroidDriveEntitlementSnapshot(
       canUseBackgroundContinuation = readableBoolean(params, "canUseBackgroundContinuation", defaultValue = false),
       canUseRemoteTunnel = readableBoolean(params, "canUseRemoteTunnel", defaultValue = false),
       checkedAt = readableStringOrNull(params, "checkedAt"),
       expiresAt = readableStringOrNull(params, "expiresAt"),
     )
+    applyDriveEntitlementSnapshot(snapshot)
+    val now = isoNow()
+    if (AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(entitlement = snapshot, now = now)) {
+      rescheduleRemoteTunnelEntitlementExpiry(reason = "entitlement_updated")
+    } else {
+      cancelRemoteTunnelEntitlementExpiry(reason = "entitlement_updated_denied")
+      clearP2PTunnelCredentialsIfRemoteEntitlementDenied("remote_entitlement_revoked")
+    }
     recordDiagnosticsLog(
       "Entitlements",
       "snapshot updated background=${driveEntitlementSnapshot.canUseBackgroundContinuation} remote=${driveEntitlementSnapshot.canUseRemoteTunnel} checkedAt=${driveEntitlementSnapshot.checkedAt ?: "nil"} expiresAt=${driveEntitlementSnapshot.expiresAt ?: "nil"}",
@@ -1126,7 +1145,9 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun wipeSyncIdentity(promise: Promise) {
     try {
-      stopP2PTunnel()
+      driveEntitlementSnapshot = AndroidDriveEntitlementSnapshot()
+      cancelRemoteTunnelEntitlementExpiry(reason = "identity_reset")
+      clearP2PTunnelCredentials("identity_reset")
       clearBindingInvalidationReason()
       performWipeSyncIdentity(prefs)
       emitBindingStateCleared()
@@ -3888,6 +3909,20 @@ class NativeSyncEngineModule(
     val clientId = getOrCreateClientId()
     val targetClientId = binding.deviceId
     val pairingToken = binding.pairingToken
+    val hasTunnelCredentials = synchronized(p2pTunnelLock) {
+      !signalingUrl.isNullOrBlank() && !accessToken.isNullOrBlank()
+    }
+    if (
+      hasTunnelCredentials &&
+      !AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = driveEntitlementSnapshot,
+        now = isoNow(),
+      )
+    ) {
+      clearP2PTunnelCredentialsIfRemoteEntitlementDenied("remote_entitlement_denied")
+      recordNativeLog("SyncEngine", "P2P tunnel skipped: remote entitlement denied")
+      return
+    }
 
     val startSnapshot = synchronized(p2pTunnelLock) {
       val currentSignalingUrl = signalingUrl
@@ -3925,10 +3960,25 @@ class NativeSyncEngineModule(
         var logMessage: String? = null
         var shouldStopStaleTunnel = false
         synchronized(p2pTunnelLock) {
-          val shouldCommit = tunnelGeneration == startSnapshot.generation &&
+          val credentialsStillCurrent = tunnelGeneration == startSnapshot.generation &&
             signalingUrl == startSnapshot.signalingUrl &&
             accessToken == startSnapshot.accessToken &&
             tunnelIceServersJSON == startSnapshot.iceServersJSON
+          val entitlementStillAllowed =
+            AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+              entitlement = driveEntitlementSnapshot,
+              now = isoNow(),
+            )
+          if (credentialsStillCurrent && !entitlementStillAllowed) {
+            signalingUrl = null
+            accessToken = null
+            tunnelIceServersJSON = ""
+            tunnelPort = null
+            isTunnelActive = false
+            tunnelStarting = false
+            logMessage = "P2P tunnel discarded: remote entitlement denied"
+          }
+          val shouldCommit = credentialsStillCurrent && entitlementStillAllowed
           if (shouldCommit && port > 0) {
             tunnelPort = port
             isTunnelActive = true
@@ -3992,6 +4042,133 @@ class NativeSyncEngineModule(
       }
     }
   }
+
+  private fun rescheduleRemoteTunnelEntitlementExpiry(reason: String) {
+    val delayMs = AndroidSyncPrimitives.remoteTunnelExpiryDelayMillis(
+      entitlement = driveEntitlementSnapshot,
+      now = isoNow(),
+    )
+    synchronized(remoteTunnelEntitlementLock) {
+      remoteTunnelEntitlementFuture?.cancel(false)
+      remoteTunnelEntitlementFuture = null
+      remoteTunnelEntitlementGeneration += 1
+      if (delayMs == null) {
+        return
+      }
+      val generation = remoteTunnelEntitlementGeneration
+      remoteTunnelEntitlementFuture = remoteTunnelEntitlementExecutorLocked().schedule(
+        { enforceRemoteTunnelEntitlementExpiry(generation) },
+        delayMs,
+        TimeUnit.MILLISECONDS,
+      )
+    }
+    recordNativeLog("Entitlements", "remote tunnel expiry scheduled reason=$reason delay=${delayMs}ms")
+  }
+
+  private fun applyDriveEntitlementSnapshot(snapshot: AndroidDriveEntitlementSnapshot) {
+    synchronized(remoteTunnelEntitlementLock) {
+      remoteTunnelEntitlementGeneration += 1
+      driveEntitlementSnapshot = snapshot
+    }
+  }
+
+  private fun cancelRemoteTunnelEntitlementExpiry(reason: String) {
+    val hadFuture = synchronized(remoteTunnelEntitlementLock) {
+      remoteTunnelEntitlementGeneration += 1
+      val existing = remoteTunnelEntitlementFuture
+      remoteTunnelEntitlementFuture = null
+      existing
+    }
+    if (hadFuture != null) {
+      hadFuture.cancel(false)
+      recordNativeLog("Entitlements", "remote tunnel expiry cancelled reason=$reason")
+    }
+  }
+
+  private fun enforceRemoteTunnelEntitlementExpiry(generation: Long) {
+    val stillCurrent = synchronized(remoteTunnelEntitlementLock) {
+      generation == remoteTunnelEntitlementGeneration
+    }
+    if (!stillCurrent) {
+      return
+    }
+    if (
+      AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = driveEntitlementSnapshot,
+        now = isoNow(),
+      )
+    ) {
+      rescheduleRemoteTunnelEntitlementExpiry(reason = "expiry_recheck_still_allowed")
+      return
+    }
+    val shouldClear = synchronized(remoteTunnelEntitlementLock) {
+      if (generation == remoteTunnelEntitlementGeneration) {
+        remoteTunnelEntitlementFuture = null
+        true
+      } else {
+        false
+      }
+    }
+    if (shouldClear) {
+      clearP2PTunnelCredentialsIfRemoteEntitlementDenied(
+        reason = "remote_entitlement_expired_local",
+        expectedGeneration = generation,
+      )
+    }
+  }
+
+  private fun remoteTunnelEntitlementExecutorLocked(): ScheduledExecutorService {
+    val existing = remoteTunnelEntitlementExecutor
+    if (existing != null && !existing.isShutdown) {
+      return existing
+    }
+    return Executors.newSingleThreadScheduledExecutor { runnable ->
+      Thread(runnable, "NativeSyncEngineRemoteTunnelEntitlement").apply { isDaemon = true }
+    }.also { remoteTunnelEntitlementExecutor = it }
+  }
+
+  private fun hasP2PTunnelState(): Boolean =
+    synchronized(p2pTunnelLock) {
+      !signalingUrl.isNullOrBlank() ||
+        !accessToken.isNullOrBlank() ||
+        tunnelIceServersJSON.isNotBlank() ||
+        tunnelPort != null ||
+        isTunnelActive ||
+        tunnelStarting
+    }
+
+  private fun clearP2PTunnelCredentials(reason: String) {
+    synchronized(p2pTunnelLock) {
+      signalingUrl = null
+      accessToken = null
+      tunnelIceServersJSON = ""
+    }
+    stopP2PTunnel()
+    recordNativeLog("SyncEngine", "tunnel credentials cleared reason=$reason")
+  }
+
+  private fun clearP2PTunnelCredentialsIfRemoteEntitlementDenied(
+    reason: String,
+    expectedGeneration: Long? = null,
+  ): Boolean =
+    synchronized(remoteTunnelEntitlementLock) {
+      if (expectedGeneration != null && expectedGeneration != remoteTunnelEntitlementGeneration) {
+        return@synchronized false
+      }
+      if (
+        AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+          entitlement = driveEntitlementSnapshot,
+          now = isoNow(),
+        )
+      ) {
+        return@synchronized false
+      }
+      if (!hasP2PTunnelState()) {
+        return@synchronized false
+      }
+      clearP2PTunnelCredentials(reason)
+      true
+    }
 
   private fun resolveSharedFileRoute(
     scope: String,
@@ -4375,8 +4552,8 @@ class NativeSyncEngineModule(
     )
   }
 
-  private fun p2pTunnelRouteSnapshot(): P2PTunnelRouteSnapshot =
-    synchronized(p2pTunnelLock) {
+  private fun p2pTunnelRouteSnapshot(): P2PTunnelRouteSnapshot {
+    val snapshot = synchronized(p2pTunnelLock) {
       P2PTunnelRouteSnapshot(
         hasCredentials = !signalingUrl.isNullOrBlank() && !accessToken.isNullOrBlank(),
         isActive = isTunnelActive && tunnelPort != null,
@@ -4384,6 +4561,24 @@ class NativeSyncEngineModule(
         port = tunnelPort,
       )
     }
+    if (
+      snapshot.hasState &&
+      !AndroidSyncPrimitives.shouldAcceptRemoteTunnelCredentials(
+        entitlement = driveEntitlementSnapshot,
+        now = isoNow(),
+      )
+    ) {
+      if (clearP2PTunnelCredentialsIfRemoteEntitlementDenied("remote_entitlement_denied")) {
+        return P2PTunnelRouteSnapshot(
+          hasCredentials = false,
+          isActive = false,
+          isStarting = false,
+          port = null,
+        )
+      }
+    }
+    return snapshot
+  }
 
   private fun waitForP2PTunnelActive(binding: StoredBinding, reason: String): Boolean {
     val deadline = SystemClock.elapsedRealtime() + SHARED_TUNNEL_ROUTE_WAIT_MS
@@ -7613,7 +7808,10 @@ class NativeSyncEngineModule(
     val isActive: Boolean,
     val isStarting: Boolean,
     val port: Int?,
-  )
+  ) {
+    val hasState: Boolean
+      get() = hasCredentials || isActive || isStarting || port != null
+  }
 
   companion object {
     private const val MODULE_NAME = "NativeSyncEngine"

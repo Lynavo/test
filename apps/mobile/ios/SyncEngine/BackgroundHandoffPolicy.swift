@@ -157,6 +157,34 @@ enum BackgroundHandoffPolicy {
         )
     }
 
+    static func shouldAcceptRemoteTunnelCredentials(
+        snapshot: DriveEntitlementSnapshot?,
+        now: Date = Date()
+    ) -> Bool {
+        canUseRemoteTunnel(snapshot: snapshot, now: now)
+    }
+
+    static func shouldClearRemoteTunnelOnEntitlementUpdate(
+        snapshot: DriveEntitlementSnapshot?,
+        now: Date = Date()
+    ) -> Bool {
+        !shouldAcceptRemoteTunnelCredentials(snapshot: snapshot, now: now)
+    }
+
+    static func remoteTunnelExpiryDate(
+        snapshot: DriveEntitlementSnapshot?,
+        now: Date = Date()
+    ) -> Date? {
+        guard canUseRemoteTunnel(snapshot: snapshot, now: now),
+              let checkedAt = snapshot?.checkedAt,
+              let expiresAt = snapshot?.expiresAt
+        else {
+            return nil
+        }
+        let deadline = min(expiresAt, checkedAt.addingTimeInterval(entitlementMaxAge))
+        return deadline >= now ? deadline : nil
+    }
+
     static func backgroundContinuationExpiryDate(
         snapshot: DriveEntitlementSnapshot?,
         now: Date = Date()
