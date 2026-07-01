@@ -87,6 +87,11 @@ private class PairingInvalidatedFrameException(
   val invalidationReason: String,
 ) : Exception("Pairing invalidated: $invalidationReason")
 
+private class SharedFileHttpStatusException(
+  val statusCode: Int,
+  message: String,
+) : Exception(message)
+
 private data class PickedDocumentMetadata(
   val name: String,
   val size: Long,
@@ -133,14 +138,6 @@ class NativeSyncEngineModule(
   private val uploadStore by lazy { AndroidUploadStore(reactApplicationContext) }
   private val mediaStoreRepository by lazy { AndroidMediaStoreRepository(reactApplicationContext) }
   @Volatile private var appVisible = false
-  private val p2pTunnelLock = Any()
-  private var tunnelGeneration = 0L
-  private var tunnelPort: Int? = null
-  private var isTunnelActive = false
-  private var tunnelStarting = false
-  private var signalingUrl: String? = null
-  private var accessToken: String? = null
-  private var tunnelIceServersJSON: String = ""
   @Volatile private var sharedFilesReachability: SharedFilesReachability? = null
   private val bindingMutationLock = Any()
   init {
@@ -164,7 +161,6 @@ class NativeSyncEngineModule(
     cancelPresenceRecoveryProbe(reason = "module_invalidated")
     stopPresenceHeartbeatTimer()
     stopPairingControlSession(reason = "module_invalidated")
-    stopP2PTunnel()
     unregisterNetworkAvailabilityMonitor()
     reactApplicationContext.removeLifecycleEventListener(this)
     super.invalidate()
@@ -657,7 +653,6 @@ class NativeSyncEngineModule(
     recordNativeLog("Pairing", "disconnectAndUnbind requested")
     val binding = loadBinding()
     cancelPresenceRecoveryProbe(reason = "unbind")
-    stopP2PTunnel()
     stopPresenceHeartbeatTimer()
     stopPairingControlSession(reason = "unbind")
     clearBindingInvalidationReason()
@@ -1007,7 +1002,6 @@ class NativeSyncEngineModule(
   @ReactMethod
   fun wipeSyncIdentity(promise: Promise) {
     try {
-      clearP2PTunnelCredentials("identity_reset")
       clearBindingInvalidationReason()
       performWipeSyncIdentity(prefs)
       emitBindingStateCleared()
@@ -1586,19 +1580,19 @@ class NativeSyncEngineModule(
         )
         recordNativeLog(
           "SharedFiles",
-          "prepareSharedFilePreview completed scope=$scope path=$path is_tunnel=${route.isTunnel} local_path=$localPath",
+          "prepareSharedFilePreview completed scope=$scope path=$path local_path=$localPath",
         )
         promise.resolve(localPath)
       } catch (err: Throwable) {
-        if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+        if (!shouldRetrySharedFileRouteFailure(err)) {
           recordNativeLog(
             "SharedFiles",
-            "prepareSharedFilePreview failed path=$path is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+            "prepareSharedFilePreview failed path=$path retry=false error=${err.message ?: err::class.java.simpleName}",
             Log.WARN,
           )
           throw err
         }
-        route = recoverSharedFileTunnelAfterRouteFailure(
+        route = recoverSharedFileRouteAfterFailure(
           scope = scope,
           kind = "download",
           path = path,
@@ -1615,7 +1609,7 @@ class NativeSyncEngineModule(
         )
         recordNativeLog(
           "SharedFiles",
-          "prepareSharedFilePreview completed scope=$scope path=$path retry=true is_tunnel=${route.isTunnel} local_path=$localPath",
+          "prepareSharedFilePreview completed scope=$scope path=$path retry=true local_path=$localPath",
         )
         promise.resolve(localPath)
       }
@@ -3069,10 +3063,10 @@ class NativeSyncEngineModule(
     val json = try {
       JSONObject(readHttpString(route))
     } catch (err: Throwable) {
-      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+      if (!shouldRetrySharedFileRouteFailure(err)) {
         throw err
       }
-      route = recoverSharedFileTunnelAfterRouteFailure(
+      route = recoverSharedFileRouteAfterFailure(
         scope = scope,
         kind = "list",
         path = path,
@@ -3135,11 +3129,11 @@ class NativeSyncEngineModule(
     val json = try {
       JSONObject(readHttpString(route))
     } catch (err: Throwable) {
-      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+      if (!shouldRetrySharedFileRouteFailure(err)) {
         throw err
       }
       route = receivedListRoute(
-        recoverSharedFileTunnelAfterRouteFailure(
+        recoverSharedFileRouteAfterFailure(
           scope = "team",
           kind = "list",
           path = "received",
@@ -3210,15 +3204,15 @@ class NativeSyncEngineModule(
         )
       }
     } catch (err: Throwable) {
-      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+      if (!shouldRetrySharedFileRouteFailure(err)) {
         recordNativeLog(
           "SharedFiles",
-          "downloadSharedFile failed path=$path is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+          "downloadSharedFile failed path=$path retry=false error=${err.message ?: err::class.java.simpleName}",
           Log.WARN,
         )
         throw err
       }
-      route = recoverSharedFileTunnelAfterRouteFailure(
+      route = recoverSharedFileRouteAfterFailure(
         scope = scope,
         kind = "download",
         path = path,
@@ -3268,15 +3262,15 @@ class NativeSyncEngineModule(
         )
       }
     } catch (err: Throwable) {
-      if (!AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(route.isTunnel)) {
+      if (!shouldRetrySharedFileRouteFailure(err)) {
         recordNativeLog(
           "SharedFiles",
-          "downloadReceivedFile failed fileKey=$normalizedFileKey is_tunnel=${route.isTunnel} retry=false error=${err.message ?: err::class.java.simpleName}",
+          "downloadReceivedFile failed fileKey=$normalizedFileKey retry=false error=${err.message ?: err::class.java.simpleName}",
           Log.WARN,
         )
         throw err
       }
-      route = recoverSharedFileTunnelAfterRouteFailure(
+      route = recoverSharedFileRouteAfterFailure(
         scope = "team",
         kind = "download",
         path = normalizedFileKey,
@@ -3306,7 +3300,7 @@ class NativeSyncEngineModule(
     try {
       recordNativeLog(
         "SharedFiles",
-        "downloadReceivedFile HTTP request fileKey=$fileKey filename=$filename is_tunnel=${route.isTunnel}",
+        "downloadReceivedFile HTTP request fileKey=$fileKey filename=$filename",
       )
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
@@ -3333,7 +3327,7 @@ class NativeSyncEngineModule(
     try {
       recordNativeLog(
         "SharedFiles",
-        "downloadSharedFile HTTP request path=$path filename=$filename media_type=$mediaType is_tunnel=${route.isTunnel}",
+        "downloadSharedFile HTTP request path=$path filename=$filename media_type=$mediaType",
       )
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
@@ -3358,7 +3352,7 @@ class NativeSyncEngineModule(
     try {
       recordNativeLog(
         "SharedFiles",
-        "prepareSharedFilePreview HTTP request path=$path filename=$safeFilename is_tunnel=${route.isTunnel}",
+        "prepareSharedFilePreview HTTP request path=$path filename=$safeFilename",
       )
       connection.requestMethod = "GET"
       connection.connectTimeout = SHARED_HTTP_TIMEOUT_MS
@@ -3371,7 +3365,7 @@ class NativeSyncEngineModule(
         "prepareSharedFilePreview HTTP response path=$path status=$statusCode content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong}",
       )
       if (statusCode !in 200..299) {
-        throw IllegalStateException("Sidecar returned HTTP $statusCode")
+        throw SharedFileHttpStatusException(statusCode, "Sidecar returned HTTP $statusCode")
       }
       val destDir = File(reactApplicationContext.cacheDir, "lynavo_shared_previews")
       if (!destDir.exists()) {
@@ -3408,7 +3402,7 @@ class NativeSyncEngineModule(
       "persistHttpDownload response filename=$safeFilename progress_key=$progressKey status=$statusCode media_type=$mediaType content_type=${connection.contentType ?: "nil"} content_length=${connection.contentLengthLong} expose_downloads_uri=$exposeDownloadsUri",
     )
     if (statusCode !in 200..299) {
-      throw IllegalStateException("Sidecar returned HTTP $statusCode")
+      throw SharedFileHttpStatusException(statusCode, "Sidecar returned HTTP $statusCode")
     }
     val mimeType = connection.contentType?.substringBefore(';')
       ?: AndroidSyncPrimitives.mimeTypeForFilename(safeFilename)
@@ -3593,48 +3587,12 @@ class NativeSyncEngineModule(
       val statusCode = connection.responseCode
       val body = readResponseBody(connection, statusCode)
       if (statusCode !in 200..299) {
-        throw IllegalStateException(body.ifBlank { "Sidecar returned HTTP $statusCode" })
+        throw SharedFileHttpStatusException(statusCode, body.ifBlank { "Sidecar returned HTTP $statusCode" })
       }
       return body
     } finally {
       connection.disconnect()
     }
-  }
-
-  private fun startP2PTunnelIfNeeded(binding: StoredBinding) {
-    if (hasP2PTunnelState()) {
-      clearP2PTunnelCredentials("oss_tunnel_disabled")
-    }
-    recordNativeLog("SyncEngine", "P2P tunnel skipped: remote tunnel disabled in OSS")
-  }
-
-  private fun stopP2PTunnel() {
-    synchronized(p2pTunnelLock) {
-      tunnelGeneration += 1
-      tunnelPort = null
-      isTunnelActive = false
-      tunnelStarting = false
-    }
-  }
-
-  private fun hasP2PTunnelState(): Boolean =
-    synchronized(p2pTunnelLock) {
-      !signalingUrl.isNullOrBlank() ||
-        !accessToken.isNullOrBlank() ||
-        tunnelIceServersJSON.isNotBlank() ||
-        tunnelPort != null ||
-        isTunnelActive ||
-        tunnelStarting
-    }
-
-  private fun clearP2PTunnelCredentials(reason: String) {
-    synchronized(p2pTunnelLock) {
-      signalingUrl = null
-      accessToken = null
-      tunnelIceServersJSON = ""
-    }
-    stopP2PTunnel()
-    recordNativeLog("SyncEngine", "tunnel credentials cleared reason=$reason")
   }
 
   private fun resolveSharedFileRoute(
@@ -3643,7 +3601,6 @@ class NativeSyncEngineModule(
     path: String,
     requestAccessToken: String,
     reason: String,
-    waitForTunnel: Boolean = true,
   ): SharedFileRoute {
     val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
     val shouldAttemptWake = AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
@@ -3655,137 +3612,32 @@ class NativeSyncEngineModule(
       "SharedFiles",
       "wake decision scope=$scope path=$path operation=$kind allowWake=$shouldAttemptWake ${wakeCapabilityLogSummary(binding.wake)}",
     )
-    val wakeGateSnapshot = p2pTunnelRouteSnapshot()
-    if (AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
-        allowWake = shouldAttemptWake,
-        hasActiveTunnel = wakeGateSnapshot.isActive && wakeGateSnapshot.port != null,
-      )
-    ) {
-      val directSnapshot = wakeGateSnapshot
-      val directDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
-        isTunnelActive = false,
-        tunnelPort = null,
-        hasTunnelCredentials = false,
-        directHost = binding.host,
-        directPort = DEFAULT_SIDECAR_HTTP_PORT,
-      )
+    val directDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
+      directHost = binding.host,
+      directPort = DEFAULT_SIDECAR_HTTP_PORT,
+    )
+    if (AndroidSyncPrimitives.shouldAttemptLanWake(allowWake = shouldAttemptWake)) {
       if (canReachSidecarHealth(binding.host, BINDING_PROBE_TIMEOUT_MS)) {
-        return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, directDecision, directSnapshot)
-      }
-
-      if (directSnapshot.hasCredentials && !directSnapshot.isActive && !directSnapshot.isStarting) {
-        recordNativeLog("SharedFiles", "starting P2P tunnel asynchronously during wake attempt reason=$reason")
-        startP2PTunnelIfNeeded(binding)
+        return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, directDecision)
       }
 
       val wokeHost = attemptSharedFilesLANWakeIfNeeded(binding, reason)
       if (wokeHost != null) {
-        val isTunnel = wokeHost.startsWith("127.0.0.1")
-        val finalDecision = if (isTunnel) {
-          val portPart = wokeHost.substringAfterLast(":", "").toIntOrNull() ?: DEFAULT_SIDECAR_HTTP_PORT
-          AndroidSharedFilesRouteDecision(
-            mode = AndroidSharedFilesRouteMode.TUNNEL,
-            host = "127.0.0.1",
-            port = portPart,
-            isTunnel = true,
-          )
-        } else {
-          directDecision.copy(host = wokeHost)
-        }
         return sharedFileRoute(
           scope,
           kind,
           path,
           requestAccessToken,
           binding.pairingToken,
-          finalDecision,
-          directSnapshot,
+          directDecision.copy(host = wokeHost),
         )
       }
       recordNativeLog(
         "SharedFiles",
-        "LAN wake did not recover shared files host reason=$reason; falling back to route selection",
-      )
-    } else if (shouldAttemptWake && wakeGateSnapshot.isActive && wakeGateSnapshot.port != null) {
-      val activeDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
-        isTunnelActive = true,
-        tunnelPort = wakeGateSnapshot.port,
-        hasTunnelCredentials = wakeGateSnapshot.hasCredentials,
-        directHost = binding.host,
-        directPort = DEFAULT_SIDECAR_HTTP_PORT,
-      )
-      recordNativeLog("SharedFiles", "using active P2P tunnel directly, skipping wake decision reason=$reason")
-      return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, activeDecision, wakeGateSnapshot)
-    }
-    val initialSnapshot = p2pTunnelRouteSnapshot()
-    val initialDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = initialSnapshot.isActive,
-      tunnelPort = initialSnapshot.port,
-      hasTunnelCredentials = initialSnapshot.hasCredentials,
-      directHost = binding.host,
-      directPort = DEFAULT_SIDECAR_HTTP_PORT,
-    )
-
-    when (initialDecision.mode) {
-      AndroidSharedFilesRouteMode.TUNNEL -> {
-        return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, initialDecision, initialSnapshot)
-      }
-
-      AndroidSharedFilesRouteMode.DIRECT_LAN -> {
-        recordNativeLog("SharedFiles", "P2P tunnel unavailable for shared files reason=$reason; credentials missing")
-        return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, initialDecision, initialSnapshot)
-      }
-
-      AndroidSharedFilesRouteMode.WAIT_FOR_TUNNEL -> {
-        if (waitForTunnel && waitForP2PTunnelActive(binding, reason)) {
-          val readySnapshot = p2pTunnelRouteSnapshot()
-          val readyDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
-            isTunnelActive = readySnapshot.isActive,
-            tunnelPort = readySnapshot.port,
-            hasTunnelCredentials = readySnapshot.hasCredentials,
-            directHost = binding.host,
-            directPort = DEFAULT_SIDECAR_HTTP_PORT,
-          )
-          if (readyDecision.mode == AndroidSharedFilesRouteMode.TUNNEL) {
-            return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, readyDecision, readySnapshot)
-          }
-        }
-      }
-    }
-
-    val fallbackSnapshot = p2pTunnelRouteSnapshot()
-    val fallbackDecision = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = false,
-      tunnelPort = null,
-      hasTunnelCredentials = false,
-      directHost = binding.host,
-      directPort = DEFAULT_SIDECAR_HTTP_PORT,
-    )
-    if (waitForTunnel) {
-      recordNativeLog(
-        "SharedFiles",
-        "P2P tunnel wait timed out for shared files reason=$reason hasCredentials=${fallbackSnapshot.hasCredentials}",
+        "LAN wake did not recover shared files host reason=$reason; falling back to cached binding host",
       )
     }
-    return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, fallbackDecision, fallbackSnapshot)
-  }
-
-  private fun logPeerProxySkipDiagnostics() {
-    val hasMultiDesktopBindingSource = false
-    val hasOnlineLynavoDriveDesktopPeer = false
-    if (!AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
-        hasOnlineLynavoDriveDesktopPeer = hasOnlineLynavoDriveDesktopPeer,
-      )
-    ) {
-      AndroidSyncPrimitives.peerProxySkipReasons(
-        hasMultiDesktopBindingSource = hasMultiDesktopBindingSource,
-        hasOnlineLynavoDriveDesktopPeer = hasOnlineLynavoDriveDesktopPeer,
-        hasThirdPartyHelperConfigured = false,
-      ).forEach { skipReason ->
-        recordDiagnosticsLog("SharedFiles", "peer proxy skipped reason=$skipReason")
-      }
-    }
+    return sharedFileRoute(scope, kind, path, requestAccessToken, binding.pairingToken, directDecision)
   }
 
   private fun sharedFileRoute(
@@ -3795,17 +3647,9 @@ class NativeSyncEngineModule(
     requestAccessToken: String,
     pairingToken: String,
     decision: AndroidSharedFilesRouteDecision,
-    snapshot: P2PTunnelRouteSnapshot,
   ): SharedFileRoute {
     val normalizedScope = normalizeSharedDirectoryScope(scope)
     val endpoint = sharedFileEndpoint(normalizedScope, kind, path)
-    val displayHost = if (decision.isTunnel) "${decision.host}:${decision.port}" else decision.host
-    val metadata = AndroidSyncPrimitives.sharedFilesRouteMetadata(
-      decision = decision,
-      snapshotTunnelActive = snapshot.isActive,
-      snapshotTunnelStarting = snapshot.isStarting,
-      snapshotTunnelPort = snapshot.port,
-    )
     val authorizationToken = requestAccessToken.takeIf { normalizedScope == "personal" }?.trim()?.ifBlank { null }
     return SharedFileRoute(
       scope = normalizedScope,
@@ -3823,17 +3667,10 @@ class NativeSyncEngineModule(
       port = decision.port,
       authorizationToken = authorizationToken,
       personalAccessPairingToken = pairingToken.takeIf { normalizedScope == "personal" }?.trim()?.ifBlank { null },
-      displayHost = displayHost,
-      isTunnel = decision.isTunnel,
-      reachabilityRoute = if (decision.isTunnel) currentSharedFilesTunnelReachabilityRoute() else "lan",
-      tunnelActive = metadata.tunnelActive,
-      tunnelStarting = metadata.tunnelStarting,
-      activeTunnelPort = metadata.activeTunnelPort,
+      displayHost = decision.host,
+      reachabilityRoute = "lan",
     )
   }
-
-  private fun currentSharedFilesTunnelReachabilityRoute(): String =
-    "tunnel"
 
   private fun sharedFileUrlForRoute(kind: String, path: String, route: SharedFileRoute): URL =
     sharedFileEndpoint(route.scope, kind, path).let { endpoint ->
@@ -4019,35 +3856,7 @@ class NativeSyncEngineModule(
     )
   }
 
-  private fun p2pTunnelRouteSnapshot(): P2PTunnelRouteSnapshot {
-    val snapshot = synchronized(p2pTunnelLock) {
-      P2PTunnelRouteSnapshot(
-        hasCredentials = !signalingUrl.isNullOrBlank() && !accessToken.isNullOrBlank(),
-        isActive = isTunnelActive && tunnelPort != null,
-        isStarting = tunnelStarting,
-        port = tunnelPort,
-      )
-    }
-    if (snapshot.hasState) {
-      clearP2PTunnelCredentials("oss_tunnel_disabled")
-    }
-    return P2PTunnelRouteSnapshot(
-      hasCredentials = false,
-      isActive = false,
-      isStarting = false,
-      port = null,
-    )
-  }
-
-  private fun waitForP2PTunnelActive(binding: StoredBinding, reason: String): Boolean {
-    if (hasP2PTunnelState()) {
-      clearP2PTunnelCredentials("oss_tunnel_disabled")
-    }
-    recordNativeLog("SharedFiles", "P2P tunnel unavailable for shared files reason=$reason; remote tunnel disabled in OSS")
-    return false
-  }
-
-  private fun recoverSharedFileTunnelAfterRouteFailure(
+  private fun recoverSharedFileRouteAfterFailure(
     scope: String,
     kind: String,
     path: String,
@@ -4057,30 +3866,33 @@ class NativeSyncEngineModule(
   ): SharedFileRoute {
     recordNativeLog(
       "SharedFiles",
-      "tunnel route failed path=$path reason=$reason error=${error.message ?: error.javaClass.simpleName}; restarting tunnel",
+      "shared-files LAN route failed path=$path reason=$reason error=${error.message ?: error.javaClass.simpleName}; refreshing route",
       Log.WARN,
     )
-    val binding = loadBinding() ?: throw IllegalStateException("No bound desktop")
-    stopP2PTunnel()
-    return if (waitForP2PTunnelActive(binding, "${reason}_retry_after_tunnel_restart")) {
-      resolveSharedFileRoute(
-        scope = scope,
-        kind = kind,
-        path = path,
-        requestAccessToken = requestAccessToken,
-        reason = "${reason}_retry_after_tunnel_restart",
-        waitForTunnel = false,
-      )
-    } else {
-      resolveSharedFileRoute(
-        scope = scope,
-        kind = kind,
-        path = path,
-        requestAccessToken = requestAccessToken,
-        reason = "${reason}_direct_fallback_after_tunnel_restart",
-        waitForTunnel = false,
+    return resolveSharedFileRoute(
+      scope = scope,
+      kind = kind,
+      path = path,
+      requestAccessToken = requestAccessToken,
+      reason = "${reason}_lan_retry",
+    )
+  }
+
+  private fun shouldRetrySharedFileRouteFailure(error: Throwable): Boolean {
+    val httpStatusCode = (error as? SharedFileHttpStatusException)?.statusCode
+    if (httpStatusCode != null) {
+      return AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = httpStatusCode,
       )
     }
+    val isTransportFailure = error is SocketTimeoutException ||
+      error is java.net.ConnectException ||
+      error is java.net.NoRouteToHostException ||
+      error is java.net.UnknownHostException ||
+      error is java.net.SocketException
+    return isTransportFailure &&
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(isLocalSaveFailure = false)
   }
 
   private fun logSharedFileRoute(action: String, route: SharedFileRoute, retry: Boolean = false) {
@@ -4088,8 +3900,7 @@ class NativeSyncEngineModule(
     recordNativeLog(
       "SharedFiles",
       "$action$retryPrefix kind=${route.kind} path=${route.path} resolved_host=${route.displayHost} " +
-        "is_tunnel=${route.isTunnel} tunnel_active=${route.tunnelActive} " +
-        "tunnel_starting=${route.tunnelStarting} active_port=${route.activeTunnelPort ?: "nil"}",
+        "route=${route.reachabilityRoute}",
     )
   }
 
@@ -4113,7 +3924,7 @@ class NativeSyncEngineModule(
     val savedToPhotos = result.hasKey("savedToPhotos") && result.getBoolean("savedToPhotos")
     recordNativeLog(
       "SharedFiles",
-      "$action completed key=$key retry=$retry is_tunnel=${route.isTunnel} saved_to_photos=$savedToPhotos local_path=$localPath saved_location=$savedLocation",
+      "$action completed key=$key retry=$retry saved_to_photos=$savedToPhotos local_path=$localPath saved_location=$savedLocation",
     )
   }
 
@@ -4167,20 +3978,6 @@ class NativeSyncEngineModule(
 
     val deadline = SystemClock.elapsedRealtime() + SHARED_LAN_WAKE_POLL_TIMEOUT_MS
     while (SystemClock.elapsedRealtime() < deadline) {
-      // Early exit if P2P tunnel becomes active
-      val snapshot = p2pTunnelRouteSnapshot()
-      if (snapshot.isActive && snapshot.port != null) {
-        val wokeHost = "127.0.0.1:${snapshot.port}"
-        recordNativeLog("SharedFiles", "wake early P2P tunnel active host=$wokeHost reason=$reason")
-        updateSharedFilesReachability(
-          state = "available",
-          route = null,
-          routeOverride = "tunnel",
-          reason = AndroidSyncPrimitives.wakeLanReachableReason(reason),
-        )
-        return wokeHost
-      }
-
       val latestBinding = loadBinding() ?: binding
       val probeHost = latestBinding.host.takeIf { it.isNotBlank() } ?: binding.host
       if (canReachSidecarHealth(probeHost, SHARED_LAN_WAKE_HEALTH_TIMEOUT_MS)) {
@@ -4222,7 +4019,6 @@ class NativeSyncEngineModule(
     }
 
     recordNativeLog("SharedFiles", "wake polling exhausted reason=$reason")
-    logPeerProxySkipDiagnostics()
     clearSharedFilesReachability(reason = "${reason}_wake_polling_exhausted")
     return null
   }
@@ -4599,33 +4395,6 @@ class NativeSyncEngineModule(
     emitEvent("onSharedFilesReachabilityChanged", null)
   }
 
-  private fun retainSharedFilesTunnelReachabilityForBindingOffline(reason: String?): Boolean {
-    val reachability = sharedFilesReachability ?: return false
-    val snapshot = p2pTunnelRouteSnapshot()
-    if (!AndroidSyncPrimitives.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason = reason,
-        reachabilityState = reachability.state,
-        reachabilityRoute = reachability.route,
-        isTunnelActive = snapshot.isActive,
-        isTunnelStarting = snapshot.isStarting,
-      )
-    ) {
-      return false
-    }
-
-    val next = reachability.copy(
-      reason = "${reason}_tunnel_retained",
-      updatedAt = isoNow(),
-    )
-    sharedFilesReachability = next
-    recordNativeLog(
-      "SharedFiles",
-      "reachability ${reachability.state}/${reachability.route ?: "nil"} -> ${next.state}/${next.route ?: "nil"} (${next.reason})",
-    )
-    emitEvent("onSharedFilesReachabilityChanged", next.toWritableMap())
-    return true
-  }
-
   private fun StoredBinding.toWritableMapWithSharedFilesReachability(): WritableMap {
     val map = toWritableMap()
     val reachability = sharedFilesReachability
@@ -4796,9 +4565,7 @@ class NativeSyncEngineModule(
     )
     val updated = binding.copy(connectionState = connectionState)
     saveBinding(updated)
-    val retainSharedFilesTunnel = connectionState == "offline" &&
-      retainSharedFilesTunnelReachabilityForBindingOffline(reason)
-    if (connectionState == "offline" && !retainSharedFilesTunnel) {
+    if (connectionState == "offline") {
       clearSharedFilesReachability(reason = "binding_state_offline")
     }
     emitBindingStateChanged(updated)
@@ -4806,7 +4573,6 @@ class NativeSyncEngineModule(
       cancelPresenceRecoveryProbe(reason = reason ?: "state_connected")
       startPresenceHeartbeatTimer(updated)
       startPairingControlSessionIfNeeded(updated, reason = reason ?: "state_connected")
-      startP2PTunnelIfNeeded(updated)
       wakeManualUploadAfterReconnectIfNeeded(
         previousConnectionState = binding.connectionState,
         updatedBinding = updated,
@@ -4818,11 +4584,6 @@ class NativeSyncEngineModule(
       cancelPresenceRecoveryProbe(reason = reason ?: "state_offline")
       stopPresenceHeartbeatTimer()
       stopPairingControlSession(reason = reason ?: "state_offline")
-      if (retainSharedFilesTunnel) {
-        recordNativeLog("SharedFiles", "retained P2P tunnel while binding offline (${reason ?: "state_offline"})")
-      } else {
-        stopP2PTunnel()
-      }
       if (retryPresenceWhileOffline) {
         recordDiagnosticsLog(
           "Presence",
@@ -4833,11 +4594,9 @@ class NativeSyncEngineModule(
     } else if (connectionState != "connecting") {
       stopPresenceHeartbeatTimer()
       stopPairingControlSession(reason = reason ?: "state_$connectionState")
-      stopP2PTunnel()
     } else {
       stopPresenceHeartbeatTimer()
       stopPairingControlSession(reason = reason ?: "state_connecting")
-      stopP2PTunnel()
     }
     return updated
   }
@@ -4873,7 +4632,6 @@ class NativeSyncEngineModule(
     cancelPresenceRecoveryProbe(reason = normalizedReason)
     stopPresenceHeartbeatTimer()
     stopPairingControlSession(reason = normalizedReason)
-    stopP2PTunnel()
     clearSharedFilesReachability(reason = normalizedReason)
     forgetKnownDevicePairingToken(binding?.deviceId ?: expectedDeviceId)
     clearBinding()
@@ -4993,9 +4751,6 @@ class NativeSyncEngineModule(
           }
           if (syncInProgress) {
             return@scheduleWithFixedDelay
-          }
-          if (current.connectionState == "connected") {
-            startP2PTunnelIfNeeded(current)
           }
           val heartbeatReason = if (currentAllowsOfflineRetry) {
             "presence_offline_desktop_unavailable_retry"
@@ -7215,22 +6970,8 @@ class NativeSyncEngineModule(
     val authorizationToken: String?,
     val personalAccessPairingToken: String?,
     val displayHost: String,
-    val isTunnel: Boolean,
     val reachabilityRoute: String,
-    val tunnelActive: Boolean,
-    val tunnelStarting: Boolean,
-    val activeTunnelPort: Int?,
   )
-
-  private data class P2PTunnelRouteSnapshot(
-    val hasCredentials: Boolean,
-    val isActive: Boolean,
-    val isStarting: Boolean,
-    val port: Int?,
-  ) {
-    val hasState: Boolean
-      get() = hasCredentials || isActive || isStarting || port != null
-  }
 
   companion object {
     private const val MODULE_NAME = "NativeSyncEngine"

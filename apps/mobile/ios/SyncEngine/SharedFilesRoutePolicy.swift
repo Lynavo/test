@@ -1,15 +1,9 @@
 import Foundation
 
 enum SharedFilesRoutePolicy {
-    static let p2pTunnelRouteModeAll = "all"
-    static let p2pTunnelRouteModeWAN = "wan"
-    static let p2pTunnelRouteModeRelay = "relay"
-
     static let sharedFileListRequestTimeout: TimeInterval = 15
     static let sharedFileDownloadRequestTimeout: TimeInterval = 300
     static let sharedFileDownloadResourceTimeout: TimeInterval = 86_400
-    static let sharedFileTunnelHeartbeatGracePeriod: TimeInterval = 3
-    static let sharedFileTunnelRouteWaitTimeout: TimeInterval = 4
     static let sharedFileDownloadMaxAttempts = 4
     private static let sharedFilePathSegmentAllowedCharacters: CharacterSet = {
         var allowed = CharacterSet.alphanumerics
@@ -54,24 +48,14 @@ enum SharedFilesRoutePolicy {
         hasFreshLANHost
     }
 
-    static func shouldPreferLANRoute(
-        hasReachableLANHost: Bool,
-        isTunnelActive _: Bool
-    ) -> Bool {
+    static func shouldPreferLANRoute(hasReachableLANHost: Bool) -> Bool {
         hasReachableLANHost
     }
 
-    static func shouldProbeFallbackDirectLANBeforeP2P(
+    static func shouldProbeFallbackDirectLANAfterDiscovery(
         hasFreshLANHost: Bool
     ) -> Bool {
         !hasFreshLANHost
-    }
-
-    static func shouldPublishP2PReachabilityFromTunnel(
-        hasActiveTunnel: Bool,
-        hasReachableLANHost: Bool
-    ) -> Bool {
-        hasActiveTunnel && !hasReachableLANHost
     }
 
     static func fallbackDirectHost(
@@ -137,14 +121,6 @@ enum SharedFilesRoutePolicy {
         return "unknown"
     }
 
-    static func shouldInvalidateTunnelAfterRouteFailure(isTunnelRoute: Bool) -> Bool {
-        isTunnelRoute
-    }
-
-    static func shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: Bool) -> Bool {
-        isTunnelRoute
-    }
-
     static func resumeOffsetForPartialDownload(existingBytes: Int64) -> Int64 {
         max(0, existingBytes)
     }
@@ -206,103 +182,6 @@ enum SharedFilesRoutePolicy {
             .joined(separator: "/")
     }
 
-    static func shouldWaitForP2PTunnelRoute(
-        hasTunnelCredentials: Bool,
-        isTunnelActive: Bool,
-        hasUsableDirectRouteHost: Bool
-    ) -> Bool {
-        hasTunnelCredentials && !isTunnelActive && !hasUsableDirectRouteHost
-    }
-
-    static func shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: Bool,
-        hasTunnelPort: Bool,
-        selectedICERoute: String,
-        hasReachableLANHost: Bool
-    ) -> Bool {
-        guard isTunnelActive, hasTunnelPort else {
-            return false
-        }
-
-        let normalizedRoute = selectedICERoute.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalizedRoute == "turn_relay" ||
-            normalizedRoute == "ipv6_direct" ||
-            normalizedRoute == "public_ipv4_direct" ||
-            normalizedRoute == "direct_reflexive" {
-            return true
-        }
-        return hasReachableLANHost
-    }
-
-    static func nextP2PTunnelRouteModeAfterRejectedRoute(
-        currentRouteMode: String,
-        selectedICERoute _: String
-    ) -> String {
-        switch currentRouteMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case p2pTunnelRouteModeRelay:
-            return p2pTunnelRouteModeRelay
-        case p2pTunnelRouteModeWAN:
-            return p2pTunnelRouteModeRelay
-        default:
-            return p2pTunnelRouteModeWAN
-        }
-    }
-
-    static func nextP2PTunnelRouteModeAfterStartupTimeout(
-        currentRouteMode: String
-    ) -> String? {
-        switch currentRouteMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-        case p2pTunnelRouteModeRelay:
-            return nil
-        case p2pTunnelRouteModeWAN:
-            return p2pTunnelRouteModeRelay
-        default:
-            return p2pTunnelRouteModeWAN
-        }
-    }
-
-    static func storedP2PTunnelRouteModeAfterStartFailure(
-        currentRouteMode: String
-    ) -> String {
-        nextP2PTunnelRouteModeAfterStartupTimeout(currentRouteMode: currentRouteMode)
-            ?? p2pTunnelRouteModeRelay
-    }
-
-    static func tunnelOptionsJSON(iceServersJSON: String, routeMode: String) -> String {
-        let normalizedRouteMode = routeMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let trimmedIceServers = iceServersJSON.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalizedRouteMode != p2pTunnelRouteModeAll else {
-            return trimmedIceServers
-        }
-
-        let iceServersValue: Any
-        if let data = trimmedIceServers.data(using: .utf8),
-           let decoded = try? JSONSerialization.jsonObject(with: data) {
-            iceServersValue = decoded
-        } else {
-            iceServersValue = []
-        }
-        let payload: [String: Any] = [
-            "routeMode": normalizedRouteMode,
-            "iceServers": iceServersValue,
-        ]
-        guard JSONSerialization.isValidJSONObject(payload),
-              let data = try? JSONSerialization.data(withJSONObject: payload),
-              let encoded = String(data: data, encoding: .utf8)
-        else {
-            return trimmedIceServers
-        }
-        return encoded
-    }
-
-    static func shouldContinueWaitingForP2PTunnelRoute(
-        hasTunnelCredentials: Bool,
-        isTunnelActive: Bool,
-        isRouteAcceptable: Bool
-    ) -> Bool {
-        hasTunnelCredentials && (!isTunnelActive || !isRouteAcceptable)
-    }
-
     static func shouldAttemptWake(
         scope: String,
         path: String,
@@ -323,37 +202,10 @@ enum SharedFilesRoutePolicy {
             !hasTraversalSegment
     }
 
-    static func shouldAttemptWakeBeforeP2PFallback(
-        allowWake: Bool,
-        hasActiveTunnel: Bool,
-        hasTunnelCredentials: Bool
+    static func shouldAttemptLANWake(
+        allowWake: Bool
     ) -> Bool {
-        allowWake && !hasActiveTunnel && !hasTunnelCredentials
-    }
-
-    static func peerProxySkipReasons(
-        hasMultiDesktopBindingSource: Bool,
-        hasOnlineLynavoDriveDesktopPeer: Bool,
-        hasThirdPartyHelperConfigured: Bool
-    ) -> [String] {
-        var reasons: [String] = []
-        if !hasMultiDesktopBindingSource {
-            reasons.append("no_multi_desktop_binding_source")
-        }
-        if !hasOnlineLynavoDriveDesktopPeer {
-            reasons.append("no_online_lynavo_drive_desktop_peer")
-        }
-        if !hasThirdPartyHelperConfigured {
-            reasons.append("third_party_helper_not_configured")
-        }
-        return reasons
-    }
-
-    static func shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource: Bool,
-        hasOnlineLynavoDriveDesktopPeer: Bool
-    ) -> Bool {
-        hasMultiDesktopBindingSource && hasOnlineLynavoDriveDesktopPeer
+        allowWake
     }
 
     static func wakeLANReachableReason(baseReason: String) -> String {
@@ -392,35 +244,6 @@ enum SharedFilesRoutePolicy {
                 lastResumeAt: lastResumeAt,
                 wakeAttemptStartedAt: wakeAttemptStartedAt
             )
-    }
-
-    static func shouldSuppressPresenceTunnelFailure(
-        isTunnelRoute: Bool,
-        activeSharedFileTunnelOperations: Int,
-        secondsSinceLastSharedFileTunnelOperation: TimeInterval? = nil
-    ) -> Bool {
-        guard isTunnelRoute else { return false }
-        if activeSharedFileTunnelOperations > 0 {
-            return true
-        }
-        guard let secondsSinceLastSharedFileTunnelOperation else {
-            return false
-        }
-        return secondsSinceLastSharedFileTunnelOperation >= 0 &&
-            secondsSinceLastSharedFileTunnelOperation <= sharedFileTunnelHeartbeatGracePeriod
-    }
-
-    static func shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason: String,
-        reachabilityState: String?,
-        reachabilityRoute: String?,
-        isTunnelActive: Bool,
-        isTunnelStarting: Bool
-    ) -> Bool {
-        guard reason == "presence_recovery_exhausted" else { return false }
-        guard reachabilityState == "available" else { return false }
-        guard reachabilityRoute == "tunnel" || reachabilityRoute == "relay" else { return false }
-        return isTunnelActive || isTunnelStarting
     }
 
     static func shouldClearLANReachabilityOnPresenceRecoveryStart(

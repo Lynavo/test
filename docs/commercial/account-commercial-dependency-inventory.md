@@ -26,10 +26,10 @@ browsing.
 2. `@lynavo-drive/contracts` now exposes only the community foreground LAN
    entitlement. Commercial background and tunnel entitlement fields were removed
    from the OSS contract surface.
-3. Mobile native background continuation runtime has been removed from the OSS
-   baseline. The largest remaining mobile residue is legacy auth/account UI,
-   RemoteAccess naming for LAN browsing, mobile native tunnel/wake route logic,
-   and manual file-selection upload surfaces.
+3. Mobile native background continuation runtime and native shared-files tunnel
+   route skeletons have been removed from the OSS baseline. The largest
+   remaining mobile residue is legacy auth/account UI, RemoteAccess naming for
+   LAN browsing, and manual file-selection upload surfaces.
 4. "RemoteAccess" often means LAN personal-directory browsing in current mobile
    and desktop UI. Do not delete it as paid tunnel code without first splitting
    the naming and route policy.
@@ -78,8 +78,8 @@ browsing.
 | iOS silent audio              | The silent-audio service and bridge toggle were removed from OSS.                                                                                                                                                          | Moved out of OSS | Keep removed; positive capability belongs in official overlay.                                             |
 | iOS background upload runtime | Background URLSession/BGTask registration, upload service code, HTTP reset state machine, UploadStore HTTP/background metadata, and the old background upload plan were removed; only short UIKit transition tasks remain. | Moved out of OSS | Keep OSS foreground-only; official overlays must own paid background upload runtime.                       |
 | Android background service    | Android foreground-service class, manifest service declaration and notification resources were removed.                                                                                                                    | Moved out of OSS | Keep removed; official overlays must own paid background continuation.                                     |
-| iOS P2P tunnel                | RN bridge credential entrypoints, former tunnel xcframework, and the old gomobile tunnel build script were removed; `LocalTCPProxy` remains an OSS no-op.                                                                  | Moved out of OSS | Remove the remaining no-op proxy and tunnel route retry skeleton in a focused native cleanup.              |
-| Android P2P tunnel            | RN bridge credential entrypoints, bundled MobileTunnel AAR/JAR, and the old gomobile tunnel build script were removed; route policy resolves to direct LAN only.                                                           | Moved out of OSS | Remove remaining tunnel metadata/state skeleton in a focused native cleanup.                               |
+| iOS P2P tunnel                | RN bridge credential entrypoints, former tunnel xcframework, old gomobile tunnel build script, `LocalTCPProxy`, tunnel route state/retry logic, and tunnel policy tests were removed.                                      | Moved out of OSS | Keep absent; iOS shared-files routing is LAN/WoL/direct-host only in OSS.                                  |
+| Android P2P tunnel            | RN bridge credential entrypoints, bundled MobileTunnel AAR/JAR, old gomobile tunnel build script, tunnel route state/retry logic, peer-proxy diagnostics, and tunnel policy tests were removed.                            | Moved out of OSS | Keep absent; Android shared-files routing is LAN/WoL/direct-host only in OSS.                              |
 | Public wake                   | Public Wake-on-WAN target DTOs and policy helpers were removed from iOS and Android; same-LAN WoL target metadata remains.                                                                                                 | Moved out of OSS | Keep same-LAN WoL only; do not reintroduce public/router/account-backed wake in OSS.                       |
 | Manual file selection         | `SyncEngineModule.ts:314`, `AutoUploadSettingsGlobalScreen.tsx:347`, `NativeSyncEngineModule.kt:1210`.                                                                                                                     | Harden           | Separate non-commercial invariant risk: OSS must not offer manual file selection as an upload replacement. |
 
@@ -110,15 +110,12 @@ browsing.
 
 ## Recommended Follow-up Order
 
-1. Mobile native tunnel cleanup: remove remaining iOS `LocalTCPProxy` no-op,
-   native tunnel route retry/state skeletons, and tests that still exercise
-   relay/tunnel paths.
-2. Mobile auth cleanup: remove `isFeatureAccessAllowed` and sync activity auth
+1. Mobile auth cleanup: remove `isFeatureAccessAllowed` and sync activity auth
    dependency, then shrink legacy auth store and owner-user-id bridges.
-3. Naming cleanup: split LAN personal-directory browsing from paid remote
+2. Naming cleanup: split LAN personal-directory browsing from paid remote
    tunnel by renaming `RemoteAccess*` services/screens/copy to local computer or
    shared-files terminology.
-4. Manual upload cleanup: remove document picker/manual-selection upload paths
+3. Manual upload cleanup: remove document picker/manual-selection upload paths
    so the true upload set only comes from the mobile pending queue.
-5. Sidecar HTTP hardening: add HMAC/local-only protection to mobile resource and
+4. Sidecar HTTP hardening: add HMAC/local-only protection to mobile resource and
    presence routes, while keeping `/personal/*` as paired-device local browsing.

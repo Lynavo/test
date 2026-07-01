@@ -10,59 +10,8 @@ import org.junit.Test
 
 class AndroidSyncPrimitivesTest {
   @Test
-  fun sharedFilesRouteUsesDirectLanEvenWhenTunnelIsActive() {
+  fun sharedFilesRouteUsesDirectLanHost() {
     val route = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = true,
-      tunnelPort = 51234,
-      hasTunnelCredentials = true,
-      directHost = "172.20.10.3",
-      directPort = 39394,
-    )
-
-    assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
-    assertEquals("172.20.10.3", route.host)
-    assertEquals(39394, route.port)
-    assertFalse(route.isTunnel)
-  }
-
-  @Test
-  fun sharedFilesRouteUsesDirectLanWhenCredentialsExistButTunnelIsNotActive() {
-    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = false,
-      tunnelPort = null,
-      hasTunnelCredentials = true,
-      directHost = "172.20.10.3",
-      directPort = 39394,
-    )
-
-    assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
-    assertEquals("172.20.10.3", route.host)
-    assertEquals(39394, route.port)
-    assertFalse(route.isTunnel)
-  }
-
-  @Test
-  fun sharedFilesRouteDoesNotUseStaleTunnelPortUntilTunnelIsActive() {
-    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = false,
-      tunnelPort = 51234,
-      hasTunnelCredentials = true,
-      directHost = "172.20.10.3",
-      directPort = 39394,
-    )
-
-    assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
-    assertEquals("172.20.10.3", route.host)
-    assertEquals(39394, route.port)
-    assertFalse(route.isTunnel)
-  }
-
-  @Test
-  fun sharedFilesRouteFallsBackToDirectLanWhenCredentialsAreMissingEvenWithStaleTunnelPort() {
-    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = false,
-      tunnelPort = 51234,
-      hasTunnelCredentials = false,
       directHost = " 172.20.10.3 ",
       directPort = 39394,
     )
@@ -70,29 +19,46 @@ class AndroidSyncPrimitivesTest {
     assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
     assertEquals("172.20.10.3", route.host)
     assertEquals(39394, route.port)
-    assertFalse(route.isTunnel)
   }
 
   @Test
-  fun sharedFilesRouteFallsBackToDirectLanWhenTunnelCredentialsAreMissing() {
-    val route = AndroidSyncPrimitives.decideSharedFilesRoute(
-      isTunnelActive = false,
-      tunnelPort = null,
-      hasTunnelCredentials = false,
-      directHost = " 172.20.10.3 ",
-      directPort = 39394,
+  fun sharedFileDownloadRetrySkipsLocalSaveAndNonRetryableHttpFailures() {
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = null,
+      ),
     )
-
-    assertEquals(AndroidSharedFilesRouteMode.DIRECT_LAN, route.mode)
-    assertEquals("172.20.10.3", route.host)
-    assertEquals(39394, route.port)
-    assertFalse(route.isTunnel)
-  }
-
-  @Test
-  fun sharedFilesRouteFailureRetriesOnlyTunnelRoute() {
-    assertTrue(AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute = true))
-    assertFalse(AndroidSyncPrimitives.shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute = false))
+    assertFalse(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = true,
+        httpStatusCode = null,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = 408,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = 429,
+      ),
+    )
+    assertTrue(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = 503,
+      ),
+    )
+    assertFalse(
+      AndroidSyncPrimitives.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure = false,
+        httpStatusCode = 404,
+      ),
+    )
   }
 
   @Test
@@ -411,57 +377,6 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
-  fun peerProxySkipReasonsReportMissingPeerProxyCapabilities() {
-    val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
-      hasMultiDesktopBindingSource = false,
-      hasOnlineLynavoDriveDesktopPeer = false,
-      hasThirdPartyHelperConfigured = false,
-    )
-
-    assertEquals(
-      listOf(
-        "no_multi_desktop_binding_source",
-        "no_online_lynavo_drive_desktop_peer",
-        "third_party_helper_not_configured",
-      ),
-      reasons,
-    )
-  }
-
-  @Test
-  fun peerProxySkipReasonsDoNotReportAvailableCapabilities() {
-    val reasons = AndroidSyncPrimitives.peerProxySkipReasons(
-      hasMultiDesktopBindingSource = true,
-      hasOnlineLynavoDriveDesktopPeer = true,
-      hasThirdPartyHelperConfigured = true,
-    )
-
-    assertTrue(reasons.isEmpty())
-  }
-
-  @Test
-  fun peerProxyWakeRequiresMultiDesktopSourceAndOnlineLynavoDrivePeer() {
-    assertTrue(
-      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource = true,
-        hasOnlineLynavoDriveDesktopPeer = true,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource = false,
-        hasOnlineLynavoDriveDesktopPeer = true,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource = true,
-        hasOnlineLynavoDriveDesktopPeer = false,
-      ),
-    )
-  }
-
-  @Test
   fun wakeAttemptIsScopedToPersonalRootListingOnly() {
     assertTrue(
       AndroidSyncPrimitives.shouldAttemptSharedFilesWake(
@@ -508,25 +423,9 @@ class AndroidSyncPrimitivesTest {
   }
 
   @Test
-  fun sharedFilesWakeBeforeP2PFallbackSkipsWhenTunnelIsAlreadyActive() {
-    assertTrue(
-      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
-        allowWake = true,
-        hasActiveTunnel = false,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
-        allowWake = true,
-        hasActiveTunnel = true,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldAttemptWakeBeforeP2PFallback(
-        allowWake = false,
-        hasActiveTunnel = false,
-      ),
-    )
+  fun sharedFilesLanWakeFollowsWakeGate() {
+    assertTrue(AndroidSyncPrimitives.shouldAttemptLanWake(allowWake = true))
+    assertFalse(AndroidSyncPrimitives.shouldAttemptLanWake(allowWake = false))
   }
 
   @Test
@@ -549,25 +448,6 @@ class AndroidSyncPrimitivesTest {
         wakeAttemptStartedAt = "2026-06-11T03:50:00Z",
       ),
     )
-  }
-
-  @Test
-  fun tunnelRouteMetadataUsesDecisionPortWhenWakeRecoversThroughTunnel() {
-    val metadata = AndroidSyncPrimitives.sharedFilesRouteMetadata(
-      decision = AndroidSharedFilesRouteDecision(
-        mode = AndroidSharedFilesRouteMode.TUNNEL,
-        host = "127.0.0.1",
-        port = 51234,
-        isTunnel = true,
-      ),
-      snapshotTunnelActive = false,
-      snapshotTunnelStarting = false,
-      snapshotTunnelPort = null,
-    )
-
-    assertTrue(metadata.tunnelActive)
-    assertFalse(metadata.tunnelStarting)
-    assertEquals(51234, metadata.activeTunnelPort)
   }
 
   @Test
@@ -1324,46 +1204,6 @@ class AndroidSyncPrimitivesTest {
         bindingDeviceId = "desktop-1",
         connectionState = "offline",
         reason = "user_offline",
-      ),
-    )
-  }
-
-  @Test
-  fun exhaustedPresenceRecoveryRetainsActiveSharedFilesTunnelReachability() {
-    assertTrue(
-      AndroidSyncPrimitives.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason = "presence_recovery_exhausted",
-        reachabilityState = "available",
-        reachabilityRoute = "tunnel",
-        isTunnelActive = true,
-        isTunnelStarting = false,
-      ),
-    )
-    assertTrue(
-      AndroidSyncPrimitives.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason = "presence_recovery_exhausted",
-        reachabilityState = "available",
-        reachabilityRoute = "relay",
-        isTunnelActive = false,
-        isTunnelStarting = true,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason = "pipeline_failed",
-        reachabilityState = "available",
-        reachabilityRoute = "tunnel",
-        isTunnelActive = true,
-        isTunnelStarting = false,
-      ),
-    )
-    assertFalse(
-      AndroidSyncPrimitives.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason = "presence_recovery_exhausted",
-        reachabilityState = "available",
-        reachabilityRoute = "lan",
-        isTunnelActive = true,
-        isTunnelStarting = false,
       ),
     )
   }

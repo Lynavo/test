@@ -47,7 +47,6 @@
 		FC3ECC712F6F0C00000460F8 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECC702F6F0C00000460F8 /* Log.swift */; };
 		FC3ECCA02F7A0001000460F8 /* HMACAuthHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECCA12F7A0001000460F8 /* HMACAuthHelper.swift */; };
 		FC3ECCC02F8A0002000460F8 /* BackgroundTransitionRefCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECCC12F8A0002000460F8 /* BackgroundTransitionRefCount.swift */; };
-		FC3ECF2C2F6F05B5000460F8 /* LocalTCPProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC3ECF3C2F6F05B5000460F8 /* LocalTCPProxy.swift */; };
 		FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000001 /* AppleAuthModule.swift */; };
 		FFFF00000000000000000004 /* AppleAuthModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FFFF00000000000000000003 /* AppleAuthModuleBridge.m */; };
 		VD0000000000000000000002 /* LynavoBlurViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = VD0000000000000000000001 /* LynavoBlurViewManager.m */; };
@@ -100,7 +99,6 @@
 		FC3ECC702F6F0C00000460F8 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
 		FC3ECCA12F7A0001000460F8 /* HMACAuthHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACAuthHelper.swift; sourceTree = "<group>"; };
 		FC3ECCC12F8A0002000460F8 /* BackgroundTransitionRefCount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionRefCount.swift; sourceTree = "<group>"; };
-		FC3ECF3C2F6F05B5000460F8 /* LocalTCPProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalTCPProxy.swift; sourceTree = "<group>"; };
 		FFFF00000000000000000001 /* AppleAuthModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleAuthModule.swift; path = LynavoDrive/AppleAuthModule.swift; sourceTree = "<group>"; };
 		FFFF00000000000000000003 /* AppleAuthModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = AppleAuthModuleBridge.m; path = LynavoDrive/AppleAuthModuleBridge.m; sourceTree = "<group>"; };
 		VD0000000000000000000001 /* LynavoBlurViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LynavoBlurViewManager.m; path = LynavoDrive/LynavoBlurViewManager.m; sourceTree = "<group>"; };
@@ -187,7 +185,6 @@
 		FC3ECC2D2F6F05B5000460F8 /* SyncEngine */ = {
 			isa = PBXGroup;
 			children = (
-				FC3ECF3C2F6F05B5000460F8 /* LocalTCPProxy.swift */,
 				FC3ECC1F2F6F05B5000460F8 /* AssetExportService.swift */,
 				FC3ECC202F6F05B5000460F8 /* BackgroundExecutionService.swift */,
 				D4E1C9F32F92000100000001 /* BackgroundHandoffPolicy.swift */,
@@ -375,7 +372,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FC3ECF2C2F6F05B5000460F8 /* LocalTCPProxy.swift in Sources */,
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				5A2D2F6B3480DB6500C3A12F /* AuthKeychainCleaner.swift in Sources */,
 				FFFF00000000000000000002 /* AppleAuthModule.swift in Sources */,

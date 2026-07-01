@@ -218,14 +218,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private enum SharedFilesReachabilityRoute: String {
         case lan
-        case tunnel
-        case relay
-    }
-
-    private struct P2PTunnelCredentials: Equatable {
-        let signalingURL: String
-        let accessToken: String
-        let iceServersJSON: String
     }
 
     let discoveryService = DiscoveryService()
@@ -354,26 +346,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private var presenceRecoveryToken = UUID()
     private var presenceRecoveryWorkItem: DispatchWorkItem?
     private var presenceDelayedRecoveryProbeFailures = 0
-    private let localTCPProxy = LocalTCPProxy()
-    private let p2pTunnelQueue = DispatchQueue(
-        label: "com.lynavo.drive.p2p-tunnel",
-        qos: .utility
-    )
-    private var p2pTunnelCredentials: P2PTunnelCredentials?
-    private var p2pTunnelGeneration = 0
-    private var p2pTunnelStarting = false
-    private var p2pTunnelRouteMode = SharedFilesRoutePolicy.p2pTunnelRouteModeAll
-    private struct P2PTunnelRouteState {
-        let hasCredentials: Bool
-        let isActive: Bool
-        let isStarting: Bool
-        let port: UInt16?
-        let selectedICERoute: String
-        let routeMode: String
-    }
-    private let sharedFileTunnelOperationLock = NSLock()
-    private var activeSharedFileTunnelOperations = 0
-    private var lastSharedFileTunnelOperationEndedAt: TimeInterval?
     private let diagnosticsIssueLock = NSLock()
     private var recentRetryDiagnostic: [String: Any]?
     private var recentErrorDiagnostic: [String: Any]?
@@ -1379,7 +1351,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func clearDisabledCommercialRuntimeState(reason: String) {
         stopDisabledBackgroundRuntime(reason: reason)
-        clearP2PTunnelCredentials(reason: reason)
         syncDiagnosticsLog("CommercialRuntime", "disabled commercial runtime state cleared reason=\(reason)")
     }
 
@@ -1581,7 +1552,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             stopPresenceHeartbeatTimer()
             stopPairingControlSession(reason: reason)
             cancelPresenceRecoveryProbe(reason: reason)
-            stopP2PTunnel(reason: reason)
             clearSharedFilesReachability(reason: reason)
 
             if let pairingTokenKeychainRef = currentIdentity.pairingTokenKeychainRef,
@@ -1734,15 +1704,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
     private func updateBindingConnectionState(_ newState: BindingConnectionState, reason: String) {
         guard bindingConnectionState != newState else { return }
-        let retainSharedFilesTunnel = newState == .offline &&
-            retainSharedFilesTunnelReachabilityForBindingOffline(reason: reason)
         slog("[SyncEngine] binding connection state %@ -> %@ (%@)",
               bindingConnectionState.rawValue,
               newState.rawValue,
               reason)
         syncDiagnosticsLog("SyncEngine", "binding connection state \(bindingConnectionState.rawValue) -> \(newState.rawValue) (\(reason))")
         bindingConnectionState = newState
-        if newState == .offline && !retainSharedFilesTunnel {
+        if newState == .offline {
             clearSharedFilesReachability(reason: "binding_state_offline")
         }
         emitBindingStateChanged()
@@ -1758,7 +1726,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         reason: "state_connected"
                     )
                 }
-                startP2PTunnelIfNeeded(reason: "state_connected")
             }
         } else {
             let retryPresenceWhileOffline = newState == .offline &&
@@ -1766,14 +1733,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             stopPresenceHeartbeatTimer()
             stopPairingControlSession(reason: "state_\(newState.rawValue)")
             if newState == .offline {
-                if retainSharedFilesTunnel {
-                    syncDiagnosticsLog(
-                        "SharedFiles",
-                        "retained P2P tunnel while binding offline (\(reason))"
-                    )
-                } else {
-                    stopP2PTunnel(reason: "state_offline")
-                }
                 if retryPresenceWhileOffline {
                     syncDiagnosticsLog(
                         "Presence",
@@ -1784,30 +1743,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
         }
 
-    }
-
-    private func retainSharedFilesTunnelReachabilityForBindingOffline(reason: String) -> Bool {
-        let routeState = p2pTunnelQueue.sync {
-            currentP2PTunnelRouteStateLocked()
-        }
-        let reachabilityState = sharedFilesReachabilityPayload?["state"] as? String
-        let reachabilityRoute = sharedFilesReachabilityPayload?["route"] as? String
-        guard SharedFilesRoutePolicy.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-            reason: reason,
-            reachabilityState: reachabilityState,
-            reachabilityRoute: reachabilityRoute,
-            isTunnelActive: routeState.isActive,
-            isTunnelStarting: routeState.isStarting
-        ) else {
-            return false
-        }
-        let route = SharedFilesReachabilityRoute(rawValue: reachabilityRoute ?? "") ?? .tunnel
-        updateSharedFilesReachability(
-            .available,
-            route: route,
-            reason: "\(reason)_tunnel_retained"
-        )
-        return true
     }
 
     private func clearSharedFilesLANReachabilityOnPresenceRecoveryStart() {
@@ -1835,7 +1770,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         if let binding = uploadStore?.getBinding() {
             startPairingControlSessionIfNeeded(binding: binding, reason: reason)
         }
-        startP2PTunnelIfNeeded(reason: reason)
         emitBindingStateChanged()
     }
 
@@ -1847,302 +1781,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             failureReason: "\(reason)_presence_failed",
             updateStateOnFailure: false
         )
-    }
-
-    private func startP2PTunnelIfNeeded(reason: String) {
-        p2pTunnelQueue.async { [weak self] in
-            self?.startP2PTunnelIfNeededLocked(reason: reason)
-        }
-    }
-
-    private func currentP2PTunnelRouteStateLocked() -> P2PTunnelRouteState {
-        if hasP2PTunnelStateLocked() {
-            clearP2PTunnelCredentialsLocked(reason: "oss_tunnel_disabled")
-        }
-        return P2PTunnelRouteState(
-            hasCredentials: false,
-            isActive: false,
-            isStarting: p2pTunnelStarting,
-            port: nil,
-            selectedICERoute: localTCPProxy.currentSelectedICERoute(),
-            routeMode: p2pTunnelRouteMode
-        )
-    }
-
-    private func p2pTunnelRouteState(startReason: String?) async -> P2PTunnelRouteState {
-        p2pTunnelQueue.sync {
-            if let startReason {
-                startP2PTunnelIfNeededLocked(reason: startReason)
-            }
-            return currentP2PTunnelRouteStateLocked()
-        }
-    }
-
-    private func waitForP2PTunnelActive(
-        reason: String,
-        timeoutNanoseconds: UInt64 = UInt64(SharedFilesRoutePolicy.sharedFileTunnelRouteWaitTimeout * 1_000_000_000)
-    ) async -> Bool {
-        let deadline = Date().addingTimeInterval(Double(timeoutNanoseconds) / 1_000_000_000)
-        let pollIntervalNanoseconds: UInt64 = 500_000_000
-        var attempt = 0
-        var didLogWait = false
-
-        while true {
-            let startReason = attempt == 0 ? reason : "\(reason)_retry_\(attempt)"
-            let state = await p2pTunnelRouteState(startReason: startReason)
-            var isRouteAcceptable = false
-            if state.isActive,
-               await acceptedSharedFilesTunnelHost(
-                   state: state,
-                   hasReachableLANHost: false,
-                   reason: reason
-               ) != nil {
-                isRouteAcceptable = true
-                syncDiagnosticsLog(
-                    "SharedFiles",
-                    "P2P tunnel ready for shared files reason=\(reason) port=\(state.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(state.selectedICERoute)) attempts=\(attempt + 1)"
-                )
-                return true
-            }
-
-            guard SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
-                hasTunnelCredentials: state.hasCredentials,
-                isTunnelActive: state.isActive,
-                isRouteAcceptable: isRouteAcceptable
-            ) else {
-                if !state.hasCredentials {
-                    syncDiagnosticsLog(
-                        "SharedFiles",
-                        "P2P tunnel unavailable for shared files reason=\(reason); credentials missing"
-                    )
-                }
-                return false
-            }
-
-            if Date() >= deadline {
-                break
-            }
-
-            if !didLogWait {
-                didLogWait = true
-                updateSharedFilesReachability(
-                    .unknown,
-                    route: sharedFilesReachabilityRoute(forTunnelRouteMode: state.routeMode),
-                    reason: "\(reason)_p2p_wait_started"
-                )
-                syncDiagnosticsLog(
-                    "SharedFiles",
-                    "waiting for P2P tunnel before shared files route reason=\(reason) routeMode=\(state.routeMode)"
-                )
-            }
-
-            if state.isActive {
-                await restartRejectedSharedFilesTunnel(
-                    state: state,
-                    reason: "\(reason)_wait_unacceptable_route_\(attempt)"
-                )
-            }
-
-            let remaining = max(0, deadline.timeIntervalSinceNow)
-            let sleepSeconds = min(remaining, Double(pollIntervalNanoseconds) / 1_000_000_000)
-            if sleepSeconds > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(sleepSeconds * 1_000_000_000))
-            }
-            attempt += 1
-        }
-
-        var finalState = await p2pTunnelRouteState(startReason: nil)
-        if finalState.isActive,
-           await acceptedSharedFilesTunnelHost(
-               state: finalState,
-               hasReachableLANHost: false,
-               reason: "\(reason)_deadline"
-           ) != nil {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "P2P tunnel became ready at wait deadline reason=\(reason) port=\(finalState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(finalState.selectedICERoute))"
-            )
-            return true
-        }
-
-        while finalState.hasCredentials,
-              !finalState.isActive,
-              let nextRouteMode = SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterStartupTimeout(
-                  currentRouteMode: finalState.routeMode
-              ) {
-            updateSharedFilesReachability(
-                .unknown,
-                route: sharedFilesReachabilityRoute(forTunnelRouteMode: nextRouteMode),
-                reason: "\(reason)_startup_timeout_retry_\(nextRouteMode)"
-            )
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "advancing P2P tunnel route mode after startup timeout reason=\(reason) \(finalState.routeMode)->\(nextRouteMode) active=\(finalState.isActive) port=\(finalState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(finalState.selectedICERoute))"
-            )
-            await restartP2PTunnelAndWait(
-                reason: "\(reason)_startup_timeout_retry_\(nextRouteMode)",
-                routeMode: nextRouteMode
-            )
-            finalState = await p2pTunnelRouteState(startReason: nil)
-            if finalState.isActive,
-               await acceptedSharedFilesTunnelHost(
-                   state: finalState,
-                   hasReachableLANHost: false,
-                   reason: "\(reason)_startup_timeout_retry_\(nextRouteMode)_ready"
-               ) != nil {
-                syncDiagnosticsLog(
-                    "SharedFiles",
-                    "P2P tunnel ready after startup timeout retry reason=\(reason) routeMode=\(nextRouteMode) port=\(finalState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(finalState.selectedICERoute))"
-                )
-                return true
-            }
-        }
-
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "P2P tunnel wait timed out for shared files reason=\(reason) hasCredentials=\(finalState.hasCredentials) active=\(finalState.isActive) port=\(finalState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(finalState.selectedICERoute))"
-        )
-        return false
-    }
-
-    private func startP2PTunnelIfNeededLocked(reason: String) {
-        if hasP2PTunnelStateLocked() {
-            clearP2PTunnelCredentialsLocked(reason: "oss_tunnel_disabled")
-        }
-        syncDiagnosticsLog("SyncEngine", "P2P tunnel skipped: remote tunnel disabled in OSS (\(reason))")
-    }
-
-    private func stopP2PTunnel(reason: String) {
-        p2pTunnelQueue.async { [weak self] in
-            self?.stopP2PTunnelLocked(reason: reason)
-        }
-    }
-
-    private func clearP2PTunnelCredentials(reason: String) {
-        p2pTunnelQueue.async { [weak self] in
-            self?.clearP2PTunnelCredentialsLocked(reason: reason)
-        }
-    }
-
-    private func hasP2PTunnelStateLocked() -> Bool {
-        p2pTunnelCredentials != nil ||
-            p2pTunnelStarting ||
-            sharedFilesService.isTunnelActive ||
-            sharedFilesService.tunnelPort != nil ||
-            sharedFilesService.useTunnelRoute
-    }
-
-    private func clearP2PTunnelCredentialsLocked(reason: String) {
-        p2pTunnelCredentials = nil
-        stopP2PTunnelLocked(reason: reason)
-        slog("[SyncEngine] tunnel credentials cleared reason=%@", reason)
-        syncDiagnosticsLog("SyncEngine", "tunnel credentials cleared reason=\(reason)")
-    }
-
-    private func stopP2PTunnelLocked(reason: String) {
-        p2pTunnelGeneration += 1
-        p2pTunnelStarting = false
-        p2pTunnelRouteMode = SharedFilesRoutePolicy.p2pTunnelRouteModeAll
-        sharedFilesService.tunnelPort = nil
-        sharedFilesService.isTunnelActive = false
-        sharedFilesService.useTunnelRoute = false
-        localTCPProxy.stop()
-        syncDiagnosticsLog("SyncEngine", "P2P tunnel stopped (\(reason))")
-    }
-
-    private func restartP2PTunnel(reason: String) {
-        p2pTunnelQueue.async { [weak self] in
-            guard let self else { return }
-            self.restartP2PTunnelLocked(reason: reason)
-        }
-    }
-
-    private func restartP2PTunnelAndWait(reason: String, routeMode: String? = nil) async {
-        p2pTunnelQueue.sync {
-            if let routeMode {
-                p2pTunnelRouteMode = routeMode
-            }
-            restartP2PTunnelLocked(reason: reason)
-        }
-    }
-
-    private func restartP2PTunnelLocked(reason: String) {
-        syncDiagnosticsLog("SyncEngine", "P2P tunnel restarting (\(reason))")
-        let routeMode = p2pTunnelRouteMode
-        stopP2PTunnelLocked(reason: reason)
-        p2pTunnelRouteMode = routeMode
-        startP2PTunnelIfNeededLocked(reason: "\(reason)_restart")
-    }
-
-    private func beginSharedFileTunnelOperation(
-        path: String,
-        reason: String,
-        isTunnelRoute: Bool
-    ) -> Bool {
-        guard isTunnelRoute else { return false }
-
-        sharedFileTunnelOperationLock.lock()
-        activeSharedFileTunnelOperations += 1
-        let active = activeSharedFileTunnelOperations
-        sharedFileTunnelOperationLock.unlock()
-
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "shared file tunnel operation began reason=\(reason) path=\(path) active=\(active)"
-        )
-        return true
-    }
-
-    private func endSharedFileTunnelOperation(
-        path: String,
-        reason: String,
-        didBegin: Bool
-    ) {
-        guard didBegin else { return }
-
-        sharedFileTunnelOperationLock.lock()
-        activeSharedFileTunnelOperations = max(0, activeSharedFileTunnelOperations - 1)
-        lastSharedFileTunnelOperationEndedAt = Date().timeIntervalSinceReferenceDate
-        let active = activeSharedFileTunnelOperations
-        sharedFileTunnelOperationLock.unlock()
-
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "shared file tunnel operation ended reason=\(reason) path=\(path) active=\(active)"
-        )
-    }
-
-    private func currentSharedFileTunnelOperationState() -> (
-        activeOperations: Int,
-        secondsSinceLastOperation: TimeInterval?
-    ) {
-        sharedFileTunnelOperationLock.lock()
-        defer { sharedFileTunnelOperationLock.unlock() }
-        let secondsSinceLastOperation = lastSharedFileTunnelOperationEndedAt.map {
-            Date().timeIntervalSinceReferenceDate - $0
-        }
-        return (activeSharedFileTunnelOperations, secondsSinceLastOperation)
-    }
-
-    private func withSharedFileTunnelOperation<T>(
-        path: String,
-        reason: String,
-        isTunnelRoute: Bool,
-        _ operation: () async throws -> T
-    ) async throws -> T {
-        let didBegin = beginSharedFileTunnelOperation(
-            path: path,
-            reason: reason,
-            isTunnelRoute: isTunnelRoute
-        )
-        defer {
-            endSharedFileTunnelOperation(
-                path: path,
-                reason: reason,
-                didBegin: didBegin
-            )
-        }
-        return try await operation()
     }
 
     // MARK: - Standalone Presence Heartbeat Timer
@@ -2168,9 +1806,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             }
             // Skip if sync pipeline is running — it has its own heartbeat loop
             guard !self.isSyncing else { return }
-            if !isOfflineRetry {
-                self.startP2PTunnelIfNeeded(reason: "presence_heartbeat_timer")
-            }
             // A single HTTP timeout on the presence port can be a transient Wi-Fi
             // hiccup; the DiscoveryService's TCP probe on the protocol port often
             // still sees the desktop. Don't flip the UI to offline on one miss —
@@ -2504,8 +2139,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         } else {
             syncDiagnosticsLog("SyncEngine", "presence recovery started while already offline; keeping offline state")
         }
-        publishSharedFilesP2PReachabilityAfterLANFailure(reason: "presence_recovery_started")
-
         let token = UUID()
         presenceRecoveryLock.lock()
         presenceRecoveryToken = token
@@ -5597,9 +5230,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 // before going offline; only mark offline if the probe also fails.
                 slog("[SyncEngine] bound device %@ disappeared from discovery, verifying via heartbeat", binding.deviceId)
                 syncDiagnosticsLog("SyncEngine", "bound device \(binding.deviceId) disappeared from discovery, verifying via heartbeat")
-                publishSharedFilesP2PReachabilityAfterLANFailure(
-                    reason: "discovery_bound_device_missing"
-                )
                 let clientId = bindingService.getOrCreateClientId()
                 verifyPresenceWithRecovery(clientId: clientId)
             } else if boundDeviceVisible && (bindingConnectionState == .offline || bindingConnectionState == .bound) {
@@ -6135,7 +5765,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         runtimeRoundSource = nil
 
         stopPresenceHeartbeatTimer()
-        stopP2PTunnel(reason: "disconnectAndUnbind")
         bindingConnectionState = .offline
         clearSharedFilesReachability(reason: "disconnectAndUnbind")
         sidecarHost = nil
@@ -6656,7 +6285,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         let expectedPairingToken = resolvedPairingToken(for: binding)
         let hostPart = host.contains(":") ? "[\(host)]" : host
         let portPart = 39394
-        let usedTunnelRoute = false
         let urlStr = "http://\(hostPart):\(portPart)/presence/\(clientId)"
         guard let url = URL(string: urlStr) else { return }
         var request = URLRequest(url: url)
@@ -6683,29 +6311,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             if let error {
                 slog("[Presence] heartbeat failed: %@", "\(error)")
                 syncDiagnosticsLog("Presence", "heartbeat failed host=\(host) reason=\(failureReason) error=\(error)")
-                let sharedFileTunnelState = self.currentSharedFileTunnelOperationState()
-                if SharedFilesRoutePolicy.shouldSuppressPresenceTunnelFailure(
-                    isTunnelRoute: usedTunnelRoute,
-                    activeSharedFileTunnelOperations: sharedFileTunnelState.activeOperations,
-                    secondsSinceLastSharedFileTunnelOperation: sharedFileTunnelState.secondsSinceLastOperation
-                ) {
-                    syncDiagnosticsLog(
-                        "Presence",
-                        "heartbeat failed on tunnel route near shared file tunnel activity; suppressing tunnel restart reason=\(failureReason) active=\(sharedFileTunnelState.activeOperations) secondsSinceLast=\(sharedFileTunnelState.secondsSinceLastOperation.map { String(format: "%.3f", $0) } ?? "nil")"
-                    )
-                    self.maintainConnectedBindingState(
-                        reason: "\(failureReason)_shared_file_tunnel_active"
-                    )
-                    completion?(true)
-                    return
-                }
-                if SharedFilesRoutePolicy.shouldInvalidateTunnelAfterRouteFailure(isTunnelRoute: usedTunnelRoute) {
-                    syncDiagnosticsLog(
-                        "Presence",
-                        "heartbeat failed on tunnel route; restarting P2P tunnel reason=\(failureReason)"
-                    )
-                    self.restartP2PTunnel(reason: "\(failureReason)_tunnel_failed")
-                }
                 if updateStateOnFailure {
                     self.updateBindingConnectionState(.offline, reason: failureReason)
                 }
@@ -7550,148 +7155,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
     }
 
-    private func normalizedICERouteLabel(_ route: String) -> String {
-        let normalized = route.trimmingCharacters(in: .whitespacesAndNewlines)
-        return normalized.isEmpty ? "unknown" : normalized
-    }
-
-    private func canReachSharedFilesTunnelHost(port: UInt16, timeout: TimeInterval = 1.5) async -> Bool {
-        var components = URLComponents()
-        components.scheme = "http"
-        components.host = "127.0.0.1"
-        components.port = Int(port)
-        components.path = "/health"
-        guard let url = components.url else {
-            syncDiagnosticsLog("SharedFiles", "tunnel health probe could not build URL port=\(port)")
-            return false
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = timeout
-
-        do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                syncDiagnosticsLog("SharedFiles", "tunnel health probe missing HTTP response port=\(port)")
-                return false
-            }
-            let reachable = (200..<300).contains(httpResponse.statusCode)
-            syncDiagnosticsLog("SharedFiles", "tunnel health probe port=\(port) status=\(httpResponse.statusCode) reachable=\(reachable)")
-            return reachable
-        } catch {
-            syncDiagnosticsLog("SharedFiles", "tunnel health probe failed port=\(port) error=\(error)")
-            return false
-        }
-    }
-
-    private func acceptedSharedFilesTunnelHost(
-        state: P2PTunnelRouteState,
-        hasReachableLANHost: Bool,
-        reason: String,
-        probeTimeout: TimeInterval = 1.5
-    ) async -> String? {
-        let selectedRoute = normalizedICERouteLabel(state.selectedICERoute)
-        let hasPort = state.port != nil
-        guard SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-            isTunnelActive: state.isActive,
-            hasTunnelPort: hasPort,
-            selectedICERoute: state.selectedICERoute,
-            hasReachableLANHost: hasReachableLANHost
-        ) else {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "active P2P tunnel rejected for shared files reason=\(reason) port=\(state.port.map(String.init) ?? "nil") selectedRoute=\(selectedRoute) hasReachableLANHost=\(hasReachableLANHost) policy=not_acceptable"
-            )
-            return nil
-        }
-
-        guard let port = state.port else {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "active P2P tunnel rejected for shared files reason=\(reason) port=nil selectedRoute=\(selectedRoute) hasReachableLANHost=\(hasReachableLANHost) policy=missing_port"
-            )
-            return nil
-        }
-
-        guard await canReachSharedFilesTunnelHost(port: port, timeout: probeTimeout) else {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "active P2P tunnel rejected for shared files reason=\(reason) port=\(port) selectedRoute=\(selectedRoute) hasReachableLANHost=\(hasReachableLANHost) health=failed"
-            )
-            return nil
-        }
-
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "active P2P tunnel accepted for shared files reason=\(reason) port=\(port) selectedRoute=\(selectedRoute) hasReachableLANHost=\(hasReachableLANHost) health=ok"
-        )
-        return "127.0.0.1:\(port)"
-    }
-
-    private func restartRejectedSharedFilesTunnel(
-        state: P2PTunnelRouteState,
-        reason: String
-    ) async {
-        guard state.isActive || state.isStarting else {
-            return
-        }
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "restarting rejected P2P tunnel reason=\(reason) active=\(state.isActive) starting=\(state.isStarting) port=\(state.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(state.selectedICERoute))"
-        )
-        let nextRouteMode = SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterRejectedRoute(
-            currentRouteMode: state.routeMode,
-            selectedICERoute: state.selectedICERoute
-        )
-        updateSharedFilesReachability(
-            .unknown,
-            route: sharedFilesReachabilityRoute(forTunnelRouteMode: nextRouteMode),
-            reason: "\(reason)_rejected_tunnel_retry_\(nextRouteMode)"
-        )
-        await restartP2PTunnelAndWait(
-            reason: "\(reason)_rejected_tunnel",
-            routeMode: nextRouteMode
-        )
-        if state.routeMode != nextRouteMode {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "advanced P2P tunnel route mode reason=\(reason) \(state.routeMode)->\(nextRouteMode) selectedRoute=\(normalizedICERouteLabel(state.selectedICERoute))"
-            )
-        }
-    }
-
     private func applySharedFilesLANRoute(host: String, reason: String) {
         sharedFilesService.sidecarHost = host
-        sharedFilesService.useTunnelRoute = false
         updateSharedFilesReachability(
             .available,
             route: .lan,
             reason: reason
         )
-    }
-
-    private func applySharedFilesTunnelRoute(reason: String) {
-        sharedFilesService.useTunnelRoute = true
-        updateSharedFilesReachability(
-            .available,
-            route: currentSharedFilesTunnelReachabilityRoute(),
-            reason: reason
-        )
-    }
-
-    private func currentSharedFilesTunnelReachabilityRoute() -> SharedFilesReachabilityRoute {
-        if localTCPProxy.currentSelectedICERoute() == "turn_relay" {
-            return .relay
-        }
-        return .tunnel
-    }
-
-    private func sharedFilesReachabilityRoute(forTunnelRouteMode routeMode: String) -> SharedFilesReachabilityRoute {
-        if routeMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == SharedFilesRoutePolicy.p2pTunnelRouteModeRelay {
-            return .relay
-        }
-        return .tunnel
     }
 
     private func reachableSharedFilesLANHost(
@@ -7800,20 +7270,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         let deadline = Date().addingTimeInterval(25)
         while Date() < deadline {
-            let tunnelState = await p2pTunnelRouteState(startReason: reason)
-            if let wokeHost = await acceptedSharedFilesTunnelHost(
-                state: tunnelState,
-                hasReachableLANHost: false,
-                reason: "\(reason)_wake_polling",
-                probeTimeout: 1.0
-            ) {
-                let tunnelReachableReason = SharedFilesRoutePolicy.wakeLANReachableReason(baseReason: reason)
-                syncDiagnosticsLog("SharedFiles", "wake early P2P tunnel reachable host=\(wokeHost) reason=\(reason)")
-                applySharedFilesTunnelRoute(reason: tunnelReachableReason)
-                refreshBindingConnectionFromPresence(reason: tunnelReachableReason)
-                return wokeHost
-            }
-
             if let host = await reachableSharedFilesLANHost(for: binding, probeTimeout: 1.0) {
                 let lanReachableReason = SharedFilesRoutePolicy.wakeLANReachableReason(baseReason: reason)
                 syncDiagnosticsLog("SharedFiles", "wake LAN reachable host=\(host) reason=\(reason)")
@@ -7843,20 +7299,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         syncDiagnosticsLog("SharedFiles", "wake polling exhausted reason=\(reason)")
-        let hasMultiDesktopBindingSource = false
-        let hasOnlineLynavoDriveDesktopPeer = false
-        if !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
-            hasMultiDesktopBindingSource: hasMultiDesktopBindingSource,
-            hasOnlineLynavoDriveDesktopPeer: hasOnlineLynavoDriveDesktopPeer
-        ) {
-            for skipReason in SharedFilesRoutePolicy.peerProxySkipReasons(
-                hasMultiDesktopBindingSource: hasMultiDesktopBindingSource,
-                hasOnlineLynavoDriveDesktopPeer: hasOnlineLynavoDriveDesktopPeer,
-                hasThirdPartyHelperConfigured: false
-            ) {
-                syncDiagnosticsLog("SharedFiles", "peer proxy skipped reason=\(skipReason)")
-            }
-        }
         clearSharedFilesReachability(reason: "\(reason)_wake_polling_exhausted")
         return nil
     }
@@ -7932,41 +7374,10 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         applySharedFilesLANRoute(host: host, reason: reason)
     }
 
-    private func publishSharedFilesP2PReachabilityAfterLANFailure(reason: String) {
-        Task { [weak self] in
-            await self?.publishSharedFilesP2PReachabilityIfNeeded(reason: reason)
-        }
-    }
-
-    private func publishSharedFilesP2PReachabilityIfNeeded(reason: String) async {
-        guard let binding = uploadStore?.getBinding() else { return }
-        let lanHost = await reachableSharedFilesLANHost(for: binding)
-        let tunnelState = await p2pTunnelRouteState(startReason: "\(reason)_p2p_route")
-        let tunnelHost = await acceptedSharedFilesTunnelHost(
-            state: tunnelState,
-            hasReachableLANHost: lanHost != nil,
-            reason: "\(reason)_reachability_publish",
-            probeTimeout: 1.0
-        )
-        guard tunnelHost != nil,
-              SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
-                  hasActiveTunnel: tunnelState.isActive,
-                  hasReachableLANHost: lanHost != nil
-              )
-        else {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "skipped P2P reachability publish reason=\(reason) lanHost=\(lanHost ?? "nil") tunnelActive=\(tunnelState.isActive) port=\(tunnelState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(tunnelState.selectedICERoute))"
-            )
-            return
-        }
-        applySharedFilesTunnelRoute(reason: reason)
-    }
-
     private func prepareSharedFilesRoute(
         reason: String,
         allowWake: Bool = false
-    ) async throws -> (host: String, isTunnel: Bool) {
+    ) async throws -> String {
         guard let binding = uploadStore?.getBinding() else {
             sharedFilesService.sidecarHost = nil
             throw SyncEngineError.networkError("No active binding available for shared files")
@@ -7983,13 +7394,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         var unreachableLANHost: String?
         if let lanHost = freshSharedFilesLANHost(for: binding) {
             if await canReachSharedFilesLANHost(lanHost),
-               SharedFilesRoutePolicy.shouldPreferLANRoute(
-                   hasReachableLANHost: true,
-                   isTunnelActive: sharedFilesService.isTunnelActive
-               )
+               SharedFilesRoutePolicy.shouldPreferLANRoute(hasReachableLANHost: true)
             {
-                sharedFilesService.sidecarHost = lanHost
-                sharedFilesService.useTunnelRoute = false
+                applySharedFilesLANRoute(host: lanHost, reason: "\(reason)_fresh_lan")
                 if allowWake {
                     refreshSharedFilesWakeMetadataIfNeeded(
                         binding: binding,
@@ -7997,149 +7404,67 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                         reason: reason
                     )
                 }
-                return (lanHost, false)
+                return lanHost
             }
             unreachableLANHost = lanHost
             syncDiagnosticsLog(
                 "SharedFiles",
-                "LAN host unavailable for shared files host=\(lanHost); trying P2P tunnel"
+                "LAN host unavailable for shared files host=\(lanHost); trying LAN fallback"
             )
         }
 
         if let directHost = await reachableFallbackDirectSharedFilesHost(for: binding, excluding: unreachableLANHost) {
             syncDiagnosticsLog(
                 "SharedFiles",
-                "using cached direct LAN host before P2P route state host=\(directHost) reason=\(reason)"
+                "using cached direct LAN host host=\(directHost) reason=\(reason)"
             )
             sidecarHost = directHost
-            sharedFilesService.sidecarHost = directHost
-            sharedFilesService.useTunnelRoute = false
-            return (directHost, false)
+            applySharedFilesLANRoute(host: directHost, reason: "\(reason)_cached_lan")
+            return directHost
         }
 
         if let discoveredHost = await waitForSharedFilesLANHost(binding: binding),
            await canReachSharedFilesLANHost(discoveredHost),
-           SharedFilesRoutePolicy.shouldPreferLANRoute(
-               hasReachableLANHost: true,
-               isTunnelActive: sharedFilesService.isTunnelActive
-           )
+           SharedFilesRoutePolicy.shouldPreferLANRoute(hasReachableLANHost: true)
         {
             syncDiagnosticsLog(
                 "SharedFiles",
-                "using discovered LAN host before P2P route state host=\(discoveredHost) reason=\(reason)"
+                "using discovered LAN host host=\(discoveredHost) reason=\(reason)"
             )
             sidecarHost = discoveredHost
-            sharedFilesService.sidecarHost = discoveredHost
-            sharedFilesService.useTunnelRoute = false
-            return (discoveredHost, false)
+            applySharedFilesLANRoute(host: discoveredHost, reason: "\(reason)_discovered_lan")
+            return discoveredHost
         }
 
-        let initialTunnelState = await p2pTunnelRouteState(startReason: reason)
-        if let tunnelHost = await acceptedSharedFilesTunnelHost(
-            state: initialTunnelState,
-            hasReachableLANHost: false,
-            reason: "\(reason)_initial",
-            probeTimeout: 1.0
-        ) {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "using accepted active P2P tunnel directly, skipping wake reason=\(reason) selectedRoute=\(normalizedICERouteLabel(initialTunnelState.selectedICERoute))"
-            )
-            sharedFilesService.sidecarHost = tunnelHost
-            sharedFilesService.useTunnelRoute = true
-            return (tunnelHost, true)
-        }
-        if initialTunnelState.isActive {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "deferring rejected active P2P tunnel restart until fallback route is needed reason=\(reason) port=\(initialTunnelState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(initialTunnelState.selectedICERoute))"
-            )
-        }
-
-        if SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
-            allowWake: allowWake,
-            hasActiveTunnel: initialTunnelState.isActive,
-            hasTunnelCredentials: initialTunnelState.hasCredentials
+        if SharedFilesRoutePolicy.shouldAttemptLANWake(
+            allowWake: allowWake
         ),
            let wokeHost = await attemptSharedFilesLANWakeIfNeeded(
                binding: binding,
                reason: reason
-           ) {
-            let isTunnel = wokeHost.contains("127.0.0.1")
-            sharedFilesService.sidecarHost = wokeHost
-            sharedFilesService.useTunnelRoute = isTunnel
-            return (wokeHost, isTunnel)
-        }
-
-        let currentTunnelState = await p2pTunnelRouteState(startReason: nil)
-        if let tunnelHost = await acceptedSharedFilesTunnelHost(
-            state: currentTunnelState,
-            hasReachableLANHost: false,
-            reason: "\(reason)_post_wake",
-            probeTimeout: 1.0
         ) {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "using accepted P2P tunnel after LAN wake/direct checks reason=\(reason) selectedRoute=\(normalizedICERouteLabel(currentTunnelState.selectedICERoute))"
-            )
-            sharedFilesService.sidecarHost = tunnelHost
-            sharedFilesService.useTunnelRoute = true
-            return (tunnelHost, true)
-        }
-        if currentTunnelState.isActive {
-            syncDiagnosticsLog(
-                "SharedFiles",
-                "deferring rejected post-wake P2P tunnel restart until fallback route is needed reason=\(reason) port=\(currentTunnelState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(currentTunnelState.selectedICERoute))"
-            )
+            sharedFilesService.sidecarHost = wokeHost
+            return wokeHost
         }
 
-        if SharedFilesRoutePolicy.shouldProbeFallbackDirectLANBeforeP2P(
+        if SharedFilesRoutePolicy.shouldProbeFallbackDirectLANAfterDiscovery(
             hasFreshLANHost: unreachableLANHost != nil
         ),
            let fallbackHost = await reachableFallbackDirectSharedFilesHost(for: binding, excluding: unreachableLANHost)
         {
             syncDiagnosticsLog(
                 "SharedFiles",
-                "using cached direct LAN host before P2P wait host=\(fallbackHost) reason=\(reason)"
+                "using cached direct LAN host after discovery wait host=\(fallbackHost) reason=\(reason)"
             )
             sidecarHost = fallbackHost
-            sharedFilesService.sidecarHost = fallbackHost
-            sharedFilesService.useTunnelRoute = false
-            return (fallbackHost, false)
-        }
-
-        let tunnelStateBeforeWait = await p2pTunnelRouteState(startReason: nil)
-        if tunnelStateBeforeWait.isActive {
-            await restartRejectedSharedFilesTunnel(
-                state: tunnelStateBeforeWait,
-                reason: "\(reason)_before_p2p_wait"
-            )
-        }
-
-        if await waitForP2PTunnelActive(reason: reason) {
-            let tunnelState = await p2pTunnelRouteState(startReason: nil)
-            if let tunnelHost = await acceptedSharedFilesTunnelHost(
-                state: tunnelState,
-                hasReachableLANHost: false,
-                reason: "\(reason)_wait_completed",
-                probeTimeout: 1.0
-            ) {
-                sharedFilesService.sidecarHost = tunnelHost
-                sharedFilesService.useTunnelRoute = true
-                return (tunnelHost, true)
-            } else {
-                syncDiagnosticsLog(
-                    "SharedFiles",
-                    "P2P tunnel wait completed but route was not acceptable; continuing LAN fallback reason=\(reason) port=\(tunnelState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(tunnelState.selectedICERoute))"
-                )
-            }
+            applySharedFilesLANRoute(host: fallbackHost, reason: "\(reason)_cached_lan_after_wait")
+            return fallbackHost
         }
 
         if let lanHost = await waitForSharedFilesLANHost(binding: binding) {
             if await canReachSharedFilesLANHost(lanHost) {
-                sharedFilesService.sidecarHost = lanHost
-                sharedFilesService.useTunnelRoute = false
-                return (lanHost, false)
+                applySharedFilesLANRoute(host: lanHost, reason: "\(reason)_waited_lan")
+                return lanHost
             }
             unreachableLANHost = lanHost
             syncDiagnosticsLog(
@@ -8160,82 +7485,18 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
         guard SharedFilesRoutePolicy.hasUsableDirectRouteHost(fallbackHost) else {
             sharedFilesService.sidecarHost = nil
-            sharedFilesService.useTunnelRoute = false
             syncDiagnosticsLog(
                 "SharedFiles",
-                "no shared files route available after LAN discovery/tunnel unavailable"
+                "no shared files route available after LAN discovery and wake"
             )
             throw SyncEngineError.networkError("No shared files route available")
         }
         sharedFilesService.sidecarHost = fallbackHost
-        sharedFilesService.useTunnelRoute = false
         syncDiagnosticsLog(
             "SharedFiles",
-            "shared files falling back to cached direct host=\(fallbackHost ?? "nil") after LAN discovery/tunnel unavailable"
+            "shared files falling back to cached direct host=\(fallbackHost ?? "nil") after LAN discovery and wake"
         )
-        return (fallbackHost!, false)
-    }
-
-    private func recoverSharedFilesTunnelAfterRouteFailure(
-        path: String,
-        reason: String,
-        error: Error
-    ) async throws -> (host: String, isTunnel: Bool) {
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "tunnel route failed path=\(path) reason=\(reason) error=\(error); restarting tunnel"
-        )
-        await restartP2PTunnelAndWait(reason: "\(reason)_tunnel_route_failed")
-        return try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_tunnel_restart")
-    }
-
-    private func recoverSharedFilesDownloadTunnelAfterRouteFailure(
-        path: String,
-        reason: String,
-        error: Error
-    ) async throws -> (host: String, isTunnel: Bool) {
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "download tunnel route failed path=\(path) reason=\(reason) error=\(error); restarting tunnel for tunnel retry"
-        )
-        await restartP2PTunnelAndWait(reason: "\(reason)_tunnel_route_failed")
-
-        if let binding = uploadStore?.getBinding(),
-           let lanHost = await waitForSharedFilesLANHost(binding: binding),
-           await canReachSharedFilesLANHost(lanHost),
-           SharedFilesRoutePolicy.shouldPreferLANRoute(
-               hasReachableLANHost: true,
-               isTunnelActive: sharedFilesService.isTunnelActive
-           )
-        {
-            applySharedFilesLANRoute(host: lanHost, reason: "\(reason)_lan_recovered")
-            return (lanHost, false)
-        }
-
-        if await waitForP2PTunnelActive(reason: "\(reason)_retry_tunnel") {
-            let tunnelState = await p2pTunnelRouteState(startReason: nil)
-            guard let tunnelHost = await acceptedSharedFilesTunnelHost(
-                state: tunnelState,
-                hasReachableLANHost: false,
-                reason: "\(reason)_retry_tunnel_wait_completed",
-                probeTimeout: 1.0
-            ) else {
-                syncDiagnosticsLog(
-                    "SharedFiles",
-                    "download retry tunnel wait completed but route was not acceptable path=\(path) reason=\(reason) port=\(tunnelState.port.map(String.init) ?? "nil") selectedRoute=\(normalizedICERouteLabel(tunnelState.selectedICERoute))"
-                )
-                return try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_tunnel_unacceptable")
-            }
-            sharedFilesService.sidecarHost = tunnelHost
-            sharedFilesService.useTunnelRoute = true
-            return (tunnelHost, true)
-        }
-
-        syncDiagnosticsLog(
-            "SharedFiles",
-            "P2P tunnel unavailable for download retry path=\(path) reason=\(reason); falling back to route selection"
-        )
-        return try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_tunnel_restart")
+        return fallbackHost!
     }
 
     private func sharedFileHTTPStatusCode(from error: Error) -> Int? {
@@ -8304,65 +7565,30 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=\(scope.rawValue) path=\(path) operation=list allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        var route = try await prepareSharedFilesRoute(
+        let routeHost = try await prepareSharedFilesRoute(
             reason: "browse_shared_files",
             allowWake: allowWake
         )
         let accessClientID = scope == .personal ? getClientId() : ""
         let accessClientName = scope == .personal ? getClientDisplayName() : ""
         let accessPairingToken = personalAccessPairingToken(for: scope)
-        slog("[SharedFiles] browseSharedFiles scope=%@ path=%@ resolved_host=%@ is_tunnel=%@", scope.rawValue, path, route.host, String(route.isTunnel))
-        syncDiagnosticsLog("SharedFiles", "browseSharedFiles scope=\(scope.rawValue) path=\(path) resolved_host=\(route.host) is_tunnel=\(route.isTunnel) has_pairing_signature=\(!accessPairingToken.isEmpty)")
+        slog("[SharedFiles] browseSharedFiles scope=%@ path=%@ resolved_host=%@", scope.rawValue, path, routeHost)
+        syncDiagnosticsLog("SharedFiles", "browseSharedFiles scope=\(scope.rawValue) path=\(path) resolved_host=\(routeHost) has_pairing_signature=\(!accessPairingToken.isEmpty)")
 
-        let directory: SharedDirectory
-        do {
-            directory = try await withSharedFileTunnelOperation(
-                path: path,
-                reason: "browse_shared_files",
-                isTunnelRoute: route.isTunnel
-            ) {
-                try await sharedFilesService.listSharedFiles(
-                    scope: scope,
-                    path: path,
-                    accessToken: accessToken,
-                    pairingToken: accessPairingToken,
-                    clientID: accessClientID,
-                    clientName: accessClientName
-                )
-            }
-        } catch {
-            guard SharedFilesRoutePolicy.shouldInvalidateTunnelAfterRouteFailure(isTunnelRoute: route.isTunnel) else {
-                throw error
-            }
-            route = try await recoverSharedFilesTunnelAfterRouteFailure(
-                path: path,
-                reason: "browse_shared_files",
-                error: error
-            )
-            slog("[SharedFiles] browseSharedFiles retry scope=%@ path=%@ resolved_host=%@ is_tunnel=%@", scope.rawValue, path, route.host, String(route.isTunnel))
-            syncDiagnosticsLog("SharedFiles", "browseSharedFiles retry scope=\(scope.rawValue) path=\(path) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
-            directory = try await withSharedFileTunnelOperation(
-                path: path,
-                reason: "browse_shared_files_retry",
-                isTunnelRoute: route.isTunnel
-            ) {
-                try await sharedFilesService.listSharedFiles(
-                    scope: scope,
-                    path: path,
-                    accessToken: accessToken,
-                    pairingToken: accessPairingToken,
-                    clientID: accessClientID,
-                    clientName: accessClientName
-                )
-            }
-        }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
+        let directory = try await sharedFilesService.listSharedFiles(
+            scope: scope,
+            path: path,
+            accessToken: accessToken,
+            pairingToken: accessPairingToken,
+            clientID: accessClientID,
+            clientName: accessClientName
+        )
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "browse_shared_files_success"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "browse_shared_files_success")
         }
         let files: [[String: Any]] = directory.files.map { file in
@@ -8432,12 +7658,12 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=\(scope.rawValue) path=\(path) operation=download allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        var route = try await prepareSharedFilesRoute(reason: "download_shared_file", allowWake: allowWake)
+        var routeHost = try await prepareSharedFilesRoute(reason: "download_shared_file", allowWake: allowWake)
         let accessClientID = scope == .personal ? getClientId() : ""
         let accessClientName = scope == .personal ? getClientDisplayName() : ""
         let accessPairingToken = personalAccessPairingToken(for: scope)
-        slog("[SharedFiles] downloadSharedFile scope=%@ path=%@ resolved_host=%@ is_tunnel=%@", scope.rawValue, path, route.host, String(route.isTunnel))
-        syncDiagnosticsLog("SharedFiles", "downloadSharedFile scope=\(scope.rawValue) path=\(path) resolved_host=\(route.host) is_tunnel=\(route.isTunnel) has_pairing_signature=\(!accessPairingToken.isEmpty)")
+        slog("[SharedFiles] downloadSharedFile scope=%@ path=%@ resolved_host=%@", scope.rawValue, path, routeHost)
+        syncDiagnosticsLog("SharedFiles", "downloadSharedFile scope=\(scope.rawValue) path=\(path) resolved_host=\(routeHost) has_pairing_signature=\(!accessPairingToken.isEmpty)")
 
         let progressHandler: SharedFileDownloadProgressHandler = { bytesWritten, totalBytes, progress in
             NativeSyncEngineModule.shared?.emitSharedFileDownloadProgress(
@@ -8452,32 +7678,26 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "download_shared_file" : "download_shared_file_retry"
             do {
-                let downloadResult = try await withSharedFileTunnelOperation(
+                let downloadResult = try await sharedFilesService.downloadFile(
+                    scope: scope,
                     path: path,
-                    reason: reason,
-                    isTunnelRoute: route.isTunnel
-                ) {
-                    try await sharedFilesService.downloadFile(
-                        scope: scope,
-                        path: path,
-                        accessToken: accessToken,
-                        pairingToken: accessPairingToken,
-                        clientID: accessClientID,
-                        clientName: accessClientName,
-                        onProgress: progressHandler
-                    )
-                }
+                    accessToken: accessToken,
+                    pairingToken: accessPairingToken,
+                    clientID: accessClientID,
+                    clientName: accessClientName,
+                    onProgress: progressHandler
+                )
                 result = downloadResult
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadSharedFile completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
+                    "downloadSharedFile completed path=\(path) attempt=\(attempt) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
                 )
                 break
             } catch {
                 lastError = error
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadSharedFile attempt failed path=\(path) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) is_tunnel=\(route.isTunnel) error=\(error)"
+                    "downloadSharedFile attempt failed path=\(path) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) error=\(error)"
                 )
                 guard SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
                     isLocalSaveFailure: error is SharedFileLocalSaveError,
@@ -8492,33 +7712,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 guard attempt < SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts else {
                     throw error
                 }
-                if SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: route.isTunnel) {
-                    route = try await recoverSharedFilesDownloadTunnelAfterRouteFailure(
-                        path: path,
-                        reason: reason,
-                        error: error
-                    )
-                } else {
-                    syncDiagnosticsLog(
-                        "SharedFiles",
-                        "download direct route failed path=\(path) reason=\(reason) error=\(error); reselecting route for retry"
-                    )
-                    route = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
-                }
-                slog("[SharedFiles] downloadSharedFile retry path=%@ attempt=%d resolved_host=%@ is_tunnel=%@", path, attempt + 1, route.host, String(route.isTunnel))
-                syncDiagnosticsLog("SharedFiles", "downloadSharedFile retry path=\(path) attempt=\(attempt + 1) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "download direct route failed path=\(path) reason=\(reason) error=\(error); reselecting LAN route for retry"
+                )
+                routeHost = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
+                slog("[SharedFiles] downloadSharedFile retry path=%@ attempt=%d resolved_host=%@", path, attempt + 1, routeHost)
+                syncDiagnosticsLog("SharedFiles", "downloadSharedFile retry path=\(path) attempt=\(attempt + 1) resolved_host=\(routeHost)")
             }
         }
         guard let result else {
             throw lastError ?? SyncEngineError.networkError("Shared file download failed without an error")
         }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "download_shared_file_success"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "download_shared_file_success")
         }
         return [
@@ -8561,54 +7772,22 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=received path=received operation=list received_scope=\(diagnosticScope) allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        var route = try await prepareSharedFilesRoute(reason: reason, allowWake: allowWake)
-        slog("[SharedFiles] %@ resolved_host=%@ is_tunnel=%@ scope=%@", operationName, route.host, String(route.isTunnel), diagnosticScope)
-        syncDiagnosticsLog("SharedFiles", "\(operationName) resolved_host=\(route.host) is_tunnel=\(route.isTunnel) scope=\(diagnosticScope)")
+        let routeHost = try await prepareSharedFilesRoute(reason: reason, allowWake: allowWake)
+        slog("[SharedFiles] %@ resolved_host=%@ scope=%@", operationName, routeHost, diagnosticScope)
+        syncDiagnosticsLog("SharedFiles", "\(operationName) resolved_host=\(routeHost) scope=\(diagnosticScope)")
 
-        let items: [[String: Any]]
-        do {
-            items = try await withSharedFileTunnelOperation(
-                path: "received",
-                reason: reason,
-                isTunnelRoute: route.isTunnel
-            ) {
-                try await sharedFilesService.listReceivedFiles(
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    scope: httpScope
-                )
-            }
-        } catch {
-            guard SharedFilesRoutePolicy.shouldInvalidateTunnelAfterRouteFailure(isTunnelRoute: route.isTunnel) else {
-                throw error
-            }
-            route = try await recoverSharedFilesTunnelAfterRouteFailure(
-                path: "received",
-                reason: reason,
-                error: error
-            )
-            slog("[SharedFiles] %@ retry resolved_host=%@ is_tunnel=%@ scope=%@", operationName, route.host, String(route.isTunnel), diagnosticScope)
-            syncDiagnosticsLog("SharedFiles", "\(operationName) retry resolved_host=\(route.host) is_tunnel=\(route.isTunnel) scope=\(diagnosticScope)")
-            items = try await withSharedFileTunnelOperation(
-                path: "received",
-                reason: "\(reason)_retry",
-                isTunnelRoute: route.isTunnel
-            ) {
-                try await sharedFilesService.listReceivedFiles(
-                    clientId: getClientId(),
-                    clientName: getClientDisplayName(),
-                    scope: httpScope
-                )
-            }
-        }
+        let items = try await sharedFilesService.listReceivedFiles(
+            clientId: getClientId(),
+            clientName: getClientDisplayName(),
+            scope: httpScope
+        )
 
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "\(reason)_success"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "\(reason)_success")
         }
 
@@ -8646,16 +7825,15 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=received path=\(trimmedFileKey) operation=\(normalizedKind) allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        let route = try await prepareSharedFilesRoute(reason: "preview_received_file", allowWake: allowWake)
-        slog("[SharedFiles] getReceivedFilePreviewUrl fileKey=%@ kind=%@ resolved_host=%@ is_tunnel=%@", trimmedFileKey, normalizedKind, route.host, String(route.isTunnel))
-        syncDiagnosticsLog("SharedFiles", "getReceivedFilePreviewUrl fileKey=\(trimmedFileKey) kind=\(normalizedKind) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
+        let routeHost = try await prepareSharedFilesRoute(reason: "preview_received_file", allowWake: allowWake)
+        slog("[SharedFiles] getReceivedFilePreviewUrl fileKey=%@ kind=%@ resolved_host=%@", trimmedFileKey, normalizedKind, routeHost)
+        syncDiagnosticsLog("SharedFiles", "getReceivedFilePreviewUrl fileKey=\(trimmedFileKey) kind=\(normalizedKind) resolved_host=\(routeHost)")
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "preview_received_file_route_selected"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "preview_received_file_route_selected")
         }
         return try sharedFilesService.getReceivedFileMediaUrl(
@@ -8696,9 +7874,9 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=received path=\(trimmedFileKey) operation=download allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        var route = try await prepareSharedFilesRoute(reason: "download_received_file", allowWake: allowWake)
-        slog("[SharedFiles] downloadReceivedFile fileKey=%@ resolved_host=%@ is_tunnel=%@", trimmedFileKey, route.host, String(route.isTunnel))
-        syncDiagnosticsLog("SharedFiles", "downloadReceivedFile fileKey=\(trimmedFileKey) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+        var routeHost = try await prepareSharedFilesRoute(reason: "download_received_file", allowWake: allowWake)
+        slog("[SharedFiles] downloadReceivedFile fileKey=%@ resolved_host=%@", trimmedFileKey, routeHost)
+        syncDiagnosticsLog("SharedFiles", "downloadReceivedFile fileKey=\(trimmedFileKey) resolved_host=\(routeHost)")
 
         let progressHandler: SharedFileDownloadProgressHandler = { bytesWritten, totalBytes, progress in
             NativeSyncEngineModule.shared?.emitSharedFileDownloadProgress(
@@ -8713,31 +7891,25 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "download_received_file" : "download_received_file_retry"
             do {
-                let downloadResult = try await withSharedFileTunnelOperation(
-                    path: trimmedFileKey,
-                    reason: reason,
-                    isTunnelRoute: route.isTunnel
-                ) {
-                    try await sharedFilesService.downloadReceivedFile(
-                        fileKey: trimmedFileKey,
-                        clientId: getClientId(),
-                        clientName: getClientDisplayName(),
-                        filename: safeFilename,
-                        mediaType: mediaType,
-                        onProgress: progressHandler
-                    )
-                }
+                let downloadResult = try await sharedFilesService.downloadReceivedFile(
+                    fileKey: trimmedFileKey,
+                    clientId: getClientId(),
+                    clientName: getClientDisplayName(),
+                    filename: safeFilename,
+                    mediaType: mediaType,
+                    onProgress: progressHandler
+                )
                 result = downloadResult
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadReceivedFile completed fileKey=\(trimmedFileKey) filename=\(safeFilename) media_type=\(mediaType ?? "nil") attempt=\(attempt) is_tunnel=\(route.isTunnel) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
+                    "downloadReceivedFile completed fileKey=\(trimmedFileKey) filename=\(safeFilename) media_type=\(mediaType ?? "nil") attempt=\(attempt) saved_to_photos=\(downloadResult.savedToPhotos) local_path=\(downloadResult.localPath ?? "nil") saved_location=\(downloadResult.savedLocation ?? "nil")"
                 )
                 break
             } catch {
                 lastError = error
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "downloadReceivedFile attempt failed fileKey=\(trimmedFileKey) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) is_tunnel=\(route.isTunnel) error=\(error)"
+                    "downloadReceivedFile attempt failed fileKey=\(trimmedFileKey) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) error=\(error)"
                 )
                 guard SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
                     isLocalSaveFailure: error is SharedFileLocalSaveError,
@@ -8752,33 +7924,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 guard attempt < SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts else {
                     throw error
                 }
-                if SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: route.isTunnel) {
-                    route = try await recoverSharedFilesDownloadTunnelAfterRouteFailure(
-                        path: trimmedFileKey,
-                        reason: reason,
-                        error: error
-                    )
-                } else {
-                    syncDiagnosticsLog(
-                        "SharedFiles",
-                        "received download direct route failed fileKey=\(trimmedFileKey) reason=\(reason) error=\(error); reselecting route for retry"
-                    )
-                    route = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
-                }
-                slog("[SharedFiles] downloadReceivedFile retry fileKey=%@ attempt=%d resolved_host=%@ is_tunnel=%@", trimmedFileKey, attempt + 1, route.host, String(route.isTunnel))
-                syncDiagnosticsLog("SharedFiles", "downloadReceivedFile retry fileKey=\(trimmedFileKey) attempt=\(attempt + 1) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "received download direct route failed fileKey=\(trimmedFileKey) reason=\(reason) error=\(error); reselecting LAN route for retry"
+                )
+                routeHost = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
+                slog("[SharedFiles] downloadReceivedFile retry fileKey=%@ attempt=%d resolved_host=%@", trimmedFileKey, attempt + 1, routeHost)
+                syncDiagnosticsLog("SharedFiles", "downloadReceivedFile retry fileKey=\(trimmedFileKey) attempt=\(attempt + 1) resolved_host=\(routeHost)")
             }
         }
         guard let result else {
             throw lastError ?? SyncEngineError.networkError("Received file download failed without an error")
         }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "download_received_file_success"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "download_received_file_success")
         }
         return [
@@ -8839,44 +8002,38 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             "SharedFiles",
             "wake decision scope=\(scope.rawValue) path=\(path) operation=preview allowWake=\(allowWake) \(wakeCapabilityLogSummary(uploadStore?.getBinding()?.wake))"
         )
-        var route = try await prepareSharedFilesRoute(reason: "preview_shared_file", allowWake: allowWake)
+        var routeHost = try await prepareSharedFilesRoute(reason: "preview_shared_file", allowWake: allowWake)
         let accessClientID = scope == .personal ? getClientId() : ""
         let accessClientName = scope == .personal ? getClientDisplayName() : ""
         let accessPairingToken = personalAccessPairingToken(for: scope)
-        slog("[SharedFiles] prepareSharedFilePreview scope=%@ path=%@ resolved_host=%@ is_tunnel=%@", scope.rawValue, path, route.host, String(route.isTunnel))
-        syncDiagnosticsLog("SharedFiles", "prepareSharedFilePreview scope=\(scope.rawValue) path=\(path) resolved_host=\(route.host) is_tunnel=\(route.isTunnel) has_pairing_signature=\(!accessPairingToken.isEmpty)")
+        slog("[SharedFiles] prepareSharedFilePreview scope=%@ path=%@ resolved_host=%@", scope.rawValue, path, routeHost)
+        syncDiagnosticsLog("SharedFiles", "prepareSharedFilePreview scope=\(scope.rawValue) path=\(path) resolved_host=\(routeHost) has_pairing_signature=\(!accessPairingToken.isEmpty)")
 
         var previewURL: URL?
         var lastError: Error?
         for attempt in 1...SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts {
             let reason = attempt == 1 ? "preview_shared_file" : "preview_shared_file_retry"
             do {
-                let downloadedPreviewURL = try await withSharedFileTunnelOperation(
+                let downloadedPreviewURL = try await sharedFilesService.downloadFileForPreview(
+                    scope: scope,
                     path: path,
-                    reason: reason,
-                    isTunnelRoute: route.isTunnel
-                ) {
-                    try await sharedFilesService.downloadFileForPreview(
-                        scope: scope,
-                        path: path,
-                        accessToken: accessToken,
-                        pairingToken: accessPairingToken,
-                        filename: filename,
-                        clientID: accessClientID,
-                        clientName: accessClientName
-                    )
-                }
+                    accessToken: accessToken,
+                    pairingToken: accessPairingToken,
+                    filename: filename,
+                    clientID: accessClientID,
+                    clientName: accessClientName
+                )
                 previewURL = downloadedPreviewURL
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "prepareSharedFilePreview completed path=\(path) attempt=\(attempt) is_tunnel=\(route.isTunnel) preview_url=\(downloadedPreviewURL.absoluteString)"
+                    "prepareSharedFilePreview completed path=\(path) attempt=\(attempt) preview_url=\(downloadedPreviewURL.absoluteString)"
                 )
                 break
             } catch {
                 lastError = error
                 syncDiagnosticsLog(
                     "SharedFiles",
-                    "prepareSharedFilePreview attempt failed path=\(path) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) is_tunnel=\(route.isTunnel) error=\(error)"
+                    "prepareSharedFilePreview attempt failed path=\(path) attempt=\(attempt) max_attempts=\(SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts) error=\(error)"
                 )
                 guard SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
                     isLocalSaveFailure: error is SharedFileLocalSaveError,
@@ -8891,33 +8048,24 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 guard attempt < SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts else {
                     throw error
                 }
-                if SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: route.isTunnel) {
-                    route = try await recoverSharedFilesDownloadTunnelAfterRouteFailure(
-                        path: path,
-                        reason: reason,
-                        error: error
-                    )
-                } else {
-                    syncDiagnosticsLog(
-                        "SharedFiles",
-                        "preview direct route failed path=\(path) reason=\(reason) error=\(error); reselecting route for retry"
-                    )
-                    route = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
-                }
-                slog("[SharedFiles] prepareSharedFilePreview retry path=%@ attempt=%d resolved_host=%@ is_tunnel=%@", path, attempt + 1, route.host, String(route.isTunnel))
-                syncDiagnosticsLog("SharedFiles", "prepareSharedFilePreview retry path=\(path) attempt=\(attempt + 1) resolved_host=\(route.host) is_tunnel=\(route.isTunnel)")
+                syncDiagnosticsLog(
+                    "SharedFiles",
+                    "preview direct route failed path=\(path) reason=\(reason) error=\(error); reselecting LAN route for retry"
+                )
+                routeHost = try await prepareSharedFilesRoute(reason: "\(reason)_retry_after_direct_route_failure")
+                slog("[SharedFiles] prepareSharedFilePreview retry path=%@ attempt=%d resolved_host=%@", path, attempt + 1, routeHost)
+                syncDiagnosticsLog("SharedFiles", "prepareSharedFilePreview retry path=\(path) attempt=\(attempt + 1) resolved_host=\(routeHost)")
             }
         }
         guard let previewURL else {
             throw lastError ?? SyncEngineError.networkError("Shared file preview failed without an error")
         }
-        let reachabilityRoute: SharedFilesReachabilityRoute = route.isTunnel ? currentSharedFilesTunnelReachabilityRoute() : .lan
         updateSharedFilesReachability(
             .available,
-            route: reachabilityRoute,
+            route: .lan,
             reason: "preview_shared_file_success"
         )
-        if !route.isTunnel && bindingConnectionState != .connected {
+        if bindingConnectionState != .connected {
             refreshBindingConnectionFromPresence(reason: "preview_shared_file_success")
         }
         return previewURL.absoluteString
@@ -8994,7 +8142,6 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
 
         // 1. Tear down any live networking / timers so we don't race the wipe.
         stopPresenceHeartbeatTimer()
-        stopP2PTunnel(reason: "wipeSyncIdentity")
         protocolSession?.disconnect()
         protocolSession = nil
         transport.disconnect()

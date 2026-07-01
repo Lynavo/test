@@ -8,13 +8,118 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
 }
 
 expect(
-    SharedFilesRoutePolicy.sharedFileDownloadResourceTimeout >= 3_600,
-    "shared file downloads must allow large P2P transfers to run longer than five minutes"
+    SharedFilesRoutePolicy.sharedFileListRequestTimeout == 15,
+    "shared-file list requests should fail quickly on unavailable LAN routes"
 )
 
 expect(
-    SharedFilesRoutePolicy.sharedFileTunnelRouteWaitTimeout == 4,
-    "shared files P2P fallback must wait briefly because LAN/WoL is the primary route"
+    SharedFilesRoutePolicy.sharedFileDownloadRequestTimeout == 300,
+    "shared-file download requests must allow large LAN transfers to continue"
+)
+
+expect(
+    SharedFilesRoutePolicy.sharedFileDownloadResourceTimeout == 86_400,
+    "shared-file downloads must allow long-running resource transfers"
+)
+
+expect(
+    SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts == 4,
+    "shared-file downloads must allow repeated network-switch recovery attempts before failing"
+)
+
+expect(SharedFilesRoutePolicy.isPrivateLANIPv4("10.0.0.8"), "10/8 must be treated as LAN")
+expect(SharedFilesRoutePolicy.isPrivateLANIPv4("172.16.0.8"), "172.16/12 lower bound must be LAN")
+expect(SharedFilesRoutePolicy.isPrivateLANIPv4("172.31.255.8"), "172.16/12 upper bound must be LAN")
+expect(SharedFilesRoutePolicy.isPrivateLANIPv4("192.168.1.8"), "192.168/16 must be LAN")
+expect(!SharedFilesRoutePolicy.isPrivateLANIPv4("172.32.0.8"), "172.32/16 must not be LAN")
+expect(!SharedFilesRoutePolicy.isPrivateLANIPv4("8.8.8.8"), "public IPv4 hosts must not be LAN")
+expect(!SharedFilesRoutePolicy.isPrivateLANIPv4("fe80::1"), "IPv6 strings must not pass IPv4 LAN checks")
+
+expect(
+    SharedFilesRoutePolicy.freshLANHost(discoveredHost: " 192.168.1.20 ") == "192.168.1.20",
+    "shared files should accept a freshly discovered private LAN host after network recovery"
+)
+
+expect(
+    SharedFilesRoutePolicy.freshLANHost(discoveredHost: "8.8.8.8") == nil,
+    "shared files must reject public discovery hosts for LAN recovery"
+)
+
+expect(
+    SharedFilesRoutePolicy.freshLANHost(discoveredHost: " \n ") == nil,
+    "blank discovery hosts must not become LAN routes"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(hasFreshLANHost: true),
+    "shared files should publish LAN reachability as soon as discovery has a fresh LAN route"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(hasFreshLANHost: false),
+    "shared files must not publish LAN reachability without a fresh LAN route"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldPreferLANRoute(hasReachableLANHost: true),
+    "shared files should use a reachable LAN route"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldPreferLANRoute(hasReachableLANHost: false),
+    "shared files should not choose LAN when no reachable host exists"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldProbeFallbackDirectLANAfterDiscovery(hasFreshLANHost: false),
+    "shared files should probe cached direct LAN after discovery fails to provide a fresh host"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldProbeFallbackDirectLANAfterDiscovery(hasFreshLANHost: true),
+    "shared files should not prefer stale cached LAN when discovery already has a fresh host"
+)
+
+expect(
+    SharedFilesRoutePolicy.fallbackDirectHost(
+        liveHost: "10.0.0.7",
+        currentBindingHost: "10.0.0.8",
+        persistedHost: "192.168.1.8"
+    ) == "10.0.0.7",
+    "shared files should prefer the live sidecar host when falling back to direct LAN"
+)
+
+expect(
+    SharedFilesRoutePolicy.fallbackDirectHost(
+        liveHost: nil,
+        currentBindingHost: "10.0.0.8",
+        persistedHost: "192.168.1.8"
+    ) == "10.0.0.8",
+    "shared files should prefer the current binding host over persisted host when falling back"
+)
+
+expect(
+    SharedFilesRoutePolicy.fallbackDirectHost(
+        liveHost: " \n ",
+        currentBindingHost: nil,
+        persistedHost: "192.168.1.8"
+    ) == "192.168.1.8",
+    "shared files should ignore blank direct LAN candidates"
+)
+
+expect(
+    SharedFilesRoutePolicy.hasUsableDirectRouteHost("10.0.0.8"),
+    "shared files should allow a non-empty direct route host"
+)
+
+expect(
+    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(nil),
+    "shared files must not treat a nil direct route host as usable"
+)
+
+expect(
+    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(" \n "),
+    "shared files must not treat a blank direct route host as usable"
 )
 
 let cellularPathSummary = SharedFilesRoutePolicy.diagnosticNetworkPathSummary([
@@ -42,323 +147,9 @@ expect(
 )
 
 expect(
-    SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
-        hasTunnelCredentials: true,
-        isTunnelActive: false,
-        hasUsableDirectRouteHost: false
-    ),
-    "shared files must wait for the P2P tunnel after reconnect when credentials exist but the tunnel is not active"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
-        hasTunnelCredentials: true,
-        isTunnelActive: true,
-        hasUsableDirectRouteHost: false
-    ),
-    "shared files must not wait for the P2P tunnel when the tunnel is already active"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
-        hasTunnelCredentials: false,
-        isTunnelActive: false,
-        hasUsableDirectRouteHost: false
-    ),
-    "shared files must fall back to direct LAN when no P2P tunnel credentials exist"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldWaitForP2PTunnelRoute(
-        hasTunnelCredentials: true,
-        isTunnelActive: false,
-        hasUsableDirectRouteHost: true
-    ),
-    "shared files must prefer a usable direct LAN route over waiting for a not-yet-active P2P tunnel"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
-        hasTunnelCredentials: true,
-        isTunnelActive: true,
-        isRouteAcceptable: false
-    ),
-    "shared files must keep waiting when an active P2P tunnel selected an unacceptable route"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldContinueWaitingForP2PTunnelRoute(
-        hasTunnelCredentials: true,
-        isTunnelActive: true,
-        isRouteAcceptable: true
-    ),
-    "shared files must stop waiting when an active P2P tunnel selected an acceptable route"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "direct_host",
-        hasReachableLANHost: false
-    ),
-    "shared files must not trust a direct_host tunnel as a WAN route when LAN is not reachable"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "ipv6_direct",
-        hasReachableLANHost: false
-    ),
-    "shared files must accept an IPv6 direct tunnel before falling back to relay when LAN is not reachable"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "direct_reflexive",
-        hasReachableLANHost: false
-    ),
-    "shared files must accept a server-reflexive P2P tunnel when LAN is not reachable"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "link_local_direct",
-        hasReachableLANHost: false
-    ),
-    "shared files must reject a link-local P2P tunnel when LAN health probes time out so relay fallback can run"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "link_local_reflexive",
-        hasReachableLANHost: false
-    ),
-    "shared files must reject a link-local reflexive P2P tunnel when LAN is not reachable"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "turn_relay",
-        hasReachableLANHost: false
-    ),
-    "shared files may trust an active relay tunnel when LAN is not reachable"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAcceptActiveP2PTunnelRoute(
-        isTunnelActive: true,
-        hasTunnelPort: true,
-        selectedICERoute: "direct_host",
-        hasReachableLANHost: true
-    ),
-    "shared files may keep a direct_host tunnel only when LAN is also reachable"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterRejectedRoute(
-        currentRouteMode: "all",
-        selectedICERoute: "link_local_direct"
-    ) == "wan",
-    "a rejected default tunnel route must retry with WAN candidate filtering before relay-only fallback"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterRejectedRoute(
-        currentRouteMode: "wan",
-        selectedICERoute: "direct_host"
-    ) == "relay",
-    "a rejected WAN-filtered tunnel route must retry with relay-only ICE"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterRejectedRoute(
-        currentRouteMode: "relay",
-        selectedICERoute: "direct_host"
-    ) == "relay",
-    "a rejected relay tunnel route must remain relay-only"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterStartupTimeout(
-        currentRouteMode: "all"
-    ) == "wan",
-    "a default tunnel startup timeout must retry with WAN candidate filtering before relay-only fallback"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterStartupTimeout(
-        currentRouteMode: "wan"
-    ) == "relay",
-    "a WAN-filtered tunnel startup timeout must retry with relay-only ICE"
-)
-
-expect(
-    SharedFilesRoutePolicy.nextP2PTunnelRouteModeAfterStartupTimeout(
-        currentRouteMode: "relay"
-    ) == nil,
-    "a relay-only tunnel startup timeout must stop route-mode escalation"
-)
-
-expect(
-    SharedFilesRoutePolicy.storedP2PTunnelRouteModeAfterStartFailure(
-        currentRouteMode: "all"
-    ) == "wan",
-    "a failed default tunnel start must store WAN mode for the next route attempt"
-)
-
-expect(
-    SharedFilesRoutePolicy.storedP2PTunnelRouteModeAfterStartFailure(
-        currentRouteMode: "wan"
-    ) == "relay",
-    "a failed WAN tunnel start must store relay mode so the next route attempt does not repeat WAN"
-)
-
-expect(
-    SharedFilesRoutePolicy.storedP2PTunnelRouteModeAfterStartFailure(
-        currentRouteMode: "relay"
-    ) == "relay",
-    "a failed relay tunnel start must keep relay mode instead of resetting to WAN"
-)
-
-let wrappedTunnelOptions = SharedFilesRoutePolicy.tunnelOptionsJSON(
-    iceServersJSON: #"[{"urls":["turn:turn.lynavo.com:3478?transport=udp"],"username":"u","credential":"p"}]"#,
-    routeMode: "wan"
-)
-let wrappedTunnelOptionsData = wrappedTunnelOptions.data(using: .utf8)!
-let wrappedTunnelOptionsObject = try! JSONSerialization.jsonObject(with: wrappedTunnelOptionsData) as! [String: Any]
-expect(
-    wrappedTunnelOptionsObject["routeMode"] as? String == "wan",
-    "tunnel options JSON must carry the requested route mode"
-)
-expect(
-    ((wrappedTunnelOptionsObject["iceServers"] as? [[String: Any]])?.first?["urls"] as? [String])?.first
-        == "turn:turn.lynavo.com:3478?transport=udp",
-    "tunnel options JSON must preserve the TURN URL including transport"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
-        allowWake: true,
-        hasActiveTunnel: false,
-        hasTunnelCredentials: false
-    ),
-    "opening the personal root may attempt wake before P2P fallback only when no tunnel credentials exist"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
-        allowWake: true,
-        hasActiveTunnel: false,
-        hasTunnelCredentials: true
-    ),
-    "opening the personal root must try P2P before wake when tunnel credentials exist"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
-        allowWake: true,
-        hasActiveTunnel: true,
-        hasTunnelCredentials: true
-    ),
-    "opening the personal root must use an active P2P tunnel directly instead of waking first"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAttemptWakeBeforeP2PFallback(
-        allowWake: false,
-        hasActiveTunnel: false,
-        hasTunnelCredentials: false
-    ),
-    "shared files must not wake before P2P fallback outside the scoped personal trigger"
-)
-
-let peerProxySkipReasonsWithoutSources = SharedFilesRoutePolicy.peerProxySkipReasons(
-    hasMultiDesktopBindingSource: false,
-    hasOnlineLynavoDriveDesktopPeer: false,
-    hasThirdPartyHelperConfigured: false
-)
-
-expect(
-    peerProxySkipReasonsWithoutSources.contains("no_multi_desktop_binding_source"),
-    "peer proxy diagnostics must report when no multi-desktop binding source exists"
-)
-
-expect(
-    peerProxySkipReasonsWithoutSources.contains("no_online_lynavo_drive_desktop_peer"),
-    "peer proxy diagnostics must report when no online Lynavo Drive desktop peer exists"
-)
-
-expect(
-    peerProxySkipReasonsWithoutSources.contains("third_party_helper_not_configured"),
-    "peer proxy diagnostics must report when no explicit third-party helper is configured"
-)
-
-expect(
-    !SharedFilesRoutePolicy.peerProxySkipReasons(
-        hasMultiDesktopBindingSource: true,
-        hasOnlineLynavoDriveDesktopPeer: false,
-        hasThirdPartyHelperConfigured: false
-    ).contains("no_multi_desktop_binding_source"),
-    "peer proxy diagnostics must not report missing multi-desktop source when the source exists"
-)
-
-expect(
-    !SharedFilesRoutePolicy.peerProxySkipReasons(
-        hasMultiDesktopBindingSource: false,
-        hasOnlineLynavoDriveDesktopPeer: true,
-        hasThirdPartyHelperConfigured: false
-    ).contains("no_online_lynavo_drive_desktop_peer"),
-    "peer proxy diagnostics must not report missing Lynavo Drive peer when an online peer exists"
-)
-
-expect(
-    !SharedFilesRoutePolicy.peerProxySkipReasons(
-        hasMultiDesktopBindingSource: false,
-        hasOnlineLynavoDriveDesktopPeer: false,
-        hasThirdPartyHelperConfigured: true
-    ).contains("third_party_helper_not_configured"),
-    "peer proxy diagnostics must not report missing third-party helper when one is explicitly configured"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource: false,
-        hasOnlineLynavoDriveDesktopPeer: true
-    ),
-    "peer proxy wake must remain disabled without a durable multi-desktop binding source"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource: true,
-        hasOnlineLynavoDriveDesktopPeer: false
-    ),
-    "peer proxy wake must remain disabled without an online authenticated Lynavo Drive desktop peer"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldAttemptPeerProxyWake(
-        hasMultiDesktopBindingSource: true,
-        hasOnlineLynavoDriveDesktopPeer: true
-    ),
-    "peer proxy wake may be attempted only when both durable multi-desktop source and online desktop peer exist"
-)
-
-expect(
     SharedFilesRoutePolicy.wakeLANReachableReason(baseReason: "browse_shared_files")
         == "browse_shared_files_wake_lan_reachable",
-    "LAN health recovery after WoL must be logged as LAN reachable, not full wake success"
+    "LAN health recovery after WoL must be logged as LAN reachable"
 )
 
 expect(
@@ -368,11 +159,21 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldAttemptLANWake(allowWake: true),
+    "shared files may attempt LAN wake for scoped personal root listings"
+)
+
+expect(
+    !SharedFilesRoutePolicy.shouldAttemptLANWake(allowWake: false),
+    "shared files must not attempt LAN wake when the caller does not allow it"
+)
+
+expect(
     !SharedFilesRoutePolicy.shouldPromoteBindingConnectedFromReachability(
         presenceConfirmed: false,
         fullResumeConfirmed: false
     ),
-    "LAN or tunnel reachability alone must not mark a binding connected"
+    "LAN reachability alone must not mark a binding connected"
 )
 
 expect(
@@ -442,6 +243,16 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "", operation: "list"),
+    "opening the personal root may attempt bound desktop wake"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "/", operation: "list"),
+    "wrapper slashes around the personal root should still allow wake"
+)
+
+expect(
     !SharedFilesRoutePolicy.shouldAttemptWake(scope: "personal", path: "Applications", operation: "list"),
     "nested personal folder listings must not trigger bound desktop wake"
 )
@@ -467,186 +278,6 @@ expect(
 )
 
 expect(
-    SharedFilesRoutePolicy.freshLANHost(discoveredHost: " 192.168.1.20 ") == "192.168.1.20",
-    "shared files should accept a freshly discovered private LAN host after network recovery"
-)
-
-expect(
-    SharedFilesRoutePolicy.freshLANHost(discoveredHost: "8.8.8.8") == nil,
-    "shared files must reject public discovery hosts for LAN recovery"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(
-        hasFreshLANHost: true
-    ),
-    "shared files should publish LAN reachability as soon as discovery has a fresh LAN route"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldPublishLANReachabilityFromDiscovery(
-        hasFreshLANHost: false
-    ),
-    "shared files must not publish LAN reachability without a fresh LAN route"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldPreferLANRoute(
-        hasReachableLANHost: true,
-        isTunnelActive: true
-    ),
-    "shared files should prefer a reachable LAN route over an active tunnel"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldPreferLANRoute(
-        hasReachableLANHost: false,
-        isTunnelActive: true
-    ),
-    "shared files should keep using the tunnel when no reachable LAN route exists"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldProbeFallbackDirectLANBeforeP2P(
-        hasFreshLANHost: false
-    ),
-    "shared files should probe the cached direct LAN route before waiting for P2P when Bonjour has no fresh host"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldProbeFallbackDirectLANBeforeP2P(
-        hasFreshLANHost: true
-    ),
-    "shared files should not prefer stale cached direct LAN before P2P when Bonjour has already provided a fresh LAN host"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
-        hasActiveTunnel: true,
-        hasReachableLANHost: false
-    ),
-    "shared files should publish P2P reachability when the tunnel is active and LAN is not reachable"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
-        hasActiveTunnel: true,
-        hasReachableLANHost: true
-    ),
-    "shared files must not let an active tunnel override a reachable LAN route"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldPublishP2PReachabilityFromTunnel(
-        hasActiveTunnel: false,
-        hasReachableLANHost: false
-    ),
-    "shared files must not publish P2P reachability when the tunnel is unavailable"
-)
-
-expect(
-    SharedFilesRoutePolicy.fallbackDirectHost(
-        liveHost: nil,
-        currentBindingHost: "10.0.0.8",
-        persistedHost: "192.168.1.8"
-    ) == "10.0.0.8",
-    "shared files should prefer the current binding host over persisted host when falling back"
-)
-
-expect(
-    SharedFilesRoutePolicy.hasUsableDirectRouteHost("10.0.0.8"),
-    "shared files should allow a non-empty direct route host"
-)
-
-expect(
-    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(nil),
-    "shared files must not treat a nil direct route host as usable after tunnel and LAN are unavailable"
-)
-
-expect(
-    !SharedFilesRoutePolicy.hasUsableDirectRouteHost(" \n "),
-    "shared files must not treat a blank direct route host as usable after tunnel and LAN are unavailable"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldSuppressPresenceTunnelFailure(
-        isTunnelRoute: true,
-        activeSharedFileTunnelOperations: 1
-    ),
-    "presence failures on the tunnel must be suppressed while a shared-file tunnel operation is active"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldSuppressPresenceTunnelFailure(
-        isTunnelRoute: true,
-        activeSharedFileTunnelOperations: 0
-    ),
-    "presence failures on the tunnel must not be suppressed when no shared-file operation is active"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldSuppressPresenceTunnelFailure(
-        isTunnelRoute: true,
-        activeSharedFileTunnelOperations: 0,
-        secondsSinceLastSharedFileTunnelOperation: 0.25
-    ),
-    "presence failures on the tunnel must be suppressed briefly after a shared-file tunnel operation completes"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldSuppressPresenceTunnelFailure(
-        isTunnelRoute: true,
-        activeSharedFileTunnelOperations: 0,
-        secondsSinceLastSharedFileTunnelOperation: 10
-    ),
-    "presence failures on the tunnel must not be suppressed long after shared-file tunnel activity"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason: "presence_recovery_exhausted",
-        reachabilityState: "available",
-        reachabilityRoute: "tunnel",
-        isTunnelActive: true,
-        isTunnelStarting: false
-    ),
-    "presence recovery exhaustion must not clear shared-files tunnel reachability while the tunnel is active"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason: "presence_recovery_exhausted",
-        reachabilityState: "available",
-        reachabilityRoute: "relay",
-        isTunnelActive: false,
-        isTunnelStarting: true
-    ),
-    "presence recovery exhaustion must not clear shared-files relay reachability while the tunnel is reconnecting"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason: "pipeline_failed",
-        reachabilityState: "available",
-        reachabilityRoute: "tunnel",
-        isTunnelActive: true,
-        isTunnelStarting: false
-    ),
-    "non-presence offline transitions must still clear shared-files tunnel reachability"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-        reason: "presence_recovery_exhausted",
-        reachabilityState: "available",
-        reachabilityRoute: "lan",
-        isTunnelActive: true,
-        isTunnelStarting: false
-    ),
-    "LAN reachability must not be retained when presence recovery is exhausted"
-)
-
-expect(
     SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
         reachabilityState: "available",
         reachabilityRoute: "lan"
@@ -657,9 +288,9 @@ expect(
 expect(
     !SharedFilesRoutePolicy.shouldClearLANReachabilityOnPresenceRecoveryStart(
         reachabilityState: "available",
-        reachabilityRoute: "tunnel"
+        reachabilityRoute: nil
     ),
-    "presence recovery must not clear tunnel reachability before tunnel liveness is known"
+    "presence recovery must not clear reachability without a LAN route marker"
 )
 
 expect(
@@ -668,21 +299,6 @@ expect(
         reachabilityRoute: "lan"
     ),
     "presence recovery must not re-emit clears for already unavailable LAN reachability"
-)
-
-expect(
-    SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: true),
-    "shared-file downloads that started on the tunnel must retry on a fresh tunnel instead of migrating to LAN"
-)
-
-expect(
-    !SharedFilesRoutePolicy.shouldRetryDownloadOnTunnelAfterFailure(isTunnelRoute: false),
-    "direct LAN shared-file downloads must not force a tunnel retry"
-)
-
-expect(
-    SharedFilesRoutePolicy.sharedFileDownloadMaxAttempts == 4,
-    "shared-file downloads must allow repeated network-switch recovery attempts before failing"
 )
 
 expect(
@@ -711,12 +327,26 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.totalDownloadedBytes(existingBytes: -1, receivedBytes: 2_048) == 2_048,
+    "shared-file progress must ignore invalid negative partial byte counts"
+)
+
+expect(
     SharedFilesRoutePolicy.canResumePartialDownload(
         existingBytes: 1_024,
         validator: "Wed, 01 Jun 2026 08:00:00 GMT",
         expectedBytes: 4_096
     ),
     "shared-file partial downloads may resume only when a server validator is stored"
+)
+
+expect(
+    SharedFilesRoutePolicy.canResumePartialDownload(
+        existingBytes: 1_024,
+        validator: "Wed, 01 Jun 2026 08:00:00 GMT",
+        expectedBytes: nil
+    ),
+    "shared-file partial downloads may resume without a total length when a validator is stored"
 )
 
 expect(
@@ -748,11 +378,27 @@ expect(
 )
 
 expect(
+    SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure: false,
+        httpStatusCode: 408
+    ),
+    "request timeout responses should be retryable"
+)
+
+expect(
+    SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
+        isLocalSaveFailure: false,
+        httpStatusCode: 429
+    ),
+    "rate-limit responses should be retryable"
+)
+
+expect(
     !SharedFilesRoutePolicy.shouldRetrySharedFileDownloadFailure(
         isLocalSaveFailure: false,
         httpStatusCode: 404
     ),
-    "missing shared files must not restart tunnels or retry downloads"
+    "missing shared files must not retry downloads"
 )
 
 expect(

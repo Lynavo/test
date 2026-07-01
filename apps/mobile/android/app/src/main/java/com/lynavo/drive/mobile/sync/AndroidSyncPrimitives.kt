@@ -107,8 +107,6 @@ enum class AndroidDiscoveryProbeResolution {
 }
 
 enum class AndroidSharedFilesRouteMode {
-  TUNNEL,
-  WAIT_FOR_TUNNEL,
   DIRECT_LAN,
 }
 
@@ -116,13 +114,6 @@ data class AndroidSharedFilesRouteDecision(
   val mode: AndroidSharedFilesRouteMode,
   val host: String,
   val port: Int,
-  val isTunnel: Boolean,
-)
-
-data class AndroidSharedFilesRouteMetadata(
-  val tunnelActive: Boolean,
-  val tunnelStarting: Boolean,
-  val activeTunnelPort: Int?,
 )
 
 data class AndroidPersonalAccessSignature(
@@ -185,30 +176,6 @@ data class AndroidForegroundLanRuntimeDecision(
 )
 
 object AndroidSyncPrimitives {
-  fun peerProxySkipReasons(
-    hasMultiDesktopBindingSource: Boolean,
-    hasOnlineLynavoDriveDesktopPeer: Boolean,
-    hasThirdPartyHelperConfigured: Boolean,
-  ): List<String> {
-    val reasons = mutableListOf<String>()
-    if (!hasMultiDesktopBindingSource) {
-      reasons.add("no_multi_desktop_binding_source")
-    }
-    if (!hasOnlineLynavoDriveDesktopPeer) {
-      reasons.add("no_online_lynavo_drive_desktop_peer")
-    }
-    if (!hasThirdPartyHelperConfigured) {
-      reasons.add("third_party_helper_not_configured")
-    }
-    return reasons
-  }
-
-  fun shouldAttemptPeerProxyWake(
-    hasMultiDesktopBindingSource: Boolean,
-    hasOnlineLynavoDriveDesktopPeer: Boolean,
-  ): Boolean =
-    hasMultiDesktopBindingSource && hasOnlineLynavoDriveDesktopPeer
-
   fun mergeWakeCapability(
     newWake: AndroidWakeCapability?,
     existingWake: AndroidWakeCapability?,
@@ -217,9 +184,6 @@ object AndroidSyncPrimitives {
   }
 
   fun decideSharedFilesRoute(
-    isTunnelActive: Boolean,
-    tunnelPort: Int?,
-    hasTunnelCredentials: Boolean,
     directHost: String,
     directPort: Int,
   ): AndroidSharedFilesRouteDecision =
@@ -227,10 +191,22 @@ object AndroidSyncPrimitives {
       mode = AndroidSharedFilesRouteMode.DIRECT_LAN,
       host = directHost.trim(),
       port = directPort,
-      isTunnel = false,
     )
 
-  fun shouldRetrySharedFilesRouteAfterFailure(isTunnelRoute: Boolean): Boolean = isTunnelRoute
+  fun shouldRetrySharedFileDownloadFailure(
+    isLocalSaveFailure: Boolean,
+    httpStatusCode: Int? = null,
+  ): Boolean {
+    if (isLocalSaveFailure) {
+      return false
+    }
+    return when (httpStatusCode) {
+      null -> true
+      408, 429 -> true
+      in 500..599 -> true
+      else -> false
+    }
+  }
 
   fun isForegroundLanRuntimeActive(runtimeState: AndroidForegroundLanRuntimeState): Boolean =
     runtimeState.appVisible &&
@@ -347,26 +323,6 @@ object AndroidSyncPrimitives {
       normalizedOperation == "list" &&
       normalizedPath.isEmpty() &&
       !hasTraversalSegment
-  }
-
-  fun sharedFilesRouteMetadata(
-    decision: AndroidSharedFilesRouteDecision,
-    snapshotTunnelActive: Boolean,
-    snapshotTunnelStarting: Boolean,
-    snapshotTunnelPort: Int?,
-  ): AndroidSharedFilesRouteMetadata {
-    if (decision.isTunnel) {
-      return AndroidSharedFilesRouteMetadata(
-        tunnelActive = true,
-        tunnelStarting = false,
-        activeTunnelPort = decision.port,
-      )
-    }
-    return AndroidSharedFilesRouteMetadata(
-      tunnelActive = snapshotTunnelActive,
-      tunnelStarting = snapshotTunnelStarting,
-      activeTunnelPort = snapshotTunnelPort,
-    )
   }
 
   fun normalizePairingConnectionCode(rawCode: String?): String {
@@ -790,10 +746,7 @@ object AndroidSyncPrimitives {
     presenceConfirmed: Boolean,
   ): Boolean = healthReachable && presenceConfirmed
 
-  fun shouldAttemptWakeBeforeP2PFallback(
-    allowWake: Boolean,
-    hasActiveTunnel: Boolean,
-  ): Boolean = allowWake && !hasActiveTunnel
+  fun shouldAttemptLanWake(allowWake: Boolean): Boolean = allowWake
 
   fun isFullWakeConfirmed(
     lastResumeAt: String,
@@ -859,25 +812,6 @@ object AndroidSyncPrimitives {
       "connection_code_set" -> true
       else -> false
     }
-  }
-
-  fun shouldRetainSharedFilesTunnelReachabilityOnBindingOffline(
-    reason: String?,
-    reachabilityState: String?,
-    reachabilityRoute: String?,
-    isTunnelActive: Boolean,
-    isTunnelStarting: Boolean,
-  ): Boolean {
-    if (reason != "presence_recovery_exhausted") {
-      return false
-    }
-    if (reachabilityState != "available") {
-      return false
-    }
-    if (reachabilityRoute != "tunnel" && reachabilityRoute != "relay") {
-      return false
-    }
-    return isTunnelActive || isTunnelStarting
   }
 
   fun shouldRefreshBoundDiscoveryAfterNetworkAvailable(
