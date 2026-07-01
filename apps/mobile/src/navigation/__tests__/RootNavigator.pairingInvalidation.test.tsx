@@ -2,7 +2,7 @@
  * RootNavigator — global pairing invalidation routing
  *
  * Verifies the global build invariant:
- *   - native pairing invalidation resets any authenticated route to pairing
+ *   - native pairing invalidation resets any active local route to pairing
  *   - ordinary offline binding state remains an in-app update, not a pairing reset
  *   - cold-start persisted invalidation opens pairing with an explicit reason
  */
@@ -293,7 +293,7 @@ describe('RootNavigator — pairing invalidation', () => {
     expect(isPairingInvalidatedEvent(new CustomPayload())).toBe(false);
   });
 
-  test('global authenticated navigation resets when native emits onPairingInvalidated', async () => {
+  test('global active local navigation resets when native emits onPairingInvalidated', async () => {
     renderRootNavigator();
 
     await waitFor(() =>

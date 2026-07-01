@@ -83,6 +83,35 @@ test('scans code targets while leaving docs and generated artifacts out of the d
   }
 });
 
+test('scans release scripts while excluding generated release artifacts', () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-boundary-'));
+  try {
+    const staleMarketKey = ['SYNC', 'FLOW_MARKET'].join('');
+    const releaseScriptDir = join(fixtureRoot, 'scripts', 'release');
+    const generatedReleaseDir = join(fixtureRoot, 'apps', 'desktop', 'release', 'win-unpacked');
+    mkdirSync(releaseScriptDir, { recursive: true });
+    mkdirSync(generatedReleaseDir, { recursive: true });
+    writeFileSync(
+      join(releaseScriptDir, 'bad.mjs'),
+      [
+        `const staleMarket = "${staleMarketKey}";`,
+        'const staleUpdateUrl = "LYNAVO_DESKTOP_UPDATE_URL";',
+      ].join('\n'),
+    );
+    writeFileSync(join(generatedReleaseDir, 'bundle.js'), 'const oldScreen = "RemoteAccess";\n');
+
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 2/);
+    assert.match(result.stdout, new RegExp(`scripts/release/bad\\.mjs:1 ${staleMarketKey}`));
+    assert.match(result.stdout, /scripts\/release\/bad\.mjs:2 LYNAVO_DESKTOP_UPDATE_URL/);
+    assert.doesNotMatch(result.stdout, /apps\/desktop\/release/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('does not treat React Native event subscription handles as commercial subscription state', () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-boundary-'));
   try {

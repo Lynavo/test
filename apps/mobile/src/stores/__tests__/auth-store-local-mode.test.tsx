@@ -30,7 +30,7 @@ describe('AuthProvider guest local mode bootstrap', () => {
     jest.clearAllMocks();
   });
 
-  test('hydrates no-token guest without running authenticated owner cleanup', async () => {
+  test('hydrates guest local mode without wiping local sync identity', async () => {
     render(
       <AuthProvider>
         <AuthProbe />

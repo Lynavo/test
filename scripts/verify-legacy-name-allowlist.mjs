@@ -19,8 +19,9 @@ const IGNORE_GLOBS = [
   '!**/build/**',
   '!out/**',
   '!**/out/**',
-  '!release/**',
-  '!**/release/**',
+  '!apps/**/release/**',
+  '!packages/**/release/**',
+  '!services/**/release/**',
   '!coverage/**',
   '!**/coverage/**',
   '!DerivedData/**',
@@ -131,10 +132,15 @@ const ALLOWED_EXACT_PATHS = new Map([
   ],
   [
     'scripts/release/__tests__/desktop-branding.test.mjs',
-    allowMatches(
-      [{ terms: ['syncflow'], linePattern: /assert\.doesNotMatch\(.*syncflow-sidecar/ }],
-      'Regression tests assert old packaged sidecar exe paths do not return.',
-    ),
+    allowAny('Regression test fixture asserts legacy desktop branding does not return.'),
+  ],
+  [
+    'scripts/release/__tests__/macos-packaging.test.mjs',
+    allowAny('Regression test fixture asserts legacy market env usage does not return.'),
+  ],
+  [
+    'scripts/release/__tests__/release-profiles.test.mjs',
+    allowAny('Regression test fixture asserts legacy release profile/env names do not return.'),
   ],
   ['AGENTS.md', allowAny('Repository handoff instructions quote external historical repo paths.')],
   [

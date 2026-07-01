@@ -87,6 +87,27 @@ test('includes hidden files while keeping generated artifacts ignored', () => {
   }
 });
 
+test('scans release scripts while excluding generated release artifacts', () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'legacy-name-allowlist-'));
+  try {
+    const releaseScriptDir = join(fixtureRoot, 'scripts', 'release');
+    const generatedReleaseDir = join(fixtureRoot, 'apps', 'desktop', 'release', 'win-unpacked');
+    mkdirSync(releaseScriptDir, { recursive: true });
+    mkdirSync(generatedReleaseDir, { recursive: true });
+    writeFileSync(join(releaseScriptDir, 'bad.mjs'), 'const oldName = "SyncFlow";\n');
+    writeFileSync(join(generatedReleaseDir, 'bundle.js'), 'const oldName = "ViviDrop";\n');
+
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Unallowlisted legacy name hits: 1/);
+    assert.match(result.stdout, /scripts\/release\/bad\.mjs:1 SyncFlow/);
+    assert.doesNotMatch(result.stdout, /apps\/desktop\/release/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('rejects legacy Go module paths after sidecar module rename', () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'legacy-name-allowlist-'));
   try {

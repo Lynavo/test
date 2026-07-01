@@ -244,9 +244,9 @@ describe('SyncEngineModule shared bridge wrappers', () => {
       {
         resourceId: '',
         desktopDeviceId: 'desktop-001',
-        clientId: 'account-a-client',
-        displayName: 'Account A photo',
-        fileKey: '2026/06/17/account-a-image',
+        clientId: 'phone-a-client',
+        displayName: 'Phone A photo',
+        fileKey: '2026/06/17/phone-a-image',
         filename: 'IMG_ACCOUNT_A.JPG',
         mediaType: 'image',
         fileSize: 4096,
@@ -311,7 +311,7 @@ describe('SyncEngineModule shared bridge wrappers', () => {
     );
   });
 
-  it('does not inject account tokens for personal file operations', async () => {
+  it('calls personal file native bridge methods without legacy credential arguments', async () => {
     const directoryListing = {
       scope: 'personal',
       path: '',

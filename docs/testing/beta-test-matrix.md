@@ -137,9 +137,9 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh \
 4. 恢复网络后自动 `RESUME`
 5. 不从 0 重传
 
-### 4.4 后台持续
+### 4.4 前后台切换补偿
 
-后台持续属于官方商业能力。Community/OSS build 或缺少有效 entitlement / official capability 时，本节预期是 fail-closed：不得请求 tunnel credentials，不得启用 silent background continuation；回到前景后继续通过 LAN pending queue 补偿同步。
+后台持续属于官方商业能力，不是 OSS 主线正向验收项。Community/OSS build 本节只验证前台 LAN 同步在切后台后安全暂停、回到前景后继续通过 pending queue 补偿同步。
 
 1. 传输中切后台
 2. 锁屏保持一段时间
@@ -155,10 +155,12 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh \
 5. UI 不提供手动勾选文件、跳过文件或删除队列项作为替代路径
 6. 断网恢复后继续 `RESUME`，不因 guest 身份清空 sync identity 或 pending queue
 
-### 4.4.2 Remote/background fail-closed
+### 4.4.2 Commercial remote/background boundary
 
-1. guest/free/expired entitlement 不请求 remote tunnel credentials
-2. community / OSS runtime 不展示官方 remote tunnel 激活入口，也不向 sidecar 下发 remote credentials
+本节是商业能力负向边界 sanity check，不是 OSS 正向功能验收。
+
+1. community / OSS runtime 不请求官方 tunnel credentials
+2. community / OSS runtime 不展示官方 tunnel 激活入口，也不向 sidecar 下发 credentials
 3. 缺少 official native capability 时，后台静默续传入口保持关闭
 4. 前景 LAN 同步仍可用，并在回到前景后通过 pending queue 补偿
 
@@ -273,9 +275,9 @@ bash /Volumes/workspace/work/sync-flow/scripts/ios/lynavo_upload_eval.sh \
 3. iOS Debug/Release 构建通过
 4. Android Debug 构建通过
 5. `batch + recovery-sidecar + recovery-late-sidecar + recovery-app` 至少各过 1 轮
-6. 真实设备上手工验证一次：后台上传 + 断网恢复
+6. 真实设备上手工验证一次：切后台暂停、回前景 pending queue 补偿 + 断网恢复
 7. guest local LAN 前景同步至少过一次：未登录 / 无订阅仍可配对并自动上传
-8. remote/background fail-closed 至少过一次：community / guest build 不启用 official remote tunnel、TURN credentials 或 silent background continuation
+8. 商业 remote/background 边界 sanity 至少过一次：community / guest build 不启用 official tunnel credentials 或 silent background continuation
 9. 如本轮包含 Windows 桌面包，至少完成一次 NSIS fresh install + 配对上传冒烟
 10. 如本轮包含 Linux 桌面包，至少完成 Ubuntu 22.04 arm64 和 amd64 `.deb` fresh install + iOS / Android 真机配对上传冒烟
 11. 如本轮包含 iOS thermal 策略改动，至少完成一次 serious/critical thermal 手工回归并导出 mobile diagnostics

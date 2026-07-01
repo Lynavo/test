@@ -1108,7 +1108,7 @@ describe('LocalComputerGlobalScreen', () => {
     );
   });
 
-  it('shows generic LAN unavailable guidance when the desktop account identity is unavailable', async () => {
+  it('shows generic LAN unavailable guidance for legacy desktop-identity errors', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error('desktop account identity is unavailable'),
@@ -1132,7 +1132,7 @@ describe('LocalComputerGlobalScreen', () => {
     expect(queryByText('尚未開啟本地共享')).toBeNull();
   });
 
-  it('shows generic LAN unavailable guidance when mobile and desktop account identities differ', async () => {
+  it('shows generic LAN unavailable guidance for legacy identity-mismatch errors', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockListGlobalLocalComputerResources.mockRejectedValueOnce(
       new Error('account mismatch'),

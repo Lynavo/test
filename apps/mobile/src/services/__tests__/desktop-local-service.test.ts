@@ -717,9 +717,9 @@ describe('desktop-local-service', () => {
           {
             resourceId: '',
             desktopDeviceId: 'desktop-001',
-            clientId: 'account-a-client',
-            displayName: 'A account photo',
-            fileKey: '2026/06/17/account-a-image',
+            clientId: 'phone-a-client',
+            displayName: 'Phone A photo',
+            fileKey: '2026/06/17/phone-a-image',
             filename: 'IMG_ACCOUNT_A.JPG',
             mediaType: 'image',
             fileSize: 4096,
@@ -746,12 +746,12 @@ describe('desktop-local-service', () => {
       totalItems: 1,
       items: [
         {
-          clientId: 'account-a-client',
-          fileKey: '2026/06/17/account-a-image',
+          clientId: 'phone-a-client',
+          fileKey: '2026/06/17/phone-a-image',
           previewUrl:
-            'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Faccount-a-image',
+            'http://192.168.10.20:39394/resources/mobile/received/preview?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fphone-a-image',
           thumbnailUrl:
-            'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Faccount-a-image',
+            'http://192.168.10.20:39394/resources/mobile/received/thumbnail?clientId=client-001&clientName=Alice%20iPhone&fileKey=2026%2F06%2F17%2Fphone-a-image',
         },
       ],
     });
@@ -824,18 +824,18 @@ describe('desktop-local-service', () => {
       {
         resourceId: '',
         desktopDeviceId: 'desktop-001',
-        clientId: 'account-a-client',
-        displayName: 'A account photo',
-        fileKey: '2026/06/17/native-account-a-image',
+        clientId: 'phone-a-client',
+        displayName: 'Phone A photo',
+        fileKey: '2026/06/17/native-phone-a-image',
         filename: 'IMG_ACCOUNT_A_NATIVE.JPG',
         mediaType: 'image',
         fileSize: 4096,
         completedAt: '2026-06-16T08:00:00.000Z',
         shareStatus: 'not_shared',
         previewUrl:
-          'http://127.0.0.1:49394/resources/mobile/received/preview?fileKey=native-account-a-image',
+          'http://127.0.0.1:49394/resources/mobile/received/preview?fileKey=native-phone-a-image',
         thumbnailUrl:
-          'http://127.0.0.1:49394/resources/mobile/received/thumbnail?fileKey=native-account-a-image',
+          'http://127.0.0.1:49394/resources/mobile/received/thumbnail?fileKey=native-phone-a-image',
       },
     ]);
 
@@ -850,12 +850,12 @@ describe('desktop-local-service', () => {
       totalItems: 1,
       items: [
         {
-          clientId: 'account-a-client',
-          fileKey: '2026/06/17/native-account-a-image',
+          clientId: 'phone-a-client',
+          fileKey: '2026/06/17/native-phone-a-image',
           previewUrl:
-            'http://127.0.0.1:49394/resources/mobile/received/preview?fileKey=native-account-a-image',
+            'http://127.0.0.1:49394/resources/mobile/received/preview?fileKey=native-phone-a-image',
           thumbnailUrl:
-            'http://127.0.0.1:49394/resources/mobile/received/thumbnail?fileKey=native-account-a-image',
+            'http://127.0.0.1:49394/resources/mobile/received/thumbnail?fileKey=native-phone-a-image',
         },
       ],
     });

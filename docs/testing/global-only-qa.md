@@ -14,9 +14,9 @@ pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
 验收口径：
 
 1. 只出现 `review` / `prod` release channel。
-2. `review` 指向 review API。
-3. `prod` 不指向 review API。
-4. dry-run 输出不要求或展示历史 market。
+2. dry-run 输出只设置 `LYNAVO_RELEASE_CHANNEL`、中性的 `ELECTRON_BUILDER_CONFIG=electron-builder.yml` 和打包命令。
+3. dry-run 输出不要求或展示 API base、support upload endpoint、update check endpoint 或历史 market。
+4. `prod` 不复用 `review` channel。
 
 ## Guest Local LAN
 
@@ -46,15 +46,15 @@ pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
 
 如果需要 debug 特定文件，应使用诊断或测试脚本，不作为产品路径暴露。
 
-## Paid Remote/background Boundary
+## Commercial Boundary Negative Check
 
-无 entitlement、expired entitlement、server error、official capability missing 都要覆盖。
+这是商业能力负向边界检查，不是 OSS 正向功能验收。Community/OSS build 应覆盖官方 capability 缺失场景，并确认前景 LAN 同步不受影响。
 
 预期：
 
-1. remote access 不请求或不使用 tunnel credentials。
+1. 不请求或不使用官方 tunnel credentials。
 2. background silent continuation 不启用。
-3. community / OSS runtime 不展示官方 remote tunnel 激活入口。
+3. community / OSS runtime 不展示官方 tunnel 激活入口。
 4. 前景 LAN 同步仍可用。
 5. 回到前景后继续 pending queue 补偿。
 

@@ -48,7 +48,7 @@ if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
   exit 1
 fi
 
-git tag -a "$TAG_NAME" -m "SyncFlow beta ${MARKETING_VERSION} (${BUILD_NUMBER})"
+git tag -a "$TAG_NAME" -m "Lynavo Drive beta ${MARKETING_VERSION} (${BUILD_NUMBER})"
 echo "Created tag: $TAG_NAME"
 
 if [[ "$PUSH_TAG" == "true" ]]; then

@@ -1682,7 +1682,7 @@ func TestPresenceHeartbeatBroadcastsConnectedIdleEvent(t *testing.T) {
 	}
 }
 
-func TestPresenceHeartbeatAllowsPairedClientWithoutAccountContext(t *testing.T) {
+func TestPresenceHeartbeatAllowsLocalPairedClient(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	now := time.Now().UTC().Format(time.RFC3339)
 	insertPairedDeviceWithStableID(t, st, "client-1", "Nick iPhone", "client-1", "stable-1", now)
@@ -3590,7 +3590,7 @@ func TestPersonalListRejectsEscapes(t *testing.T) {
 	}
 }
 
-func TestSharedListStaysAccessibleWithoutAccountToken(t *testing.T) {
+func TestSharedListStaysAccessibleForLocalDesktop(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 	sharedDir := cfg.SharedDir()
 	if err := os.MkdirAll(sharedDir, 0o755); err != nil {

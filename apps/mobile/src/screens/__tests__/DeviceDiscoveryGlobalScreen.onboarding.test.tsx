@@ -837,7 +837,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.getByPlaceholderText('192.168.31.21')).toBeTruthy();
   });
 
-  it('reconnects a recent desktop with an empty token code before opening pairing options', async () => {
+  it('reconnects a recent desktop with an empty connection code before opening pairing options', async () => {
     mockHasSeenUnconnectedGuide.mockResolvedValue(true);
 
     const screen = render(<DeviceDiscoveryGlobalScreen />);
@@ -869,7 +869,7 @@ describe('DeviceDiscoveryGlobalScreen onboarding', () => {
     expect(screen.queryByText('选择连接方式')).toBeNull();
   });
 
-  it('falls back to global pairing options when recent desktop token reconnect fails', async () => {
+  it('falls back to pairing options when recent desktop silent reconnect fails', async () => {
     mockHasSeenUnconnectedGuide.mockResolvedValue(true);
     mockPairDevice.mockRejectedValueOnce(
       new PairingError('Pair token invalid', 'unknown'),
