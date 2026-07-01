@@ -8,13 +8,11 @@ import {
   getBonjourInstallSuccessMessage,
 } from '@renderer/lib/bonjour-install';
 import { getBonjourRuntimeMessage, getSidecarRuntimeMessage } from '@renderer/lib/runtime-messages';
-import { useAppStore } from '@renderer/stores/app-store';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 
 export function SidecarStatusBanner() {
   const { t } = useTranslation();
   const runtime = useSidecarRuntimeStore((s) => s.runtime);
-  const setView = useAppStore((s) => s.setView);
   const [retrying, setRetrying] = useState(false);
   const [installing, setInstalling] = useState(false);
   const showBonjourFallback = runtime.bonjour.status === 'fallback';
@@ -111,17 +109,6 @@ export function SidecarStatusBanner() {
           >
             {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {t('layout.sidecar.installBonjour')}
-          </Button>
-        )}
-        {isBonjourWarning && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setView('settings')}
-            className="shrink-0"
-          >
-            {t('layout.sidecar.viewSettings')}
           </Button>
         )}
         <Button

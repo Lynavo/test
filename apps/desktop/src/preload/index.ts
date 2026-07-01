@@ -15,7 +15,6 @@ const IPC = {
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
-  SIDECAR_RESET_STATE: 'sidecar:reset-state',
   SIDECAR_CONNECTION_DEVICES: 'sidecar:connection-devices',
   SIDECAR_REVOKE_CONNECTION_DEVICE: 'sidecar:revoke-connection-device',
   SIDECAR_CLEAR_BLOCKED_CLIENT: 'sidecar:clear-blocked-client',
@@ -71,7 +70,6 @@ const electronAPI: ElectronAPI = {
     getDeviceDates: (deviceId: string) => ipcRenderer.invoke(IPC.SIDECAR_DEVICE_DATES, deviceId),
     getSettings: () => ipcRenderer.invoke(IPC.SIDECAR_SETTINGS),
     updateSettings: (settings) => ipcRenderer.invoke(IPC.SIDECAR_UPDATE_SETTINGS, settings),
-    resetState: () => ipcRenderer.invoke(IPC.SIDECAR_RESET_STATE),
     getConnectionDevices: () => ipcRenderer.invoke(IPC.SIDECAR_CONNECTION_DEVICES),
     revokeConnectionDevice: (clientId: string) =>
       ipcRenderer.invoke(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE, clientId),

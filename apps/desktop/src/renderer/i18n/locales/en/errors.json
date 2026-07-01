@@ -32,22 +32,7 @@
     "openFolderFailed": "Failed to open folder"
   },
   "settings": {
-    "saveDeviceNameFailed": "Failed to save device name",
-    "regenerateCodeFailed": "Failed to regenerate pairing code",
-    "powerSaveLoadFailed": "Failed to load power management settings",
-    "powerSaveUpdateFailed": "Failed to save power management settings",
-    "transferActiveCannotChangeReceivePath": "Transfer is in progress. The receive path cannot be changed.",
-    "saveReceivePathFailed": "Failed to save receive path",
-    "savePersonalPathFailed": "Failed to save personal shared folder",
-    "noReceivePathToOpen": "There is no receive path to open yet",
-    "noPersonalPathToOpen": "There is no personal shared path to open yet",
-    "noSharedPathToOpen": "There is no team shared path to open yet",
-    "openFolderFailed": "Failed to open folder",
-    "openPersonalFolderFailed": "Failed to open personal shared folder",
-    "openSharedFolderFailed": "Failed to open team shared folder",
     "shareStatusCheckFailed": "Failed to check sharing status",
-    "bonjourRetrySuccess": "The background service rechecked the Bonjour runtime",
-    "bonjourRetryFailed": "Failed to recheck the Bonjour runtime",
     "bonjourInstallFailed": "Bonjour installation failed",
     "bonjourInstallSuccess": "Bonjour has been installed",
     "bonjourAlreadyInstalled": "Bonjour is already installed",
@@ -60,11 +45,6 @@
     "bonjourInstallFallback": "Please try again later or use Apple's official download page.",
     "diagnosticsExported": "Diagnostics bundle exported",
     "diagnosticsExportFailed": "Failed to export diagnostics bundle",
-    "resetSuccess": "All data has been reset",
-    "resetSuccessDescription": "Paired devices, upload records, and sessions have all been cleared",
-    "resetFailed": "Reset failed",
-    "resetTransferActiveDescription": "Files are being received. Reset data after transfer finishes.",
-    "sidecarRetryFailed": "Failed to retry background service startup",
-    "sidecarBonjourInstallHint": "Go to Settings for installation instructions."
+    "sidecarRetryFailed": "Failed to retry background service startup"
   }
 }

@@ -1,19 +1,4 @@
 {
-  "title": "Settings",
-  "sections": {
-    "language": "Language",
-    "languageDescription": "Choose the desktop interface language",
-    "deviceName": "Device name",
-    "deviceNameDescription": "This name is shown on mobile devices",
-    "connectionCode": "Pairing code",
-    "connectionCodeDescription": "After regeneration, old phones need to pair again",
-    "powerSave": "Power management",
-    "powerSaveDescription": "Keep desktop available during sync",
-    "shareAddress": "LAN sharing",
-    "shareAddressDescription": "Checks this computer's SMB sharing status for mobile access to the shared folder",
-    "bonjour": "Windows Bonjour broadcast",
-    "bonjourDescription": "Allows phones on the same LAN to discover this computer"
-  },
   "language": {
     "label": "Interface language",
     "options": {
@@ -22,59 +7,8 @@
       "zhHant": "Traditional Chinese"
     }
   },
-  "deviceName": {
-    "lockedHint": "Files are being received. Rename after transfer finishes."
-  },
-  "connectionCode": {
-    "regenerate": "Regenerate",
-    "regenerateConfirm": "Changing the pairing code will invalidate all currently paired phones. They will need to pair again with the new code. Continue?"
-  },
-  "connectionDevices": {
-    "title": "Connected devices",
-    "description": "Manage authorized phones, blocked pairing requests, and recent pairing code attempts.",
-    "authorized": "Authorized devices",
-    "blocked": "Blocked devices",
-    "recentAttempts": "Recent pairing attempts",
-    "emptyAuthorized": "No authorized devices",
-    "emptyBlocked": "No blocked devices",
-    "emptyAttempts": "No pairing attempts",
-    "refresh": "Refresh",
-    "revoke": "Revoke",
-    "clearBlock": "Clear block",
-    "confirmRevoke": "After revoking, this phone must enter the desktop pairing code again next time. Revoke authorization?",
-    "confirmClearBlock": "Clearing the block will not authorize the phone automatically. The phone still needs the correct pairing code. Clear block?",
-    "authorizedAt": "Authorized at",
-    "lastSeenAt": "Last seen",
-    "lastAttemptAt": "Last attempt",
-    "blockedAt": "Blocked at",
-    "failedAttempts": "Failed attempts",
-    "status": "Status",
-    "ip": "IP",
-    "platform": "Platform",
-    "result": "Result",
-    "failureReason": "Reason",
-    "loadFailed": "Unable to load connected devices",
-    "authorizedStatus": "Authorized",
-    "connectedStatus": "Connected",
-    "offlineStatus": "Offline"
-  },
-  "powerSave": {
-    "preventSleepTitle": "Prevent computer sleep",
-    "preventSleepDescription": "Keep computer awake while Lynavo Drive is running (screen is allowed to turn off) so mobile can sync at any time. This does not enable Wake-on-LAN, which must be configured separately in macOS or Windows.",
-    "blockingSleep": "Keeping awake",
-    "idle": "Disabled"
-  },
   "filePath": {
-    "receiveAddress": "Receive folder",
-    "personalAddress": "Personal shared folder",
-    "sharedAddress": "Team shared folder",
-    "chooseFolder": "Choose folder",
-    "openReceived": "Open receive folder",
-    "openPersonal": "Open personal shared folder",
-    "openShared": "Open team shared folder",
-    "windowsDrives": "Local disks",
-    "windowsDrivesWithPath": "Local disks ({{path}})",
-    "restoreWindowsDrives": "Restore local disks"
+    "openShared": "Open team shared folder"
   },
   "shareAddress": {
     "label": "LAN share address",
@@ -105,20 +39,6 @@
     "copyRecommendedAddress": "Copy recommended address",
     "recommendedAddress": "Recommended address",
     "systemGuide": "System guide"
-  },
-  "bonjour": {
-    "defaultMessage": "Bonjour allows iPhone to discover this computer automatically.",
-    "install": "Install Bonjour",
-    "retry": "Check again",
-    "openApplePage": "Open Apple download page",
-    "mode": "Discovery mode",
-    "appleBonjour": "Apple Bonjour",
-    "fallbackMode": "Built-in broadcast",
-    "advertisedIp": "Advertised IP",
-    "sameLanHint": "Confirm the phone and computer are connected to the same LAN.",
-    "runtimePath": "Runtime path",
-    "runtimeNotFound": "Not detected",
-    "installHint": "Check again after installation finishes."
   },
   "systemGuide": {
     "macTitle": "macOS File Sharing",
@@ -195,20 +115,9 @@
     }
   },
   "support": {
-    "title": "Support and diagnostics",
-    "description": "Export a local diagnostics bundle and share it manually when needed.",
     "exportDiagnostics": "Export diagnostics",
     "diagnosticsDescriptionLabel": "Issue description",
-    "diagnosticsDescriptionPlaceholder": "Describe the steps, phone model, network environment, or error symptoms",
-    "diagnosticsDescriptionHelp": "The description is saved inside the local diagnostics bundle.",
     "diagnosticsCancel": "Cancel",
-    "diagnosticsSubmit": "Export",
-    "confirmReset": "Confirm reset",
-    "reset": "Reset data",
-    "lastSuccessfulSync": "Last successful sync",
-    "advertisedIp": "Advertised IP",
-    "sameLanHint": "Confirm the phone and computer are connected to the same LAN.",
-    "desktopVersion": "Desktop version",
-    "buildNumber": "{{buildNumber}}"
+    "diagnosticsSubmit": "Export"
   }
 }

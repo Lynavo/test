@@ -1,19 +1,4 @@
 {
-  "title": "設定",
-  "sections": {
-    "language": "語言",
-    "languageDescription": "選擇桌面端介面顯示語言",
-    "deviceName": "裝置名稱",
-    "deviceNameDescription": "手機端會看到這個名稱",
-    "connectionCode": "連線碼管理",
-    "connectionCodeDescription": "重新產生後，舊手機需要重新配對",
-    "powerSave": "電源管理",
-    "powerSaveDescription": "同步時保持桌面端可用",
-    "shareAddress": "區域網路共享",
-    "shareAddressDescription": "偵測這台電腦的 SMB 共享狀態，供手機讀取共享目錄",
-    "bonjour": "Windows Bonjour 廣播",
-    "bonjourDescription": "用於讓手機在同一個區域網路內發現這台電腦"
-  },
   "language": {
     "label": "介面語言",
     "options": {
@@ -22,59 +7,8 @@
       "zhHant": "繁體中文"
     }
   },
-  "deviceName": {
-    "lockedHint": "正在接收檔案，完成後再修改名稱"
-  },
-  "connectionCode": {
-    "regenerate": "重新產生",
-    "regenerateConfirm": "修改配對碼會中斷目前已配對的手機，所有手機需使用新配對碼重新配對。要繼續嗎？"
-  },
-  "connectionDevices": {
-    "title": "連接設備",
-    "description": "管理已授權手機、被封鎖的配對請求與近期連接碼嘗試。",
-    "authorized": "已授權設備",
-    "blocked": "已封鎖設備",
-    "recentAttempts": "近期配對嘗試",
-    "emptyAuthorized": "尚無已授權設備",
-    "emptyBlocked": "尚無被封鎖設備",
-    "emptyAttempts": "尚無配對嘗試",
-    "refresh": "重新整理",
-    "revoke": "撤銷授權",
-    "clearBlock": "解除封鎖",
-    "confirmRevoke": "撤銷後，這台手機下次必須重新輸入電腦端連接碼。確定要撤銷？",
-    "confirmClearBlock": "解除封鎖不會自動授權手機，手機仍需輸入正確連接碼。確定要解除？",
-    "authorizedAt": "授權時間",
-    "lastSeenAt": "最後連線",
-    "lastAttemptAt": "最後嘗試",
-    "blockedAt": "封鎖時間",
-    "failedAttempts": "錯誤次數",
-    "status": "狀態",
-    "ip": "IP",
-    "platform": "平台",
-    "result": "結果",
-    "failureReason": "原因",
-    "loadFailed": "無法載入連接設備",
-    "authorizedStatus": "已授權",
-    "connectedStatus": "連線中",
-    "offlineStatus": "離線"
-  },
-  "powerSave": {
-    "preventSleepTitle": "防止電腦待機",
-    "preventSleepDescription": "保持電腦處於喚醒狀態（允許螢幕熄滅），以便手機隨時發起同步。此設定不會開啟 Wake-on-LAN，遠端喚醒仍需在 macOS 或 Windows 另外設定。",
-    "blockingSleep": "正在保持喚醒",
-    "idle": "未啟用"
-  },
   "filePath": {
-    "receiveAddress": "接收目錄",
-    "personalAddress": "個人共享目錄",
-    "sharedAddress": "團隊共享目錄",
-    "chooseFolder": "選擇資料夾",
-    "openReceived": "開啟接收目錄",
-    "openPersonal": "開啟個人共享目錄",
-    "openShared": "開啟團隊共享目錄",
-    "windowsDrives": "本機磁碟",
-    "windowsDrivesWithPath": "本機磁碟（{{path}}）",
-    "restoreWindowsDrives": "恢復本機磁碟"
+    "openShared": "開啟團隊共享目錄"
   },
   "shareAddress": {
     "label": "區域網路共享位址",
@@ -105,20 +39,6 @@
     "copyRecommendedAddress": "複製建議位址",
     "recommendedAddress": "建議位址",
     "systemGuide": "系統指引"
-  },
-  "bonjour": {
-    "defaultMessage": "Bonjour 用於讓 iPhone 自動發現這台電腦。",
-    "install": "安裝 Bonjour",
-    "retry": "重新偵測",
-    "openApplePage": "開啟 Apple 下載頁",
-    "mode": "探索模式",
-    "appleBonjour": "Apple Bonjour",
-    "fallbackMode": "內建廣播",
-    "advertisedIp": "廣播 IP",
-    "sameLanHint": "請確認手機和電腦連到同一個區域網路。",
-    "runtimePath": "執行路徑",
-    "runtimeNotFound": "未偵測到",
-    "installHint": "安裝完成後請重新偵測。"
   },
   "systemGuide": {
     "macTitle": "macOS 檔案共享",
@@ -195,20 +115,9 @@
     }
   },
   "support": {
-    "title": "支援與診斷",
-    "description": "匯出本機診斷包，需要時可手動分享。",
     "exportDiagnostics": "匯出診斷包",
     "diagnosticsDescriptionLabel": "問題描述",
-    "diagnosticsDescriptionPlaceholder": "請描述出現問題的步驟、手機型號、網路環境或錯誤現象",
-    "diagnosticsDescriptionHelp": "描述會保存在本機診斷包中。",
     "diagnosticsCancel": "取消",
-    "diagnosticsSubmit": "匯出",
-    "confirmReset": "確認重置",
-    "reset": "重置資料",
-    "lastSuccessfulSync": "最近成功同步",
-    "advertisedIp": "廣播 IP",
-    "sameLanHint": "請確認手機和電腦連到同一個區域網路。",
-    "desktopVersion": "桌面端版本",
-    "buildNumber": "{{buildNumber}}"
+    "diagnosticsSubmit": "匯出"
   }
 }

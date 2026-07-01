@@ -44,7 +44,6 @@ export interface ElectronAPI {
     getDeviceDates(deviceId: string): Promise<{ dates: string[] }>;
     getSettings(): Promise<SettingsDTO>;
     updateSettings(settings: Partial<SettingsDTO>): Promise<SettingsDTO>;
-    resetState(): Promise<{ ok: boolean }>;
     getConnectionDevices(): Promise<ConnectionDevicesSettingsDTO>;
     revokeConnectionDevice(clientId: string): Promise<{ ok: boolean }>;
     clearBlockedClient(clientId: string): Promise<{ ok: boolean }>;

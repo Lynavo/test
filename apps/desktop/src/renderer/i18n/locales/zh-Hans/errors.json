@@ -32,22 +32,7 @@
     "openFolderFailed": "打开文件夹失败"
   },
   "settings": {
-    "saveDeviceNameFailed": "保存设备名称失败",
-    "regenerateCodeFailed": "重新生成连接码失败",
-    "powerSaveLoadFailed": "读取电源管理设置失败",
-    "powerSaveUpdateFailed": "保存电源管理设置失败",
-    "transferActiveCannotChangeReceivePath": "传输进行中，无法更改接收路径",
-    "saveReceivePathFailed": "保存接收路径失败",
-    "savePersonalPathFailed": "保存个人共享目录失败",
-    "noReceivePathToOpen": "当前还没有可打开的接收路径",
-    "noPersonalPathToOpen": "当前还没有可打开的个人共享路径",
-    "noSharedPathToOpen": "当前还没有可打开的团队共享路径",
-    "openFolderFailed": "打开文件夹失败",
-    "openPersonalFolderFailed": "打开个人共享目录失败",
-    "openSharedFolderFailed": "打开团队共享文件夹失败",
     "shareStatusCheckFailed": "共享状态检测失败",
-    "bonjourRetrySuccess": "后台服务已重新检测 Bonjour 运行时",
-    "bonjourRetryFailed": "重新检测 Bonjour 运行时失败",
     "bonjourInstallFailed": "Bonjour 安装失败",
     "bonjourInstallSuccess": "Bonjour 已安装完成",
     "bonjourAlreadyInstalled": "Bonjour 已安装",
@@ -60,11 +45,6 @@
     "bonjourInstallFallback": "请稍后重试，或改用苹果官方安装页面。",
     "diagnosticsExported": "诊断包已导出",
     "diagnosticsExportFailed": "诊断包导出失败",
-    "resetSuccess": "已重置所有数据",
-    "resetSuccessDescription": "配对设备、上传记录、会话已全部清除",
-    "resetFailed": "重置失败",
-    "resetTransferActiveDescription": "正在接收文件，完成后再重置数据",
-    "sidecarRetryFailed": "重试启动后台服务失败",
-    "sidecarBonjourInstallHint": "请改到设置页查看安装说明。"
+    "sidecarRetryFailed": "重试启动后台服务失败"
   }
 }

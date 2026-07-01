@@ -152,7 +152,6 @@ vi.mock('../sidecar-client', async () => {
       getDeviceDates: vi.fn(),
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
-      resetState: vi.fn(),
       regenerateConnectionCode: vi.fn(),
       setConnectionCode: vi.fn(),
       getShareStatus: vi.fn(),

@@ -198,7 +198,6 @@ export const sidecarClient = {
   getSettings: () => request<import('@lynavo-drive/contracts').SettingsDTO>('GET', '/settings'),
   updateSettings: (s: Partial<import('@lynavo-drive/contracts').SettingsDTO>) =>
     request<import('@lynavo-drive/contracts').SettingsDTO>('PUT', '/settings', s),
-  resetState: () => request<{ ok: boolean }>('POST', '/settings/reset-state', {}),
   setConnectionCode: (code: string) =>
     request<{ code: string }>('POST', '/connection-code', { code }),
   getConnectionDevices: () =>

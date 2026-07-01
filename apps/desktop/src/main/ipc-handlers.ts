@@ -29,7 +29,6 @@ export const IPC = {
   SIDECAR_DEVICE_DATES: 'sidecar:device-dates',
   SIDECAR_SETTINGS: 'sidecar:settings',
   SIDECAR_UPDATE_SETTINGS: 'sidecar:update-settings',
-  SIDECAR_RESET_STATE: 'sidecar:reset-state',
   SIDECAR_CONNECTION_DEVICES: 'sidecar:connection-devices',
   SIDECAR_REVOKE_CONNECTION_DEVICE: 'sidecar:revoke-connection-device',
   SIDECAR_CLEAR_BLOCKED_CLIENT: 'sidecar:clear-blocked-client',
@@ -110,7 +109,6 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_UPDATE_SETTINGS, (_e, partial) =>
     sidecarClient.updateSettings(partial),
   );
-  ipcMain.handle(IPC.SIDECAR_RESET_STATE, () => sidecarClient.resetState());
   ipcMain.handle(IPC.SIDECAR_CONNECTION_DEVICES, () => sidecarClient.getConnectionDevices());
   ipcMain.handle(IPC.SIDECAR_REVOKE_CONNECTION_DEVICE, (_e, clientId: string) =>
     sidecarClient.revokeConnectionDevice(clientId),

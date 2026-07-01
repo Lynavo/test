@@ -84,7 +84,6 @@
     "bonjourPath": "Bonjour 路径：{{path}}",
     "lastExitCode": "最近退出码：{{code}}",
     "installBonjour": "一键安装 Bonjour",
-    "viewSettings": "查看设置",
     "retrySidecar": "重试后台服务"
   }
 }

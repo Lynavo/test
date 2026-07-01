@@ -32,22 +32,7 @@
     "openFolderFailed": "開啟資料夾失敗"
   },
   "settings": {
-    "saveDeviceNameFailed": "儲存裝置名稱失敗",
-    "regenerateCodeFailed": "重新產生連線碼失敗",
-    "powerSaveLoadFailed": "讀取電源管理設定失敗",
-    "powerSaveUpdateFailed": "儲存電源管理設定失敗",
-    "transferActiveCannotChangeReceivePath": "傳輸進行中，無法變更接收路徑",
-    "saveReceivePathFailed": "儲存接收路徑失敗",
-    "savePersonalPathFailed": "儲存個人共享目錄失敗",
-    "noReceivePathToOpen": "目前沒有可開啟的接收路徑",
-    "noPersonalPathToOpen": "目前沒有可開啟的個人共享路徑",
-    "noSharedPathToOpen": "目前沒有可開啟的團隊共享路徑",
-    "openFolderFailed": "開啟資料夾失敗",
-    "openPersonalFolderFailed": "開啟個人共享目錄失敗",
-    "openSharedFolderFailed": "開啟團隊共享資料夾失敗",
     "shareStatusCheckFailed": "共享狀態偵測失敗",
-    "bonjourRetrySuccess": "背景服務已重新偵測 Bonjour 執行環境",
-    "bonjourRetryFailed": "重新偵測 Bonjour 執行環境失敗",
     "bonjourInstallFailed": "Bonjour 安裝失敗",
     "bonjourInstallSuccess": "Bonjour 已安裝完成",
     "bonjourAlreadyInstalled": "Bonjour 已安裝",
@@ -60,11 +45,6 @@
     "bonjourInstallFallback": "請稍後重試，或改用 Apple 官方安裝頁面。",
     "diagnosticsExported": "診斷包已匯出",
     "diagnosticsExportFailed": "診斷包匯出失敗",
-    "resetSuccess": "已重置所有資料",
-    "resetSuccessDescription": "配對裝置、上傳紀錄、工作階段已全部清除",
-    "resetFailed": "重置失敗",
-    "resetTransferActiveDescription": "正在接收檔案，完成後再重置資料",
-    "sidecarRetryFailed": "重試啟動背景服務失敗",
-    "sidecarBonjourInstallHint": "請改到設定頁查看安裝說明。"
+    "sidecarRetryFailed": "重試啟動背景服務失敗"
   }
 }

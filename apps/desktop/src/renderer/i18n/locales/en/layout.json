@@ -84,7 +84,6 @@
     "bonjourPath": "Bonjour path: {{path}}",
     "lastExitCode": "Last exit code: {{code}}",
     "installBonjour": "Install Bonjour",
-    "viewSettings": "View settings",
     "retrySidecar": "Retry background service"
   }
 }

@@ -67,7 +67,7 @@ export function SettingsPage() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackContact, setFeedbackContact] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [diagnosticsDialogOpen, setDiagnosticsDialogOpen] = useState(false);
   const [diagnosticsDescription, setDiagnosticsDescription] = useState('');
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
 
@@ -168,7 +168,7 @@ export function SettingsPage() {
     }
   };
 
-  const handleUploadLogs = async () => {
+  const handleExportDiagnostics = async () => {
     const description = diagnosticsDescription.trim();
     setExportingDiagnostics(true);
     try {
@@ -181,7 +181,7 @@ export function SettingsPage() {
           description: archivePath,
         });
         setDiagnosticsDescription('');
-        setUploadDialogOpen(false);
+        setDiagnosticsDialogOpen(false);
       }
     } catch (error) {
       toast.error(t('errors.settings.diagnosticsExportFailed'), {
@@ -465,7 +465,7 @@ export function SettingsPage() {
                 action={
                   <button
                     type="button"
-                    onClick={() => setUploadDialogOpen(true)}
+                    onClick={() => setDiagnosticsDialogOpen(true)}
                     disabled={exportingDiagnostics}
                     className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md bg-white/60 px-3 text-xs font-semibold text-[#59616d] transition hover:bg-white/82 disabled:cursor-not-allowed disabled:text-[#aab2bd]"
                   >
@@ -474,7 +474,7 @@ export function SettingsPage() {
                   </button>
                 }
               />
-              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+              <Dialog open={diagnosticsDialogOpen} onOpenChange={setDiagnosticsDialogOpen}>
                 <DialogContent className="border border-white/80 bg-white/90 shadow-2xl backdrop-blur-xl">
                   <DialogHeader>
                     <DialogTitle className="text-lg font-semibold text-[#17191c]">
@@ -510,7 +510,7 @@ export function SettingsPage() {
                       data-testid="cancel-diagnostics-btn"
                       disabled={exportingDiagnostics}
                       onClick={() => {
-                        setUploadDialogOpen(false);
+                        setDiagnosticsDialogOpen(false);
                         setDiagnosticsDescription('');
                       }}
                       className="rounded-md border border-white/80 bg-white/58 px-3 py-2 text-sm font-semibold text-[#59616d] transition hover:bg-white/82 disabled:opacity-50"
@@ -521,7 +521,7 @@ export function SettingsPage() {
                       type="button"
                       data-testid="submit-diagnostics-btn"
                       disabled={exportingDiagnostics}
-                      onClick={() => void handleUploadLogs()}
+                      onClick={() => void handleExportDiagnostics()}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#17191c] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_22px_rgba(23,25,28,0.16)] transition hover:bg-[#2b2f36] disabled:cursor-not-allowed disabled:bg-[#cfd6df]"
                     >
                       <FileUp className="h-4 w-4" />
