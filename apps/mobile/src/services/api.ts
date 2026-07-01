@@ -1,7 +1,10 @@
 import i18next from 'i18next';
 import { NativeModules, Platform } from 'react-native';
 import { getOrCreateAuthDeviceId } from './auth-device-id';
-import { describeInsecureBaseUrl, getBaseUrl } from './config';
+import {
+  describeInsecureSupportApiBaseUrl,
+  getSupportApiBaseUrl,
+} from './config';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -76,8 +79,8 @@ interface RequestOptions {
 export function buildUrl(path: string, baseUrlOverride?: string): string {
   // Resolve and validate per-request: a misconfigured release build raises
   // a typed ApiError instead of crashing the bundle at module-load time.
-  const baseUrl = baseUrlOverride ?? getBaseUrl();
-  const insecure = describeInsecureBaseUrl(baseUrl);
+  const baseUrl = baseUrlOverride ?? getSupportApiBaseUrl();
+  const insecure = describeInsecureSupportApiBaseUrl(baseUrl);
   if (insecure) {
     throw new ApiError(ERROR_CODE.NETWORK_ERROR, insecure);
   }

@@ -16,8 +16,8 @@ jest.mock('../auth-device-id', () => ({
 }));
 
 jest.mock('../config', () => ({
-  getBaseUrl: () => 'https://api.test',
-  describeInsecureBaseUrl: () => null,
+  getSupportApiBaseUrl: () => 'https://api.test',
+  describeInsecureSupportApiBaseUrl: () => null,
 }));
 
 import { apiGet, clientInfoHeaders, ERROR_CODE } from '../api';

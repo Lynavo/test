@@ -1,5 +1,5 @@
-export const PROD_API_BASE_URL = 'https://api.lynavo.com';
-export const REVIEW_API_BASE_URL = 'https://review-api.lynavo.com';
+export const PROD_SUPPORT_API_BASE_URL = 'https://api.lynavo.com';
+export const REVIEW_SUPPORT_API_BASE_URL = 'https://review-api.lynavo.com';
 const NEUTRAL_ELECTRON_BUILDER_CONFIG = 'electron-builder.yml';
 
 const TARGETS = new Set(['ios', 'android', 'mac', 'win', 'linux']);
@@ -9,14 +9,14 @@ const RELEASE_PROFILES = Object.freeze({
     name: 'prod',
     channel: 'prod',
     review: false,
-    apiBaseUrl: PROD_API_BASE_URL,
+    supportApiBaseUrl: PROD_SUPPORT_API_BASE_URL,
     electronBuilderConfig: NEUTRAL_ELECTRON_BUILDER_CONFIG,
   }),
   review: Object.freeze({
     name: 'review',
     channel: 'review',
     review: true,
-    apiBaseUrl: REVIEW_API_BASE_URL,
+    supportApiBaseUrl: REVIEW_SUPPORT_API_BASE_URL,
     electronBuilderConfig: NEUTRAL_ELECTRON_BUILDER_CONFIG,
   }),
 });
@@ -72,13 +72,13 @@ export function buildReleasePlan({ profileName, targets }) {
 }
 
 function assertProfileIntegrity(profile) {
-  const usesReviewServer = profile.apiBaseUrl === REVIEW_API_BASE_URL;
+  const usesReviewServer = profile.supportApiBaseUrl === REVIEW_SUPPORT_API_BASE_URL;
   if (profile.review && !usesReviewServer) {
-    throw new Error(`${profile.name} must use ${REVIEW_API_BASE_URL}.`);
+    throw new Error(`${profile.name} must use ${REVIEW_SUPPORT_API_BASE_URL}.`);
   }
   if (!profile.review && usesReviewServer) {
     throw new Error(
-      `${profile.name} is a production profile and cannot use ${REVIEW_API_BASE_URL}.`,
+      `${profile.name} is a production profile and cannot use ${REVIEW_SUPPORT_API_BASE_URL}.`,
     );
   }
 }
@@ -86,7 +86,7 @@ function assertProfileIntegrity(profile) {
 function buildProfileEnv(profile) {
   return {
     LYNAVO_RELEASE_CHANNEL: profile.channel,
-    LYNAVO_API_BASE_URL: profile.apiBaseUrl,
+    LYNAVO_SUPPORT_API_BASE_URL: profile.supportApiBaseUrl,
     ELECTRON_BUILDER_CONFIG: profile.electronBuilderConfig,
   };
 }
@@ -136,9 +136,9 @@ export const mobileReleaseProfile = {
   name: '${profile.name}',
   channel: '${profile.channel}',
   review: ${profile.review},
-  apiBaseUrl: '${profile.apiBaseUrl}',
+  supportApiBaseUrl: '${profile.supportApiBaseUrl}',
 } as const;
 
-export const releaseApiBaseUrl = mobileReleaseProfile.apiBaseUrl.trim() || null;
+export const releaseSupportApiBaseUrl = mobileReleaseProfile.supportApiBaseUrl.trim() || null;
 `;
 }

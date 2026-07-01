@@ -111,6 +111,7 @@ describe('checkForUpdates', () => {
 
   beforeEach(() => {
     appState.isPackaged = false;
+    delete process.env.LYNAVO_SUPPORT_API_BASE_URL;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env[legacyViviApiBaseEnv];
@@ -165,8 +166,8 @@ describe('checkForUpdates', () => {
     );
   });
 
-  it('prefers an explicit Lynavo API base URL over the development default', async () => {
-    process.env.LYNAVO_API_BASE_URL = 'http://localhost:9090';
+  it('prefers an explicit Lynavo support API base URL over the development default', async () => {
+    process.env.LYNAVO_SUPPORT_API_BASE_URL = 'http://localhost:9090';
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: vi.fn().mockResolvedValue({
@@ -187,7 +188,7 @@ describe('checkForUpdates', () => {
     );
   });
 
-  it('prefers the Lynavo API base URL over legacy API base env', async () => {
+  it('ignores stale broad API base URL env when no support API base URL is configured', async () => {
     process.env.LYNAVO_API_BASE_URL = 'http://lynavo.localhost:9090';
     process.env[legacyViviApiBaseEnv] = 'http://legacy.localhost:9090';
     const fetchMock = vi.fn().mockResolvedValue({
@@ -206,7 +207,7 @@ describe('checkForUpdates', () => {
 
     const requestUrl = fetchMock.mock.calls[0]?.[0];
     expect(requestUrl).toEqual(
-      `http://lynavo.localhost:9090/api/v1/desktop/update-check?${updateCheckQuery}`,
+      `https://review-api.lynavo.com/api/v1/desktop/update-check?${updateCheckQuery}`,
     );
   });
 
@@ -259,6 +260,7 @@ describe('checkForUpdates', () => {
 describe('exportDiagnostics', () => {
   beforeEach(() => {
     appState.isPackaged = false;
+    delete process.env.LYNAVO_SUPPORT_API_BASE_URL;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
@@ -271,6 +273,7 @@ describe('exportDiagnostics', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.LYNAVO_SUPPORT_API_BASE_URL;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
@@ -384,13 +387,14 @@ describe('exportDiagnostics', () => {
     const diagnostics = JSON.parse(diagnosticsJson) as {
       issue?: { description?: string };
       process?: { electron?: string; node?: string; chrome?: string };
-      api?: { updateCheckUrl?: string; diagnosticsUploadUrl?: string };
+      supportApi?: { updateCheckUrl?: string; diagnosticsUploadUrl?: string };
       paths?: { userData?: string; logs?: string[] };
     };
     expect(diagnostics.issue?.description).toBe('Wi-Fi drops when the phone locks');
     expect(diagnostics.process?.node).toBeTruthy();
-    expect(diagnostics.api?.updateCheckUrl).toContain('/api/v1/desktop/update-check');
-    expect(diagnostics.api?.diagnosticsUploadUrl).toContain('/api/v1/diagnostics/upload');
+    expect(diagnostics.supportApi?.updateCheckUrl).toContain('/api/v1/desktop/update-check');
+    expect(diagnostics.supportApi?.diagnosticsUploadUrl).toContain('/api/v1/diagnostics/upload');
+    expect('api' in diagnostics).toBe(false);
     expect(diagnostics.paths?.userData).toBe(diagnosticsPaths.userData);
     expect(diagnostics.paths?.logs).toContain(diagnosticsPaths.desktopLog);
 
@@ -478,12 +482,12 @@ describe('exportDiagnostics', () => {
       encoding: 'utf8',
     });
     const diagnostics = JSON.parse(diagnosticsJson) as {
-      api?: { updateCheckUrl?: string; diagnosticsUploadUrl?: string };
+      supportApi?: { updateCheckUrl?: string; diagnosticsUploadUrl?: string };
     };
-    expect(diagnostics.api?.updateCheckUrl).toBe(
+    expect(diagnostics.supportApi?.updateCheckUrl).toBe(
       'https://redacted:redacted@example.test/update?token=redacted&keep=ok',
     );
-    expect(diagnostics.api?.diagnosticsUploadUrl).toBe(
+    expect(diagnostics.supportApi?.diagnosticsUploadUrl).toBe(
       'https://example.test/upload?api_key=redacted&keep=ok',
     );
 
@@ -539,6 +543,7 @@ describe('writePowerDiagnostics', () => {
 describe('uploadDiagnostics', () => {
   beforeEach(() => {
     appState.isPackaged = false;
+    delete process.env.LYNAVO_SUPPORT_API_BASE_URL;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
@@ -556,6 +561,7 @@ describe('uploadDiagnostics', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    delete process.env.LYNAVO_SUPPORT_API_BASE_URL;
     delete process.env.LYNAVO_API_BASE_URL;
     delete process.env.LYNAVO_DESKTOP_UPDATE_URL;
     delete process.env.LYNAVO_DIAGNOSTICS_UPLOAD_URL;
@@ -624,9 +630,10 @@ describe('uploadDiagnostics', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it('ignores legacy diagnostics upload URL and token env', async () => {
+  it('ignores legacy diagnostics upload URL and broad token env', async () => {
     process.env[legacyViviDiagnosticsUploadEnv] = 'https://legacy.example/diagnostics';
     process.env[legacyViviApiTokenEnv] = 'legacy-token';
+    process.env.LYNAVO_API_TOKEN = 'broad-token';
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => {
       return new Response(
         JSON.stringify({ ref_id: 'DIA-LEGACY', uploaded_at: '2026-05-18T09:00:00Z' }),

@@ -27,7 +27,6 @@ fi
 
 PROJECT_FILE="${IOS_DIR}/LynavoDrive.xcodeproj/project.pbxproj"
 MOBILE_CONFIG_FILE="${MOBILE_CONFIG_FILE:-${REPO_ROOT}/apps/mobile/src/config/app-config.ts}"
-CONTRACTS_ENDPOINTS_FILE="${CONTRACTS_ENDPOINTS_FILE:-${REPO_ROOT}/packages/contracts/src/service-endpoints.ts}"
 MARKETING_VERSION="$(sed -n 's/.*MARKETING_VERSION = \([^;]*\);/\1/p' "${PROJECT_FILE}" | head -n 1 | tr -d '[:space:]')"
 BUILD_NUMBER="$(sed -n 's/.*CURRENT_PROJECT_VERSION = \([^;]*\);/\1/p' "${PROJECT_FILE}" | head -n 1 | tr -d '[:space:]')"
 
@@ -119,22 +118,6 @@ extract_mobile_review_phone() {
   echo "${raw_val}"
 }
 
-extract_contract_review_email() {
-  local endpoints_file="$1"
-  local raw_val
-  raw_val="$(sed -n "s/^[[:space:]]*export const LYNAVO_REVIEW_EMAIL[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${endpoints_file}" | head -n 1)"
-
-  if [[ -z "${raw_val}" ]]; then
-    local root_domain
-    root_domain="$(sed -n "s/^[[:space:]]*export const LYNAVO_ROOT_DOMAIN[[:space:]]*=[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${endpoints_file}" | head -n 1)"
-    if [[ -n "${root_domain}" ]]; then
-      raw_val="review@${root_domain}"
-    fi
-  fi
-
-  echo "${raw_val}"
-}
-
 extract_server_review_email() {
   local env_file="$1"
   awk '
@@ -163,9 +146,6 @@ extract_mobile_review_email() {
 
   if [[ -z "${raw_val}" ]]; then
     raw_val="$(sed -n "s/^[[:space:]]*email[[:space:]]*:[[:space:]]*['\"]\\([^'\"]*\\)['\"].*/\\1/p" "${config_file}" | head -n 1)"
-  fi
-  if [[ -z "${raw_val}" && -f "${CONTRACTS_ENDPOINTS_FILE}" ]] && grep -Eq 'LYNAVO_ENDPOINTS\.reviewEmail|LYNAVO_REVIEW_EMAIL' "${config_file}"; then
-    raw_val="$(extract_contract_review_email "${CONTRACTS_ENDPOINTS_FILE}")"
   fi
   echo "${raw_val}"
 }

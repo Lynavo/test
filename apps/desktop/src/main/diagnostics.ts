@@ -6,7 +6,10 @@ import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs
 import { hostname, networkInterfaces, release, tmpdir, type } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import { LYNAVO_API_BASE_URL, LYNAVO_REVIEW_API_BASE_URL } from '@lynavo-drive/contracts';
+import {
+  LYNAVO_REVIEW_SUPPORT_API_BASE_URL,
+  LYNAVO_SUPPORT_API_BASE_URL,
+} from '@lynavo-drive/contracts';
 import { desktopClientHeaders, getAppInfo, type AppInfo } from './app-info';
 import { sidecarClient } from './sidecar-client';
 import type { SidecarManager } from './sidecar-manager';
@@ -66,7 +69,7 @@ type DiagnosticSnapshot = {
     node: string;
     v8: string | null;
   };
-  api: {
+  supportApi: {
     diagnosticsUploadUrl: string;
     updateCheckUrl: string;
     baseUrl: string;
@@ -470,16 +473,16 @@ async function listDesktopLogFiles(activeLogPath: string): Promise<string[]> {
   return Array.from(present);
 }
 
-function defaultApiBaseUrl(): string {
-  return app.isPackaged ? LYNAVO_API_BASE_URL : LYNAVO_REVIEW_API_BASE_URL;
+function defaultSupportApiBaseUrl(): string {
+  return app.isPackaged ? LYNAVO_SUPPORT_API_BASE_URL : LYNAVO_REVIEW_SUPPORT_API_BASE_URL;
 }
 
-function configuredApiBase(): { baseUrl: string; source: string } {
-  const lynavoBase = process.env.LYNAVO_API_BASE_URL?.trim();
-  if (lynavoBase) return { baseUrl: lynavoBase, source: 'LYNAVO_API_BASE_URL' };
+function configuredSupportApiBase(): { baseUrl: string; source: string } {
+  const supportBase = process.env.LYNAVO_SUPPORT_API_BASE_URL?.trim();
+  if (supportBase) return { baseUrl: supportBase, source: 'LYNAVO_SUPPORT_API_BASE_URL' };
 
   return {
-    baseUrl: defaultApiBaseUrl(),
+    baseUrl: defaultSupportApiBaseUrl(),
     source: app.isPackaged ? 'packaged-default' : 'dev-default',
   };
 }
@@ -489,7 +492,7 @@ function configuredUrl(envNames: readonly string[], fallbackPath: string): strin
     const explicit = process.env[envName]?.trim();
     if (explicit) return explicit;
   }
-  const { baseUrl: base } = configuredApiBase();
+  const { baseUrl: base } = configuredSupportApiBase();
   return new URL(fallbackPath, base.endsWith('/') ? base : `${base}/`).toString();
 }
 
@@ -517,10 +520,8 @@ function updateCheckUrl(): string {
   return configuredUrl(['LYNAVO_DESKTOP_UPDATE_URL'], '/api/v1/desktop/update-check');
 }
 
-function optionalApiToken(): string | null {
-  return (
-    process.env.LYNAVO_DIAGNOSTICS_TOKEN?.trim() || process.env.LYNAVO_API_TOKEN?.trim() || null
-  );
+function optionalDiagnosticsToken(): string | null {
+  return process.env.LYNAVO_DIAGNOSTICS_TOKEN?.trim() || null;
 }
 
 function desktopClientId(): string {
@@ -590,7 +591,7 @@ async function createDiagnosticsBundle(
   const sidecarLogFiles = await listSidecarLogFiles(sidecarDataDir);
   const powerLog = await writePowerDiagnostics(filesDir);
   const environment = await captureEnvironmentSnapshot();
-  const apiBase = configuredApiBase();
+  const supportApiBase = configuredSupportApiBase();
   const snapshot: DiagnosticSnapshot = {
     generatedAt: new Date().toISOString(),
     issue: {
@@ -611,11 +612,11 @@ async function createDiagnosticsBundle(
       node: process.versions.node,
       v8: process.versions.v8 ?? null,
     },
-    api: {
+    supportApi: {
       diagnosticsUploadUrl: redactUrlForDiagnostics(diagnosticsUploadUrl()),
       updateCheckUrl: redactUrlForDiagnostics(updateCheckUrl()),
-      baseUrl: redactUrlForDiagnostics(apiBase.baseUrl),
-      baseUrlSource: apiBase.source,
+      baseUrl: redactUrlForDiagnostics(supportApiBase.baseUrl),
+      baseUrlSource: supportApiBase.source,
     },
     device: {
       model: `${type()} ${process.arch}`,
@@ -746,7 +747,7 @@ export async function uploadDiagnostics(
     );
 
     const headers: Record<string, string> = desktopClientHeaders();
-    const token = optionalApiToken();
+    const token = optionalDiagnosticsToken();
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

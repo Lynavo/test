@@ -7,8 +7,6 @@ import {
   getProductName,
   getProductReleaseChannel,
   isLynavoGlobalProduct,
-  resolveLynavoApiBaseUrl,
-  shouldUseLynavoReviewTarget,
 } from '../product';
 
 describe('desktop product helper', () => {
@@ -41,39 +39,10 @@ describe('desktop product helper', () => {
     expect(PRODUCT_DISTRIBUTION).toBe('community');
   });
 
-  it('resolves the plain API base from Lynavo env or the Lynavo default only', () => {
-    expect(
-      resolveLynavoApiBaseUrl({
-        LYNAVO_API_BASE_URL: 'https://api.lynavo.example',
-        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
-      }),
-    ).toBe('https://api.lynavo.example');
+  it('does not expose product-level API target helpers in the OSS shell', async () => {
+    const product = await import('../product');
 
-    expect(
-      resolveLynavoApiBaseUrl({
-        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
-      }),
-    ).toBe('https://api.lynavo.com');
-
-    expect(
-      resolveLynavoApiBaseUrl({
-        OTHER_PRODUCT_API_BASE_URL: 'https://api.other-product.example',
-      }),
-    ).toBe('https://api.lynavo.com');
-  });
-
-  it('uses only Lynavo release channel or plain Lynavo API URL for review target selection', () => {
-    expect(shouldUseLynavoReviewTarget({ LYNAVO_RELEASE_CHANNEL: 'review' })).toBe(true);
-    expect(
-      shouldUseLynavoReviewTarget({ LYNAVO_API_BASE_URL: 'https://review-api.lynavo.com' }),
-    ).toBe(true);
-
-    expect(
-      shouldUseLynavoReviewTarget({
-        OTHER_RELEASE_PROFILE: 'review',
-        OTHER_PRODUCT_API_BASE_URL: 'https://review-api.other-product.example',
-        OTHER_AUTH_BASE_URL: 'https://review-api.other-product.example',
-      }),
-    ).toBe(false);
+    expect('resolveLynavoApiBaseUrl' in product).toBe(false);
+    expect('shouldUseLynavoReviewTarget' in product).toBe(false);
   });
 });

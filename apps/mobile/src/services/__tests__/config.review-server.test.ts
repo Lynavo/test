@@ -12,7 +12,7 @@ import * as config from '../config';
 
 const testGlobal = globalThis as typeof globalThis & { __DEV__?: boolean };
 
-describe('OSS API config', () => {
+describe('OSS support API config', () => {
   const originalDevFlag = testGlobal.__DEV__;
 
   beforeEach(async () => {
@@ -31,27 +31,33 @@ describe('OSS API config', () => {
     });
   });
 
-  test('uses review API as the debug built-in base URL', () => {
-    expect(config.PROD_BASE_URL).toBe('https://api.lynavo.com');
-    expect(config.REVIEW_API_BASE_URL).toBe('https://review-api.lynavo.com');
-    expect(config.DEV_API_BASE_URL).toBe('https://review-api.lynavo.com');
-    expect(config.getBaseUrl()).toBe('https://review-api.lynavo.com');
+  test('uses review support API as the debug built-in base URL', () => {
+    expect(config.PROD_SUPPORT_API_BASE_URL).toBe('https://api.lynavo.com');
+    expect(config.REVIEW_SUPPORT_API_BASE_URL).toBe(
+      'https://review-api.lynavo.com',
+    );
+    expect(config.DEV_SUPPORT_API_BASE_URL).toBe(
+      'https://review-api.lynavo.com',
+    );
+    expect(config.getSupportApiBaseUrl()).toBe('https://review-api.lynavo.com');
   });
 
-  test('uses production API as the release built-in base URL', () => {
+  test('uses production support API as the release built-in base URL', () => {
     Object.defineProperty(testGlobal, '__DEV__', {
       value: false,
       configurable: true,
     });
 
-    expect(config.getBaseUrl()).toBe(config.PROD_BASE_URL);
+    expect(config.getSupportApiBaseUrl()).toBe(
+      config.PROD_SUPPORT_API_BASE_URL,
+    );
   });
 
   test('uses and persists the debug base URL override in dev builds', async () => {
     await config.setDebugBaseUrlOverride('http://192.168.1.42:8080');
 
     expect(config.getDebugBaseUrlOverride()).toBe('http://192.168.1.42:8080');
-    expect(config.getBaseUrl()).toBe('http://192.168.1.42:8080');
+    expect(config.getSupportApiBaseUrl()).toBe('http://192.168.1.42:8080');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       '@lynavo-drive/debug/api_base_url',
       'http://192.168.1.42:8080',
@@ -65,7 +71,7 @@ describe('OSS API config', () => {
 
     await config.loadDebugBaseUrlOverride();
 
-    expect(config.getBaseUrl()).toBe('http://192.168.1.42:8080');
+    expect(config.getSupportApiBaseUrl()).toBe('http://192.168.1.42:8080');
   });
 
   test('does not expose official auth routing or session-base helpers', () => {

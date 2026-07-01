@@ -2,7 +2,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const path = require('node:path');
 const { buildOssChildEnv } = require('../../../scripts/dev/oss-env-scrubber.cjs');
 
-const DEFAULT_LYNAVO_DEV_API_BASE_URL = 'https://review-api.lynavo.com';
+const DEFAULT_LYNAVO_DEV_SUPPORT_API_BASE_URL = 'https://review-api.lynavo.com';
 
 function main() {
   const command = process.argv[2];
@@ -73,12 +73,15 @@ function buildElectronViteEnv({ command, parentEnv }) {
 
 function bridgeLynavoDevEnv(env) {
   const releaseChannel = firstNonEmpty(env.LYNAVO_RELEASE_CHANNEL);
-  const apiBaseUrl = firstNonEmpty(env.LYNAVO_API_BASE_URL, DEFAULT_LYNAVO_DEV_API_BASE_URL);
+  const supportApiBaseUrl = firstNonEmpty(
+    env.LYNAVO_SUPPORT_API_BASE_URL,
+    DEFAULT_LYNAVO_DEV_SUPPORT_API_BASE_URL,
+  );
 
   if (releaseChannel) {
     env.LYNAVO_RELEASE_CHANNEL = releaseChannel;
   }
-  env.LYNAVO_API_BASE_URL = apiBaseUrl;
+  env.LYNAVO_SUPPORT_API_BASE_URL = supportApiBaseUrl;
 }
 
 function firstNonEmpty(...values) {
