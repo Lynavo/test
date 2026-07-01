@@ -86,11 +86,11 @@
             "body": "Confirm the phone and computer are on the same LAN, check whether the desktop firewall blocks Lynavo Drive, then try restarting the desktop app or connecting with the QR code."
           },
           {
-            "title": "Do I need an account or subscription?",
-            "body": "No. The open-source desktop runtime supports local LAN pairing, discovery, automatic uploads, and shared-folder browsing without official account or subscription bootstrap."
+            "title": "Do I need a cloud login?",
+            "body": "No. The open-source desktop runtime supports local LAN pairing, discovery, automatic uploads, and shared-folder browsing without Lynavo cloud bootstrap."
           },
           {
-            "title": "Does the OSS edition include official remote access?",
+            "title": "Does the OSS edition include official internet relay?",
             "body": "No. Official TURN, signaling, purchase, and account services are not part of the OSS runtime. Keep the phone and computer on the same LAN for sync and browsing."
           }
         ]

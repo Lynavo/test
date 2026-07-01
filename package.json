@@ -42,13 +42,15 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "verify:oss-boundary": "node scripts/verify-oss-boundary.mjs",
+    "verify:oss-boundary:advisory": "node scripts/verify-oss-boundary.mjs --advisory",
     "verify:legacy-names": "node scripts/verify-legacy-name-allowlist.mjs --advisory",
     "verify:legacy-names:strict": "node scripts/verify-legacy-name-allowlist.mjs",
     "verify:vscode-android-debug": "node scripts/verify-vscode-android-debug.mjs",
     "verify:android-syncengine-bridge": "node scripts/verify-android-syncengine-bridge-parity.mjs",
     "sync:versions": "node scripts/sync-version-manifest.mjs",
     "sync:versions:check": "node scripts/sync-version-manifest.mjs --check",
-    "check": "pnpm sync:versions:check && turbo run build test typecheck",
+    "check": "pnpm sync:versions:check && pnpm verify:oss-boundary && turbo run build test typecheck",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo"
   },
   "devDependencies": {

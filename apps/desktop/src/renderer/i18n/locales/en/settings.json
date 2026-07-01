@@ -193,7 +193,7 @@
     },
     "community": {
       "title": "Local LAN access",
-      "caption": "Pair, discover, and sync automatically on the same LAN. No official account or subscription is required.",
+      "caption": "Pair, discover, and sync automatically on the same LAN. No Lynavo cloud login is required.",
       "devicesTitle": "Paired devices",
       "devicesCaption": "Phones continue to use local pairing tokens and paired-device authorization for LAN access."
     }

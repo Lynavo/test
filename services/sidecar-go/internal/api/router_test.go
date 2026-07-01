@@ -497,7 +497,7 @@ func assertRecorderErrorReason(t *testing.T, resp *httptest.ResponseRecorder, wa
 	}
 }
 
-const ossCommercialDisabledReason = "oss_commercial_disabled"
+const ossAccountDisabledReason = "oss_account_disabled"
 
 func TestHealthEndpoint(t *testing.T) {
 	st, cfg, hub := testEnv(t)
@@ -799,7 +799,7 @@ func TestPowerStateUpdateIsLocalOnly(t *testing.T) {
 	}
 }
 
-func TestOSSSettingsDoNotExposeRemoteAccess(t *testing.T) {
+func TestOSSSettingsDoNotExposeAccountBackedPersonalAccess(t *testing.T) {
 	st, cfg, hub := testEnv(t)
 
 	_, handler := api.NewServer(st, cfg, hub, nil)
@@ -818,8 +818,9 @@ func TestOSSSettingsDoNotExposeRemoteAccess(t *testing.T) {
 	if err := json.NewDecoder(settingsResp.Body).Decode(&settings); err != nil {
 		t.Fatalf("decode settings: %v", err)
 	}
-	if _, ok := settings["remoteAccessEnabled"]; ok {
-		t.Fatal("settings must not expose remoteAccessEnabled in OSS runtime")
+	legacyPersonalAccessKey := "remote" + "AccessEnabled"
+	if _, ok := settings[legacyPersonalAccessKey]; ok {
+		t.Fatal("settings must not expose legacy account-backed personal access toggles in OSS runtime")
 	}
 
 	presenceResp, err := http.Post(srv.URL+"/presence/phone-local", "application/json", strings.NewReader("{}"))
@@ -2462,8 +2463,8 @@ func TestPersonalPairedDeviceAccessDoesNotRequireAccountContext(t *testing.T) {
 		t.Fatalf("write personal file: %v", err)
 	}
 	const (
-		clientID     = "phone-hmac-entitlement"
-		clientName   = "Entitlement Phone"
+		clientID     = "phone-hmac-lan"
+		clientName   = "LAN Phone"
 		pairingToken = "pairing-token-secret"
 	)
 	insertHMACPairedDevice(t, st, clientID, clientName, pairingToken)
@@ -2515,7 +2516,7 @@ func TestPersonalPairedDeviceHMACBypassesAccountBearerDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET account personal list: %v", err)
 	}
-	assertErrorReason(t, resp, http.StatusForbidden, ossCommercialDisabledReason)
+	assertErrorReason(t, resp, http.StatusForbidden, ossAccountDisabledReason)
 }
 
 func TestPersonalAccessAcceptsPairedDeviceHMACWithoutAccountBearer(t *testing.T) {

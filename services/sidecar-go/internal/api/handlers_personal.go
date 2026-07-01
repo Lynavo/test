@@ -17,9 +17,11 @@ import (
 const personalAccessSignatureMaxSkew = 5 * time.Minute
 
 const (
-	remoteGuardReasonOSSCommercialDisabled = "oss_commercial_disabled"
-	remoteGuardReasonInvalidDeviceAuth     = "invalid_device_authorization"
+	personalGuardReasonOSSAccountDisabled = "oss_account_disabled"
+	personalGuardReasonInvalidDeviceAuth  = "invalid_device_authorization"
 )
+
+const ossAccountPersonalAccessDisabledMessage = "account-backed personal shared files access is disabled in the open-source build"
 
 func (s *Server) authorizePersonalRequest(w http.ResponseWriter, r *http.Request) bool {
 	_, ok := s.authorizePersonalRequestAccountID(w, r)
@@ -30,7 +32,7 @@ func (s *Server) authorizePersonalRequestAccountID(w http.ResponseWriter, r *htt
 	if pairedAccountID, pairedOK, pairedAttempted, pairedStatus, pairedMessage, pairedReason := s.authorizePersonalPairedDeviceRequest(r); pairedOK {
 		return pairedAccountID, true
 	} else if pairedAttempted {
-		s.writeRemoteGuardError(w, r, pairedStatus, pairedMessage, pairedReason, "operation", "personal.paired_device")
+		s.writePersonalAccessGuardError(w, r, pairedStatus, pairedMessage, pairedReason, "operation", "personal.paired_device")
 		return "", false
 	}
 
@@ -42,80 +44,80 @@ func (s *Server) authorizePersonalPairedDeviceRequest(r *http.Request) (string, 
 	escapedPath := r.URL.EscapedPath()
 	signature, timestamp, nonce, attempted, credentialsAllowed := personalAccessAuthValues(r, isPersonalQueryAuthAllowedPath(escapedPath))
 	if !attempted {
-		return "", false, false, http.StatusForbidden, "commercial remote access is disabled in the open-source build", remoteGuardReasonOSSCommercialDisabled
+		return "", false, false, http.StatusForbidden, ossAccountPersonalAccessDisabledMessage, personalGuardReasonOSSAccountDisabled
 	}
 	if !credentialsAllowed {
-		return "", false, true, http.StatusUnauthorized, "paired device query credentials are not allowed for this endpoint", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device query credentials are not allowed for this endpoint", personalGuardReasonInvalidDeviceAuth
 	}
 	if signature == "" || timestamp == "" || nonce == "" {
-		return "", false, true, http.StatusUnauthorized, "paired device signature is incomplete", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature is incomplete", personalGuardReasonInvalidDeviceAuth
 	}
 
 	clientID := strings.TrimSpace(r.URL.Query().Get("clientId"))
 	if !isValidAPIID(clientID) {
-		return "", false, true, http.StatusBadRequest, "invalid clientId", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusBadRequest, "invalid clientId", personalGuardReasonInvalidDeviceAuth
 	}
 
 	signedAt, err := time.Parse(time.RFC3339Nano, timestamp)
 	if err != nil {
-		return "", false, true, http.StatusUnauthorized, "paired device signature timestamp is invalid", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature timestamp is invalid", personalGuardReasonInvalidDeviceAuth
 	}
 	if skew := time.Since(signedAt); skew > personalAccessSignatureMaxSkew || skew < -personalAccessSignatureMaxSkew {
-		return "", false, true, http.StatusUnauthorized, "paired device signature timestamp expired", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature timestamp expired", personalGuardReasonInvalidDeviceAuth
 	}
 	if strings.TrimSpace(nonce) == "" || len(nonce) > 128 {
-		return "", false, true, http.StatusUnauthorized, "paired device signature nonce is invalid", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature nonce is invalid", personalGuardReasonInvalidDeviceAuth
 	}
 
 	device, err := s.store.GetPairedDevice(clientID)
 	if err != nil {
-		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", personalGuardReasonInvalidDeviceAuth
 	}
 
 	tokenHashBytes, err := hex.DecodeString(strings.TrimSpace(device.PairingTokenHash))
 	if err != nil || len(tokenHashBytes) == 0 {
-		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", personalGuardReasonInvalidDeviceAuth
 	}
 	expected := personalAccessSignature(r.Method, escapedPath, clientID, timestamp, nonce, tokenHashBytes)
 	if !hmac.Equal([]byte(strings.ToLower(signature)), []byte(expected)) {
-		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature is invalid", personalGuardReasonInvalidDeviceAuth
 	}
 	if !isReusablePersonalQueryAuthPath(escapedPath) && !s.rememberPersonalAccessNonce(clientID, nonce, signedAt.Add(personalAccessSignatureMaxSkew)) {
-		return "", false, true, http.StatusUnauthorized, "paired device signature nonce replayed", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusUnauthorized, "paired device signature nonce replayed", personalGuardReasonInvalidDeviceAuth
 	}
 	if device.RevokedAt != nil {
-		return "", false, true, http.StatusForbidden, "device pairing revoked", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusForbidden, "device pairing revoked", personalGuardReasonInvalidDeviceAuth
 	}
 	desktopDeviceID, err := s.store.GetDeviceID()
 	if err != nil {
-		return "", false, true, http.StatusForbidden, "device authorization unavailable", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusForbidden, "device authorization unavailable", personalGuardReasonInvalidDeviceAuth
 	}
 	block, err := s.store.GetDeviceBlockState(desktopDeviceID, clientID)
 	if err != nil {
-		return "", false, true, http.StatusForbidden, "device authorization unavailable", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusForbidden, "device authorization unavailable", personalGuardReasonInvalidDeviceAuth
 	}
 	if block.Blocked {
-		return "", false, true, http.StatusForbidden, "device is blocked", remoteGuardReasonInvalidDeviceAuth
+		return "", false, true, http.StatusForbidden, "device is blocked", personalGuardReasonInvalidDeviceAuth
 	}
 
 	return "paired:" + clientID, true, true, http.StatusOK, "", ""
 }
 
 func (s *Server) writeOSSCommercialDisabled(w http.ResponseWriter, r *http.Request, operation string) {
-	s.writeRemoteGuardError(
+	s.writePersonalAccessGuardError(
 		w,
 		r,
 		http.StatusForbidden,
-		"commercial remote access is disabled in the open-source build",
-		remoteGuardReasonOSSCommercialDisabled,
+		ossAccountPersonalAccessDisabledMessage,
+		personalGuardReasonOSSAccountDisabled,
 		"operation",
 		operation,
 	)
 }
 
-func (s *Server) writeRemoteGuardError(w http.ResponseWriter, r *http.Request, status int, message string, reason string, attrs ...any) {
+func (s *Server) writePersonalAccessGuardError(w http.ResponseWriter, r *http.Request, status int, message string, reason string, attrs ...any) {
 	if reason == "" {
-		reason = remoteGuardReasonOSSCommercialDisabled
+		reason = personalGuardReasonOSSAccountDisabled
 	}
 	logAttrs := []any{
 		"reason", reason,
@@ -124,7 +126,7 @@ func (s *Server) writeRemoteGuardError(w http.ResponseWriter, r *http.Request, s
 		"remote", r.RemoteAddr,
 	}
 	logAttrs = append(logAttrs, attrs...)
-	slog.Warn("remote capability request rejected", logAttrs...)
+	slog.Warn("personal shared files request rejected", logAttrs...)
 	writeJSON(w, status, map[string]string{"error": message, "reason": reason})
 }
 
