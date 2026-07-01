@@ -122,7 +122,10 @@ const NEGATIVE_ASSERTION_REASON =
   'Regression test or scrubber names commercial/account inputs to prove the OSS runtime does not expose them.';
 
 const CURRENT_ACCOUNT_COMPAT_REASON =
-  'Current OSS baseline still contains account/subscription compatibility state; tracked for later deletion behind this explicit allowlist.';
+  'Current OSS baseline still contains account/subscription compatibility names in shared contracts and fail-closed stubs; tracked for later deletion behind this explicit allowlist.';
+
+const OSS_INFO_EXCLUSION_COPY_REASON =
+  'OSS information locale copy names excluded billing and remote-tunnel flows to explain they are unavailable in the community runtime.';
 
 const ALLOWED_EXACT_PATHS = new Map([
   [
@@ -186,10 +189,6 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
   ],
   [
-    'apps/mobile/src/navigation/__tests__/RootNavigator.subscription.test.tsx',
-    allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
-  ],
-  [
     'apps/mobile/src/screens/__tests__/SharedFilesDownloadGate.test.tsx',
     allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
   ],
@@ -198,21 +197,10 @@ const ALLOWED_EXACT_PATHS = new Map([
     allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
   ],
   [
-    'apps/mobile/src/screens/__tests__/OpenSourceInfoScreen.test.tsx',
-    allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
+    'apps/mobile/src/i18n/locales/en/oss.json',
+    allowTerms(['billing', 'remote tunnel'], OSS_INFO_EXCLUSION_COPY_REASON),
   ],
-  ['apps/mobile/src/screens/OpenSourceInfoScreen.tsx', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
-  ['apps/mobile/src/i18n/resources.ts', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
   ['apps/mobile/src/i18n/locales/en/help.json', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
-  ['apps/mobile/src/i18n/locales/en/subscription.json', allowAny(CURRENT_ACCOUNT_COMPAT_REASON)],
-  [
-    'apps/mobile/src/i18n/locales/zh-Hans/subscription.json',
-    allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
-  ],
-  [
-    'apps/mobile/src/i18n/locales/zh-Hant/subscription.json',
-    allowAny(CURRENT_ACCOUNT_COMPAT_REASON),
-  ],
   [
     'apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj',
     allowAny(APPLE_SIGNING_ENTITLEMENTS_REASON),

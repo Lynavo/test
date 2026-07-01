@@ -46,8 +46,6 @@ function AuthProbe() {
     <Text testID="auth-state">
       {JSON.stringify({
         accessToken: auth.accessToken,
-        profileLoading: auth.profileLoading,
-        userId: auth.user?.id ?? null,
       })}
     </Text>
   );
@@ -78,14 +76,10 @@ describe('AuthProvider token refresh bridge', () => {
         screen.getByTestId('auth-state').props.children,
       ) as {
         accessToken: string | null;
-        profileLoading: boolean;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         accessToken: null,
-        profileLoading: false,
-        userId: null,
       });
     });
     expect(Keychain.setGenericPassword).not.toHaveBeenCalledWith(
@@ -130,14 +124,10 @@ describe('AuthProvider token refresh bridge', () => {
         screen.getByTestId('auth-state').props.children,
       ) as {
         accessToken: string | null;
-        profileLoading: boolean;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         accessToken: null,
-        profileLoading: false,
-        userId: null,
       });
     });
   });

@@ -245,34 +245,8 @@ const mockReset = jest.fn();
 const mockDispatch = jest.fn();
 let mockAuthState: {
   isLoggedIn: boolean;
-  user: null | {
-    id: number;
-    status: string;
-    plan: string;
-    expireAt: string | null;
-    trialEnd: string | null;
-  };
-  subscription: null | {
-    status: string;
-    plan: string;
-    expireAt: string | null;
-    trialEnd: string | null;
-  };
 } = {
   isLoggedIn: true,
-  user: {
-    id: 1,
-    status: 'subscribed',
-    plan: 'yearly',
-    expireAt: '2030-01-01T00:00:00.000Z',
-    trialEnd: null,
-  },
-  subscription: {
-    status: 'subscribed',
-    plan: 'yearly',
-    expireAt: '2030-01-01T00:00:00.000Z',
-    trialEnd: null,
-  },
 };
 
 jest.mock('@react-navigation/native', () => ({
@@ -296,19 +270,6 @@ jest.mock('../../stores/auth-store', () => ({
 function resetMockAuthState() {
   mockAuthState = {
     isLoggedIn: true,
-    user: {
-      id: 1,
-      status: 'subscribed',
-      plan: 'yearly',
-      expireAt: '2030-01-01T00:00:00.000Z',
-      trialEnd: null,
-    },
-    subscription: {
-      status: 'subscribed',
-      plan: 'yearly',
-      expireAt: '2030-01-01T00:00:00.000Z',
-      trialEnd: null,
-    },
   };
 }
 
@@ -601,8 +562,6 @@ describe('SharedFilesScreen V2 (Landing Menu)', () => {
   it('keeps guest users on local-LAN local computer access instead of login or purchase flow', () => {
     mockAuthState = {
       isLoggedIn: false,
-      user: null,
-      subscription: null,
     };
 
     const { getByText } = render(
@@ -668,8 +627,6 @@ describe('SharedFilesGlobalScreen', () => {
   it('keeps guest users on local-LAN local computer access instead of login or purchase flow', () => {
     mockAuthState = {
       isLoggedIn: false,
-      user: null,
-      subscription: null,
     };
 
     const { getByText } = render(

@@ -488,7 +488,7 @@ Start with Package 0 because it owns the shared primitives that every page consu
 
 - `pnpm --filter @lynavo-drive/mobile exec tsc --noEmit`: pass.
 - `git diff --check`: pass.
-- QA/bootstrap regression suite passed: `api-dev-sandbox.test.ts`, `visualQa.test.ts`, `auth-store-visual-qa.test.tsx`, and `RootNavigator.subscription.test.tsx`; 4 suites / 18 tests.
+- QA/bootstrap regression suite passed: `api-dev-sandbox.test.ts`, `visualQa.test.ts`, `auth-store-visual-qa.test.tsx`, and `RootNavigator.fail-open.test.tsx`; 4 suites / 18 tests.
 - Integrated mobile UI targeted suite passed: 27 suites / 281 tests, covering market config, shared chrome/icons, global login, files/history/help/settings/sync/device pairing/album/auto-upload/subscription, and visual QA bootstrap tests.
 - Known non-blocking Jest warnings remain: market debug logs, RN `InteractionManager`/`Clipboard` deprecation logs, expected `CodeVerifyScreen` native pairing error path, SyncActivity read-only queue mock warning, subscription StoreKit mock filtering, and subscription `act(...)` warnings.
 - Android visual route smoke on `emulator-5554` (`Android 16`, `1080x2400`) built and installed `globalDebug`, then launched routes through `com.vividrop.mobile.global/com.vividrop.mobile.china.MainActivity`. This confirms mock login/bootstrap can reach post-login pages on Android, but it is not a final visual pass because screenshots include RN warning overlay, zh-Hans emulator locale copy, permission prompts, History loading, and Subscription network error.

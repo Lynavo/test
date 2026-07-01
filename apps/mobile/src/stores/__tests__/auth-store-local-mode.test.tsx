@@ -40,8 +40,6 @@ function AuthProbe() {
       {JSON.stringify({
         isLoggedIn: auth.isLoggedIn,
         isLoading: auth.isLoading,
-        profileLoading: auth.profileLoading,
-        userId: auth.user?.id ?? null,
       })}
     </Text>
   );
@@ -66,15 +64,11 @@ describe('AuthProvider guest local mode bootstrap', () => {
       ) as {
         isLoggedIn: boolean;
         isLoading: boolean;
-        profileLoading: boolean;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         isLoggedIn: false,
         isLoading: false,
-        profileLoading: false,
-        userId: null,
       });
     });
 
@@ -102,15 +96,11 @@ describe('AuthProvider guest local mode bootstrap', () => {
       ) as {
         isLoggedIn: boolean;
         isLoading: boolean;
-        profileLoading: boolean;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         isLoggedIn: false,
         isLoading: false,
-        profileLoading: false,
-        userId: null,
       });
     });
 
@@ -143,15 +133,11 @@ describe('AuthProvider guest local mode bootstrap', () => {
       ) as {
         isLoggedIn: boolean;
         isLoading: boolean;
-        profileLoading: boolean;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         isLoggedIn: false,
         isLoading: false,
-        profileLoading: false,
-        userId: null,
       });
     });
 

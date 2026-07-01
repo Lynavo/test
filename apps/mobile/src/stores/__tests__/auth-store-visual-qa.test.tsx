@@ -40,7 +40,6 @@ function AuthProbe() {
       {JSON.stringify({
         accessToken: auth.accessToken,
         refreshToken: auth.refreshToken,
-        userId: auth.user?.id ?? null,
       })}
     </Text>
   );
@@ -83,13 +82,11 @@ describe('AuthProvider visual QA bootstrap', () => {
       ) as {
         accessToken: string | null;
         refreshToken: string | null;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         accessToken: 'mock-sandbox-access-token:designer@example.com',
         refreshToken: 'mock-sandbox-refresh-token',
-        userId: null,
       });
     });
     expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
@@ -119,13 +116,11 @@ describe('AuthProvider visual QA bootstrap', () => {
       ) as {
         accessToken: string | null;
         refreshToken: string | null;
-        userId: number | null;
       };
 
       expect(state).toEqual({
         accessToken: 'mock-sandbox-access-token:functional@example.com',
         refreshToken: 'mock-sandbox-refresh-token',
-        userId: null,
       });
     });
     expect(Keychain.setGenericPassword).toHaveBeenCalledWith(

@@ -19,38 +19,6 @@ applyVisualQaSharedFilesPreviewFlag();
 // Types
 // ---------------------------------------------------------------------------
 
-export type AccountStatus =
-  | 'trialing'
-  | 'subscribed'
-  | 'trial_expired'
-  | 'sub_expired';
-export type SubscriptionPlan = 'monthly' | 'yearly' | '';
-
-export interface IdentityDescriptor {
-  // Legacy commercial identity descriptors are retained only so stale
-  // snapshots can be represented without blocking local LAN sync.
-  type: string;
-  display: string;
-  identifier?: string;
-}
-
-export interface UserProfile {
-  id: number;
-  primaryIdentity: IdentityDescriptor | null;
-  identities: IdentityDescriptor[];
-  status: AccountStatus;
-  plan: SubscriptionPlan;
-  expireAt: string | null;
-  trialEnd: string | null;
-}
-
-export interface SubscriptionInfo {
-  status: AccountStatus;
-  plan: SubscriptionPlan;
-  expireAt: string | null;
-  trialEnd: string | null;
-}
-
 export type SignedOutTransition = 'session_replaced' | null;
 
 export interface AuthState {
@@ -58,13 +26,6 @@ export interface AuthState {
   isLoading: boolean;
   accessToken: string | null;
   refreshToken: string | null;
-  user: UserProfile | null;
-  subscription: SubscriptionInfo | null;
-  /** Legacy profile-load state retained for compatibility with stale callers.
-   *  OSS runtime does not fetch official profiles during startup. */
-  profileError: Error | null;
-  /** Legacy profile-load state; always false in OSS startup. */
-  profileLoading: boolean;
   /** Short-lived exit transition shown before we land on local LAN screens. */
   signedOutTransition: SignedOutTransition;
 }
@@ -84,7 +45,6 @@ const DEV_SANDBOX_REFRESH_TOKEN = 'mock-sandbox-refresh-token';
 
 let _accessToken: string | null = null;
 let _refreshToken: string | null = null;
-let _authSessionGeneration = 0;
 
 export function getAccessToken(): string | null {
   return _accessToken;
@@ -97,10 +57,6 @@ export function getRefreshToken(): string | null {
 function syncTokensToModule(access: string | null, refresh: string | null) {
   _accessToken = access;
   _refreshToken = refresh;
-}
-
-function bumpAuthSessionGeneration() {
-  _authSessionGeneration += 1;
 }
 
 function loadAuthService(): Promise<typeof import('../services/auth-service')> {
@@ -176,10 +132,6 @@ const initialState: AuthState = {
   isLoading: true,
   accessToken: null,
   refreshToken: null,
-  user: null,
-  subscription: null,
-  profileError: null,
-  profileLoading: false,
   signedOutTransition: null,
 };
 
@@ -284,7 +236,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearAuth = useCallback((transition?: SignedOutTransition) => {
-    bumpAuthSessionGeneration();
     if (transition !== undefined) {
       dispatch({ type: 'SET_SIGNED_OUT_TRANSITION', transition });
     }
@@ -312,7 +263,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           persistTokens(access, refresh);
         },
         transition => {
-          bumpAuthSessionGeneration();
           if (transition !== undefined) {
             dispatch({
               type: 'SET_SIGNED_OUT_TRANSITION',

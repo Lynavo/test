@@ -41,13 +41,13 @@ export function OpenSourceInfoScreen() {
           <View style={styles.iconBox}>
             <Icon name="git-network-outline" size={30} color="#1677D2" />
           </View>
-          <Text style={styles.title}>{t('subscription.oss.title')}</Text>
-          <Text style={styles.body}>{t('subscription.oss.body')}</Text>
+          <Text style={styles.title}>{t('oss.title')}</Text>
+          <Text style={styles.body}>{t('oss.body')}</Text>
 
           <View style={styles.points}>
-            <InfoPoint text={t('subscription.oss.pointLan')} />
-            <InfoPoint text={t('subscription.oss.pointNoBilling')} />
-            <InfoPoint text={t('subscription.oss.pointDocs')} />
+            <InfoPoint text={t('oss.pointLan')} />
+            <InfoPoint text={t('oss.pointNoBilling')} />
+            <InfoPoint text={t('oss.pointDocs')} />
           </View>
 
           <TouchableOpacity
@@ -56,9 +56,7 @@ export function OpenSourceInfoScreen() {
             activeOpacity={0.76}
             onPress={() => navigation.navigate('DeviceDiscovery')}
           >
-            <Text style={styles.primaryButtonText}>
-              {t('subscription.oss.primary')}
-            </Text>
+            <Text style={styles.primaryButtonText}>{t('oss.primary')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
@@ -66,9 +64,7 @@ export function OpenSourceInfoScreen() {
             activeOpacity={0.72}
             onPress={() => navigation.navigate('SyncActivity')}
           >
-            <Text style={styles.secondaryButtonText}>
-              {t('subscription.oss.secondary')}
-            </Text>
+            <Text style={styles.secondaryButtonText}>{t('oss.secondary')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

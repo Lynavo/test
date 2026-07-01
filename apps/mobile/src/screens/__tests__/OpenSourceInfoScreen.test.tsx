@@ -25,11 +25,17 @@ jest.mock('react-i18next', () => ({
     i18n: { language: 'en' },
     t: (key: string) => {
       const map: Record<string, string> = {
-        'subscription.oss.title': 'Lynavo Drive Community',
-        'subscription.oss.body':
+        'oss.title': 'Lynavo Drive Community',
+        'oss.body':
           'The open-source edition syncs over your local LAN without an official account.',
-        'subscription.oss.primary': 'Pair a computer',
-        'subscription.oss.secondary': 'Back to sync',
+        'oss.pointLan':
+          'Pair with a desktop on the same network for automatic incremental sync.',
+        'oss.pointNoBilling':
+          'Store payment and redemption flows are not included in this runtime.',
+        'oss.pointDocs':
+          'Remote tunnel and background commercial services stay disabled in this community runtime.',
+        'oss.primary': 'Pair a computer',
+        'oss.secondary': 'Back to sync',
         'common.back': 'Back',
       };
       return map[key] ?? key;
@@ -68,6 +74,21 @@ describe('OpenSourceInfoScreen OSS information route', () => {
     expect(
       getByText(
         'The open-source edition syncs over your local LAN without an official account.',
+      ),
+    ).toBeTruthy();
+    expect(
+      getByText(
+        'Pair with a desktop on the same network for automatic incremental sync.',
+      ),
+    ).toBeTruthy();
+    expect(
+      getByText(
+        'Store payment and redemption flows are not included in this runtime.',
+      ),
+    ).toBeTruthy();
+    expect(
+      getByText(
+        'Remote tunnel and background commercial services stay disabled in this community runtime.',
       ),
     ).toBeTruthy();
     expect(queryByText('Subscribe Now')).toBeNull();

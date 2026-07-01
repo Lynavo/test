@@ -1,8 +1,8 @@
 /**
- * RootNavigator — entitlement fail-open routing test
+ * RootNavigator - OSS fail-open routing test
  *
- * Focuses on verifying that entitlement status no longer blocks foreground
- * LAN sync routing. Paid background / remote gates are handled separately.
+ * Focuses on verifying that account state no longer blocks foreground LAN sync
+ * routing. Official background / off-LAN gates are handled separately.
  *
  * All screens are replaced with minimal stubs so the test only exercises
  * routing logic. Native modules and third-party libs are mocked to allow
@@ -331,27 +331,18 @@ import i18n from '../../i18n';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function mockAuthForStatus(status: string, subscriptionStatus = status) {
+function mockAuthedLocalSession() {
   (useAuth as jest.Mock).mockReturnValue({
     isLoggedIn: true,
     isLoading: false,
-    user: { id: 1, status },
-    subscription: {
-      status: subscriptionStatus,
-      plan: '',
-      expireAt: null,
-      trialEnd: null,
-    },
-    profileLoading: false,
-    profileError: null,
     signedOutTransition: null,
     clearAuth: jest.fn(),
     setSignedOutTransition: jest.fn(),
   });
 }
 
-function renderWith(status: string, subscriptionStatus = status) {
-  mockAuthForStatus(status, subscriptionStatus);
+function renderWithAuthedLocalSession() {
+  mockAuthedLocalSession();
   return render(
     <NavigationContainer>
       <RootNavigator />
@@ -394,33 +385,33 @@ afterAll(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('RootNavigator — entitlement fail-open routing', () => {
-  test('routes trial_expired user to foreground LAN discovery, not OpenSourceInfoScreen', async () => {
-    renderWith('trial_expired');
+describe('RootNavigator - OSS fail-open routing', () => {
+  test('routes stale authenticated sessions to foreground LAN discovery, not OpenSourceInfoScreen', async () => {
+    renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
     expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('routes sub_expired user to foreground LAN discovery, not OpenSourceInfoScreen', async () => {
-    renderWith('sub_expired');
+  test('does not require account state before entering foreground LAN discovery', async () => {
+    renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
     expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('routes trialing user to main app (not paywall)', async () => {
-    renderWith('trialing');
+  test('routes hydrated local sessions to main app without a paid gate', async () => {
+    renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
     expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('routes subscribed user to main app (not paywall)', async () => {
-    renderWith('subscribed');
+  test('keeps local sessions off paid gate routes', async () => {
+    renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
@@ -436,7 +427,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
       host: '192.168.1.10',
     });
 
-    renderWith('sub_expired');
+    renderWithAuthedLocalSession();
 
     await waitFor(() =>
       expect(screen.getByTestId('global-sync-activity-screen')).toBeTruthy(),
@@ -444,21 +435,21 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('active subscription snapshot over stale expired user status also routes to LAN discovery', async () => {
-    renderWith('trial_expired', 'subscribed');
+  test('stale legacy account snapshots are no longer required for LAN discovery', async () => {
+    renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
     expect(screen.queryByTestId('open-source-info-screen')).toBeNull();
   });
 
-  test('does not reset foreground LAN route to OpenSourceInfoScreen when subscription expires after entering the app', async () => {
-    const view = renderWith('subscribed');
+  test('does not reset foreground LAN route to OpenSourceInfoScreen after entering the app', async () => {
+    const view = renderWithAuthedLocalSession();
     await waitFor(() =>
       expect(screen.getByTestId('global-device-discovery-screen')).toBeTruthy(),
     );
 
-    mockAuthForStatus('subscribed', 'sub_expired');
+    mockAuthedLocalSession();
     view.rerender(
       <NavigationContainer>
         <RootNavigator />
@@ -475,7 +466,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
     process.env.LYNAVO_VISUAL_QA = '1';
     process.env.LYNAVO_VISUAL_QA_ROUTE = 'History';
 
-    renderWith('subscribed');
+    renderWithAuthedLocalSession();
 
     await waitFor(() =>
       expect(screen.getByTestId('history-screen')).toBeTruthy(),
@@ -490,7 +481,7 @@ describe('RootNavigator — entitlement fail-open routing', () => {
       removeListeners: jest.fn(),
     };
 
-    renderWith('subscribed');
+    renderWithAuthedLocalSession();
 
     await waitFor(() =>
       expect(

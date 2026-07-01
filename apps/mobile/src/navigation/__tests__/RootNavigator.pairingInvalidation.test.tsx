@@ -253,15 +253,6 @@ beforeEach(() => {
   (useAuth as jest.Mock).mockReturnValue({
     isLoggedIn: true,
     isLoading: false,
-    user: { id: 1, status: 'subscribed' },
-    subscription: {
-      status: 'subscribed',
-      plan: '',
-      expireAt: null,
-      trialEnd: null,
-    },
-    profileLoading: false,
-    profileError: null,
     signedOutTransition: null,
     clearAuth: jest.fn(),
     setSignedOutTransition: jest.fn(),

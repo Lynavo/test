@@ -80,40 +80,5 @@
   },
   "toast": {
     "copied": "已复制到剪贴板"
-  },
-  "authPage": {
-    "title": "登录",
-    "continueWithGoogle": "使用 Google 继续",
-    "continueWithApple": "使用 Apple 继续",
-    "divider": "或",
-    "useEmailLogin": "使用邮箱登录",
-    "emailLabel": "电子邮箱",
-    "emailPlaceholder": "请输入电子邮箱",
-    "codeLabel": "验证码",
-    "codePlaceholder": "6 位数验证码",
-    "codeSentCountdown": "已发送 ({{seconds}}s)",
-    "getCode": "获取验证码",
-    "backToThirdPartySignIn": "返回第三方登录",
-    "agreementAriaLabel": "我已阅读并同意《隐私政策》和《用户协议》",
-    "agreementPrefix": "我已阅读并同意",
-    "privacyPolicy": "《隐私政策》",
-    "agreementConjunction": "和",
-    "userAgreement": "《用户协议》",
-    "agreementRequired": "请先勾选同意隐私政策后再登录",
-    "autoRegisterHint": "未注册的账号将自动注册",
-    "toast": {
-      "googleLoginFailed": "Google 登录失败",
-      "appleLoginFailed": "Apple 登录失败",
-      "emailRequired": "请输入电子邮箱",
-      "invalidEmail": "请输入有效的电子邮箱地址",
-      "sendCodeUnavailable": "发送验证码服务暂不可用",
-      "codeSent": "验证码已发送至您的邮箱，请注意查收",
-      "sendCodeFailed": "发送验证码失败",
-      "codeRequired": "请输入 6 位数验证码",
-      "loginUnavailable": "登录服务暂不可用",
-      "loginSuccess": "登录成功",
-      "emailLoginFailed": "登录失败，验证码可能错误或已过期",
-      "loginFailed": "登录失败"
-    }
   }
 }
