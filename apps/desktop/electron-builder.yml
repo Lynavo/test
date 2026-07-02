@@ -38,6 +38,10 @@ dmg:
       path: /Applications
 win:
   artifactName: LynavoDrive-${version}-${arch}.${ext}
+  forceCodeSigning: false
+  verifyUpdateCodeSignature: false
+  signExts:
+    - '!.exe'
   target:
     - target: nsis
       arch:

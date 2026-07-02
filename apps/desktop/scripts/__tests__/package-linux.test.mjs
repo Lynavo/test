@@ -225,12 +225,24 @@ test('desktop OSS package scripts do not ship official Apple signing or upload h
   const builderConfig = readFileSync(path.join(desktopRoot, 'electron-builder.yml'), 'utf8');
   assert.match(builderConfig, /^files:\n  - out\/\*\*\/\*\n  - node_modules\/\*\*\/\*\n  - package\.json$/m);
   assert.match(builderConfig, /^  identity: null$/m);
+  assert.match(builderConfig, /^  forceCodeSigning: false$/m);
+  assert.match(builderConfig, /^  verifyUpdateCodeSignature: false$/m);
+  assert.match(builderConfig, /^  signExts:\n    - '!\.exe'$/m);
   assert.doesNotMatch(builderConfig, /sign:\s+\.\/scripts\/mac-sign\.cjs/);
+  assert.doesNotMatch(builderConfig, /signtoolOptions:/);
+  assert.doesNotMatch(builderConfig, /azureSignOptions:/);
   assert.doesNotMatch(builderConfig, /\bmas:/);
   assert.doesNotMatch(builderConfig, /entitlements(?:Inherit)?:/);
   assert.doesNotMatch(builderConfig, /dns-sd\.exe/);
   assert.doesNotMatch(builderConfig, /dnssd\.dll/);
   assert.equal(builderConfig.includes(token(['not', 'arize:'])), false);
+});
+
+test('desktop electron-builder wrapper disables local signing auto discovery', () => {
+  const wrapper = readFileSync(path.join(desktopRoot, 'scripts', 'run-electron-builder.cjs'), 'utf8');
+
+  assert.match(wrapper, /CSC_IDENTITY_AUTO_DISCOVERY:\s+'false'/);
+  assert.match(wrapper, /ELECTRON_BUILDER_DISABLE_BUILD_CACHE:\s+'true'/);
 });
 
 test('Windows installer uses Lynavo Drive firewall rule identities', () => {

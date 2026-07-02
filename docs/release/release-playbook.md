@@ -113,9 +113,10 @@ hdiutil verify apps/desktop/release/LynavoDrive-<version>-x64.dmg
 file apps/desktop/release/mac*/Lynavo\ Drive.app/Contents/Resources/lynavo-drive-sidecar
 ```
 
-The exact local code-signing behavior depends on Electron builder, host
-configuration, and platform toolchains. OSS verification only checks that the
-local package is produced and contains the expected runtime files.
+OSS desktop packages are local build artifacts only. The builder wrapper
+disables local code-signing identity discovery, and Windows packaging excludes
+`.exe` signing so contributor machines do not accidentally inject private
+certificates into release rehearsal outputs.
 
 Windows:
 

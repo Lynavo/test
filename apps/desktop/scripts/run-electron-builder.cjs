@@ -13,7 +13,10 @@ const spawnArgs =
 
 const child = spawn(spawnCommand, spawnArgs, {
   cwd: projectRoot,
-  env: buildOssChildEnv(process.env),
+  env: buildOssChildEnv(process.env, {
+    CSC_IDENTITY_AUTO_DISCOVERY: 'false',
+    ELECTRON_BUILDER_DISABLE_BUILD_CACHE: 'true',
+  }),
   stdio: 'inherit',
 });
 
