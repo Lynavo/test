@@ -131,6 +131,12 @@ test('release execution scrubs stale commercial and legacy parent env before spa
           [legacySyncEnv('_GOOGLE_CLIENT_CONFIG_FILE')]: '/secure/google-client.json',
           GOOGLE_CLIENT_ID: 'google-client-id',
           APPLE_OAUTH_CLIENT_ID: 'com.example.signin',
+          APPLE_ID: 'maintainer@example.com',
+          APPLE_APP_SPECIFIC_PASSWORD: 'app-password',
+          APPLE_TEAM_ID: 'TEAMID1234',
+          CSC_LINK: '/secure/cert.p12',
+          CSC_KEY_PASSWORD: 'cert-password',
+          WIN_CSC_LINK: '/secure/win-cert.p12',
         },
       },
     );
@@ -152,6 +158,12 @@ test('release execution scrubs stale commercial and legacy parent env before spa
     assert.equal(Object.hasOwn(childEnv, legacySyncEnv('_GOOGLE_CLIENT_CONFIG_FILE')), false);
     assert.equal(Object.hasOwn(childEnv, 'GOOGLE_CLIENT_ID'), false);
     assert.equal(Object.hasOwn(childEnv, 'APPLE_OAUTH_CLIENT_ID'), false);
+    assert.equal(Object.hasOwn(childEnv, 'APPLE_ID'), false);
+    assert.equal(Object.hasOwn(childEnv, 'APPLE_APP_SPECIFIC_PASSWORD'), false);
+    assert.equal(Object.hasOwn(childEnv, 'APPLE_TEAM_ID'), false);
+    assert.equal(Object.hasOwn(childEnv, 'CSC_LINK'), false);
+    assert.equal(Object.hasOwn(childEnv, 'CSC_KEY_PASSWORD'), false);
+    assert.equal(Object.hasOwn(childEnv, 'WIN_CSC_LINK'), false);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }

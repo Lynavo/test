@@ -38,6 +38,14 @@ function createTrackedFixture(files) {
   return fixtureRoot;
 }
 
+function createFilesystemFixture(files) {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-source-package-'));
+  for (const [path, content] of Object.entries(files)) {
+    writeFixture(fixtureRoot, path, content);
+  }
+  return fixtureRoot;
+}
+
 test('blocks tracked package artifacts and signing material by default', () => {
   const fixtureRoot = createTrackedFixture({
     'apps/desktop/release/LynavoDrive.dmg': 'binary\n',
@@ -94,10 +102,53 @@ test('audits only tracked source-package files', () => {
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Tracked OSS source package files: 1/);
+    assert.match(result.stdout, /Audited OSS source package files: 1/);
     assert.match(result.stdout, /Disallowed OSS source package files: 0/);
     assert.doesNotMatch(result.stdout, /\.env\.local/);
     assert.doesNotMatch(result.stdout, /untracked\.dmg/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('audits non-ignored untracked worktree files when requested', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
+    '.gitignore': ['.env.local', 'apps/desktop/release/'].join('\n'),
+  });
+  try {
+    writeFixture(fixtureRoot, 'apps/mobile/src/Untracked.tsx', 'export const Untracked = true;\n');
+    writeFixture(fixtureRoot, '.env.local', 'TOKEN=secret\n');
+    writeFixture(fixtureRoot, 'apps/desktop/release/untracked.dmg', 'binary\n');
+    writeFixture(fixtureRoot, 'apps/mobile/ios/GoogleService-Info.plist', '<plist />\n');
+
+    const result = runVerifier(['--root', fixtureRoot, '--include-untracked']);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 4/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 1/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/GoogleService-Info\.plist/);
+    assert.doesNotMatch(result.stdout, /\.env\.local/);
+    assert.doesNotMatch(result.stdout, /untracked\.dmg/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('audits deleted tracked source-package files when untracked worktree files are requested', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/desktop/resources/dns-sd.exe': 'binary\n',
+    'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
+  });
+  try {
+    rmSync(join(fixtureRoot, 'apps', 'desktop', 'resources', 'dns-sd.exe'), { force: true });
+
+    const result = runVerifier(['--root', fixtureRoot, '--include-untracked']);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 2/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 1/);
+    assert.match(result.stdout, /apps\/desktop\/resources\/dns-sd\.exe/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -113,28 +164,117 @@ test('ignores tracked files deleted from the working tree before staging', () =>
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Tracked OSS source package files: 0/);
+    assert.match(result.stdout, /Audited OSS source package files: 0/);
     assert.match(result.stdout, /Disallowed OSS source package files: 0/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-test('allows normal source files and explicit redistributable exceptions', () => {
+test('audits a committed git tree when a git ref is requested', () => {
+  const fixtureRoot = createTrackedFixture({
+    [`docs/${legacyFormerFlow}-plan.md`]: 'legacy\n',
+  });
+  try {
+    git(fixtureRoot, [
+      '-c',
+      'user.email=oss-source-test@example.invalid',
+      '-c',
+      'user.name=OSS Source Test',
+      'commit',
+      '-qm',
+      'fixture',
+    ]);
+    rmSync(join(fixtureRoot, 'docs', `${legacyFormerFlow}-plan.md`), { force: true });
+
+    const result = runVerifier(['--root', fixtureRoot, '--git-ref', 'HEAD']);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /OSS source package input: git tree HEAD/);
+    assert.match(result.stdout, /Audited OSS source package files: 1/);
+    assert.match(result.stdout, new RegExp(`docs/${legacyFormerFlow}-plan\\.md`));
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('allows normal source files and exact source-build exceptions', () => {
   const fixtureRoot = createTrackedFixture({
     'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
     'packages/contracts/src/index.ts': 'export const ok = true;\n',
     'apps/mobile/android/gradle/wrapper/gradle-wrapper.jar': 'jar\n',
-    'apps/desktop/resources/dns-sd.exe': 'bonjour\n',
-    'apps/desktop/resources/dnssd.dll': 'bonjour\n',
+    'apps/mobile/scripts/resources/mobile-i18n.xlsx': 'xlsx\n',
   });
   try {
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Tracked OSS source package files: 5/);
-    assert.match(result.stdout, /Allowed OSS source package exceptions: 3/);
+    assert.match(result.stdout, /Audited OSS source package files: 4/);
+    assert.match(result.stdout, /Allowed OSS source package exceptions: 2/);
     assert.match(result.stdout, /Disallowed OSS source package files: 0/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks unallowlisted binary source-package artifacts', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/desktop/native-addon.node': 'native\n',
+    'apps/mobile/android/libs/feature.aar': 'aar\n',
+    'apps/mobile/scripts/input.xlsx': 'xlsx\n',
+    'services/sidecar-go/plugin.wasm': 'wasm\n',
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Disallowed OSS source package files: 4/);
+    assert.match(result.stdout, /apps\/desktop\/native-addon\.node/);
+    assert.match(result.stdout, /apps\/mobile\/android\/libs\/feature\.aar/);
+    assert.match(result.stdout, /apps\/mobile\/scripts\/input\.xlsx/);
+    assert.match(result.stdout, /services\/sidecar-go\/plugin\.wasm/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks npmrc mirrors, registries, proxies, certificates, and auth config', () => {
+  const fixtureRoot = createTrackedFixture({
+    '.npmrc': [
+      'shamefully-hoist=false',
+      'ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"',
+    ].join('\n'),
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Disallowed OSS source package files: 1/);
+    assert.match(result.stdout, /\.npmrc/);
+    assert.match(result.stdout, /registry, mirror, proxy, certificate, or auth configuration/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('falls back to filesystem walk for extracted source archives without git metadata', () => {
+  const fixtureRoot = createFilesystemFixture({
+    'package.json': '{}\n',
+    'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
+    'apps/mobile/android/gradle/wrapper/gradle-wrapper.jar': 'jar\n',
+    'apps/desktop/release/LynavoDrive.dmg': 'binary\n',
+    'node_modules/pkg/private.key': 'ignored dependency fixture\n',
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /OSS source package input: filesystem walk/);
+    assert.match(result.stdout, /Audited OSS source package files: 4/);
+    assert.match(result.stdout, /Allowed OSS source package exceptions: 1/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 1/);
+    assert.match(result.stdout, /apps\/desktop\/release\/LynavoDrive\.dmg/);
+    assert.doesNotMatch(result.stdout, /node_modules/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

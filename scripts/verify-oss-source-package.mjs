@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, extname, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -21,18 +21,16 @@ const LEGACY_PATH_PATTERN = new RegExp(
 
 const ALLOWED_EXACT_PATHS = new Map([
   [
-    'apps/desktop/resources/dns-sd.exe',
-    'Exact Bonjour redistributable exception for Windows local mDNS support.',
-  ],
-  [
-    'apps/desktop/resources/dnssd.dll',
-    'Exact Bonjour redistributable exception for Windows local mDNS support.',
-  ],
-  [
     'apps/mobile/android/gradle/wrapper/gradle-wrapper.jar',
     'Gradle wrapper bootstrap jar is a source-build dependency, not a release artifact.',
   ],
+  [
+    'apps/mobile/scripts/resources/mobile-i18n.xlsx',
+    'First-party translation source workbook used by the local i18n import tool.',
+  ],
 ]);
+
+const FILESYSTEM_WALK_IGNORED_DIRS = new Set(['.git', 'node_modules']);
 
 const PRIVATE_TOOLING_DIRS = new Set([
   '.agent',
@@ -60,18 +58,26 @@ const GENERATED_DIRS = new Set([
 
 const PACKAGE_ARTIFACT_EXTENSIONS = new Set([
   '.aab',
+  '.aar',
   '.apk',
   '.app',
   '.dmg',
   '.dll',
   '.docx',
+  '.dylib',
   '.exe',
   '.gz',
   '.ipa',
   '.jar',
+  '.node',
   '.pkg',
+  '.so',
   '.tar',
   '.tgz',
+  '.wasm',
+  '.xls',
+  '.xlsm',
+  '.xlsx',
   '.xcarchive',
   '.zip',
   '.zst',
@@ -82,6 +88,7 @@ const DATA_ARTIFACT_EXTENSIONS = new Set(['.db', '.log', '.sqlite', '.sqlite3', 
 const SIGNING_AND_SECRET_EXTENSIONS = new Set([
   '.cer',
   '.crt',
+  '.jks',
   '.key',
   '.keystore',
   '.mobileprovision',
@@ -98,27 +105,39 @@ const GENERATED_SIDECAR_RESOURCE_PATHS = new Set([
   'apps/desktop/resources/lynavo-drive-sidecar.exe',
 ]);
 
+const NPMRC_DISALLOWED_PATTERN =
+  /(^|\n)\s*(?:registry|.*_auth.*|.*token.*|.*proxy.*|cafile|certfile|keyfile|.*_MIRROR)\s*=/iu;
+
 function usage() {
   return [
-    'Usage: node scripts/verify-oss-source-package.mjs [--root <path>] [--manifest <file>] [--advisory]',
+    'Usage: node scripts/verify-oss-source-package.mjs [--root <path>] [--manifest <file>] [--git-ref <ref>] [--include-untracked] [--advisory]',
     '',
-    'Audits the tracked source-package file list for generated artifacts, signing material, private tooling, and legacy runtime paths.',
-    'By default it uses `git ls-files -z` under --root. Use --manifest for a newline- or NUL-separated source-package manifest.',
+    'Audits the source-package file list for generated artifacts, signing material, private tooling, and legacy runtime paths.',
+    'By default it uses `git ls-files -z` under --root, with a filesystem fallback for extracted archives without .git.',
+    'Use --include-untracked to also audit non-ignored untracked worktree files before a local release.',
+    'Use --git-ref to audit a committed Git tree such as HEAD before a source archive rehearsal.',
+    'Use --manifest for a newline- or NUL-separated source-package manifest.',
   ].join('\n');
 }
 
 function parseArgs(argv) {
   let root = process.cwd();
   let manifest = null;
+  let gitRef = null;
   let advisory = false;
+  let includeUntracked = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--help' || arg === '-h') {
-      return { help: true, root, manifest, advisory };
+      return { help: true, root, manifest, gitRef, advisory, includeUntracked };
     }
     if (arg === '--advisory') {
       advisory = true;
+      continue;
+    }
+    if (arg === '--include-untracked') {
+      includeUntracked = true;
       continue;
     }
     if (arg === '--root') {
@@ -139,14 +158,32 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === '--git-ref') {
+      const next = argv[index + 1];
+      if (!next) {
+        throw new Error('--git-ref requires a ref');
+      }
+      gitRef = next;
+      index += 1;
+      continue;
+    }
     throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  if (manifest && gitRef) {
+    throw new Error('--manifest and --git-ref cannot be used together');
+  }
+  if (gitRef && includeUntracked) {
+    throw new Error('--git-ref and --include-untracked cannot be used together');
   }
 
   return {
     help: false,
     root: resolve(root),
     manifest: manifest ? resolve(root, manifest) : null,
+    gitRef,
     advisory,
+    includeUntracked,
   };
 }
 
@@ -155,8 +192,11 @@ function normalizePath(path) {
   return normalized.startsWith('./') ? normalized.slice(2) : normalized;
 }
 
-function collectGitTrackedFiles(root) {
-  const result = spawnSync('git', ['ls-files', '-z'], {
+function collectGitFiles(root, { includeUntracked }) {
+  const args = includeUntracked
+    ? ['ls-files', '-z', '--cached', '--others', '--deleted', '--exclude-standard']
+    : ['ls-files', '-z'];
+  const result = spawnSync('git', args, {
     cwd: root,
     encoding: 'buffer',
     maxBuffer: 1024 * 1024 * 64,
@@ -173,7 +213,62 @@ function collectGitTrackedFiles(root) {
     .toString('utf8')
     .split('\0')
     .map((path) => normalizePath(path.trim()))
-    .filter((path) => path && existsSync(resolve(root, path)));
+    .filter((path) => path && (includeUntracked || existsSync(resolve(root, path))));
+}
+
+function collectGitRefFiles(root, gitRef) {
+  const result = spawnSync('git', ['ls-tree', '-r', '-z', '--name-only', gitRef], {
+    cwd: root,
+    encoding: 'buffer',
+    maxBuffer: 1024 * 1024 * 64,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(result.stderr.toString('utf8').trim() || 'git ls-tree failed');
+  }
+
+  return result.stdout
+    .toString('utf8')
+    .split('\0')
+    .map((path) => normalizePath(path.trim()))
+    .filter(Boolean);
+}
+
+function collectFilesystemFiles(root) {
+  const files = [];
+
+  function walk(relativeDir) {
+    const absoluteDir = resolve(root, relativeDir);
+    for (const entry of readdirSync(absoluteDir, { withFileTypes: true })) {
+      if (entry.name === '.' || entry.name === '..') {
+        continue;
+      }
+      if (entry.isDirectory() && FILESYSTEM_WALK_IGNORED_DIRS.has(entry.name)) {
+        continue;
+      }
+
+      const relativePath = normalizePath(relativeDir ? `${relativeDir}/${entry.name}` : entry.name);
+      const absolutePath = resolve(root, relativePath);
+
+      if (entry.isDirectory()) {
+        walk(relativePath);
+        continue;
+      }
+      if (entry.isFile()) {
+        files.push(relativePath);
+        continue;
+      }
+      if (entry.isSymbolicLink() && existsSync(absolutePath)) {
+        files.push(relativePath);
+      }
+    }
+  }
+
+  walk('');
+  return files;
 }
 
 function collectManifestFiles(manifestPath) {
@@ -204,7 +299,30 @@ function hasLegacyProductPath(path) {
   return LEGACY_PATH_PATTERN.test(path);
 }
 
-function disallowReason(path) {
+function contentDisallowReason(path, root) {
+  if (basename(path) !== '.npmrc') {
+    return null;
+  }
+
+  const absolutePath = resolve(root, path);
+  if (!existsSync(absolutePath)) {
+    return null;
+  }
+
+  const content = readFileSync(absolutePath, 'utf8');
+  if (NPMRC_DISALLOWED_PATTERN.test(content)) {
+    return '.npmrc contains registry, mirror, proxy, certificate, or auth configuration';
+  }
+
+  return null;
+}
+
+function disallowReason(path, root) {
+  const contentReason = contentDisallowReason(path, root);
+  if (contentReason) {
+    return contentReason;
+  }
+
   if (GENERATED_SIDECAR_RESOURCE_PATHS.has(path)) {
     return 'generated sidecar binary must be built locally, not committed to the source package';
   }
@@ -256,7 +374,7 @@ function disallowReason(path) {
   return null;
 }
 
-function summarize(paths) {
+function summarize(paths, root) {
   const uniquePaths = [...new Set(paths)].sort((left, right) => left.localeCompare(right));
   const allowed = [];
   const disallowed = [];
@@ -268,7 +386,7 @@ function summarize(paths) {
       continue;
     }
 
-    const reason = disallowReason(path);
+    const reason = disallowReason(path, root);
     if (reason) {
       disallowed.push({ path, reason });
     }
@@ -281,9 +399,39 @@ function summarize(paths) {
   };
 }
 
-function printResults(summary, { advisory, manifest }) {
-  console.log(`OSS source package input: ${manifest ? 'manifest' : 'git ls-files'}`);
-  console.log(`Tracked OSS source package files: ${summary.trackedCount}`);
+function collectInputFiles(options) {
+  if (options.manifest) {
+    return {
+      inputKind: 'manifest',
+      paths: collectManifestFiles(options.manifest),
+    };
+  }
+
+  if (options.gitRef) {
+    return {
+      inputKind: `git tree ${options.gitRef}`,
+      paths: collectGitRefFiles(options.root, options.gitRef),
+    };
+  }
+
+  try {
+    return {
+      inputKind: 'git ls-files',
+      paths: collectGitFiles(options.root, {
+        includeUntracked: options.includeUntracked,
+      }),
+    };
+  } catch {
+    return {
+      inputKind: 'filesystem walk',
+      paths: collectFilesystemFiles(options.root),
+    };
+  }
+}
+
+function printResults(summary, { advisory, inputKind }) {
+  console.log(`OSS source package input: ${inputKind}`);
+  console.log(`Audited OSS source package files: ${summary.trackedCount}`);
   console.log(`Allowed OSS source package exceptions: ${summary.allowed.length}`);
   console.log(`Disallowed OSS source package files: ${summary.disallowed.length}`);
 
@@ -316,19 +464,17 @@ function main() {
     return;
   }
 
-  let paths;
+  let input;
   try {
-    paths = options.manifest
-      ? collectManifestFiles(options.manifest)
-      : collectGitTrackedFiles(options.root);
+    input = collectInputFiles(options);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 2;
     return;
   }
 
-  const summary = summarize(paths);
-  printResults(summary, options);
+  const summary = summarize(input.paths, options.root);
+  printResults(summary, { ...options, inputKind: input.inputKind });
 
   if (summary.disallowed.length > 0 && !options.advisory) {
     process.exitCode = 1;

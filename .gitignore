@@ -25,9 +25,12 @@ tmp
 # Desktop release/resources
 apps/desktop/release/
 apps/desktop/resources/.sidecar-build/
+apps/desktop/resources/dns-sd.exe
+apps/desktop/resources/dnssd.dll
 apps/desktop/resources/embedded.provisionprofile
 apps/desktop/resources/lynavo-drive-sidecar
 apps/desktop/resources/lynavo-drive-sidecar.exe
+apps/desktop/resources-vendor/
 tools/node/
 
 # Go sidecar

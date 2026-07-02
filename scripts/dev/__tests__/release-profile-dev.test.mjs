@@ -153,6 +153,12 @@ test('removes externally exported legacy release env from child process env', ()
       [legacySyncEnv('_GOOGLE_CLIENT_CONFIG_FILE')]: '/secure/google-client.json',
       GOOGLE_CLIENT_ID: 'google-client-id',
       APPLE_OAUTH_CLIENT_ID: 'com.example.signin',
+      APPLE_ID: 'maintainer@example.com',
+      APPLE_APP_SPECIFIC_PASSWORD: 'app-password',
+      APPLE_TEAM_ID: 'TEAMID1234',
+      CSC_LINK: '/secure/cert.p12',
+      CSC_KEY_PASSWORD: 'cert-password',
+      WIN_CSC_LINK: '/secure/win-cert.p12',
       LYNAVO_API_BASE_URL: 'https://external-lynavo.example',
       LYNAVO_SUPPORT_API_BASE_URL: 'https://external-support.example',
       [desktopUpdateEnv]: 'https://external-update.example',
@@ -181,6 +187,12 @@ test('removes externally exported legacy release env from child process env', ()
   assert.equal(Object.hasOwn(env, legacySyncEnv('_GOOGLE_CLIENT_CONFIG_FILE')), false);
   assert.equal(Object.hasOwn(env, 'GOOGLE_CLIENT_ID'), false);
   assert.equal(Object.hasOwn(env, 'APPLE_OAUTH_CLIENT_ID'), false);
+  assert.equal(Object.hasOwn(env, 'APPLE_ID'), false);
+  assert.equal(Object.hasOwn(env, 'APPLE_APP_SPECIFIC_PASSWORD'), false);
+  assert.equal(Object.hasOwn(env, 'APPLE_TEAM_ID'), false);
+  assert.equal(Object.hasOwn(env, 'CSC_LINK'), false);
+  assert.equal(Object.hasOwn(env, 'CSC_KEY_PASSWORD'), false);
+  assert.equal(Object.hasOwn(env, 'WIN_CSC_LINK'), false);
 });
 
 test('external legacy env does not appear in dev dry-run output', () => {

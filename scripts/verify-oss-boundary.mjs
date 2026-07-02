@@ -49,6 +49,15 @@ const OSS_BOUNDARY_TERMS = [
   'SYNC' + 'FLOW_RELEASE_PROFILE',
   'SYNC' + 'FLOW_MARKET',
   'LYNAVO_SUPPORT_API_BASE_URL',
+  'BonjourPSSetup.exe',
+  'BONJOUR_WINDOWS_INSTALLER_URL',
+  'downloadBonjourInstaller',
+  'installBonjour',
+  'install-bonjour',
+  'autoUpdater',
+  'electron-updater',
+  'checkForUpdates',
+  'vivi_',
   ossTerm(['LYNAVO_DESKTOP', '_UPDATE_URL']),
   ossTerm(['LYNAVO_DIAGNOSTICS', '_UPLOAD_URL']),
   ossTerm(['support', 'ApiBaseUrl']),
@@ -70,6 +79,7 @@ const OSS_BOUNDARY_PATH_TERMS = [
   'paywall',
   'billing',
   'tunnel',
+  'bonjour-installer',
 ];
 
 const DEFAULT_SCAN_TARGETS = [

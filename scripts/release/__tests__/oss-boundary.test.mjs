@@ -27,6 +27,8 @@ test('blocks unallowlisted commercial and remote-access boundary terms by defaul
         'const tunnel = "remote tunnel";',
         'const gate = "paywall";',
         'const urlScheme = "com.googleusercontent.apps.example";',
+        'const installer = "BonjourPSSetup.exe";',
+        'const updater = "checkForUpdates";',
       ].join('\n'),
     );
     writeFileSync(join(sourceDir, 'RemoteAccessScreen.tsx'), 'export const ok = true;\n');
@@ -34,12 +36,14 @@ test('blocks unallowlisted commercial and remote-access boundary terms by defaul
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 5/);
+    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 7/);
     assert.match(result.stdout, /apps\/mobile\/src\/RemoteAccessScreen\.tsx:0 RemoteAccess/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:1 RemoteAccess/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:2 remote tunnel/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:3 paywall/);
     assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:4 googleusercontent/);
+    assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:5 BonjourPSSetup\.exe/);
+    assert.match(result.stdout, /apps\/mobile\/src\/bad\.ts:6 checkForUpdates/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

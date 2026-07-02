@@ -67,10 +67,10 @@ test('desktop app package metadata satisfies Linux deb packaging', () => {
 
   assert.equal(packageJson.productName, 'Lynavo Drive');
   assert.equal(packageJson.description, 'Lynavo Drive desktop app for local mobile media sync.');
-  assert.equal(packageJson.homepage, 'https://www.lynavo.com');
+  assert.equal(packageJson.homepage, 'https://github.com/lynavo/lynavo-drive');
   assert.deepEqual(packageJson.author, {
     name: 'Lynavo',
-    email: 'support@lynavo.com',
+    url: 'https://github.com/lynavo/lynavo-drive',
   });
 });
 
@@ -175,7 +175,7 @@ test('windows installer no longer deletes legacy firewall rules during upgrade',
   assert.doesNotMatch(installer, /delete rule name="\$\{SF_LEGACY_/);
 });
 
-test('Windows release and beta docs match Lynavo Drive firewall rule identities', () => {
+test('Windows release and OSS verification docs match Lynavo Drive firewall rule identities', () => {
   const expectedRules = [
     'Lynavo Drive Sidecar TCP',
     'Lynavo Drive Sidecar HTTP',
@@ -185,9 +185,12 @@ test('Windows release and beta docs match Lynavo Drive firewall rule identities'
     resolve(repoRoot, 'docs/release/release-playbook.md'),
     'utf8',
   );
-  const betaMatrix = readFileSync(resolve(repoRoot, 'docs/testing/beta-test-matrix.md'), 'utf8');
+  const verificationMatrix = readFileSync(
+    resolve(repoRoot, 'docs/testing/oss-verification-matrix.md'),
+    'utf8',
+  );
 
-  for (const doc of [releasePlaybook, betaMatrix]) {
+  for (const doc of [releasePlaybook, verificationMatrix]) {
     for (const rule of expectedRules) {
       assert.match(doc, new RegExp(rule));
     }
@@ -201,19 +204,15 @@ test('release docs verify the renamed packaged sidecar binary paths', () => {
     resolve(repoRoot, 'docs/release/release-playbook.md'),
     'utf8',
   );
-  const macBuild = readFileSync(
-    resolve(repoRoot, 'docs/release/macos-desktop-build.md'),
-    'utf8',
-  );
 
   assert.match(releasePlaybook, /resources\\lynavo-drive-sidecar\.exe/);
   assert.doesNotMatch(releasePlaybook, new RegExp(`resources\\\\${legacySidecarBin}\\.exe`));
-  assert.match(macBuild, /Contents\/Resources\/lynavo-drive-sidecar/);
-  assert.doesNotMatch(macBuild, new RegExp(`Contents/Resources/${legacySidecarBin}`));
+  assert.match(releasePlaybook, /Contents\/Resources\/lynavo-drive-sidecar/);
+  assert.doesNotMatch(releasePlaybook, new RegExp(`Contents/Resources/${legacySidecarBin}`));
 });
 
-test('iOS build docs do not expose external beta upload steps', () => {
-  const doc = readFileSync(resolve(repoRoot, 'docs/release/ios-build.md'), 'utf8');
+test('release playbook does not expose external upload steps', () => {
+  const doc = readFileSync(resolve(repoRoot, 'docs/release/release-playbook.md'), 'utf8');
   const archiveUploadTerm = ['archive', '-upload'].join('');
   const appleUploadToolTerm = ['not', 'arytool'].join('');
 

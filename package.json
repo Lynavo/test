@@ -1,8 +1,9 @@
 {
   "name": "lynavo-drive",
   "private": true,
+  "license": "MIT",
   "engines": {
-    "node": ">=20",
+    "node": ">=22.12.0",
     "pnpm": ">=10"
   },
   "packageManager": "pnpm@10.32.1",
@@ -31,13 +32,15 @@
     "release": "node scripts/release/release.mjs",
     "test:sidecar": "cd services/sidecar-go && make test",
     "test:release": "node --test scripts/release/__tests__/*.mjs scripts/dev/__tests__/*.mjs",
-    "gate:release": "pnpm sync:versions:check && pnpm verify:oss-source-package && pnpm verify:oss-boundary && pnpm verify:legacy-names:strict && pnpm test:release && pnpm release --profile review --targets ios,android,mac,win,linux --dry-run && pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run",
+    "gate:release": "pnpm sync:versions:check && pnpm verify:oss-source-package:worktree && pnpm verify:oss-source-package:head && pnpm verify:oss-boundary && pnpm verify:legacy-names:strict && pnpm test:release && pnpm release --profile review --targets ios,android,mac,win,linux --dry-run && pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify:oss-source-package": "node scripts/verify-oss-source-package.mjs",
+    "verify:oss-source-package:worktree": "node scripts/verify-oss-source-package.mjs --include-untracked",
+    "verify:oss-source-package:head": "node scripts/verify-oss-source-package.mjs --git-ref HEAD",
     "verify:oss-source-package:advisory": "node scripts/verify-oss-source-package.mjs --advisory",
     "verify:oss-boundary": "node scripts/verify-oss-boundary.mjs",
     "verify:oss-boundary:advisory": "node scripts/verify-oss-boundary.mjs --advisory",
