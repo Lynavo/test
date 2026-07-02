@@ -74,10 +74,8 @@ The gate covers:
 
 1. Version manifest consistency.
 2. Source package boundaries.
-3. OSS boundary scan for account, remote access, and background capability.
-4. Legacy name allowlist.
-5. Release/dev script tests.
-6. Release profile dry-run.
+3. Release/dev script tests.
+4. Release profile dry-run.
 
 Acceptance criteria:
 

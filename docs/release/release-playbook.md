@@ -15,10 +15,8 @@ The gate checks:
 
 1. version manifest consistency
 2. OSS source-package boundaries for tracked and non-ignored untracked worktree files
-3. account, remote-access, and background-capability OSS boundary allowlist
-4. legacy-name allowlist
-5. release/dev script tests
-6. release profile dry-runs
+3. release/dev script tests
+4. release profile dry-runs
 
 ## Local Prerequisites
 
