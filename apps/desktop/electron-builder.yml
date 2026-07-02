@@ -1,6 +1,10 @@
 appId: com.lynavo.drive.desktop
 productName: Lynavo Drive
 buildVersion: '62'
+files:
+  - out/**/*
+  - node_modules/**/*
+  - package.json
 mac:
   artifactName: LynavoDrive-${version}-${arch}.${ext}
   identity: null
@@ -46,8 +50,6 @@ win:
     - from: resources
       filter:
         - lynavo-drive-sidecar.exe
-        - dns-sd.exe
-        - dnssd.dll
 linux:
   artifactName: LynavoDrive-${version}-linux-${arch}.${ext}
   target:

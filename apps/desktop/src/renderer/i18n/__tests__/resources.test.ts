@@ -8,14 +8,6 @@ const sourceRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const staticTranslationCallPattern =
   /\b(?:t|i18n\.t)\(\s*(['"])([a-zA-Z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+)\1/g;
 const dynamicRendererKeys = [
-  'errors.settings.bonjourInstallSuccess',
-  'errors.settings.bonjourAlreadyInstalled',
-  'errors.settings.bonjourUnsupportedPlatform',
-  'errors.settings.bonjourPostInstallNotDetected',
-  'errors.settings.bonjourTooManyRedirects',
-  'errors.settings.bonjourInstallCanceled',
-  'errors.settings.bonjourDownloadHttpFailed',
-  'errors.settings.bonjourInstallExitFailed',
   'layout.sidecar.runtimeMessages.bonjourNativeDetected',
   'layout.sidecar.runtimeMessages.bonjourFallbackDetected',
   'layout.sidecar.runtimeMessages.starting',

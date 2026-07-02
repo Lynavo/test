@@ -265,7 +265,7 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('opens feedback panel and sends a composed email link', async () => {
+  it('opens feedback panel and sends a composed GitHub issue link', async () => {
     render(<SettingsPage />);
     await screen.findByText('v1.0.1 (56) · 当前版本已安装');
 
@@ -275,17 +275,16 @@ describe('SettingsPage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 
-    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
-      expect.stringContaining('mailto:support@lynavo.com'),
+    const issueUrl = new URL(
+      vi.mocked(window.electronAPI?.files.openExternal).mock.calls[0]?.[0] ?? '',
     );
-    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent('Lynavo Drive Desktop 问题反馈 v1.0.1 (56)')),
+    expect(issueUrl.href).toContain(
+      'https://github.com/lynavo/lynavo-drive/issues/new',
     );
-    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent('手机无法连接电脑')),
+    expect(issueUrl.searchParams.get('title')).toBe(
+      'Lynavo Drive Desktop 问题反馈 v1.0.1 (56)',
     );
-    expect(window.electronAPI?.files.openExternal).toHaveBeenCalledWith(
-      expect.stringContaining(encodeURIComponent('当前版本：v1.0.1 (56)')),
-    );
+    expect(issueUrl.searchParams.get('body')).toContain('手机无法连接电脑');
+    expect(issueUrl.searchParams.get('body')).toContain('当前版本：v1.0.1 (56)');
   });
 });

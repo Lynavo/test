@@ -392,19 +392,19 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Android' })).toBeInTheDocument();
   });
 
-  it('opens Lynavo mobile download URLs from setup and the QR panel', async () => {
+  it('opens OSS repository links from setup and the QR panel', async () => {
     const { openExternal } = installElectronAPI();
 
     render(<AppShell />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'iOS 下载二维码' }));
-    expect(openExternal).toHaveBeenLastCalledWith('https://www.lynavo.com/download/ios');
+    expect(openExternal).toHaveBeenLastCalledWith('https://github.com/lynavo/lynavo-drive');
 
     await completeConnectionCodeSetup();
     fireEvent.click(await screen.findByRole('button', { name: '下载移动端' }));
     fireEvent.click(screen.getByRole('button', { name: 'Android' }));
 
-    expect(openExternal).toHaveBeenLastCalledWith('https://www.lynavo.com/download/android');
+    expect(openExternal).toHaveBeenLastCalledWith('https://github.com/lynavo/lynavo-drive');
     expect(openExternal).not.toHaveBeenCalledWith(expect.stringContaining('old-product.example'));
   });
 

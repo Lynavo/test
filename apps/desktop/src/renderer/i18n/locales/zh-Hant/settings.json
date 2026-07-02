@@ -86,12 +86,13 @@
     },
     "feedback": {
       "title": "問題回饋",
-      "openedCaption": "已開啟郵件回饋",
+      "openedCaption": "已開啟 GitHub issue 草稿",
+      "issueCaption": "先本機匯出診斷包，再開啟 GitHub issue",
       "placeholder": "請描述問題、發生步驟或希望改善的地方",
       "contactPlaceholder": "聯絡信箱或手機號碼",
       "contactEmpty": "未提供聯絡方式",
-      "mailSubject": "Lynavo Drive Desktop 問題回饋 v{{version}}",
-      "mailBody": "問題描述：\n{{description}}\n\n聯絡方式：\n{{contact}}\n\n目前版本：v{{version}}"
+      "issueTitle": "Lynavo Drive Desktop 問題回饋 v{{version}}",
+      "issueBody": "問題描述：\n{{description}}\n\n聯絡方式：\n{{contact}}\n\n目前版本：v{{version}}\n\n僅在你確認可以公開分享時附加本機診斷包。安全漏洞請使用私有 security advisory 流程。"
     },
     "diagnostics": {
       "exportingCaption": "正在匯出診斷包",
@@ -105,7 +106,7 @@
       "preventSleepDisabled": "已關閉防止待機",
       "preventSleepFailed": "無法更新電源設定",
       "receivedAccessFailed": "修改已接收檔案瀏覽權限失敗",
-      "feedbackOpened": "已開啟郵件回饋"
+      "feedbackOpened": "已開啟 GitHub issue 草稿"
     },
     "community": {
       "title": "本地區域網路存取",

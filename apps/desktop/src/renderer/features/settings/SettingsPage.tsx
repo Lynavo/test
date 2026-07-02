@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { LYNAVO_SUPPORT_URL } from '@lynavo-drive/contracts';
 import { persistLocale } from '@renderer/i18n';
 import {
   isSupportedLocale,
@@ -38,7 +39,7 @@ import { SystemGuideSection } from './SystemGuideSection';
 type Tone = 'blue' | 'sky' | 'green' | 'amber' | 'rose' | 'slate';
 type AppInfo = Awaited<ReturnType<NonNullable<Window['electronAPI']>['support']['getAppInfo']>>;
 
-const developerFeedbackEmail = 'support@lynavo.com';
+const developerFeedbackUrl = `${LYNAVO_SUPPORT_URL}/new`;
 const installedVersionFallback = '0.1.0';
 
 const localeLabels: Record<SupportedLocale, { label: string; caption: string }> = {
@@ -195,20 +196,21 @@ export function SettingsPage() {
   const handleSendFeedback = () => {
     if (!feedbackReady) return;
 
-    const subject = encodeURIComponent(
-      t('settings.profile.feedback.mailSubject', { version: installedVersionLabel }),
+    const issueUrl = new URL(developerFeedbackUrl);
+    issueUrl.searchParams.set(
+      'title',
+      t('settings.profile.feedback.issueTitle', { version: installedVersionLabel }),
     );
-    const body = encodeURIComponent(
-      t('settings.profile.feedback.mailBody', {
+    issueUrl.searchParams.set(
+      'body',
+      t('settings.profile.feedback.issueBody', {
         description: feedbackText.trim(),
         contact: feedbackContact.trim() || t('settings.profile.feedback.contactEmpty'),
         version: installedVersionLabel,
       }),
     );
 
-    void window.electronAPI?.files.openExternal(
-      `mailto:${developerFeedbackEmail}?subject=${subject}&body=${body}`,
-    );
+    void window.electronAPI?.files.openExternal(issueUrl.toString());
     setFeedbackSent(true);
     setFeedbackText('');
     setFeedbackOpen(false);
@@ -401,7 +403,7 @@ export function SettingsPage() {
                 caption={
                   feedbackSent
                     ? t('settings.profile.feedback.openedCaption')
-                    : developerFeedbackEmail
+                    : t('settings.profile.feedback.issueCaption')
                 }
                 onClick={() => setFeedbackOpen((open) => !open)}
                 action={

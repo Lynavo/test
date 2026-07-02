@@ -98,12 +98,12 @@
       "contact": {
         "items": [
           {
-            "title": "Support email",
-            "body": "support@lynavo.com. We reply within 24 hours on business days."
+            "title": "Community support",
+            "body": "Open a GitHub issue for reproducible bugs or feature requests. Use the private security advisory flow for vulnerabilities."
           },
           {
             "title": "Export diagnostics package",
-            "body": "Go to My -> Export Diagnostics Package and send the runtime logs to support so we can troubleshoot faster."
+            "body": "Go to My -> Export Diagnostics Package to save runtime logs locally. Share the archive only if you are comfortable attaching it to a public issue."
           },
           {
             "title": "Feedback entry",

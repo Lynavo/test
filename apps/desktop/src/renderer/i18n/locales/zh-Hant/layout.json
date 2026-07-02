@@ -83,7 +83,6 @@
     },
     "bonjourPath": "Bonjour 路徑：{{path}}",
     "lastExitCode": "最近退出碼：{{code}}",
-    "installBonjour": "一鍵安裝 Bonjour",
     "retrySidecar": "重試背景服務"
   }
 }

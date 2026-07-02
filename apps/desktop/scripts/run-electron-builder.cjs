@@ -1,5 +1,6 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
+const { buildOssChildEnv } = require('../../../scripts/dev/oss-env-scrubber.cjs');
 
 const projectRoot = path.resolve(__dirname, '..');
 const binName = process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
@@ -12,7 +13,7 @@ const spawnArgs =
 
 const child = spawn(spawnCommand, spawnArgs, {
   cwd: projectRoot,
-  env: process.env,
+  env: buildOssChildEnv(process.env),
   stdio: 'inherit',
 });
 

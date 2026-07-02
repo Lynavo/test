@@ -33,16 +33,6 @@
   },
   "settings": {
     "shareStatusCheckFailed": "Failed to check sharing status",
-    "bonjourInstallFailed": "Bonjour installation failed",
-    "bonjourInstallSuccess": "Bonjour has been installed",
-    "bonjourAlreadyInstalled": "Bonjour is already installed",
-    "bonjourUnsupportedPlatform": "Bonjour can only be installed automatically on Windows.",
-    "bonjourPostInstallNotDetected": "The installer completed, but Bonjour was not detected. Restart the app and try again.",
-    "bonjourTooManyRedirects": "The Bonjour download redirected too many times. Use Apple's official download page instead.",
-    "bonjourInstallCanceled": "Bonjour installation was canceled.",
-    "bonjourDownloadHttpFailed": "Bonjour download failed with HTTP {{status}}.",
-    "bonjourInstallExitFailed": "The Bonjour installer exited with code {{code}}.",
-    "bonjourInstallFallback": "Please try again later or use Apple's official download page.",
     "diagnosticsExported": "Diagnostics bundle exported",
     "diagnosticsExportFailed": "Failed to export diagnostics bundle",
     "sidecarRetryFailed": "Failed to retry background service startup"

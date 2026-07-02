@@ -9,22 +9,34 @@ const required = [
     file: 'lynavo-drive-sidecar.exe',
     hint: 'Run `pnpm build:sidecar:win` — requires Go + a Windows C compiler (e.g. x86_64-w64-mingw32-gcc on macOS/Linux).',
   },
+];
+
+const optional = [
   {
     file: 'dns-sd.exe',
     hint:
-      'Bonjour runtime missing. Either install Apple Bonjour Print Services on a Windows host, or drop\n' +
-      '      dns-sd.exe + dnssd.dll into apps/desktop/resources-vendor/bonjour/, or set LYNAVO_BONJOUR_DIR.',
+      'Native Bonjour runtime was not bundled. Windows users can install Apple Bonjour Print Services,\n' +
+      '      or the app will use the built-in zeroconf-compatible fallback.',
   },
   {
     file: 'dnssd.dll',
-    hint: 'Bonjour runtime DLL missing — same resolution as dns-sd.exe above.',
+    hint: 'Native Bonjour runtime DLL was not bundled; continuing with fallback support.',
   },
 ];
 
 const missing = required.filter(({ file }) => !fs.existsSync(path.join(resourcesDir, file)));
+const missingOptional = optional.filter(({ file }) => !fs.existsSync(path.join(resourcesDir, file)));
 
 if (missing.length === 0) {
   console.log('[verify-windows-resources] all required Windows resources present ✓');
+  if (missingOptional.length > 0) {
+    console.warn('[verify-windows-resources] optional Windows resources missing:');
+    for (const { file, hint } of missingOptional) {
+      console.warn(`  ! apps/desktop/resources/${file}`);
+      console.warn(`    → ${hint}`);
+    }
+    console.warn('  Continuing; sidecar will use the built-in zeroconf-compatible fallback when needed.');
+  }
   process.exit(0);
 }
 

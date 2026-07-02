@@ -79,8 +79,8 @@ describe('HelpDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '联系我们' }));
 
-    expect(screen.getByText('客服邮箱')).toBeInTheDocument();
-    expect(screen.getByText(/support@lynavo.com/)).toBeInTheDocument();
+    expect(screen.getByText('社区支持')).toBeInTheDocument();
+    expect(screen.getByText(/GitHub issue/)).toBeInTheDocument();
     expect(screen.getByText('导出诊断包')).toBeInTheDocument();
     expect(screen.getByText('反馈入口')).toBeInTheDocument();
   });

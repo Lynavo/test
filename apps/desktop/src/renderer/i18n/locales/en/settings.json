@@ -86,12 +86,13 @@
     },
     "feedback": {
       "title": "Feedback",
-      "openedCaption": "Email composer opened",
+      "openedCaption": "GitHub issue draft opened",
+      "issueCaption": "Export diagnostics locally, then open a GitHub issue",
       "placeholder": "Describe the issue, steps, or improvements you want",
       "contactPlaceholder": "Contact email or phone",
       "contactEmpty": "No contact provided",
-      "mailSubject": "Lynavo Drive Desktop feedback v{{version}}",
-      "mailBody": "Issue description:\n{{description}}\n\nContact:\n{{contact}}\n\nCurrent version: v{{version}}"
+      "issueTitle": "Lynavo Drive Desktop feedback v{{version}}",
+      "issueBody": "Issue description:\n{{description}}\n\nContact:\n{{contact}}\n\nCurrent version: v{{version}}\n\nAttach local diagnostics only if you are comfortable sharing them publicly. Use the private security advisory flow for vulnerabilities."
     },
     "diagnostics": {
       "exportingCaption": "Exporting diagnostics bundle",
@@ -105,7 +106,7 @@
       "preventSleepDisabled": "Computer sleep prevention disabled",
       "preventSleepFailed": "Unable to update power setting",
       "receivedAccessFailed": "Failed to update received file browsing access",
-      "feedbackOpened": "Feedback email opened"
+      "feedbackOpened": "GitHub issue draft opened"
     },
     "community": {
       "title": "Local LAN access",

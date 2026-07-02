@@ -4,12 +4,13 @@
   "description": "Lynavo Drive desktop app for local mobile media sync.",
   "version": "1.0.1",
   "lynavoDriveBuildNumber": "62",
-  "homepage": "https://www.lynavo.com",
+  "homepage": "https://github.com/lynavo/lynavo-drive",
   "author": {
     "name": "Lynavo",
-    "email": "support@lynavo.com"
+    "url": "https://github.com/lynavo/lynavo-drive"
   },
   "private": true,
+  "license": "MIT",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "node ./scripts/run-electron-vite.cjs dev",

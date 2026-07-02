@@ -223,10 +223,13 @@ test('desktop OSS package scripts do not ship official Apple signing or upload h
   assert.equal(packageJson.scripts[token(['upload', ':test', 'flight'])], undefined);
 
   const builderConfig = readFileSync(path.join(desktopRoot, 'electron-builder.yml'), 'utf8');
+  assert.match(builderConfig, /^files:\n  - out\/\*\*\/\*\n  - node_modules\/\*\*\/\*\n  - package\.json$/m);
   assert.match(builderConfig, /^  identity: null$/m);
   assert.doesNotMatch(builderConfig, /sign:\s+\.\/scripts\/mac-sign\.cjs/);
   assert.doesNotMatch(builderConfig, /\bmas:/);
   assert.doesNotMatch(builderConfig, /entitlements(?:Inherit)?:/);
+  assert.doesNotMatch(builderConfig, /dns-sd\.exe/);
+  assert.doesNotMatch(builderConfig, /dnssd\.dll/);
   assert.equal(builderConfig.includes(token(['not', 'arize:'])), false);
 });
 

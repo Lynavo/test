@@ -3,10 +3,6 @@ import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@renderer/components/ui/button';
-import {
-  getBonjourInstallErrorMessage,
-  getBonjourInstallSuccessMessage,
-} from '@renderer/lib/bonjour-install';
 import { getBonjourRuntimeMessage, getSidecarRuntimeMessage } from '@renderer/lib/runtime-messages';
 import { useSidecarRuntimeStore } from '@renderer/stores/sidecar-runtime-store';
 
@@ -14,7 +10,6 @@ export function SidecarStatusBanner() {
   const { t } = useTranslation();
   const runtime = useSidecarRuntimeStore((s) => s.runtime);
   const [retrying, setRetrying] = useState(false);
-  const [installing, setInstalling] = useState(false);
   const showBonjourFallback = runtime.bonjour.status === 'fallback';
 
   if ((runtime.status === 'healthy' && !showBonjourFallback) || runtime.status === 'stopped') {
@@ -46,20 +41,6 @@ export function SidecarStatusBanner() {
       toast.error(t('errors.settings.sidecarRetryFailed'));
     } finally {
       setRetrying(false);
-    }
-  };
-
-  const handleInstall = async () => {
-    setInstalling(true);
-    try {
-      const result = await window.electronAPI.sidecar.installBonjour();
-      toast.success(getBonjourInstallSuccessMessage(result.messageCode, t));
-    } catch (error) {
-      toast.error(t('errors.settings.bonjourInstallFailed'), {
-        description: getBonjourInstallErrorMessage(error, t),
-      });
-    } finally {
-      setInstalling(false);
     }
   };
 
@@ -99,24 +80,12 @@ export function SidecarStatusBanner() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {isBonjourWarning && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void handleInstall()}
-            disabled={installing || retrying || isStarting}
-            className="shrink-0"
-          >
-            {installing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {t('layout.sidecar.installBonjour')}
-          </Button>
-        )}
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={handleRetry}
-          disabled={retrying || isStarting || installing}
+          disabled={retrying || isStarting}
           className="shrink-0"
         >
           <RotateCcw className="h-4 w-4" />

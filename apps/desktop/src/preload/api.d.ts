@@ -17,7 +17,6 @@ import type {
   SortDirection,
 } from '@lynavo-drive/contracts';
 import type { SidecarEvent } from '@lynavo-drive/contracts';
-import type { BonjourInstallResult } from '../shared/bonjour';
 import type { SidecarRuntimeState } from '../shared/sidecar-runtime';
 
 export type PowerSaveState = {
@@ -51,7 +50,6 @@ export interface ElectronAPI {
     regenerateConnectionCode(): Promise<{ code: string }>;
     getRuntimeState(): Promise<SidecarRuntimeState>;
     retryStart(): Promise<void>;
-    installBonjour(): Promise<BonjourInstallResult>;
     getShareStatus(): Promise<ShareStatusDTO>;
     validateShare(): Promise<ShareStatusDTO>;
     getTransferActive(): Promise<{ active: boolean }>;

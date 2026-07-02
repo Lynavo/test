@@ -86,12 +86,13 @@
     },
     "feedback": {
       "title": "问题反馈",
-      "openedCaption": "已打开邮件反馈",
+      "openedCaption": "已打开 GitHub issue 草稿",
+      "issueCaption": "先本地导出诊断包，再打开 GitHub issue",
       "placeholder": "请描述问题、发生步骤或希望改进的地方",
       "contactPlaceholder": "联系方式邮箱或手机号",
       "contactEmpty": "未提供联系方式",
-      "mailSubject": "Lynavo Drive Desktop 问题反馈 v{{version}}",
-      "mailBody": "问题描述：\n{{description}}\n\n联系方式：\n{{contact}}\n\n当前版本：v{{version}}"
+      "issueTitle": "Lynavo Drive Desktop 问题反馈 v{{version}}",
+      "issueBody": "问题描述：\n{{description}}\n\n联系方式：\n{{contact}}\n\n当前版本：v{{version}}\n\n仅在你确认可以公开分享时附加本地诊断包。安全漏洞请使用私有 security advisory 流程。"
     },
     "diagnostics": {
       "exportingCaption": "正在导出诊断包",
@@ -105,7 +106,7 @@
       "preventSleepDisabled": "已关闭防止待机",
       "preventSleepFailed": "无法更新电源设置",
       "receivedAccessFailed": "修改已接收文件浏览权限失败",
-      "feedbackOpened": "已打开邮件反馈"
+      "feedbackOpened": "已打开 GitHub issue 草稿"
     },
     "community": {
       "title": "本地局域网访问",

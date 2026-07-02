@@ -1,7 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const isWindows = process.platform === 'win32';
 const projectRoot = path.resolve(__dirname, '..');
 const resourcesDir = path.join(projectRoot, 'resources');
 const dnsSDFileName = 'dns-sd.exe';
@@ -9,11 +8,6 @@ const dnsSDDLLName = 'dnssd.dll';
 
 function candidatePaths() {
   const candidates = [];
-  const pathSeparator = isWindows ? ';' : ':';
-  const pathEntries = (process.env.PATH || process.env.Path || '')
-    .split(pathSeparator)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 
   if (process.env.LYNAVO_DNSSD_PATH) {
     candidates.push(process.env.LYNAVO_DNSSD_PATH);
@@ -23,23 +17,9 @@ function candidatePaths() {
     candidates.push(path.join(process.env.LYNAVO_BONJOUR_DIR, dnsSDFileName));
   }
 
-  // Default vendor directory — works on any host when the binaries are checked in
-  // or dropped in manually (see docs/release/release-playbook.md).
+  // Optional local-only staging. The OSS repository and default packages do not
+  // redistribute Apple Bonjour binaries.
   candidates.push(path.join(projectRoot, 'resources-vendor', 'bonjour', dnsSDFileName));
-
-  if (isWindows) {
-    for (const entry of pathEntries) {
-      candidates.push(path.join(entry, dnsSDFileName));
-    }
-
-    for (const root of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']]) {
-      if (!root) {
-        continue;
-      }
-      candidates.push(path.join(root, 'Bonjour', dnsSDFileName));
-      candidates.push(path.join(root, 'Bonjour Print Services', dnsSDFileName));
-    }
-  }
 
   return [...new Set(candidates)];
 }
@@ -83,8 +63,9 @@ const sourcePath = candidatePaths().find((candidate) => fs.existsSync(candidate)
 if (!sourcePath) {
   console.warn(
     '[sync-bonjour-runtime] dns-sd.exe not found; continuing without bundled Bonjour runtime.\n' +
-      '  To bundle Bonjour on a non-Windows host, set LYNAVO_BONJOUR_DIR to a directory\n' +
-      '  containing dns-sd.exe + dnssd.dll, or drop them into apps/desktop/resources-vendor/bonjour/.',
+      '  Optional local staging requires LYNAVO_BONJOUR_DIR, LYNAVO_DNSSD_PATH,\n' +
+      '  or apps/desktop/resources-vendor/bonjour/. Default OSS packages rely on\n' +
+      '  user-installed Bonjour or the zeroconf-compatible fallback.',
   );
   process.exit(0);
 }

@@ -98,12 +98,12 @@
       "contact": {
         "items": [
           {
-            "title": "客服邮箱",
-            "body": "support@lynavo.com，工作日 24 小时内回复。"
+            "title": "社区支持",
+            "body": "可通过 GitHub issue 提交可复现 bug 或功能建议。安全漏洞请使用私有 security advisory 流程。"
           },
           {
             "title": "导出诊断包",
-            "body": "前往「我的 -> 导出诊断包」将运行日志发给客服，以协助快速排查问题。"
+            "body": "前往「我的 -> 导出诊断包」将运行日志保存到本地。仅在你确认可以公开分享时，将诊断包附加到公开 issue。"
           },
           {
             "title": "反馈入口",

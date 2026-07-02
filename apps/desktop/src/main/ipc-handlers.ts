@@ -16,7 +16,6 @@ import {
 } from './file-operations';
 import type { SidecarManager } from './sidecar-manager';
 import { exportDiagnostics, getAppInfo } from './diagnostics';
-import { installBonjourForWindows } from './bonjour-installer';
 import { usesTitleBarOverlayControls } from '../shared/platform-capabilities';
 import { getTitleBarOverlayOptions } from './window-chrome';
 
@@ -36,7 +35,6 @@ export const IPC = {
   SIDECAR_REGENERATE_CODE: 'sidecar:regenerate-code',
   SIDECAR_RUNTIME_STATE: 'sidecar:runtime-state',
   SIDECAR_RETRY_START: 'sidecar:retry-start',
-  SIDECAR_INSTALL_BONJOUR: 'sidecar:install-bonjour',
   SIDECAR_SHARE_STATUS: 'sidecar:share-status',
   SIDECAR_VALIDATE_SHARE: 'sidecar:validate-share',
   SIDECAR_TRANSFER_ACTIVE: 'sidecar:transfer-active',
@@ -122,7 +120,6 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.SIDECAR_REGENERATE_CODE, () => regenerateConnectionCodeSafely());
   ipcMain.handle(IPC.SIDECAR_RUNTIME_STATE, () => sidecarManager.getState());
   ipcMain.handle(IPC.SIDECAR_RETRY_START, () => sidecarManager.retryStart());
-  ipcMain.handle(IPC.SIDECAR_INSTALL_BONJOUR, () => installBonjourForWindows(sidecarManager));
   ipcMain.handle(IPC.SIDECAR_SHARE_STATUS, () => sidecarClient.getShareStatus());
   ipcMain.handle(IPC.SIDECAR_VALIDATE_SHARE, () => sidecarClient.validateShare());
   ipcMain.handle(IPC.SIDECAR_TRANSFER_ACTIVE, () => sidecarClient.getTransferActive());

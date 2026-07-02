@@ -71,12 +71,12 @@ const mobileDownloadLinks = [
   {
     platform: 'iOS',
     label: 'iOS',
-    url: new URL('/download/ios', LYNAVO_WEB_BASE_URL).toString(),
+    url: LYNAVO_WEB_BASE_URL,
   },
   {
     platform: 'Android',
     label: 'Android',
-    url: new URL('/download/android', LYNAVO_WEB_BASE_URL).toString(),
+    url: LYNAVO_WEB_BASE_URL,
   },
 ] as const;
 

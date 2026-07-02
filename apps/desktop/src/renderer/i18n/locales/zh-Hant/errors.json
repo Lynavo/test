@@ -33,16 +33,6 @@
   },
   "settings": {
     "shareStatusCheckFailed": "共享狀態偵測失敗",
-    "bonjourInstallFailed": "Bonjour 安裝失敗",
-    "bonjourInstallSuccess": "Bonjour 已安裝完成",
-    "bonjourAlreadyInstalled": "Bonjour 已安裝",
-    "bonjourUnsupportedPlatform": "Bonjour 僅支援在 Windows 上自動安裝。",
-    "bonjourPostInstallNotDetected": "安裝程式已完成，但仍未偵測到 Bonjour。請重新啟動應用程式後再試。",
-    "bonjourTooManyRedirects": "Bonjour 下載發生過多重新導向，請改用 Apple 官方安裝頁面。",
-    "bonjourInstallCanceled": "Bonjour 安裝已取消。",
-    "bonjourDownloadHttpFailed": "Bonjour 下載失敗，HTTP 狀態碼 {{status}}。",
-    "bonjourInstallExitFailed": "Bonjour 安裝程式退出碼為 {{code}}。",
-    "bonjourInstallFallback": "請稍後重試，或改用 Apple 官方安裝頁面。",
     "diagnosticsExported": "診斷包已匯出",
     "diagnosticsExportFailed": "診斷包匯出失敗",
     "sidecarRetryFailed": "重試啟動背景服務失敗"
