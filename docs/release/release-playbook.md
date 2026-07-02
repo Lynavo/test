@@ -43,7 +43,8 @@ diagnostic archives, local databases, logs, or generated release artifacts.
 Public changes should be reviewable from source without local secrets,
 proprietary binaries, diagnostic archives, local databases, or generated build
 outputs. If a contributor accidentally adds sensitive material, remove it from
-the change before review and notify the maintainers through a private channel.
+the change before review and use the private vulnerability reporting path in
+`SECURITY.md`.
 
 ## Local Native Builds
 
@@ -57,7 +58,23 @@ cd services/sidecar-go && go build -o /tmp/lynavo-drive-sidecar ./cmd/lynavo-dri
 ```
 
 `build:mobile:ios:release` is a generic iOS device build with
-`CODE_SIGNING_ALLOWED=NO`.
+`CODE_SIGNING_ALLOWED=NO`. `build:mobile:android` is an Android Debug build
+(`assembleDebug`) for local smoke verification; it is not the Android Release
+source-build check.
+
+For Android Release source-build verification, use the release profile from the
+repository root:
+
+```bash
+pnpm release --profile review --targets android --dry-run
+pnpm release --profile review --targets android
+```
+
+Or run the underlying Gradle command directly from the repository root:
+
+```bash
+cd apps/mobile/android && ./gradlew assembleRelease bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
+```
 
 ## Release Profile Commands
 
@@ -89,7 +106,7 @@ Target rules:
 2. `android` is a Gradle `assembleRelease bundleRelease` source build.
 3. `mac` is a local macOS DMG package.
 4. `win` is a local Windows NSIS/ZIP package.
-5. `linux` is a local `.deb` package and must run on Linux hosts.
+5. `linux` is a host-arch local `.deb` package and must run on Linux hosts.
 
 ## Desktop Packages
 
@@ -154,10 +171,19 @@ Linux must run on a Linux host:
 pnpm package:desktop:linux
 ```
 
-Expected local artifacts:
+The wrapper builds one Linux architecture per invocation: the host architecture
+by default, or an explicit architecture when called through the desktop package
+script:
 
-- `apps/desktop/release/LynavoDrive-<version>-linux-x64.deb`
-- `apps/desktop/release/LynavoDrive-<version>-linux-arm64.deb`
+```bash
+pnpm --filter @lynavo-drive/desktop package:linux -- --arch=x64
+pnpm --filter @lynavo-drive/desktop package:linux -- --arch=arm64
+```
+
+Expected local artifact for the selected architecture:
+
+- `--arch=x64`: `apps/desktop/release/LynavoDrive-<version>-linux-x64.deb`
+- `--arch=arm64`: `apps/desktop/release/LynavoDrive-<version>-linux-arm64.deb`
 
 ## Android Release Variant
 

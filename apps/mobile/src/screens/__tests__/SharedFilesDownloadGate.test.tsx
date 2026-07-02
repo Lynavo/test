@@ -322,7 +322,7 @@ jest.mock('../../services/desktop-local-service', () => ({
       (typeof result.localPath === 'string' &&
         result.localPath.trim().toLowerCase().startsWith('ph://')) ||
       (typeof result.savedLocation === 'string' &&
-        ['photos', 'pictures/vivi drop', 'movies/vivi drop'].includes(
+        ['photos', 'pictures/lynavo drive', 'movies/lynavo drive'].includes(
           result.savedLocation.trim().toLowerCase(),
         )),
   ),

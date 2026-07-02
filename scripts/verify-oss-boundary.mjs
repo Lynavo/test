@@ -83,6 +83,7 @@ const OSS_BOUNDARY_PATH_TERMS = [
 ];
 
 const DEFAULT_SCAN_TARGETS = [
+  '.github',
   'apps',
   'packages',
   'services',
@@ -204,7 +205,7 @@ function usage() {
     'Usage: node scripts/verify-oss-boundary.mjs [--root <path>] [--advisory]',
     '',
     'Scans code paths for commercial/account/remote-access boundary terms and reports hits outside the allowlist.',
-    'Default scan targets: apps, packages, services, scripts, package.json, pnpm-workspace.yaml, turbo.json.',
+    'Default scan targets: .github, apps, packages, services, scripts, package.json, pnpm-workspace.yaml, turbo.json.',
   ].join('\n');
 }
 

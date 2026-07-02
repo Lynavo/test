@@ -6,7 +6,7 @@ struct ClientDisplayNameResolverTests {
         var passed = true
 
         passed = assertEqual(
-            syncFlowResolvedDefaultClientDisplayName(
+            lynavoResolvedDefaultClientDisplayName(
                 rawName: "Alice iPhone",
                 model: "iPhone"
             ),
@@ -14,14 +14,14 @@ struct ClientDisplayNameResolverTests {
             "non-generic device names should be preserved"
         ) && passed
 
-        let genericName = syncFlowResolvedDefaultClientDisplayName(
+        let genericName = lynavoResolvedDefaultClientDisplayName(
             rawName: "iPhone",
             model: "iPhone"
         )
         passed = assertEqual(genericName, "iPhone", "generic fallback should use model only") && passed
         passed = assertFalse(genericName.contains("ABCD"), "generic fallback must not expose clientId suffix") && passed
 
-        let blankName = syncFlowResolvedDefaultClientDisplayName(
+        let blankName = lynavoResolvedDefaultClientDisplayName(
             rawName: "  ",
             model: "iPad"
         )
@@ -29,7 +29,7 @@ struct ClientDisplayNameResolverTests {
         passed = assertFalse(blankName.contains("BEEF"), "blank fallback must not expose clientId suffix") && passed
 
         passed = assertEqual(
-            syncFlowResolvedClientDisplayName(
+            lynavoResolvedClientDisplayName(
                 storedName: "iPhone",
                 legacyName: nil,
                 rawName: "iPhone 12",
@@ -41,7 +41,7 @@ struct ClientDisplayNameResolverTests {
         ) && passed
 
         passed = assertEqual(
-            syncFlowResolvedClientDisplayName(
+            lynavoResolvedClientDisplayName(
                 storedName: "iPhone 821E",
                 legacyName: nil,
                 rawName: "iPhone 12",
@@ -53,7 +53,7 @@ struct ClientDisplayNameResolverTests {
         ) && passed
 
         passed = assertEqual(
-            syncFlowResolvedClientDisplayName(
+            lynavoResolvedClientDisplayName(
                 storedName: "iPhone 821E",
                 legacyName: nil,
                 rawName: "iPhone 12",
@@ -65,7 +65,7 @@ struct ClientDisplayNameResolverTests {
         ) && passed
 
         passed = assertEqual(
-            syncFlowResolvedClientDisplayName(
+            lynavoResolvedClientDisplayName(
                 storedName: "Alice Phone",
                 legacyName: nil,
                 rawName: "iPhone 12",

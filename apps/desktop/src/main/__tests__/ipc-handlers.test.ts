@@ -113,7 +113,7 @@ const electronMockState = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: {
     getName: () => 'Lynavo Drive',
-    getPath: () => '/tmp/vivi-drop-test',
+    getPath: () => '/tmp/lynavo-drive-test',
     getVersion: () => '0.1.0',
   },
   BrowserWindow: Object.assign(electronMockState.BrowserWindow, {

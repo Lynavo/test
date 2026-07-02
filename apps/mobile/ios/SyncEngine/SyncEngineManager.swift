@@ -6,14 +6,14 @@ import Network
 import Darwin
 import SSZipArchive
 
-private let syncFlowTruthyValues: Set<String> = ["1", "true", "yes", "on"]
+private let lynavoTruthyValues: Set<String> = ["1", "true", "yes", "on"]
 
-func syncFlowBoolSetting(envKey: String, userDefaultsKey: String, defaultValue: Bool = false) -> Bool {
+func lynavoBoolSetting(envKey: String, userDefaultsKey: String, defaultValue: Bool = false) -> Bool {
     #if DEBUG
     if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
        !raw.isEmpty
     {
-        return syncFlowTruthyValues.contains(raw.lowercased())
+        return lynavoTruthyValues.contains(raw.lowercased())
     }
 
     if let raw = UserDefaults.standard.object(forKey: userDefaultsKey) {
@@ -23,7 +23,7 @@ func syncFlowBoolSetting(envKey: String, userDefaultsKey: String, defaultValue: 
         case let value as NSNumber:
             return value.boolValue
         case let value as String:
-            return syncFlowTruthyValues.contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            return lynavoTruthyValues.contains(value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
         default:
             break
         }
@@ -35,7 +35,7 @@ func syncFlowBoolSetting(envKey: String, userDefaultsKey: String, defaultValue: 
     #endif
 }
 
-func syncFlowIntSetting(envKey: String, userDefaultsKey: String) -> Int? {
+func lynavoIntSetting(envKey: String, userDefaultsKey: String) -> Int? {
     #if DEBUG
     if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
        !raw.isEmpty,
@@ -63,7 +63,7 @@ func syncFlowIntSetting(envKey: String, userDefaultsKey: String) -> Int? {
     #endif
 }
 
-func syncFlowStringSetting(envKey: String, userDefaultsKey: String) -> String? {
+func lynavoStringSetting(envKey: String, userDefaultsKey: String) -> String? {
     #if DEBUG
     if let raw = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
        !raw.isEmpty
@@ -87,7 +87,7 @@ func syncFlowStringSetting(envKey: String, userDefaultsKey: String) -> String? {
     #endif
 }
 
-private func syncFlowPreferredClientIPv4() -> String? {
+private func lynavoPreferredClientIPv4() -> String? {
     var addressList: UnsafeMutablePointer<ifaddrs>?
     guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
         return nil
@@ -138,7 +138,7 @@ private func syncFlowPreferredClientIPv4() -> String? {
     return fallback
 }
 
-private func syncFlowIsPrivateLANIPv4(_ host: String) -> Bool {
+private func lynavoIsPrivateLANIPv4(_ host: String) -> Bool {
     SharedFilesRoutePolicy.isPrivateLANIPv4(host)
 }
 
@@ -2286,13 +2286,13 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func currentClientIPv4() -> String? {
-        return syncFlowPreferredClientIPv4()
+        return lynavoPreferredClientIPv4()
     }
 
     private func defaultClientDisplayName() -> String {
         let rawName = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = UIDevice.current.model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return syncFlowResolvedDefaultClientDisplayName(
+        return lynavoResolvedDefaultClientDisplayName(
             rawName: rawName,
             model: model
         )
@@ -2634,33 +2634,33 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func resolvedUploadTuning(targetDeviceType targetDeviceTypeOverride: String? = nil) -> UploadTuning {
-        let perfLoggingEnabled = syncFlowBoolSetting(
+        let perfLoggingEnabled = lynavoBoolSetting(
             envKey: "LYNAVO_UPLOAD_PERF_LOG",
             userDefaultsKey: "LynavoDriveUploadPerfLog"
         )
         let chunkMB = min(
-            max(syncFlowIntSetting(
+            max(lynavoIntSetting(
                 envKey: "LYNAVO_UPLOAD_CHUNK_MB",
                 userDefaultsKey: "LynavoDriveUploadChunkMB"
             ) ?? 8, 1),
             48
         )
         let windowMB = min(
-            max(syncFlowIntSetting(
+            max(lynavoIntSetting(
                 envKey: "LYNAVO_UPLOAD_WINDOW_MB",
                 userDefaultsKey: "LynavoDriveUploadWindowMB"
             ) ?? 32, chunkMB),
             256
         )
         let maxPipelineChunks = min(
-            max(syncFlowIntSetting(
+            max(lynavoIntSetting(
                 envKey: "LYNAVO_UPLOAD_PIPELINE_CHUNKS",
                 userDefaultsKey: "LynavoDriveUploadPipelineChunks"
             ) ?? 8, 1),
             32
         )
         let ackTimeoutSec = min(
-            max(syncFlowIntSetting(
+            max(lynavoIntSetting(
                 envKey: "LYNAVO_UPLOAD_ACK_TIMEOUT_SEC",
                 userDefaultsKey: "LynavoDriveUploadAckTimeoutSec"
             ) ?? 8, 2),
@@ -2777,7 +2777,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func perfLog(_ message: String) {
-        guard syncFlowBoolSetting(
+        guard lynavoBoolSetting(
             envKey: "LYNAVO_UPLOAD_PERF_LOG",
             userDefaultsKey: "LynavoDriveUploadPerfLog"
         ) else {
@@ -2787,14 +2787,14 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     }
 
     private func resolvedForcedSidecarTarget() -> (host: String, port: UInt16)? {
-        guard let host = syncFlowStringSetting(
+        guard let host = lynavoStringSetting(
             envKey: "LYNAVO_UPLOAD_FORCE_HOST",
             userDefaultsKey: "LynavoDriveUploadForceHost"
         ) else {
             return nil
         }
 
-        let portValue = syncFlowIntSetting(
+        let portValue = lynavoIntSetting(
             envKey: "LYNAVO_UPLOAD_FORCE_PORT",
             userDefaultsKey: "LynavoDriveUploadForcePort"
         ) ?? 39393
@@ -2881,7 +2881,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
     private func maxUploadReconnectAttempts() -> Int {
         min(
             max(
-                syncFlowIntSetting(
+                lynavoIntSetting(
                     envKey: "LYNAVO_UPLOAD_MAX_RECONNECT_ATTEMPTS",
                     userDefaultsKey: "LynavoDriveUploadMaxReconnectAttempts"
                 ) ?? 3,
@@ -4998,7 +4998,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             if let device = boundDevice {
                 let resolvedHost = preferredSidecarHost(probedHost: device.ip, device: device)
                 if let resolvedHost, !resolvedHost.isEmpty {
-                    if syncFlowIsPrivateLANIPv4(resolvedHost) {
+                    if lynavoIsPrivateLANIPv4(resolvedHost) {
                         boundDeviceHasUsablePresenceHost = true
                         if uploadStore?.getBinding()?.deviceId == binding.deviceId {
                             if sidecarHost != resolvedHost {
@@ -5749,7 +5749,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
                 }
                 return bindingService.getPairingToken() != nil
             }(),
-            "preferredIPv4": syncFlowPreferredClientIPv4() ?? NSNull(),
+            "preferredIPv4": lynavoPreferredClientIPv4() ?? NSNull(),
         ]
 
         let diagnostics: [String: Any] = [
@@ -6255,8 +6255,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !stored.isEmpty
         {
-            if syncFlowGenericClientName(stored, model: model) ||
-                syncFlowLegacyGeneratedClientName(stored, model: model, clientId: clientId)
+            if lynavoGenericClientName(stored, model: model) ||
+                lynavoLegacyGeneratedClientName(stored, model: model, clientId: clientId)
             {
                 bindingService.clearClientDisplayName()
                 clearedPersistedName = true
@@ -6270,8 +6270,8 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !legacy.isEmpty
         {
-            if !syncFlowGenericClientName(legacy, model: model),
-               !syncFlowLegacyGeneratedClientName(legacy, model: model, clientId: clientId)
+            if !lynavoGenericClientName(legacy, model: model),
+               !lynavoLegacyGeneratedClientName(legacy, model: model, clientId: clientId)
             {
                 bindingService.saveClientDisplayName(legacy)
                 defaults.removeObject(forKey: Self.legacyClientNameKey)
@@ -6284,7 +6284,7 @@ class SyncEngineManager: NSObject, DiscoveryServiceDelegate, PhotoScannerDelegat
         }
 
         defaults.removeObject(forKey: Self.legacyClientNameKey)
-        let resolved = syncFlowResolvedDefaultClientDisplayName(rawName: rawName, model: model)
+        let resolved = lynavoResolvedDefaultClientDisplayName(rawName: rawName, model: model)
         if clearedPersistedName {
             pushClientMetadataUpdateIfPossible()
         }

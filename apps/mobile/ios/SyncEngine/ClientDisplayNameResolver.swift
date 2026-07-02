@@ -1,6 +1,6 @@
 import Foundation
 
-func syncFlowGenericClientName(_ rawName: String, model: String) -> Bool {
+func lynavoGenericClientName(_ rawName: String, model: String) -> Bool {
     let normalized = rawName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     if normalized.isEmpty {
         return true
@@ -15,7 +15,7 @@ func syncFlowGenericClientName(_ rawName: String, model: String) -> Bool {
     return genericNames.contains(normalized)
 }
 
-func syncFlowLegacyGeneratedClientName(_ rawName: String, model: String, clientId: String?) -> Bool {
+func lynavoLegacyGeneratedClientName(_ rawName: String, model: String, clientId: String?) -> Bool {
     let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty, !trimmedModel.isEmpty else {
@@ -33,9 +33,9 @@ func syncFlowLegacyGeneratedClientName(_ rawName: String, model: String, clientI
     return trimmedName == "\(trimmedModel) \(suffix)"
 }
 
-func syncFlowResolvedDefaultClientDisplayName(rawName: String, model: String) -> String {
+func lynavoResolvedDefaultClientDisplayName(rawName: String, model: String) -> String {
     let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard syncFlowGenericClientName(trimmedName, model: model) else {
+    guard lynavoGenericClientName(trimmedName, model: model) else {
         return trimmedName
     }
 
@@ -43,27 +43,27 @@ func syncFlowResolvedDefaultClientDisplayName(rawName: String, model: String) ->
     return trimmedModel.isEmpty ? trimmedName : trimmedModel
 }
 
-func syncFlowResolvedClientDisplayName(
+func lynavoResolvedClientDisplayName(
     storedName: String?,
     legacyName: String?,
     rawName: String,
     model: String,
     clientId: String?
 ) -> String {
-    if let stored = syncFlowResolvedCustomClientDisplayName(storedName, model: model, clientId: clientId) {
+    if let stored = lynavoResolvedCustomClientDisplayName(storedName, model: model, clientId: clientId) {
         return stored
     }
-    if let legacy = syncFlowResolvedCustomClientDisplayName(legacyName, model: model, clientId: clientId) {
+    if let legacy = lynavoResolvedCustomClientDisplayName(legacyName, model: model, clientId: clientId) {
         return legacy
     }
-    return syncFlowResolvedDefaultClientDisplayName(rawName: rawName, model: model)
+    return lynavoResolvedDefaultClientDisplayName(rawName: rawName, model: model)
 }
 
-private func syncFlowResolvedCustomClientDisplayName(_ name: String?, model: String, clientId: String?) -> String? {
+private func lynavoResolvedCustomClientDisplayName(_ name: String?, model: String, clientId: String?) -> String? {
     guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines),
           !trimmed.isEmpty,
-          !syncFlowGenericClientName(trimmed, model: model),
-          !syncFlowLegacyGeneratedClientName(trimmed, model: model, clientId: clientId)
+          !lynavoGenericClientName(trimmed, model: model),
+          !lynavoLegacyGeneratedClientName(trimmed, model: model, clientId: clientId)
     else {
         return nil
     }

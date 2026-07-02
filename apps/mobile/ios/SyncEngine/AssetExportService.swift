@@ -8,7 +8,7 @@ class AssetExportService {
         _ asset: PHAsset,
         onDownloadProgress: ((Double) -> Void)? = nil
     ) async throws -> ExportedFile {
-        let perfLoggingEnabled = syncFlowBoolSetting(
+        let perfLoggingEnabled = lynavoBoolSetting(
             envKey: "LYNAVO_UPLOAD_PERF_LOG",
             userDefaultsKey: "LynavoDriveUploadPerfLog"
         )

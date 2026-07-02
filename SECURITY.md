@@ -8,8 +8,13 @@ private release branches are not part of the OSS support surface.
 ## Reporting a Vulnerability
 
 Do not post exploitable security details in a public issue. Report suspected
-vulnerabilities through the repository owner's private security advisory flow or
-another private channel made available by the maintainers.
+vulnerabilities through GitHub private vulnerability reporting:
+
+<https://github.com/lynavo/lynavo-drive/security/advisories/new>
+
+If GitHub private vulnerability reporting is unavailable, open a public issue
+titled "Security contact request" without exploit details so maintainers can
+provide a private contact path.
 
 Include:
 

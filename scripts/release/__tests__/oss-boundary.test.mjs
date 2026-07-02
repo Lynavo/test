@@ -118,6 +118,44 @@ test('scans release scripts while excluding generated release artifacts', () => 
   }
 });
 
+test('scans GitHub workflows for release update and upload boundary terms', () => {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-boundary-'));
+  try {
+    const desktopUpdateUrlKey = token(['LYNAVO_DESKTOP', '_UPDATE_URL']);
+    const diagnosticsUploadUrlKey = token(['LYNAVO_DIAGNOSTICS', '_UPLOAD_URL']);
+    const workflowDir = join(fixtureRoot, '.github', 'workflows');
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(join(fixtureRoot, 'package.json'), '{"private":true}\n');
+    writeFileSync(
+      join(workflowDir, 'release.yml'),
+      [
+        'name: Release',
+        'jobs:',
+        '  publish:',
+        '    runs-on: macos-latest',
+        '    steps:',
+        `      - run: echo "\${{ secrets.${desktopUpdateUrlKey} }}"`,
+        `      - run: echo "\${{ secrets.${diagnosticsUploadUrlKey} }}"`,
+      ].join('\n'),
+    );
+
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Unallowlisted OSS boundary hits: 2/);
+    assert.match(
+      result.stdout,
+      new RegExp(`\\.github/workflows/release\\.yml:6 ${desktopUpdateUrlKey}`),
+    );
+    assert.match(
+      result.stdout,
+      new RegExp(`\\.github/workflows/release\\.yml:7 ${diagnosticsUploadUrlKey}`),
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('blocks Apple signing metadata in active desktop and iOS build files', () => {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-boundary-'));
   try {
