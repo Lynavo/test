@@ -127,10 +127,13 @@ browsing.
    `pnpm release --profile <review|prod> --targets ios,android,mac,win,linux --dry-run`.
    Allowed legacy/commercial hits should stay limited to negative fixtures,
    scanner definitions, compatibility migrations, and historical docs.
-3. Capture one beta-smoke evidence pass for preserved OSS baseline behavior:
-   guest local LAN pairing/upload, pending-queue recovery, `/personal/*`
-   paired-device HMAC access with bearer-token rejection, local diagnostics
-   export/share/email only, and no support upload/update/reset-state IPC.
+3. Use the captured OSS beta smoke evidence in
+   `docs/testing/global-only-qa.md#2026-07-02-oss-beta-smoke-evidence` as the
+   current automated baseline for guest LAN route behavior, pending-queue
+   recovery, `/personal/*` paired-device HMAC access, local diagnostics export,
+   and removed support upload/update/reset-state runtime entrypoints. Complete
+   the remaining true-device LAN, media permission, interruption/resume and
+   share-sheet checks before beta sign-off.
 4. Keep deferred migrations separate from this commercial cleanup inventory:
    package scope, mDNS service, old data-dir/keychain/shared-preference,
    native package/bundle IDs, and store-listing continuity need dedicated

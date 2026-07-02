@@ -58,6 +58,154 @@ pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
 4. 前景 LAN 同步仍可用。
 5. 回到前景后继续 pending queue 补偿。
 
+## 2026-07-02 OSS Beta Smoke Evidence
+
+执行环境：本机 `/Volumes/workspace/work/sync-flow`，
+`codex/lynavo-global-oss-commercial-plan`，2026-07-02 10:37 CST。
+
+本轮只覆盖自动化和静态边界证据；真实 mDNS、PhotoKit / MediaStore
+权限、真机 TCP 传输字节、断网重连和系统 share sheet 仍按
+`docs/testing/beta-test-matrix.md` 走人工实机 smoke。
+
+已通过的自动化证据：
+
+1. Desktop OSS IPC / diagnostics / settings smoke:
+
+   ```bash
+   pnpm --filter @lynavo-drive/desktop exec vitest run \
+     src/preload/__tests__/index.test.ts \
+     src/main/__tests__/ipc-handlers.test.ts \
+     src/main/__tests__/diagnostics.test.ts \
+     src/renderer/features/settings/__tests__/SettingsPage.test.tsx \
+     src/renderer/features/layout/__tests__/AppShell.test.tsx
+   ```
+
+   结果：5 files / 59 tests passed。覆盖 preload 无 auth/commercial
+   bridge、diagnostics 本地导出、settings 不暴露 update check、support
+   upload/update IPC 负向断言。
+
+2. Sidecar `/personal/*` HMAC / local-network smoke:
+
+   ```bash
+   cd services/sidecar-go
+   go test ./internal/api -run 'TestPersonal(PairedDeviceAccessUsesLocalHMACCredentials|AccessRejectsBearerTokenWithoutPairedDeviceCredentials|AccessAcceptsPairedDeviceHMACCredentials|AccessRejectsReplayedPairedDeviceHMACNonce|AccessRejectsBlockedPairedDeviceHMAC|AccessVerifiesHMACBeforeDeviceStatusDenials)|TestMobileResourcesRejectNonLocalNetwork|TestPresenceRejectsNonLocalNetwork|TestPersonalAccess'
+   ```
+
+   结果：passed。覆盖 paired-device HMAC access、bearer-only rejection、nonce
+   replay / blocked device rejection、non-LAN mobile resource / presence
+   rejection。
+
+3. Sidecar sync / resume smoke:
+
+   ```bash
+   cd services/sidecar-go
+   go test ./internal/server -run '^(TestFullPairingAndFileTransfer|TestResumeAfterDisconnect|TestCompletedSessionStaysCompletedAfterDisconnect|TestPauseTransferWhenDiskFallsBelowThresholdMidFile|TestNewFileWriterSeeksToResumeOffset)$' -count=1
+   ```
+
+   结果：passed。覆盖 `HELLO -> PAIR_REQ -> SYNC_BEGIN -> FILE_* ->
+SYNC_END`、disconnect resume、completed session stability、mid-file pause。
+
+4. Sidecar progress persistence smoke:
+
+   ```bash
+   cd services/sidecar-go
+   go test ./internal/store -run '^(TestUpdateUploadProgress|TestInterruptActiveSession_MarksActiveSessionAndKeepsProgress)$' -count=1
+   ```
+
+   结果：passed。覆盖 upload progress update 和 active session
+   interruption keeps progress。
+
+5. Sidecar Bonjour local LAN metadata smoke:
+
+   ```bash
+   cd services/sidecar-go
+   go test ./cmd/lynavo-drive-sidecar -run '^TestBonjourShareMetadataAdvertisesLocalLANShare$' -count=1
+   ```
+
+   结果：passed。覆盖 advertised share metadata stays local-LAN。
+
+6. Mobile TypeScript:
+
+   ```bash
+   pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
+   ```
+
+   结果：passed。覆盖 mobile TS surface compiles after OSS cleanup。
+
+7. Mobile guest LAN / pending queue / diagnostics smoke:
+
+   ```bash
+   pnpm --filter @lynavo-drive/mobile exec jest --silent --runTestsByPath \
+     src/navigation/__tests__/RootNavigator.local-mode.test.tsx \
+     src/navigation/__tests__/RootNavigator.fail-open.test.tsx \
+     src/stores/__tests__/auth-store-local-mode.test.tsx \
+     src/screens/__tests__/DeviceDiscoveryScreen.pairingOptions.test.tsx \
+     src/screens/__tests__/DeviceDiscoveryScreen.switchMode.test.tsx \
+     src/screens/__tests__/deviceDiscoveryManualPairing.test.ts \
+     src/screens/__tests__/AutoUploadSettingsGlobalScreen.test.tsx \
+     src/services/__tests__/SyncEngineModule.bridgeWrappers.test.ts \
+     src/services/__tests__/SyncEngineModule.autoUploadSession.test.ts \
+     src/services/__tests__/SyncEngineModule.background-service.test.ts \
+     src/screens/__tests__/SyncActivityGlobalScreen.test.tsx \
+     src/utils/__tests__/syncActivityTransferState.test.ts \
+     src/utils/__tests__/shareDiagnosticsArchive.test.ts \
+     src/screens/__tests__/HelpGlobalScreen.test.tsx \
+     src/screens/__tests__/SettingsGlobalScreen.test.tsx \
+     src/config/__tests__/app-config.test.ts \
+     src/services/__tests__/auth-service.review-server.test.ts
+   ```
+
+   结果：17 suites / 127 tests passed。覆盖 guest route fail-open、manual
+   pairing UI/service、pending queue upload session wrappers、background
+   commercial bridge absence、local diagnostics share、review-server URL cleanup。
+
+8. OSS boundary scanner:
+
+   ```bash
+   pnpm verify:oss-boundary
+   ```
+
+   结果：passed，0 unallowlisted hits。覆盖
+   commercial/account/support/update/tunnel/auth boundary stays allowlisted only。
+
+9. Android SyncEngine bridge parity:
+
+   ```bash
+   pnpm verify:android-syncengine-bridge
+   ```
+
+   结果：passed。覆盖 JS/native Android SyncEngine bridge declarations stay in
+   parity。
+
+10. Removed support/update/reset runtime scan:
+
+    ```bash
+    rg -n "resetState|reset-state|settings/reset-state|support:reset-state|support:upload-diagnostics|support:check-for-updates|checkForUpdates|uploadDiagnostics" apps packages services scripts -S
+    ```
+
+    结果：runtime hits: 0；只剩 desktop IPC negative assertions。覆盖无
+    support upload、update check 或 destructive reset-state runtime
+    entrypoint。
+
+Observed command-selection issues:
+
+1. An initial mobile Jest run referenced two stale paths and failed with
+   `ENOENT`; the corrected path set above passed.
+2. A follow-up mobile Jest run briefly used
+   `src/services/__tests__/deviceDiscoveryManualPairing.test.ts`; that file
+   lives under `src/screens/__tests__`. The corrected command above passed.
+
+Remaining manual smoke required before beta sign-off:
+
+1. Real iOS and Android devices discover desktop over LAN mDNS, pair, and upload
+   a real media batch.
+2. Real device transfer interruption resumes without resetting pending queue or
+   sync identity.
+3. Local diagnostics export opens the platform share sheet / mail path without
+   support upload network calls.
+4. Desktop installer smoke on the target OS set confirms sidecar ports, Bonjour
+   / local discovery, and received library behavior.
+
 ## Deferred Migration Checks
 
 本轮不要求迁移这些名称或路径，但 QA 记录里要明确它们是兼容项：
