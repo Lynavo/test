@@ -44,4 +44,4 @@ Community build 不提供这些替代路径：
 2. mDNS service type 和 sidecar health service rename。
 3. 旧 data-dir、keychain、shared-preference migration。
 4. iOS bundle id、Android application id、native package namespace rename。
-5. App Store / Play 既有 listing continuity 决策。
+5. 既有移动端公开分发记录 continuity 决策。

@@ -31,10 +31,10 @@ pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
 
 1. 只出现 `review` / `prod` release channel。
 2. dry-run 输出只设置 `LYNAVO_RELEASE_CHANNEL`、中性的 `ELECTRON_BUILDER_CONFIG=electron-builder.yml` 和打包命令。
-3. dry-run 输出不要求或展示 API base、support upload endpoint、update check endpoint 或历史 market。
+3. dry-run 输出不要求或展示 API base、远端诊断提交端点、桌面自动更新端点或历史 market。
 4. `prod` 不复用 `review` channel。
 5. GitHub Actions `OSS Release Gate` 只执行 `pnpm gate:release`，不执行
-   native build、desktop package、TestFlight upload 或 Android Gradle package。
+   native build、desktop package 或 Android Gradle package。
 
 ## Guest Local LAN
 
@@ -99,8 +99,8 @@ pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
    ```
 
    结果：5 files / 59 tests passed。覆盖 preload 无 auth/commercial
-   bridge、diagnostics 本地导出、settings 不暴露 update check、support
-   upload/update IPC 负向断言。
+   bridge、diagnostics 本地导出、settings 不暴露桌面自动更新或远端诊断提交
+   IPC 负向断言。
 
 2. Sidecar `/personal/*` HMAC / local-network smoke:
 
@@ -195,14 +195,14 @@ SYNC_END`、disconnect resume、completed session stability、mid-file pause。
    结果：passed。覆盖 JS/native Android SyncEngine bridge declarations stay in
    parity。
 
-10. Removed support/update/reset runtime scan:
+10. Removed network-support/update/reset runtime scan:
 
     ```bash
     rg -n "resetState|reset-state|settings/reset-state|support:reset-state|support:upload-diagnostics|support:check-for-updates|checkForUpdates|uploadDiagnostics" apps packages services scripts -S
     ```
 
     结果：runtime hits: 0；只剩 desktop IPC negative assertions。覆盖无
-    support upload、update check 或 destructive reset-state runtime
+    远端诊断提交、桌面自动更新或 destructive reset-state runtime
     entrypoint。
 
 Observed command-selection issues:
@@ -220,7 +220,7 @@ Remaining manual smoke required before beta sign-off:
 2. Real device transfer interruption resumes without resetting pending queue or
    sync identity.
 3. Local diagnostics export opens the platform share sheet / mail path without
-   support upload network calls.
+   built-in network submission calls.
 4. Desktop installer smoke on the target OS set confirms sidecar ports, Bonjour
    / local discovery, and received library behavior.
 
