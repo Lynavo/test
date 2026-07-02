@@ -109,7 +109,8 @@ Get-Service -Name "Bonjour Service"
 dns-sd.exe -B _lynavodrive._tcp local.
 ```
 
-如果 `dns-sd.exe` 不在 `PATH`，改用 Bonjour 安装目录或桌面端 `resources` 目录里的实际路径。
+如果 `dns-sd.exe` 不在 `PATH`，改用用户本机 Bonjour 安装目录，或通过
+`LYNAVO_BONJOUR_DIR` 指向本机允许来源。
 
 ## 4. 常见残留问题
 
@@ -272,7 +273,7 @@ desktop 诊断包足够回答这些问题：
 每次发布前，至少确认：
 
 1. 本机没有残留源码 sidecar
-2. 只测试本轮目标平台的最新安装包（macOS DMG / Windows NSIS）
+2. 只测试本轮目标平台的本地包（macOS DMG / Windows NSIS）
 3. 端口监听、Bonjour、HTTP API 都正常
 4. macOS：DMG 可挂载，内嵌 `lynavo-drive-sidecar` 可执行
-5. Windows：安装器已写入防火墙规则，Bonjour 运行时路径或 fallback 模式都已验证
+5. Windows：安装器已写入防火墙规则，Bonjour 本机路径或 fallback 模式都已验证

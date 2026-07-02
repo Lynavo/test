@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows / Linux）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS / Android 平台原生同步能力。当前开源基线为 global-only，不再维护 CN / Global 双市场产品路径。
+Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows）局域网素材无感增量同步工具。Monorepo 当前包含 Electron 桌面应用、Go sidecar、React Native 移动端，以及 iOS / Android 平台原生同步能力。当前开源基线只维护单一 OSS 本地构建路径，不包含多市场产品路径。Linux 仅保留本地 source-build / package verification 路径，不是当前用户支持范围。
 
 ## 当前开发依据
 
@@ -11,7 +11,7 @@ Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows / Linux
 1. **当前已提交代码**：实际行为以仓库中的现有实现为准
 2. **`@lynavo-drive/contracts`**：共享 DTO、常量、事件名、端口定义的唯一来源
 3. **架构 / 运维 / 发布文档**：用于解释当前实现，而不是覆盖代码
-4. **`docs/testing/beta-test-matrix.md`**：当前内测验证范围、回归场景和发布门槛
+4. **`docs/testing/oss-verification-matrix.md`**：长期 OSS 验证矩阵、回归场景和发布门槛
 
 历史文档如果后续恢复，只能作为背景参考；在新的 source of truth 明确之前，不要再假定某个已删除 spec 文件仍然有效。
 
@@ -30,10 +30,8 @@ Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows / Linux
 
 - mobile 诊断包：[docs/operations/mobile-diagnostics.md](./docs/operations/mobile-diagnostics.md)
 - sidecar 运维：[docs/operations/sidecar-runbook.md](./docs/operations/sidecar-runbook.md)
-- 环境和密钥：[docs/operations/environment-and-secrets.md](./docs/operations/environment-and-secrets.md)
 - 产品边界：[docs/product/constraints.md](./docs/product/constraints.md)
-- iOS 构建验证：[docs/release/ios-build.md](./docs/release/ios-build.md)
-- macOS 桌面构建验证：[docs/release/macos-desktop-build.md](./docs/release/macos-desktop-build.md)
+- 构建 / 打包验证：[docs/release/release-playbook.md](./docs/release/release-playbook.md)
 
 ## 多 Agent 派发优先规则
 
@@ -45,17 +43,17 @@ Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows / Linux
 
 ## 关键架构约束
 
-- **Desktop 当前覆盖 macOS / Windows**；平台差异（如共享检测、打包）按当前代码和对应文档处理；开源仓库不提供官方签名 / 上传路径
+- **Desktop 当前覆盖 macOS / Windows**；平台差异（如共享检测、打包）按当前代码和对应文档处理；开源仓库只提供本地源码构建 / 打包验证路径
+- **开源源码包不分发 Apple Bonjour for Windows 二进制**；Windows native Bonjour 只能依赖用户本机安装或本机允许来源配置，缺失时走 zeroconf-compatible fallback
 - **队列绝对只读**：不允许用户在 UI 删除、调序、跳过队列项
 - **全自动增量同步**：不允许手动勾选文件
 - **无手动文件选择替代路径**：不得新增手动挑选文件来绕过 mobile 本地扫描和 pending 队列
 - **单文件串行上传**：同一台手机同一时间只传 1 个文件
 - **guest local LAN mode**：未登录 / 未订阅用户在前景 LAN 场景仍可发现、配对和自动同步
-- **商业能力 fail-closed**：后台静默续传、远程访问、tunnel credentials 必须有官方 capability 和有效 entitlement；缺失、过期或无法确认时关闭
+- **非 OSS 远程 / 后台能力 fail-closed**：后台静默续传、远程访问、tunnel credentials 必须有官方 capability 和有效 entitlement；缺失、过期或无法确认时关闭
 - **所有 DTO 类型从 `@lynavo-drive/contracts` 导入**，不允许在 desktop/mobile 中重新定义
-- **`tmp/ui-demo/` 只做视觉参考**，不允许直接复制代码。实现以当前代码、`@lynavo-drive/contracts` 和测试矩阵为准。
 - **Renderer 不直接访问** sidecar、文件系统、SQLite —— 全部走 preload bridge
-- **Build 只能在本机进行，绝对不能在远端服务器上进行**。所有的代码构建、二进制编译、镜像打包必须在本地机完成，然后通过文件传输同步至远端服务器部署，以避免远端编译环境污染与资源争抢。
+- **Build 只能在本机进行**。所有代码构建、二进制编译和镜像打包必须在本地机完成，不依赖远程编译 / 打包环境。
 
 补充解释：
 
@@ -63,7 +61,7 @@ Lynavo Drive：移动端（iOS / Android）→ Desktop（macOS / Windows / Linux
 - 历史“属于哪一天”以 **sidecar / desktop 完成日** 为准
 - 真实上传集合必须来自 **mobile 本地 pending 队列**，不能只拿本轮新扫描素材
 - iCloud 素材在扫描阶段照常入队，导出阶段才会触发云端下载
-- 前景 LAN 同步 fail-open，不因登录态、订阅态或商业模块缺失而阻断
+- 前景 LAN 同步 fail-open，不因登录态、订阅态或非 OSS 模块缺失而阻断
 - 远程 / 后台能力 fail-closed，不允许用本地默认值把付费能力误开
 - mDNS service、旧 data-dir、native package / bundle id、包 scope rename 是后续迁移边界；除非任务明确要求，不要在文档任务中执行迁移
 
@@ -146,7 +144,7 @@ pnpm format:check      # 格式检查
 
 - **Monorepo / Desktop / Sidecar / Mobile SyncEngine**：都已落地，不再是 greenfield 阶段
 - **当前重点**：异常恢复、连接状态提示、OSS 边界收口和本地构建 / 打包验证
-- **回归基线**：以 `go test ./...`、`pnpm --filter @lynavo-drive/mobile exec tsc --noEmit`、iOS 构建、Android Debug/Release 构建和 `docs/testing/beta-test-matrix.md` 为准
+- **回归基线**：以 `go test ./...`、`pnpm --filter @lynavo-drive/mobile exec tsc --noEmit`、iOS 构建、Android Debug/Release 构建和 `docs/testing/oss-verification-matrix.md` 为准
 - **交接基线**：新同事优先依赖 `docs/architecture/*`、`docs/operations/*`、`docs/release/release-playbook.md`
 
 ## 排障与构建验证入口
@@ -160,8 +158,6 @@ pnpm format:check      # 格式检查
 构建 / 打包验证优先看：
 
 1. [docs/release/release-playbook.md](./docs/release/release-playbook.md)
-2. [docs/release/ios-build.md](./docs/release/ios-build.md)
-3. [docs/release/macos-desktop-build.md](./docs/release/macos-desktop-build.md)
 
 Windows 桌面包当前跟随 `docs/release/release-playbook.md` 中的 Windows 小节，以及根目录脚本 `pnpm package:desktop:win`。
 
@@ -170,10 +166,10 @@ Windows 桌面包当前跟随 `docs/release/release-playbook.md` 中的 Windows 
 AI 或人工执行 OSS 构建验证时，优先使用根目录单一入口查看或执行本机构建路径：
 
 ```bash
-pnpm release --profile <review|prod> --targets ios,android,mac,win,linux
+pnpm release --profile review --targets ios,android,mac,win,linux
 ```
 
-禁止用手动拼接历史 market 或 API base URL 环境变量来替代 release profile。OSS 仓库只维护本机构建和打包验证路径。如果只是确认将执行什么，使用 `--dry-run`。
+禁止用手动拼接市场或 API base URL 环境变量来替代 release profile。其他本地 profile 也必须只解析到本机构建 / 打包命令。如果只是确认将执行什么，使用 `--dry-run`。
 
 ## Sidecar HTTP API 端口
 

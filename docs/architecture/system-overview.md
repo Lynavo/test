@@ -8,13 +8,14 @@ Lynavo Drive 目前的目標非常聚焦：
 
 1. mobile 端自動或半自動綁定一台 desktop
 2. 在區域網內把相簿素材無感增量同步到 desktop
-3. 在中斷、重連、背景、鎖定螢幕等場景下盡可能自動恢復
+3. 在前景 LAN 中斷、重連、回到前景和平台允許的短時恢復場景下盡可能自動恢復
 4. 在 desktop 端提供佇列、歷史、儲存、診斷和發佈驗證能力
 
 目前範圍明確限制為：
 
 - 支援 `iOS / Android -> Desktop` 同步鏈路
 - 僅支援區域網傳輸
+- OSS baseline 不承諾遠端訪問或背景靜默續傳
 - 不支援使用者在 UI 手動挑選、刪除、跳過或重排佇列
 - 同一台手機同一時間只傳 1 個檔案
 
@@ -151,7 +152,7 @@ Lynavo Drive 目前的目標非常聚焦：
 
 1. 目前已提交程式碼
 2. `@lynavo-drive/contracts`
-3. `docs/testing/beta-test-matrix.md`
+3. `docs/testing/oss-verification-matrix.md` 的 OSS 驗證矩陣
 
 不應再依賴已刪除的歷史 spec 檔案。
 

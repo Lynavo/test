@@ -13,7 +13,17 @@ mobile 端诊断包导出为一个 zip 文件，命名类似：
 - app 设置页
 - `支持与诊断 -> 导出诊断包`
 
-导出后走系统分享面板，方便直接发给开发或测试负责人。
+导出后走系统分享面板。使用者自行决定是否分享给维护者；公开 issue
+中不要直接上传未脱敏诊断包。
+
+隐私原则：
+
+1. 诊断包是本地文件，不会由 OSS runtime 自动上传到远端服务。
+2. 分享前应检查并按需脱敏本机路径、设备名、IP 地址、文件名和错误上下文。
+3. `lynavo-drive.db` / `*-wal` / `*-shm` 属于高敏感材料；只有在使用者明确
+   opt in，且排障确实需要数据库快照时才应包含或分享。
+4. 如果只需要普通排查，优先分享 `diagnostics.json`、`queue.json` 和
+   `engine.log` 的脱敏片段。
 
 ## 2. 当前包含的文件
 
@@ -99,7 +109,8 @@ mobile 本地 SQLite 快照。
 - `lynavo-drive.db-wal`
 - `lynavo-drive.db-shm`
 
-这是最有价值的排障材料之一，不建议为控体积过早删掉。
+数据库快照可能包含本地队列、路径、文件名、设备标识和历史记录。它只应在
+使用者明确 opt in 时包含或分享；公开 issue 中不要上传完整数据库。
 
 ## 3. 当前关键字段解释
 
@@ -123,7 +134,7 @@ Wake-on-LAN 判讀口徑：
 1. `wake.supported=true` 且有可用 targets，代表 mobile 曾在 desktop 清醒時收到可快取的 LAN wake metadata
 2. `wakeSupported=false` 或 `wakeTargetCount=0`，代表目前沒有可用 wake metadata；此時打開 `我的電腦` 或按 `重新連接` 仍應回到既有離線/重連流程
 3. metadata 可能因桌面換網路、DHCP 變更、換網卡或路由器變更而過期；不要只看欄位存在就判定喚醒一定會成功
-4. 這個 metadata 只代表 same-LAN WoL 能力；公網喚醒仍需要 router Wake-on-WAN / router helper，VPN 只作 fallback
+4. 這個 metadata 只代表 same-LAN WoL 能力；OSS build 不提供 public Wake-on-WAN、router helper 或 relay wake，VPN 只作 fallback
 
 ### 3.2 `runtime.syncOverview`
 
@@ -200,8 +211,6 @@ Wake-on-LAN 判讀口徑：
 
 - `wake skipped reason=<reason> metadata_missing_or_unusable`：使用者打開 `我的電腦` 或按 `重新連接`，但 bound desktop 沒有已快取的 wake targets，或 targets 被判定不可用
 - `wake packets sent packets=<n>`：mobile 已對 directed / limited broadcast 目的地送出 `<n>` 個 magic packets
-- `wake packets sent via peer proxy to host=<peer>`：peer proxy follow-up 實作完成後，mobile 已請另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop 代送 magic packet；目前若沒有 multi-desktop peer source，應只看到 skipped reason
-- `peer proxy skipped reason=<reason>`：沒有合格的 authenticated awake Lynavo Drive Desktop peer、目前 build 沒有 multi-desktop binding 來源，或使用者未明確設定 third-party helper / webhook / router API
 - `wake packets sent`：舊版或摘要型日誌，代表 mobile 已送出 magic packet
 - `wake LAN reachable host=<ip>` / `wake recovered LAN host`：wake polling 期間，`/health` 已從該 LAN host 恢復可達
 - `wake polling exhausted` / `wake probe timed out`：送出 wake packet 後，限定 polling 時間內仍未觀察到 sidecar 恢復
@@ -213,10 +222,9 @@ Wake-on-LAN 判讀口徑：
 行為邊界：
 
 1. app 啟動、回前景、單純顯示離線，不應出現 `wake packets sent`
-2. `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN，也不會自動嘗試 router public wake
-3. peer proxy 僅限另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop；未安裝 Lynavo Drive Desktop 的 router-connected device 不可自動當 peer proxy
-4. NAS、OpenWrt、Home Assistant、router 或其他常在線設備若未安裝 Lynavo Drive Desktop，只能透過使用者明確設定並完成驗證的 third-party helper / webhook / router API 參與喚醒
-5. 手機在外部網路且沒有 router wake/helper、configured public wake target、eligible peer proxy、explicit helper 或 VPN fallback 時，喚醒失敗屬於能力邊界，不應視為 upload queue 或 sync state machine 錯誤
+2. `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN
+3. OSS build 不提供 router helper、third-party wake helper、public relay wake 或 peer proxy wake
+4. 手機在外部網路且沒有 VPN-LAN fallback 時，喚醒失敗屬於能力邊界，不應視為 upload queue 或 sync state machine 錯誤
 
 ## 4. 当前大小控制
 
@@ -232,7 +240,8 @@ Wake-on-LAN 判讀口徑：
 1. `queue.json`
 2. `lynavo-drive.db`
 
-目前策略是优先保留数据库完整性，方便排障。
+如果导出的包内包含数据库快照，排障时应优先保护数据库完整性；如果准备公开
+分享，则优先删除数据库或只提供脱敏后的关键字段。
 
 ## 5. 适合排查的问题
 
@@ -257,16 +266,16 @@ Wake-on-LAN 判讀口徑：
 
 ## 7. 推荐联动材料
 
-远程排查时，优先同时收：
+排查时，优先同时准备：
 
 1. mobile 诊断包
 2. desktop 诊断包
 3. 当时的版本号
 4. 简短复现描述
 
-只收单边材料时，优先级是：
+只提供单边材料时，优先级是：
 
 1. `diagnostics.json`
 2. `queue.json`
 3. `engine.log`
-4. `lynavo-drive.db`
+4. `lynavo-drive.db`（仅在使用者明确 opt in 时）

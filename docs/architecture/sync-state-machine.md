@@ -109,12 +109,11 @@
 - `uploading`
 - `completed`
 - `failed`
-- `skipped`
 
 關鍵說明：
 
 1. `cloud_downloading` 只在 iCloud 素材匯出階段出現
-2. `completed / failed / skipped` 的檔案不會繼續留在唯讀 pending 佇列裡
+2. `completed / failed` 的檔案不會繼續留在唯讀 pending 佇列裡
 3. desktop 不直接消費這套原生狀態；desktop 只看 sidecar 聚合後的上傳紀錄
 
 ## 7. 標準同步輪次

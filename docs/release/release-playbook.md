@@ -14,11 +14,36 @@ pnpm gate:release
 The gate checks:
 
 1. version manifest consistency
-2. OSS source-package boundaries
-3. commercial/account/remote-access boundary allowlist
+2. OSS source-package boundaries for tracked and non-ignored untracked worktree files
+3. account, remote-access, and background-capability OSS boundary allowlist
 4. legacy-name allowlist
 5. release/dev script tests
-6. `review` and `prod` release profile dry-runs
+6. release profile dry-runs
+
+## Local Prerequisites
+
+1. Node.js >= 22.12.0
+2. pnpm >= 10
+3. Go >= 1.25.6
+4. Xcode + CocoaPods for iOS builds on macOS
+5. Android Studio + Android SDK / NDK for Android builds
+
+Install dependencies and build shared packages:
+
+```bash
+pnpm install
+pnpm build
+```
+
+Never commit `.env` files, API/private keys, certificate exports, keystores,
+diagnostic archives, local databases, logs, or generated release artifacts.
+
+## Repository Hygiene
+
+Public changes should be reviewable from source without local secrets,
+proprietary binaries, diagnostic archives, local databases, or generated build
+outputs. If a contributor accidentally adds sensitive material, remove it from
+the change before review and notify the maintainers through a private channel.
 
 ## Local Native Builds
 
@@ -40,11 +65,15 @@ Use dry-run first:
 
 ```bash
 pnpm release --profile review --targets ios,android,mac,win,linux --dry-run
-pnpm release --profile prod --targets ios,android,mac,win,linux --dry-run
 ```
 
-Profiles only set `LYNAVO_RELEASE_CHANNEL` and the neutral Electron builder
-config.
+Release profiles are build-channel selectors for local verification only:
+
+1. `review` sets `LYNAVO_RELEASE_CHANNEL=review`.
+2. Other configured local profiles follow the same source-build-only rules.
+3. Profiles do not inject support, update, diagnostics, auth, entitlement,
+   signing, upload, or historical market environment variables.
+4. Profiles resolve to local build/package commands only.
 
 Target commands:
 
@@ -53,6 +82,14 @@ Target commands:
 - `mac`: `pnpm package:desktop`
 - `win`: `pnpm --filter @lynavo-drive/desktop package:win`
 - `linux`: `pnpm --filter @lynavo-drive/desktop package:linux`
+
+Target rules:
+
+1. `ios` is a generic Release build with `CODE_SIGNING_ALLOWED=NO`.
+2. `android` is a Gradle `assembleRelease bundleRelease` source build.
+3. `mac` is a local macOS DMG package.
+4. `win` is a local Windows NSIS/ZIP package.
+5. `linux` is a local `.deb` package and must run on Linux hosts.
 
 ## Desktop Packages
 
@@ -66,6 +103,19 @@ Expected local artifacts:
 
 - `apps/desktop/release/LynavoDrive-<version>-arm64.dmg`
 - `apps/desktop/release/LynavoDrive-<version>-x64.dmg`
+- `apps/desktop/release/mac*/Lynavo Drive.app`
+
+Minimum local checks:
+
+```bash
+hdiutil verify apps/desktop/release/LynavoDrive-<version>-arm64.dmg
+hdiutil verify apps/desktop/release/LynavoDrive-<version>-x64.dmg
+file apps/desktop/release/mac*/Lynavo\ Drive.app/Contents/Resources/lynavo-drive-sidecar
+```
+
+The exact local code-signing behavior depends on Electron builder, host
+configuration, and platform toolchains. OSS verification only checks that the
+local package is produced and contains the expected runtime files.
 
 Windows:
 
@@ -86,6 +136,17 @@ Minimum local checks:
    `Lynavo Drive Sidecar HTTP`, and `Lynavo Drive mDNS UDP` firewall rules
    for ports `39393/TCP`, `39394/TCP`, and `5353/UDP`.
 
+The OSS source package does not redistribute Apple Bonjour runtime binaries.
+Windows builds may include `dns-sd.exe` and `dnssd.dll` only when those files are
+available from the user's local Bonjour installation or another locally
+permitted source configured through `apps/desktop/resources-vendor/bonjour/` or
+`LYNAVO_BONJOUR_DIR`. Without those files, the sidecar uses its built-in
+zeroconf-compatible broadcaster.
+
+Do not commit Apple Bonjour binaries to the source repository. If an official
+Windows package later bundles them, first confirm redistribution rights, record
+the source URL, version, and hashes, and add the required third-party notice.
+
 Linux must run on a Linux host:
 
 ```bash
@@ -99,15 +160,27 @@ Expected local artifacts:
 
 ## Android Release Variant
 
-The Android release variant is kept as an unsigned source-build target. It does
-not define release keystore inputs or shared signing material.
+The Android release variant is kept as a source-build target. It does not define
+repository-owned keystore inputs or shared signing material.
+
+## Debug Flags
+
+Sidecar:
+
+- `LYNAVO_UPLOAD_PERF_LOG=1`
+
+Mobile debug-only behaviors include upload parameter overrides, force host /
+force port, perf logging, and manual stress switches. They must remain
+debug-only and must not become product paths.
 
 ## Source Package Rehearsal
 
-A real source package rehearsal should use a tracked-source archive, extract it
-outside the repository, install dependencies, and run the release gate:
+A real source package rehearsal should run after the cleanup commits are in the
+Git tree. First audit `HEAD`, then archive that same tree, extract it outside
+the repository, install dependencies, and run the release gate:
 
 ```bash
+pnpm verify:oss-source-package:head
 git archive --format=tar --output /tmp/lynavo-drive-oss-source.tar HEAD
 mkdir -p /tmp/lynavo-drive-oss-source
 tar -xf /tmp/lynavo-drive-oss-source.tar -C /tmp/lynavo-drive-oss-source
@@ -115,3 +188,12 @@ cd /tmp/lynavo-drive-oss-source
 pnpm install --frozen-lockfile
 pnpm gate:release
 ```
+
+`scripts/verify-oss-source-package.mjs` uses `git ls-files` in a normal clone
+and automatically falls back to a filesystem walk when the extracted rehearsal
+directory has no `.git` metadata. The fallback ignores `node_modules` so the
+gate can run after dependency installation.
+
+Do not use `git archive HEAD` as evidence for uncommitted cleanup work. If a
+file was deleted locally but the deletion has not been committed, it still
+exists in `HEAD` and will be included in that archive.

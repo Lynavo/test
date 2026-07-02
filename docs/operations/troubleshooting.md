@@ -7,7 +7,7 @@
 遇到問題時，先判斷問題屬於哪一層：
 
 1. **desktop / sidecar 層**
-   - 桌面端沒監聽、沒廣播、Windows 防火牆擋住、Bonjour 執行時缺失、簽名包打不開、共享檢測錯誤
+   - 桌面端沒監聽、沒廣播、Windows 防火牆擋住、Bonjour 執行時缺失、本地包打不開、共享檢測錯誤
 2. **mobile 發現 / 綁定層**
    - 掃不到設備、連接失敗、重啟 app 後恢復
 3. **mobile 佇列 / 匯出層**
@@ -107,11 +107,10 @@ LAN Wake-on-LAN 檢查：
 
 - 目前喚醒是 best-effort LAN 功能，只在使用者明確操作時觸發：打開 `我的電腦` 根目錄，或在同步狀態/同步動態按 `重新連接`
 - app 啟動、回到前景、或只是顯示離線狀態，不應觸發喚醒
-- `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN 按鈕；不會嘗試 router public wake
+- `重新連接` 是 LAN / VPN-LAN retry，不是 public Wake-on-WAN 按鈕
 - 手機和電腦不在同一個 LAN 時，除非 VPN 讓手機等同進入該 LAN 且 wake 封包可送達，否則同 LAN WoL 不保證有效
-- peer proxy / WOL Relay 僅限另一台 authenticated、awake、同 LAN/VPN 的 Lynavo Drive Desktop；它必須能在 target desktop 所在 LAN/VPN 內代送 magic packet
-- 未安裝 Lynavo Drive Desktop 的 router-connected device 不可自動當 peer proxy；NAS、OpenWrt、Home Assistant、router 或其他常在線設備只能透過使用者明確設定的 authenticated third-party helper / webhook / router API 參與
-- 只有一台睡眠中的電腦、且沒有 router Wake-on-WAN / router helper / configured public wake target / eligible peer proxy / explicit helper / VPN fallback 時，cloud 不能憑空喚醒 NAT 後面的電腦
+- OSS build 不提供 router helper、third-party wake helper、public relay wake 或 peer proxy wake
+- 只有一台睡眠中的電腦且沒有 LAN/VPN-LAN 可達路徑時，mobile 不能憑空喚醒 NAT 後面的電腦
 - macOS 需確認系統設定中的 `Wake for network access`；Ethernet 通常比睡眠 Wi-Fi 穩定
 - Windows 需確認 BIOS/UEFI WoL、網卡 `Allow this device to wake the computer`、`Only allow a magic packet to wake the computer`；Modern Standby、休眠、關機狀態會依機型不同
 - paired mobile 會快取 sidecar 在清醒時下發的 wake metadata；如果桌面換網路、DHCP 變更、換網卡或路由器變更，metadata 可能過期，失敗後仍應回到既有 P2P/direct fallback
@@ -123,10 +122,9 @@ LAN Wake-on-LAN 檢查：
 3. shared-files 入口 metadata 缺失時，`engine.log` 是否有 `wake skipped reason=<reason> metadata_missing_or_unusable`
 4. `重新連接` metadata 缺失時，`engine.log` 是否有 `wake skipped reason=manual_lan_reconnect metadata_missing_or_unusable`
 5. direct same-LAN wake 是否有 `wake packets sent packets=<n>`，成功時是否有 `wake LAN reachable host=<ip>` / `wake recovered LAN host`，失敗時是否有 `wake polling exhausted` / `wake probe timed out`
-6. peer proxy follow-up 實作完成後，才應檢查是否有 `wake packets sent via peer proxy to host=<peer>`；目前沒有 multi-desktop peer source 時，應確認是否有 `peer proxy skipped reason=<reason>`
-7. 舊版或摘要型日誌是否有 `wake packets sent`、`wake recovered LAN host`、`wake polling exhausted`
-8. 喚醒後 `/health` 是否恢復，`39393 / 39394` 是否重新可達
-9. 是否誤把外網未設定 router wake / helper / eligible peer proxy / VPN-LAN 的情境當作可支援情境
+6. 舊版或摘要型日誌是否有 `wake packets sent`、`wake recovered LAN host`、`wake polling exhausted`
+7. 喚醒後 `/health` 是否恢復，`39393 / 39394` 是否重新可達
+8. 是否誤把外網未設定 VPN-LAN 的情境當作可支援情境
 
 ### 3.4.1 `我的電腦` 或 `重新連接` 沒有喚醒 desktop
 
@@ -135,9 +133,8 @@ LAN Wake-on-LAN 檢查：
 1. 在 desktop 清醒時重新連接一次，確認 mobile 能快取 wake metadata；若看到 `wake skipped reason=<reason> metadata_missing_or_unusable`，代表 mobile 沒有可用 targets
 2. 確認手機和 desktop 位於同一 LAN；若是 VPN，必須等同 VPN-LAN 且允許 wake packet 進入 target LAN
 3. macOS 先確認 `Wake for network access`，Windows 先確認 BIOS/UEFI 與 NIC magic packet wake
-4. 確認 mobile diagnostics 出現 `wake packets sent packets=<n>`；peer proxy follow-up 實作完成後，才應期待 `wake packets sent via peer proxy to host=<peer>`
-5. 若出現 `peer proxy skipped reason=<reason>`，依 reason 檢查是否沒有 authenticated awake Lynavo Drive Desktop peer、沒有 multi-desktop binding source，或 third-party helper 尚未明確設定
-6. 若出現 `wake polling exhausted` / `wake probe timed out`，代表封包送出後 `/health` 未在限定時間內恢復，應檢查平台 WoL 設定、路由器 broadcast 行為、睡眠模式與 `http://<desktop-lan-ip>:39394/health`
+4. 確認 mobile diagnostics 出現 `wake packets sent packets=<n>`
+5. 若出現 `wake polling exhausted` / `wake probe timed out`，代表封包送出後 `/health` 未在限定時間內恢復，應檢查平台 WoL 設定、路由器 broadcast 行為、睡眠模式與 `http://<desktop-lan-ip>:39394/health`
 
 ## 3.5 「發現頁能掃到設備，但實際連不上」
 
