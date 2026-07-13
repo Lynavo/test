@@ -14,8 +14,14 @@ The OSS baseline must continuously verify four capability groups:
 3. OSS boundaries: guest/local foreground LAN sync is fail-open; remote access,
    official tunnel, silent background continuation, and other non-OSS
    capabilities remain off.
-4. Local buildability: shared packages, sidecar, mobile typecheck, native mobile
-   builds, and desktop package verification are reproducible.
+4. Buildability: shared packages, sidecar, mobile typecheck, native mobile
+   builds, and desktop package verification are reproducible locally and in
+   approved GitHub-hosted verification jobs.
+
+GitHub-hosted jobs use public source, no repository secrets, and unsigned
+verification artifacts only. Third-party or external build services, signing,
+notarization, store upload, auto-update, and private distribution infrastructure
+remain prohibited. Linux remains local build/package verification only.
 
 ## 2. Automated Verification
 

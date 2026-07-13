@@ -1,7 +1,13 @@
 # Lynavo Drive OSS Build Playbook
 
 This repository is the global-only open-source baseline. The release playbook
-documents local source-build and package verification only.
+documents contributor-local verification and approved GitHub-hosted,
+secret-free, unsigned source-build/package verification. Hosted outputs are
+verification artifacts, not official signed distributions.
+
+Third-party or external build services, code signing, notarization, store
+upload, auto-update, and private distribution infrastructure remain
+unavailable. Linux remains local build/package verification only.
 
 ## Release Gate
 
@@ -89,6 +95,10 @@ Release profiles are build-channel selectors for local verification only:
 3. Profiles do not inject support, update, diagnostics, auth, server-side
    capability, signing, upload, or external service environment variables.
 4. Profiles resolve to local build/package commands only.
+
+GitHub-hosted Actions may invoke the same public source-build commands with no
+repository secrets to produce unsigned verification artifacts. This does not
+turn release profiles into hosted signing, upload, or distribution profiles.
 
 Target commands:
 

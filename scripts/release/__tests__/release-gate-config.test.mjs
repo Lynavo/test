@@ -58,6 +58,31 @@ test('CI runs the OSS release gate with the repository Node baseline', () => {
   assert.doesNotMatch(workflow, /\bgradlew\b/);
 });
 
+test('policy permits only secret-free unsigned GitHub-hosted verification builds', () => {
+  const policyPaths = [
+    'AGENTS.md',
+    'README.md',
+    'CONTRIBUTING.md',
+    'docs/release/release-playbook.md',
+    'docs/testing/oss-verification-matrix.md',
+  ];
+  const docs = policyPaths.map(readRepoFile);
+
+  for (const doc of docs) {
+    assert.match(doc, /GitHub-hosted/i);
+    assert.match(doc, /unsigned/i);
+  }
+
+  const policy = docs.join('\n');
+  assert.match(policy, /no repository secrets/i);
+  assert.match(policy, /Linux.+local.+verification/is);
+  assert.match(policy, /signing|code signing/i);
+  assert.match(policy, /notarization/i);
+  assert.match(policy, /store upload|app-store upload/i);
+  assert.match(policy, /auto-update/i);
+  assert.match(policy, /external.+build|third-party.+build/i);
+});
+
 test('iOS OSS build does not declare background audio capability', () => {
   const infoPlist = readRepoFile('apps/mobile/ios/LynavoDrive/Info.plist');
   const appDelegate = readRepoFile('apps/mobile/ios/LynavoDrive/AppDelegate.swift');

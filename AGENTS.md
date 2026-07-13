@@ -7,11 +7,12 @@ Lynavo Drive is a local-LAN incremental media sync tool from mobile
 the Electron desktop app, Go sidecar, React Native mobile app, and native iOS /
 Android sync capabilities.
 
-This repository is the global-only OSS baseline. It maintains one public local
-source-build and package-verification path only. It does not include
-multi-market, official signing, upload, auto-update, non-OSS distribution,
-or other non-OSS product paths. Linux is kept only for local source-build /
-package verification; it is not a current user support surface.
+This repository is the global-only OSS baseline. It maintains public local and
+GitHub-hosted source-build and package-verification paths. Hosted verification
+uses public source, no repository secrets, and unsigned artifacts only. It does
+not include multi-market, official signing, upload, auto-update, non-OSS
+distribution, or other non-OSS product paths. Linux is kept only for local
+source-build / package verification; it is not a current user support surface.
 
 ## Current Development Baseline
 
@@ -72,8 +73,8 @@ machine, persistence, or sync semantics.
 
 - **Desktop currently covers macOS / Windows**. Handle platform differences,
   such as sharing checks and packaging, according to current code and the
-  relevant docs. The OSS repository provides local source-build and package
-  verification only.
+  relevant docs. The OSS repository provides local and GitHub-hosted unsigned
+  source-build and package verification.
 - **No official non-OSS release path is available here**. Do not add or assume
   official signing, notarization, upload, auto-update, non-OSS market,
   server-side capability, support, or hosted release infrastructure in this public
@@ -101,9 +102,10 @@ machine, persistence, or sync semantics.
   in desktop or mobile packages.
 - **Renderer must not access sidecar, filesystem, or SQLite directly**. Route
   everything through the preload bridge.
-- **Builds must run locally**. All code builds, binary compilation, and image or
-  package creation must run on the local machine, not a remote compile/package
-  environment.
+- **Approved build environments are narrowly scoped**. Contributor-local builds
+  and GitHub-hosted Actions builds are allowed for public, secret-free OSS
+  source-build and unsigned package verification. Third-party or external build
+  and packaging services remain prohibited.
 
 Additional clarifications:
 

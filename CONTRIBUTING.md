@@ -20,8 +20,14 @@ pnpm build
 pnpm gate:release
 ```
 
-Native iOS, Android, macOS, Windows, and Linux build verification must run on a
-local machine with the required platform toolchains.
+Native iOS, Android, macOS, and Windows verification may run on contributor
+machines or GitHub-hosted Actions. Hosted jobs use public source, no repository
+secrets, and produce unsigned verification artifacts only. Linux build/package
+verification remains local-only.
+
+Third-party or external build services, code signing, notarization, store
+upload, auto-update, and private distribution infrastructure are not part of
+this OSS repository.
 
 ## Pull Requests
 

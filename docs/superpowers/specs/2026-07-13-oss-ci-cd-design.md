@@ -1,7 +1,7 @@
 # OSS CI/CD Design
 
 **Date:** 2026-07-13
-**Status:** Awaiting written-spec review
+**Status:** Approved for implementation
 
 ## Context
 

@@ -236,7 +236,10 @@ pnpm check
 
 ## 📦 OSS Build & Package Verification
 
-This OSS repository keeps local source-build and package verification paths.
+This OSS repository keeps contributor-local source-build paths and
+GitHub-hosted, secret-free unsigned build/package verification. Hosted outputs
+are verification artifacts, not official signed distributions. Linux remains
+local verification only and is not a supported desktop user surface.
 
 <details>
 <summary>🔬 View Verification & Build Pipelines</summary>
@@ -267,6 +270,11 @@ pnpm --filter @lynavo-drive/desktop package:linux -- --arch=arm64
 
 `release` profiles only inject `LYNAVO_RELEASE_CHANNEL` and local build
 configuration, and only select local build/package commands.
+
+GitHub-hosted workflows may invoke these commands using public source and no
+repository secrets. Third-party or external build services, code signing,
+notarization, store upload, auto-update, and private distribution infrastructure
+remain outside this OSS baseline.
 
 ## 📁 Project Structure
 
