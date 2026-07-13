@@ -47,7 +47,6 @@ import i18n from '../../i18n';
 import {
   clearAutoUploadSessionForTest,
   clearRememberedAutoUploadRoundProgressForTest,
-  rememberAutoUploadRoundProgress,
   setAutoUploadSessionBaselineForTest,
 } from '../../utils/autoUploadRoundProgress';
 import { AlbumWorkbenchScreen } from '../AlbumWorkbenchScreen';

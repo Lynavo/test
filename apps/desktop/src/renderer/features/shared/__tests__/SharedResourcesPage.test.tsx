@@ -7,6 +7,8 @@ vi.mock('@renderer/stores/resources-store', () => ({
   useResourcesStore: vi.fn(),
 }));
 
+const mockedUseResourcesStore = vi.mocked(useResourcesStore);
+
 describe('SharedResourcesPage', () => {
   const mockStore = {
     sharedResources: [],
@@ -20,7 +22,7 @@ describe('SharedResourcesPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useResourcesStore as any).mockReturnValue(mockStore);
+    mockedUseResourcesStore.mockReturnValue(mockStore);
   });
 
   it('renders page layout and titles', () => {
@@ -29,7 +31,7 @@ describe('SharedResourcesPage', () => {
   });
 
   it('displays loading state with skeletons when empty', () => {
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       sharedLoading: true,
       sharedResources: [],
@@ -39,7 +41,7 @@ describe('SharedResourcesPage', () => {
   });
 
   it('displays loading indicator when not empty', () => {
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       sharedLoading: true,
       sharedResources: [
@@ -64,7 +66,7 @@ describe('SharedResourcesPage', () => {
   });
 
   it('displays error state', () => {
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       sharedError: 'Something went wrong',
     });
@@ -73,7 +75,7 @@ describe('SharedResourcesPage', () => {
   });
 
   it('renders resources in table', () => {
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       sharedResources: [
         {
@@ -97,7 +99,7 @@ describe('SharedResourcesPage', () => {
 
   it('triggers remove action on trash click', () => {
     const removeSharedResource = vi.fn();
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       sharedResources: [
         {
@@ -122,7 +124,7 @@ describe('SharedResourcesPage', () => {
   it('triggers shareFile and shareFolder on button click', () => {
     const shareFile = vi.fn();
     const shareFolder = vi.fn();
-    (useResourcesStore as any).mockReturnValue({
+    mockedUseResourcesStore.mockReturnValue({
       ...mockStore,
       shareFile,
       shareFolder,

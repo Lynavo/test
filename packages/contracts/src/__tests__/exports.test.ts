@@ -204,6 +204,105 @@ describe('@lynavo-drive/contracts exports', () => {
     expect(distribution).toBe('official');
   });
 
+  it('exports desktop-local management DTO types', () => {
+    const device: DesktopManagedDeviceDTO = {
+      desktopDeviceId: 'desktop-1',
+      clientId: 'client-1',
+      clientIdShort: 'client',
+      displayName: 'Test Phone',
+      platform: 'ios',
+      authorizationStatus: 'authorized',
+      blockStatus: 'none',
+      failedAttemptCount: 0,
+      todayFileCount: 1,
+      todayBytes: 1024,
+      totalFileCount: 1,
+      totalBytes: 1024,
+    };
+    const shared: DesktopSharedResourceDTO = {
+      resourceId: 'resource-1',
+      desktopDeviceId: 'desktop-1',
+      kind: 'shared_file',
+      displayName: 'example.txt',
+      status: 'available',
+      addedAt: '2026-07-13T00:00:00.000Z',
+      downloadCount: 0,
+    };
+    const library: ReceivedLibraryItemDTO = {
+      resourceId: 'received-1',
+      desktopDeviceId: 'desktop-1',
+      clientId: 'client-1',
+      displayName: 'Test Phone',
+      fileKey: 'file-1',
+      filename: 'photo.jpg',
+      mediaType: 'image/jpeg',
+      fileSize: 1024,
+      completedAt: '2026-07-13T00:00:00.000Z',
+      shareStatus: 'not_shared',
+    };
+
+    expect(
+      assertTypeExports(
+        'authorized',
+        'none',
+        'shared_file',
+        'available',
+        'list',
+        'ok',
+        device,
+        {
+          desktopDeviceId: 'desktop-1',
+          clientId: 'client-1',
+          result: 'success',
+          attemptedAt: '2026-07-13T00:00:00.000Z',
+        },
+        {
+          desktopDeviceId: 'desktop-1',
+          clientId: 'client-1',
+          blocked: false,
+          failedAttemptCount: 0,
+          remainingAttempts: 3,
+        },
+        shared,
+        {
+          recordId: 'access-1',
+          desktopDeviceId: 'desktop-1',
+          clientId: 'client-1',
+          displayName: 'Test Phone',
+          resourceId: 'resource-1',
+          resourceKind: 'shared_file',
+          resourceName: 'example.txt',
+          action: 'list',
+          result: 'ok',
+          accessedAt: '2026-07-13T00:00:00.000Z',
+        },
+        {
+          recordId: 'sync-1',
+          desktopDeviceId: 'desktop-1',
+          clientId: 'client-1',
+          displayName: 'Test Phone',
+          fileKey: 'file-1',
+          filename: 'photo.jpg',
+          mediaType: 'image/jpeg',
+          fileSize: 1024,
+          status: 'completed',
+          completedAt: '2026-07-13T00:00:00.000Z',
+        },
+        { items: [device] },
+        { kind: 'shared_file', displayName: 'example.txt', localPath: '/tmp/example.txt' },
+        library,
+        {
+          desktopDeviceId: 'desktop-1',
+          desktopName: 'Test Desktop',
+          host: '192.168.1.2',
+          port: 39393,
+          lastConnectedAt: '2026-07-13T00:00:00.000Z',
+        },
+        { code: 'wrong_code', message: 'Pairing code rejected', remainingAttempts: 2 },
+      ),
+    ).toBe(true);
+  });
+
   it('exports wake metadata DTOs and wake reachability states', () => {
     const target: WakeTargetDTO = {
       interfaceName: 'en0',

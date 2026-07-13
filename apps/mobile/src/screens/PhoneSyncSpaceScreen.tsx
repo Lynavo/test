@@ -24,7 +24,6 @@ import {
   ChevronLeft,
   CloudUpload,
   Download,
-  Eye,
   FileImage,
   FileText,
   Play,
@@ -733,7 +732,7 @@ export function PhoneSyncSpaceScreen() {
         }
         return acc;
       }, []),
-    [sortedItems],
+    [sortedItems, t],
   );
 
   const totalSizeLabel = formatBytes(libraryTotalBytes);

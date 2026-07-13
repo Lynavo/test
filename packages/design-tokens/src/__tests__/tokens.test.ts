@@ -6,7 +6,7 @@ import { fontFamily } from '../typography';
 
 describe('colors', () => {
   it('all values are valid oklch strings', () => {
-    for (const [_key, value] of Object.entries(colors)) {
+    for (const value of Object.values(colors)) {
       expect(value).toMatch(/^oklch\(/);
     }
   });

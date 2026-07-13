@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useResourcesStore } from '../resources-store';
 import { useSidecarRuntimeStore } from '../sidecar-runtime-store';
+import type { ElectronAPI } from '../../../preload/api';
+
+const testWindow = window as Window & { electronAPI: ElectronAPI };
 
 describe('resources-store', () => {
   beforeEach(() => {
@@ -46,11 +49,11 @@ describe('resources-store', () => {
       ],
     };
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         getSharedResources: vi.fn().mockResolvedValue(mockShared),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().loadSharedResources();
 
@@ -60,11 +63,11 @@ describe('resources-store', () => {
   });
 
   it('handles shared resources fetch error', async () => {
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         getSharedResources: vi.fn().mockRejectedValue(new Error('Network failure')),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().loadSharedResources();
 
@@ -103,15 +106,15 @@ describe('resources-store', () => {
       ],
     };
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         getReceivedLibrary: vi.fn().mockResolvedValue(mockReceived),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().loadReceivedLibrary();
 
-    expect((window as any).electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
+    expect(testWindow.electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
       page: 1,
       pageSize: 30,
     });
@@ -170,15 +173,15 @@ describe('resources-store', () => {
       ],
     };
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         getReceivedLibrary: vi.fn().mockResolvedValue(secondPage),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().loadMoreReceivedLibrary();
 
-    expect((window as any).electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
+    expect(testWindow.electronAPI.sidecar.getReceivedLibrary).toHaveBeenCalledWith({
       page: 2,
       pageSize: 30,
     });
@@ -189,11 +192,11 @@ describe('resources-store', () => {
   });
 
   it('handles received library fetch error', async () => {
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         getReceivedLibrary: vi.fn().mockRejectedValue(new Error('Network failure')),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().loadReceivedLibrary();
 
@@ -203,20 +206,20 @@ describe('resources-store', () => {
   });
 
   it('removes shared resource successfully', async () => {
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         removeSharedResource: vi.fn().mockResolvedValue({ ok: true }),
         getSharedResources: vi.fn().mockResolvedValue({ items: [] }),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().removeSharedResource('res-1');
 
-    expect((window as any).electronAPI.sidecar.removeSharedResource).toHaveBeenCalledWith('res-1');
+    expect(testWindow.electronAPI.sidecar.removeSharedResource).toHaveBeenCalledWith('res-1');
   });
 
   it('shares a file using file picker', async () => {
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       files: {
         selectFile: vi.fn().mockResolvedValue('/path/to/my-file.zip'),
       },
@@ -224,12 +227,12 @@ describe('resources-store', () => {
         addSharedResource: vi.fn().mockResolvedValue({ resourceId: 'new-res-1' }),
         getSharedResources: vi.fn().mockResolvedValue({ items: [] }),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().shareFile();
 
-    expect((window as any).electronAPI.files.selectFile).toHaveBeenCalled();
-    expect((window as any).electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
+    expect(testWindow.electronAPI.files.selectFile).toHaveBeenCalled();
+    expect(testWindow.electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
       kind: 'shared_file',
       displayName: 'my-file.zip',
       localPath: '/path/to/my-file.zip',
@@ -237,7 +240,7 @@ describe('resources-store', () => {
   });
 
   it('shares a folder using folder picker', async () => {
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       files: {
         selectFolder: vi.fn().mockResolvedValue('/path/to/my-folder'),
       },
@@ -245,12 +248,12 @@ describe('resources-store', () => {
         addSharedResource: vi.fn().mockResolvedValue({ resourceId: 'new-res-2' }),
         getSharedResources: vi.fn().mockResolvedValue({ items: [] }),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().shareFolder();
 
-    expect((window as any).electronAPI.files.selectFolder).toHaveBeenCalled();
-    expect((window as any).electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
+    expect(testWindow.electronAPI.files.selectFolder).toHaveBeenCalled();
+    expect(testWindow.electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
       kind: 'shared_folder',
       displayName: 'my-folder',
       localPath: '/path/to/my-folder',
@@ -271,7 +274,7 @@ describe('resources-store', () => {
       shareStatus: 'not_shared' as const,
     };
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       sidecar: {
         addSharedResource: vi.fn().mockResolvedValue({ resourceId: 'new-res-3' }),
         getSharedResources: vi.fn().mockResolvedValue({ items: [] }),
@@ -284,11 +287,11 @@ describe('resources-store', () => {
           deviceStats: [],
         }),
       },
-    };
+    } as unknown as ElectronAPI;
 
     await useResourcesStore.getState().addSharedFromReceived(mockItem);
 
-    expect((window as any).electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
+    expect(testWindow.electronAPI.sidecar.addSharedResource).toHaveBeenCalledWith({
       kind: 'received_file',
       displayName: 'image.png',
       receivedFileKey: 'key-1',

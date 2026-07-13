@@ -7,6 +7,9 @@ import { useManagementStore } from '@renderer/stores/management-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { toast } from 'sonner';
 import type { DashboardDeviceDTO, ReceivedLibraryItemDTO } from '@lynavo-drive/contracts';
+import type { ElectronAPI } from '../../../../preload/api';
+
+const testWindow = window as Window & { electronAPI: ElectronAPI };
 
 vi.mock('sonner', () => ({
   toast: {
@@ -59,7 +62,7 @@ describe('ReceivedLibraryPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     intersectionCallback = null;
-    (window as any).IntersectionObserver = vi.fn(function MockIntersectionObserver(
+    window.IntersectionObserver = vi.fn(function MockIntersectionObserver(
       callback: IntersectionObserverCallback,
     ) {
       intersectionCallback = callback;
@@ -68,7 +71,7 @@ describe('ReceivedLibraryPage', () => {
         unobserve: vi.fn(),
         disconnect: vi.fn(),
       };
-    });
+    }) as unknown as typeof IntersectionObserver;
     useResourcesStore.setState({
       receivedItems: [],
       receivedPage: 1,
@@ -107,14 +110,14 @@ describe('ReceivedLibraryPage', () => {
       },
     });
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       files: {
         openFolder: vi.fn().mockResolvedValue(null),
       },
       sidecar: {
         getReceivedLibrary: vi.fn().mockImplementation(async () => buildMockReceivedLibraryPage()),
       },
-    };
+    } as unknown as ElectronAPI;
   });
 
   it('renders page layout and titles', () => {
@@ -197,7 +200,7 @@ describe('ReceivedLibraryPage', () => {
       .fn()
       .mockResolvedValueOnce(firstPage)
       .mockResolvedValueOnce(secondPage);
-    (window as any).electronAPI.sidecar.getReceivedLibrary = getReceivedLibrary;
+    testWindow.electronAPI.sidecar.getReceivedLibrary = getReceivedLibrary;
 
     render(<ReceivedLibraryPage />);
 
@@ -236,7 +239,7 @@ describe('ReceivedLibraryPage', () => {
       receivedError: 'Error message from sidecar',
     });
     // Override the mock to reject to test error
-    (window as any).electronAPI.sidecar.getReceivedLibrary = vi
+    testWindow.electronAPI.sidecar.getReceivedLibrary = vi
       .fn()
       .mockRejectedValue(new Error('Error message from sidecar'));
 
@@ -608,7 +611,7 @@ describe('ReceivedLibraryPage', () => {
 
   it('does not fall back to the receive root when opening a device folder fails', async () => {
     const openFolder = vi.fn().mockRejectedValue(new Error('missing folder'));
-    (window as any).electronAPI.files.openFolder = openFolder;
+    testWindow.electronAPI.files.openFolder = openFolder;
     useManagementStore.setState({
       devices: [
         {

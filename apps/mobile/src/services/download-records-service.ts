@@ -91,13 +91,11 @@ function normalizeDownloadRecord(record: DownloadRecord): DownloadRecord {
   const streamUrl = isPersonalDir
     ? undefined
     : normalizeOptionalString(record.streamUrl);
-  const {
-    localPath: _localPath,
-    thumbnailUrl: _thumbnailUrl,
-    previewUrl: _previewUrl,
-    streamUrl: _streamUrl,
-    ...rest
-  } = record;
+  const rest = { ...record };
+  delete rest.localPath;
+  delete rest.thumbnailUrl;
+  delete rest.previewUrl;
+  delete rest.streamUrl;
 
   const normalized: DownloadRecord = {
     ...rest,

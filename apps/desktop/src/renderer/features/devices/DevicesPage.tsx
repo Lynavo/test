@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Smartphone, ShieldAlert, Wifi } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DesktopManagedDeviceDTO } from '@lynavo-drive/contracts';

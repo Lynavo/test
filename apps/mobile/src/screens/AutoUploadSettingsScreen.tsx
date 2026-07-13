@@ -246,7 +246,7 @@ export function AutoUploadSettingsScreen() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [copy.loadConfigFailed]);
 
   const persistAlbumAutoUploadConfig = async (
     range: AutoUploadRange,

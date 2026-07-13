@@ -61,7 +61,7 @@ function CameraQRScannerScreen() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [Camera]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
@@ -71,7 +71,7 @@ function CameraQRScannerScreen() {
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [Camera]);
 
   useEffect(() => {
     const animation = Animated.loop(

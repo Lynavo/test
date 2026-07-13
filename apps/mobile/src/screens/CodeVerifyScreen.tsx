@@ -43,8 +43,6 @@ type CodeVerifyNavProp = StackNavigationProp<RootStackParamList, 'CodeVerify'>;
 type CodeVerifyRouteProp = RouteProp<RootStackParamList, 'CodeVerify'>;
 
 const CODE_LENGTH = 6;
-const VERIFY_DELAY_MS = 1200;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -232,17 +230,6 @@ export function CodeVerifyScreen() {
         inputRefs.current[0]?.focus();
         return;
       }
-
-      // Mock fallback: always succeed after delay
-      setTimeout(() => {
-        setVerifying(false);
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 0,
-            routes: [{ name: 'SyncActivity' }],
-          }),
-        );
-      }, VERIFY_DELAY_MS);
     },
     [
       navigation,

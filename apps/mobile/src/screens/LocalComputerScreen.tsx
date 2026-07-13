@@ -105,12 +105,6 @@ type RouteStatusViewModel = {
 };
 type LocalComputerDisabledReason = 'desktop';
 
-const SORT_OPTIONS: Array<{ id: SortKey; label: string }> = [
-  { id: 'name', label: 'Name' },
-  { id: 'time', label: 'Time' },
-  { id: 'size', label: 'File Size' },
-];
-
 const PREVIEW_DESKTOP_NAME = 'MacBook Pro';
 const ROOT_DIRECTORY_LABEL = 'User Directory';
 const UNBOUND_LOCAL_COMPUTER_SUBTITLE = 'Not connected to computer';
@@ -1750,7 +1744,7 @@ function NetworkDisconnectedState({ onRetry }: { onRetry: () => void }) {
 }
 
 function LocalComputerDisabledState({
-  reason,
+  reason: _reason,
   onRetry,
 }: {
   reason: LocalComputerDisabledReason;

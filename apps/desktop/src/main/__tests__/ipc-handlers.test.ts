@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  APP_COMPATIBILITY_VERSION,
   type DesktopAccessRecordDTO,
   type DesktopManagedDeviceDTO,
   type DesktopSharedResourceDTO,
@@ -179,15 +178,6 @@ vi.mock('../sidecar-client', async () => {
     },
   };
 });
-
-function compatibleHealth(capabilities?: { connectionDeviceManagement?: boolean }) {
-  return {
-    ok: true,
-    service: 'lynavo-drive-sidecar',
-    appCompatibilityVersion: APP_COMPATIBILITY_VERSION,
-    ...(capabilities ? { capabilities } : {}),
-  };
-}
 
 vi.mock('../diagnostics', () => ({
   exportDiagnostics: vi.fn(),

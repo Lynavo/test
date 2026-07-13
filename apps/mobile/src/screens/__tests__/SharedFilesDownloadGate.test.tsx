@@ -1925,7 +1925,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('opens unsupported extensionless local computer documents through the system app chooser', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListGlobalLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:protoc-gen-go',

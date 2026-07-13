@@ -116,7 +116,6 @@ const BLUE_MUTED = '#8ab0c8';
 const DARK = '#1a3a5c';
 const DARK_FILE = '#1e3a54';
 const MUTED_FILE = '#a8bece';
-const RING_BG = '#daeef8';
 const CARD_BG = 'rgba(255,255,255,0.62)';
 const QUEUE_CARD_BG = 'rgba(255,255,255,0.80)';
 const ICON_BG = '#eef6fc';
@@ -847,7 +846,7 @@ export function SyncStatusScreen() {
             }
           },
         );
-      } catch (e) {
+      } catch {
         console.warn('Native module not available for SyncStatus');
         setInitialLoading(false);
       }

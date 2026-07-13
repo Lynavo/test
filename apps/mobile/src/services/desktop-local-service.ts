@@ -447,21 +447,6 @@ function buildReceivedMediaUrl(
   return `http://${desktop.host}:${desktop.port}/resources/mobile/received/${kind}?${query}`;
 }
 
-async function receivedLibraryFileUrl(
-  desktop: DesktopInfo,
-  item: ReceivedLibraryItemDTO,
-  kind: 'download' | 'preview' | 'stream',
-): Promise<string> {
-  const fileKey = item.fileKey?.trim();
-  if (!fileKey) {
-    throw new Error('Received file key is required');
-  }
-  const clientId = await getClientId();
-  const clientName =
-    (await NativeSyncEngine?.getClientDisplayName?.()) || clientId;
-  return buildReceivedMediaUrl(desktop, kind, clientId, clientName, fileKey);
-}
-
 async function nativeReceivedLibraryFileUrl(
   item: ReceivedLibraryItemDTO,
   kind: 'download' | 'preview' | 'stream',

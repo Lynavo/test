@@ -4,6 +4,9 @@ import { Dashboard } from '../Dashboard';
 import { useDashboardStore } from '@renderer/stores/dashboard-store';
 import { useSettingsStore } from '@renderer/stores/settings-store';
 import { toast } from 'sonner';
+import type { ElectronAPI } from '../../../../preload/api';
+
+const testWindow = window as Window & { electronAPI: ElectronAPI };
 
 vi.mock('sonner', () => ({
   toast: {
@@ -48,7 +51,7 @@ describe('Dashboard', () => {
       },
     });
 
-    (window as any).electronAPI = {
+    testWindow.electronAPI = {
       files: {
         copyToClipboard: vi.fn().mockResolvedValue(undefined),
         selectFolder: vi.fn().mockResolvedValue('/new/receive/path'),
@@ -82,7 +85,7 @@ describe('Dashboard', () => {
         getHostName: vi.fn().mockReturnValue('test-host'),
         getLocalIPs: vi.fn().mockReturnValue(['192.168.31.8']),
       },
-    };
+    } as unknown as ElectronAPI;
   });
 
   it('renders the local LAN cards without a remote access toggle', () => {

@@ -416,6 +416,8 @@ export function DeviceDiscoveryScreen() {
       return device;
     });
   }, [t]);
+  const getVisualQaDevicesRef = useRef(getVisualQaDevices);
+  getVisualQaDevicesRef.current = getVisualQaDevices;
 
   const connectionFeatureGuideSteps = React.useMemo<ConnectionGuideStep[]>(
     () => [
@@ -566,7 +568,7 @@ export function DeviceDiscoveryScreen() {
       visualQaTimer = setTimeout(() => {
         if (!active || devicesRef.current.length > 0) return;
         preserveCachedDevicesRef.current = false;
-        setDevices(getVisualQaDevices());
+        setDevices(getVisualQaDevicesRef.current());
         setScanning(false);
         setConnectionStatus('ready');
         if (timeoutTimer) {
@@ -910,7 +912,7 @@ export function DeviceDiscoveryScreen() {
         setConnectionModalStep('code');
       }
     },
-    [addDesktop, currentDeviceId, devices, mode, navigation, showGuide],
+    [addDesktop, currentDeviceId, devices, mode, navigation, showGuide, t],
   );
 
   const handleManualPair = useCallback(() => {
@@ -926,7 +928,7 @@ export function DeviceDiscoveryScreen() {
     setConnectionFailure(null);
     setConnectionStatus('ready');
     setConnectionModalStep('code');
-  }, [manualHost]);
+  }, [manualHost, t]);
 
   const handleVerifyCode = useCallback(async () => {
     if (!selectedDevice || !connectionCode.trim()) return;
@@ -995,7 +997,7 @@ export function DeviceDiscoveryScreen() {
       setConnectionModalStep(null);
       setConnectionStatus('failed');
     }
-  }, [addDesktop, connectionCode, navigation, selectedDevice]);
+  }, [addDesktop, connectionCode, navigation, selectedDevice, t]);
 
   const handleRescan = useCallback(() => {
     setDevices([]);

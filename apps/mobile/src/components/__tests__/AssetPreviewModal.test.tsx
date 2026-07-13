@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { Text, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { Text, TouchableOpacity, Image } from 'react-native';
 import type { AlbumAssetDTO } from '@lynavo-drive/contracts';
 import { getAssetPreviewSource } from '../../services/SyncEngineModule';
 
