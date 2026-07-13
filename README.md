@@ -79,7 +79,7 @@
   </tr>
 </table>
 
-## Prerequisites
+## ⚙️ Prerequisites
 
 - **macOS or Windows** (desktop currently supports macOS / Windows; Linux is
   only for local build / package verification; iOS builds still require macOS +
@@ -87,10 +87,15 @@
 - **Node.js** >= 22.12.0
 - **pnpm** >= 10
 - **Go** >= 1.25.6 (sidecar development and tests)
+
+<details>
+<summary>📱 View Mobile & Platform-Specific SDK Requirements</summary>
+
 - **Xcode + CocoaPods** (iOS builds and device debugging, macOS only)
 - **Android Studio + Android SDK / NDK** (Android builds and debugging)
+</details>
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 # 1. Install dependencies
@@ -106,7 +111,10 @@ pnpm dev:desktop
 
 The Electron window opens automatically, and the desktop app starts the sidecar.
 
-## Common Commands
+## 💻 Common Commands
+
+<details>
+<summary>🛠️ View Developer Command Reference</summary>
 
 ```bash
 # Desktop
@@ -134,9 +142,14 @@ pnpm format:check
 pnpm check
 ```
 
-## OSS Build And Package Verification
+</details>
+
+## 📦 OSS Build & Package Verification
 
 This OSS repository keeps local source-build and package verification paths.
+
+<details>
+<summary>🔬 View Verification & Build Pipelines</summary>
 
 ```bash
 # Inspect the local build / package commands that would run
@@ -159,6 +172,8 @@ pnpm package:desktop
 pnpm --filter @lynavo-drive/desktop package:linux -- --arch=x64
 pnpm --filter @lynavo-drive/desktop package:linux -- --arch=arm64
 ```
+
+</details>
 
 `release` profiles only inject `LYNAVO_RELEASE_CHANNEL` and local build
 configuration, and only select local build/package commands.
@@ -185,7 +200,10 @@ configuration, and only select local build/package commands.
 > **Future Migration Boundaries**
 > Package scope, mDNS service names, legacy data directories, and native package/bundle ID renames are migration boundaries and do not require renames in this documentation pass.
 
-## Project Structure
+## 📁 Project Structure
+
+<details>
+<summary>📂 View Directory Structure Map</summary>
 
 ```text
 lynavo-drive/
@@ -213,7 +231,9 @@ lynavo-drive/
     └── testing/              # OSS verification matrix
 ```
 
-## Tech Stack
+</details>
+
+## 🛠️ Tech Stack
 
 | Layer          | Technology                                                 |
 | -------------- | ---------------------------------------------------------- |
@@ -227,7 +247,7 @@ lynavo-drive/
 | Shared         | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
 | Test           | vitest 4.1 + jest + `go test`                              |
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
 ```text
 Mobile (RN UI on iOS / Android)
@@ -246,7 +266,7 @@ Desktop (Electron + Go sidecar, macOS / Windows)
   └── Filesystem / shared directory detection
 ```
 
-## Development Baseline
+## 🎯 Development Baseline
 
 - Shared types, constants, event names, and port definitions come from
   `@lynavo-drive/contracts`.
@@ -257,7 +277,7 @@ Desktop (Electron + Go sidecar, macOS / Windows)
 - Guest/local foreground LAN sync is fail-open; remote access and background
   continuation fail closed.
 
-## Files
+## 📄 Documentation Reference
 
 - Development constraints and operating rules: [`AGENTS.md`](./AGENTS.md)
 - System overview: [`docs/architecture/system-overview.md`](./docs/architecture/system-overview.md)
@@ -275,6 +295,6 @@ Desktop (Electron + Go sidecar, macOS / Windows)
 - Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
 - Third-party notices: [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
 
-## License
+## ⚖️ License
 
 MIT. See [`LICENSE`](./LICENSE).
