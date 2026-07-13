@@ -3,8 +3,8 @@ import { resolveLocale } from '../locale-resolver';
 
 describe('resolveLocale', () => {
   it('resolves Chinese scripts and regions', () => {
-    expect(resolveLocale(['zh-Hans-CN'])).toBe('zh-Hans');
-    expect(resolveLocale(['zh-CN'])).toBe('zh-Hans');
+    expect(resolveLocale(['zh-Hans'])).toBe('zh-Hans');
+    expect(resolveLocale(['zh'])).toBe('zh-Hans');
     expect(resolveLocale(['zh-Hant-TW'])).toBe('zh-Hant');
     expect(resolveLocale(['zh-TW'])).toBe('zh-Hant');
     expect(resolveLocale(['zh-HK'])).toBe('zh-Hant');

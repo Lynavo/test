@@ -868,7 +868,8 @@ function getLocalComputerSubtitle({
 
 export function LocalComputerScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const activeLocale = i18n.resolvedLanguage ?? i18n.language;
   const [loading, setLoading] = useState(true);
   const [networkDisconnected, setNetworkDisconnected] = useState(false);
   const [localComputerDisabledReason, setLocalComputerDisabledReason] =
@@ -1175,13 +1176,13 @@ export function LocalComputerScreen() {
 
     return [...filtered].sort((a, b) => {
       if (sortBy === 'name')
-        return a.displayName.localeCompare(b.displayName, 'zh-CN');
+        return a.displayName.localeCompare(b.displayName, activeLocale);
       if (sortBy === 'size') return getItemSize(b) - getItemSize(a);
       if (isFolder(a) && !isFolder(b)) return -1;
       if (!isFolder(a) && isFolder(b)) return 1;
       return getItemTime(b) - getItemTime(a);
     });
-  }, [currentItems, searchQuery, sortBy]);
+  }, [activeLocale, currentItems, searchQuery, sortBy]);
 
   const selectedItems = useMemo(
     () =>

@@ -14,8 +14,8 @@ jest.mock('react-native-localize', () => ({
     {
       languageCode: 'zh',
       scriptCode: 'Hans',
-      countryCode: 'CN',
-      languageTag: 'zh-Hans-CN',
+      countryCode: '',
+      languageTag: 'zh-Hans',
       isRTL: false,
     },
   ],
@@ -641,6 +641,55 @@ describe('AlbumWorkbenchScreen', () => {
       await fromNowChip!.props.onPress();
     });
     expect(mockedSaveAutoUploadConfig).not.toHaveBeenCalled();
+  });
+
+  it('uses the active i18n locale for the iOS date picker', async () => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', {
+      value: 'ios',
+      configurable: true,
+    });
+    mockedBrowseAlbum.mockResolvedValue([]);
+    mockedGetAutoUploadConfig.mockResolvedValue({
+      enabled: true,
+      state: 'idle',
+      timeRangeMode: 'custom',
+      customTimeFrom: null,
+    });
+
+    try {
+      let tree: ReactTestRenderer.ReactTestRenderer | undefined;
+      await ReactTestRenderer.act(async () => {
+        tree = createAlbumWorkbenchScreen();
+      });
+      await ReactTestRenderer.act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      const customTimeButton = tree!.root
+        .findAll(node => typeof node.props.onPress === 'function')
+        .find(node =>
+          node
+            .findAllByType(Text)
+            .some(text => text.props.children === 'Tap to Set a Time'),
+        );
+      expect(customTimeButton).toBeDefined();
+
+      await ReactTestRenderer.act(async () => {
+        customTimeButton!.props.onPress();
+      });
+
+      const dateTimePicker = tree!.root.findByType(
+        'DateTimePicker' as unknown as React.ComponentType,
+      );
+      expect(dateTimePicker.props.locale).toBe('en');
+    } finally {
+      Object.defineProperty(Platform, 'OS', {
+        value: originalPlatformOS,
+        configurable: true,
+      });
+    }
   });
 
   it('shows auto upload transferred count as this-round increment instead of cumulative total', async () => {

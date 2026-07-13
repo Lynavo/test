@@ -190,7 +190,8 @@ function getEmptyStateCopy(
 
 export function AlbumWorkbenchScreen() {
   const navigation = useNavigation();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const activeLocale = i18n.resolvedLanguage ?? i18n.language;
 
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -1526,7 +1527,7 @@ export function AlbumWorkbenchScreen() {
               mode="datetime"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDatePickerChange}
-              locale="zh-Hans"
+              locale={Platform.OS === 'ios' ? activeLocale : undefined}
               style={styles.datePickerSpinner}
             />
           </View>

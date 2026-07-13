@@ -361,7 +361,8 @@ function mergeReceivedLibraryItems(
 
 export function PhoneSyncSpaceScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const activeLocale = i18n.resolvedLanguage ?? i18n.language;
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -712,13 +713,13 @@ export function PhoneSyncSpaceScreen() {
       if (sortBy === 'name') {
         return getReceivedFileTitle(a).localeCompare(
           getReceivedFileTitle(b),
-          'zh-CN',
+          activeLocale,
         );
       }
       if (sortBy === 'size') return b.fileSize - a.fileSize;
       return getItemTimestamp(b) - getItemTimestamp(a);
     });
-  }, [items, sortBy]);
+  }, [activeLocale, items, sortBy]);
 
   const sections = useMemo(
     () =>

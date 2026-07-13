@@ -42,8 +42,8 @@ jest.mock('react-native-localize', () => ({
     {
       languageCode: 'zh',
       scriptCode: 'Hans',
-      countryCode: 'CN',
-      languageTag: 'zh-Hans-CN',
+      countryCode: '',
+      languageTag: 'zh-Hans',
       isRTL: false,
     },
   ],
@@ -142,30 +142,6 @@ jest.mock('../../screens/DeviceDiscoveryScreen', () => ({
   },
 }));
 
-jest.mock('../../screens/DeviceDiscoveryScreen', () => ({
-  DeviceDiscoveryScreen: () => {
-    const R = require('react');
-    const { Text } = require('react-native');
-    return R.createElement(
-      Text,
-      { testID: 'device-discovery-screen' },
-      'DeviceDiscovery',
-    );
-  },
-}));
-
-jest.mock('../../screens/SyncActivityScreen', () => ({
-  SyncActivityScreen: () => {
-    const R = require('react');
-    const { Text } = require('react-native');
-    return R.createElement(
-      Text,
-      { testID: 'sync-activity-screen' },
-      'SyncActivity',
-    );
-  },
-}));
-
 jest.mock('../../screens/SyncActivityScreen', () => ({
   SyncActivityScreen: ({
     showBottomTabBar,
@@ -218,26 +194,6 @@ jest.mock('../../screens/SharedFilesScreen', () => ({
   },
 }));
 
-jest.mock('../../screens/SharedFilesScreen', () => ({
-  SharedFilesScreen: ({ showBottomTabBar }: { showBottomTabBar?: boolean }) => {
-    const R = require('react');
-    const { Text } = require('react-native');
-    return R.createElement(
-      Text,
-      { testID: 'shared-files-screen' },
-      `SharedFilesGlobal showBottomTabBar=${String(showBottomTabBar)}`,
-    );
-  },
-}));
-
-jest.mock('../../screens/HistoryScreen', () => ({
-  HistoryScreen: () => {
-    const R = require('react');
-    const { Text } = require('react-native');
-    return R.createElement(Text, { testID: 'history-screen' }, 'History');
-  },
-}));
-
 jest.mock('../../screens/HistoryScreen', () => ({
   HistoryScreen: () => {
     const R = require('react');
@@ -254,18 +210,6 @@ jest.mock('../../screens/SettingsScreen', () => ({
       Text,
       { testID: 'settings-screen' },
       `Settings showBottomTabBar=${String(showBottomTabBar)}`,
-    );
-  },
-}));
-
-jest.mock('../../screens/SettingsScreen', () => ({
-  SettingsScreen: ({ showBottomTabBar }: { showBottomTabBar?: boolean }) => {
-    const R = require('react');
-    const { Text } = require('react-native');
-    return R.createElement(
-      Text,
-      { testID: 'settings-screen' },
-      `SettingsGlobal showBottomTabBar=${String(showBottomTabBar)}`,
     );
   },
 }));
@@ -479,13 +423,13 @@ describe('RootNavigator - OSS fail-open routing', () => {
       StyleSheet.flatten(screen.getByTestId('main-tabs-root').props.style)
         .backgroundColor,
     ).toBe('#F7FBFF');
-    expect(screen.queryByTestId('bottom-tab-bar-outer')).toBeNull();
+    expect(screen.getByTestId('bottom-tab-bar-outer')).toBeTruthy();
     expect(screen.getByTestId('bottom-tab-files')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('bottom-tab-files'));
     await waitFor(() =>
       expect(
-        screen.getByText('SharedFilesGlobal showBottomTabBar=false'),
+        screen.getByText('SharedFiles showBottomTabBar=false'),
       ).toBeTruthy(),
     );
     expect(
@@ -494,9 +438,7 @@ describe('RootNavigator - OSS fail-open routing', () => {
 
     fireEvent.press(screen.getByTestId('bottom-tab-settings'));
     await waitFor(() =>
-      expect(
-        screen.getByText('SettingsGlobal showBottomTabBar=false'),
-      ).toBeTruthy(),
+      expect(screen.getByText('Settings showBottomTabBar=false')).toBeTruthy(),
     );
     expect(
       screen.UNSAFE_getByProps({ testID: 'shared-files-screen' }),

@@ -37,6 +37,10 @@ jest.mock('react-i18next', () => {
     useTranslation: () => {
       ReactInner.useContext(TranslationContext);
       return {
+        i18n: {
+          language: 'zh-Hant',
+          resolvedLanguage: 'zh-Hant',
+        },
         t: (key: string, options?: any) => {
           const map: Record<string, string> = {
             'sharedFiles.loading': 'Loading...',
@@ -712,6 +716,44 @@ describe('LocalComputerScreen', () => {
       expect(getByText('Edit Bay / User Directory')).toBeTruthy();
     });
     expect(queryByText('MacBook Pro / User Directory')).toBeNull();
+  });
+
+  it('sorts local computer names using the active i18n locale', async () => {
+    const localeCompareSpy = jest.spyOn(String.prototype, 'localeCompare');
+    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+      {
+        resourceId: 'personal-dir:zeta.jpg',
+        desktopDeviceId: 'desktop-device-id',
+        displayName: 'Zeta.jpg',
+        kind: 'shared_file',
+        fileSize: 1024,
+        mediaType: 'image',
+        status: 'available',
+        addedAt: '2026-06-16T08:00:00.000Z',
+        downloadCount: 0,
+      },
+      {
+        resourceId: 'personal-dir:alpha.jpg',
+        desktopDeviceId: 'desktop-device-id',
+        displayName: 'Alpha.jpg',
+        kind: 'shared_file',
+        fileSize: 1024,
+        mediaType: 'image',
+        status: 'available',
+        addedAt: '2026-06-16T07:00:00.000Z',
+        downloadCount: 0,
+      },
+    ]);
+
+    const { getByText } = render(<LocalComputerScreen />);
+
+    await waitFor(() => {
+      expect(getByText('Alpha.jpg')).toBeTruthy();
+      expect(localeCompareSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        'zh-Hant',
+      );
+    });
   });
 
   it('shows the current shared-files route from the binding snapshot', async () => {
@@ -1996,6 +2038,60 @@ describe('PhoneSyncSpaceScreen', () => {
       connectionState: 'connected',
     });
     mockCurrentClientReceivedLibraryPageFromLegacyList();
+  });
+
+  it('sorts phone sync space names using the active i18n locale', async () => {
+    const localeCompareSpy = jest.spyOn(String.prototype, 'localeCompare');
+    mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
+      {
+        resourceId: 'received-zeta',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'Zeta.jpg',
+        fileKey: 'received/zeta.jpg',
+        filename: 'Zeta.jpg',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-16T08:00:00.000Z',
+        shareStatus: 'shared',
+      },
+      {
+        resourceId: 'received-alpha',
+        desktopDeviceId: 'desktop-device-id',
+        clientId: 'client-001',
+        displayName: 'Alpha.jpg',
+        fileKey: 'received/alpha.jpg',
+        filename: 'Alpha.jpg',
+        mediaType: 'image',
+        fileSize: 1024,
+        completedAt: '2026-06-16T07:00:00.000Z',
+        shareStatus: 'shared',
+      },
+    ]);
+
+    try {
+      const { getAllByTestId, getByText } = render(
+        <TestErrorBoundary>
+          <PhoneSyncSpaceScreen />
+        </TestErrorBoundary>,
+      );
+
+      await waitFor(() => {
+        expect(getByText('Zeta.jpg')).toBeTruthy();
+      });
+
+      fireEvent.press(getAllByTestId('phone-sync-sort-icon')[0].parent!);
+      fireEvent.press(getByText('Name'));
+
+      await waitFor(() => {
+        expect(localeCompareSpy).toHaveBeenCalledWith(
+          expect.any(String),
+          'zh-Hant',
+        );
+      });
+    } finally {
+      localeCompareSpy.mockRestore();
+    }
   });
 
   it('keeps an empty real received library empty unless the shared files preview gate is explicit', async () => {

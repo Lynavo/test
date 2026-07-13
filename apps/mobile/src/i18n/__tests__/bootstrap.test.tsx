@@ -8,8 +8,8 @@ jest.mock('react-native-localize', () => ({
     {
       languageCode: 'zh',
       scriptCode: 'Hans',
-      countryCode: 'CN',
-      languageTag: 'zh-Hans-CN',
+      countryCode: '',
+      languageTag: 'zh-Hans',
       isRTL: false,
     },
   ],

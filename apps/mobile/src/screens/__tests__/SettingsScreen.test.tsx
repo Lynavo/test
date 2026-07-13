@@ -1,5 +1,11 @@
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { SettingsScreen } from '../SettingsScreen';
@@ -10,6 +16,7 @@ import {
   setClientDisplayName,
 } from '../../services/SyncEngineModule';
 import {
+  loadStoredLanguagePreference,
   resolveLanguagePreference,
   saveLanguagePreference,
 } from '../../i18n/language-preference';
@@ -155,6 +162,10 @@ const mockedSetClientDisplayName = setClientDisplayName as jest.MockedFunction<
 const mockedGetAppInfo = getAppInfo as jest.MockedFunction<typeof getAppInfo>;
 const mockedSaveLanguagePreference =
   saveLanguagePreference as jest.MockedFunction<typeof saveLanguagePreference>;
+const mockedLoadStoredLanguagePreference =
+  loadStoredLanguagePreference as jest.MockedFunction<
+    typeof loadStoredLanguagePreference
+  >;
 const mockedResolveLanguagePreference =
   resolveLanguagePreference as jest.MockedFunction<
     typeof resolveLanguagePreference
@@ -195,6 +206,7 @@ describe('SettingsScreen', () => {
       build: '67',
     });
     mockedSaveLanguagePreference.mockResolvedValue(undefined);
+    mockedLoadStoredLanguagePreference.mockResolvedValue('system');
     mockedResolveLanguagePreference.mockReturnValue('en');
     mockedChangeLanguage.mockResolvedValue(undefined);
     mockedShareDiagnosticsArchive.mockResolvedValue(
@@ -359,5 +371,31 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByTestId('language-back'));
     expect(getByText('English')).toBeTruthy();
+  });
+
+  test('uses the active i18n language before stored preference hydration completes', async () => {
+    mockedLoadStoredLanguagePreference.mockImplementationOnce(
+      () => new Promise(() => undefined),
+    );
+
+    const { getByLabelText, getByTestId, getByText } = render(
+      <SettingsScreen />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByTestId('settings-language'));
+    fireEvent.press(getByText('Select Language Manually'));
+
+    expect(
+      within(getByLabelText('English')).getByTestId('mock-check-icon'),
+    ).toBeTruthy();
+    expect(
+      within(getByLabelText('Simplified Chinese')).queryByTestId(
+        'mock-check-icon',
+      ),
+    ).toBeNull();
   });
 });

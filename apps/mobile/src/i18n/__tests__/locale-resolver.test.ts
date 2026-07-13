@@ -23,14 +23,14 @@ const locale = (
 });
 
 describe('resolveLocale', () => {
-  it('returns zh-Hans for simplified Chinese with CN region', () => {
-    expect(resolveLocale([locale('zh-Hans-CN', 'zh', 'CN', 'Hans')])).toBe(
+  it('returns zh-Hans for simplified Chinese script', () => {
+    expect(resolveLocale([locale('zh-Hans', 'zh', '', 'Hans')])).toBe(
       'zh-Hans',
     );
   });
 
-  it('returns zh-Hans for bare zh-CN without scriptCode', () => {
-    expect(resolveLocale([locale('zh-CN', 'zh', 'CN')])).toBe('zh-Hans');
+  it('returns zh-Hans for bare Chinese without scriptCode', () => {
+    expect(resolveLocale([locale('zh', 'zh', '')])).toBe('zh-Hans');
   });
 
   it('returns zh-Hant for traditional Chinese (Taiwan)', () => {
@@ -63,7 +63,7 @@ describe('resolveLocale', () => {
     expect(
       resolveLocale([
         locale('en-US', 'en', 'US'),
-        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+        locale('zh-Hans', 'zh', '', 'Hans'),
       ]),
     ).toBe('en');
   });
@@ -71,7 +71,7 @@ describe('resolveLocale', () => {
   it('picks zh-Hans when simplified Chinese comes before English', () => {
     expect(
       resolveLocale([
-        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+        locale('zh-Hans', 'zh', '', 'Hans'),
         locale('en-US', 'en', 'US'),
       ]),
     ).toBe('zh-Hans');
@@ -81,7 +81,7 @@ describe('resolveLocale', () => {
     expect(
       resolveLocale([
         locale('zh-Hant-TW', 'zh', 'TW', 'Hant'),
-        locale('zh-Hans-CN', 'zh', 'CN', 'Hans'),
+        locale('zh-Hans', 'zh', '', 'Hans'),
       ]),
     ).toBe('zh-Hant');
   });

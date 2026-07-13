@@ -92,6 +92,12 @@ const LANGUAGE_OPTIONS: Array<{ id: LanguageId; label: string }> = [
   { id: 'en', label: 'English' },
 ];
 
+function resolveActiveLanguage(language: string | undefined): LanguageId {
+  if (language?.startsWith('zh-Hant')) return 'zh-Hant';
+  if (language?.startsWith('zh-Hans')) return 'zh-Hans';
+  return 'en';
+}
+
 function firstNonEmptyString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -160,7 +166,7 @@ export function SettingsScreen({
   showBottomTabBar = true,
   onTabPress,
 }: SettingsScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n: translationI18n } = useTranslation();
   const navigation = useNavigation<NavigationProp>();
   const [activeView, setActiveView] = useState<'settings' | 'language'>(
     'settings',
@@ -174,7 +180,11 @@ export function SettingsScreen({
   const [isSavingDeviceName, setIsSavingDeviceName] = useState(false);
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
   const [languageMode, setLanguageMode] = useState<LanguageMode>('system');
-  const [language, setLanguage] = useState<LanguageId>('zh-Hans');
+  const [language, setLanguage] = useState<LanguageId>(() =>
+    resolveActiveLanguage(
+      translationI18n.resolvedLanguage ?? translationI18n.language,
+    ),
+  );
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>('system');
   const [languageError, setLanguageError] = useState<string | null>(null);
@@ -191,7 +201,7 @@ export function SettingsScreen({
         }
       })
       .catch(error => {
-        console.warn('[SettingsGlobal] getBindingState failed:', error);
+        console.warn('[SettingsScreen] getBindingState failed:', error);
         if (!cancelled) {
           setBindingState(null);
         }
@@ -205,7 +215,7 @@ export function SettingsScreen({
         }
       })
       .catch(error => {
-        console.warn('[SettingsGlobal] getClientDisplayName failed:', error);
+        console.warn('[SettingsScreen] getClientDisplayName failed:', error);
       });
 
     void getAppInfo()
@@ -215,7 +225,7 @@ export function SettingsScreen({
         }
       })
       .catch(error => {
-        console.warn('[SettingsGlobal] getAppInfo failed:', error);
+        console.warn('[SettingsScreen] getAppInfo failed:', error);
         if (!cancelled) {
           setAppInfo(null);
         }
@@ -237,7 +247,7 @@ export function SettingsScreen({
       })
       .catch(error => {
         console.warn(
-          '[SettingsGlobal] load language preference failed:',
+          '[SettingsScreen] load language preference failed:',
           error,
         );
       });
@@ -269,7 +279,7 @@ export function SettingsScreen({
       setDeviceName(nextName);
       setShowEditDevice(false);
     } catch (error) {
-      console.warn('[SettingsGlobal] setClientDisplayName failed:', error);
+      console.warn('[SettingsScreen] setClientDisplayName failed:', error);
       setDeviceNameError(t('settings.global.errorDeviceNameSave'));
     } finally {
       setIsSavingDeviceName(false);
@@ -296,7 +306,7 @@ export function SettingsScreen({
         setLanguage(preference);
       }
     } catch (error) {
-      console.warn('[SettingsGlobal] save language preference failed:', error);
+      console.warn('[SettingsScreen] save language preference failed:', error);
       setLanguageError(t('settings.dialogs.languageSaveFailed.body'));
     }
   };
@@ -307,7 +317,7 @@ export function SettingsScreen({
     try {
       await shareDiagnosticsArchive();
     } catch (error) {
-      console.warn('[SettingsGlobal] exportDiagnostics failed:', error);
+      console.warn('[SettingsScreen] exportDiagnostics failed:', error);
       if (isDiagnosticsExportUnavailable(error)) {
         Alert.alert(
           t('settings.dialogs.exportUnavailable.title'),
@@ -326,7 +336,7 @@ export function SettingsScreen({
 
   if (activeView === 'language') {
     return (
-      <LanguageGlobalView
+      <LanguageView
         mode={languageMode}
         language={language}
         errorMessage={languageError}
@@ -513,7 +523,7 @@ export function SettingsScreen({
   );
 }
 
-function LanguageGlobalView({
+function LanguageView({
   mode,
   language,
   errorMessage,

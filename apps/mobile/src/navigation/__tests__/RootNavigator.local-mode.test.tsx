@@ -28,8 +28,8 @@ jest.mock('react-native-localize', () => ({
     {
       languageCode: 'zh',
       scriptCode: 'Hans',
-      countryCode: 'CN',
-      languageTag: 'zh-Hans-CN',
+      countryCode: '',
+      languageTag: 'zh-Hans',
       isRTL: false,
     },
   ],
@@ -171,40 +171,17 @@ jest.mock('../../components/BottomTabBar', () => ({
   BottomTabBar: () => null,
 }));
 
-jest.mock('../../screens/DeviceDiscoveryScreen', () => ({
-  DeviceDiscoveryScreen: () => null,
-}));
 jest.mock('../../screens/CodeVerifyScreen', () => ({
   CodeVerifyScreen: () => null,
 }));
 jest.mock('../../screens/ConnectionTutorialScreen', () => ({
   ConnectionTutorialScreen: () => null,
 }));
-jest.mock('../../screens/SyncActivityScreen', () => ({
-  SyncActivityScreen: () => null,
-}));
 jest.mock('../../screens/AlbumWorkbenchScreen', () => ({
   AlbumWorkbenchScreen: () => null,
 }));
-jest.mock('../../screens/SharedFilesScreen', () => ({
-  SharedFilesScreen: () => null,
-}));
-jest.mock('../../screens/PhoneSyncSpaceScreen', () => ({
-  PhoneSyncSpaceScreen: () => null,
-}));
-jest.mock('../../screens/LocalComputerScreen', () => ({
-  LocalComputerScreen: () => null,
-}));
-jest.mock('../../screens/HistoryScreen', () => ({ HistoryScreen: () => null }));
-jest.mock('../../screens/SettingsScreen', () => ({
-  SettingsScreen: () => null,
-}));
-jest.mock('../../screens/HelpScreen', () => ({ HelpScreen: () => null }));
 jest.mock('../../screens/QRScannerScreen', () => ({
   QRScannerScreen: () => null,
-}));
-jest.mock('../../screens/AutoUploadSettingsScreen', () => ({
-  AutoUploadSettingsScreen: () => null,
 }));
 
 jest.mock('../../stores/auth-store', () => {
