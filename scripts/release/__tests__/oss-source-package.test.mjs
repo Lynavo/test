@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 const repoRoot = new URL('../../..', import.meta.url);
+const cnMarketValue = ['c', 'n'].join('');
 
 function runVerifier(args) {
   return spawnSync(process.execPath, ['scripts/verify-oss-source-package.mjs', ...args], {
@@ -28,6 +29,9 @@ function writeFixture(root, path, content = 'fixture\n') {
 function createTrackedFixture(files) {
   const fixtureRoot = mkdtempSync(join(tmpdir(), 'oss-source-package-'));
   git(fixtureRoot, ['init', '-q']);
+  const excludesFile = join(fixtureRoot, '.git', 'empty-excludes');
+  writeFileSync(excludesFile, '');
+  git(fixtureRoot, ['config', 'core.excludesFile', excludesFile]);
   for (const [path, content] of Object.entries(files)) {
     writeFixture(fixtureRoot, path, content);
   }
@@ -136,16 +140,19 @@ test('audits deleted tracked source-package files when untracked worktree files 
   const fixtureRoot = createTrackedFixture({
     'apps/desktop/resources/dns-sd.exe': 'binary\n',
     'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
+    'scripts/release/release-profiles.mjs': `export const market = '${cnMarketValue}';\n`,
   });
   try {
     rmSync(join(fixtureRoot, 'apps', 'desktop', 'resources', 'dns-sd.exe'), { force: true });
+    rmSync(join(fixtureRoot, 'scripts', 'release', 'release-profiles.mjs'), { force: true });
 
     const result = runVerifier(['--root', fixtureRoot, '--include-untracked']);
 
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /Audited OSS source package files: 2/);
+    assert.match(result.stdout, /Audited OSS source package files: 3/);
     assert.match(result.stdout, /Disallowed OSS source package files: 1/);
     assert.match(result.stdout, /apps\/desktop\/resources\/dns-sd\.exe/);
+    assert.doesNotMatch(result.stdout, /release-profiles\.mjs/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -251,6 +258,49 @@ test('blocks npmrc mirrors, registries, proxies, certificates, and auth config',
     assert.match(result.stdout, /Disallowed OSS source package files: 1/);
     assert.match(result.stdout, /\.npmrc/);
     assert.match(result.stdout, /registry, mirror, proxy, certificate, or auth configuration/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks tracked CN market source and build residue without broad CN string matching', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/android/app/src/cn/AndroidManifest.xml': '<manifest />\n',
+    'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveCN.xcscheme':
+      '<Scheme />\n',
+    'apps/desktop/electron-builder.cn.yml': 'productName: Lynavo Drive\n',
+    'scripts/release/release-profiles.mjs': `export const review = { market: '${cnMarketValue}' };\n`,
+    'apps/mobile/config/release.json': `${JSON.stringify({ profile: cnMarketValue })}\n`,
+    'apps/mobile/config/runtime.yml': `region: ${cnMarketValue}\n`,
+    'apps/mobile/android/app/src/global/java/com/lynavo/drive/mobile/china/payments/NativeMainlandPaymentModule.kt':
+      'class NativeMainlandPaymentModule\n',
+    'apps/mobile/src/markets/cn/config.ts': 'export const enabled = true;\n',
+    'apps/mobile/src/services/mainland-payment-service.ts': 'export const pay = () => null;\n',
+    'apps/mobile/src/i18n/locales/zh-Hans/common.json': `${JSON.stringify({
+      region: cnMarketValue.toUpperCase(),
+    })}\n`,
+    'apps/desktop/src/renderer/lib/styles.ts': "export const className = cn('grid', 'gap-2');\n",
+    'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveGlobal.xcscheme':
+      '<Scheme />\n',
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 12/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 9/);
+    assert.match(result.stdout, /apps\/mobile\/android\/app\/src\/cn\/AndroidManifest\.xml/);
+    assert.match(result.stdout, /LynavoDriveCN\.xcscheme/);
+    assert.match(result.stdout, /apps\/desktop\/electron-builder\.cn\.yml/);
+    assert.match(result.stdout, /scripts\/release\/release-profiles\.mjs/);
+    assert.match(result.stdout, /apps\/mobile\/config\/release\.json/);
+    assert.match(result.stdout, /apps\/mobile\/config\/runtime\.yml/);
+    assert.match(result.stdout, /NativeMainlandPaymentModule\.kt/);
+    assert.match(result.stdout, /apps\/mobile\/src\/markets\/cn\/config\.ts/);
+    assert.match(result.stdout, /apps\/mobile\/src\/services\/mainland-payment-service\.ts/);
+    assert.doesNotMatch(result.stdout, /zh-Hans\/common\.json/);
+    assert.doesNotMatch(result.stdout, /renderer\/lib\/styles\.ts/);
+    assert.doesNotMatch(result.stdout, /LynavoDriveGlobal\.xcscheme/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

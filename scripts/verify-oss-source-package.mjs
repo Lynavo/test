@@ -92,14 +92,50 @@ const GENERATED_SIDECAR_RESOURCE_PATHS = new Set([
   'apps/desktop/resources/lynavo-drive-sidecar.exe',
 ]);
 
+const TEXT_SOURCE_AND_CONFIG_EXTENSIONS = new Set([
+  '.cjs',
+  '.gradle',
+  '.js',
+  '.json',
+  '.json5',
+  '.jsx',
+  '.kt',
+  '.kts',
+  '.mjs',
+  '.plist',
+  '.properties',
+  '.sh',
+  '.swift',
+  '.toml',
+  '.ts',
+  '.tsx',
+  '.xcconfig',
+  '.xcscheme',
+  '.xml',
+  '.yaml',
+  '.yml',
+]);
+
+const KNOWN_MAINLAND_MODULE_FILENAMES = new Set([
+  'mainland-payment-service.ts',
+  'mainlandpaymentprimitives.kt',
+  'nativemainlandpaymentmodule.kt',
+  'nativemainlandpaymentpackage.kt',
+  'nativemarketconfigmodule.kt',
+  'nativemarketconfigpackage.kt',
+  'wxpayentryactivity.kt',
+]);
+
 const NPMRC_DISALLOWED_PATTERN =
   /(^|\n)\s*(?:registry|.*_auth.*|.*token.*|.*proxy.*|cafile|certfile|keyfile|.*_MIRROR)\s*=/iu;
+const CN_RELEASE_SETTING_PATTERN =
+  /\b(?:release[_-]?profile|profile|market|region)\b["']?\s*[:=]\s*(?:["']cn["']|cn)(?=\s*(?:[,;}\]\r\n#]|$))/iu;
 
 function usage() {
   return [
     'Usage: node scripts/verify-oss-source-package.mjs [--root <path>] [--manifest <file>] [--git-ref <ref>] [--include-untracked] [--advisory]',
     '',
-    'Audits the source-package file list for generated artifacts, signing material, private tooling, and local runtime data.',
+    'Audits the source-package file list for generated artifacts, signing material, private tooling, CN market residue, and local runtime data.',
     'By default it uses `git ls-files -z` under --root, with a filesystem fallback for extracted archives without .git.',
     'Use --include-untracked to also audit non-ignored untracked worktree files before a local release.',
     'Use --git-ref to audit a committed Git tree such as HEAD before a source archive rehearsal.',
@@ -291,8 +327,37 @@ function isReleaseOutputPath(path) {
   );
 }
 
+function cnMarketPathDisallowReason(path) {
+  const lowerPath = path.toLowerCase();
+  const name = basename(lowerPath);
+
+  if (/^apps\/mobile\/android\/.*\/src\/(?:cn|testcn)(?:\/|$)/u.test(lowerPath)) {
+    return 'Android CN market source set';
+  }
+  if (name.endsWith('cn.xcscheme')) {
+    return 'CN-specific Xcode scheme';
+  }
+  if (lowerPath === 'apps/desktop/electron-builder.cn.yml') {
+    return 'CN-specific Electron builder configuration';
+  }
+  if (lowerPath.startsWith('apps/mobile/src/markets/cn/')) {
+    return 'CN market source module';
+  }
+  if (lowerPath.includes('/china/payments/') || lowerPath.includes('/china/market/')) {
+    return 'mainland payment or market module';
+  }
+  if (KNOWN_MAINLAND_MODULE_FILENAMES.has(name)) {
+    return 'known mainland payment or market module';
+  }
+
+  return null;
+}
+
 function contentDisallowReason(path, root) {
-  if (basename(path) !== '.npmrc') {
+  const name = basename(path);
+  const isNpmrc = name === '.npmrc';
+  const isScannableText = TEXT_SOURCE_AND_CONFIG_EXTENSIONS.has(extname(path).toLowerCase());
+  if (!isNpmrc && !isScannableText) {
     return null;
   }
 
@@ -302,8 +367,11 @@ function contentDisallowReason(path, root) {
   }
 
   const content = readFileSync(absolutePath, 'utf8');
-  if (NPMRC_DISALLOWED_PATTERN.test(content)) {
+  if (isNpmrc && NPMRC_DISALLOWED_PATTERN.test(content)) {
     return '.npmrc contains registry, mirror, proxy, certificate, or auth configuration';
+  }
+  if (!hasSegment(path, 'zh-Hans') && CN_RELEASE_SETTING_PATTERN.test(content)) {
+    return 'release profile, market, or region is set to cn';
   }
 
   return null;
@@ -313,6 +381,11 @@ function disallowReason(path, root) {
   const contentReason = contentDisallowReason(path, root);
   if (contentReason) {
     return contentReason;
+  }
+
+  const cnMarketPathReason = cnMarketPathDisallowReason(path);
+  if (cnMarketPathReason) {
+    return cnMarketPathReason;
   }
 
   if (GENERATED_SIDECAR_RESOURCE_PATHS.has(path)) {
