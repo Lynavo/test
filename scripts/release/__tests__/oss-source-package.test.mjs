@@ -7,6 +7,7 @@ import test from 'node:test';
 
 const repoRoot = new URL('../../..', import.meta.url);
 const cnMarketValue = ['c', 'n'].join('');
+const cnRuntimeEndpoint = ['https://api.vividrop', '.cn'].join('');
 
 function runVerifier(args) {
   return spawnSync(process.execPath, ['scripts/verify-oss-source-package.mjs', ...args], {
@@ -301,6 +302,37 @@ test('blocks tracked CN market source and build residue without broad CN string 
     assert.doesNotMatch(result.stdout, /zh-Hans\/common\.json/);
     assert.doesNotMatch(result.stdout, /renderer\/lib\/styles\.ts/);
     assert.doesNotMatch(result.stdout, /LynavoDriveGlobal\.xcscheme/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks remaining CN runtime configuration and mainland payment residue', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/src/config/runtime.ts': `export const apiBaseUrl = '${cnRuntimeEndpoint}';\n`,
+    'scripts/release/market.properties': `LYNAVO_MARKET=${cnMarketValue}\n`,
+    'apps/mobile/scripts/region.sh': `SYNCFLOW_REGION=${cnMarketValue}\n`,
+    'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveCN.xcscheme/contents.xcscheme':
+      '<Scheme />\n',
+    'apps/mobile/src/payments/WeChatPay.ts': 'export const pay = () => null;\n',
+    'docs/runtime-endpoints.md': `Example only: ${cnRuntimeEndpoint}\n`,
+    'apps/mobile/src/i18n/locales/en/runtime.json': `${JSON.stringify({
+      endpointExample: cnRuntimeEndpoint,
+    })}\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 7/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 5/);
+    assert.match(result.stdout, /apps\/mobile\/src\/config\/runtime\.ts/);
+    assert.match(result.stdout, /scripts\/release\/market\.properties/);
+    assert.match(result.stdout, /apps\/mobile\/scripts\/region\.sh/);
+    assert.match(result.stdout, /LynavoDriveCN\.xcscheme\/contents\.xcscheme/);
+    assert.match(result.stdout, /apps\/mobile\/src\/payments\/WeChatPay\.ts/);
+    assert.doesNotMatch(result.stdout, /docs\/runtime-endpoints\.md/);
+    assert.doesNotMatch(result.stdout, /i18n\/locales\/en\/runtime\.json/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

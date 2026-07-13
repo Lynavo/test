@@ -123,13 +123,16 @@ const KNOWN_MAINLAND_MODULE_FILENAMES = new Set([
   'nativemainlandpaymentpackage.kt',
   'nativemarketconfigmodule.kt',
   'nativemarketconfigpackage.kt',
+  'wechatpay.ts',
   'wxpayentryactivity.kt',
 ]);
 
 const NPMRC_DISALLOWED_PATTERN =
   /(^|\n)\s*(?:registry|.*_auth.*|.*token.*|.*proxy.*|cafile|certfile|keyfile|.*_MIRROR)\s*=/iu;
 const CN_RELEASE_SETTING_PATTERN =
-  /\b(?:release[_-]?profile|profile|market|region)\b["']?\s*[:=]\s*(?:["']cn["']|cn)(?=\s*(?:[,;}\]\r\n#]|$))/iu;
+  /(?:^|[^a-z0-9_])(?:[a-z][a-z0-9]*_)*(?:release[_-]?profile|profile|market|region)\b["']?\s*[:=]\s*(?:["']cn["']|cn)(?=\s*(?:[,;}\]\r\n#]|$))/iu;
+const CN_RUNTIME_ENDPOINT_PATTERN =
+  /https?:\/\/(?:api|global-api|review-api)\.vividrop\.cn(?=[:/?#"'`\s]|$)/iu;
 
 function usage() {
   return [
@@ -316,6 +319,18 @@ function hasSegment(path, segment) {
   return path.split('/').includes(segment);
 }
 
+function isDocumentationOrLocalizationPath(path) {
+  const segments = path.toLowerCase().split('/');
+  return (
+    segments[0] === 'docs' ||
+    segments.includes('i18n') ||
+    segments.includes('locale') ||
+    segments.includes('locales') ||
+    segments.includes('localization') ||
+    segments.includes('localizations')
+  );
+}
+
 function firstMatchingSegment(path, segments) {
   return path.split('/').find((segment) => segments.has(segment)) ?? null;
 }
@@ -334,7 +349,7 @@ function cnMarketPathDisallowReason(path) {
   if (/^apps\/mobile\/android\/.*\/src\/(?:cn|testcn)(?:\/|$)/u.test(lowerPath)) {
     return 'Android CN market source set';
   }
-  if (name.endsWith('cn.xcscheme')) {
+  if (lowerPath.split('/').some((segment) => segment.endsWith('cn.xcscheme'))) {
     return 'CN-specific Xcode scheme';
   }
   if (lowerPath === 'apps/desktop/electron-builder.cn.yml') {
@@ -372,6 +387,9 @@ function contentDisallowReason(path, root) {
   }
   if (!hasSegment(path, 'zh-Hans') && CN_RELEASE_SETTING_PATTERN.test(content)) {
     return 'release profile, market, or region is set to cn';
+  }
+  if (!isDocumentationOrLocalizationPath(path) && CN_RUNTIME_ENDPOINT_PATTERN.test(content)) {
+    return 'China-only runtime service endpoint';
   }
 
   return null;
