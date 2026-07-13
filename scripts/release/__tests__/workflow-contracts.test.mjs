@@ -40,6 +40,10 @@ function findStep(steps, name) {
   return step;
 }
 
+function allWorkflowSteps(config) {
+  return Object.values(config.jobs ?? {}).flatMap(job => job.steps ?? []);
+}
+
 test('OSS Release Gate workflow is stable, read-only, and toolchain-pinned', () => {
   const config = workflow('.github/workflows/oss-release-gate.yml');
   const job = config.jobs?.['oss-release-gate'];
@@ -130,5 +134,98 @@ test('Dependabot proposes reviewed monthly dependency updates', () => {
     assert.equal(update.directory, '/');
     assert.equal(update.schedule?.interval, 'monthly');
     assert.equal(update['open-pull-requests-limit'], 5);
+  }
+});
+
+test('native build workflow is path-aware, unsigned, and platform-bounded', () => {
+  const config = workflow('.github/workflows/native-builds.yml');
+  const jobs = config.jobs ?? {};
+
+  assert.equal(config.name, 'Native Builds');
+  assertCommonTriggers(config);
+  assert.ok(config.on?.workflow_call !== undefined);
+  assertReadOnlyWorkflow(config);
+  assert.equal(config.on?.pull_request_target, undefined);
+
+  assert.equal(jobs.changes?.name, 'Detect Changes');
+  assert.equal(jobs.ios?.name, 'iOS Build');
+  assert.equal(jobs.android?.name, 'Android Build');
+  assert.equal(jobs.macos?.name, 'macOS Package');
+  assert.equal(jobs.windows?.name, 'Windows Package');
+  assert.equal(jobs.aggregate?.name, 'Native Builds');
+
+  const paths = findStep(jobs.changes?.steps ?? [], 'Filter changed paths');
+  const filters = paths.with?.filters ?? '';
+  for (const path of [
+    'apps/mobile/**',
+    'apps/desktop/**',
+    'services/sidecar-go/**',
+    'packages/contracts/**',
+    'packages/design-tokens/**',
+    'scripts/release/**',
+    'pnpm-lock.yaml',
+    '.github/workflows/native-builds.yml',
+  ]) {
+    assert.match(filters, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.equal(jobs.ios?.['runs-on'], 'macos-26');
+  assert.equal(jobs.android?.['runs-on'], 'ubuntu-24.04');
+  assert.equal(jobs.windows?.['runs-on'], 'windows-2025');
+  assert.deepEqual(jobs.macos?.strategy?.matrix?.include, [
+    { arch: 'arm64', runner: 'macos-26' },
+    { arch: 'x64', runner: 'macos-26-intel' },
+  ]);
+  assert.equal(jobs.macos?.['runs-on'], '${{ matrix.runner }}');
+
+  const steps = allWorkflowSteps(config);
+  assertActionsPinned(steps);
+  const workflowText = readRepoFile('.github/workflows/native-builds.yml');
+  assert.match(workflowText, /22\.12\.0/);
+  assert.match(workflowText, /10\.32\.1/);
+  assert.match(workflowText, /1\.25\.6/);
+  assert.match(workflowText, /java-version:\s*['"]?17['"]?/);
+  assert.match(workflowText, /CODE_SIGNING_ALLOWED=NO/);
+  assert.match(workflowText, /retention-days:\s*7/);
+
+  for (const artifact of [
+    'native-macos-${{ matrix.arch }}',
+    'native-windows-x64',
+    'native-android',
+    'LynavoDrive-${{ needs.changes.outputs.version }}-macos-${{ matrix.arch }}.dmg',
+    'LynavoDrive-${{ needs.changes.outputs.version }}-windows-x64.exe',
+    'LynavoDrive-${{ needs.changes.outputs.version }}-windows-x64.zip',
+    'LynavoDrive-${{ needs.changes.outputs.version }}-android-arm64-x86_64.apk',
+    'LynavoDrive-${{ needs.changes.outputs.version }}-android-arm64-x86_64.aab',
+  ]) {
+    assert.ok(workflowText.includes(artifact), `missing native artifact: ${artifact}`);
+  }
+
+  assert.equal(jobs.aggregate?.if, 'always()');
+  assert.deepEqual(jobs.aggregate?.needs, [
+    'changes',
+    'ios',
+    'android',
+    'macos',
+    'windows',
+  ]);
+  const aggregateStep = findStep(
+    jobs.aggregate?.steps ?? [],
+    'Verify native build results',
+  );
+  assert.equal(aggregateStep.env?.CHANGES_RESULT, '${{ needs.changes.result }}');
+  const aggregateCommands = aggregateStep.run ?? '';
+  assert.match(aggregateCommands, /CHANGES_RESULT.+success/s);
+  assert.match(aggregateCommands, /success/);
+  assert.match(aggregateCommands, /skipped/);
+  assert.match(aggregateCommands, /No native build scope selected\./);
+
+  assert.doesNotMatch(workflowText, /pull_request_target/);
+  assert.doesNotMatch(workflowText, /ubuntu-(?:20\.04|22\.04)|runs-on:\s*.*linux/i);
+  assert.doesNotMatch(workflowText, /(?:artifact|asset)[^\n]*linux|linux[^\n]*(?:artifact|asset)/i);
+  assert.doesNotMatch(workflowText, /notari[sz]|apple-id|app-store|play-store|auto.?update/i);
+  assert.doesNotMatch(workflowText, /secrets\.|CSC_LINK|APPLE_ID|signing-certificate/i);
+  for (const step of steps.filter(candidate => candidate.uses?.startsWith('actions/upload-artifact@'))) {
+    assert.doesNotMatch(String(step.with?.path ?? ''), /[*?]/);
   }
 });
