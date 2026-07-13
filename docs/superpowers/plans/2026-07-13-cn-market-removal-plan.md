@@ -32,6 +32,7 @@
 ### Task 1: Add The OSS Market Boundary Guard
 
 **Files:**
+
 - Modify: `scripts/release/__tests__/oss-source-package.test.mjs`
 - Modify: `scripts/verify-oss-source-package.mjs`
 
@@ -127,6 +128,7 @@ git commit -m "test: guard OSS source from CN market residue"
 ### Task 2: Remove The Unused Country-Code Contract Surface
 
 **Files:**
+
 - Delete: `packages/contracts/src/countries.ts`
 - Delete: `apps/mobile/src/constants/countries.ts`
 - Modify: `packages/contracts/package.json`
@@ -179,6 +181,7 @@ git commit -m "refactor: remove unused country code contract"
 ### Task 3: Remove Desktop Variant Dead Code
 
 **Files:**
+
 - Delete: `apps/desktop/src/renderer/features/settings/ShareAddressSection.tsx`
 - Delete: `apps/desktop/src/renderer/features/settings/SystemGuideSection.tsx`
 - Delete: `apps/desktop/src/renderer/features/settings/__tests__/ShareAddressSection.test.tsx`
@@ -235,6 +238,7 @@ git commit -m "refactor: remove desktop market variant dead code"
 ### Task 4: Synchronize Desktop Document Locale
 
 **Files:**
+
 - Modify: `apps/desktop/src/renderer/index.html`
 - Modify: `apps/desktop/src/renderer/i18n/index.ts`
 - Modify: `apps/desktop/src/renderer/i18n/__tests__/index.test.ts`
@@ -284,6 +288,7 @@ git commit -m "fix: synchronize desktop document locale"
 ### Task 5: Canonicalize Mobile Screen Implementations
 
 **Files:**
+
 - Replace with active implementation: `apps/mobile/src/screens/{AutoUploadSettings,DeviceDiscovery,Help,History,LocalComputer,PhoneSyncSpace,Settings,SharedFiles,SyncActivity}Screen.tsx`
 - Create from active variant: `apps/mobile/src/screens/DownloadRecordsScreen.tsx`
 - Delete: `apps/mobile/src/screens/{AutoUploadSettings,DeviceDiscovery,DownloadRecords,Help,History,LocalComputer,PhoneSyncSpace,Settings,SharedFiles,SyncActivity}GlobalScreen.tsx`
@@ -308,9 +313,15 @@ For every family in the Files list, delete the old unsuffixed implementation fir
 Examples of required final declarations:
 
 ```ts
-export function DeviceDiscoveryScreen() { /* existing active body */ }
-export function SyncActivityScreen({ showBottomTabBar = true }: SyncActivityScreenProps) { /* existing active body */ }
-export function SettingsScreen({ showBottomTabBar = true }: SettingsScreenProps) { /* existing active body */ }
+export function DeviceDiscoveryScreen() {
+  /* existing active body */
+}
+export function SyncActivityScreen({ showBottomTabBar = true }: SyncActivityScreenProps) {
+  /* existing active body */
+}
+export function SettingsScreen({ showBottomTabBar = true }: SettingsScreenProps) {
+  /* existing active body */
+}
 ```
 
 - [ ] **Step 3: Rename active tests and update navigation/mocks atomically**
@@ -339,6 +350,7 @@ git commit -m "refactor: canonicalize mobile screen names"
 ### Task 6: Remove Mobile China-Locale Defaults And Fixtures
 
 **Files:**
+
 - Modify: `apps/mobile/src/screens/AlbumWorkbenchScreen.tsx`
 - Modify: `apps/mobile/src/screens/LocalComputerScreen.tsx`
 - Modify: `apps/mobile/src/screens/PhoneSyncSpaceScreen.tsx`
@@ -390,6 +402,7 @@ git commit -m "fix: derive runtime locale without China defaults"
 ### Task 7: Neutralize iOS Metadata And App Icon Selection
 
 **Files:**
+
 - Modify: `apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj`
 - Delete: `apps/mobile/ios/LynavoDrive/Images.xcassets/AppIconGlobal.appiconset/Contents.json`
 - Delete: all PNG files under `apps/mobile/ios/LynavoDrive/Images.xcassets/AppIconGlobal.appiconset/`
@@ -435,6 +448,7 @@ git commit -m "refactor: neutralize iOS market metadata"
 ### Task 8: Full Verification And Residue Audit
 
 **Files:**
+
 - Modify only files already in scope if validation finds a cleanup regression.
 
 - [ ] **Step 1: Run formatting and focused static scans**
