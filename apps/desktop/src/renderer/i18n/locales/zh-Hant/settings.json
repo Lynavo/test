@@ -10,50 +10,6 @@
   "filePath": {
     "openShared": "開啟團隊共享目錄"
   },
-  "shareAddress": {
-    "label": "區域網路共享位址",
-    "recommendedHost": "這台電腦",
-    "validating": "正在偵測共享狀態",
-    "validatingDetail": "正在檢查 Windows 共享設定。",
-    "validatingDetailMac": "正在檢查 macOS 檔案共享設定。",
-    "validatingDetailLinux": "正在檢查系統檔案共享設定。",
-    "ready": "共享已就緒",
-    "readyDetail": "{{shareName}} 可以被同一個區域網路內的裝置存取。",
-    "needsManualEnable": "需要手動開啟共享",
-    "needsManualEnableDetailMac": "請在系統設定中開啟檔案共享，並允許 Lynavo Drive 存取團隊共享目錄。",
-    "needsManualEnableDetailWindows": "請開啟 Windows 進階共享，並確認網路探索可用。",
-    "needsManualEnableDetailLinux": "請在系統中手動設定檔案共享後重新偵測。",
-    "shareRegistered": "團隊共享目錄已登記",
-    "shareRegisteredDetailMac": "系統共享可能需要一點時間重新整理，請保持檔案共享開啟。",
-    "shareRegisteredDetailWindows": "團隊共享目錄已登記，請確認 Windows 防火牆允許檔案共享。",
-    "shareRegisteredDetailLinux": "團隊共享目錄已登記，請確認系統檔案共享可用。",
-    "error": "共享偵測失敗",
-    "errorDetail": "請檢查系統共享設定後重試。",
-    "unknown": "共享狀態未知",
-    "unknownDetail": "背景服務尚未回報共享狀態。",
-    "refresh": "重新偵測",
-    "windowsManualHint": "Windows 需要開啟進階共享後，手機才能讀取團隊共享目錄。",
-    "windowsQuickConfig": "Windows 快速設定",
-    "windowsQuickConfigDescription": "開啟系統進階共享設定，確認網路探索和檔案共享已啟用。",
-    "openAdvancedSharing": "開啟進階共享",
-    "copyRecommendedAddress": "複製建議位址",
-    "recommendedAddress": "建議位址",
-    "systemGuide": "系統指引"
-  },
-  "systemGuide": {
-    "macTitle": "macOS 檔案共享",
-    "macSubtitle": "確認檔案共享和團隊共享目錄權限已開啟。",
-    "windowsTitle": "Windows 檔案共享",
-    "windowsDescription": "開啟網路探索、檔案和印表機共享，並允許團隊共享目錄共享。",
-    "linuxTitle": "Linux 檔案共享",
-    "linuxDescription": "在系統中手動設定 Samba 或檔案共享後，回到 Lynavo Drive 重新偵測。",
-    "steps": [
-      "開啟進階共享設定",
-      "啟用網路探索",
-      "啟用檔案和印表機共享",
-      "確認團隊共享目錄允許目前使用者讀取"
-    ]
-  },
   "profile": {
     "title": "我的",
     "cards": {

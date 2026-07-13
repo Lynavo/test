@@ -17,10 +17,6 @@ export function getProductName(): string {
   return PRODUCT_NAME;
 }
 
-export function isLynavoGlobalProduct(): boolean {
-  return true;
-}
-
 export function getProductReleaseChannel(env: Env = process.env): ReleaseChannel {
   return parseReleaseChannel(env.LYNAVO_RELEASE_CHANNEL) ?? 'prod';
 }

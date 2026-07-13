@@ -6,7 +6,6 @@ import {
   PRODUCT_NAME,
   getProductName,
   getProductReleaseChannel,
-  isLynavoGlobalProduct,
 } from '../product';
 
 describe('desktop product helper', () => {
@@ -22,13 +21,6 @@ describe('desktop product helper', () => {
   it('uses Lynavo Drive as the Electron storage identity', () => {
     expect(APP_STORAGE_IDENTITY_NAME).toBe('Lynavo Drive');
     expect(APP_STORAGE_IDENTITY_NAME).toBe(getProductName());
-  });
-
-  it('does not let unrelated env affect product identity', () => {
-    vi.stubEnv('OTHER_PRODUCT_VARIANT', 'regional');
-
-    expect(getProductName()).toBe('Lynavo Drive');
-    expect(isLynavoGlobalProduct()).toBe(true);
   });
 
   it('resolves release channel from Lynavo env only', () => {

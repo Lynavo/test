@@ -189,41 +189,6 @@ describe('SettingsPage', () => {
     expect(screen.getByText('192.168.0.227')).toBeInTheDocument();
   });
 
-  it('hides local share address guidance in the Lynavo global product', () => {
-    setElectronPlatform({ isMac: false, isWindows: false, isLinux: true });
-
-    render(<SettingsPage />);
-
-    expect(screen.queryByText('LAN share address')).not.toBeInTheDocument();
-    expect(screen.queryByText('Linux File Sharing')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Open team shared folder/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('keeps Linux sharing guidance hidden in the Lynavo global product', () => {
-    setElectronPlatform({ isMac: false, isWindows: false, isLinux: true });
-    useSettingsStore.setState({
-      settings: {
-        ...useSettingsStore.getState().settings,
-        shareStatus: 'needs_manual_enable',
-      },
-      shareStatusInfo: {
-        ...useSettingsStore.getState().shareStatusInfo,
-        status: 'needs_manual_enable',
-      },
-    });
-
-    render(<SettingsPage />);
-
-    expect(
-      screen.queryByText('Configure file sharing in Linux system settings, then check again.'),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText('Linux File Sharing')).not.toBeInTheDocument();
-    expect(screen.queryByText('Windows quick setup')).not.toBeInTheDocument();
-    expect(screen.queryByText('Windows File Sharing')).not.toBeInTheDocument();
-  });
-
   it('does not render desktop version polling controls', async () => {
     render(<SettingsPage />);
 

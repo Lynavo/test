@@ -32,9 +32,7 @@ import {
 } from '@renderer/components/ui/dialog';
 import { Label } from '@renderer/components/ui/label';
 import type { PowerSaveState } from '../../../preload/api';
-import { getProductName, isLynavoGlobalProduct } from '../../../shared/product';
-import { ShareAddressSection } from './ShareAddressSection';
-import { SystemGuideSection } from './SystemGuideSection';
+import { getProductName } from '../../../shared/product';
 
 type Tone = 'blue' | 'sky' | 'green' | 'amber' | 'rose' | 'slate';
 type AppInfo = Awaited<ReturnType<NonNullable<Window['electronAPI']>['support']['getAppInfo']>>;
@@ -86,7 +84,6 @@ export function SettingsPage() {
   const crossDeviceReceivedAccessEnabled = settings.allowCrossDeviceReceivedAccess !== false;
   const localIp = localIps[0] || '192.168.0.227';
   const feedbackReady = feedbackText.trim().length > 0;
-  const showLocalShareGuidance = !isLynavoGlobalProduct();
   const productName = getProductName();
   const installedVersionLabel = appInfo
     ? `${appInfo.version}${appInfo.buildNumber ? ` (${appInfo.buildNumber})` : ''}`
@@ -258,13 +255,6 @@ export function SettingsPage() {
                 caption={localIp}
               />
             </SettingsCard>
-
-            {showLocalShareGuidance ? (
-              <>
-                <ShareAddressSection />
-                <SystemGuideSection />
-              </>
-            ) : null}
           </div>
 
           <div className="space-y-5">
