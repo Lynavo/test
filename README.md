@@ -163,30 +163,27 @@ pnpm --filter @lynavo-drive/desktop package:linux -- --arch=arm64
 `release` profiles only inject `LYNAVO_RELEASE_CHANNEL` and local build
 configuration, and only select local build/package commands.
 
-## OSS Boundary
+## 🛡️ OSS Boundaries
 
-- Community/OSS builds are a single OSS baseline. They do not provide
-  multi-market branches, dedicated account-service paths, dedicated release
-  profiles, or dual-market regression matrices.
-- Guest local LAN mode must work. Without sign-in or account-service state,
-  users can discover the desktop, pair, scan the pending queue, and upload
-  automatically over foreground LAN.
-- No manual file-selection fallback is provided. The queue is driven by mobile
-  local scans and the pending queue; the UI must not allow manual file
-  checkboxes to bypass automatic incremental sync.
-- Foreground LAN sync is fail-open. When local permissions, pairing, and LAN
-  reachability are available, foreground sync is not blocked by sign-in,
-  account-service state, or missing non-OSS modules.
-- Non-OSS remote/background capabilities fail closed. Remote access, tunnel
-  credentials, and silent background continuation remain off without official
-  capability.
-- The OSS source package does not redistribute Apple Bonjour for Windows
-  binaries. Windows native Bonjour can only use the user's local installation or
-  another locally permitted configured source; otherwise it uses the
-  zeroconf-compatible fallback.
-- Package scope, mDNS service, legacy data directory, and native package/bundle
-  renames are future migration boundaries. This documentation pass does not
-  require renames or data migration.
+> [!IMPORTANT]
+> **Open-Source Core & Sync Limitations**
+>
+> - **Guest Local LAN Mode**: Foreground automatic sync works out of the box without login or account-service state. Devices discover, pair, scan the pending queue, and upload over local LAN.
+> - **Strictly Read-Only Queue**: Users cannot delete, reorder, or skip queue items in the UI.
+> - **Automatic Incremental Sync Only**: No manual file-selection fallback or checkbox picking is provided. Sync is driven solely by local scans and the pending queue.
+> - **Fail-Open LAN Sync**: Foreground LAN sync is never blocked by login, account-service state, or missing non-OSS modules.
+> - **Single-Device Serial Upload**: A given mobile client uploads only one file at a time to the desktop.
+
+> [!WARNING]
+> **Closed-by-Default Capabilities & Licensing**
+>
+> - **Non-OSS Capabilities Fail Closed**: Silent background resume, remote access, and tunnel credentials require official capabilities and will fail closed (remain disabled) by default.
+> - **No Redistribution of Apple Bonjour**: The OSS build does not redistribute Apple Bonjour for Windows binaries. Windows users must use their local Bonjour installation or default to the zeroconf-compatible fallback.
+> - **Single Baseline**: No multi-market branches, dedicated account paths, or dual-market regression matrices are provided in this baseline.
+
+> [!NOTE]
+> **Future Migration Boundaries**
+> Package scope, mDNS service names, legacy data directories, and native package/bundle ID renames are migration boundaries and do not require renames in this documentation pass.
 
 ## Project Structure
 
