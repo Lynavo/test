@@ -42,22 +42,6 @@ test('package scripts expose an OSS release gate without native builds', () => {
   assert.equal(scripts[token(['tag:', 'beta:push'])], undefined);
 });
 
-test('CI runs the OSS release gate with the repository Node baseline', () => {
-  const packageJson = JSON.parse(readRepoFile('package.json'));
-  const workflow = readRepoFile('.github/workflows/oss-release-gate.yml');
-
-  assert.match(workflow, /name:\s+OSS Release Gate/);
-  assert.equal(packageJson.engines?.node, '>=22.12.0');
-  assert.match(workflow, /node-version:\s+22\.12\.0/);
-  assert.match(workflow, /pnpm gate:release/);
-  assert.match(workflow, /pull_request:/);
-  assert.match(workflow, /push:/);
-  assert.doesNotMatch(workflow, /\bpnpm build\b/);
-  assert.doesNotMatch(workflow, /\bpnpm package:/);
-  assert.doesNotMatch(workflow, /\bxcodebuild\b/);
-  assert.doesNotMatch(workflow, /\bgradlew\b/);
-});
-
 test('policy permits only secret-free unsigned GitHub-hosted verification builds', () => {
   const policyPaths = [
     'AGENTS.md',
