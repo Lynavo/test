@@ -326,6 +326,25 @@ Desktop (Electron + Go sidecar, macOS / Windows)
 - Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
 - Third-party notices: [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
 
+## 💡 Contributing
+
+We welcome contributions from the community! To get started:
+
+1. **Fork the Repository**: Create a personal fork and clone it locally.
+2. **Setup Development Workspace**: Install dependencies and compile shared packages:
+   ```bash
+   pnpm install
+   pnpm build
+   ```
+3. **Verify Tests**: Ensure all formatting, typescript checks, and unit tests pass before submitting a PR:
+   ```bash
+   pnpm test
+   pnpm typecheck
+   pnpm format:check
+   ```
+
+For detailed coding standards, project layouts, and process rules, check out our [Contributing Guidelines](./CONTRIBUTING.md) and [Code of Conduct](./CODE_OF_CONDUCT.md).
+
 ## ⚖️ License
 
 MIT. See [`LICENSE`](./LICENSE).
