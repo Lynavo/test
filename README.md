@@ -1,11 +1,34 @@
-# Lynavo Drive
+<p align="center">
+  <img src="./screenshots/banner.png" alt="Lynavo Drive Banner" width="100%">
+</p>
 
-Lynavo Drive is a local-LAN incremental media sync tool from mobile
-(iOS / Android) to desktop (macOS / Windows), built for global users and video
-teams. The current open-source baseline maintains one OSS local build path only
-and does not include multi-market distribution paths. Linux keeps only local
-source-build / package verification paths and is not a current user support
-surface.
+<p align="center">
+  <img src="./screenshots/logo.png" alt="Lynavo Drive Logo" width="120">
+</p>
+
+<h1 align="center">Lynavo Drive</h1>
+
+<p align="center">
+  <strong>A high-performance, local-LAN incremental media sync tool from mobile (iOS / Android) to desktop (macOS / Windows).</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D%2022.12.0-blue?style=flat-square&logo=node.js" alt="Node Version">
+  <img src="https://img.shields.io/badge/Go-%3E%3D%201.25.6-00ADD8?style=flat-square&logo=go" alt="Go Version">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey?style=flat-square" alt="Desktop Platform">
+  <img src="https://img.shields.io/badge/Mobile-iOS%20%7C%20Android-lightgrey?style=flat-square" alt="Mobile Platform">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
+</p>
+
+<p align="center">
+  <a href="#-screenshots-preview">Screenshots</a> •
+  <a href="#-key-features">Key Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-oss-boundaries">OSS Boundaries</a> •
+  <a href="#-tech-stack">Tech Stack</a>
+</p>
+
+---
 
 ## Current Status
 
