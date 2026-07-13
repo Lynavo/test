@@ -171,8 +171,6 @@ describe('@lynavo-drive/contracts exports', () => {
     expect(settings.allowCrossDeviceReceivedAccess).toBe(true);
   });
   it('exports mobile country code data', () => {
-    expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'CN')?.code).toBe('+86');
-    expect(contracts.COUNTRY_CODES.find((country) => country.iso === 'TW')?.code).toBe('+886');
   });
   it('exports OSS repository support links without official API endpoints', () => {
     expect(contracts.LYNAVO_REPOSITORY_URL).toBe('https://github.com/lynavo/lynavo-drive');

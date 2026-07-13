@@ -10,11 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.js"
-    },
-    "./countries": {
-      "types": "./dist/countries.d.ts",
-      "import": "./dist/esm/countries.js",
-      "require": "./dist/countries.js"
     }
   },
   "scripts": {

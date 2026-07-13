@@ -9,5 +9,5 @@
     "declarationMap": false,
     "tsBuildInfoFile": "dist/esm/tsconfig.esm.tsbuildinfo"
   },
-  "include": ["src/countries.ts"]
+  "include": ["src/index.ts"]
 }
