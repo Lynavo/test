@@ -205,6 +205,43 @@ test('audits a committed git tree when a git ref is requested', () => {
   }
 });
 
+test('audits content from the requested git tree instead of the worktree', () => {
+  const fixtureRoot = createTrackedFixture({
+    'configs/release profile [legacy].mjs': `export const market = '${cnMarketValue}';\n`,
+    'apps/mobile/src/config/runtime endpoint.ts':
+      `export const apiBaseUrl = '${cnRuntimeEndpoint}';\n`,
+  });
+  try {
+    git(fixtureRoot, [
+      '-c',
+      'user.email=oss-source-test@example.invalid',
+      '-c',
+      'user.name=OSS Source Test',
+      'commit',
+      '-qm',
+      'fixture',
+    ]);
+    writeFixture(
+      fixtureRoot,
+      'configs/release profile [legacy].mjs',
+      "export const market = 'global';\n",
+    );
+    rmSync(join(fixtureRoot, 'apps', 'mobile', 'src', 'config', 'runtime endpoint.ts'), {
+      force: true,
+    });
+
+    const result = runVerifier(['--root', fixtureRoot, '--git-ref', 'HEAD']);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 2/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 2/);
+    assert.match(result.stdout, /configs\/release profile \[legacy\]\.mjs/);
+    assert.match(result.stdout, /apps\/mobile\/src\/config\/runtime endpoint\.ts/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('allows normal source files and exact source-build exceptions', () => {
   const fixtureRoot = createTrackedFixture({
     'apps/mobile/src/App.tsx': 'export const App = () => null;\n',
@@ -312,6 +349,8 @@ test('blocks remaining CN runtime configuration and mainland payment residue', (
     'apps/mobile/src/config/runtime.ts': `export const apiBaseUrl = '${cnRuntimeEndpoint}';\n`,
     'scripts/release/market.properties': `LYNAVO_MARKET=${cnMarketValue}\n`,
     'apps/mobile/scripts/region.sh': `SYNCFLOW_REGION=${cnMarketValue}\n`,
+    'apps/mobile/ios/LynavoDrive.xcodeproj/project.pbxproj':
+      `SYNCFLOW_MARKET = ${cnMarketValue};\n`,
     'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveCN.xcscheme/contents.xcscheme':
       '<Scheme />\n',
     'apps/mobile/src/payments/WeChatPay.ts': 'export const pay = () => null;\n',
@@ -319,20 +358,26 @@ test('blocks remaining CN runtime configuration and mainland payment residue', (
     'apps/mobile/src/i18n/locales/en/runtime.json': `${JSON.stringify({
       endpointExample: cnRuntimeEndpoint,
     })}\n`,
+    'apps/mobile/src/i18n/locales/zh-Hans/common.json': `${JSON.stringify({
+      region: cnMarketValue.toUpperCase(),
+      label: 'Simplified Chinese',
+    })}\n`,
   });
   try {
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /Audited OSS source package files: 7/);
-    assert.match(result.stdout, /Disallowed OSS source package files: 5/);
+    assert.match(result.stdout, /Audited OSS source package files: 9/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 7/);
     assert.match(result.stdout, /apps\/mobile\/src\/config\/runtime\.ts/);
     assert.match(result.stdout, /scripts\/release\/market\.properties/);
     assert.match(result.stdout, /apps\/mobile\/scripts\/region\.sh/);
+    assert.match(result.stdout, /LynavoDrive\.xcodeproj\/project\.pbxproj/);
     assert.match(result.stdout, /LynavoDriveCN\.xcscheme\/contents\.xcscheme/);
     assert.match(result.stdout, /apps\/mobile\/src\/payments\/WeChatPay\.ts/);
+    assert.match(result.stdout, /i18n\/locales\/en\/runtime\.json/);
     assert.doesNotMatch(result.stdout, /docs\/runtime-endpoints\.md/);
-    assert.doesNotMatch(result.stdout, /i18n\/locales\/en\/runtime\.json/);
+    assert.doesNotMatch(result.stdout, /i18n\/locales\/zh-Hans\/common\.json/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

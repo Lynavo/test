@@ -102,6 +102,7 @@ const TEXT_SOURCE_AND_CONFIG_EXTENSIONS = new Set([
   '.kt',
   '.kts',
   '.mjs',
+  '.pbxproj',
   '.plist',
   '.properties',
   '.sh',
@@ -319,16 +320,9 @@ function hasSegment(path, segment) {
   return path.split('/').includes(segment);
 }
 
-function isDocumentationOrLocalizationPath(path) {
+function isDocumentationPath(path) {
   const segments = path.toLowerCase().split('/');
-  return (
-    segments[0] === 'docs' ||
-    segments.includes('i18n') ||
-    segments.includes('locale') ||
-    segments.includes('locales') ||
-    segments.includes('localization') ||
-    segments.includes('localizations')
-  );
+  return segments[0] === 'docs';
 }
 
 function firstMatchingSegment(path, segments) {
@@ -368,7 +362,29 @@ function cnMarketPathDisallowReason(path) {
   return null;
 }
 
-function contentDisallowReason(path, root) {
+function readFilesystemContent(root, path) {
+  const absolutePath = resolve(root, path);
+  return existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null;
+}
+
+function readGitRefContent(root, gitRef, path) {
+  const result = spawnSync('git', ['show', `${gitRef}:${path}`], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 1024 * 1024 * 64,
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || `git show failed for ${gitRef}:${path}`);
+  }
+
+  return result.stdout;
+}
+
+function contentDisallowReason(path, readContent) {
   const name = basename(path);
   const isNpmrc = name === '.npmrc';
   const isScannableText = TEXT_SOURCE_AND_CONFIG_EXTENSIONS.has(extname(path).toLowerCase());
@@ -376,27 +392,26 @@ function contentDisallowReason(path, root) {
     return null;
   }
 
-  const absolutePath = resolve(root, path);
-  if (!existsSync(absolutePath)) {
+  const content = readContent(path);
+  if (content === null) {
     return null;
   }
 
-  const content = readFileSync(absolutePath, 'utf8');
   if (isNpmrc && NPMRC_DISALLOWED_PATTERN.test(content)) {
     return '.npmrc contains registry, mirror, proxy, certificate, or auth configuration';
   }
   if (!hasSegment(path, 'zh-Hans') && CN_RELEASE_SETTING_PATTERN.test(content)) {
     return 'release profile, market, or region is set to cn';
   }
-  if (!isDocumentationOrLocalizationPath(path) && CN_RUNTIME_ENDPOINT_PATTERN.test(content)) {
+  if (!isDocumentationPath(path) && CN_RUNTIME_ENDPOINT_PATTERN.test(content)) {
     return 'China-only runtime service endpoint';
   }
 
   return null;
 }
 
-function disallowReason(path, root) {
-  const contentReason = contentDisallowReason(path, root);
+function disallowReason(path, readContent) {
+  const contentReason = contentDisallowReason(path, readContent);
   if (contentReason) {
     return contentReason;
   }
@@ -453,7 +468,7 @@ function disallowReason(path, root) {
   return null;
 }
 
-function summarize(paths, root) {
+function summarize(paths, readContent) {
   const uniquePaths = [...new Set(paths)].sort((left, right) => left.localeCompare(right));
   const allowed = [];
   const disallowed = [];
@@ -465,7 +480,7 @@ function summarize(paths, root) {
       continue;
     }
 
-    const reason = disallowReason(path, root);
+    const reason = disallowReason(path, readContent);
     if (reason) {
       disallowed.push({ path, reason });
     }
@@ -479,10 +494,13 @@ function summarize(paths, root) {
 }
 
 function collectInputFiles(options) {
+  const readWorktreeContent = (path) => readFilesystemContent(options.root, path);
+
   if (options.manifest) {
     return {
       inputKind: 'manifest',
       paths: collectManifestFiles(options.manifest),
+      readContent: readWorktreeContent,
     };
   }
 
@@ -491,12 +509,14 @@ function collectInputFiles(options) {
       return {
         inputKind: `filesystem walk (no git metadata for ${options.gitRef})`,
         paths: collectFilesystemFiles(options.root),
+        readContent: readWorktreeContent,
       };
     }
 
     return {
       inputKind: `git tree ${options.gitRef}`,
       paths: collectGitRefFiles(options.root, options.gitRef),
+      readContent: (path) => readGitRefContent(options.root, options.gitRef, path),
     };
   }
 
@@ -506,11 +526,13 @@ function collectInputFiles(options) {
       paths: collectGitFiles(options.root, {
         includeUntracked: options.includeUntracked,
       }),
+      readContent: readWorktreeContent,
     };
   } catch {
     return {
       inputKind: 'filesystem walk',
       paths: collectFilesystemFiles(options.root),
+      readContent: readWorktreeContent,
     };
   }
 }
@@ -559,7 +581,7 @@ function main() {
     return;
   }
 
-  const summary = summarize(input.paths, options.root);
+  const summary = summarize(input.paths, input.readContent);
   printResults(summary, { ...options, inputKind: input.inputKind });
 
   if (summary.disallowed.length > 0 && !options.advisory) {
