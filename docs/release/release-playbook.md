@@ -100,6 +100,43 @@ GitHub-hosted Actions may invoke the same public source-build commands with no
 repository secrets to produce unsigned verification artifacts. This does not
 turn release profiles into hosted signing, upload, or distribution profiles.
 
+## Hosted Native Verification
+
+The `Native Builds` workflow provides secret-free GitHub-hosted verification
+for the current iOS, Android, macOS, and Windows build surfaces. Pull requests
+select only affected mobile or desktop jobs. Pushes to `main`, manual
+dispatches, and reusable workflow calls run every hosted platform.
+
+Expected jobs are:
+
+- `iOS Build`: unsigned generic-device Debug and Release builds; no IPA is
+  uploaded.
+- `Android Build`: Debug and unsigned Release source builds.
+- `macOS Package`: unsigned arm64 and x64 DMG packages.
+- `Windows Package`: unsigned x64 NSIS and ZIP packages.
+- `Native Builds`: the stable aggregate check for branch rules.
+
+Successful package jobs upload these seven-day intermediate artifacts:
+
+- `native-android`
+- `native-macos-arm64`
+- `native-macos-x64`
+- `native-windows-x64`
+
+A manual dispatch produces Actions artifacts only. It does not create a GitHub
+Release, sign software, notarize a package, upload to a store, or publish an
+update. These unsigned outputs may trigger macOS Gatekeeper, Windows
+SmartScreen, or Android sideloading warnings and are suitable only for build
+verification.
+
+Fork pull requests remain safe because the workflow uses public source with no
+repository secrets and read-only repository permissions. Review the workflow
+diff before allowing a fork run when GitHub requires maintainer approval.
+
+Linux remains local verification only: it has no hosted job and no release
+artifact. The local Linux package commands below remain the sole Linux package
+verification path.
+
 Target commands:
 
 - `ios`: `pnpm --filter @lynavo-drive/mobile build:ios:release`

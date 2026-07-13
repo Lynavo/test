@@ -67,6 +67,36 @@ test('policy permits only secret-free unsigned GitHub-hosted verification builds
   assert.match(policy, /external.+build|third-party.+build/i);
 });
 
+test('native hosted verification docs define jobs, artifacts, and Linux exclusion', () => {
+  const playbook = readRepoFile('docs/release/release-playbook.md');
+  const matrix = readRepoFile('docs/testing/oss-verification-matrix.md');
+  const docs = `${playbook}\n${matrix}`;
+
+  for (const check of [
+    'Native Builds',
+    'iOS Build',
+    'Android Build',
+    'macOS Package',
+    'Windows Package',
+  ]) {
+    assert.ok(docs.includes(`\`${check}\``), `missing hosted check: ${check}`);
+  }
+  for (const artifact of [
+    'native-android',
+    'native-macos-arm64',
+    'native-macos-x64',
+    'native-windows-x64',
+  ]) {
+    assert.ok(docs.includes(`\`${artifact}\``), `missing hosted artifact: ${artifact}`);
+  }
+
+  assert.match(docs, /seven-day|7-day/i);
+  assert.match(docs, /manual dispatch.+Actions artifacts only/is);
+  assert.match(docs, /fork.+no repository secrets/is);
+  assert.match(docs, /unsigned/i);
+  assert.match(docs, /Linux.+no hosted job.+no release artifact/is);
+});
+
 test('iOS OSS build does not declare background audio capability', () => {
   const infoPlist = readRepoFile('apps/mobile/ios/LynavoDrive/Info.plist');
   const appDelegate = readRepoFile('apps/mobile/ios/LynavoDrive/AppDelegate.swift');

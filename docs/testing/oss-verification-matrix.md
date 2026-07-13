@@ -93,6 +93,34 @@ Acceptance criteria:
 4. Source package scans include no secrets, diagnostics packages, local
    databases, generated packages, or third-party proprietary binaries.
 
+### 2.4 Hosted Native Verification
+
+The `Native Builds` workflow exposes these jobs:
+
+1. `iOS Build`
+2. `Android Build`
+3. `macOS Package`
+4. `Windows Package`
+5. `Native Builds` as the stable aggregate result
+
+Pull requests use path classification, while pushes to `main`, manual
+dispatches, and reusable workflow calls run all four hosted platforms. A manual
+dispatch creates Actions artifacts only. Expected package artifacts are
+`native-android`, `native-macos-arm64`, `native-macos-x64`, and
+`native-windows-x64`, each retained for seven days.
+
+Acceptance criteria:
+
+1. Hosted jobs use public source, read-only repository permissions, and no
+   repository secrets, including for fork pull requests.
+2. iOS performs unsigned generic-device Debug and Release builds without an
+   IPA artifact.
+3. Android, macOS, and Windows artifacts use exact versioned filenames and
+   contain only the approved build-verification outputs.
+4. Signing, notarization, store upload, auto-update, and external build services
+   remain absent.
+5. Linux remains local-only and has no hosted job and no release artifact.
+
 ## 3. Device Script Regression
 
 Script:
