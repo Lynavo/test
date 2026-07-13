@@ -177,6 +177,10 @@ test('native build workflow is path-aware, unsigned, and platform-bounded', () =
     { arch: 'x64', runner: 'macos-26-intel' },
   ]);
   assert.equal(jobs.macos?.['runs-on'], '${{ matrix.runner }}');
+  assert.equal(
+    findStep(jobs.macos?.steps ?? [], 'Build macOS sidecar').run,
+    'node apps/desktop/scripts/build-sidecar-mac.cjs ${{ matrix.arch }}',
+  );
 
   const steps = allWorkflowSteps(config);
   assertActionsPinned(steps);

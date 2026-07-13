@@ -250,7 +250,7 @@ jobs:
         run: pnpm build --filter=!@lynavo-drive/mobile
 
       - name: Build macOS sidecar
-        run: pnpm --filter @lynavo-drive/desktop build:sidecar:mac ${{ matrix.arch }}
+        run: node apps/desktop/scripts/build-sidecar-mac.cjs ${{ matrix.arch }}
 
       - name: Package macOS DMG
         run: >-
