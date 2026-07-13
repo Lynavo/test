@@ -10,6 +10,7 @@
 To support Traditional Chinese (zh-Hant) developers and users in the open-source community, we will create a Traditional Chinese translation of the project landing page.
 
 Our objectives are:
+
 - Create `README.zh-Hant.md` in the repository root.
 - Keep the structure, HTML layout, images, details fold components, and commands identical to the English `README.md` (which is in the revised golden order).
 - Add language switcher navigation links at the top of both `README.md` and `README.zh-Hant.md`.
@@ -20,6 +21,7 @@ Our objectives are:
 ## 2. Terminology Mapping
 
 To maintain high technical quality, the translation will use standard Traditional Chinese computer science terminology:
+
 - **local-LAN**: 區域網路 (LAN)
 - **incremental sync**: 增量同步
 - **sidecar**: 側車服務 (Sidecar)
@@ -40,17 +42,17 @@ To maintain high technical quality, the translation will use standard Traditiona
 We will inject a language switcher at the top of both files:
 
 ```html
-<p align="center">
-  <a href="./README.md">English</a> | <strong>繁體中文</strong>
-</p>
+<p align="center"><a href="./README.md">English</a> | <strong>繁體中文</strong></p>
 ```
-*(In `README.md`, English will be plain text and Traditional Chinese will be a link, and vice versa)*
+
+_(In `README.md`, English will be plain text and Traditional Chinese will be a link, and vice versa)_
 
 ---
 
 ## 4. Hierarchy of README.zh-Hant.md
 
 The section structure will translate directly to:
+
 1. **Hero Header (置中橫幅、Logo、多語系連結、徽章、導航連結)**
 2. **目前狀態 (Current Status)**
 3. **📸 截圖預覽 (Screenshots Preview - HTML Table)**
