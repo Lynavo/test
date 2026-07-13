@@ -112,6 +112,33 @@ pnpm dev:desktop
 
 The Electron window opens automatically, and the desktop app starts the sidecar.
 
+## ❓ FAQs & Troubleshooting
+
+<details>
+<summary>🔍 View Troubleshooting Guide & Common FAQs</summary>
+
+### 1. The mobile app cannot find my desktop client (mDNS discovery failure)
+
+- **Check Network**: Ensure both mobile and desktop are on the same Local LAN (or VPN-LAN).
+- **Windows Firewall**: Verify that Windows Defender Firewall allows incoming traffic for ports `39393` (TCP/LMUP file transport) and `39394` (HTTP API).
+- **Bonjour Runtime**: The OSS build doesn't redistribute Apple Bonjour. Ensure Bonjour is installed on Windows, or rely on the zeroconf-compatible fallback.
+
+### 2. Why are some of my iCloud photos stuck/not transferring?
+
+- Photos marked with `iCloud` must be exported from the Apple Photos cloud repository before transfer.
+- While in `cloud_downloading` or `preparing` states, the phone is downloading the high-res original asset to local storage. Transfer begins automatically once complete.
+
+### 3. Can I manually select which photos/videos to sync?
+
+- No. To ensure fully automatic incremental sync, Lynavo Drive relies entirely on mobile background/foreground scans and a strictly read-only pending queue. Checkbox picking is a non-goal for this baseline.
+
+### 4. What happens when the desktop sleeps or connection drops?
+
+- LAN transfers will interrupt. Once the desktop wakes and network connectivity is restored, the mobile app will automatically resume the unfinished queue without losing progress.
+- Enable _"Prevent computer from sleeping while syncing"_ in the desktop app settings for uninterrupted transfers.
+
+</details>
+
 ## 💻 Common Commands
 
 <details>
