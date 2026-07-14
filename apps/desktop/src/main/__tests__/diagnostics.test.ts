@@ -289,6 +289,22 @@ describe('exportDiagnostics', () => {
   });
 });
 
+describe('compressBundle', () => {
+  it('uses zip for Linux verification hosts', async () => {
+    const runCommand = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
+    const { compressBundle } = await import('../diagnostics');
+
+    await compressBundle('/tmp/diagnostics/bundle', '/tmp/diagnostics.zip', true, {
+      platform: 'linux',
+      runCommand,
+    });
+
+    expect(runCommand).toHaveBeenCalledWith('zip', ['-r', '/tmp/diagnostics.zip', 'bundle'], {
+      cwd: '/tmp/diagnostics',
+    });
+  });
+});
+
 describe('writePowerDiagnostics', () => {
   it('writes filtered macOS sleep and wake history into the diagnostics files directory', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-power-diagnostics-test-'));

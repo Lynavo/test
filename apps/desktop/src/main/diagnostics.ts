@@ -101,6 +101,11 @@ type PowerDiagnosticsOptions = {
   now?: Date;
 };
 
+type CompressBundleOptions = {
+  platform?: NodeJS.Platform;
+  runCommand?: CommandRunner;
+};
+
 export type PowerDiagnosticsResult = {
   path: string;
   source: string;
@@ -504,13 +509,17 @@ async function createDiagnosticsBundle(
   return { tempRoot, bundleDir };
 }
 
-async function compressBundle(
+export async function compressBundle(
   bundleDir: string,
   outputPath: string,
   includeParent: boolean,
+  options: CompressBundleOptions = {},
 ): Promise<void> {
-  if (process.platform === 'win32') {
-    await execFileAsync('powershell.exe', [
+  const platform = options.platform ?? process.platform;
+  const runCommand = options.runCommand ?? execFileAsync;
+
+  if (platform === 'win32') {
+    await runCommand('powershell.exe', [
       '-NoProfile',
       '-Command',
       `Compress-Archive -Path '${bundleDir.replace(/'/g, "''")}\\*' -DestinationPath '${outputPath.replace(/'/g, "''")}' -Force`,
@@ -518,8 +527,15 @@ async function compressBundle(
     return;
   }
 
+  if (platform === 'linux') {
+    const cwd = includeParent ? dirname(bundleDir) : bundleDir;
+    const source = includeParent ? basename(bundleDir) : '.';
+    await runCommand('zip', ['-r', outputPath, source], { cwd });
+    return;
+  }
+
   if (includeParent) {
-    await execFileAsync('ditto', [
+    await runCommand('ditto', [
       '-c',
       '-k',
       '--sequesterRsrc',
@@ -528,6 +544,6 @@ async function compressBundle(
       outputPath,
     ]);
   } else {
-    await execFileAsync('ditto', ['-c', '-k', '--sequesterRsrc', bundleDir, outputPath]);
+    await runCommand('ditto', ['-c', '-k', '--sequesterRsrc', bundleDir, outputPath]);
   }
 }
