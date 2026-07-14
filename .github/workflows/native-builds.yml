@@ -155,7 +155,10 @@ jobs:
 
       - name: Install Ruby dependencies
         working-directory: apps/mobile
-        run: bundle install --jobs 4 --retry 3 --deployment
+        env:
+          BUNDLE_DEPLOYMENT: 'true'
+          BUNDLE_FROZEN: 'true'
+        run: bundle install --jobs 4 --retry 3
 
       - name: Install iOS pods
         working-directory: apps/mobile/ios

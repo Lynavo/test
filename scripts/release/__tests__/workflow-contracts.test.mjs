@@ -347,6 +347,7 @@ test('iOS native build locks the CocoaPods toolchain to the Podfile version', ()
 
 test('iOS native build pins Ruby and installs the locked bundle', () => {
   const config = workflow('.github/workflows/native-builds.yml');
+  const gemfileLock = readRepoFile('apps/mobile/Gemfile.lock');
   const steps = config.jobs?.ios?.steps ?? [];
   const setupRuby = findStep(steps, 'Setup Ruby');
   const installRuby = findStep(steps, 'Install Ruby dependencies');
@@ -359,10 +360,16 @@ test('iOS native build pins Ruby and installs the locked bundle', () => {
   assert.equal(setupRuby.with?.bundler, '4.0.15');
   assert.ok(steps.indexOf(setupRuby) < steps.indexOf(installRuby));
   assert.equal(installRuby['working-directory'], 'apps/mobile');
-  assert.equal(
-    installRuby.run,
-    'bundle install --jobs 4 --retry 3 --deployment',
+  assert.deepEqual(installRuby.env, {
+    BUNDLE_DEPLOYMENT: 'true',
+    BUNDLE_FROZEN: 'true',
+  });
+  assert.equal(installRuby.run, 'bundle install --jobs 4 --retry 3');
+  assert.match(
+    gemfileLock,
+    /^RUBY VERSION\n {2}ruby 3\.4\.9(?:p-?\d+)?$/m,
   );
+  assert.match(gemfileLock, /^BUNDLED WITH\n {2}4\.0\.15$/m);
 });
 
 test('native artifact uploads overwrite same-run artifacts on rerun', () => {
