@@ -56,7 +56,11 @@ jobs:
         run: pnpm --filter @lynavo-drive/mobile exec tsc --noEmit
 
       - name: Test
-        run: pnpm test
+        run: |
+          pnpm --filter @lynavo-drive/contracts test
+          pnpm --filter @lynavo-drive/design-tokens test
+          pnpm --filter @lynavo-drive/desktop test
+          pnpm --filter @lynavo-drive/mobile test
 
   go-tests:
     name: Go Tests

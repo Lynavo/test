@@ -96,6 +96,15 @@ test('repository CI workflow runs TypeScript quality and Go tests', () => {
   assert.equal(node.with?.['node-version'], '22.12.0');
   assert.equal(node.with?.cache, 'pnpm');
 
+  const serialTestCommand = [
+    'pnpm --filter @lynavo-drive/contracts test',
+    'pnpm --filter @lynavo-drive/design-tokens test',
+    'pnpm --filter @lynavo-drive/desktop test',
+    'pnpm --filter @lynavo-drive/mobile test',
+    '',
+  ].join('\n');
+  assert.equal(findStep(tsJob.steps, 'Test').run, serialTestCommand);
+
   const tsCommands = tsJob.steps.map(step => step.run).filter(Boolean);
   assert.deepEqual(tsCommands, [
     'pnpm install --frozen-lockfile',
@@ -104,7 +113,7 @@ test('repository CI workflow runs TypeScript quality and Go tests', () => {
     'pnpm lint',
     'pnpm typecheck',
     'pnpm --filter @lynavo-drive/mobile exec tsc --noEmit',
-    'pnpm test',
+    serialTestCommand,
   ]);
 
   assert.equal(goJob?.name, 'Go Tests');
