@@ -52,6 +52,9 @@ jobs:
       - verify-tag
       - gate
       - ci
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/native-builds.yml
 
   assemble:

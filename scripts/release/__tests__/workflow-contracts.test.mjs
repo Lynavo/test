@@ -400,6 +400,10 @@ test('draft release workflow is tag-gated, unsigned, and idempotent', () => {
   assert.equal(jobs.gate?.uses, './.github/workflows/oss-release-gate.yml');
   assert.equal(jobs.ci?.uses, './.github/workflows/ci.yml');
   assert.equal(jobs.native?.uses, './.github/workflows/native-builds.yml');
+  assert.deepEqual(jobs.native?.permissions, {
+    contents: 'read',
+    'pull-requests': 'read',
+  });
   for (const jobName of ['gate', 'ci', 'native']) {
     assert.match(JSON.stringify(jobs[jobName].needs), /verify-tag|gate|ci/);
   }
