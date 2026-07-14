@@ -51,6 +51,16 @@ Repository rules are configured in GitHub after each check has appeared at
 least once. Keep the display names stable when changing workflows so existing
 rules do not silently stop applying.
 
+Protect release tags with a maintainer-only `v*` tag ruleset. Only stable tags
+matching `vX.Y.Z` are accepted, and the tag version must match the desktop,
+mobile, iOS, and Android version sources. Branch protection and tag rulesets are
+GitHub repository settings, not enforced by committed YAML; maintainers must
+configure and audit them separately.
+
+The tag workflow creates draft releases only. Treat a published release as
+immutable: correct a bad published release with a new version instead of moving
+or reusing its tag. See the release playbook before creating a release tag.
+
 Dependabot opens reviewed monthly updates for pnpm dependencies and pinned
 GitHub Actions. Each ecosystem is limited to five open pull requests; updates
 must pass the same checks and are not merged automatically.

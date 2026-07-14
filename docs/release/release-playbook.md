@@ -137,6 +137,69 @@ Linux remains local verification only: it has no hosted job and no release
 artifact. The local Linux package commands below remain the sole Linux package
 verification path.
 
+## OSS Draft Release
+
+The `OSS Draft Release` workflow rebuilds verification outputs from one
+immutable commit. It accepts stable tags matching `vX.Y.Z` only. Before any
+native runner starts, the workflow verifies that the tag version exactly
+matches the desktop package, mobile package, iOS `MARKETING_VERSION`, and
+Android `versionName` sources.
+
+A manual dispatch is a build-only rehearsal and creates no GitHub Release. It
+runs the release gate, TypeScript and Go CI, and every hosted native build, then
+stops with seven-day Actions artifacts. iOS remains build-only: it performs
+unsigned Debug and Release generic-device builds and produces no IPA.
+
+A valid tag run waits for `OSS Release Gate`, `TS Quality`, `Go Tests`, and
+`Native Builds` from the same commit. It then assembles exactly these files:
+
+- `LynavoDrive-<version>-macos-arm64.dmg`
+- `LynavoDrive-<version>-macos-x64.dmg`
+- `LynavoDrive-<version>-windows-x64.exe`
+- `LynavoDrive-<version>-windows-x64.zip`
+- `LynavoDrive-<version>-android-arm64-x86_64.apk`
+- `LynavoDrive-<version>-android-arm64-x86_64.aab`
+- `SHA256SUMS`
+
+`SHA256SUMS` contains one sorted SHA-256 entry for each of the six package
+assets. Verify the matching entry in `SHA256SUMS` before testing an asset.
+There is no hosted Linux release asset, and iOS does not produce a release
+asset.
+
+Release creation is draft-only. The job has read-only repository permissions
+until the final tag-gated release job, which receives `contents: write`. A new
+draft uses generated release notes and this warning:
+
+> These files are unsigned OSS build-verification outputs, not an official
+> signed distribution. macOS Gatekeeper, Windows SmartScreen, and Android
+> sideloading controls may block installation or display warnings. Verify the
+> matching entry in `SHA256SUMS` before testing an asset.
+
+An existing draft may be updated idempotently. A rerun for the same tag updates
+the existing draft, deletes only the seven allowlisted assets above, and
+uploads the newly rebuilt set. A published release is immutable: the workflow
+must fail before deleting or uploading assets and never moves, deletes, or
+recreates the tag.
+
+### Maintainer Procedure
+
+1. Confirm all four version sources contain the intended stable version.
+2. Run `pnpm gate:release` and the relevant local native checks.
+3. Optionally dispatch `OSS Draft Release` manually. Confirm all reusable jobs
+   pass, the four intermediate artifact groups exist, and no release is
+   created.
+4. Create and push one stable `vX.Y.Z` tag only after the target commit and
+   repository checks are approved.
+5. Confirm the draft contains only the six versioned files and `SHA256SUMS`.
+6. Download the files, verify their checksums, and record platform smoke-test
+   results before any separate publication decision.
+
+For a failed tag run, keep the tag fixed and address only transient workflow or
+packaging failures that do not require source changes. Rerun the workflow to
+replace the existing draft assets. If source or version metadata must change,
+use a new version and tag. If the release is already published, do not rerun to
+overwrite it; create a new stable version instead.
+
 Target commands:
 
 - `ios`: `pnpm --filter @lynavo-drive/mobile build:ios:release`

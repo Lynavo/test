@@ -278,6 +278,13 @@ repository secrets. Third-party or external build services, code signing,
 notarization, store upload, auto-update, and private distribution infrastructure
 remain outside this OSS baseline.
 
+The `OSS Draft Release` workflow accepts stable tags matching `vX.Y.Z`, rebuilds
+the complete verification set from that tagged commit, and creates or updates a
+draft GitHub Release. Manual dispatch is build-only. Release files are unsigned
+OSS build-verification outputs and include SHA-256 checksums; see the
+[release playbook](./docs/release/release-playbook.md) for the exact asset list,
+warnings, and maintainer procedure.
+
 ## 📁 Project Structure
 
 <details>

@@ -97,6 +97,48 @@ test('native hosted verification docs define jobs, artifacts, and Linux exclusio
   assert.match(docs, /Linux.+no hosted job.+no release artifact/is);
 });
 
+test('draft release operations document tags, assets, retries, and repository rules', () => {
+  const readme = readRepoFile('README.md');
+  const contributing = readRepoFile('CONTRIBUTING.md');
+  const playbook = readRepoFile('docs/release/release-playbook.md');
+  const matrix = readRepoFile('docs/testing/oss-verification-matrix.md');
+  const docs = `${readme}\n${contributing}\n${playbook}\n${matrix}`;
+
+  assert.match(readme, /stable tags matching `vX\.Y\.Z`/i);
+  assert.match(readme, /draft GitHub Release/i);
+
+  for (const asset of [
+    'LynavoDrive-<version>-macos-arm64.dmg',
+    'LynavoDrive-<version>-macos-x64.dmg',
+    'LynavoDrive-<version>-windows-x64.exe',
+    'LynavoDrive-<version>-windows-x64.zip',
+    'LynavoDrive-<version>-android-arm64-x86_64.apk',
+    'LynavoDrive-<version>-android-arm64-x86_64.aab',
+    'SHA256SUMS',
+  ]) {
+    assert.ok(playbook.includes(`\`${asset}\``), `missing release asset: ${asset}`);
+  }
+
+  assert.match(playbook, /iOS.+build-only.+no IPA/is);
+  assert.match(playbook, /manual dispatch.+build-only.+no GitHub Release/is);
+  assert.match(playbook, /draft-only/i);
+  assert.match(playbook, /published release.+immutable/is);
+  assert.match(playbook, /rerun.+same tag.+existing draft/is);
+  assert.match(playbook, /Gatekeeper.+SmartScreen.+sideloading/is);
+  assert.match(playbook, /matching entry in `SHA256SUMS`/i);
+
+  for (const check of ['OSS Release Gate', 'TS Quality', 'Go Tests', 'Native Builds']) {
+    assert.ok(contributing.includes(`\`${check}\``), `missing required check: ${check}`);
+  }
+  assert.match(contributing, /maintainer-only `v\*` tag ruleset/i);
+  assert.match(contributing, /GitHub repository settings.+not enforced by committed YAML/is);
+
+  assert.match(matrix, /stable tag.+`vX\.Y\.Z`/is);
+  assert.match(matrix, /published release.+must fail/is);
+  assert.match(matrix, /rerun.+draft.+seven allowlisted assets/is);
+  assert.match(docs, /unsigned OSS build-verification outputs/i);
+});
+
 test('iOS OSS build does not declare background audio capability', () => {
   const infoPlist = readRepoFile('apps/mobile/ios/LynavoDrive/Info.plist');
   const appDelegate = readRepoFile('apps/mobile/ios/LynavoDrive/AppDelegate.swift');

@@ -121,6 +121,30 @@ Acceptance criteria:
    remain absent.
 5. Linux remains local-only and has no hosted job and no release artifact.
 
+### 2.5 OSS Draft Release
+
+The `OSS Draft Release` workflow supports manual build rehearsal and stable tag
+release rehearsal. A stable tag uses the exact `vX.Y.Z` form and must match the
+desktop, mobile, iOS, and Android version sources before hosted native jobs
+start.
+
+Acceptance criteria:
+
+1. Manual dispatch completes the gates and native builds but creates Actions
+   artifacts only, with no GitHub Release and no write-permission release job.
+2. A valid tag run rebuilds from the tagged commit and creates a draft containing
+   six exact versioned assets plus `SHA256SUMS`; iOS remains an unsigned
+   build-only check with no IPA.
+3. The draft warning identifies unsigned OSS build-verification outputs and the
+   expected Gatekeeper, SmartScreen, and Android sideloading warnings.
+4. A published release is immutable and any overwrite attempt must fail before
+   asset deletion or upload.
+5. A rerun against a draft replaces only the seven allowlisted assets and leaves
+   the tag unchanged.
+6. Linux remains excluded from hosted release assets, and signing,
+   notarization, store upload, auto-update, secrets, and external distribution
+   services remain absent.
+
 ## 3. Device Script Regression
 
 Script:
