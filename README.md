@@ -47,7 +47,7 @@ mobile store builds, auto-updates, or hosted services.
 | Desktop      | macOS and Windows application runtime                          |
 | Mobile       | iOS and Android application runtime                            |
 | Linux        | Local source-build and package verification only               |
-| Network      | Foreground sync over the same LAN or a LAN-equivalent VPN      |
+| Network      | Foreground sync over the same LAN                              |
 | Distribution | Community source builds and locally produced packages/binaries |
 
 ## 📸 Product Preview
@@ -135,7 +135,7 @@ Android requires Android Studio plus the Android SDK/NDK.
 
 Pair the applications:
 
-1. Keep the phone and desktop on the same LAN or LAN-equivalent VPN.
+1. Keep the phone and desktop on the same LAN.
 2. Open Lynavo Drive on the desktop and set or view the six-digit pairing code.
 3. On mobile, discover the desktop and scan its QR code or enter the pairing
    code.
@@ -148,7 +148,7 @@ Pair the applications:
 
 ### 1. The mobile app cannot find my desktop client (mDNS discovery failure)
 
-- **Check Network**: Ensure both mobile and desktop are on the same Local LAN (or VPN-LAN).
+- **Check Network**: Ensure both mobile and desktop are on the same local LAN.
 - **Windows Firewall**: Verify that Windows Defender Firewall allows incoming traffic for ports `39393` (TCP/LMUP file transport) and `39394` (HTTP API).
 - **Bonjour Runtime**: The OSS build doesn't redistribute Apple Bonjour. Ensure Bonjour is installed on Windows, or rely on the zeroconf-compatible fallback.
 
