@@ -144,12 +144,18 @@ jobs:
           node-version: 22.12.0
           cache: pnpm
 
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@6e5d382445ae5590b7449d8b3bc8cb1c2c27f617
+        with:
+          ruby-version: 3.4.9
+          bundler: 4.0.15
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Install Ruby dependencies
         working-directory: apps/mobile
-        run: bundle install --jobs 4 --retry 3
+        run: bundle install --jobs 4 --retry 3 --deployment
 
       - name: Install iOS pods
         working-directory: apps/mobile/ios
