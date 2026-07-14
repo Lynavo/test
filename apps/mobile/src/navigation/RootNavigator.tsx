@@ -46,9 +46,9 @@ import { resolveVisualQaInitialRoute } from '../dev/visualQa';
 type MainTabKey = 'home' | 'files' | 'settings';
 
 type MainTabParamList = {
-  GlobalHomeTab: undefined;
-  GlobalFilesTab: undefined;
-  GlobalSettingsTab: undefined;
+  HomeTab: undefined;
+  FilesTab: undefined;
+  SettingsTab: undefined;
 };
 
 const MainTab = createBottomTabNavigator<MainTabParamList>();
@@ -336,21 +336,21 @@ function PairingInvalidationWatcher({ enabled }: { enabled: boolean }) {
 function getMainTabInitialRouteName(
   routeName: keyof RootStackParamList | undefined,
 ): keyof MainTabParamList {
-  if (routeName === 'SharedFiles') return 'GlobalFilesTab';
-  if (routeName === 'Settings') return 'GlobalSettingsTab';
-  return 'GlobalHomeTab';
+  if (routeName === 'SharedFiles') return 'FilesTab';
+  if (routeName === 'Settings') return 'SettingsTab';
+  return 'HomeTab';
 }
 
 function getMainTabForTabRouteName(routeName: string | undefined): MainTabKey {
-  if (routeName === 'GlobalFilesTab') return 'files';
-  if (routeName === 'GlobalSettingsTab') return 'settings';
+  if (routeName === 'FilesTab') return 'files';
+  if (routeName === 'SettingsTab') return 'settings';
   return 'home';
 }
 
 function getMainTabRouteName(tab: MainTabKey): keyof MainTabParamList {
-  if (tab === 'files') return 'GlobalFilesTab';
-  if (tab === 'settings') return 'GlobalSettingsTab';
-  return 'GlobalHomeTab';
+  if (tab === 'files') return 'FilesTab';
+  if (tab === 'settings') return 'SettingsTab';
+  return 'HomeTab';
 }
 
 function HomeTabScreen() {
@@ -398,12 +398,9 @@ function MainTabsScreen({
         }}
         tabBar={props => <MainTabsTabBar {...props} />}
       >
-        <MainTab.Screen name="GlobalHomeTab" component={HomeTabScreen} />
-        <MainTab.Screen name="GlobalFilesTab" component={FilesTabScreen} />
-        <MainTab.Screen
-          name="GlobalSettingsTab"
-          component={SettingsTabScreen}
-        />
+        <MainTab.Screen name="HomeTab" component={HomeTabScreen} />
+        <MainTab.Screen name="FilesTab" component={FilesTabScreen} />
+        <MainTab.Screen name="SettingsTab" component={SettingsTabScreen} />
       </MainTab.Navigator>
     </View>
   );

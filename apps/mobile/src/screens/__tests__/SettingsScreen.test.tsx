@@ -231,7 +231,7 @@ describe('SettingsScreen', () => {
     expect(queryByText('Version 2.1.0')).toBeNull();
   });
 
-  test('uses lucide icons instead of legacy ionicon glyph names on the global settings page', async () => {
+  test('uses lucide icons instead of legacy ionicon glyph names on the settings page', async () => {
     const { queryByText } = await renderSettingsScreen();
 
     [
@@ -339,7 +339,7 @@ describe('SettingsScreen', () => {
     expect(getByText('Field iPhone')).toBeTruthy();
   });
 
-  test('only offers supported global languages and persists selected preference', async () => {
+  test('only offers supported languages and persists selected preference', async () => {
     const { getByText, getByTestId, queryByText } =
       await renderSettingsScreen();
 

@@ -42,21 +42,21 @@ import {
 } from '@lynavo-drive/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 import { formatBytes } from '../utils/format';
 import { Icon } from '../components/Icon';
 import { GradientBackground } from '../components/GradientBackground';
 import { ModalBlurBackdrop } from '../components/shared/ModalBlurBackdrop';
 import {
-  downloadGlobalLocalComputerResource,
-  getGlobalLocalComputerPreviewUrl,
+  downloadLocalComputerResource,
+  getLocalComputerPreviewUrl,
   isDownloadSavedLocally,
-  listGlobalLocalComputerFolderContents,
-  listGlobalLocalComputerResources,
-  prepareGlobalLocalComputerPreview,
-  prepareGlobalLocalComputerShareFile,
-  shareGlobalLocalComputerResources,
+  listLocalComputerFolderContents,
+  listLocalComputerResources,
+  prepareLocalComputerPreview,
+  prepareLocalComputerShareFile,
+  shareLocalComputerResources,
 } from '../services/desktop-local-service';
 import { recordDownloadedFile } from '../services/download-records-service';
 import {
@@ -238,7 +238,7 @@ const MOCK_ROOT_ITEMS: LocalComputerResourceItem[] = [
   resource({
     resourceId: 'ui-design',
     kind: 'shared_folder',
-    displayName: 'Global UI Design',
+    displayName: 'UI Design',
     countLabel: 'Folder',
     addedOffsetHours: 42,
   }),
@@ -962,7 +962,7 @@ export function LocalComputerScreen() {
       setDesktopDisplayName(bindingDisplayName);
 
       const result = await withLocalComputerReadyRetry(() =>
-        listGlobalLocalComputerResources(),
+        listLocalComputerResources(),
       );
       const localComputerItems = result ?? [];
       const refreshedBinding = await NativeSyncEngine.getBindingState?.();
@@ -1031,7 +1031,7 @@ export function LocalComputerScreen() {
       setFolderLoadError(false);
       try {
         const listing = await withLocalComputerReadyRetry(() =>
-          listGlobalLocalComputerFolderContents(rootResourceId, folderPath),
+          listLocalComputerFolderContents(rootResourceId, folderPath),
         );
         const folderItems = listing.files.map(file =>
           directoryFileToResourceItem({
@@ -1097,9 +1097,7 @@ export function LocalComputerScreen() {
           return;
         }
 
-        const result = await downloadGlobalLocalComputerResource(
-          item.resourceId,
-        );
+        const result = await downloadLocalComputerResource(item.resourceId);
         if (!isDownloadSavedLocally(result)) {
           Alert.alert(
             t('sharedFiles.localSaveUnsupported.title') ||
@@ -1234,14 +1232,14 @@ export function LocalComputerScreen() {
           isImageFile(item.mediaType, item.displayName) ||
           isVideoFile(item.mediaType, item.displayName)
         ) {
-          const url = await getGlobalLocalComputerPreviewUrl(item.resourceId);
+          const url = await getLocalComputerPreviewUrl(item.resourceId);
           setResourcePreview({ item, url });
           return;
         }
 
         if (!canPreviewDocumentFile(item.mediaType, item.displayName)) {
           try {
-            const localPath = await prepareGlobalLocalComputerShareFile(
+            const localPath = await prepareLocalComputerShareFile(
               item.resourceId,
               item.displayName,
             );
@@ -1260,7 +1258,7 @@ export function LocalComputerScreen() {
           return;
         }
 
-        const localPath = await prepareGlobalLocalComputerPreview(
+        const localPath = await prepareLocalComputerPreview(
           item.resourceId,
           item.displayName,
         );
@@ -1335,7 +1333,7 @@ export function LocalComputerScreen() {
         return;
       }
 
-      await shareGlobalLocalComputerResources(
+      await shareLocalComputerResources(
         selectedItems.map(item => ({
           resourceId: item.resourceId,
           displayName: item.displayName,

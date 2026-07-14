@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen, Home, User } from 'lucide-react-native';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 
 const SIDE_INSET = 16;

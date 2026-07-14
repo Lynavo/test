@@ -970,7 +970,7 @@ describe('DeviceDiscoveryScreen onboarding', () => {
         'Connection failed. Please check if the computer is online and try again.',
     },
   ])(
-    'maps PairingError $label to a global connection state',
+    'maps PairingError $label to its connection state message',
     async ({ error, message }) => {
       mockHasSeenUnconnectedGuide.mockResolvedValue(true);
       mockPairDevice.mockRejectedValueOnce(error);

@@ -38,7 +38,7 @@ import {
 } from '@lynavo-drive/contracts';
 
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 import { formatBytes } from '../utils/format';
 import { GradientBackground } from '../components/GradientBackground';
@@ -385,14 +385,18 @@ export function PhoneSyncSpaceScreen() {
   const loadData = useCallback(async () => {
     setLoadError(false);
     setLoadingMore(false);
-    recordDiagnosticsLog('PhoneSyncSpace', 'global screen load start');
+    recordDiagnosticsLog('PhoneSyncSpace', 'phone sync space load start');
     try {
       const { NativeSyncEngine } = NativeModules;
       if (!NativeSyncEngine) {
         const previewItems = getPreviewReceivedItems();
-        recordDiagnosticsLog('PhoneSyncSpace', 'global screen native missing', {
-          previewItems: previewItems.length,
-        });
+        recordDiagnosticsLog(
+          'PhoneSyncSpace',
+          'phone sync space native missing',
+          {
+            previewItems: previewItems.length,
+          },
+        );
         setItems(previewItems);
         setCurrentPage(1);
         setHasMorePages(false);
@@ -407,14 +411,18 @@ export function PhoneSyncSpaceScreen() {
 
       const bindingState = await NativeSyncEngine.getBindingState();
       setBinding(bindingState);
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen binding loaded', {
-        hasBinding: Boolean(bindingState),
-        hasHost: Boolean(bindingState?.host),
-        connectionState: bindingState?.connectionState ?? 'unknown',
-      });
+      recordDiagnosticsLog(
+        'PhoneSyncSpace',
+        'phone sync space binding loaded',
+        {
+          hasBinding: Boolean(bindingState),
+          hasHost: Boolean(bindingState?.host),
+          connectionState: bindingState?.connectionState ?? 'unknown',
+        },
+      );
       if (!bindingState || !bindingState.host) {
         const previewItems = getPreviewReceivedItems();
-        recordDiagnosticsLog('PhoneSyncSpace', 'global screen no host', {
+        recordDiagnosticsLog('PhoneSyncSpace', 'phone sync space no host', {
           previewItems: previewItems.length,
         });
         setItems(previewItems);
@@ -430,7 +438,7 @@ export function PhoneSyncSpaceScreen() {
       }
 
       const desktop = { host: bindingState.host, port: SIDECAR_HTTP_PORT };
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen list request', {
+      recordDiagnosticsLog('PhoneSyncSpace', 'phone sync space list request', {
         host: desktop.host,
         page: 1,
         pageSize: RECEIVED_LIBRARY_PAGE_SIZE,
@@ -442,7 +450,7 @@ export function PhoneSyncSpaceScreen() {
       const receivedItems = result.items ?? [];
       const previewItems = getPreviewReceivedItems();
       const nextItems = receivedItems.length > 0 ? receivedItems : previewItems;
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen list result', {
+      recordDiagnosticsLog('PhoneSyncSpace', 'phone sync space list result', {
         itemCount: receivedItems.length,
         totalItems: result.totalItems,
         totalBytes: result.totalBytes,
@@ -465,7 +473,7 @@ export function PhoneSyncSpaceScreen() {
     } catch (e) {
       console.warn('[PhoneSyncSpaceScreen] Failed to load data:', e);
       const previewItems = getPreviewReceivedItems();
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen load failed', {
+      recordDiagnosticsLog('PhoneSyncSpace', 'phone sync space load failed', {
         error: e instanceof Error ? e.message : String(e),
         previewItems: previewItems.length,
       });
@@ -532,7 +540,7 @@ export function PhoneSyncSpaceScreen() {
       const desktop = { host: binding.host, port: SIDECAR_HTTP_PORT };
       recordDiagnosticsLog(
         'PhoneSyncSpace',
-        'global screen next page request',
+        'phone sync space next page request',
         {
           host: desktop.host,
           page: currentPage + 1,
@@ -543,11 +551,15 @@ export function PhoneSyncSpaceScreen() {
         page: currentPage + 1,
         pageSize: RECEIVED_LIBRARY_PAGE_SIZE,
       });
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen next page result', {
-        itemCount: result.items?.length ?? 0,
-        totalItems: result.totalItems,
-        page: result.page,
-      });
+      recordDiagnosticsLog(
+        'PhoneSyncSpace',
+        'phone sync space next page result',
+        {
+          itemCount: result.items?.length ?? 0,
+          totalItems: result.totalItems,
+          page: result.page,
+        },
+      );
       setItems(currentItems =>
         mergeReceivedLibraryItems(currentItems, result.items ?? []),
       );
@@ -558,9 +570,13 @@ export function PhoneSyncSpaceScreen() {
       setLoadError(false);
     } catch (e) {
       console.warn('[PhoneSyncSpaceScreen] Failed to load next page:', e);
-      recordDiagnosticsLog('PhoneSyncSpace', 'global screen next page failed', {
-        error: e instanceof Error ? e.message : String(e),
-      });
+      recordDiagnosticsLog(
+        'PhoneSyncSpace',
+        'phone sync space next page failed',
+        {
+          error: e instanceof Error ? e.message : String(e),
+        },
+      );
     } finally {
       setLoadingMore(false);
     }

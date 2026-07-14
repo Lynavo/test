@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b && tsc -p tsconfig.esm.json",
+    "build": "tsc -b",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",

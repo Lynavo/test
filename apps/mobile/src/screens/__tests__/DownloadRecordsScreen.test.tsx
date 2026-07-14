@@ -50,13 +50,13 @@ jest.mock('../../services/download-records-service', () => ({
 }));
 
 jest.mock('../../services/desktop-local-service', () => ({
-  downloadGlobalLocalComputerResource: jest.fn(),
+  downloadLocalComputerResource: jest.fn(),
   downloadReceivedLibraryItem: jest.fn(),
-  downloadResourceForGlobal: jest.fn(),
-  getGlobalLocalComputerPreviewUrl: jest
+  downloadDesktopResource: jest.fn(),
+  getLocalComputerPreviewUrl: jest
     .fn()
     .mockResolvedValue('http://192.168.1.100:39394/personal/stream/live'),
-  getGlobalLocalComputerThumbnailUrl: jest
+  getLocalComputerThumbnailUrl: jest
     .fn()
     .mockResolvedValue('http://192.168.1.100:39394/personal/thumbnail/live'),
   isDownloadSavedLocally: jest.fn(
@@ -122,7 +122,7 @@ jest.mock('../../dev/visualQa', () => ({
 import { listDownloadRecords } from '../../services/download-records-service';
 import {
   downloadReceivedLibraryItem,
-  downloadResourceForGlobal,
+  downloadDesktopResource,
 } from '../../services/desktop-local-service';
 import { viewDocument } from '@react-native-documents/viewer';
 import { openFileWithOtherApp } from '../../utils/file-preview';
@@ -135,7 +135,7 @@ const mockedViewDocument = viewDocument as jest.Mock;
 const mockedOpenFileWithOtherApp = openFileWithOtherApp as jest.Mock;
 const mockedDownloadReceivedLibraryItem =
   downloadReceivedLibraryItem as jest.Mock;
-const mockedDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
+const mockedDownloadDesktopResource = downloadDesktopResource as jest.Mock;
 
 describe('DownloadRecordsScreen', () => {
   beforeEach(() => {
@@ -364,7 +364,7 @@ describe('DownloadRecordsScreen', () => {
         downloadedAt: '2026-06-16T02:41:00.000Z',
       },
     ]);
-    mockedDownloadResourceForGlobal.mockResolvedValueOnce({
+    mockedDownloadDesktopResource.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/downloads/Missing.pdf',
       savedLocation: 'Downloads/Lynavo Drive',
@@ -383,7 +383,7 @@ describe('DownloadRecordsScreen', () => {
         '/tmp/Local.pdf',
         'Local.pdf',
       );
-      expect(mockedDownloadResourceForGlobal).toHaveBeenCalledWith(
+      expect(mockedDownloadDesktopResource).toHaveBeenCalledWith(
         { host: '192.168.1.100', port: 39394 },
         'missing-1',
         'Missing.pdf',
@@ -440,7 +440,7 @@ describe('DownloadRecordsScreen', () => {
           mediaType: 'image',
         }),
       );
-      expect(mockedDownloadResourceForGlobal).not.toHaveBeenCalled();
+      expect(mockedDownloadDesktopResource).not.toHaveBeenCalled();
       expect(alertSpy).toHaveBeenCalledWith(
         'Download complete',
         'CAP_5FA32EEE-723F-4B25-ABB7-1EF7B23290FA.jpg saved to Photos',

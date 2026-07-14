@@ -261,7 +261,7 @@ describe('SyncActivityScreen', () => {
     expect(queryByText('Client-Handoff.mov')).toBeNull();
   });
 
-  test('loads sync overview, queue, history, and binding snapshots for global home state', async () => {
+  test('loads sync overview, queue, history, and binding snapshots for home state', async () => {
     (getSyncOverview as jest.Mock).mockResolvedValueOnce({
       currentDeviceId: 'desktop-1',
       currentDeviceName: 'Studio Mac',
