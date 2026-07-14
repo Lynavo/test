@@ -422,6 +422,25 @@ test('iOS native build pins Ruby and installs the locked bundle', () => {
   assert.match(gemfileLock, /^BUNDLED WITH\n {2}4\.0\.15$/m);
 });
 
+test('iOS native build permits only external source checksum refreshes', () => {
+  const config = workflow('.github/workflows/native-builds.yml');
+  const steps = config.jobs?.ios?.steps ?? [];
+  const installPods = findStep(steps, 'Install iOS pods');
+  const verifyPods = findStep(steps, 'Verify iOS pod lock');
+  const debugBuild = findStep(steps, 'Build iOS Debug');
+
+  assert.equal(
+    installPods.run.trim(),
+    'cp Podfile.lock "$RUNNER_TEMP/Podfile.lock.before-install"\nbundle exec pod install',
+  );
+  assert.equal(
+    verifyPods.run,
+    'node scripts/release/verify-pod-lock-portability.mjs --before "$RUNNER_TEMP/Podfile.lock.before-install" --after apps/mobile/ios/Podfile.lock',
+  );
+  assert.ok(steps.indexOf(installPods) < steps.indexOf(verifyPods));
+  assert.ok(steps.indexOf(verifyPods) < steps.indexOf(debugBuild));
+});
+
 test('native artifact uploads overwrite same-run artifacts on rerun', () => {
   const config = workflow('.github/workflows/native-builds.yml');
   const uploads = allWorkflowSteps(config).filter(step =>

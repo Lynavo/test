@@ -168,7 +168,15 @@ jobs:
         env:
           BUNDLE_DEPLOYMENT: 'true'
           BUNDLE_FROZEN: 'true'
-        run: bundle exec pod install --deployment
+        run: |
+          cp Podfile.lock "$RUNNER_TEMP/Podfile.lock.before-install"
+          bundle exec pod install
+
+      - name: Verify iOS pod lock
+        run: >-
+          node scripts/release/verify-pod-lock-portability.mjs
+          --before "$RUNNER_TEMP/Podfile.lock.before-install"
+          --after apps/mobile/ios/Podfile.lock
 
       - name: Build iOS Debug
         working-directory: apps/mobile/ios
