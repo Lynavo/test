@@ -317,6 +317,20 @@ test('Android native build compiles shared workspaces before mobile typecheck', 
   assert.ok(buildIndex < typecheckIndex, 'Android workspaces must build before typecheck');
 });
 
+test('iOS native build compiles shared workspaces before Xcode build', () => {
+  const config = workflow('.github/workflows/native-builds.yml');
+  const steps = config.jobs?.ios?.steps ?? [];
+  const buildIndex = steps.findIndex(step => step.name === 'Build workspaces');
+  const xcodebuildIndex = steps.findIndex(step => step.name === 'Build iOS Release');
+
+  assert.notEqual(buildIndex, -1, 'missing iOS Build workspaces step');
+  assert.equal(
+    steps[buildIndex].run,
+    'pnpm build --filter=!@lynavo-drive/mobile',
+  );
+  assert.ok(buildIndex < xcodebuildIndex, 'iOS workspaces must build before Xcode');
+});
+
 test('Windows native build compiles shared workspaces before packaging', () => {
   const config = workflow('.github/workflows/native-builds.yml');
   const steps = config.jobs?.windows?.steps ?? [];
@@ -351,6 +365,7 @@ test('iOS native build pins Ruby and installs the locked bundle', () => {
   const steps = config.jobs?.ios?.steps ?? [];
   const setupRuby = findStep(steps, 'Setup Ruby');
   const installRuby = findStep(steps, 'Install Ruby dependencies');
+  const installPods = findStep(steps, 'Install iOS pods');
 
   assert.equal(
     setupRuby.uses,
@@ -365,6 +380,7 @@ test('iOS native build pins Ruby and installs the locked bundle', () => {
     BUNDLE_FROZEN: 'true',
   });
   assert.equal(installRuby.run, 'bundle install --jobs 4 --retry 3');
+  assert.deepEqual(installPods.env, installRuby.env);
   assert.match(
     gemfileLock,
     /^RUBY VERSION\n {2}ruby 3\.4\.9(?:p-?\d+)?$/m,
