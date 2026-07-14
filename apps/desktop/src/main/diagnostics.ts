@@ -530,6 +530,7 @@ export async function compressBundle(
   if (platform === 'linux') {
     const cwd = includeParent ? dirname(bundleDir) : bundleDir;
     const source = includeParent ? basename(bundleDir) : '.';
+    await rm(outputPath, { force: true });
     await runCommand('zip', ['-r', outputPath, source], { cwd });
     return;
   }

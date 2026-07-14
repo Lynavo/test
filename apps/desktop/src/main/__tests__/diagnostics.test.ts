@@ -303,6 +303,31 @@ describe('compressBundle', () => {
       cwd: '/tmp/diagnostics',
     });
   });
+
+  it('replaces an existing Linux archive without retaining stale entries', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'lynavo-drive-compress-bundle-test-'));
+    const bundleDir = join(tempRoot, 'bundle');
+    const archivePath = join(tempRoot, 'diagnostics.zip');
+    const { compressBundle } = await import('../diagnostics');
+    mkdirSync(bundleDir, { recursive: true });
+
+    try {
+      writeFileSync(join(bundleDir, 'stale.txt'), 'stale\n');
+      await compressBundle(bundleDir, archivePath, true, { platform: 'linux' });
+
+      rmSync(join(bundleDir, 'stale.txt'));
+      writeFileSync(join(bundleDir, 'current.txt'), 'current\n');
+      await compressBundle(bundleDir, archivePath, true, { platform: 'linux' });
+
+      const entries = execFileSync('unzip', ['-Z1', archivePath], { encoding: 'utf8' })
+        .split('\n')
+        .filter(Boolean);
+      expect(entries).toContain('bundle/current.txt');
+      expect(entries).not.toContain('bundle/stale.txt');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('writePowerDiagnostics', () => {
