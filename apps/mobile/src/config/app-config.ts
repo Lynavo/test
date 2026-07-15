@@ -31,7 +31,7 @@ const LYNAVO_ENDPOINTS: AppConfigEndpoints = {
 };
 
 export const appConfig: AppConfig = Object.freeze({
-  productName: 'Lynavo Drive',
+  productName: 'LynavoDriveDemo',
   bundleId: 'com.lynavo.drive.mobile.demo',
   endpoints: LYNAVO_ENDPOINTS,
   legal: {
