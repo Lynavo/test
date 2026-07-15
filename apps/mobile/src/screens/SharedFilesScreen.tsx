@@ -9,7 +9,7 @@ import { GradientBackground } from '../components/GradientBackground';
 import { BottomTabBar } from '../components/BottomTabBar';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'SharedFiles'>;

@@ -245,8 +245,12 @@ jest.mock('../../stores/auth-store', () => {
 // Imports after all mocks are registered
 // ---------------------------------------------------------------------------
 import { useAuth } from '../../stores/auth-store';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  createNavigationContainerRef,
+  NavigationContainer,
+} from '@react-navigation/native';
 import { RootNavigator } from '../RootNavigator';
+import type { RootStackParamList } from '../RootNavigator';
 import i18n from '../../i18n';
 
 // ---------------------------------------------------------------------------
@@ -405,7 +409,7 @@ describe('RootNavigator - OSS fail-open routing', () => {
     expect(screen.queryByTestId('device-discovery-screen')).toBeNull();
   });
 
-  test('global connected session renders home, local computer files, and settings inside the main tab shell', async () => {
+  test('connected session renders home, local computer files, and settings inside the main tab shell', async () => {
     (NativeModules as Record<string, unknown>).NativeSyncEngine = {
       getBindingState: jest.fn().mockResolvedValue({ deviceId: 'desktop-1' }),
       addListener: jest.fn(),
@@ -450,5 +454,31 @@ describe('RootNavigator - OSS fail-open routing', () => {
         screen.getByText('SyncActivity showBottomTabBar=false'),
       ).toBeTruthy(),
     );
+  });
+
+  test('uses neutral route names for the main tabs', async () => {
+    (
+      NativeModules.NativeSyncEngine.getBindingState as jest.Mock
+    ).mockResolvedValue({ deviceId: 'desktop-1' });
+    const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+    mockGuestLocalSession();
+    render(
+      <NavigationContainer ref={navigationRef}>
+        <RootNavigator />
+      </NavigationContainer>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('sync-activity-screen')).toBeTruthy(),
+    );
+
+    const rootState = navigationRef.getRootState();
+    const activeRootRoute = rootState.routes[rootState.index];
+    expect(activeRootRoute.state?.routes.map(route => route.name)).toEqual([
+      'HomeTab',
+      'FilesTab',
+      'SettingsTab',
+    ]);
   });
 });

@@ -302,14 +302,29 @@ test('blocks npmrc mirrors, registries, proxies, certificates, and auth config',
 });
 
 test('blocks tracked CN market source and build residue without broad CN string matching', () => {
+  const cnImplementation = [cnMarketValue, 'Implementation'].join('');
   const fixtureRoot = createTrackedFixture({
     'apps/mobile/android/app/src/cn/AndroidManifest.xml': '<manifest />\n',
     'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveCN.xcscheme':
       '<Scheme />\n',
     'apps/desktop/electron-builder.cn.yml': 'productName: Lynavo Drive\n',
+    'apps/desktop/electron-builder.cn.yaml': 'productName: Lynavo Drive\n',
     'scripts/release/release-profiles.mjs': `export const review = { market: '${cnMarketValue}' };\n`,
     'apps/mobile/config/release.json': `${JSON.stringify({ profile: cnMarketValue })}\n`,
     'apps/mobile/config/runtime.yml': `region: ${cnMarketValue}\n`,
+    'apps/mobile/config/channel.json': `${JSON.stringify({ channel: cnMarketValue })}\n`,
+    'apps/mobile/config/variant.yml': `variant: ${cnMarketValue}\n`,
+    'apps/mobile/config/flavor.ts': `export const flavor = '${cnMarketValue}';\n`,
+    'apps/mobile/android/app/build.gradle': `android {
+  flavorDimensions "market"
+  productFlavors {
+    ${cnMarketValue} { dimension "market" }
+  }
+}
+dependencies {
+  ${cnImplementation} "com.alipay.sdk:alipaysdk-android:15.8.41"
+  ${cnImplementation} "com.tencent.mm.opensdk:wechat-sdk-android:6.8.34"
+}\n`,
     'apps/mobile/android/app/src/global/java/com/lynavo/drive/mobile/china/payments/NativeMainlandPaymentModule.kt':
       'class NativeMainlandPaymentModule\n',
     'apps/mobile/src/markets/cn/config.ts': 'export const enabled = true;\n',
@@ -320,25 +335,167 @@ test('blocks tracked CN market source and build residue without broad CN string 
     'apps/desktop/src/renderer/lib/styles.ts': "export const className = cn('grid', 'gap-2');\n",
     'apps/mobile/ios/LynavoDrive.xcodeproj/xcshareddata/xcschemes/LynavoDriveGlobal.xcscheme':
       '<Scheme />\n',
+    'apps/mobile/src/theme/globalColors.ts': 'export const colors = {};\n',
+    'apps/mobile/src/assets/onboarding/global/sync-activity-panel.png': 'image\n',
   });
   try {
     const result = runVerifier(['--root', fixtureRoot]);
 
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stdout, /Audited OSS source package files: 12/);
-    assert.match(result.stdout, /Disallowed OSS source package files: 9/);
+    assert.match(result.stdout, /Audited OSS source package files: 19/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 17/);
     assert.match(result.stdout, /apps\/mobile\/android\/app\/src\/cn\/AndroidManifest\.xml/);
     assert.match(result.stdout, /LynavoDriveCN\.xcscheme/);
     assert.match(result.stdout, /apps\/desktop\/electron-builder\.cn\.yml/);
+    assert.match(result.stdout, /apps\/desktop\/electron-builder\.cn\.yaml/);
     assert.match(result.stdout, /scripts\/release\/release-profiles\.mjs/);
     assert.match(result.stdout, /apps\/mobile\/config\/release\.json/);
     assert.match(result.stdout, /apps\/mobile\/config\/runtime\.yml/);
+    assert.match(result.stdout, /apps\/mobile\/config\/channel\.json/);
+    assert.match(result.stdout, /apps\/mobile\/config\/variant\.yml/);
+    assert.match(result.stdout, /apps\/mobile\/config\/flavor\.ts/);
+    assert.match(result.stdout, /apps\/mobile\/android\/app\/build\.gradle/);
     assert.match(result.stdout, /NativeMainlandPaymentModule\.kt/);
     assert.match(result.stdout, /apps\/mobile\/src\/markets\/cn\/config\.ts/);
     assert.match(result.stdout, /apps\/mobile\/src\/services\/mainland-payment-service\.ts/);
+    assert.match(result.stdout, /LynavoDriveGlobal\.xcscheme/);
+    assert.match(result.stdout, /apps\/mobile\/src\/theme\/globalColors\.ts/);
+    assert.match(result.stdout, /apps\/mobile\/src\/assets\/onboarding\/global/);
     assert.doesNotMatch(result.stdout, /zh-Hans\/common\.json/);
     assert.doesNotMatch(result.stdout, /renderer\/lib\/styles\.ts/);
-    assert.doesNotMatch(result.stdout, /LynavoDriveGlobal\.xcscheme/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks TypeScript CN market selectors with type assertions', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/src/config/asserted-market.ts':
+      `export const config = { market: '${cnMarketValue}' as const };\n`,
+    'apps/mobile/src/config/satisfied-market.ts':
+      `export const market = '${cnMarketValue}' satisfies Market;\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 2/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 2/);
+    assert.match(result.stdout, /asserted-market\.ts/);
+    assert.match(result.stdout, /satisfied-market\.ts/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('allows selector-like variables that use the cn helper or namespace', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/desktop/src/renderer/lib/region.ts':
+      `export const region = ${cnMarketValue}('grid');\n`,
+    'apps/desktop/src/renderer/lib/variant.ts':
+      `export const variant = ${cnMarketValue}(baseClass);\n`,
+    'apps/desktop/src/renderer/lib/channel.ts':
+      `export const channel = ${cnMarketValue}.channels.default;\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 3/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 0/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks Android CN build-variant source sets', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/android/app/src/cnDebug/kotlin/DebugOnly.kt': 'class DebugOnly\n',
+    'apps/mobile/android/app/src/cnRelease/kotlin/ReleaseOnly.kt': 'class ReleaseOnly\n',
+    'apps/mobile/android/app/src/cnBenchmark/kotlin/BenchmarkOnly.kt':
+      'class BenchmarkOnly\n',
+    'apps/mobile/android/app/src/freeCnDebug/kotlin/FreeCnDebugOnly.kt':
+      'class FreeCnDebugOnly\n',
+    'apps/mobile/android/app/src/testCn/kotlin/CnTest.kt': 'class CnTest\n',
+    'apps/mobile/android/app/src/testCnBenchmark/kotlin/CnBenchmarkTest.kt':
+      'class CnBenchmarkTest\n',
+    'apps/mobile/android/app/src/testFreeCnDebug/kotlin/FreeCnDebugTest.kt':
+      'class FreeCnDebugTest\n',
+    'apps/mobile/android/app/src/androidTestCn/kotlin/CnInstrumentedTest.kt':
+      'class CnInstrumentedTest\n',
+    'apps/mobile/android/app/src/androidTestCnBenchmark/kotlin/CnBenchmarkInstrumentedTest.kt':
+      'class CnBenchmarkInstrumentedTest\n',
+    'apps/mobile/android/app/src/androidTestFreeCnDebug/kotlin/FreeCnDebugInstrumentedTest.kt':
+      'class FreeCnDebugInstrumentedTest\n',
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 10/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 10/);
+    assert.match(result.stdout, /src\/cnDebug\/kotlin\/DebugOnly\.kt/);
+    assert.match(result.stdout, /src\/cnRelease\/kotlin\/ReleaseOnly\.kt/);
+    assert.match(result.stdout, /src\/cnBenchmark\/kotlin\/BenchmarkOnly\.kt/);
+    assert.match(result.stdout, /src\/freeCnDebug\/kotlin\/FreeCnDebugOnly\.kt/);
+    assert.match(result.stdout, /src\/testCn\/kotlin\/CnTest\.kt/);
+    assert.match(result.stdout, /src\/testCnBenchmark\/kotlin\/CnBenchmarkTest\.kt/);
+    assert.match(result.stdout, /src\/testFreeCnDebug\/kotlin\/FreeCnDebugTest\.kt/);
+    assert.match(result.stdout, /src\/androidTestCn\/kotlin\/CnInstrumentedTest\.kt/);
+    assert.match(
+      result.stdout,
+      /src\/androidTestCnBenchmark\/kotlin\/CnBenchmarkInstrumentedTest\.kt/,
+    );
+    assert.match(
+      result.stdout,
+      /src\/androidTestFreeCnDebug\/kotlin\/FreeCnDebugInstrumentedTest\.kt/,
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('blocks Kotlin DSL declarations of the Android CN product flavor', () => {
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/android/app/build.gradle.kts': `android {
+  productFlavors {
+    create("${cnMarketValue}") { dimension = "market" }
+  }
+}\n`,
+    'apps/mobile/android/feature/build.gradle.kts': `android {
+  productFlavors {
+    register("${cnMarketValue}") { dimension = "market" }
+  }
+}\n`,
+    'apps/mobile/android/library/build.gradle.kts': `android {
+  productFlavors {
+    maybeCreate("${cnMarketValue}").dimension = "market"
+  }
+}\n`,
+    'apps/mobile/android/direct-create/build.gradle.kts': `android.productFlavors.create("${cnMarketValue}") {
+  dimension = "market"
+}\n`,
+    'apps/mobile/android/direct-register/build.gradle.kts': `android.productFlavors.register("${cnMarketValue}") {
+  dimension = "market"
+}\n`,
+    'apps/mobile/android/direct-maybe-create/build.gradle.kts':
+      `android.productFlavors.maybeCreate("${cnMarketValue}").dimension = "market"\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 6/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 6/);
+    assert.match(result.stdout, /apps\/mobile\/android\/app\/build\.gradle\.kts/);
+    assert.match(result.stdout, /apps\/mobile\/android\/feature\/build\.gradle\.kts/);
+    assert.match(result.stdout, /apps\/mobile\/android\/library\/build\.gradle\.kts/);
+    assert.match(result.stdout, /apps\/mobile\/android\/direct-create\/build\.gradle\.kts/);
+    assert.match(result.stdout, /apps\/mobile\/android\/direct-register\/build\.gradle\.kts/);
+    assert.match(
+      result.stdout,
+      /apps\/mobile\/android\/direct-maybe-create\/build\.gradle\.kts/,
+    );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
@@ -383,6 +540,54 @@ test('blocks remaining CN runtime configuration and mainland payment residue', (
   }
 });
 
+test('scans native source and common config files for CN residue', () => {
+  const fixtureRoot = createTrackedFixture({
+    'services/sidecar-go/main.go': `const apiBaseURL = "${cnRuntimeEndpoint}"\n`,
+    'apps/mobile/scripts/release.py': `market = '${cnMarketValue}'\n`,
+    'apps/mobile/ios/RuntimeConfig.m': `NSString *endpoint = @"${cnRuntimeEndpoint}";\n`,
+    'apps/mobile/ios/RuntimeConfig.h': `static const char *market = "${cnMarketValue}";\n`,
+    'services/sidecar-go/migrations/market.sql': `-- region = ${cnMarketValue}\n`,
+    'services/sidecar-go/Makefile': `MARKET = ${cnMarketValue}\n`,
+    'apps/mobile/ios/Podfile': `region = '${cnMarketValue}'\n`,
+    'apps/mobile/Gemfile': `channel = '${cnMarketValue}'\n`,
+    'config/release.ini': `profile=${cnMarketValue}\n`,
+    'config/release.cfg': `variant=${cnMarketValue}\n`,
+    'config/release.conf': `flavor=${cnMarketValue}\n`,
+    'apps/mobile/ios/.xcode.env': `MARKET=${cnMarketValue}\n`,
+    'apps/mobile/ios/Podfile.lock': `endpoint: ${cnRuntimeEndpoint}\n`,
+    'services/sidecar-go/go.mod': `// region = ${cnMarketValue}\n`,
+    'apps/mobile/android/app/proguard-rules.pro': `# channel = ${cnMarketValue}\n`,
+    'apps/mobile/ios/LaunchScreen.storyboard': `<string value="${cnRuntimeEndpoint}" />\n`,
+    'apps/desktop/dummy.txt': `profile=${cnMarketValue}\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 17/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 17/);
+    assert.match(result.stdout, /services\/sidecar-go\/main\.go/);
+    assert.match(result.stdout, /apps\/mobile\/scripts\/release\.py/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/RuntimeConfig\.m/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/RuntimeConfig\.h/);
+    assert.match(result.stdout, /services\/sidecar-go\/migrations\/market\.sql/);
+    assert.match(result.stdout, /services\/sidecar-go\/Makefile/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/Podfile/);
+    assert.match(result.stdout, /apps\/mobile\/Gemfile/);
+    assert.match(result.stdout, /config\/release\.ini/);
+    assert.match(result.stdout, /config\/release\.cfg/);
+    assert.match(result.stdout, /config\/release\.conf/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/\.xcode\.env/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/Podfile\.lock/);
+    assert.match(result.stdout, /services\/sidecar-go\/go\.mod/);
+    assert.match(result.stdout, /apps\/mobile\/android\/app\/proguard-rules\.pro/);
+    assert.match(result.stdout, /apps\/mobile\/ios\/LaunchScreen\.storyboard/);
+    assert.match(result.stdout, /apps\/desktop\/dummy\.txt/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('falls back to filesystem walk for extracted source archives without git metadata', () => {
   const fixtureRoot = createFilesystemFixture({
     'package.json': '{}\n',
@@ -406,6 +611,151 @@ test('falls back to filesystem walk for extracted source archives without git me
   }
 });
 
+test('blocks exact retired mobile global identifiers without broad phrase matching', () => {
+  const globalHomeTab = ['Global', 'HomeTab'].join('');
+  const globalDownloadHelper = ['downloadResourceFor', 'Global'].join('');
+  const globalDurationHelper = ['format', 'GlobalHistoryDuration'].join('');
+  const globalLocalComputerType = ['Global', 'LocalComputerResource'].join('');
+  const listGlobalLocalComputer = ['list', 'GlobalLocalComputerResources'].join('');
+  const downloadGlobalLocalComputer = [
+    'download',
+    'GlobalLocalComputerResource',
+  ].join('');
+  const getGlobalLocalComputer = [
+    'get',
+    'GlobalLocalComputerPreviewUrl',
+  ].join('');
+  const prepareGlobalLocalComputer = [
+    'prepare',
+    'GlobalLocalComputerPreview',
+  ].join('');
+  const shareGlobalLocalComputer = [
+    'share',
+    'GlobalLocalComputerResources',
+  ].join('');
+  const globalPreview = ['global', 'Preview'].join('');
+  const globalTourImages = ['TOUR_BACKGROUND_IMAGES', 'GLOBAL'].join('_');
+  const globalSyncStyle = ['global', 'SyncRecordCard'].join('');
+  const globalMediaStyle = ['global', 'MediaPreviewWrap'].join('');
+  const isGlobalPreview = ['is', 'GlobalPreview'].join('');
+  const shouldRenderGlobalEmpty = ['shouldRender', 'GlobalEmpty'].join('');
+  const globalRecentDownloadStyle = ['global', 'RecentDownloadSection'].join('');
+  const globalSectionStyle = ['global', 'SectionEmptyState'].join('');
+  const globalPhotoStyle = ['global', 'PhotoHillLeft'].join('');
+  const globalVideoStyle = ['global', 'VideoDot'].join('');
+  const globalFileStyle = ['global', 'FileCorner'].join('');
+  const globalPlayStyle = ['global', 'PlayCircle'].join('');
+  const globalHomeGradient = ['global', 'Home'].join('');
+  const deviceDiscoveryGlobalKey = ['deviceDiscovery', 'global', 'connected'].join('.');
+  const settingsGlobalKey = ['settings', 'global', 'connected'].join('.');
+  const globalPersonalDirectoryKey = [
+    'directory',
+    'pathCard',
+    'globalPersonalDirectory',
+  ].join('.');
+  const fixtureRoot = createTrackedFixture({
+    'apps/mobile/src/navigation/RootNavigator.tsx': `const route = '${globalHomeTab}';\n`,
+    'apps/mobile/src/services/desktop-local-service.ts':
+      `export function ${globalDownloadHelper}() {}\n`,
+    'apps/mobile/src/screens/SyncActivityScreen.tsx':
+      `function ${globalDurationHelper}() {}\n`,
+    'apps/mobile/src/screens/PhoneSyncSpaceScreen.tsx':
+      "recordDiagnosticsLog('PhoneSyncSpace', 'global screen load start');\n",
+    'apps/mobile/src/components/__tests__/ReferenceLayout.test.tsx':
+      "test('matches the global reference layout', () => {});\n",
+    'apps/mobile/src/i18n/locales/en/common.json': '{"label":"global screen"}\n',
+    'apps/mobile/src/services/SyncEngineModule.ts':
+      'export function listGlobalReceivedFiles() {}\n',
+    'apps/mobile/src/stores/connection-store.ts':
+      '// Aggregate the global connection state across paired desktops.\n',
+    'apps/mobile/src/types/local-computer.ts':
+      `export type ${globalLocalComputerType} = {};\n`,
+    'apps/mobile/src/services/list-local-computer.ts':
+      `export function ${listGlobalLocalComputer}() {}\n`,
+    'apps/mobile/src/services/download-local-computer.ts':
+      `export function ${downloadGlobalLocalComputer}() {}\n`,
+    'apps/mobile/src/services/get-local-computer.ts':
+      `export function ${getGlobalLocalComputer}() {}\n`,
+    'apps/mobile/src/services/prepare-local-computer.ts':
+      `export function ${prepareGlobalLocalComputer}() {}\n`,
+    'apps/mobile/src/services/share-local-computer.ts':
+      `export function ${shareGlobalLocalComputer}() {}\n`,
+    'apps/mobile/src/screens/components/Preview.tsx':
+      `const variant = '${globalPreview}';\n`,
+    'apps/mobile/src/components/onboarding/tour-assets.ts':
+      `export const ${globalTourImages} = [];\n`,
+    'apps/mobile/src/screens/styles/sync.ts':
+      `export const ${globalSyncStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/media.ts':
+      `export const ${globalMediaStyle} = {};\n`,
+    'apps/mobile/src/screens/components/variant.ts':
+      `const ${isGlobalPreview} = true;\n`,
+    'apps/mobile/src/screens/components/empty.ts':
+      `const ${shouldRenderGlobalEmpty} = true;\n`,
+    'apps/mobile/src/screens/styles/recent-download.ts':
+      `export const ${globalRecentDownloadStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/section.ts':
+      `export const ${globalSectionStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/photo.ts':
+      `export const ${globalPhotoStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/video.ts':
+      `export const ${globalVideoStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/file.ts':
+      `export const ${globalFileStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/play.ts':
+      `export const ${globalPlayStyle} = {};\n`,
+    'apps/mobile/src/screens/styles/gradient.ts':
+      `const gradientId = \`${globalHomeGradient}\${type}MediaGradient\`;\n`,
+    'apps/mobile/src/screens/DeviceDiscoveryScreen.tsx':
+      `const label = t('${deviceDiscoveryGlobalKey}');\n`,
+    'apps/mobile/src/screens/SettingsScreen.tsx': `const label = t('${settingsGlobalKey}');\n`,
+    'apps/desktop/src/renderer/features/directory/DirectoryPathCard.tsx':
+      `const label = t('${globalPersonalDirectoryKey}');\n`,
+  });
+  try {
+    const result = runVerifier(['--root', fixtureRoot]);
+
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stdout, /Audited OSS source package files: 30/);
+    assert.match(result.stdout, /Disallowed OSS source package files: 25/);
+    assert.match(result.stdout, /navigation\/RootNavigator\.tsx/);
+    assert.match(result.stdout, /services\/desktop-local-service\.ts/);
+    assert.match(result.stdout, /screens\/SyncActivityScreen\.tsx/);
+    assert.doesNotMatch(result.stdout, /screens\/PhoneSyncSpaceScreen\.tsx/);
+    assert.doesNotMatch(
+      result.stdout,
+      /components\/__tests__\/ReferenceLayout\.test\.tsx/,
+    );
+    assert.doesNotMatch(result.stdout, /i18n\/locales\/en\/common\.json/);
+    assert.doesNotMatch(result.stdout, /services\/SyncEngineModule\.ts/);
+    assert.doesNotMatch(result.stdout, /stores\/connection-store\.ts/);
+    assert.match(result.stdout, /types\/local-computer\.ts/);
+    assert.match(result.stdout, /services\/list-local-computer\.ts/);
+    assert.match(result.stdout, /services\/download-local-computer\.ts/);
+    assert.match(result.stdout, /services\/get-local-computer\.ts/);
+    assert.match(result.stdout, /services\/prepare-local-computer\.ts/);
+    assert.match(result.stdout, /services\/share-local-computer\.ts/);
+    assert.match(result.stdout, /screens\/components\/Preview\.tsx/);
+    assert.match(result.stdout, /components\/onboarding\/tour-assets\.ts/);
+    assert.match(result.stdout, /screens\/styles\/sync\.ts/);
+    assert.match(result.stdout, /screens\/styles\/media\.ts/);
+    assert.match(result.stdout, /screens\/components\/variant\.ts/);
+    assert.match(result.stdout, /screens\/components\/empty\.ts/);
+    assert.match(result.stdout, /screens\/styles\/recent-download\.ts/);
+    assert.match(result.stdout, /screens\/styles\/section\.ts/);
+    assert.match(result.stdout, /screens\/styles\/photo\.ts/);
+    assert.match(result.stdout, /screens\/styles\/video\.ts/);
+    assert.match(result.stdout, /screens\/styles\/file\.ts/);
+    assert.match(result.stdout, /screens\/styles\/play\.ts/);
+    assert.match(result.stdout, /screens\/styles\/gradient\.ts/);
+    assert.match(result.stdout, /screens\/DeviceDiscoveryScreen\.tsx/);
+    assert.match(result.stdout, /screens\/SettingsScreen\.tsx/);
+    assert.match(result.stdout, /features\/directory\/DirectoryPathCard\.tsx/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test('falls back to filesystem walk for git-ref audits in extracted source archives', () => {
   const fixtureRoot = createFilesystemFixture({
     'package.json': '{}\n',
@@ -424,6 +774,39 @@ test('falls back to filesystem walk for git-ref audits in extracted source archi
     assert.match(result.stdout, /Disallowed OSS source package files: 1/);
     assert.match(result.stdout, /apps\/desktop\/release\/LynavoDrive\.dmg/);
     assert.doesNotMatch(result.stdout, /node_modules/);
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test('does not reuse parent git metadata for a nested extracted source archive', () => {
+  const fixtureRoot = createTrackedFixture({
+    'README.md': 'parent repository\n',
+  });
+  const extractedRoot = join(fixtureRoot, 'tmp', 'extracted-source');
+  try {
+    git(fixtureRoot, [
+      '-c',
+      'user.email=oss-source-test@example.invalid',
+      '-c',
+      'user.name=OSS Source Test',
+      'commit',
+      '-qm',
+      'fixture',
+    ]);
+    writeFixture(extractedRoot, 'package.json', '{}\n');
+    writeFixture(extractedRoot, 'apps/desktop/release/LynavoDrive.dmg', 'binary\n');
+
+    for (const verifierArgs of [[], ['--git-ref', 'HEAD']]) {
+      const result = runVerifier(['--root', extractedRoot, ...verifierArgs]);
+
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stdout, /OSS source package input: filesystem walk/);
+      assert.match(result.stdout, /Audited OSS source package files: 2/);
+      assert.match(result.stdout, /Disallowed OSS source package files: 1/);
+      assert.match(result.stdout, /apps\/desktop\/release\/LynavoDrive\.dmg/);
+      assert.doesNotMatch(result.stdout, /README\.md/);
+    }
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

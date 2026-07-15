@@ -403,7 +403,7 @@ describe('ReceivedLibraryPage', () => {
         fileSize: 1048576,
         completedAt: '2026-06-15T00:00:00Z',
         shareStatus: 'not_shared',
-        thumbnailUrl: 'http://127.0.0.1:39394/resources/received/thumbnail?fileKey=key-thumb-1',
+        thumbnailUrl: 'http://127.0.0.1:39594/resources/received/thumbnail?fileKey=key-thumb-1',
       },
     ];
 
@@ -419,7 +419,7 @@ describe('ReceivedLibraryPage', () => {
     const thumbnail = screen.getByTestId('received-library-thumbnail-image');
     expect(thumbnail).toHaveAttribute(
       'src',
-      'http://127.0.0.1:39394/resources/received/thumbnail?fileKey=key-thumb-1',
+      'http://127.0.0.1:39594/resources/received/thumbnail?fileKey=key-thumb-1',
     );
 
     fireEvent.error(thumbnail);
@@ -440,7 +440,7 @@ describe('ReceivedLibraryPage', () => {
         fileSize: 1048576,
         completedAt: '2026-06-15T00:00:00Z',
         shareStatus: 'not_shared',
-        thumbnailUrl: 'http://127.0.0.1:39394/resources/received/thumbnail?fileKey=key-video-1',
+        thumbnailUrl: 'http://127.0.0.1:39594/resources/received/thumbnail?fileKey=key-video-1',
       },
     ];
 

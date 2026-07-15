@@ -295,25 +295,25 @@ jest.mock('../../dev/visualQa', () => ({
 jest.mock('../../services/desktop-local-service', () => ({
   listSharedResources: jest.fn(),
   listSharedFolderContents: jest.fn(),
-  listGlobalLocalComputerResources: jest.fn(),
-  listGlobalLocalComputerFolderContents: jest.fn(),
+  listLocalComputerResources: jest.fn(),
+  listLocalComputerFolderContents: jest.fn(),
   listReceivedLibrary: jest.fn(),
   listCurrentClientReceivedLibrary: jest.fn(),
   listCurrentClientReceivedLibraryPage: jest.fn(),
   listGlobalReceivedLibraryPage: jest.fn(),
   downloadResource: jest.fn(),
-  downloadResourceForGlobal: jest.fn(),
+  downloadDesktopResource: jest.fn(),
   downloadReceivedLibraryItem: jest.fn(),
-  downloadGlobalLocalComputerResource: jest.fn(),
+  downloadLocalComputerResource: jest.fn(),
   getResourcePreviewUrl: jest.fn(),
   getReceivedLibraryPreviewUrl: jest.fn(),
-  getGlobalLocalComputerPreviewUrl: jest.fn(),
+  getLocalComputerPreviewUrl: jest.fn(),
   prepareResourcePreview: jest.fn(),
   prepareReceivedLibraryPreview: jest.fn(),
-  prepareGlobalLocalComputerPreview: jest.fn(),
-  prepareGlobalLocalComputerShareFile: jest.fn(),
+  prepareLocalComputerPreview: jest.fn(),
+  prepareLocalComputerShareFile: jest.fn(),
   shareResources: jest.fn(),
-  shareGlobalLocalComputerResources: jest.fn(),
+  shareLocalComputerResources: jest.fn(),
   isDownloadSavedLocally: jest.fn(
     (result: {
       savedToPhotos?: boolean;
@@ -359,24 +359,24 @@ import { LocalComputerScreen } from '../LocalComputerScreen';
 import {
   listSharedResources,
   listSharedFolderContents,
-  listGlobalLocalComputerResources,
-  listGlobalLocalComputerFolderContents,
+  listLocalComputerResources,
+  listLocalComputerFolderContents,
   listReceivedLibrary,
   listCurrentClientReceivedLibrary,
   listGlobalReceivedLibraryPage,
   downloadResource,
-  downloadResourceForGlobal,
+  downloadDesktopResource,
   downloadReceivedLibraryItem,
-  downloadGlobalLocalComputerResource,
+  downloadLocalComputerResource,
   getResourcePreviewUrl,
   getReceivedLibraryPreviewUrl,
-  getGlobalLocalComputerPreviewUrl,
+  getLocalComputerPreviewUrl,
   prepareResourcePreview,
   prepareReceivedLibraryPreview,
-  prepareGlobalLocalComputerPreview,
-  prepareGlobalLocalComputerShareFile,
+  prepareLocalComputerPreview,
+  prepareLocalComputerShareFile,
   shareResources,
-  shareGlobalLocalComputerResources,
+  shareLocalComputerResources,
 } from '../../services/desktop-local-service';
 import { recordDownloadedFile } from '../../services/download-records-service';
 import { recordDiagnosticsLog } from '../../services/diagnostics-log-service';
@@ -385,36 +385,34 @@ import { PhoneSyncSpaceScreen } from '../PhoneSyncSpaceScreen';
 
 const mockListSharedResources = listSharedResources as jest.Mock;
 const mockListSharedFolderContents = listSharedFolderContents as jest.Mock;
-const mockListGlobalLocalComputerResources =
-  listGlobalLocalComputerResources as jest.Mock;
-const mockListGlobalLocalComputerFolderContents =
-  listGlobalLocalComputerFolderContents as jest.Mock;
+const mockListLocalComputerResources = listLocalComputerResources as jest.Mock;
+const mockListLocalComputerFolderContents =
+  listLocalComputerFolderContents as jest.Mock;
 const mockListReceivedLibrary = listReceivedLibrary as jest.Mock;
 const mockListCurrentClientReceivedLibrary =
   listCurrentClientReceivedLibrary as jest.Mock;
 const mockListGlobalReceivedLibraryPage =
   listGlobalReceivedLibraryPage as jest.Mock;
 const mockDownloadResource = downloadResource as jest.Mock;
-const mockDownloadResourceForGlobal = downloadResourceForGlobal as jest.Mock;
+const mockDownloadDesktopResource = downloadDesktopResource as jest.Mock;
 const mockDownloadReceivedLibraryItem =
   downloadReceivedLibraryItem as jest.Mock;
-const mockDownloadGlobalLocalComputerResource =
-  downloadGlobalLocalComputerResource as jest.Mock;
+const mockDownloadLocalComputerResource =
+  downloadLocalComputerResource as jest.Mock;
 const mockGetResourcePreviewUrl = getResourcePreviewUrl as jest.Mock;
 const mockGetReceivedLibraryPreviewUrl =
   getReceivedLibraryPreviewUrl as jest.Mock;
-const mockGetGlobalLocalComputerPreviewUrl =
-  getGlobalLocalComputerPreviewUrl as jest.Mock;
+const mockGetLocalComputerPreviewUrl = getLocalComputerPreviewUrl as jest.Mock;
 const mockPrepareResourcePreview = prepareResourcePreview as jest.Mock;
 const mockPrepareReceivedLibraryPreview =
   prepareReceivedLibraryPreview as jest.Mock;
-const mockPrepareGlobalLocalComputerPreview =
-  prepareGlobalLocalComputerPreview as jest.Mock;
-const mockPrepareGlobalLocalComputerShareFile =
-  prepareGlobalLocalComputerShareFile as jest.Mock;
+const mockPrepareLocalComputerPreview =
+  prepareLocalComputerPreview as jest.Mock;
+const mockPrepareLocalComputerShareFile =
+  prepareLocalComputerShareFile as jest.Mock;
 const mockShareResources = shareResources as jest.Mock;
-const mockShareGlobalLocalComputerResources =
-  shareGlobalLocalComputerResources as jest.Mock;
+const mockShareLocalComputerResources =
+  shareLocalComputerResources as jest.Mock;
 const mockRecordDownloadedFile = recordDownloadedFile as jest.Mock;
 const mockRecordDiagnosticsLog = recordDiagnosticsLog as jest.Mock;
 const mockViewDocument = viewDocument as jest.Mock;
@@ -423,24 +421,24 @@ beforeEach(() => {
   [
     mockListSharedResources,
     mockListSharedFolderContents,
-    mockListGlobalLocalComputerResources,
-    mockListGlobalLocalComputerFolderContents,
+    mockListLocalComputerResources,
+    mockListLocalComputerFolderContents,
     mockListReceivedLibrary,
     mockListCurrentClientReceivedLibrary,
     mockListGlobalReceivedLibraryPage,
     mockDownloadResource,
-    mockDownloadResourceForGlobal,
+    mockDownloadDesktopResource,
     mockDownloadReceivedLibraryItem,
-    mockDownloadGlobalLocalComputerResource,
+    mockDownloadLocalComputerResource,
     mockGetResourcePreviewUrl,
     mockGetReceivedLibraryPreviewUrl,
-    mockGetGlobalLocalComputerPreviewUrl,
+    mockGetLocalComputerPreviewUrl,
     mockPrepareResourcePreview,
     mockPrepareReceivedLibraryPreview,
-    mockPrepareGlobalLocalComputerPreview,
-    mockPrepareGlobalLocalComputerShareFile,
+    mockPrepareLocalComputerPreview,
+    mockPrepareLocalComputerShareFile,
     mockShareResources,
-    mockShareGlobalLocalComputerResources,
+    mockShareLocalComputerResources,
     mockRecordDownloadedFile,
     mockRecordDiagnosticsLog,
     mockViewDocument,
@@ -554,7 +552,7 @@ describe('SharedFilesScreen', () => {
     );
   });
 
-  it('keeps global local computer local-LAN without an account service gate', () => {
+  it('keeps local computer local-LAN without an account service gate', () => {
     const { getByText, queryByText } = render(
       <SharedFilesScreen showBottomTabBar={false} />,
     );
@@ -627,19 +625,19 @@ describe('LocalComputerScreen', () => {
   });
 
   it('does not crash when share target translations are unavailable on initial render', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     expect(() => {
       render(<LocalComputerScreen />);
     }).not.toThrow();
 
     await waitFor(() => {
-      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+      expect(mockListLocalComputerResources).toHaveBeenCalledWith();
     });
   });
 
   it('lists shared files without an off-LAN service gate', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { queryByText } = render(
       <TestErrorBoundary>
@@ -648,14 +646,14 @@ describe('LocalComputerScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+      expect(mockListLocalComputerResources).toHaveBeenCalledWith();
     });
     expect(queryByText('Cloud account required')).toBeNull();
     expect(queryByText('Network Disconnected')).toBeNull();
   });
 
   it('renders local computer access list items without calling hooks from renderItem helpers', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -676,7 +674,7 @@ describe('LocalComputerScreen', () => {
 
   it('keeps an empty real response empty unless the shared files preview gate is explicit', async () => {
     mockVisualQaEnabled = true;
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByTestId, getByText, queryByText } = render(
       <TestErrorBoundary>
@@ -685,7 +683,7 @@ describe('LocalComputerScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+      expect(mockListLocalComputerResources).toHaveBeenCalledWith();
     });
 
     await waitFor(() => {
@@ -704,7 +702,7 @@ describe('LocalComputerScreen', () => {
       host: '192.168.1.100',
       connectionState: 'connected',
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
@@ -720,7 +718,7 @@ describe('LocalComputerScreen', () => {
 
   it('sorts local computer names using the active i18n locale', async () => {
     const localeCompareSpy = jest.spyOn(String.prototype, 'localeCompare');
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:zeta.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -770,7 +768,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText } = render(
       <TestErrorBoundary>
@@ -797,7 +795,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText } = render(
       <TestErrorBoundary>
@@ -839,7 +837,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
@@ -854,7 +852,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('ignores relay reachability events in the OSS local-LAN runtime', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { getByText, queryByText } = render(
       <TestErrorBoundary>
@@ -863,7 +861,7 @@ describe('LocalComputerScreen', () => {
     );
 
     await waitFor(() => {
-      expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+      expect(mockListLocalComputerResources).toHaveBeenCalledWith();
       expect(getByText('LAN')).toBeTruthy();
     });
 
@@ -897,7 +895,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -948,7 +946,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -1000,7 +998,7 @@ describe('LocalComputerScreen', () => {
         updatedAt: '2026-06-17T08:00:00.000Z',
       },
     });
-    mockListGlobalLocalComputerResources.mockImplementationOnce(
+    mockListLocalComputerResources.mockImplementationOnce(
       () => new Promise(() => {}),
     );
 
@@ -1014,7 +1012,7 @@ describe('LocalComputerScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+    expect(mockListLocalComputerResources).toHaveBeenCalledWith();
     expect(getByText('Computer files loading')).toBeTruthy();
     expect(queryByText('Relay connecting')).toBeNull();
     expect(queryByText('Waking')).toBeNull();
@@ -1026,7 +1024,7 @@ describe('LocalComputerScreen', () => {
   it('falls back to the disconnected state when local computer loading times out', async () => {
     jest.useFakeTimers();
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockImplementationOnce(
+    mockListLocalComputerResources.mockImplementationOnce(
       () => new Promise(() => {}),
     );
 
@@ -1040,7 +1038,7 @@ describe('LocalComputerScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledWith();
+    expect(mockListLocalComputerResources).toHaveBeenCalledWith();
     expect(getByText('Computer files loading')).toBeTruthy();
 
     await act(async () => {
@@ -1066,7 +1064,7 @@ describe('LocalComputerScreen', () => {
 
   it('shows desktop local-computer disabled instead of network disconnected when the desktop rejects browsing', async () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+    mockListLocalComputerResources.mockRejectedValueOnce(
       new Error('local computer access is disabled'),
     );
 
@@ -1094,7 +1092,7 @@ describe('LocalComputerScreen', () => {
 
   it('shows generic LAN unavailable guidance for legacy desktop-identity errors', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+    mockListLocalComputerResources.mockRejectedValueOnce(
       new Error('desktop account identity is unavailable'),
     );
 
@@ -1118,7 +1116,7 @@ describe('LocalComputerScreen', () => {
 
   it('shows generic LAN unavailable guidance for legacy identity-mismatch errors', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+    mockListLocalComputerResources.mockRejectedValueOnce(
       new Error('account mismatch'),
     );
 
@@ -1142,7 +1140,7 @@ describe('LocalComputerScreen', () => {
 
   it('shows desktop local-computer disabled for generic personal directory HTTP 403', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+    mockListLocalComputerResources.mockRejectedValueOnce(
       new Error('Sidecar returned HTTP 403 for /personal/list'),
     );
 
@@ -1160,7 +1158,7 @@ describe('LocalComputerScreen', () => {
 
   it('shows desktop local-computer disabled when sidecar returns personal directory HTTP 403 with body', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockRejectedValueOnce(
+    mockListLocalComputerResources.mockRejectedValueOnce(
       new Error(
         'Sidecar returned HTTP 403 for /personal/list: local computer access is disabled',
       ),
@@ -1180,7 +1178,7 @@ describe('LocalComputerScreen', () => {
 
   it('silently retries the first local computer list while the shared-files route is becoming ready', async () => {
     jest.useFakeTimers();
-    mockListGlobalLocalComputerResources
+    mockListLocalComputerResources
       .mockRejectedValueOnce(new Error('No shared files route available'))
       .mockResolvedValueOnce([
         {
@@ -1204,7 +1202,7 @@ describe('LocalComputerScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledTimes(1);
+    expect(mockListLocalComputerResources).toHaveBeenCalledTimes(1);
     expect(queryByText('Network Disconnected')).toBeNull();
 
     await act(async () => {
@@ -1216,12 +1214,12 @@ describe('LocalComputerScreen', () => {
     await waitFor(() => {
       expect(getByText('Project Files')).toBeTruthy();
     });
-    expect(mockListGlobalLocalComputerResources).toHaveBeenCalledTimes(2);
+    expect(mockListLocalComputerResources).toHaveBeenCalledTimes(2);
     expect(queryByText('Network Disconnected')).toBeNull();
   });
 
   it('loads real shared folder contents when a production folder is opened', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Project%20Files',
         desktopDeviceId: 'desktop-device-id',
@@ -1232,7 +1230,7 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockListGlobalLocalComputerFolderContents.mockResolvedValueOnce({
+    mockListLocalComputerFolderContents.mockResolvedValueOnce({
       path: '',
       files: [
         {
@@ -1264,7 +1262,7 @@ describe('LocalComputerScreen', () => {
           size: 8192,
           modifiedAt: '2026-06-16T08:33:00.000Z',
           thumbnailUrl:
-            'http://192.168.1.100:39394/personal/thumbnail/walkthrough.mov?v=8192-1780000',
+            'http://192.168.1.100:39594/personal/thumbnail/walkthrough.mov?v=8192-1780000',
         },
       ],
       totalCount: 4,
@@ -1285,7 +1283,7 @@ describe('LocalComputerScreen', () => {
     });
 
     await waitFor(() => {
-      expect(mockListGlobalLocalComputerFolderContents).toHaveBeenCalledWith(
+      expect(mockListLocalComputerFolderContents).toHaveBeenCalledWith(
         'personal-dir:Project%20Files',
         '',
       );
@@ -1299,7 +1297,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('keeps sparse local computer grid items constrained to a single column', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:command-line-tools',
         desktopDeviceId: 'desktop-device-id',
@@ -1357,8 +1355,8 @@ describe('LocalComputerScreen', () => {
     });
   });
 
-  it('renders the reference-style media type icons in the global local computer list', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+  it('renders the reference-style media type icons in the local computer list', async () => {
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'res-folder',
         desktopDeviceId: 'desktop-device-id',
@@ -1418,7 +1416,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('renders local computer image and video thumbnails from thumbnail urls', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1430,7 +1428,7 @@ describe('LocalComputerScreen', () => {
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
         thumbnailUrl:
-          'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg?v=1024-1780000',
+          'http://192.168.1.100:39594/personal/thumbnail/alpha.jpg?v=1024-1780000',
       },
       {
         resourceId: 'personal-dir:beta.mov',
@@ -1443,8 +1441,8 @@ describe('LocalComputerScreen', () => {
         addedAt: '2026-06-16T08:01:00.000Z',
         downloadCount: 0,
         thumbnailUrl:
-          'http://192.168.1.100:39394/personal/thumbnail/beta.mov?v=2048-1780000',
-        streamUrl: 'http://192.168.1.100:39394/personal/stream/beta.mov',
+          'http://192.168.1.100:39594/personal/thumbnail/beta.mov?v=2048-1780000',
+        streamUrl: 'http://192.168.1.100:39594/personal/stream/beta.mov',
       },
     ]);
 
@@ -1468,7 +1466,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('falls back to the image file type icon when a local computer thumbnail fails', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:broken.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1480,7 +1478,7 @@ describe('LocalComputerScreen', () => {
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
         thumbnailUrl:
-          'http://192.168.1.100:39394/personal/thumbnail/broken.jpg?v=1024-1780000',
+          'http://192.168.1.100:39594/personal/thumbnail/broken.jpg?v=1024-1780000',
       },
     ]);
 
@@ -1508,7 +1506,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('falls back to the video file type icon when a local computer video thumbnail fails', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:broken.mov',
         desktopDeviceId: 'desktop-device-id',
@@ -1520,8 +1518,8 @@ describe('LocalComputerScreen', () => {
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
         thumbnailUrl:
-          'http://192.168.1.100:39394/personal/thumbnail/broken.mov?v=2048-1780000',
-        streamUrl: 'http://192.168.1.100:39394/personal/stream/broken.mov',
+          'http://192.168.1.100:39594/personal/thumbnail/broken.mov?v=2048-1780000',
+        streamUrl: 'http://192.168.1.100:39594/personal/stream/broken.mov',
       },
     ]);
 
@@ -1549,7 +1547,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('limits the local computer FlatList render batch to ten rows', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce(
+    mockListLocalComputerResources.mockResolvedValueOnce(
       Array.from({ length: 12 }, (_, index) => ({
         resourceId: `personal-dir:photo-${index}.jpg`,
         desktopDeviceId: 'desktop-device-id',
@@ -1560,7 +1558,7 @@ describe('LocalComputerScreen', () => {
         status: 'available' as const,
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
-        thumbnailUrl: `http://192.168.1.100:39394/personal/thumbnail/photo-${index}.jpg?v=1024-1780000`,
+        thumbnailUrl: `http://192.168.1.100:39594/personal/thumbnail/photo-${index}.jpg?v=1024-1780000`,
       })),
     );
 
@@ -1581,7 +1579,7 @@ describe('LocalComputerScreen', () => {
   });
 
   it('uses reference lucide toolbar icons instead of Ionicons glyph mappings', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([]);
+    mockListLocalComputerResources.mockResolvedValueOnce([]);
 
     const { queryAllByTestId, queryByText } = render(
       <TestErrorBoundary>
@@ -1636,7 +1634,7 @@ describe('LocalComputerScreen', () => {
 
   it('records a saved local computer download after native persistence succeeds', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1647,12 +1645,12 @@ describe('LocalComputerScreen', () => {
         status: 'available',
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
-        thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
-        previewUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
-        streamUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
+        thumbnailUrl: 'http://192.168.1.100:39594/personal/thumbnail/alpha.jpg',
+        previewUrl: 'http://192.168.1.100:39594/personal/stream/alpha.jpg',
+        streamUrl: 'http://192.168.1.100:39594/personal/stream/alpha.jpg',
       },
     ]);
-    mockDownloadGlobalLocalComputerResource.mockResolvedValueOnce({
+    mockDownloadLocalComputerResource.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/local/alpha.jpg',
     });
@@ -1670,7 +1668,7 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('download-outline'));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledWith(
+      expect(mockDownloadLocalComputerResource).toHaveBeenCalledWith(
         'personal-dir:alpha.jpg',
       );
     });
@@ -1680,9 +1678,9 @@ describe('LocalComputerScreen', () => {
       fileSize: 1024,
       mediaType: 'image',
       localPath: '/local/alpha.jpg',
-      thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
-      previewUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
-      streamUrl: 'http://192.168.1.100:39394/personal/stream/alpha.jpg',
+      thumbnailUrl: 'http://192.168.1.100:39594/personal/thumbnail/alpha.jpg',
+      previewUrl: 'http://192.168.1.100:39594/personal/stream/alpha.jpg',
+      streamUrl: 'http://192.168.1.100:39594/personal/stream/alpha.jpg',
       savedToPhotos: false,
     });
     expect(alertSpy).toHaveBeenCalledWith(
@@ -1695,7 +1693,7 @@ describe('LocalComputerScreen', () => {
 
   it('records folder image downloads with stream urls for recent download previews', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:Album',
         desktopDeviceId: 'desktop-device-id',
@@ -1706,7 +1704,7 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockListGlobalLocalComputerFolderContents.mockResolvedValueOnce({
+    mockListLocalComputerFolderContents.mockResolvedValueOnce({
       path: 'Album',
       files: [
         {
@@ -1717,14 +1715,14 @@ describe('LocalComputerScreen', () => {
           modifiedAt: '2026-06-16T08:31:00.000Z',
           isDirectory: false,
           thumbnailUrl:
-            'http://192.168.1.100:39394/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
+            'http://192.168.1.100:39594/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
           streamUrl:
-            'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
+            'http://192.168.1.100:39594/personal/stream/Album/photo.jpg',
         },
       ],
       totalCount: 1,
     });
-    mockDownloadGlobalLocalComputerResource.mockResolvedValueOnce({
+    mockDownloadLocalComputerResource.mockResolvedValueOnce({
       savedToPhotos: false,
       localPath: '/local/photo.jpg',
     });
@@ -1750,7 +1748,7 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('download-outline'));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledWith(
+      expect(mockDownloadLocalComputerResource).toHaveBeenCalledWith(
         'personal-dir:Album/photo.jpg',
       );
     });
@@ -1761,9 +1759,9 @@ describe('LocalComputerScreen', () => {
       mediaType: 'image',
       localPath: '/local/photo.jpg',
       thumbnailUrl:
-        'http://192.168.1.100:39394/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
-      previewUrl: 'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
-      streamUrl: 'http://192.168.1.100:39394/personal/stream/Album/photo.jpg',
+        'http://192.168.1.100:39594/personal/thumbnail/Album/photo.jpg?v=1024-1780000',
+      previewUrl: 'http://192.168.1.100:39594/personal/stream/Album/photo.jpg',
+      streamUrl: 'http://192.168.1.100:39594/personal/stream/Album/photo.jpg',
       savedToPhotos: false,
     });
     expect(mockRecordDiagnosticsLog).toHaveBeenCalledWith(
@@ -1783,8 +1781,8 @@ describe('LocalComputerScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('runs the global download gate for every selected file instead of only the first selection', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+  it('runs the download gate for every selected file instead of only the first selection', async () => {
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1808,7 +1806,7 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockDownloadGlobalLocalComputerResource.mockResolvedValue({
+    mockDownloadLocalComputerResource.mockResolvedValue({
       savedToPhotos: false,
       localPath: null,
     });
@@ -1830,20 +1828,20 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText(/^(Download|Download)$/));
 
     await waitFor(() => {
-      expect(mockDownloadGlobalLocalComputerResource).toHaveBeenCalledTimes(2);
+      expect(mockDownloadLocalComputerResource).toHaveBeenCalledTimes(2);
     });
-    expect(mockDownloadGlobalLocalComputerResource).toHaveBeenNthCalledWith(
+    expect(mockDownloadLocalComputerResource).toHaveBeenNthCalledWith(
       1,
       'personal-dir:alpha.jpg',
     );
-    expect(mockDownloadGlobalLocalComputerResource).toHaveBeenNthCalledWith(
+    expect(mockDownloadLocalComputerResource).toHaveBeenNthCalledWith(
       2,
       'personal-dir:beta.mov',
     );
   });
 
   it('opens the system share flow for selected local computer files', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:alpha.jpg',
         desktopDeviceId: 'desktop-device-id',
@@ -1854,10 +1852,10 @@ describe('LocalComputerScreen', () => {
         status: 'available',
         addedAt: '2026-06-16T08:00:00.000Z',
         downloadCount: 0,
-        thumbnailUrl: 'http://192.168.1.100:39394/personal/thumbnail/alpha.jpg',
+        thumbnailUrl: 'http://192.168.1.100:39594/personal/thumbnail/alpha.jpg',
       },
     ]);
-    mockShareGlobalLocalComputerResources.mockResolvedValueOnce(undefined);
+    mockShareLocalComputerResources.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
       <TestErrorBoundary>
@@ -1874,14 +1872,14 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('Share'));
 
     await waitFor(() => {
-      expect(mockShareGlobalLocalComputerResources).toHaveBeenCalledWith([
+      expect(mockShareLocalComputerResources).toHaveBeenCalledWith([
         { resourceId: 'personal-dir:alpha.jpg', displayName: 'alpha.jpg' },
       ]);
     });
   });
 
   it('opens a local computer document with the system preview viewer', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:manual.pdf',
         desktopDeviceId: 'desktop-device-id',
@@ -1894,9 +1892,7 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockPrepareGlobalLocalComputerPreview.mockResolvedValueOnce(
-      '/cache/manual.pdf',
-    );
+    mockPrepareLocalComputerPreview.mockResolvedValueOnce('/cache/manual.pdf');
     mockViewDocument.mockResolvedValueOnce(undefined);
 
     const { getByText } = render(
@@ -1912,7 +1908,7 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('manual.pdf'));
 
     await waitFor(() => {
-      expect(mockPrepareGlobalLocalComputerPreview).toHaveBeenCalledWith(
+      expect(mockPrepareLocalComputerPreview).toHaveBeenCalledWith(
         'personal-dir:manual.pdf',
         'manual.pdf',
       );
@@ -1926,7 +1922,7 @@ describe('LocalComputerScreen', () => {
 
   it('opens unsupported extensionless local computer documents through the system app chooser', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:protoc-gen-go',
         desktopDeviceId: 'desktop-device-id',
@@ -1939,7 +1935,7 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockPrepareGlobalLocalComputerShareFile.mockResolvedValueOnce(
+    mockPrepareLocalComputerShareFile.mockResolvedValueOnce(
       '/downloads/protoc-gen-go',
     );
     mockShareOpen.mockResolvedValueOnce(undefined);
@@ -1957,7 +1953,7 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('protoc-gen-go'));
 
     await waitFor(() => {
-      expect(mockPrepareGlobalLocalComputerShareFile).toHaveBeenCalledWith(
+      expect(mockPrepareLocalComputerShareFile).toHaveBeenCalledWith(
         'personal-dir:protoc-gen-go',
         'protoc-gen-go',
       );
@@ -1972,12 +1968,12 @@ describe('LocalComputerScreen', () => {
       failOnCancel: false,
       showAppsToView: true,
     });
-    expect(mockPrepareGlobalLocalComputerPreview).not.toHaveBeenCalled();
+    expect(mockPrepareLocalComputerPreview).not.toHaveBeenCalled();
     expect(mockViewDocument).not.toHaveBeenCalled();
   });
 
   it('opens a local computer image inside the app preview instead of the system viewer', async () => {
-    mockListGlobalLocalComputerResources.mockResolvedValueOnce([
+    mockListLocalComputerResources.mockResolvedValueOnce([
       {
         resourceId: 'personal-dir:cover.png',
         desktopDeviceId: 'desktop-device-id',
@@ -1990,8 +1986,8 @@ describe('LocalComputerScreen', () => {
         downloadCount: 0,
       },
     ]);
-    mockGetGlobalLocalComputerPreviewUrl.mockResolvedValueOnce(
-      'http://192.168.1.100:39394/personal/stream/cover.png',
+    mockGetLocalComputerPreviewUrl.mockResolvedValueOnce(
+      'http://192.168.1.100:39594/personal/stream/cover.png',
     );
 
     const { getByTestId, getByText } = render(
@@ -2007,12 +2003,12 @@ describe('LocalComputerScreen', () => {
     fireEvent.press(getByText('cover.png'));
 
     await waitFor(() => {
-      expect(mockGetGlobalLocalComputerPreviewUrl).toHaveBeenCalledWith(
+      expect(mockGetLocalComputerPreviewUrl).toHaveBeenCalledWith(
         'personal-dir:cover.png',
       );
       expect(getByTestId('local-computer-resource-preview-image')).toBeTruthy();
     });
-    expect(mockPrepareGlobalLocalComputerPreview).not.toHaveBeenCalled();
+    expect(mockPrepareLocalComputerPreview).not.toHaveBeenCalled();
     expect(mockViewDocument).not.toHaveBeenCalled();
   });
 });
@@ -2107,7 +2103,7 @@ describe('PhoneSyncSpaceScreen', () => {
     await waitFor(() => {
       expect(mockListCurrentClientReceivedLibrary).toHaveBeenCalledWith({
         host: '192.168.1.100',
-        port: 39394,
+        port: 39594,
       });
     });
 
@@ -2118,7 +2114,7 @@ describe('PhoneSyncSpaceScreen', () => {
     expect(queryByText('IMG_8421.JPG')).toBeNull();
   });
 
-  it('loads the next global sync-space page when the received list reaches the end', async () => {
+  it('loads the next phone sync-space page when the received list reaches the end', async () => {
     mockListGlobalReceivedLibraryPage
       .mockResolvedValueOnce(
         makeReceivedLibraryPage(
@@ -2178,7 +2174,7 @@ describe('PhoneSyncSpaceScreen', () => {
     await waitFor(() => {
       expect(mockListGlobalReceivedLibraryPage).toHaveBeenNthCalledWith(
         1,
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         { page: 1, pageSize: 20 },
       );
       expect(getByText('alpha.jpg')).toBeTruthy();
@@ -2190,14 +2186,14 @@ describe('PhoneSyncSpaceScreen', () => {
     await waitFor(() => {
       expect(mockListGlobalReceivedLibraryPage).toHaveBeenNthCalledWith(
         2,
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         { page: 2, pageSize: 20 },
       );
       expect(getByText('beta.mov')).toBeTruthy();
     });
   });
 
-  it('shows a load error instead of the empty state when the global phone sync listing fails', async () => {
+  it('shows a load error instead of the empty state when the phone sync listing fails', async () => {
     mockListCurrentClientReceivedLibrary.mockRejectedValueOnce(
       new Error('route unavailable'),
     );
@@ -2229,13 +2225,13 @@ describe('PhoneSyncSpaceScreen', () => {
         completedAt: '2026-06-16T08:00:00.000Z',
         shareStatus: 'shared',
         thumbnailUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-1',
+          'http://192.168.1.100:39594/resources/mobile/received/thumbnail?fileKey=received-1',
         previewUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-1',
+          'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-1',
       },
     ]);
     mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
-      'http://192.168.1.100:39394/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
+      'http://192.168.1.100:39594/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
     );
 
     const {
@@ -2267,7 +2263,7 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
       expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
@@ -2288,15 +2284,15 @@ describe('PhoneSyncSpaceScreen', () => {
         completedAt: '2026-06-16T07:00:00.000Z',
         shareStatus: 'shared',
         thumbnailUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-video',
+          'http://192.168.1.100:39594/resources/mobile/received/thumbnail?fileKey=received-video',
         previewUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-video',
+          'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-video',
         streamUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/stream?fileKey=received-video',
+          'http://192.168.1.100:39594/resources/mobile/received/stream?fileKey=received-video',
       },
     ]);
     mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
-      'http://192.168.1.100:39394/resources/mobile/received/stream?clientId=client-001&fileKey=received%2Fbeta.mov',
+      'http://192.168.1.100:39594/resources/mobile/received/stream?clientId=client-001&fileKey=received%2Fbeta.mov',
     );
 
     const { getByLabelText, getByTestId, getByText, queryByTestId } = render(
@@ -2317,14 +2313,14 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/beta.mov' }),
       );
       expect(getByTestId('phone-sync-preview-video')).toBeTruthy();
     });
   });
 
-  it('opens the received image preview when the global sync-space row is pressed', async () => {
+  it('opens the received image preview when the phone sync-space row is pressed', async () => {
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-image',
@@ -2338,11 +2334,11 @@ describe('PhoneSyncSpaceScreen', () => {
         completedAt: '2026-06-16T08:00:00.000Z',
         shareStatus: 'shared',
         previewUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-image',
+          'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-image',
       },
     ]);
     mockGetReceivedLibraryPreviewUrl.mockResolvedValueOnce(
-      'http://192.168.1.100:39394/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
+      'http://192.168.1.100:39594/resources/mobile/received/preview?clientId=client-001&fileKey=received%2Falpha.jpg',
     );
 
     const { getByTestId, getByText } = render(
@@ -2359,14 +2355,14 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockGetReceivedLibraryPreviewUrl).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
       expect(getByTestId('phone-sync-preview-image')).toBeTruthy();
     });
   });
 
-  it('opens received documents from global sync space with the system preview viewer', async () => {
+  it('opens received documents from phone sync space with the system preview viewer', async () => {
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: 'received-doc',
@@ -2398,7 +2394,7 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockPrepareReceivedLibraryPreview).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/notes.pdf' }),
       );
     });
@@ -2409,7 +2405,7 @@ describe('PhoneSyncSpaceScreen', () => {
     });
   });
 
-  it('marks deleted global sync-space items and disables preview and download', async () => {
+  it('marks deleted phone sync-space items and disables preview and download', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
@@ -2425,9 +2421,9 @@ describe('PhoneSyncSpaceScreen', () => {
         shareStatus: 'shared',
         fileStatus: 'deleted',
         thumbnailUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-deleted',
+          'http://192.168.1.100:39594/resources/mobile/received/thumbnail?fileKey=received-deleted',
         previewUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-deleted',
+          'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-deleted',
       },
     ]);
 
@@ -2460,7 +2456,7 @@ describe('PhoneSyncSpaceScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('downloads a not-shared global sync-space item by fileKey', async () => {
+  it('downloads a not-shared phone sync-space item by fileKey', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
@@ -2475,9 +2471,9 @@ describe('PhoneSyncSpaceScreen', () => {
         completedAt: '2026-06-16T08:00:00.000Z',
         shareStatus: 'not_shared',
         thumbnailUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-1',
+          'http://192.168.1.100:39594/resources/mobile/received/thumbnail?fileKey=received-1',
         previewUrl:
-          'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-1',
+          'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-1',
       },
     ]);
     mockDownloadReceivedLibraryItem.mockResolvedValueOnce({
@@ -2501,7 +2497,7 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
     });
@@ -2512,9 +2508,9 @@ describe('PhoneSyncSpaceScreen', () => {
       mediaType: 'image',
       localPath: 'ph://asset-001',
       thumbnailUrl:
-        'http://192.168.1.100:39394/resources/mobile/received/thumbnail?fileKey=received-1',
+        'http://192.168.1.100:39594/resources/mobile/received/thumbnail?fileKey=received-1',
       previewUrl:
-        'http://192.168.1.100:39394/resources/mobile/received/preview?fileKey=received-1',
+        'http://192.168.1.100:39594/resources/mobile/received/preview?fileKey=received-1',
       savedToPhotos: true,
     });
     expect(alertSpy).toHaveBeenCalledWith(
@@ -2525,7 +2521,7 @@ describe('PhoneSyncSpaceScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('shows the photo-library alert for global sync-space downloads identified by PhotoKit path', async () => {
+  it('shows the photo-library alert for phone sync-space downloads identified by PhotoKit path', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
@@ -2562,7 +2558,7 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/alpha.jpg' }),
       );
     });
@@ -2582,7 +2578,7 @@ describe('PhoneSyncSpaceScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('accepts global sync-space document downloads saved to device Downloads', async () => {
+  it('accepts phone sync-space document downloads saved to device Downloads', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
@@ -2619,7 +2615,7 @@ describe('PhoneSyncSpaceScreen', () => {
 
     await waitFor(() => {
       expect(mockDownloadReceivedLibraryItem).toHaveBeenCalledWith(
-        { host: '192.168.1.100', port: 39394 },
+        { host: '192.168.1.100', port: 39594 },
         expect.objectContaining({ fileKey: 'received/notes.txt' }),
       );
     });
@@ -2639,7 +2635,7 @@ describe('PhoneSyncSpaceScreen', () => {
     alertSpy.mockRestore();
   });
 
-  it('uses received-library filename as the global sync-space row title', async () => {
+  it('uses received-library filename as the phone sync-space row title', async () => {
     mockListCurrentClientReceivedLibrary.mockResolvedValueOnce([
       {
         resourceId: '',
@@ -2749,7 +2745,7 @@ describe('PhoneSyncSpaceScreen', () => {
     expect(queryByText('document-text')).toBeNull();
   });
 
-  it('renders the global sync-space sort sheet in-tree on Android', async () => {
+  it('renders the phone sync-space sort sheet in-tree on Android', async () => {
     const originalPlatformOS = Platform.OS;
     Object.defineProperty(Platform, 'OS', {
       configurable: true,

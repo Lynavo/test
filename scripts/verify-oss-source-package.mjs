@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, extname, resolve, sep } from 'node:path';
 import process from 'node:process';
@@ -93,28 +93,66 @@ const GENERATED_SIDECAR_RESOURCE_PATHS = new Set([
 ]);
 
 const TEXT_SOURCE_AND_CONFIG_EXTENSIONS = new Set([
+  '.bat',
+  '.c',
+  '.cc',
+  '.cfg',
   '.cjs',
+  '.cmd',
+  '.conf',
+  '.cpp',
+  '.css',
+  '.env',
   '.gradle',
+  '.go',
+  '.h',
+  '.hpp',
+  '.html',
+  '.ini',
+  '.java',
   '.js',
   '.json',
   '.json5',
   '.jsx',
   '.kt',
   '.kts',
+  '.lock',
+  '.m',
   '.mjs',
+  '.mm',
+  '.mod',
+  '.nsh',
   '.pbxproj',
   '.plist',
+  '.pro',
   '.properties',
+  '.ps1',
+  '.py',
+  '.rb',
+  '.rs',
   '.sh',
+  '.sql',
+  '.storyboard',
   '.swift',
   '.toml',
   '.ts',
   '.tsx',
+  '.txt',
   '.xcconfig',
+  '.xcprivacy',
   '.xcscheme',
+  '.xcworkspacedata',
   '.xml',
   '.yaml',
   '.yml',
+]);
+
+const TEXT_SOURCE_AND_CONFIG_FILENAMES = new Set([
+  'config',
+  'gemfile',
+  'gradlew',
+  'makefile',
+  'podfile',
 ]);
 
 const KNOWN_MAINLAND_MODULE_FILENAMES = new Set([
@@ -131,9 +169,16 @@ const KNOWN_MAINLAND_MODULE_FILENAMES = new Set([
 const NPMRC_DISALLOWED_PATTERN =
   /(^|\n)\s*(?:registry|.*_auth.*|.*token.*|.*proxy.*|cafile|certfile|keyfile|.*_MIRROR)\s*=/iu;
 const CN_RELEASE_SETTING_PATTERN =
-  /(?:^|[^a-z0-9_])(?:[a-z][a-z0-9]*_)*(?:release[_-]?profile|profile|market|region)\b["']?\s*[:=]\s*(?:["']cn["']|cn)(?=\s*(?:[,;}\]\r\n#]|$))/iu;
+  /(?:^|[^a-z0-9_])(?:[a-z][a-z0-9]*_)*(?:release[_-]?profile|profile|market|region|channel|variant|flavor)\b["']?\s*[:=]\s*(?:["']cn["']|cn(?=\s*(?:[,;}\]\r\n#]|$)))/iu;
+const CN_ANDROID_GRADLE_PATTERN =
+  /(?:\bproductFlavors\s*(?:\{[\s\S]*?(?:\bcn\s*\{|\b(?:create|register|maybeCreate)\s*\(\s*["']cn["']\s*\))|\.\s*(?:create|register|maybeCreate)\s*\(\s*["']cn["']\s*\))|\bcnImplementation\b|["']com\.alipay\.sdk:alipaysdk-android:|["']com\.tencent\.mm\.opensdk:wechat-sdk-android:)/u;
+const CN_ANDROID_SOURCE_SET_SEGMENT_PATTERN = /(?:^cn(?=$|[A-Z0-9_-])|Cn(?=$|[A-Z0-9_-]))/u;
 const CN_RUNTIME_ENDPOINT_PATTERN =
   /https?:\/\/(?:api|global-api|review-api)\.vividrop\.cn(?=[:/?#"'`\s]|$)/iu;
+const RETIRED_MOBILE_GLOBAL_IDENTIFIER_PATTERN =
+  /\b(?:Global(?:Home|Files|Settings)Tab|GlobalLocalComputer[A-Za-z0-9_]*|(?:list|download|get|prepare|share)GlobalLocalComputer[A-Za-z0-9_]*|(?:is|shouldRender)Global(?:Preview|Empty)|downloadResourceForGlobal|formatGlobalHistoryDuration|globalPreview|TOUR_BACKGROUND_IMAGES_GLOBAL|global(?:Sync[A-Z][A-Za-z0-9_]*|Media[A-Z][A-Za-z0-9_]*|Home|RecentDownloadSection|Section(?:Empty(?:Icon|Message|State|Title)|TitleText)|Photo(?:HillLeft|HillRight|Icon|Sun)|Video(?:Dot(?:Faint|RowBottom|RowTop)?|Icon)|File(?:Corner|Icon)|PlayCircle))\b/u;
+const RETIRED_GLOBAL_TRANSLATION_KEY_PATTERN =
+  /\b(?:(?:deviceDiscovery|settings)\.global\.|directory\.pathCard\.globalPersonalDirectory\b)/u;
 
 function usage() {
   return [
@@ -264,13 +309,17 @@ function collectGitRefFiles(root, gitRef) {
     .filter(Boolean);
 }
 
-function isGitWorktree(root) {
-  const result = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
+function isGitTopLevel(root) {
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
     cwd: root,
     encoding: 'utf8',
   });
 
-  return result.status === 0 && result.stdout.trim() === 'true';
+  if (result.status !== 0) {
+    return false;
+  }
+
+  return realpathSync(result.stdout.trim()) === realpathSync(root);
 }
 
 function collectFilesystemFiles(root) {
@@ -339,15 +388,28 @@ function isReleaseOutputPath(path) {
 function cnMarketPathDisallowReason(path) {
   const lowerPath = path.toLowerCase();
   const name = basename(lowerPath);
+  const androidSourceSetMatch = /^apps\/mobile\/android\/.*\/src\/([^/]+)(?:\/|$)/u.exec(path);
 
-  if (/^apps\/mobile\/android\/.*\/src\/(?:cn|testcn)(?:\/|$)/u.test(lowerPath)) {
+  if (
+    androidSourceSetMatch &&
+    CN_ANDROID_SOURCE_SET_SEGMENT_PATTERN.test(androidSourceSetMatch[1])
+  ) {
     return 'Android CN market source set';
   }
   if (lowerPath.split('/').some((segment) => segment.endsWith('cn.xcscheme'))) {
     return 'CN-specific Xcode scheme';
   }
-  if (lowerPath === 'apps/desktop/electron-builder.cn.yml') {
+  if (/^apps\/desktop\/electron-builder\.cn\.ya?ml$/u.test(lowerPath)) {
     return 'CN-specific Electron builder configuration';
+  }
+  if (name === 'lynavodriveglobal.xcscheme') {
+    return 'retired global-market Xcode scheme';
+  }
+  if (lowerPath === 'apps/mobile/src/theme/globalcolors.ts') {
+    return 'retired mobile market-specific color palette';
+  }
+  if (lowerPath.startsWith('apps/mobile/src/assets/onboarding/global/')) {
+    return 'retired mobile market-specific onboarding asset';
   }
   if (lowerPath.startsWith('apps/mobile/src/markets/cn/')) {
     return 'CN market source module';
@@ -387,7 +449,9 @@ function readGitRefContent(root, gitRef, path) {
 function contentDisallowReason(path, readContent) {
   const name = basename(path);
   const isNpmrc = name === '.npmrc';
-  const isScannableText = TEXT_SOURCE_AND_CONFIG_EXTENSIONS.has(extname(path).toLowerCase());
+  const isScannableText =
+    TEXT_SOURCE_AND_CONFIG_EXTENSIONS.has(extname(path).toLowerCase()) ||
+    TEXT_SOURCE_AND_CONFIG_FILENAMES.has(name.toLowerCase());
   if (!isNpmrc && !isScannableText) {
     return null;
   }
@@ -401,10 +465,31 @@ function contentDisallowReason(path, readContent) {
     return '.npmrc contains registry, mirror, proxy, certificate, or auth configuration';
   }
   if (!hasSegment(path, 'zh-Hans') && CN_RELEASE_SETTING_PATTERN.test(content)) {
-    return 'release profile, market, or region is set to cn';
+    return 'release market selector is set to cn';
+  }
+  if (
+    path.startsWith('apps/mobile/android/') &&
+    /\.gradle(?:\.kts)?$/u.test(path) &&
+    CN_ANDROID_GRADLE_PATTERN.test(content)
+  ) {
+    return 'Android CN product flavor or mainland payment dependency';
   }
   if (!isDocumentationPath(path) && CN_RUNTIME_ENDPOINT_PATTERN.test(content)) {
     return 'China-only runtime service endpoint';
+  }
+  if (
+    path.startsWith('apps/mobile/') &&
+    !path.includes('/i18n/') &&
+    RETIRED_MOBILE_GLOBAL_IDENTIFIER_PATTERN.test(content)
+  ) {
+    return 'retired mobile global-market variant naming';
+  }
+  if (
+    (path.startsWith('apps/mobile/') || path.startsWith('apps/desktop/')) &&
+    !path.includes('/i18n/') &&
+    RETIRED_GLOBAL_TRANSLATION_KEY_PATTERN.test(content)
+  ) {
+    return 'retired global-market translation key naming';
   }
 
   return null;
@@ -505,7 +590,7 @@ function collectInputFiles(options) {
   }
 
   if (options.gitRef) {
-    if (!isGitWorktree(options.root)) {
+    if (!isGitTopLevel(options.root)) {
       return {
         inputKind: `filesystem walk (no git metadata for ${options.gitRef})`,
         paths: collectFilesystemFiles(options.root),
@@ -517,6 +602,14 @@ function collectInputFiles(options) {
       inputKind: `git tree ${options.gitRef}`,
       paths: collectGitRefFiles(options.root, options.gitRef),
       readContent: (path) => readGitRefContent(options.root, options.gitRef, path),
+    };
+  }
+
+  if (!isGitTopLevel(options.root)) {
+    return {
+      inputKind: 'filesystem walk',
+      paths: collectFilesystemFiles(options.root),
+      readContent: readWorktreeContent,
     };
   }
 

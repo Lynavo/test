@@ -186,7 +186,7 @@ describe('SyncActivityScreen', () => {
       deviceName: 'Studio Mac',
       deviceAlias: 'Studio Mac',
       host: '192.168.1.20',
-      port: 39393,
+      port: 39593,
       connectionState: 'connected',
       pairingId: 'pairing-1',
       shareEnabled: true,
@@ -261,7 +261,7 @@ describe('SyncActivityScreen', () => {
     expect(queryByText('Client-Handoff.mov')).toBeNull();
   });
 
-  test('loads sync overview, queue, history, and binding snapshots for global home state', async () => {
+  test('loads sync overview, queue, history, and binding snapshots for home state', async () => {
     (getSyncOverview as jest.Mock).mockResolvedValueOnce({
       currentDeviceId: 'desktop-1',
       currentDeviceName: 'Studio Mac',
@@ -487,7 +487,7 @@ describe('SyncActivityScreen', () => {
         deviceName: 'Studio Mac',
         deviceAlias: 'Studio Mac',
         host: '192.168.1.20',
-        port: 39393,
+        port: 39593,
         connectionState: 'offline',
         pairingId: 'pairing-1',
         shareEnabled: true,

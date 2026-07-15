@@ -97,12 +97,12 @@ const TOUR_BACKGROUND_WIDTH = 790;
 const TOUR_BACKGROUND_HEIGHT = 1710;
 const ZERO_COORDINATE_ORIGIN: TourCoordinateOrigin = { left: 0, top: 0 };
 
-const TOUR_BACKGROUND_IMAGES_GLOBAL: Record<TourTarget, ImageSourcePropType> = {
-  album: require('../../assets/onboarding/global/sync-activity-album.png'),
-  panel: require('../../assets/onboarding/global/sync-activity-panel.png'),
-  history: require('../../assets/onboarding/global/sync-activity-history.png'),
-  settings: require('../../assets/onboarding/global/sync-activity-settings.png'),
-  help: require('../../assets/onboarding/global/sync-activity-help.png'),
+const TOUR_BACKGROUND_IMAGES: Record<TourTarget, ImageSourcePropType> = {
+  album: require('../../assets/onboarding/sync-activity/sync-activity-album.png'),
+  panel: require('../../assets/onboarding/sync-activity/sync-activity-panel.png'),
+  history: require('../../assets/onboarding/sync-activity/sync-activity-history.png'),
+  settings: require('../../assets/onboarding/sync-activity/sync-activity-settings.png'),
+  help: require('../../assets/onboarding/sync-activity/sync-activity-help.png'),
 };
 
 const TARGET_PADDING: Record<TourTarget, number> = {
@@ -404,7 +404,7 @@ export function SyncActivityTour({
         onLayout={handleOverlayLayout}
       >
         <Image
-          source={TOUR_BACKGROUND_IMAGES_GLOBAL[current.target]}
+          source={TOUR_BACKGROUND_IMAGES[current.target]}
           resizeMode="stretch"
           style={[
             styles.backgroundImage,

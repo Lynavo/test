@@ -95,7 +95,7 @@ describe('BottomTabBar', () => {
     expect(inactiveTabStyle.backgroundColor).toBeUndefined();
   });
 
-  test('uses lucide icons that match the global reference tabbar', () => {
+  test('uses lucide icons that match the reference tab bar', () => {
     const { getByTestId } = render(<BottomTabBar activeTab="home" />);
 
     expect(getByTestId('bottom-tab-home-icon')).toBeTruthy();
@@ -105,7 +105,7 @@ describe('BottomTabBar', () => {
     expect(getByTestId('bottom-tab-files-icon').props.strokeWidth).toBe(1.9);
   });
 
-  test('switches tabs inside the global shell without resetting navigation', () => {
+  test('switches tabs inside the main tab shell without resetting navigation', () => {
     const onTabPress = jest.fn();
     const { getByTestId } = render(
       <BottomTabBar activeTab="home" onTabPress={onTabPress} />,

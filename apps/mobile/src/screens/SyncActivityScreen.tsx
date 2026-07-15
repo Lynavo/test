@@ -12,12 +12,13 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import type {
-  AutoUploadState,
-  BindingStateDTO,
-  HistoryLedgerCardDTO,
-  ReadOnlyQueueItemDTO,
-  SyncSummaryDTO,
+import {
+  PROTOCOL_PORT,
+  type AutoUploadState,
+  type BindingStateDTO,
+  type HistoryLedgerCardDTO,
+  type ReadOnlyQueueItemDTO,
+  type SyncSummaryDTO,
 } from '@lynavo-drive/contracts';
 
 import { BottomTabBar } from '../components/BottomTabBar';
@@ -29,13 +30,12 @@ import {
 } from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import {
   SyncRecordTimelineSection,
   RecentDownloadsSection,
   type SyncRecordTimelineDay,
   type RecentDownloadRecord,
-  type RecentDownloadPlaceholder,
 } from './components/SyncActivityHomeSections';
 import {
   listDownloadRecords,
@@ -82,41 +82,6 @@ const EMPTY_SYNC_OVERVIEW: SyncOverview = {
   autoUploadState: 'disabled',
   autoPending: 0,
 };
-
-const RECENT_DOWNLOAD_PLACEHOLDERS: RecentDownloadPlaceholder[] = [
-  {
-    key: 'photo',
-    label: 'Photo',
-    iconName: 'image-outline',
-    iconColor: BLUE,
-    iconBackground: '#B8DDF8',
-    previewType: 'photo',
-  },
-  {
-    key: 'video',
-    label: 'Video',
-    iconName: 'play-circle-outline',
-    iconColor: '#ffffff',
-    iconBackground: '#AAB7FF',
-    previewType: 'video',
-  },
-  {
-    key: 'file-1',
-    label: 'File',
-    iconName: 'document-outline',
-    iconColor: '#315E8C',
-    iconBackground: '#EEF3FA',
-    previewType: 'file',
-  },
-  {
-    key: 'file-2',
-    label: 'File',
-    iconName: 'document-outline',
-    iconColor: '#315E8C',
-    iconBackground: '#EEF3FA',
-    previewType: 'file',
-  },
-];
 
 export function SyncActivityScreen({
   showBottomTabBar = true,
@@ -473,7 +438,6 @@ export function SyncActivityScreen({
 
           <RecentDownloadsSection
             records={recentDownloadRecords}
-            placeholders={RECENT_DOWNLOAD_PLACEHOLDERS}
             t={t}
             onPressViewAll={() => navigation.navigate('DownloadRecords')}
             title={t('syncActivity.recentDownload.title') || 'Recent Downloads'}
@@ -481,8 +445,6 @@ export function SyncActivityScreen({
               t('syncActivity.recentDownload.viewAll') || 'View All'
             }
             sectionIconColor={BLUE}
-            sectionIconName="arrow-down-circle-outline"
-            variant="globalPreview"
           />
 
           <SyncRecordTimelineSection
@@ -589,7 +551,7 @@ function normalizeBindingState(value: unknown): BindingStateDTO | null {
     deviceName,
     deviceAlias: readStringField(value, 'deviceAlias') ?? deviceName,
     host: readStringField(value, 'host') ?? '',
-    port: readNumberField(value, 'port') ?? 39393,
+    port: readNumberField(value, 'port') ?? PROTOCOL_PORT,
     connectionState: isConnectionState(connectionStateValue)
       ? connectionStateValue
       : 'bound',
@@ -807,7 +769,7 @@ function toSyncRecordTimelineDay(
           item.deviceId ||
           t('common.connectionStates.boundDeviceFallback') ||
           'BoundComputer',
-        duration: formatGlobalHistoryDuration(item.activeTransmissionSeconds),
+        duration: formatHistoryDuration(item.activeTransmissionSeconds),
         fileCount: item.totalFileCount,
         status: 'completed',
         totalSize,
@@ -816,9 +778,7 @@ function toSyncRecordTimelineDay(
   };
 }
 
-function formatGlobalHistoryDuration(
-  activeTransmissionSeconds: number,
-): string {
+function formatHistoryDuration(activeTransmissionSeconds: number): string {
   if (
     !Number.isFinite(activeTransmissionSeconds) ||
     activeTransmissionSeconds <= 0

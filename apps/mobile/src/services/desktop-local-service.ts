@@ -61,7 +61,7 @@ type ReceivedLibraryPageOptions = {
   pageSize?: number;
 };
 
-export type GlobalLocalComputerResource = DesktopSharedResourceDTO & {
+export type LocalComputerResource = DesktopSharedResourceDTO & {
   previewUrl?: string;
   thumbnailUrl?: string;
   streamUrl?: string;
@@ -292,7 +292,7 @@ function directoryFileToSharedResource(
 
 function personalDirectoryFileToSharedResource(
   file: DirectoryFileDTO,
-): GlobalLocalComputerResource {
+): LocalComputerResource {
   return {
     resourceId: personalDirectoryResourceId(file.path),
     desktopDeviceId: PERSONAL_DIRECTORY_DESKTOP_ID,
@@ -671,8 +671,8 @@ export async function listSharedResources(
   return sharedDirectory.files.map(directoryFileToSharedResource);
 }
 
-export async function listGlobalLocalComputerResources(): Promise<
-  GlobalLocalComputerResource[]
+export async function listLocalComputerResources(): Promise<
+  LocalComputerResource[]
 > {
   const listing = await browseDirectory('personal');
   const files = await withPersonalDirectoryImageStreamUrls(listing.files);
@@ -708,7 +708,7 @@ export async function listSharedFolderContents(
   return (await res.json()) as SharedDirectoryDTO;
 }
 
-export async function listGlobalLocalComputerFolderContents(
+export async function listLocalComputerFolderContents(
   resourceId: string,
   path?: string,
 ): Promise<DirectoryListingDTO> {
@@ -1017,7 +1017,7 @@ export async function shareResources(
   await NativeSyncEngine.shareFiles(localPaths);
 }
 
-export async function downloadResourceForGlobal(
+export async function downloadDesktopResource(
   desktop: DesktopInfo,
   resourceId: string,
   filename?: string,
@@ -1094,7 +1094,7 @@ export async function prepareReceivedLibraryPreview(
   return localPath;
 }
 
-export async function downloadGlobalLocalComputerResource(
+export async function downloadLocalComputerResource(
   resourceId: string,
 ): Promise<ResourceDownloadResult> {
   const result = await downloadDirectoryFile(
@@ -1104,7 +1104,7 @@ export async function downloadGlobalLocalComputerResource(
   return normalizeLocalDownloadResult(result);
 }
 
-export async function getGlobalLocalComputerPreviewUrl(
+export async function getLocalComputerPreviewUrl(
   resourceId: string,
 ): Promise<string> {
   return getDirectoryFileStreamUrl(
@@ -1113,7 +1113,7 @@ export async function getGlobalLocalComputerPreviewUrl(
   );
 }
 
-export async function getGlobalLocalComputerThumbnailUrl(
+export async function getLocalComputerThumbnailUrl(
   resourceId: string,
 ): Promise<string> {
   return getPersonalFileThumbnailUrl(
@@ -1121,7 +1121,7 @@ export async function getGlobalLocalComputerThumbnailUrl(
   );
 }
 
-export async function prepareGlobalLocalComputerPreview(
+export async function prepareLocalComputerPreview(
   resourceId: string,
   filename?: string,
 ): Promise<string> {
@@ -1136,7 +1136,7 @@ export async function prepareGlobalLocalComputerPreview(
   return localPath;
 }
 
-export async function prepareGlobalLocalComputerShareFile(
+export async function prepareLocalComputerShareFile(
   resourceId: string,
   filename?: string,
 ): Promise<string> {
@@ -1162,7 +1162,7 @@ export async function prepareGlobalLocalComputerShareFile(
   return localPath;
 }
 
-export async function shareGlobalLocalComputerResources(
+export async function shareLocalComputerResources(
   resources: ResourceShareItem[],
 ): Promise<void> {
   if (resources.length === 0) {
@@ -1174,7 +1174,7 @@ export async function shareGlobalLocalComputerResources(
 
   const localPaths: string[] = [];
   for (const resource of resources) {
-    const localPath = await prepareGlobalLocalComputerShareFile(
+    const localPath = await prepareLocalComputerShareFile(
       resource.resourceId,
       resource.displayName,
     );

@@ -27,11 +27,11 @@ import { isVisualQaEnabled } from '../dev/visualQa';
 import { getVisualQaDownloadRecords } from '../dev/visualQaMockData';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import {
-  downloadGlobalLocalComputerResource,
+  downloadLocalComputerResource,
   downloadReceivedLibraryItem,
-  downloadResourceForGlobal,
-  getGlobalLocalComputerPreviewUrl,
-  getGlobalLocalComputerThumbnailUrl,
+  downloadDesktopResource,
+  getLocalComputerPreviewUrl,
+  getLocalComputerThumbnailUrl,
   isDownloadSavedLocally,
   isDownloadSavedToPhotos,
   type DesktopInfo,
@@ -43,7 +43,7 @@ import {
   type DownloadRecord,
 } from '../services/download-records-service';
 import { recordDiagnosticsLog } from '../services/diagnostics-log-service';
-import { colors } from '../theme/globalColors';
+import { colors } from '../theme/driveColors';
 import { androidBoxShadow } from '../utils/androidShadow';
 import {
   canPreviewDocumentFile,
@@ -111,9 +111,7 @@ export function DownloadRecordsScreen() {
       // personal-dir: records no longer cache signed URLs; fetch a fresh one.
       if (!previewUrl && isPersonalDirRecord(record.resourceId)) {
         try {
-          previewUrl = await getGlobalLocalComputerPreviewUrl(
-            record.resourceId,
-          );
+          previewUrl = await getLocalComputerPreviewUrl(record.resourceId);
         } catch (err) {
           console.warn(
             '[DownloadRecordsScreen] Failed to fetch personal-dir preview URL',
@@ -344,10 +342,10 @@ async function redownloadRecord(
   }
 
   if (record.resourceId.startsWith('personal-dir:')) {
-    return downloadGlobalLocalComputerResource(record.resourceId);
+    return downloadLocalComputerResource(record.resourceId);
   }
 
-  return downloadResourceForGlobal(
+  return downloadDesktopResource(
     desktop,
     record.resourceId,
     record.filename,
@@ -437,7 +435,7 @@ function DownloadRecordPreviewThumbnail({
     setThumbnailFailed(false);
     setLiveUri(null);
     let cancelled = false;
-    getGlobalLocalComputerThumbnailUrl(record.resourceId)
+    getLocalComputerThumbnailUrl(record.resourceId)
       .then(url => {
         if (!cancelled) setLiveUri(url);
       })

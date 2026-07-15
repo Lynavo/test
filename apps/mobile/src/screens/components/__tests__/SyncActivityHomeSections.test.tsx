@@ -6,8 +6,6 @@ import type { TFunction } from 'i18next';
 import {
   SyncRecordTimelineSection,
   RecentDownloadsSection,
-  SyncRecordSummarySection,
-  type RecentDownloadPlaceholder,
 } from '../SyncActivityHomeSections';
 
 jest.mock('react-native-video', () => 'Video');
@@ -48,37 +46,17 @@ jest.mock('react-native-svg', () => {
   };
 });
 
-const placeholders: RecentDownloadPlaceholder[] = [
-  {
-    key: 'photo',
-    label: 'Photo',
-    iconName: 'image-outline',
-    iconColor: '#1677D2',
-    iconBackground: '#B8DDF8',
-    previewType: 'photo',
-  },
-  {
-    key: 'video',
-    label: 'Video',
-    iconName: 'play-circle-outline',
-    iconColor: '#ffffff',
-    iconBackground: '#AAB7FF',
-    previewType: 'video',
-  },
-];
 const tMock = ((key: string) => key) as TFunction;
 
 describe('RecentDownloadsSection', () => {
-  it('renders an explicit empty recent downloads state for global preview', () => {
+  it('renders an explicit empty recent downloads state', () => {
     let tree: ReactTestRenderer.ReactTestRenderer;
     ReactTestRenderer.act(() => {
       tree = ReactTestRenderer.create(
         <RecentDownloadsSection
           records={[]}
-          placeholders={placeholders}
           t={tMock}
           onPressViewAll={jest.fn()}
-          variant="globalPreview"
         />,
       );
     });
@@ -113,10 +91,8 @@ describe('RecentDownloadsSection', () => {
               completedAt: new Date().toISOString(),
             },
           ]}
-          placeholders={placeholders}
           t={tMock}
           onPressViewAll={jest.fn()}
-          variant="globalPreview"
         />,
       );
     });
@@ -138,15 +114,15 @@ describe('RecentDownloadsSection', () => {
               filename: 'Desktop-Mockup.png',
               mediaType: 'image',
               completedAt: '2026-06-17T08:30:00.000Z',
-              previewUrl: 'http://127.0.0.1:39394/preview/image.png',
+              previewUrl: 'http://127.0.0.1:39594/preview/image.png',
             },
             {
               recordId: 'rec-video',
               filename: 'Client-Handoff.mov',
               mediaType: 'video',
               completedAt: '2026-06-17T08:31:00.000Z',
-              thumbnailUrl: 'http://127.0.0.1:39394/thumbnail/video.jpg',
-              streamUrl: 'http://127.0.0.1:39394/stream/video.mov',
+              thumbnailUrl: 'http://127.0.0.1:39594/thumbnail/video.jpg',
+              streamUrl: 'http://127.0.0.1:39594/stream/video.mov',
             },
             {
               recordId: 'rec-fallback',
@@ -155,10 +131,8 @@ describe('RecentDownloadsSection', () => {
               completedAt: '2026-06-17T08:32:00.000Z',
             },
           ]}
-          placeholders={placeholders}
           t={tMock}
           onPressViewAll={jest.fn()}
-          variant="globalPreview"
         />,
       );
     });
@@ -170,10 +144,10 @@ describe('RecentDownloadsSection', () => {
       testID: 'recent-download-thumbnail-video',
     });
     expect(imageSources).toContainEqual({
-      uri: 'http://127.0.0.1:39394/preview/image.png',
+      uri: 'http://127.0.0.1:39594/preview/image.png',
     });
     expect(imageSources).toContainEqual({
-      uri: 'http://127.0.0.1:39394/thumbnail/video.jpg',
+      uri: 'http://127.0.0.1:39594/thumbnail/video.jpg',
     });
     expect(videoNodes).toHaveLength(0);
 
@@ -197,10 +171,8 @@ describe('RecentDownloadsSection', () => {
               localPath: '/var/mobile/Containers/Data/clip.mov',
             },
           ]}
-          placeholders={placeholders}
           t={tMock}
           onPressViewAll={jest.fn()}
-          variant="globalPreview"
         />,
       );
     });
@@ -211,30 +183,7 @@ describe('RecentDownloadsSection', () => {
     expect(tree!.root.findAllByType(Image)).toHaveLength(0);
   });
 
-  it('renders an explicit empty sync record state for global preview summaries', () => {
-    let tree: ReactTestRenderer.ReactTestRenderer;
-    ReactTestRenderer.act(() => {
-      tree = ReactTestRenderer.create(
-        <SyncRecordSummarySection
-          boundDeviceName="Mini4"
-          fileCount={0}
-          isSyncing={false}
-          t={tMock}
-          totalBytes={0}
-          variant="globalPreview"
-        />,
-      );
-    });
-
-    const textValues = tree!.root
-      .findAllByType(Text)
-      .map(node => node.props.children);
-    expect(textValues).toContain('syncActivity.syncRecords.emptyTitle');
-    expect(textValues).toContain('syncActivity.syncRecords.emptyMessage');
-    expect(textValues).not.toContain('Mini4');
-  });
-
-  it('renders an explicit empty sync record state for empty global timelines', () => {
+  it('renders an explicit empty sync record state for empty timelines', () => {
     let tree: ReactTestRenderer.ReactTestRenderer;
     ReactTestRenderer.act(() => {
       tree = ReactTestRenderer.create(

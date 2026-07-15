@@ -256,7 +256,7 @@ describe('AutoUploadSettingsScreen', () => {
     ).toHaveLength(0);
   });
 
-  it('keeps title and icon containers aligned with the global reference layout', async () => {
+  it('keeps title and icon containers aligned with the reference layout', async () => {
     const tree = await renderScreen();
     const titleNode = tree.root.findAllByType(Text).find(node => {
       return node.props.children === 'Auto Upload';

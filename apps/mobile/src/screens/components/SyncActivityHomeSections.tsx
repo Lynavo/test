@@ -14,8 +14,7 @@ import type { TFunction } from 'i18next';
 import { colors } from '../../theme/colors';
 import { Icon } from '../../components/Icon';
 import { androidBoxShadow } from '../../utils/androidShadow';
-import { formatBytes } from '../../utils/format';
-import { getGlobalLocalComputerThumbnailUrl } from '../../services/desktop-local-service';
+import { getLocalComputerThumbnailUrl } from '../../services/desktop-local-service';
 import { isPersonalDirRecord } from '../../services/download-records-service';
 
 const BLUE = colors.accent;
@@ -35,34 +34,13 @@ export interface RecentDownloadRecord {
   failedAt?: string;
 }
 
-export interface RecentDownloadPlaceholder {
-  key: string;
-  label: string;
-  iconName: string;
-  iconColor: string;
-  iconBackground: string;
-  previewType?: MediaPreviewKind;
-}
-
 interface RecentDownloadsSectionProps {
   records: RecentDownloadRecord[];
-  placeholders: RecentDownloadPlaceholder[];
   t: TFunction;
   onPressViewAll: () => void;
   title?: string;
   viewAllLabel?: string;
   sectionIconColor?: string;
-  sectionIconName?: string;
-  variant?: 'default' | 'globalPreview';
-}
-
-interface SyncRecordSummarySectionProps {
-  boundDeviceName: string;
-  fileCount: number;
-  isSyncing: boolean;
-  t: TFunction;
-  totalBytes: number;
-  variant?: 'default' | 'globalPreview';
 }
 
 export interface SyncRecordTimelineItem {
@@ -110,7 +88,7 @@ type RecentDownloadThumbnailSource = {
   renderer: 'image';
 };
 
-const GLOBAL_SECTION_EMPTY_ALIGNMENT_STYLE = {
+const SECTION_EMPTY_ALIGNMENT_STYLE = {
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
 };
@@ -129,96 +107,48 @@ function SectionEmptyState({
   return (
     <View
       testID={testID}
-      style={[
-        styles.globalSectionEmptyState,
-        GLOBAL_SECTION_EMPTY_ALIGNMENT_STYLE,
-      ]}
+      style={[styles.sectionEmptyState, SECTION_EMPTY_ALIGNMENT_STYLE]}
     >
-      <View style={styles.globalSectionEmptyIcon}>
+      <View style={styles.sectionEmptyIcon}>
         <Icon name={iconName} size={24} color={BLUE} />
       </View>
-      <Text style={styles.globalSectionEmptyTitle}>{title}</Text>
-      <Text style={styles.globalSectionEmptyMessage}>{message}</Text>
+      <Text style={styles.sectionEmptyTitle}>{title}</Text>
+      <Text style={styles.sectionEmptyMessage}>{message}</Text>
     </View>
   );
 }
 
 export function RecentDownloadsSection({
   records,
-  placeholders,
   t,
   onPressViewAll,
   title,
   viewAllLabel,
   sectionIconColor,
-  sectionIconName,
-  variant = 'default',
 }: RecentDownloadsSectionProps) {
-  const isGlobalPreview = variant === 'globalPreview';
-  const isGlobalEmpty = isGlobalPreview && records.length === 0;
-  const recentItems =
-    records.length > 0
-      ? records.slice(0, 4).map(rec => {
-          const metadata = getRecordVisualMetadata(rec);
-          return {
-            key: rec.recordId,
-            label: rec.filename,
-            meta: formatRecordTimeLabel(rec),
-            iconName: metadata.iconName,
-            iconColor: metadata.iconColor,
-            iconBackground: metadata.iconBackground,
-            previewType: metadata.previewType,
-            thumbnailSource: getRecentDownloadThumbnailSource(
-              rec,
-              metadata.previewType,
-            ),
-          };
-        })
-      : placeholders.slice(0, 4).map(item => ({
-          key: item.key,
-          label:
-            item.key === 'photo'
-              ? t('syncActivity.home.recentDownloadPhoto') || item.label
-              : item.key === 'video'
-                ? t('syncActivity.home.recentDownloadVideo') || item.label
-                : t('syncActivity.home.recentDownloadFile') || item.label,
-          meta: '',
-          iconName: item.iconName,
-          iconColor: item.iconColor,
-          iconBackground: item.iconBackground,
-          previewType: item.previewType,
-          thumbnailSource: undefined,
-        }));
+  const isEmpty = records.length === 0;
+  const recentItems = records.slice(0, 4).map(record => {
+    const previewType = getRecordPreviewType(record);
+    return {
+      key: record.recordId,
+      label: record.filename,
+      meta: formatRecordTimeLabel(record),
+      previewType,
+      thumbnailSource: getRecentDownloadThumbnailSource(record, previewType),
+    };
+  });
 
   return (
-    <View
-      style={[
-        styles.recentDownloadSection,
-        isGlobalPreview && styles.globalRecentDownloadSection,
-      ]}
-    >
+    <View style={[styles.recentDownloadSection, styles.recentDownloadSurface]}>
       <View style={styles.recentDownloadHeader}>
         <View style={styles.sectionTitleRow}>
-          {isGlobalPreview ? (
-            <ArrowDownCircle
-              testID="recent-download-title-icon"
-              size={18}
-              color={sectionIconColor ?? BLUE}
-              strokeWidth={1.9}
-            />
-          ) : (
-            <Icon
-              name={sectionIconName ?? 'download-outline'}
-              size={18}
-              color={sectionIconColor ?? DARK}
-            />
-          )}
-          <Text
-            style={[
-              styles.sectionTitleText,
-              isGlobalPreview && styles.globalSectionTitleText,
-            ]}
-          >
+          <ArrowDownCircle
+            testID="recent-download-title-icon"
+            size={18}
+            color={sectionIconColor ?? BLUE}
+            strokeWidth={1.9}
+          />
+          <Text style={[styles.sectionTitleText, styles.sectionTitleEmphasis]}>
             {title ?? t('syncActivity.home.recentDownloadsTitle')}
           </Text>
         </View>
@@ -229,7 +159,7 @@ export function RecentDownloadsSection({
           </Text>
         </TouchableOpacity>
       </View>
-      {isGlobalEmpty ? (
+      {isEmpty ? (
         <SectionEmptyState
           testID="recent-download-empty-state"
           iconName="cloud-download-outline"
@@ -241,25 +171,14 @@ export function RecentDownloadsSection({
           {recentItems.map(item => (
             <View key={item.key} style={styles.recentDownloadTile}>
               <View
-                style={[
-                  styles.recentDownloadIconWrap,
-                  isGlobalPreview
-                    ? styles.globalMediaPreviewWrap
-                    : { backgroundColor: item.iconBackground },
-                ]}
+                style={[styles.recentDownloadIconWrap, styles.mediaPreviewWrap]}
               >
-                {isGlobalPreview ? (
-                  <RecentDownloadPreview
-                    label={item.label}
-                    thumbnailSource={item.thumbnailSource}
-                    type={
-                      item.previewType ?? getPreviewTypeFromIcon(item.iconName)
-                    }
-                    recordId={item.key}
-                  />
-                ) : (
-                  <Icon name={item.iconName} size={28} color={item.iconColor} />
-                )}
+                <RecentDownloadPreview
+                  label={item.label}
+                  thumbnailSource={item.thumbnailSource}
+                  type={item.previewType}
+                  recordId={item.key}
+                />
               </View>
               <Text style={styles.recentDownloadName} numberOfLines={1}>
                 {item.label}
@@ -312,7 +231,7 @@ function RecentDownloadPreview({
     }
 
     let cancelled = false;
-    getGlobalLocalComputerThumbnailUrl(recordId)
+    getLocalComputerThumbnailUrl(recordId)
       .then(url => {
         if (!cancelled && url) {
           setLiveUri(url);
@@ -320,7 +239,7 @@ function RecentDownloadPreview({
       })
       .catch(err => {
         console.warn(
-          '[video-thumbnail][mobile] global home recent download personal-dir live URL fetch failed',
+          '[video-thumbnail][mobile] home recent download personal-dir live URL fetch failed',
           { recordId, err },
         );
       });
@@ -374,108 +293,6 @@ function RecentDownloadPreview({
   return <MediaPreviewIcon type={type} />;
 }
 
-export function SyncRecordSummarySection({
-  boundDeviceName,
-  fileCount,
-  isSyncing,
-  t,
-  totalBytes,
-  variant = 'default',
-}: SyncRecordSummarySectionProps) {
-  const isGlobalPreview = variant === 'globalPreview';
-  const shouldRenderGlobalEmpty =
-    isGlobalPreview && !isSyncing && fileCount === 0 && totalBytes === 0;
-
-  return (
-    <View
-      style={[
-        styles.syncRecordSection,
-        isGlobalPreview && styles.globalSyncRecordSection,
-      ]}
-    >
-      <View style={styles.syncRecordHeader}>
-        <View style={styles.sectionTitleRow}>
-          <Icon
-            name="time-outline"
-            size={18}
-            color={isGlobalPreview ? '#746AA8' : DARK}
-          />
-          <Text
-            style={[
-              styles.sectionTitleText,
-              isGlobalPreview && styles.globalSectionTitleText,
-            ]}
-          >
-            {t('syncActivity.home.syncRecordsTitle')}
-          </Text>
-        </View>
-        <Text style={styles.syncRecordTotal}>
-          {t('syncActivity.home.syncRecordTotal', {
-            size: formatBytes(totalBytes),
-          })}
-        </Text>
-      </View>
-      {shouldRenderGlobalEmpty ? (
-        <SectionEmptyState
-          testID="sync-record-empty-state"
-          iconName="time-outline"
-          title={t('syncActivity.syncRecords.emptyTitle')}
-          message={t('syncActivity.syncRecords.emptyMessage')}
-        />
-      ) : (
-        <>
-          <View style={styles.syncRecordDayRow}>
-            <Text style={styles.syncRecordDay}>
-              {t('syncActivity.home.today')}
-            </Text>
-            <Text style={styles.syncRecordDayStats}>
-              {t('syncActivity.home.todayStats', {
-                count: fileCount,
-                size: formatBytes(totalBytes),
-              })}
-            </Text>
-          </View>
-          <View style={styles.syncRecordCard}>
-            <View>
-              <Text style={styles.syncRecordDeviceName}>{boundDeviceName}</Text>
-              <Text style={styles.syncRecordSubtle}>
-                {t('syncActivity.home.todaySyncRecord')}
-              </Text>
-            </View>
-            <View style={styles.syncRecordStatusPill}>
-              <Text style={styles.syncRecordStatusText}>
-                {isSyncing
-                  ? t('syncActivity.home.syncing')
-                  : t('syncActivity.home.synced')}
-              </Text>
-            </View>
-            <View style={styles.syncRecordStatsRow}>
-              <View style={styles.syncRecordStat}>
-                <Text style={styles.syncRecordSubtle}>
-                  {t('syncActivity.home.uploadFiles')}
-                </Text>
-                <Text style={styles.syncRecordStatValue}>
-                  {t('syncActivity.stats.transferredCount', {
-                    count: fileCount,
-                  })}
-                </Text>
-              </View>
-              <View style={styles.syncRecordStat}>
-                <Text style={styles.syncRecordSubtle}>
-                  {t('syncActivity.stats.dataAmount')}
-                </Text>
-                <Text style={styles.syncRecordStatValue}>
-                  {formatBytes(totalBytes)}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </>
-      )}
-    </View>
-  );
-}
-
 export function SyncRecordTimelineSection({
   days,
   totalSyncedSize,
@@ -484,16 +301,14 @@ export function SyncRecordTimelineSection({
   const shouldRenderEmpty = days.length === 0;
 
   return (
-    <View style={[styles.syncRecordSection, styles.globalSyncRecordSection]}>
-      <View style={styles.globalSyncTimelineHeader}>
+    <View style={[styles.syncRecordSection, styles.syncRecordSurface]}>
+      <View style={styles.syncTimelineHeader}>
         <Icon name="time-outline" size={18} color="#746AA8" />
-        <View style={styles.globalSyncTimelineHeaderCopy}>
-          <Text
-            style={[styles.sectionTitleText, styles.globalSectionTitleText]}
-          >
+        <View style={styles.syncTimelineHeaderCopy}>
+          <Text style={[styles.sectionTitleText, styles.sectionTitleEmphasis]}>
             {t('syncActivity.syncRecords.title')}
           </Text>
-          <Text style={styles.globalSyncRecordTotal}>
+          <Text style={styles.syncTimelineTotal}>
             {t('syncActivity.syncRecords.totalSynced', {
               size: totalSyncedSize,
             })}
@@ -509,49 +324,49 @@ export function SyncRecordTimelineSection({
           message={t('syncActivity.syncRecords.emptyMessage')}
         />
       ) : (
-        <View style={styles.globalSyncTimelineDayList}>
+        <View style={styles.syncTimelineDayList}>
           {days.slice(0, 3).map(day => (
             <View key={day.key}>
-              <View style={styles.globalSyncRecordDayRow}>
-                <Text style={styles.globalSyncRecordDay}>{day.label}</Text>
-                <Text style={styles.globalSyncRecordDayStats}>
+              <View style={styles.syncTimelineDayRow}>
+                <Text style={styles.syncTimelineDay}>{day.label}</Text>
+                <Text style={styles.syncTimelineDayStats}>
                   {t('syncActivity.syncRecords.dayStats', {
                     count: day.totalFiles,
                     size: day.totalSize,
                   })}
                 </Text>
               </View>
-              <View style={styles.globalSyncTimelineRecordList}>
+              <View style={styles.syncTimelineRecordList}>
                 {day.records.map(record => {
                   const isCompleted = record.status === 'completed';
                   return (
-                    <View key={record.id} style={styles.globalSyncRecordCard}>
-                      <View style={styles.globalSyncRecordHeader}>
-                        <View style={styles.globalSyncRecordTitleBlock}>
+                    <View key={record.id} style={styles.syncTimelineRecordCard}>
+                      <View style={styles.syncTimelineRecordHeader}>
+                        <View style={styles.syncTimelineRecordTitleBlock}>
                           <Text
-                            style={styles.globalSyncRecordDeviceName}
+                            style={styles.syncTimelineRecordDeviceName}
                             numberOfLines={1}
                           >
                             {record.deviceName}
                           </Text>
-                          <Text style={styles.globalSyncRecordSubtle}>
+                          <Text style={styles.syncTimelineRecordSubtle}>
                             {t('syncActivity.syncRecords.todayRecord')}
                           </Text>
                         </View>
                         <View
                           style={[
-                            styles.globalSyncRecordStatusPill,
+                            styles.syncTimelineStatusPill,
                             isCompleted
-                              ? styles.globalSyncRecordStatusCompleted
-                              : styles.globalSyncRecordStatusSyncing,
+                              ? styles.syncTimelineStatusCompleted
+                              : styles.syncTimelineStatusSyncing,
                           ]}
                         >
                           <Text
                             style={[
-                              styles.globalSyncRecordStatusText,
+                              styles.syncTimelineStatusText,
                               isCompleted
-                                ? styles.globalSyncRecordStatusTextCompleted
-                                : styles.globalSyncRecordStatusTextSyncing,
+                                ? styles.syncTimelineStatusTextCompleted
+                                : styles.syncTimelineStatusTextSyncing,
                             ]}
                           >
                             {isCompleted
@@ -561,35 +376,35 @@ export function SyncRecordTimelineSection({
                         </View>
                       </View>
 
-                      <View style={styles.globalSyncRecordStatsGrid}>
-                        <View style={styles.globalSyncRecordStat}>
-                          <Text style={styles.globalSyncRecordSubtle}>
+                      <View style={styles.syncTimelineStatsGrid}>
+                        <View style={styles.syncTimelineStat}>
+                          <Text style={styles.syncTimelineRecordSubtle}>
                             {t('syncActivity.syncRecords.uploadFiles')}
                           </Text>
-                          <Text style={styles.globalSyncRecordStatValue}>
+                          <Text style={styles.syncTimelineStatValue}>
                             {t('syncActivity.syncRecords.fileCount', {
                               count: record.fileCount,
                             })}
                           </Text>
                         </View>
-                        <View style={styles.globalSyncRecordStat}>
-                          <Text style={styles.globalSyncRecordSubtle}>
+                        <View style={styles.syncTimelineStat}>
+                          <Text style={styles.syncTimelineRecordSubtle}>
                             {t('syncActivity.syncRecords.totalSize')}
                           </Text>
-                          <Text style={styles.globalSyncRecordStatValue}>
+                          <Text style={styles.syncTimelineStatValue}>
                             {record.totalSize}
                           </Text>
                         </View>
                         <View
                           style={[
-                            styles.globalSyncRecordStat,
-                            styles.globalSyncRecordStatRight,
+                            styles.syncTimelineStat,
+                            styles.syncTimelineStatRight,
                           ]}
                         >
-                          <Text style={styles.globalSyncRecordSubtle}>
+                          <Text style={styles.syncTimelineRecordSubtle}>
                             {t('syncActivity.syncRecords.duration')}
                           </Text>
-                          <Text style={styles.globalSyncRecordStatValue}>
+                          <Text style={styles.syncTimelineStatValue}>
                             {record.duration}
                           </Text>
                         </View>
@@ -609,11 +424,11 @@ export function SyncRecordTimelineSection({
 export function MediaPreviewIcon({ type }: { type: MediaPreviewKind }) {
   if (type === 'photo') {
     return (
-      <View style={[styles.globalMediaIcon, styles.globalPhotoIcon]}>
+      <View style={[styles.mediaIcon, styles.photoIcon]}>
         <MediaIconGradient type="photo" />
-        <View style={styles.globalPhotoSun} />
-        <View style={styles.globalPhotoHillLeft} />
-        <View style={styles.globalPhotoHillRight} />
+        <View style={styles.photoSun} />
+        <View style={styles.photoHillLeft} />
+        <View style={styles.photoHillRight} />
         <PhotoGlyph />
       </View>
     );
@@ -621,19 +436,19 @@ export function MediaPreviewIcon({ type }: { type: MediaPreviewKind }) {
 
   if (type === 'video') {
     return (
-      <View style={[styles.globalMediaIcon, styles.globalVideoIcon]}>
+      <View style={[styles.mediaIcon, styles.videoIcon]}>
         <MediaIconGradient type="video" />
-        <View style={styles.globalVideoDotRowTop}>
+        <View style={styles.videoDotRowTop}>
           {[0, 1, 2].map(item => (
-            <View key={item} style={styles.globalVideoDot} />
+            <View key={item} style={styles.videoDot} />
           ))}
         </View>
-        <View style={styles.globalPlayCircle}>
+        <View style={styles.playCircle}>
           <VideoPlayGlyph />
         </View>
-        <View style={styles.globalVideoDotRowBottom}>
+        <View style={styles.videoDotRowBottom}>
           {[0, 1, 2].map(item => (
-            <View key={item} style={styles.globalVideoDotFaint} />
+            <View key={item} style={styles.videoDotFaint} />
           ))}
         </View>
       </View>
@@ -641,9 +456,9 @@ export function MediaPreviewIcon({ type }: { type: MediaPreviewKind }) {
   }
 
   return (
-    <View style={[styles.globalMediaIcon, styles.globalFileIcon]}>
+    <View style={[styles.mediaIcon, styles.fileIcon]}>
       <MediaIconGradient type="file" />
-      <View style={styles.globalFileCorner} />
+      <View style={styles.fileCorner} />
       <FileGlyph />
     </View>
   );
@@ -656,7 +471,7 @@ function MediaIconGradient({ type }: { type: MediaPreviewKind }) {
       : type === 'video'
         ? ['#F8F6FF', '#E3E6FF', '#9AAEFF']
         : ['#FFFFFF', '#EFF5FB', '#D7E2F0'];
-  const gradientId = `globalHome${type}MediaGradient`;
+  const gradientId = `home${type}MediaGradient`;
 
   return (
     <Svg pointerEvents="none" style={StyleSheet.absoluteFillObject}>
@@ -789,7 +604,7 @@ export function SyncStatePreviewSection({
   );
 }
 
-function getRecordVisualMetadata(record: RecentDownloadRecord) {
+function getRecordPreviewType(record: RecentDownloadRecord): MediaPreviewKind {
   const isVideo =
     record.mediaType === 'video' ||
     /\.(mp4|mov|avi|mkv|webm)$/i.test(record.filename);
@@ -798,38 +613,13 @@ function getRecordVisualMetadata(record: RecentDownloadRecord) {
     /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(record.filename);
 
   if (isVideo) {
-    return {
-      iconName: 'videocam-outline',
-      iconColor: '#8b5cf6',
-      iconBackground: 'rgba(139,92,246,0.1)',
-      previewType: 'video' as const,
-    };
+    return 'video';
   }
 
   if (isImage) {
-    return {
-      iconName: 'image-outline',
-      iconColor: BLUE,
-      iconBackground: 'rgba(59,130,246,0.1)',
-      previewType: 'photo' as const,
-    };
-  }
-
-  return {
-    iconName: 'document-outline',
-    iconColor: '#10b981',
-    iconBackground: 'rgba(16,185,129,0.1)',
-    previewType: 'file' as const,
-  };
-}
-
-function getPreviewTypeFromIcon(iconName: string): MediaPreviewKind {
-  if (iconName === 'image-outline') {
     return 'photo';
   }
-  if (iconName === 'play-circle-outline' || iconName === 'videocam-outline') {
-    return 'video';
-  }
+
   return 'file';
 }
 
@@ -929,7 +719,7 @@ const styles = StyleSheet.create({
       color: 'rgba(70, 96, 138, 0.08)',
     }),
   },
-  globalRecentDownloadSection: {
+  recentDownloadSurface: {
     marginHorizontal: 20,
     paddingHorizontal: 16,
     borderRadius: 18,
@@ -954,7 +744,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DARK,
   },
-  globalSectionTitleText: {
+  sectionTitleEmphasis: {
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '600',
@@ -999,7 +789,7 @@ const styles = StyleSheet.create({
       color: 'rgba(70, 96, 138, 0.08)',
     }),
   },
-  globalMediaPreviewWrap: {
+  mediaPreviewWrap: {
     borderRadius: 14,
     backgroundColor: '#EDF4FB',
     borderWidth: 0,
@@ -1018,7 +808,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 14,
   },
-  globalMediaIcon: {
+  mediaIcon: {
     flex: 1,
     width: '100%',
     height: '100%',
@@ -1029,10 +819,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  globalPhotoIcon: {
+  photoIcon: {
     backgroundColor: '#D8F0FF',
   },
-  globalPhotoSun: {
+  photoSun: {
     position: 'absolute',
     left: 9,
     top: 9,
@@ -1041,7 +831,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.86)',
   },
-  globalPhotoHillLeft: {
+  photoHillLeft: {
     position: 'absolute',
     left: 3,
     bottom: -2,
@@ -1052,7 +842,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.62)',
     transform: [{ rotate: '-8deg' }],
   },
-  globalPhotoHillRight: {
+  photoHillRight: {
     position: 'absolute',
     right: -1,
     bottom: -2,
@@ -1063,10 +853,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(191,227,255,0.78)',
     transform: [{ rotate: '10deg' }],
   },
-  globalVideoIcon: {
+  videoIcon: {
     backgroundColor: '#E3E6FF',
   },
-  globalVideoDotRowTop: {
+  videoDotRowTop: {
     position: 'absolute',
     top: 8,
     left: 8,
@@ -1074,7 +864,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  globalVideoDotRowBottom: {
+  videoDotRowBottom: {
     position: 'absolute',
     bottom: 8,
     left: 8,
@@ -1082,19 +872,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  globalVideoDot: {
+  videoDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.72)',
   },
-  globalVideoDotFaint: {
+  videoDotFaint: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.54)',
   },
-  globalPlayCircle: {
+  playCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -1102,10 +892,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  globalFileIcon: {
+  fileIcon: {
     backgroundColor: '#EFF5FB',
   },
-  globalFileCorner: {
+  fileCorner: {
     position: 'absolute',
     top: 8,
     right: 8,
@@ -1148,7 +938,7 @@ const styles = StyleSheet.create({
       color: 'rgba(70, 96, 138, 0.08)',
     }),
   },
-  globalSyncRecordSection: {
+  syncRecordSurface: {
     marginHorizontal: 20,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.58)',
@@ -1156,7 +946,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 52,
   },
-  globalSectionEmptyState: {
+  sectionEmptyState: {
     minHeight: 128,
     borderRadius: 16,
     borderWidth: 1,
@@ -1167,7 +957,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 22,
   },
-  globalSectionEmptyIcon: {
+  sectionEmptyIcon: {
     width: 48,
     height: 48,
     borderRadius: 16,
@@ -1176,88 +966,61 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 12,
   },
-  globalSectionEmptyTitle: {
+  sectionEmptyTitle: {
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '700',
     color: '#203D63',
     textAlign: 'center',
   },
-  globalSectionEmptyMessage: {
+  sectionEmptyMessage: {
     marginTop: 6,
     fontSize: 11,
     lineHeight: 19,
     color: '#7B8490',
     textAlign: 'center',
   },
-  syncRecordHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 12,
-  },
-  globalSyncTimelineHeader: {
+  syncTimelineHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
     marginBottom: 14,
   },
-  globalSyncTimelineHeaderCopy: {
+  syncTimelineHeaderCopy: {
     flex: 1,
     minWidth: 0,
   },
-  globalSyncTimelineDayList: {
+  syncTimelineDayList: {
     gap: 16,
   },
-  globalSyncTimelineRecordList: {
+  syncTimelineRecordList: {
     gap: 10,
   },
-  syncRecordTotal: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: SOFT_TEXT,
-  },
-  globalSyncRecordTotal: {
+  syncTimelineTotal: {
     marginTop: 1,
     fontSize: 11,
     lineHeight: 16,
     color: '#59616D',
   },
-  syncRecordDayRow: {
+  syncTimelineDayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  syncRecordDay: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: DARK,
-  },
-  syncRecordDayStats: {
-    fontSize: 12,
-    color: SOFT_TEXT,
-  },
-  globalSyncRecordDayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  globalSyncRecordDay: {
+  syncTimelineDay: {
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '600',
     color: '#4D6C90',
   },
-  globalSyncRecordDayStats: {
+  syncTimelineDayStats: {
     fontSize: 10,
     lineHeight: 14,
     fontWeight: '500',
     color: '#9AB0C6',
   },
-  globalSyncRecordCard: {
+  syncTimelineRecordCard: {
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -1265,121 +1028,69 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
   },
-  globalSyncRecordHeader: {
+  syncTimelineRecordHeader: {
     marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
   },
-  globalSyncRecordTitleBlock: {
+  syncTimelineRecordTitleBlock: {
     flex: 1,
     minWidth: 0,
   },
-  globalSyncRecordDeviceName: {
+  syncTimelineRecordDeviceName: {
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
     color: '#203D63',
   },
-  globalSyncRecordSubtle: {
+  syncTimelineRecordSubtle: {
     marginTop: 1,
     fontSize: 10,
     lineHeight: 14,
     color: '#9AB0C6',
   },
-  globalSyncRecordStatusPill: {
+  syncTimelineStatusPill: {
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  globalSyncRecordStatusCompleted: {
+  syncTimelineStatusCompleted: {
     backgroundColor: '#E8F7ED',
   },
-  globalSyncRecordStatusSyncing: {
+  syncTimelineStatusSyncing: {
     backgroundColor: '#EAF2FF',
   },
-  globalSyncRecordStatusText: {
+  syncTimelineStatusText: {
     fontSize: 10,
     lineHeight: 13,
     fontWeight: '500',
   },
-  globalSyncRecordStatusTextCompleted: {
+  syncTimelineStatusTextCompleted: {
     color: '#21A453',
   },
-  globalSyncRecordStatusTextSyncing: {
+  syncTimelineStatusTextSyncing: {
     color: '#357CFF',
   },
-  globalSyncRecordStatsGrid: {
+  syncTimelineStatsGrid: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
   },
-  globalSyncRecordStat: {
+  syncTimelineStat: {
     flex: 1,
     minWidth: 0,
   },
-  globalSyncRecordStatRight: {
+  syncTimelineStatRight: {
     alignItems: 'flex-end',
   },
-  globalSyncRecordStatValue: {
+  syncTimelineStatValue: {
     marginTop: 5,
     fontSize: 12,
     lineHeight: 17,
     fontWeight: '700',
     color: '#203D63',
-  },
-  syncRecordCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    gap: 12,
-    borderRadius: 14,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.52)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-  },
-  syncRecordDeviceName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: DARK,
-  },
-  syncRecordSubtle: {
-    fontSize: 11,
-    color: SOFT_TEXT,
-  },
-  syncRecordStatusPill: {
-    marginLeft: 'auto',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(34,197,94,0.12)',
-  },
-  syncRecordStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#16a34a',
-  },
-  syncRecordStatsRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  syncRecordStat: {
-    flex: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(247,251,255,0.78)',
-    borderWidth: 1,
-    borderColor: 'rgba(221,232,244,0.78)',
-  },
-  syncRecordStatValue: {
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: '700',
-    color: DARK,
   },
   syncStateSection: {
     marginHorizontal: 20,
