@@ -84,6 +84,7 @@ Group the following sub-headings under a single unified section:
   Fold long listings (like commands, package verification, folder map) inside `<details>` blocks.
 
 ### 5. Community & Social Shields
+
 - Replace text links in the "Community & Social" (or "社群與社群媒體") section with modern flat-square brand badges:
   - X: `[![X](https://img.shields.io/badge/X-%23000000?style=flat-square&logo=x&logoColor=white)](https://x.com/founder_im63606)`
   - Mastodon: `[![Mastodon](https://img.shields.io/badge/Mastodon-%236364FF?style=flat-square&logo=mastodon&logoColor=white)](https://mastodon.social/@ViviDrop)`
@@ -92,6 +93,7 @@ Group the following sub-headings under a single unified section:
   - YouTube: `[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)`
 
 ### 6. License Removal
+
 - Note that the "License" and "授權條款" sections have been explicitly removed.
 
 ## Execution Checklist
