@@ -29,8 +29,8 @@
 <p align="center">
   <a href="#-product-preview">Product Preview</a> •
   <a href="#-key-features">Key Features</a> •
-  <a href="#-developer-quick-start">Developer Quick Start</a> •
   <a href="#-oss-boundaries">OSS Boundaries</a> •
+  <a href="#-developer-quick-start">Developer Quick Start</a> •
   <a href="#-contributing">Contributing</a> •
   <a href="#-community--social">Community & Social</a>
 </p>

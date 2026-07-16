@@ -29,8 +29,8 @@
 <p align="center">
   <a href="#-產品預覽">產品預覽</a> •
   <a href="#-主要功能">主要功能</a> •
-  <a href="#-開發者快速開始">開發者快速開始</a> •
   <a href="#-開源邊界">開源邊界</a> •
+  <a href="#-開發者快速開始">開發者快速開始</a> •
   <a href="#-參與貢獻">參與貢獻</a> •
   <a href="#-社群與社群媒體">社群與社群媒體</a>
 </p>
@@ -164,7 +164,7 @@ pnpm dev:mobile:android
 
 ```mermaid
 flowchart TD
-    subgraph Mobile["行動端 (iOS / Android)"]
+    subgraph Mobile["📱 行動端 (iOS / Android)"]
         RN["React Native UI"]
         subgraph SE["原生同步引擎"]
             iOS["iOS (Swift)"]
@@ -172,7 +172,7 @@ flowchart TD
         end
     end
 
-    subgraph Desktop["桌面端 (macOS / Windows)"]
+    subgraph Desktop["💻 桌面端 (macOS / Windows)"]
         Electron["Electron 外殼 (React 18 UI)"]
         Preload["預載橋接 (Preload Bridge)"]
         subgraph Sidecar["Go 側車服務 (Sidecar)"]

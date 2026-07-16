@@ -12,6 +12,7 @@ This document outlines the design and plan for beautifying `README.md` and `READ
 ## Technical Details
 
 ### 1. Badges & Header
+
 - Align the headers, logos, and badges at the top center.
 - Use uniform flat-square style shields for all badges:
   - OSS Release Gate: `https://github.com/lynavo/lynavo-drive/actions/workflows/oss-release-gate.yml/badge.svg`
@@ -22,7 +23,9 @@ This document outlines the design and plan for beautifying `README.md` and `READ
   - License: MIT (green)
 
 ### 2. Architecture Diagram (Mermaid)
+
 Replace ASCII with:
+
 ```mermaid
 flowchart TD
     subgraph Mobile["📱 Mobile Client (iOS / Android)"]
@@ -48,7 +51,7 @@ flowchart TD
     RN <--> Preload
     Preload <--> Electron
     Electron <--> HTTP
-    
+
     %% Network Sync Channels
     SE -- "mDNS Discovery / Pairing" --> HTTP
     SE -- "Presence & Metadata (HTTP/WS)" --> HTTP
@@ -63,18 +66,22 @@ flowchart TD
 ```
 
 ### 3. OSS Boundaries
+
 Format the open-source gates using GitHub Alerts:
+
 - `[!IMPORTANT]` for Local-LAN open-source core details.
 - `[!WARNING]` for out-of-scope non-OSS boundaries (such as remote connection, cloud relay, store distribution, etc.).
 
 ### 4. Technical Infrastructure Section
+
 Group the following sub-headings under a single unified section:
+
 - **Prerequisites**
 - **Tech Stack**
 - **Common Commands**
 - **Project Structure**
 - **OSS Build & Package Verification**
-Fold long listings (like commands, package verification, folder map) inside `<details>` blocks.
+  Fold long listings (like commands, package verification, folder map) inside `<details>` blocks.
 
 ## Execution Checklist
 
