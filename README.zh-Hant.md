@@ -41,13 +41,13 @@
 
 Lynavo Drive 已完成主要功能，並開放社群從原始碼建置與參與貢獻。本儲存庫只提供一套公開的本機原始碼建置與套件驗證流程；不發布官方簽署的安裝程式、行動應用程式商店版本、自動更新或託管服務。
 
-| 使用範圍 | 目前的開源版本支援範圍                             |
-| -------- | -------------------------------------------------- |
-| 桌面端   | macOS 與 Windows 應用程式執行環境                  |
-| 行動端   | iOS 與 Android 應用程式執行環境                    |
-| Linux    | 僅供本機原始碼建置與套件驗證                       |
-| 網路     | 同一區域網路中的前景同步                           |
-| 發布方式 | 社群原始碼建置，以及在本機產生的套件／二進位執行檔 |
+| 使用範圍    | 目前的開源版本支援範圍                             |
+| ----------- | -------------------------------------------------- |
+| 💻 桌面端   | macOS 與 Windows 應用程式執行環境                  |
+| 📱 行動端   | iOS 與 Android 應用程式執行環境                    |
+| 🐧 Linux    | 僅供本機原始碼建置與套件驗證                       |
+| 🌐 網路     | 同一區域網路中的前景同步                           |
+| 📦 發布方式 | 社群原始碼建置，以及在本機產生的套件／二進位執行檔 |
 
 ## 📸 產品預覽
 
@@ -137,22 +137,22 @@ pnpm dev:mobile:android
 <details>
 <summary>🔍 檢視疑難排解指南與常見問題</summary>
 
-### 1. 行動端應用程式找不到我的桌面裝置（mDNS 裝置探索失敗）
+### 📡 1. 行動端應用程式找不到我的桌面裝置（mDNS 裝置探索失敗）
 
 - **檢查網路**：確保行動端和桌面端皆處於同一個區域網路 (LAN)。
 - **Windows 防火牆**：驗證 Windows Defender 防火牆是否允許連接埠 `39593` (TCP/LMUP 檔案傳輸) 和 `39594` (HTTP API) 的連入流量。
 - **Bonjour 執行環境**：開源建置版本不重新散布 Apple Bonjour。請確認 Windows 已安裝 Bonjour，否則使用相容於 zeroconf 的備援方案。
 
-### 2. 為什麼我的一些 iCloud 照片卡住 / 無法傳輸？
+### ☁️ 2. 為什麼我的一些 iCloud 照片卡住 / 無法傳輸？
 
 - 標記為 `iCloud` 的照片在傳輸前，必須先從 Apple Photos 雲端儲存庫中匯出。
 - 在 `cloud_downloading` 或 `preparing` 狀態下，手機正在將高解析度的原始內容下載至本機儲存空間。下載完成後會自動開始傳輸。
 
-### 3. 我可以手動選擇要同步哪些照片 / 影片嗎？
+### 📸 3. 我可以手動選擇要同步哪些照片 / 影片嗎？
 
 - 不行。自動上傳由行動端相簿掃描及嚴格唯讀的待處理佇列驅動，開源流程不提供核取方塊選取功能。
 
-### 4. 當桌面端進入睡眠狀態或連線中斷時會發生什麼事？
+### 💤 4. 當桌面端進入睡眠狀態或連線中斷時會發生什麼事？
 
 - 區域網路傳輸會中斷。當行動應用程式位於前景時，桌面端喚醒並恢復區域網路連線後，會繼續處理未完成的佇列。
 - 開源執行環境不提供靜默背景續傳。
@@ -205,17 +205,17 @@ flowchart TD
 
 ### 🛠️ 技術架構
 
-| 層級               | 技術                                                       |
-| ------------------ | ---------------------------------------------------------- |
-| Monorepo           | pnpm 10 + turborepo 2.8                                    |
-| 桌面端             | Electron 41 + electron-vite 5 + electron-builder 26        |
-| 桌面端 UI          | React 18.3 + zustand 5 + Tailwind CSS v4                   |
-| 行動端             | React Native 0.84.1 + React 19 (iOS / Android)             |
-| iOS 原生           | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
-| Android 原生       | Kotlin 橋接 + NativeSyncEngine / MediaStore / NsdManager   |
-| 側車服務 (Sidecar) | Go 1.25.6 + SQLite + WebSocket                             |
-| 共用套件           | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
-| 測試               | vitest 4.1 + jest + `go test`                              |
+| 層級                  | 技術                                                       |
+| --------------------- | ---------------------------------------------------------- |
+| 📦 Monorepo           | pnpm 10 + turborepo 2.8                                    |
+| 💻 桌面端             | Electron 41 + electron-vite 5 + electron-builder 26        |
+| 🎨 桌面端 UI          | React 18.3 + zustand 5 + Tailwind CSS v4                   |
+| 📱 行動端             | React Native 0.84.1 + React 19 (iOS / Android)             |
+| 🍎 iOS 原生           | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
+| 🤖 Android 原生       | Kotlin 橋接 + NativeSyncEngine / MediaStore / NsdManager   |
+| ⚡ 側車服務 (Sidecar) | Go 1.25.6 + SQLite + WebSocket                             |
+| 🔗 共用套件           | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
+| 🧪 測試               | vitest 4.1 + jest + `go test`                              |
 
 ### ⚙️ 系統需求
 
@@ -345,21 +345,21 @@ lynavo-drive/
 
 ## 📄 文件參考
 
-- 開發限制與營運規則：[`AGENTS.md`](./AGENTS.md)
-- 系統概覽：[`docs/architecture/system-overview.md`](./docs/architecture/system-overview.md)
-- 同步狀態機：[`docs/architecture/sync-state-machine.md`](./docs/architecture/sync-state-machine.md)
-- 資料模型與統計語義：[`docs/architecture/data-model.md`](./docs/architecture/data-model.md)
-- 疑難排解指南：[`docs/operations/troubleshooting.md`](./docs/operations/troubleshooting.md)
-- 行動端診斷套件：[`docs/operations/mobile-diagnostics.md`](./docs/operations/mobile-diagnostics.md)
-- 側車服務 (Sidecar) 運作手冊：[`docs/operations/sidecar-runbook.md`](./docs/operations/sidecar-runbook.md)
-- 產品限制、開源邊界與非目標：[`docs/product/constraints.md`](./docs/product/constraints.md)
-- 開源版本建置驗證手冊：[`docs/release/release-playbook.md`](./docs/release/release-playbook.md)
-- 開源驗證矩陣：[`docs/testing/oss-verification-matrix.md`](./docs/testing/oss-verification-matrix.md)
-- 安全性政策：[`SECURITY.md`](./SECURITY.md)
-- 隱私權聲明：[`PRIVACY.md`](./PRIVACY.md)
-- 貢獻指南：[`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- 行為準則：[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
-- 第三方聲明：[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
+- ⚙️ 開發限制與營運規則：[`AGENTS.md`](./AGENTS.md)
+- 📘 系統概覽：[`docs/architecture/system-overview.md`](./docs/architecture/system-overview.md)
+- 🔄 同步狀態機：[`docs/architecture/sync-state-machine.md`](./docs/architecture/sync-state-machine.md)
+- 📊 資料模型與統計語義：[`docs/architecture/data-model.md`](./docs/architecture/data-model.md)
+- 🔧 疑難排解指南：[`docs/operations/troubleshooting.md`](./docs/operations/troubleshooting.md)
+- 📱 行動端診斷套件：[`docs/operations/mobile-diagnostics.md`](./docs/operations/mobile-diagnostics.md)
+- ⚡ 側車服務 (Sidecar) 運作手冊：[`docs/operations/sidecar-runbook.md`](./docs/operations/sidecar-runbook.md)
+- 🛡️ 產品限制、開源邊界與非目標：[`docs/product/constraints.md`](./docs/product/constraints.md)
+- 📦 開源版本建置驗證手冊：[`docs/release/release-playbook.md`](./docs/release/release-playbook.md)
+- 🔬 開源驗證矩陣：[`docs/testing/oss-verification-matrix.md`](./docs/testing/oss-verification-matrix.md)
+- 🔒 安全性政策：[`SECURITY.md`](./SECURITY.md)
+- 🕵️ 隱私權聲明：[`PRIVACY.md`](./PRIVACY.md)
+- 🤝 貢獻指南：[`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- 📜 行為準則：[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+- 📄 第三方聲明：[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
 
 ## 💡 參與貢獻
 
