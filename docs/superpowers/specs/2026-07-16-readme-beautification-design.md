@@ -92,13 +92,34 @@ Group the following sub-headings under a single unified section:
   - LinkedIn: `[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lynavo-lynavo-1273322b6/)`
   - YouTube: `[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)`
 
-### 6. License Removal
+### 6. Emoji Icons Enhancements
+Add clear visual Emoji icons to:
+- **Project Status Table (Surface column)**:
+  - `💻 Desktop` / `💻 桌面端`
+  - `📱 Mobile` / `📱 行動端`
+  - `🐧 Linux` / `🐧 Linux`
+  - `🌐 Network` / `🌐 網路`
+  - `📦 Distribution` / `📦 發布方式`
+- **Tech Stack Table (Layer column)**:
+  - `📦 Monorepo`
+  - `💻 Desktop`
+  - `🎨 Desktop UI`
+  - `📱 Mobile`
+  - `🍎 iOS Native`
+  - `🤖 Android Native`
+  - `⚡ Sidecar` / `⚡ 側車服務 (Sidecar)`
+  - `🔗 Shared` / `🔗 共用套件`
+  - `🧪 Test` / `🧪 測試`
+- **Documentation Reference List**: Add document type icons (e.g. `⚙️`, `📘`, `🔄`, `📊`, `🔧`, `📱`, `⚡`, `🛡️`, `📦`, `🔬`, `🔒`, `🕵️`, `🤝`, `📜`, `📄`) before the descriptions.
+- **FAQs & Troubleshooting H3 Headings**: Add category/topic icons (e.g. `📡`, `☁️`, `📸`, `💤`) to the questions.
+
+### 7. License Removal
 
 - Note that the "License" and "授權條款" sections have been explicitly removed.
 
 ## Execution Checklist
 
-- [ ] Update `README.md` (English only, no Chinese) to add community shields and ensure no License section.
-- [ ] Update `README.zh-Hant.md` (Traditional Chinese only) to add community shields and ensure no License section.
+- [ ] Update `README.md` (English only, no Chinese) to add community shields, table/list/FAQ emoji icons, and ensure no License section.
+- [ ] Update `README.zh-Hant.md` (Traditional Chinese only) to add community shields, table/list/FAQ emoji icons, and ensure no License section.
 - [ ] Verify formatting and markdown structure in both files.
 - [ ] Run `pnpm format:check` to ensure no linting/formatting regression.
