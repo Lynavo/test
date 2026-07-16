@@ -93,7 +93,9 @@ Group the following sub-headings under a single unified section:
   - YouTube: `[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)`
 
 ### 6. Emoji Icons Enhancements
+
 Add clear visual Emoji icons to:
+
 - **Project Status Table (Surface column)**:
   - `💻 Desktop` / `💻 桌面端`
   - `📱 Mobile` / `📱 行動端`
