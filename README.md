@@ -44,13 +44,13 @@ contributions. This repository provides one public local source-build and
 package-verification path; it does not publish official signed installers,
 mobile store builds, auto-updates, or hosted services.
 
-| Surface      | Current OSS scope                                              |
-| ------------ | -------------------------------------------------------------- |
-| Desktop      | macOS and Windows application runtime                          |
-| Mobile       | iOS and Android application runtime                            |
-| Linux        | Local source-build and package verification only               |
-| Network      | Foreground sync over the same LAN                              |
-| Distribution | Community source builds and locally produced packages/binaries |
+| Surface         | Current OSS scope                                              |
+| --------------- | -------------------------------------------------------------- |
+| 💻 Desktop      | macOS and Windows application runtime                          |
+| 📱 Mobile       | iOS and Android application runtime                            |
+| 🐧 Linux        | Local source-build and package verification only               |
+| 🌐 Network      | Foreground sync over the same LAN                              |
+| 📦 Distribution | Community source builds and locally produced packages/binaries |
 
 ## 📸 Product Preview
 
@@ -151,23 +151,23 @@ Pair the applications:
 <details>
 <summary>🔍 View Troubleshooting Guide & Common FAQs</summary>
 
-### 1. The mobile app cannot find my desktop client (mDNS discovery failure)
+### 📡 1. The mobile app cannot find my desktop client (mDNS discovery failure)
 
 - **Check Network**: Ensure both mobile and desktop are on the same local LAN.
 - **Windows Firewall**: Verify that Windows Defender Firewall allows incoming traffic for ports `39593` (TCP/LMUP file transport) and `39594` (HTTP API).
 - **Bonjour Runtime**: The OSS build doesn't redistribute Apple Bonjour. Ensure Bonjour is installed on Windows, or rely on the zeroconf-compatible fallback.
 
-### 2. Why are some of my iCloud photos stuck/not transferring?
+### ☁️ 2. Why are some of my iCloud photos stuck/not transferring?
 
 - Photos marked with `iCloud` must be exported from the Apple Photos cloud repository before transfer.
 - While in `cloud_downloading` or `preparing` states, the phone is downloading the high-res original asset to local storage. Transfer begins automatically once complete.
 
-### 3. Can I manually select which photos/videos to sync?
+### 📸 3. Can I manually select which photos/videos to sync?
 
 - No. Automatic upload is driven by the mobile photo-library scan and strictly
   read-only pending queue. Checkbox picking is not part of the OSS workflow.
 
-### 4. What happens when the desktop sleeps or connection drops?
+### 💤 4. What happens when the desktop sleeps or connection drops?
 
 - LAN transfers will interrupt. With the mobile app in the foreground, the
   unfinished queue continues after the desktop wakes and LAN connectivity is
@@ -222,17 +222,17 @@ flowchart TD
 
 ### 🛠️ Tech Stack
 
-| Layer          | Technology                                                 |
-| -------------- | ---------------------------------------------------------- |
-| Monorepo       | pnpm 10 + turborepo 2.8                                    |
-| Desktop        | Electron 41 + electron-vite 5 + electron-builder 26        |
-| Desktop UI     | React 18.3 + zustand 5 + Tailwind CSS v4                   |
-| Mobile         | React Native 0.84.1 + React 19 (iOS / Android)             |
-| iOS Native     | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
-| Android Native | Kotlin bridge + NativeSyncEngine / MediaStore / NsdManager |
-| Sidecar        | Go 1.25.6 + SQLite + WebSocket                             |
-| Shared         | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
-| Test           | vitest 4.1 + jest + `go test`                              |
+| Layer             | Technology                                                 |
+| ----------------- | ---------------------------------------------------------- |
+| 📦 Monorepo       | pnpm 10 + turborepo 2.8                                    |
+| 💻 Desktop        | Electron 41 + electron-vite 5 + electron-builder 26        |
+| 🎨 Desktop UI     | React 18.3 + zustand 5 + Tailwind CSS v4                   |
+| 📱 Mobile         | React Native 0.84.1 + React 19 (iOS / Android)             |
+| 🍎 iOS Native     | Swift `SyncEngine` + BGTask + PhotoKit + Network.framework |
+| 🤖 Android Native | Kotlin bridge + NativeSyncEngine / MediaStore / NsdManager |
+| ⚡ Sidecar        | Go 1.25.6 + SQLite + WebSocket                             |
+| 🔗 Shared         | `@lynavo-drive/contracts` + `@lynavo-drive/design-tokens`  |
+| 🧪 Test           | vitest 4.1 + jest + `go test`                              |
 
 ### ⚙️ Prerequisites
 
@@ -379,21 +379,21 @@ lynavo-drive/
 
 ## 📄 Documentation Reference
 
-- Development constraints and operating rules: [`AGENTS.md`](./AGENTS.md)
-- System overview: [`docs/architecture/system-overview.md`](./docs/architecture/system-overview.md)
-- Sync state machine: [`docs/architecture/sync-state-machine.md`](./docs/architecture/sync-state-machine.md)
-- Data model and statistics semantics: [`docs/architecture/data-model.md`](./docs/architecture/data-model.md)
-- Troubleshooting guide: [`docs/operations/troubleshooting.md`](./docs/operations/troubleshooting.md)
-- Mobile diagnostics package: [`docs/operations/mobile-diagnostics.md`](./docs/operations/mobile-diagnostics.md)
-- Sidecar runbook: [`docs/operations/sidecar-runbook.md`](./docs/operations/sidecar-runbook.md)
-- Product constraints, OSS boundaries, and non-goals: [`docs/product/constraints.md`](./docs/product/constraints.md)
-- OSS build verification playbook: [`docs/release/release-playbook.md`](./docs/release/release-playbook.md)
-- OSS verification matrix: [`docs/testing/oss-verification-matrix.md`](./docs/testing/oss-verification-matrix.md)
-- Security policy: [`SECURITY.md`](./SECURITY.md)
-- Privacy notice: [`PRIVACY.md`](./PRIVACY.md)
-- Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
-- Third-party notices: [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
+- ⚙️ Development constraints and operating rules: [`AGENTS.md`](./AGENTS.md)
+- 📘 System overview: [`docs/architecture/system-overview.md`](./docs/architecture/system-overview.md)
+- 🔄 Sync state machine: [`docs/architecture/sync-state-machine.md`](./docs/architecture/sync-state-machine.md)
+- 📊 Data model and statistics semantics: [`docs/architecture/data-model.md`](./docs/architecture/data-model.md)
+- 🔧 Troubleshooting guide: [`docs/operations/troubleshooting.md`](./docs/operations/troubleshooting.md)
+- 📱 Mobile diagnostics package: [`docs/operations/mobile-diagnostics.md`](./docs/operations/mobile-diagnostics.md)
+- ⚡ Sidecar runbook: [`docs/operations/sidecar-runbook.md`](./docs/operations/sidecar-runbook.md)
+- 🛡️ Product constraints, OSS boundaries, and non-goals: [`docs/product/constraints.md`](./docs/product/constraints.md)
+- 📦 OSS build verification playbook: [`docs/release/release-playbook.md`](./docs/release/release-playbook.md)
+- 🔬 OSS verification matrix: [`docs/testing/oss-verification-matrix.md`](./docs/testing/oss-verification-matrix.md)
+- 🔒 Security policy: [`SECURITY.md`](./SECURITY.md)
+- 🕵️ Privacy notice: [`PRIVACY.md`](./PRIVACY.md)
+- 🤝 Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- 📜 Code of conduct: [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
+- 📄 Third-party notices: [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
 
 ## 💡 Contributing
 
