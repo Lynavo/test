@@ -26,6 +26,8 @@
   - Use GitHub-style `[!IMPORTANT]` and `[!WARNING]` alerts to emphasize OSS boundaries.
   - Group technical environment/setup commands under a single `🔧 Technical Infrastructure` heading.
   - Wrap the project directory structure map and development command references inside collapsible `<details>` blocks.
+  - Add flat-square brand shields for each connection/channel under `## 🌐 Community & Social`.
+  - Ensure the `## ⚖️ License` section is completely removed.
   - Keep the entire document strictly in English.
 
 - [ ] **Step 2: Run formatting checks on the main README**
@@ -39,7 +41,7 @@
 
   ```bash
   git add README.md
-  git commit -m "docs: beautify and modernize main README.md"
+  git commit -m "docs: beautify and modernize main README.md with community shields"
   ```
 
 ---
@@ -52,7 +54,10 @@
 
 - [ ] **Step 1: Apply markdown upgrades to README.zh-Hant.md**
 
-  Modify the `README.zh-Hant.md` file using the exact same structural layout, Mermaid flowchart, collapsible `<details>` components, and Alert blocks as Task 1, translating any newly added English labels (like "Technical Infrastructure" and section names) into Traditional Chinese. Keep the entire document strictly in Traditional Chinese.
+  Modify the `README.zh-Hant.md` file using the exact same structural layout, Mermaid flowchart, collapsible `<details>` components, and Alert blocks as Task 1, translating any newly added English labels (like "Technical Infrastructure" and section names) into Traditional Chinese.
+  - Add flat-square brand shields for each connection/channel under `## 🌐 社群與社群媒體`.
+  - Ensure the `## ⚖️ 授權條款` section is completely removed.
+  - Keep the entire document strictly in Traditional Chinese.
 
 - [ ] **Step 2: Run formatting checks on the Traditional Chinese README**
 
@@ -65,7 +70,7 @@
 
   ```bash
   git add README.zh-Hant.md
-  git commit -m "docs: beautify and synchronize Traditional Chinese README"
+  git commit -m "docs: beautify and synchronize Traditional Chinese README with community shields"
   ```
 
 ---
