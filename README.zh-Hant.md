@@ -390,14 +390,10 @@ pnpm gate:release
 
 ## 🌐 社群與社群媒體
 
-透過以下管道關注專案新聞與最新動態：
+透過以下管道追蹤專案消息與最新動態：
 
-- [X (@founder_im63606)](https://x.com/founder_im63606)
-- [Mastodon (@ViviDrop)](https://mastodon.social/@ViviDrop)
-- [Bluesky (@vividrop.bsky.social)](https://bsky.app/profile/vividrop.bsky.social)
-- [LinkedIn (Lynavo)](https://www.linkedin.com/in/lynavo-lynavo-1273322b6/)
-- [YouTube](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)
-
-## ⚖️ 授權條款
-
-MIT。請參閱 [`LICENSE`](./LICENSE)。
+- [![X](https://img.shields.io/badge/X-%23000000?style=flat-square&logo=x&logoColor=white)](https://x.com/founder_im63606) — [@founder_im63606](https://x.com/founder_im63606)
+- [![Mastodon](https://img.shields.io/badge/Mastodon-%236364FF?style=flat-square&logo=mastodon&logoColor=white)](https://mastodon.social/@ViviDrop) — [@ViviDrop](https://mastodon.social/@ViviDrop)
+- [![Bluesky](https://img.shields.io/badge/Bluesky-%230085FF?style=flat-square&logo=bluesky&logoColor=white)](https://bsky.app/profile/vividrop.bsky.social) — [@vividrop.bsky.social](https://bsky.app/profile/vividrop.bsky.social)
+- [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lynavo-lynavo-1273322b6/) — [Lynavo](https://www.linkedin.com/in/lynavo-lynavo-1273322b6/)
+- [![YouTube](https://img.shields.io/badge/YouTube-%23FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ) — [YouTube 頻道](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)
