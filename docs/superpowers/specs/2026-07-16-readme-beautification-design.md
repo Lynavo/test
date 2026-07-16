@@ -83,9 +83,20 @@ Group the following sub-headings under a single unified section:
 - **OSS Build & Package Verification**
   Fold long listings (like commands, package verification, folder map) inside `<details>` blocks.
 
+### 5. Community & Social Shields
+- Replace text links in the "Community & Social" (or "社群與社群媒體") section with modern flat-square brand badges:
+  - X: `[![X](https://img.shields.io/badge/X-%23000000?style=flat-square&logo=x&logoColor=white)](https://x.com/founder_im63606)`
+  - Mastodon: `[![Mastodon](https://img.shields.io/badge/Mastodon-%236364FF?style=flat-square&logo=mastodon&logoColor=white)](https://mastodon.social/@ViviDrop)`
+  - Bluesky: `[![Bluesky](https://img.shields.io/badge/Bluesky-%230085FF?style=flat-square&logo=bluesky&logoColor=white)](https://bsky.app/profile/vividrop.bsky.social)`
+  - LinkedIn: `[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lynavo-lynavo-1273322b6/)`
+  - YouTube: `[![YouTube](https://img.shields.io/badge/YouTube-%23FF0000?style=flat-square&logo=youtube&logoColor=white)](https://www.youtube.com/channel/UCMcYmWmPMzQ5N8bHFffnldQ)`
+
+### 6. License Removal
+- Note that the "License" and "授權條款" sections have been explicitly removed.
+
 ## Execution Checklist
 
-- [ ] Update `README.md` (English only, no Chinese).
-- [ ] Update `README.zh-Hant.md` (Traditional Chinese only).
+- [ ] Update `README.md` (English only, no Chinese) to add community shields and ensure no License section.
+- [ ] Update `README.zh-Hant.md` (Traditional Chinese only) to add community shields and ensure no License section.
 - [ ] Verify formatting and markdown structure in both files.
 - [ ] Run `pnpm format:check` to ensure no linting/formatting regression.
